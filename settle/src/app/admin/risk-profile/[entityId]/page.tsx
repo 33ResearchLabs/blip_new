@@ -184,16 +184,9 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("blip_admin_token");
-    if (!token) {
-      setError("Admin authentication required");
-      setLoading(false);
-      return;
-    }
-
-    fetchWithAuth(`/api/risk-profile/${entityId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    // Admin auth cookie is sent automatically (httpOnly + same-origin).
+    // The server returns 401 if there is no session — handled below.
+    fetchWithAuth(`/api/risk-profile/${entityId}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {

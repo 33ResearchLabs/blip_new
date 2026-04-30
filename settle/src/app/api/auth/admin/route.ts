@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
-import { generateAdminToken, verifyAdminToken } from '@/lib/middleware/auth';
+import {
+  generateAdminToken,
+  verifyAdminToken,
+  ADMIN_COOKIE_NAME,
+  ADMIN_TOKEN_TTL_SECONDS,
+  adminCookieOptions,
+  readAdminTokenFromRequest,
+} from '@/lib/middleware/auth';
+import { isAdminJtiRevoked } from '@/lib/auth/adminRevocation';
+import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 import { auditLog } from '@/lib/auditLog';
 
@@ -8,7 +17,21 @@ import { auditLog } from '@/lib/auditLog';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
-// POST - Admin login
+/**
+ * POST /api/auth/admin — admin login.
+ *
+ * On success the response sets a `blip_admin_session` cookie:
+ *   httpOnly + Secure (prod) + SameSite=Strict + Path=/ + Max-Age=86400
+ *
+ * The token is NOT returned in the JSON body any more — it is only
+ * issued via Set-Cookie. JS code MUST NOT try to read or store it.
+ *
+ * Backward-compat note: existing clients pre-migration looked for
+ * `data.token` in the response. Returning it would defeat the XSS fix
+ * (script could still read it from the response). It is intentionally
+ * omitted; clients now derive "is logged in" from the cookie's effect
+ * on subsequent /api/auth/admin GET calls.
+ */
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, 'auth:admin', AUTH_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
@@ -30,7 +53,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Timing-safe comparison to prevent timing attacks on credentials
     const usernameMatch = username.length === ADMIN_USERNAME.length &&
       crypto.timingSafeEqual(Buffer.from(username), Buffer.from(ADMIN_USERNAME));
     const passwordMatch = password.length === ADMIN_PASSWORD.length &&
@@ -42,11 +64,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate a signed admin token (valid for 24h)
     const token = generateAdminToken(username);
     auditLog('admin.login', username, 'admin');
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         admin: {
@@ -54,9 +75,10 @@ export async function POST(request: NextRequest) {
           role: 'super_admin',
           authenticated_at: new Date().toISOString(),
         },
-        token,
       },
     });
+    response.cookies.set(ADMIN_COOKIE_NAME, token, adminCookieOptions(ADMIN_TOKEN_TTL_SECONDS));
+    return response;
   } catch {
     return NextResponse.json(
       { success: false, error: 'Authentication failed' },
@@ -65,24 +87,71 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Validate admin session (supports both old query param and new token-based auth)
+/**
+ * GET /api/auth/admin — validate the current admin session.
+ *
+ * Reads the cookie OR a legacy Bearer header (transitional — see
+ * readAdminTokenFromRequest). When a valid Bearer token is presented
+ * and no cookie exists, we Set-Cookie the same token so the next
+ * request migrates to the cookie path automatically. The client is
+ * expected to clear localStorage on its end.
+ *
+ * Body always returns { valid, username? } — the actual token is never
+ * leaked to JS.
+ */
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, 'auth:admin:check', { maxRequests: 100, windowSeconds: 60 });
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Check for Bearer token first (new secure method)
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const result = verifyAdminToken(authHeader.slice(7));
-    return NextResponse.json({
-      success: true,
-      data: { valid: result.valid, username: result.username },
-    });
+  const token = readAdminTokenFromRequest(request);
+  if (!token) {
+    return NextResponse.json({ success: true, data: { valid: false } });
   }
 
-  // No valid auth — reject
-  return NextResponse.json({
+  const result = verifyAdminToken(token);
+  if (!result.valid) {
+    return NextResponse.json({ success: true, data: { valid: false } });
+  }
+
+  // Revocation check for jti'd tokens. Legacy tokens bypass — they age
+  // out within 24h and are warned about below.
+  if (result.jti) {
+    try {
+      const revoked = await isAdminJtiRevoked(result.jti);
+      if (revoked) {
+        // Mirror requireAdminAuth: return valid:false (do NOT include
+        // jti or any token-derived data).
+        return NextResponse.json({ success: true, data: { valid: false } });
+      }
+    } catch {
+      // Redis unavailable. Fail closed for jti'd tokens — same as
+      // requireAdminAuth — to avoid certifying a session we cannot
+      // verify is current.
+      return NextResponse.json(
+        { success: false, error: 'Admin auth temporarily unavailable — try again shortly' },
+        { status: 503 }
+      );
+    }
+  }
+
+  // Token validated. If it came in via Bearer (legacy storage) but no
+  // cookie was set, migrate by issuing the same token as a cookie. The
+  // 24h Max-Age effectively gives the legacy session 24h MORE in cookie
+  // form — that's intentional, otherwise we'd cut their session short.
+  const response = NextResponse.json({
     success: true,
-    data: { valid: false },
+    data: { valid: true, username: result.username },
   });
+
+  const hasCookie = !!request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  if (!hasCookie) {
+    if (result.legacyNoJti) {
+      logger.warn('[admin] migrating legacy localStorage Bearer token → httpOnly cookie', {
+        username: result.username,
+      });
+    }
+    response.cookies.set(ADMIN_COOKIE_NAME, token, adminCookieOptions(ADMIN_TOKEN_TTL_SECONDS));
+  }
+
+  return response;
 }

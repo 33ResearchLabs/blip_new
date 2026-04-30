@@ -13,6 +13,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { readFileSync } from 'fs';
+import { requireAuth } from '@/lib/middleware/auth';
+import { getMerchantId } from '@/lib/middleware/merchantIdentity';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +25,14 @@ async function hasOpsAccess(request: NextRequest): Promise<boolean> {
     return true;
   }
 
-  // Path 2: Merchant with has_ops_access flag
-  const merchantId = request.headers.get('x-merchant-id');
+  // Path 2: Authenticated merchant with has_ops_access flag.
+  // Identity comes from the JWT — never from x-merchant-id, which any
+  // caller can set to claim any merchant's id. Without the token check,
+  // an unauthenticated request could enumerate merchant ops access by
+  // varying the header.
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return false;
+  const merchantId = getMerchantId(auth);
   if (merchantId) {
     const merchant = await queryOne<{ has_ops_access: boolean }>(
       `SELECT has_ops_access FROM merchants WHERE id = $1 AND status = 'active'`,

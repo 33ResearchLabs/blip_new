@@ -27,6 +27,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
 
 // ============================================
 // TYPES
@@ -144,19 +145,18 @@ export default function UsdtPricePage() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const savedToken = localStorage.getItem("blip_admin_token");
-        if (savedToken) {
-          const res = await fetchWithAuth("/api/auth/admin", {
-            headers: { Authorization: `Bearer ${savedToken}` },
-          });
-          const data = await res.json();
-          if (data.success && data.data?.valid) {
-            setAdminToken(savedToken);
-            setIsAuthenticated(true);
-          } else {
-            localStorage.removeItem("blip_admin");
-            localStorage.removeItem("blip_admin_token");
-          }
+        const legacyToken = localStorage.getItem("blip_admin_token");
+        const headers: Record<string, string> = {};
+        if (legacyToken) headers.Authorization = `Bearer ${legacyToken}`;
+        const res = await fetchWithAuth("/api/auth/admin", { headers });
+        const data = await res.json();
+        if (data.success && data.data?.valid) {
+          setAdminToken(ADMIN_COOKIE_SENTINEL);
+          setIsAuthenticated(true);
+          if (legacyToken) localStorage.removeItem("blip_admin_token");
+        } else {
+          localStorage.removeItem("blip_admin");
+          localStorage.removeItem("blip_admin_token");
         }
       } catch {
         localStorage.removeItem("blip_admin");
@@ -176,19 +176,15 @@ export default function UsdtPricePage() {
 
       if (!silent) setIsRefreshing(true);
       try {
-        const headers = { Authorization: `Bearer ${token}` };
-
-        // Fetch active pair + secondary pair in parallel
+        // Cookie auto-attached on same-origin fetch.
         const otherPair = PAIRS.find((p) => p.id !== activePair)?.id;
         const [mainRes, secRes] = await Promise.all([
           fetchWithAuth(
             `/api/admin/usdt-inr-price?pair=${activePair}&timeframe=${activeTimeframe}`,
-            { headers },
           ),
           otherPair
             ? fetchWithAuth(
                 `/api/admin/usdt-inr-price?pair=${otherPair}&timeframe=${activeTimeframe}`,
-                { headers },
               )
             : Promise.resolve(null),
         ]);
@@ -235,9 +231,6 @@ export default function UsdtPricePage() {
     try {
       const res = await fetchWithAuth(
         `/api/admin/set-price-mode?pair=${activePair}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
       );
       const json = await res.json();
       if (json.success && json.data) {
@@ -265,10 +258,7 @@ export default function UsdtPricePage() {
     try {
       const res = await fetchWithAuth("/api/admin/set-price-mode", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pair: activePair,
           price_mode: mode,

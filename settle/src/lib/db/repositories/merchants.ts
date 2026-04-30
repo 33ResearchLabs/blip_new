@@ -8,6 +8,64 @@ export async function getMerchantById(id: string): Promise<Merchant | null> {
   );
 }
 
+/**
+ * Explicit allowlist of merchant columns safe to expose through public-facing
+ * read endpoints (self-view + admin-view). MUST NOT include any auth secrets
+ * (password_hash, totp_secret, totp_enabled, totp_verified_at) or internal-only
+ * config (synthetic_rate, max_sinr_exposure, auto_accept_*, telegram_chat_id).
+ *
+ * If you add a new merchant column, decide explicitly whether it belongs here.
+ * Default: keep it out.
+ */
+export const SAFE_MERCHANT_COLUMNS = [
+  'id',
+  'username',
+  'display_name',
+  'business_name',
+  'email',
+  'phone',
+  'avatar_url',
+  'bio',
+  'wallet_address',
+  'status',
+  'verification_level',
+  'total_trades',
+  'total_volume',
+  'rating',
+  'rating_count',
+  'avg_response_time_mins',
+  'avg_completion_time_ms',
+  'is_online',
+  'last_seen_at',
+  'balance',
+  'sinr_balance',
+  'has_ops_access',
+  'has_compliance_access',
+  'cancelled_orders',
+  'dispute_count',
+  'tour_completed_at',
+  'created_at',
+  'updated_at',
+] as const;
+
+/**
+ * Read a merchant row using an explicit column projection (no SELECT *).
+ * Use this for any endpoint that returns merchant data to a client.
+ *
+ * NOT cached — the full-row cache (`getMerchantById`) is reused by the auth
+ * middleware which needs password_hash/totp_secret. Mixing the two through one
+ * cache key would either poison auth (truncated row) or leak secrets (full row
+ * served from a "safe" call site). Two functions, two paths.
+ */
+export async function getMerchantByIdSafe(
+  id: string
+): Promise<(Partial<Merchant> & { id: string }) | null> {
+  return queryOne<Partial<Merchant> & { id: string }>(
+    `SELECT ${SAFE_MERCHANT_COLUMNS.join(', ')} FROM merchants WHERE id = $1`,
+    [id]
+  );
+}
+
 export async function getMerchantByWallet(walletAddress: string): Promise<Merchant | null> {
   return queryOne<Merchant>('SELECT * FROM merchants WHERE wallet_address = $1', [walletAddress]);
 }

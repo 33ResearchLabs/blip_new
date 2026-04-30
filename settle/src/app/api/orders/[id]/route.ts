@@ -70,13 +70,9 @@ export async function GET(
       return notFoundResponse("Order");
     }
 
-    // Resolve merchant identity: when x-merchant-id header is present,
-    // the caller may be acting as a merchant (M2M buyer).
-    // Only trust the header if the authenticated actor is already a merchant.
-    const getMerchantId = request.headers.get("x-merchant-id");
-    if (getMerchantId && auth.actorType === "merchant") {
-      auth.merchantId = getMerchantId;
-    }
+    // Identity comes from the JWT only. For merchant tokens, auth.merchantId
+    // is already populated by getAuthContext from the same actorId. The
+    // x-merchant-id header read here was redundant and a spoofing surface.
 
     // Check authorization
     const canAccess = await canAccessOrder(auth, id);
@@ -89,8 +85,8 @@ export async function GET(
       return forbiddenResponse("You do not have access to this order");
     }
 
-    // Resolve actor ID: prefer merchant header for merchant callers
-    const actorId = getMerchantId || auth.actorId;
+    // Resolve actor ID from cryptographically-signed JWT.
+    const actorId = auth.actorId;
 
     // Enrich order with backend-driven UI fields (my_role, primaryAction, secondaryAction)
     const uiFields = enrichOrderResponse(order, actorId);
@@ -153,30 +149,16 @@ export async function PATCH(
       if (tokenAuth instanceof NextResponse) return tokenAuth;
     }
 
-    // Security: enforce actor matches authenticated identity
-    // When both user+merchant headers are present and the route is /api/orders (not /merchant),
-    // auth defaults to user. But a merchant acting (e.g. sending fiat, confirming payment)
-    // uses actor_type='merchant' + their merchant ID.
-    // Allow if actor_id matches either the resolved auth or the merchant header.
-    const headerMerchantId = request.headers.get("x-merchant-id");
+    // Security: enforce actor matches authenticated identity.
+    // Identity comes ONLY from the JWT — the x-merchant-id header swap
+    // pattern was the impersonation channel that this fix closes.
     const actorMatchesAuth = actor_id === auth.actorId;
-    const actorMatchesMerchantHeader =
-      actor_type === "merchant" &&
-      auth.actorType === "merchant" &&
-      headerMerchantId &&
-      actor_id === headerMerchantId;
-    if (!actorMatchesAuth && !actorMatchesMerchantHeader) {
+    if (!actorMatchesAuth) {
       return forbiddenResponse(
         "actor_id does not match authenticated identity",
       );
     }
-    // If merchant is acting, override auth context so canAccessOrder checks
-    // the merchant identity (covers both User↔Merchant and M2M trades)
-    if (!actorMatchesAuth && actorMatchesMerchantHeader) {
-      auth.actorType = "merchant";
-      auth.actorId = headerMerchantId;
-      auth.merchantId = headerMerchantId;
-    }
+    // No header-based actor swap — the JWT IS the merchant identity.
 
     // Verify access to this order (now with correct actor identity resolved above)
     // For claim transitions: skip canAccessOrder (merchant isn't assigned yet),
@@ -248,12 +230,10 @@ export async function PATCH(
     if (isActualClaim && prefetchedOrder) {
       try {
         const creatorUserId = prefetchedOrder.user_id;
-        const headerUserId = request.headers.get("x-user-id");
+        // x-user-id header dropped — auth.userId is the JWT-bound identity
         if (
           creatorUserId &&
-          (creatorUserId === actor_id ||
-            creatorUserId === headerUserId ||
-            creatorUserId === auth.userId)
+          (creatorUserId === actor_id || creatorUserId === auth.userId)
         ) {
           return NextResponse.json(
             { success: false, error: "You cannot accept your own order" },
@@ -479,17 +459,15 @@ export async function DELETE(
     const actorId = searchParams.get("actor_id");
     const reason = searchParams.get("reason");
 
-    // Security: enforce actor matches authenticated identity
-    // Allow if actor_id matches either the resolved auth or the merchant header
-    const headerMerchantId = request.headers.get("x-merchant-id");
-    const actorMatchesAuth = !actorId || actorId === auth.actorId;
-    const actorMatchesMerchantHeader =
-      actorType === "merchant" &&
-      headerMerchantId &&
-      actorId === headerMerchantId;
-    if (!actorMatchesAuth && !actorMatchesMerchantHeader) {
+    // Security: enforce actor matches authenticated identity (JWT only).
+    if (actorId && actorId !== auth.actorId) {
       return forbiddenResponse(
         "actor_id does not match authenticated identity",
+      );
+    }
+    if (actorType && actorType !== auth.actorType) {
+      return forbiddenResponse(
+        `actor_type does not match authenticated identity (${auth.actorType})`,
       );
     }
 

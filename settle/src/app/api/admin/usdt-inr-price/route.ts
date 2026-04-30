@@ -11,7 +11,7 @@ import {
 
 // GET /api/admin/usdt-inr-price?pair=usdt_inr&timeframe=5m
 export async function GET(request: NextRequest) {
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {

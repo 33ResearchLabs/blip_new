@@ -38,11 +38,8 @@ export async function POST(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Resolve merchant identity from header — only trust if authenticated as merchant
-    const postMerchantId = request.headers.get('x-merchant-id');
-    if (postMerchantId && auth.actorType === 'merchant' && !auth.merchantId) {
-      auth.merchantId = postMerchantId;
-    }
+    // Identity comes only from the JWT — auth.merchantId is already set
+    // for merchant tokens by getAuthContext.
 
     const { id } = await params;
     const body = await request.json();
@@ -53,9 +50,12 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
-    // Security: enforce actor matches authenticated identity
-    if (parseResult.data.actor_id !== auth.actorId && !(parseResult.data.actor_type === 'merchant' && auth.actorType === 'merchant' && postMerchantId && parseResult.data.actor_id === postMerchantId)) {
+    // Security: enforce actor matches authenticated identity (JWT only).
+    if (parseResult.data.actor_id !== auth.actorId) {
       return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+    if (parseResult.data.actor_type === 'merchant' && auth.actorType !== 'merchant') {
+      return forbiddenResponse("actor_type='merchant' requires a merchant token");
     }
 
     // ── STATUS + ROLE VALIDATION ──
@@ -127,11 +127,7 @@ export async function PUT(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Resolve merchant identity from header
-    const putMerchantId = request.headers.get('x-merchant-id');
-    if (putMerchantId && !auth.merchantId) {
-      auth.merchantId = putMerchantId;
-    }
+    // Identity comes only from the JWT.
 
     const { id } = await params;
     const body = await request.json();
@@ -142,9 +138,12 @@ export async function PUT(
       return validationErrorResponse(errors);
     }
 
-    // Security: enforce actor matches authenticated identity (with merchant header fallback)
-    if (parseResult.data.actor_id !== auth.actorId && !(parseResult.data.actor_type === 'merchant' && putMerchantId && parseResult.data.actor_id === putMerchantId)) {
+    // Security: enforce actor matches authenticated identity (JWT only).
+    if (parseResult.data.actor_id !== auth.actorId) {
       return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+    if (parseResult.data.actor_type === 'merchant' && auth.actorType !== 'merchant') {
+      return forbiddenResponse("actor_type='merchant' requires a merchant token");
     }
 
     return proxyCoreApi(`/v1/orders/${id}/cancel-request`, {

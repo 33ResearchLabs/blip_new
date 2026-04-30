@@ -118,6 +118,10 @@ const PUBLIC_EXACT = new Set([
   // (ENABLE_ISSUE_REPORTING), STRICT rate-limited (10/min), and body-capped
   // (30MB for screenshot + attachments). Safe to accept without a session.
   '/api/issues/create',
+  // CSP violation reports — sent automatically by the browser when a script/style
+  // is blocked. Must be reachable anonymously and from any page (incl. login).
+  // The route itself caps the body, returns 204, and never reflects content.
+  '/api/csp-report',
   // Sentry tunnel route — created automatically by withSentryConfig to
   // bypass ad-blockers. Must be reachable anonymously or Sentry beacons fail.
   '/monitoring',
@@ -223,20 +227,60 @@ function csrfCheck(request: NextRequest): NextResponse | null {
 // Security Headers
 // =============================================================================
 
-const SECURITY_HEADERS: Record<string, string> = {
+const STATIC_SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com; font-src 'self' data:; connect-src 'self' wss: https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com; frame-ancestors 'none';",
+  // Reporting API v2 endpoint, paired with `report-to` directive in CSP below.
+  'Reporting-Endpoints': 'csp-endpoint="/api/csp-report"',
 };
 
-function applySecurityHeaders(response: NextResponse): NextResponse {
-  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+/**
+ * Generate a base64-encoded 128-bit nonce using Web Crypto (Edge-compatible).
+ * 128 bits is the CSP3 recommended minimum; 16 random bytes → 24-char base64.
+ */
+export function generateNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let str = '';
+  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+  // btoa is available in the Edge runtime
+  return btoa(str);
+}
+
+/**
+ * Build the Content-Security-Policy string.
+ *
+ * script-src is nonce-only: 'unsafe-inline' is REMOVED. Any inline script must
+ * carry the per-request nonce or the browser will block it. style-src keeps
+ * 'unsafe-inline' on purpose — Tailwind/styled-jsx emit inline style attributes
+ * that React doesn't currently nonce; locking that down is a separate task.
+ *
+ * `report-uri` covers older browsers; `report-to csp-endpoint` is the modern
+ * Reporting API v2 mechanism (matches the `Reporting-Endpoints` header).
+ */
+export function buildCsp(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://res.cloudinary.com",
+    "font-src 'self' data:",
+    "connect-src 'self' wss: https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com",
+    "frame-ancestors 'none'",
+    'report-uri /api/csp-report',
+    'report-to csp-endpoint',
+  ].join('; ');
+}
+
+function applySecurityHeaders(response: NextResponse, nonce: string): NextResponse {
+  for (const [key, value] of Object.entries(STATIC_SECURITY_HEADERS)) {
     response.headers.set(key, value);
   }
+  response.headers.set('Content-Security-Policy', buildCsp(nonce));
   return response;
 }
 
@@ -260,6 +304,15 @@ export function middleware(request: NextRequest) {
   ) {
     return NextResponse.next();
   }
+
+  // ── Per-request CSP nonce ─────────────────────────────────────────────
+  // Generated once per request; threaded through every response that flows
+  // out of this middleware. Forwarded to downstream server components via
+  // the `x-nonce` request header so RootLayout can stamp it onto inline
+  // <script> tags. Next.js also reads this header to nonce its own scripts.
+  const nonce = generateNonce();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
 
   // ── 0. Development Access Lock ────────────────────────────────────────
   // When DEV_ACCESS_PASSWORD is set, gate ALL routes behind a shared password.
@@ -289,7 +342,8 @@ export function middleware(request: NextRequest) {
             NextResponse.json(
               { success: false, error: 'Dev access required' },
               { status: 401 }
-            )
+            ),
+            nonce
           );
         }
         const url = request.nextUrl.clone();
@@ -299,9 +353,12 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Non-API routes — no further middleware processing needed
+  // Non-API routes — apply CSP + forward nonce to server components.
+  // (Previously short-circuited without security headers, so pages got NO CSP.
+  //  That's the very surface XSS lives on — it must carry the strict CSP.)
   if (!pathname.startsWith('/api/')) {
-    return NextResponse.next();
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    return applySecurityHeaders(response, nonce);
   }
 
   // ── 1. Rate Limiting ──────────────────────────────────────────────────
@@ -327,7 +384,7 @@ export function middleware(request: NextRequest) {
     }
 
     if (rateLimitResult) {
-      return applySecurityHeaders(rateLimitResult);
+      return applySecurityHeaders(rateLimitResult, nonce);
     }
   }
 
@@ -347,14 +404,14 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.json(
       { success: false, error: 'Request body too large' },
       { status: 413 }
-    ));
+    ), nonce);
   }
 
   // ── 2. CSRF Protection ────────────────────────────────────────────────
   if (!isMockMode) {
     const csrfResult = csrfCheck(request);
     if (csrfResult) {
-      return applySecurityHeaders(csrfResult);
+      return applySecurityHeaders(csrfResult, nonce);
     }
   }
 
@@ -362,8 +419,8 @@ export function middleware(request: NextRequest) {
 
   // Public routes — pass through
   if (isPublicRoute(pathname, method)) {
-    const response = NextResponse.next();
-    return applySecurityHeaders(response);
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    return applySecurityHeaders(response, nonce);
   }
 
   // Hard-block test/seed routes in production regardless of auth
@@ -371,7 +428,7 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.json(
       { success: false, error: 'Not found' },
       { status: 404 }
-    ));
+    ), nonce);
   }
 
   // Admin routes — need Bearer token
@@ -381,11 +438,11 @@ export function middleware(request: NextRequest) {
         { success: false, error: 'Admin authentication required' },
         { status: 401 }
       );
-      return applySecurityHeaders(res);
+      return applySecurityHeaders(res, nonce);
     }
     // Token validity is checked by the route handler (needs Node crypto)
-    const response = NextResponse.next();
-    return applySecurityHeaders(response);
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    return applySecurityHeaders(response, nonce);
   }
 
   // Protected routes — need actor identity
@@ -399,13 +456,13 @@ export function middleware(request: NextRequest) {
         },
         { status: 401 }
       );
-      return applySecurityHeaders(res);
+      return applySecurityHeaders(res, nonce);
     }
   }
 
   // ── 4. Pass Through with Security Headers ─────────────────────────────
-  const response = NextResponse.next();
-  return applySecurityHeaders(response);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  return applySecurityHeaders(response, nonce);
 }
 
 // =============================================================================

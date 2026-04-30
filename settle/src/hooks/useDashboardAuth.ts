@@ -84,13 +84,12 @@ export function useDashboardAuth({
         throw new Error("Wallet signature method not available");
       }
 
-      const timestamp = Date.now();
-      const nonce = Math.random().toString(36).substring(7);
-      const message = `Sign this message to authenticate with Blip Money\n\nWallet: ${solanaWallet.walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
-      const encodedMessage = new TextEncoder().encode(message);
-      const signatureUint8 = await solanaWallet.signMessage(encodedMessage);
-      const bs58 = await import('bs58');
-      const signature = bs58.default.encode(signatureUint8);
+      // Server-issued nonce flow — replay-safe.
+      const { signLoginNonce } = await import('@/lib/auth/walletAuth');
+      const { nonce, message, signature } = await signLoginNonce(
+        solanaWallet.walletAddress,
+        solanaWallet.signMessage,
+      );
 
       const res = await fetchWithAuth('/api/auth/merchant', {
         method: 'POST',
@@ -100,6 +99,7 @@ export function useDashboardAuth({
           wallet_address: solanaWallet.walletAddress,
           signature,
           message,
+          nonce,
           username: username.trim(),
         }),
       });

@@ -53,7 +53,9 @@ const orderActionSchema = z.object({
   // Optional fields for specific actions
   reason: z.string().max(500).nullish(),                   // CANCEL reason
   tx_hash: z.string().min(1).nullish(),                    // LOCK_ESCROW tx hash
-  acceptor_wallet_address: z.string().nullish(),           // ACCEPT wallet
+  acceptor_wallet_address: z.string().nullish(),           // ACCEPT/CLAIM wallet
+  acceptor_wallet_signature: z.string().max(256).nullish(),// Option B: signature
+                                                            //   over `${Action} order ${orderId} - ... Wallet: ${addr}`
   escrow_trade_id: z.number().nullish(),                   // On-chain escrow refs
   escrow_trade_pda: z.string().nullish(),
   escrow_pda: z.string().nullish(),
@@ -90,6 +92,7 @@ export async function POST(
       reason,
       tx_hash,
       acceptor_wallet_address,
+      acceptor_wallet_signature,
       escrow_trade_id,
       escrow_trade_pda,
       escrow_pda,
@@ -104,22 +107,13 @@ export async function POST(
       : await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // 4. Security: enforce actor matches authenticated identity
-    const headerMerchantId = request.headers.get('x-merchant-id');
-    const actorMatchesAuth = actor_id === auth.actorId;
-    // Only trust x-merchant-id if the authenticated token is a merchant token
-    const actorMatchesMerchant =
-      actor_type === 'merchant' && auth.actorType === 'merchant' && headerMerchantId && actor_id === headerMerchantId;
-
-    if (!actorMatchesAuth && !actorMatchesMerchant) {
-      return forbiddenResponse('actor_id does not match authenticated identity');
-    }
-
-    // Override auth context if merchant is acting via their own merchant token
-    if (!actorMatchesAuth && actorMatchesMerchant) {
-      auth.actorId = headerMerchantId;
-      auth.merchantId = headerMerchantId;
-    }
+    // 4. Security: enforce actor matches authenticated identity.
+    // Identity is taken ONLY from the cryptographically-signed JWT
+    // (auth.actorId / auth.actorType). The previous header-based "actor
+    // swap" allowed any merchant to claim any other merchant's id.
+    const { assertActorMatchesAuth } = await import('@/lib/middleware/merchantIdentity');
+    const actorMismatch = assertActorMatchesAuth(auth, { actor_id, actor_type });
+    if (actorMismatch) return actorMismatch;
 
     // 5. Fetch order
     const order = await getOrderWithRelations(id);
@@ -134,6 +128,35 @@ export async function POST(
       if (!canAccess) {
         logger.auth.forbidden(`POST /api/orders/${id}/action`, auth.actorId, 'Not order participant');
         return forbiddenResponse('You do not have access to this order');
+      }
+    }
+
+    // 6b. Wallet-injection guard.
+    //
+    // Any action that supplies `acceptor_wallet_address` causes that wallet
+    // to flow into the order row and ultimately into the on-chain release
+    // destination. The caller MUST own that wallet — either it matches
+    // their authenticated wallet (Option A) or they sign the canonical
+    // binding message and submit it as `acceptor_wallet_signature` (Option B).
+    //
+    // During rollout (WALLET_OWNERSHIP_STRICT=false) a mismatch is allowed
+    // through with a `[security][wallet_inject]` warn-log so legacy
+    // clients don't break. Strict mode promotes the same case to a 403.
+    if (acceptor_wallet_address) {
+      const { assertWalletOwnership } = await import('@/lib/auth/walletOwnership');
+      const sigAction: 'Claim' | 'Confirm' =
+        action === 'CLAIM' || action === 'ACCEPT' ? 'Claim' : 'Confirm';
+      const ownership = await assertWalletOwnership({
+        auth,
+        walletAddress: acceptor_wallet_address,
+        orderId: id,
+        signature: acceptor_wallet_signature ?? null,
+        signatureAction: sigAction,
+      });
+      if (!ownership.ok) {
+        return forbiddenResponse(
+          `acceptor_wallet_address ownership not verified: ${ownership.reason ?? 'unknown'}`
+        );
       }
     }
 
@@ -190,6 +213,60 @@ export async function POST(
     // ── LOCK_ESCROW: atomic balance deduction + status update ──
     if (action === 'LOCK_ESCROW') {
       const escrowTxHash = tx_hash || `mock-escrow-${id}-${Date.now()}`;
+
+      // Server-side PDA binding verification. Re-derive the canonical
+      // tradePda + escrowPda from (creator_wallet, trade_id) and refuse
+      // any submitted PDA that doesn't match. The DERIVED values are
+      // stored — never the client-submitted attestations.
+      const { verifyEscrowPdaBinding, rejectsSubmittedPdaWithoutDerivationInputs } =
+        await import('@/lib/solana/v2/verifyPdaBinding');
+
+      const earlyReject = rejectsSubmittedPdaWithoutDerivationInputs({
+        creatorWallet: escrow_creator_wallet ?? null,
+        tradeId: escrow_trade_id ?? null,
+        submittedTradePda: escrow_trade_pda ?? null,
+        submittedEscrowPda: escrow_pda ?? null,
+      });
+      if (earlyReject && !earlyReject.ok) {
+        return NextResponse.json(
+          { success: false, error: earlyReject.reason, code: 'ESCROW_PDA_UNVERIFIABLE' },
+          { status: 400 }
+        );
+      }
+
+      // If any escrow on-chain reference was provided, the full quartet
+      // must be present and consistent. The verifier handles all the
+      // cross-checks and emits the structured security log on mismatch.
+      let derivedTradePda: string | undefined;
+      let derivedEscrowPda: string | undefined;
+      const anyEscrowFieldProvided =
+        !!escrow_creator_wallet ||
+        (escrow_trade_id !== null && escrow_trade_id !== undefined) ||
+        !!escrow_trade_pda ||
+        !!escrow_pda;
+      if (anyEscrowFieldProvided) {
+        const verify = verifyEscrowPdaBinding({
+          orderId: id,
+          creatorWallet: escrow_creator_wallet ?? null,
+          tradeId: escrow_trade_id ?? null,
+          submittedTradePda: escrow_trade_pda ?? null,
+          submittedEscrowPda: escrow_pda ?? null,
+        });
+        if (!verify.ok) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Escrow PDA binding rejected: ${verify.reason}`,
+              code: 'ESCROW_PDA_MISMATCH',
+              field: verify.field ?? null,
+            },
+            { status: 400 }
+          );
+        }
+        derivedTradePda = verify.derived.tradePda;
+        derivedEscrowPda = verify.derived.escrowPda;
+      }
+
       const escrowResult = await mockEscrowLock(
         id,
         actor_type,
@@ -197,8 +274,9 @@ export async function POST(
         escrowTxHash,
         {
           escrow_trade_id: escrow_trade_id ?? undefined,
-          escrow_trade_pda: escrow_trade_pda ?? undefined,
-          escrow_pda: escrow_pda ?? undefined,
+          // Always store the SERVER-DERIVED PDAs, never the client-submitted ones.
+          escrow_trade_pda: derivedTradePda ?? (escrow_trade_pda ?? undefined),
+          escrow_pda: derivedEscrowPda ?? (escrow_pda ?? undefined),
           escrow_creator_wallet: escrow_creator_wallet ?? undefined,
         }
       );
@@ -670,9 +748,8 @@ export async function GET(
       return notFoundResponse('Order');
     }
 
-    // Determine actor ID from auth context
-    const headerMerchantId = request.headers.get('x-merchant-id');
-    const actorId = headerMerchantId || auth.actorId;
+    // Determine actor ID from auth context (cryptographically-signed JWT).
+    const actorId = auth.actorId;
 
     const allowedActions = getAllowedActions(order, actorId);
     const role = resolveTradeRole(order, actorId);

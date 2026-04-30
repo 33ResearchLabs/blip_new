@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { updateOrderStatus } from '@/lib/db/repositories/orders';
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 import { logger } from '@/lib/logger';
 import { requireAuth } from '@/lib/middleware/auth';
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
+import { atomicFinalizeDispute, DisputeResolution } from '@/lib/orders/atomicFinalizeDispute';
 
 async function hasComplianceAccess(auth: { actorType: string; merchantId?: string }): Promise<boolean> {
   if (auth.actorType === 'compliance' || auth.actorType === 'system') return true;
@@ -117,17 +117,21 @@ export async function POST(
       );
     }
 
-    // Get the dispute and order details
+    // Existence + escrow-detail lookup. The status check has moved INSIDE
+    // the helper's transaction (re-checked under FOR UPDATE) — this read is
+    // only for 404 fast-fail and to surface escrow detail in the response.
     const disputeResult = await query(
-      `SELECT d.*, o.id as order_id, o.status as order_status, o.crypto_amount, o.user_id, o.merchant_id,
-              o.escrow_tx_hash, o.escrow_trade_id, o.escrow_trade_pda, o.escrow_pda, o.escrow_creator_wallet,
+      `SELECT d.id as dispute_id, o.id as order_id, o.status as order_status,
+              o.crypto_amount, o.user_id, o.merchant_id,
+              o.escrow_tx_hash, o.escrow_trade_id, o.escrow_trade_pda,
+              o.escrow_pda, o.escrow_creator_wallet,
               u.wallet_address as user_wallet,
               m.wallet_address as merchant_wallet
-       FROM disputes d
-       JOIN orders o ON d.order_id = o.id
-       LEFT JOIN users u ON o.user_id = u.id
-       LEFT JOIN merchants m ON o.merchant_id = m.id
-       WHERE d.order_id = $1`,
+         FROM disputes d
+         JOIN orders o ON d.order_id = o.id
+         LEFT JOIN users u ON o.user_id = u.id
+         LEFT JOIN merchants m ON o.merchant_id = m.id
+        WHERE d.order_id = $1`,
       [orderId]
     );
 
@@ -139,8 +143,6 @@ export async function POST(
     }
 
     const dispute = disputeResult[0] as {
-      id: string;
-      status: string;
       order_id: string;
       order_status: string;
       crypto_amount: string;
@@ -155,134 +157,67 @@ export async function POST(
       merchant_wallet: string | null;
     };
 
-    // Only allow finalizing from disputed or investigating status
-    if (!['disputed'].includes(dispute.order_status)) {
-      return NextResponse.json(
-        { success: false, error: `Cannot finalize dispute for order in '${dispute.order_status}' status` },
-        { status: 400 }
-      );
-    }
-
-    // Determine the new order status based on resolution
-    let newOrderStatus: 'completed' | 'cancelled';
-    let escrowAction: 'release' | 'refund';
-
-    if (resolution === 'user') {
-      // User wins - release escrow to user
-      newOrderStatus = 'completed';
-      escrowAction = 'release';
-    } else if (resolution === 'merchant') {
-      // Merchant wins - refund escrow to merchant
-      newOrderStatus = 'cancelled';
-      escrowAction = 'refund';
-    } else {
-      // Split - handle off-chain, mark as completed
-      newOrderStatus = 'completed';
-      escrowAction = 'release'; // Partial release handled off-chain
-    }
-
-    // Update dispute status to resolved
-    await query(
-      `UPDATE disputes
-       SET status = 'resolved'::dispute_status,
-           resolved_by = $1,
-           resolved_at = NOW(),
-           proposed_resolution = $2,
-           resolution_notes = COALESCE(resolution_notes || E'\n', '') || $3
-       WHERE order_id = $4`,
-      [
-        complianceId,
-        resolution,
-        `[${new Date().toISOString()}] FINALIZED by ${complianceMember.name} (${complianceMember.role}): ${notes || 'No notes'}`,
-        orderId
-      ]
-    );
-
-    // Update order status and record release/refund tx if provided
-    const updateFields: string[] = [];
-    const updateValues: (string | null)[] = [];
-    let paramIndex = 1;
-
-    if (release_tx_hash) {
-      updateFields.push(`release_tx_hash = $${paramIndex++}`);
-      updateValues.push(release_tx_hash);
-    }
-    if (refund_tx_hash) {
-      updateFields.push(`refund_tx_hash = $${paramIndex++}`);
-      updateValues.push(refund_tx_hash);
-    }
-
-    if (newOrderStatus === 'completed') {
-      updateFields.push(`completed_at = NOW()`);
-    } else {
-      updateFields.push(`cancelled_at = NOW()`);
-    }
-
-    if (updateFields.length > 0) {
-      updateValues.push(orderId);
-      await query(
-        `UPDATE orders SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`,
-        updateValues
-      );
-    }
-
-    // Update order status via state machine
-    const result = await updateOrderStatus(
+    // ── Atomic finalization ───────────────────────────────────────────
+    // Single transaction: lock order row → conditional refund to
+    // escrow_debited_entity_id → status flip → dispute UPDATE →
+    // order_events + notification_outbox + chat_messages. Any failure
+    // ROLLBACKs the whole thing.
+    const result = await atomicFinalizeDispute({
       orderId,
-      newOrderStatus,
-      'system', // Compliance acts as system
-      complianceId,
-      { resolution, notes }
-    );
+      resolution: resolution as DisputeResolution,
+      complianceMember,
+      notes,
+      releaseTxHash: release_tx_hash,
+      refundTxHash: refund_tx_hash,
+    });
 
-    if (!result.success) {
+    if (!result.success || !result.order) {
+      // Map error categories:
+      //   400 — caller error (already-finalized dispute, retry of terminal state)
+      //   404 — order itself does not exist
+      //   409 — concurrent writer changed status mid-flight
+      //   422 — refund target unresolvable or fails consistency check
+      //         (data corruption, legacy-edge case, etc.) — needs manual review
+      //   500 — anything else
+      const status =
+        result.error?.startsWith('Cannot finalize dispute') ? 400 :
+        result.error === 'Order not found' ? 404 :
+        result.error?.includes('Order status changed') ? 409 :
+        (result.error?.startsWith('Cannot determine refund target')
+          || result.error?.startsWith('Refund target validation failed')
+          || result.error?.startsWith('Escrow-debited entity not found')) ? 422 :
+        500;
       return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 400 }
+        { success: false, error: result.error ?? 'Failed to finalize dispute' },
+        { status }
       );
     }
 
-    // Send real-time notification
-    if (result.order) {
-      notifyOrderStatusUpdated({
-        orderId,
-        userId: dispute.user_id,
-        merchantId: dispute.merchant_id,
-        status: newOrderStatus,
-        previousStatus: dispute.order_status,
-        updatedAt: new Date().toISOString(),
-        data: {
-          ...result.order,
-          dispute_resolution: resolution,
-          resolved_by: complianceMember.name,
-        },
-      });
-    }
-
-    // Add system message to chat
-    try {
-      await query(
-        `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, created_at)
-         VALUES ($1, 'system'::actor_type, $2, $3, 'system'::message_type, NOW())`,
-        [orderId, complianceId, JSON.stringify({
-          type: 'dispute_finalized',
-          resolution,
-          resolvedBy: complianceMember.name,
-          escrowAction,
-          notes,
-        })]
-      );
-    } catch (msgErr) {
-      logger.warn('Failed to add dispute resolution message to chat', { error: msgErr });
-    }
+    // Best-effort real-time push. The notification_outbox row was already
+    // written inside the transaction, so the worker republishes if this
+    // call fails or the connection drops mid-flight.
+    notifyOrderStatusUpdated({
+      orderId,
+      userId: dispute.user_id,
+      merchantId: dispute.merchant_id,
+      status: result.newStatus!,
+      previousStatus: 'disputed',
+      updatedAt: new Date().toISOString(),
+      data: {
+        ...result.order,
+        dispute_resolution: resolution,
+        resolved_by: complianceMember.name,
+      },
+    });
 
     logger.info('Dispute finalized', {
       orderId,
       resolution,
-      escrowAction,
-      newOrderStatus,
+      escrowAction: result.escrowAction,
+      newOrderStatus: result.newStatus,
       complianceId,
       complianceName: complianceMember.name,
+      refundedTo: result.refundedTo ?? null,
     });
 
     return NextResponse.json({
@@ -290,10 +225,10 @@ export async function POST(
       data: {
         orderId,
         resolution,
-        newStatus: newOrderStatus,
-        escrowAction,
-        message: `Dispute finalized. Order status: ${newOrderStatus}. Escrow action: ${escrowAction}.`,
-        // Escrow details for compliance to process on-chain if needed
+        newStatus: result.newStatus,
+        escrowAction: result.escrowAction,
+        refundedTo: result.refundedTo ?? null,
+        message: `Dispute finalized. Order status: ${result.newStatus}. Escrow action: ${result.escrowAction}.`,
         escrowDetails: dispute.escrow_tx_hash ? {
           escrow_tx_hash: dispute.escrow_tx_hash,
           escrow_trade_id: dispute.escrow_trade_id,

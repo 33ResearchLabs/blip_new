@@ -5,50 +5,106 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual, randomBytes } from 'crypto';
 import { getOrderById } from '../db/repositories/orders';
 import { getUserById } from '../db/repositories/users';
 import { getMerchantById } from '../db/repositories/merchants';
 import { verifySessionToken } from '../auth/sessionToken';
 import { checkBlacklist } from './blacklist';
 import { hasNoActiveSessions, isSessionValid } from '../auth/sessions';
+import { isAdminJtiRevoked } from '@/lib/auth/adminRevocation';
 
-// Admin auth secret - MUST be configured via environment variable
-const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
+// Admin auth secret - MUST be configured via environment variable.
+// Resolved LAZILY (not captured at module load) so:
+//   1. Next.js build-time page-data collection doesn't trip on a missing
+//      env var, and
+//   2. tests can set process.env.ADMIN_SECRET AFTER importing this module
+//      (jest hoists imports above test setup).
+function getAdminSecret(): string {
+  return process.env.ADMIN_SECRET || '';
+}
 
 /**
- * Generate a signed admin token (HMAC-based, stateless)
- * Token format: base64(username:timestamp:hmac_signature)
- * Valid for 24 hours.
+ * Cookie that carries the admin token. Set as httpOnly + Secure +
+ * SameSite=Strict by the login route — never readable from JS, never
+ * sent on cross-site requests.
+ */
+export const ADMIN_COOKIE_NAME = 'blip_admin_session';
+export const ADMIN_TOKEN_TTL_SECONDS = 86400; // 24 hours
+
+export interface AdminTokenPayload {
+  valid: boolean;
+  username?: string;
+  /** Set for tokens issued AFTER the cookie migration. Legacy tokens have no jti. */
+  jti?: string;
+  /** Issued-at timestamp (seconds). Used to compute remaining TTL on revoke. */
+  issuedAt?: number;
+  /** True for legacy 3-part tokens that pre-date this migration. */
+  legacyNoJti?: boolean;
+}
+
+/**
+ * Generate a signed admin token.
+ *
+ * New format (post-migration):
+ *   base64(username:timestamp:jti:hmac_signature)
+ *
+ * Legacy format (kept for verifier compatibility, NEVER issued by this fn):
+ *   base64(username:timestamp:hmac_signature)
+ *
+ * Valid for 24 hours. The jti is 16 random bytes hex-encoded — used by
+ * the revocation list to invalidate individual tokens (logout, rotation).
  */
 export function generateAdminToken(username: string): string {
   const ts = Math.floor(Date.now() / 1000);
-  const payload = `${username}:${ts}`;
-  const sig = createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
+  const jti = randomBytes(16).toString('hex');
+  const payload = `${username}:${ts}:${jti}`;
+  const sig = createHmac('sha256', getAdminSecret()).update(payload).digest('hex');
   return Buffer.from(`${payload}:${sig}`).toString('base64');
 }
 
 /**
- * Verify a signed admin token
+ * Verify a signed admin token. Accepts BOTH formats:
+ *   - 4-part (username:ts:jti:sig)        — current
+ *   - 3-part (username:ts:sig)            — legacy, transitional support
+ *
+ * Does NOT check the revocation list — that is the caller's responsibility
+ * (it requires an async Redis call). Returns the jti so the caller can
+ * decide whether to enforce revocation.
  */
-export function verifyAdminToken(token: string): { valid: boolean; username?: string } {
+export function verifyAdminToken(token: string): AdminTokenPayload {
   try {
     const decoded = Buffer.from(token, 'base64').toString();
     const parts = decoded.split(':');
-    if (parts.length !== 3) return { valid: false };
+    if (parts.length !== 3 && parts.length !== 4) return { valid: false };
 
-    const [username, tsStr, sig] = parts;
+    let username: string;
+    let tsStr: string;
+    let jti: string | undefined;
+    let sig: string;
+    let signedPayload: string;
+    let legacyNoJti = false;
+
+    if (parts.length === 4) {
+      [username, tsStr, jti, sig] = parts;
+      signedPayload = `${username}:${tsStr}:${jti}`;
+    } else {
+      [username, tsStr, sig] = parts;
+      signedPayload = `${username}:${tsStr}`;
+      legacyNoJti = true;
+    }
+
     const ts = parseInt(tsStr);
     if (isNaN(ts)) return { valid: false };
 
     // Token expires after 24 hours
-    if (Math.floor(Date.now() / 1000) - ts > 86400) return { valid: false };
+    if (Math.floor(Date.now() / 1000) - ts > ADMIN_TOKEN_TTL_SECONDS) return { valid: false };
 
-    const expected = createHmac('sha256', ADMIN_SECRET).update(`${username}:${tsStr}`).digest('hex');
+    const expected = createHmac('sha256', getAdminSecret()).update(signedPayload).digest('hex');
     if (sig.length !== expected.length) return { valid: false };
 
     if (timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) {
-      return { valid: true, username };
+      return { valid: true, username, jti, issuedAt: ts, legacyNoJti };
     }
   } catch {
     // Invalid token format
@@ -57,28 +113,72 @@ export function verifyAdminToken(token: string): { valid: boolean; username?: st
 }
 
 /**
- * Require admin authentication on a route.
- * Returns null if auth passes, or a 401 response if it fails.
+ * Extract the admin token from a request — cookie first, Bearer header
+ * fallback. The Bearer fallback exists ONLY to migrate users with a
+ * legacy localStorage token; it MUST be removed in a follow-up once all
+ * legacy tokens have aged out (24h after frontend deploy).
  *
- * Usage: const authErr = requireAdminAuth(request); if (authErr) return authErr;
+ * Returns the raw token string or null if nothing presents.
  */
-export function requireAdminAuth(request: NextRequest): NextResponse | null {
-  if (!ADMIN_SECRET) {
+export function readAdminTokenFromRequest(request: NextRequest): string | null {
+  const cookieToken = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  if (cookieToken) return cookieToken;
+
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
+
+  return null;
+}
+
+/**
+ * Build the Set-Cookie attributes for the admin session cookie. Centralised
+ * so login, GET-migration, and logout all agree.
+ */
+export function adminCookieOptions(maxAgeSeconds: number): {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: 'strict';
+  path: '/';
+  maxAge: number;
+} {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+    maxAge: maxAgeSeconds,
+  };
+}
+
+/**
+ * Require admin authentication on a route.
+ * Returns null if auth passes, or a 4xx/503 response if it fails.
+ *
+ * Order:
+ *   1. ADMIN_SECRET env present
+ *   2. Token present (cookie OR Bearer)
+ *   3. HMAC signature + expiry valid
+ *   4. jti not in revocation set (Redis). If Redis is down → 503.
+ *
+ * Usage: const authErr = await requireAdminAuth(request); if (authErr) return authErr;
+ */
+export async function requireAdminAuth(request: NextRequest): Promise<NextResponse | null> {
+  if (!getAdminSecret()) {
     return NextResponse.json(
       { success: false, error: 'Admin auth not configured — set ADMIN_SECRET env var' },
       { status: 401 }
     );
   }
 
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
+  const token = readAdminTokenFromRequest(request);
+  if (!token) {
     return NextResponse.json(
       { success: false, error: 'Admin authentication required' },
       { status: 401 }
     );
   }
 
-  const result = verifyAdminToken(authHeader.slice(7));
+  const result = verifyAdminToken(token);
   if (!result.valid) {
     return NextResponse.json(
       { success: false, error: 'Invalid or expired admin token' },
@@ -86,8 +186,32 @@ export function requireAdminAuth(request: NextRequest): NextResponse | null {
     );
   }
 
+  // Revocation check — only meaningful for jti-bearing tokens. Legacy
+  // tokens are admitted with a one-time warning; they age out in 24h.
+  if (result.jti) {
+    try {
+      const revoked = await isAdminJtiRevoked(result.jti);
+      if (revoked) {
+        return NextResponse.json(
+          { success: false, error: 'Admin token has been revoked' },
+          { status: 401 }
+        );
+      }
+    } catch {
+      // isAdminJtiRevoked throws REVOCATION_CHECK_UNAVAILABLE when Redis
+      // is unreachable. Fail-closed: 503 — the operator can flip
+      // ADMIN_AUTH_REVOCATION_FAIL_OPEN=true during a Redis outage if
+      // they accept the risk.
+      return NextResponse.json(
+        { success: false, error: 'Admin auth temporarily unavailable — try again shortly' },
+        { status: 503 }
+      );
+    }
+  }
+
   return null;
 }
+
 
 export interface AuthContext {
   userId?: string;

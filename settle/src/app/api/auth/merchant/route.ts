@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { verifyWalletSignature } from '@/lib/solana/verifySignature';
+import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { requireTokenAuth } from '@/lib/middleware/auth';
 import { updateMerchantOnlineStatus, serializeMerchant } from '@/lib/db/repositories/merchants';
@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { action, wallet_address, signature, message, username } = body;
+    const { action, wallet_address, signature, message, nonce, username } = body;
 
     // Wallet-based login/signup
     if (action === 'wallet_login') {
@@ -192,12 +192,17 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Verify the wallet signature
-      const isValid = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValid) {
+      // Strict: signature + nonce + timestamp window all required.
+      const authResult = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!authResult.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: authResult.error },
+          { status: authResult.status }
         );
       }
 
@@ -308,19 +313,24 @@ export async function POST(request: NextRequest) {
 
     // Create new merchant account with username
     if (action === 'create_merchant') {
-      if (!wallet_address || !signature || !message || !username) {
+      if (!wallet_address || !signature || !message || !nonce || !username) {
         return NextResponse.json(
-          { success: false, error: 'wallet_address, signature, message, and username are required' },
+          { success: false, error: 'wallet_address, signature, message, nonce, and username are required' },
           { status: 400 }
         );
       }
 
-      // Verify the wallet signature
-      const isValid = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValid) {
+      // Strict signature + nonce + timestamp.
+      const createAuth = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!createAuth.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: createAuth.error },
+          { status: createAuth.status }
         );
       }
 
@@ -440,19 +450,24 @@ export async function POST(request: NextRequest) {
 
     // Set username for existing merchant
     if (action === 'set_username') {
-      if (!wallet_address || !signature || !message || !username) {
+      if (!wallet_address || !signature || !message || !nonce || !username) {
         return NextResponse.json(
-          { success: false, error: 'wallet_address, signature, message, and username are required' },
+          { success: false, error: 'wallet_address, signature, message, nonce, and username are required' },
           { status: 400 }
         );
       }
 
-      // Verify the wallet signature
-      const isValid = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValid) {
+      // Strict signature + nonce + timestamp.
+      const setNameAuth = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!setNameAuth.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: setNameAuth.error },
+          { status: setNameAuth.status }
         );
       }
 
@@ -534,19 +549,24 @@ export async function POST(request: NextRequest) {
     if (action === 'update_username') {
       const { merchant_id } = body;
 
-      if (!merchant_id || !username || !wallet_address || !signature || !message) {
+      if (!merchant_id || !username || !wallet_address || !signature || !message || !nonce) {
         return NextResponse.json(
-          { success: false, error: 'merchant_id, username, wallet_address, signature, and message are required' },
+          { success: false, error: 'merchant_id, username, wallet_address, signature, message, and nonce are required' },
           { status: 400 }
         );
       }
 
-      // Verify the wallet signature to prove ownership
-      const isValid = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValid) {
+      // Strict signature + nonce + timestamp ownership proof.
+      const updateNameAuth = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!updateNameAuth.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: updateNameAuth.error },
+          { status: updateNameAuth.status }
         );
       }
 
@@ -1017,11 +1037,11 @@ export async function PATCH(request: NextRequest) {
     if (auth instanceof NextResponse) return auth;
 
     const body = await request.json();
-    const { merchant_id, wallet_address, signature, message } = body;
+    const { merchant_id, wallet_address, signature, message, nonce } = body;
 
-    if (!merchant_id || !wallet_address || !signature || !message) {
+    if (!merchant_id || !wallet_address || !signature || !message || !nonce) {
       return NextResponse.json(
-        { success: false, error: 'merchant_id, wallet_address, signature, and message are required' },
+        { success: false, error: 'merchant_id, wallet_address, signature, message, and nonce are required' },
         { status: 400 }
       );
     }
@@ -1034,12 +1054,20 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Verify the wallet signature proves ownership of the NEW wallet
-    const isValid = await verifyWalletSignature(wallet_address, signature, message);
-    if (!isValid) {
+    // Strict ownership proof of the NEW wallet — server-issued nonce, signed,
+    // freshness-checked, single-use.  Without this a captured update_wallet
+    // request could be replayed to point a victim's account at any address
+    // an attacker controls a snapshot of.
+    const updateWalletAuth = await verifyWalletAuthRequest({
+      walletAddress: wallet_address,
+      signature,
+      message,
+      nonce,
+    });
+    if (!updateWalletAuth.ok) {
       return NextResponse.json(
-        { success: false, error: 'Invalid wallet signature' },
-        { status: 401 }
+        { success: false, error: updateWalletAuth.error },
+        { status: updateWalletAuth.status }
       );
     }
 

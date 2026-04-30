@@ -139,13 +139,11 @@ export function useUserAuth({
     }
 
     try {
-      const timestamp = Date.now();
-      const nonce = Math.random().toString(36).substring(7);
-      const message = `Sign this message to authenticate with Blip Money\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
-      const encodedMessage = new TextEncoder().encode(message);
-      const signatureUint8 = await signFn(encodedMessage);
-      const bs58 = await import('bs58');
-      const signature = bs58.default.encode(signatureUint8);
+      // Server-issued nonce flow — no client-generated nonce. The legacy
+      // dual-mode (LOGIN_NONCE_REQUIRED=false) was removed; this path now
+      // requires a fresh, single-use nonce from /api/auth/nonce.
+      const { signLoginNonce } = await import('@/lib/auth/walletAuth');
+      const { nonce, message, signature } = await signLoginNonce(walletAddress, signFn);
 
       const res = await fetchWithAuth('/api/auth/user', {
         method: 'POST',
@@ -155,6 +153,7 @@ export function useUserAuth({
           wallet_address: walletAddress,
           signature,
           message,
+          nonce,
           username: username.trim(),
         }),
       });

@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMerchantById, updateMerchant } from '@/lib/db/repositories/merchants';
+import {
+  getMerchantByIdSafe,
+  serializeMerchant,
+  updateMerchant,
+} from '@/lib/db/repositories/merchants';
 import { updateMerchantSchema, uuidSchema } from '@/lib/validation/schemas';
-import { requireAuth, forbiddenResponse } from '@/lib/middleware/auth';
+import {
+  requireAuth,
+  forbiddenResponse,
+  verifyAdminToken,
+} from '@/lib/middleware/auth';
 
 export async function GET(
   request: NextRequest,
@@ -18,7 +26,40 @@ export async function GET(
       );
     }
 
-    const merchant = await getMerchantById(id);
+    // ── L1+L2: AuthN + AuthZ ──────────────────────────────────────────
+    // Allow callers in two scopes only:
+    //   1. admin    — valid admin HMAC token (Authorization: Bearer <admin>)
+    //   2. self     — merchant token whose actorId matches the URL id
+    // Anything else → 403 (logged). No anonymous reads.
+    const authHeader = request.headers.get('authorization');
+    const bearer =
+      authHeader && authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7)
+        : null;
+
+    let scope: 'admin' | 'self' | null = null;
+
+    if (bearer && verifyAdminToken(bearer).valid) {
+      scope = 'admin';
+    } else {
+      const auth = await requireAuth(request);
+      if (auth instanceof NextResponse) return auth;
+
+      if (auth.actorType === 'merchant' && auth.actorId === id) {
+        scope = 'self';
+      } else {
+        console.warn('[SECURITY] GET /api/merchant/[id] forbidden cross-actor read', {
+          targetMerchantId: id,
+          actorType: auth.actorType,
+          actorId: auth.actorId,
+          route: request.nextUrl.pathname,
+        });
+        return forbiddenResponse('You can only view your own merchant profile');
+      }
+    }
+
+    // ── L3: explicit projection — secrets never enter the response path ──
+    const merchant = await getMerchantByIdSafe(id);
 
     if (!merchant) {
       return NextResponse.json(
@@ -27,7 +68,13 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: merchant });
+    console.info('[API] GET /api/merchant/[id] ok', {
+      merchantId: id,
+      scope,
+    });
+
+    // ── L4: DTO allowlist serializer (already used across auth/merchant) ──
+    return NextResponse.json({ success: true, data: serializeMerchant(merchant) });
   } catch (error) {
     console.error('[API] GET /api/merchant/[id] error:', error);
     return NextResponse.json(

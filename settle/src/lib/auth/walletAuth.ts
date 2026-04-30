@@ -2,8 +2,10 @@ import bs58 from 'bs58';
 import { randomBytes } from 'crypto';
 
 /**
- * Generate a login message for the user to sign.
- * Uses crypto.randomBytes for a cryptographically secure nonce.
+ * @deprecated Client-generated login messages are vulnerable to replay
+ * (the server has no record of the nonce so it cannot mark it consumed).
+ * Use {@link fetchLoginNonce} → {@link signLoginNonce} instead. Kept exported
+ * only for non-auth call sites that rely on the same string format.
  */
 export function generateLoginMessage(walletAddress: string): string {
   const timestamp = Date.now();
@@ -36,13 +38,57 @@ export async function requestWalletSignature(
   return bs58.encode(signature);
 }
 
+/** Server-issued login nonce + canonical message-to-sign (replay protection). */
+export interface LoginNonce {
+  nonce: string;
+  message: string;
+  expiresAt: string;
+}
+
+/** Ask the server for a login nonce. The returned `message` is what to sign. */
+export async function fetchLoginNonce(walletAddress: string): Promise<LoginNonce> {
+  const res = await fetch('/api/auth/nonce', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wallet_address: walletAddress }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.success || !json?.data?.nonce || !json?.data?.message) {
+    throw new Error(json?.error || 'Failed to obtain login nonce');
+  }
+  return {
+    nonce: json.data.nonce,
+    message: json.data.message,
+    expiresAt: json.data.expires_at,
+  };
+}
+
 /**
- * Authenticate user with wallet signature
+ * Single entry point for "ask server for nonce, sign it, return everything the
+ * auth endpoint needs". Every wallet-signature flow (user / merchant /
+ * compliance / link / set_username / wallet update) uses this.
+ */
+export async function signLoginNonce(
+  walletAddress: string,
+  signMessage: ((message: Uint8Array) => Promise<Uint8Array>) | undefined,
+): Promise<{ nonce: string; message: string; signature: string }> {
+  const issued = await fetchLoginNonce(walletAddress);
+  const signature = await requestWalletSignature(signMessage, issued.message);
+  return { nonce: issued.nonce, message: issued.message, signature };
+}
+
+type SignMessageFn = ((message: Uint8Array) => Promise<Uint8Array>) | undefined;
+
+/**
+ * Authenticate user with wallet signature.
+ *
+ * Caller passes the wallet's `signMessage` function; this helper takes care of
+ * fetching a server-issued nonce and including it in the POST body. There is
+ * no signature-only path: the server requires nonce + signature + timestamp.
  */
 export async function authenticateWithWallet(
   walletAddress: string,
-  signature: string,
-  message: string
+  signMessage: SignMessageFn,
 ): Promise<{
   success: boolean;
   user?: any;
@@ -51,6 +97,7 @@ export async function authenticateWithWallet(
   error?: string;
 }> {
   try {
+    const { nonce, message, signature } = await signLoginNonce(walletAddress, signMessage);
     const response = await fetch('/api/auth/user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -59,6 +106,7 @@ export async function authenticateWithWallet(
         wallet_address: walletAddress,
         signature,
         message,
+        nonce,
       }),
     });
 
@@ -74,19 +122,20 @@ export async function authenticateWithWallet(
 }
 
 /**
- * Set username for first-time users
+ * Set username for first-time users.
+ * Same nonce-required contract as `authenticateWithWallet`.
  */
 export async function setUsername(
   walletAddress: string,
-  signature: string,
-  message: string,
-  username: string
+  signMessage: SignMessageFn,
+  username: string,
 ): Promise<{
   success: boolean;
   user?: any;
   error?: string;
 }> {
   try {
+    const { nonce, message, signature } = await signLoginNonce(walletAddress, signMessage);
     const response = await fetch('/api/auth/user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -95,6 +144,7 @@ export async function setUsername(
         wallet_address: walletAddress,
         signature,
         message,
+        nonce,
         username,
       }),
     });
@@ -111,12 +161,12 @@ export async function setUsername(
 }
 
 /**
- * Authenticate merchant with wallet signature
+ * Authenticate merchant with wallet signature.
+ * Same nonce-required contract as `authenticateWithWallet`.
  */
 export async function authenticateMerchantWithWallet(
   walletAddress: string,
-  signature: string,
-  message: string
+  signMessage: SignMessageFn,
 ): Promise<{
   success: boolean;
   merchant?: any;
@@ -125,6 +175,7 @@ export async function authenticateMerchantWithWallet(
   error?: string;
 }> {
   try {
+    const { nonce, message, signature } = await signLoginNonce(walletAddress, signMessage);
     const response = await fetch('/api/auth/merchant', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -133,6 +184,7 @@ export async function authenticateMerchantWithWallet(
         wallet_address: walletAddress,
         signature,
         message,
+        nonce,
       }),
     });
 
@@ -148,19 +200,20 @@ export async function authenticateMerchantWithWallet(
 }
 
 /**
- * Create merchant account with username
+ * Create merchant account with username.
+ * Same nonce-required contract as `authenticateWithWallet`.
  */
 export async function createMerchantAccount(
   walletAddress: string,
-  signature: string,
-  message: string,
-  username: string
+  signMessage: SignMessageFn,
+  username: string,
 ): Promise<{
   success: boolean;
   merchant?: any;
   error?: string;
 }> {
   try {
+    const { nonce, message, signature } = await signLoginNonce(walletAddress, signMessage);
     const response = await fetch('/api/auth/merchant', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -169,6 +222,7 @@ export async function createMerchantAccount(
         wallet_address: walletAddress,
         signature,
         message,
+        nonce,
         username,
       }),
     });

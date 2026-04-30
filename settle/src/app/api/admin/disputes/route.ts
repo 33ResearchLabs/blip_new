@@ -4,7 +4,7 @@ import { requireAdminAuth } from '@/lib/middleware/auth';
 
 // GET /api/admin/disputes — Dispute stats: top disputed merchants & users
 export async function GET(request: NextRequest) {
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {

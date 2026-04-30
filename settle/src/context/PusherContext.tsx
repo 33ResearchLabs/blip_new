@@ -168,20 +168,59 @@ export function PusherProvider({ children }: PusherProviderProps) {
         cleanup();
       }
 
-      // Create Pusher client with auth headers
+      // Create Pusher client with a custom authorizer.
+      // We do NOT use `auth.headers` (static, captured at init time) because
+      // the session token may rotate while the connection is open. The
+      // authorizer below is invoked on every channel subscribe/auth, so it
+      // always picks up the freshest token.
+      //
+      // Identity is established server-side from Authorization: Bearer ...
+      // (see /api/pusher/auth). x-actor-id / x-actor-type are NOT sent —
+      // those headers were the bypass vector this fix removes.
+      const { buildPusherAuthHeaders } = await import('@/lib/pusher/authHeaders');
+
       const pusher = new PusherClient(key, {
         cluster,
         authEndpoint: '/api/pusher/auth',
-        auth: {
-          headers: {
-            'x-actor-type': actorType,
-            'x-actor-id': actorId,
+        authTransport: 'ajax',
+        authorizer: (channel: { name: string }) => ({
+          authorize: (
+            socketId: string,
+            callback: (err: Error | null, data: unknown) => void,
+          ) => {
+            const body = new URLSearchParams({
+              socket_id: socketId,
+              channel_name: channel.name,
+            }).toString();
+            fetch('/api/pusher/auth', {
+              method: 'POST',
+              credentials: 'same-origin', // sends refresh cookie if needed
+              headers: {
+                ...buildPusherAuthHeaders(),
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body,
+            })
+              .then(async (res) => {
+                if (!res.ok) {
+                  let errMsg = `Pusher auth failed: ${res.status}`;
+                  try {
+                    const errBody = await res.json();
+                    if (errBody?.error) errMsg = `${errMsg} — ${errBody.error}`;
+                  } catch { /* non-JSON body */ }
+                  callback(new Error(errMsg), null);
+                  return;
+                }
+                const data = await res.json();
+                callback(null, data);
+              })
+              .catch((err) => callback(err instanceof Error ? err : new Error(String(err)), null));
           },
-        },
+        }),
         // Enable auto-reconnect with exponential backoff
         activityTimeout: 30000,
         pongTimeout: 10000,
-      }) as unknown as PusherClientType;
+      } as unknown as ConstructorParameters<typeof PusherClient>[1]) as unknown as PusherClientType;
 
       pusherRef.current = pusher;
 

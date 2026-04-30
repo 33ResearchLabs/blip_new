@@ -71,6 +71,13 @@ export const walletAuthSchema = z.object({
   wallet_address: walletAddressSchema,
   type: z.enum(['user', 'merchant']).default('user'),
   name: z.string().min(1).max(100).optional(),
+  // Replay-protection fields — ALL required. The legacy dual-mode rollout
+  // (signature optional, nonce optional) was removed alongside the
+  // LOGIN_NONCE_REQUIRED env flag. Freshness/consumption checks happen in
+  // verifyWalletAuthRequest; presence is enforced here.
+  signature: z.string().min(1).max(256),
+  message: z.string().min(1).max(512),
+  nonce: z.string().regex(/^[a-f0-9]{64}$/i, 'Invalid nonce format'),
 });
 
 // User schemas

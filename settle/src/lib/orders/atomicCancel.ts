@@ -21,6 +21,12 @@ import { transaction } from '@/lib/db';
 import { Order, ActorType } from '@/lib/types/database';
 import { logger } from '@/lib/logger';
 import { validateTransition } from './stateMachineMinimal';
+import {
+  resolveRefundTarget,
+  validateRefundTarget,
+  logLegacyRefundDerivation,
+  logRefundTargetMismatch,
+} from './escrowRefundTarget';
 
 
 export interface AtomicCancelResult {
@@ -97,47 +103,86 @@ export async function atomicCancelWithRefund(
       }
 
       const hadEscrow = !!lockedOrder.escrow_tx_hash;
-      const escrowDebitedEntityId = lockedOrder.escrow_debited_entity_id;
-      const escrowDebitedEntityType = lockedOrder.escrow_debited_entity_type;
-      const escrowDebitedAmount = lockedOrder.escrow_debited_amount
-        ? parseFloat(String(lockedOrder.escrow_debited_amount))
-        : 0;
 
-      // TASK 4: Refund always goes to escrow_debited_entity_id (the entity that
-      // actually paid), NOT derived from order roles. This is the single source
-      // of truth recorded at escrow lock time.
-      if (hadEscrow && escrowDebitedEntityId && escrowDebitedAmount > 0) {
-        const refundTable = escrowDebitedEntityType === 'merchant' ? 'merchants' : 'users';
+      // Refund destination: ALWAYS the entity that actually funded the
+      // escrow at lock time, not derived from order roles. Recorded source
+      // of truth is `escrow_debited_entity_id`. For legacy orders predating
+      // migration 026, fall back to the migration-052 role-derivation rules
+      // inside resolveRefundTarget — never silently skip a legacy refund.
+      //
+      // Validation step rejects corrupted entity_id (foreign UUID, type
+      // disagrees with role) BEFORE moving any balance — a misdirected
+      // refund is unrecoverable; a 422 to the caller is a manual review.
+      let refundedTo: { entityId: string; entityType: 'user' | 'merchant'; amount: number } | undefined;
 
-        // Restore balance to the entity that was debited
-        const balanceResult = await client.query(
-          `SELECT balance FROM ${refundTable} WHERE id = $1 FOR UPDATE`,
-          [escrowDebitedEntityId]
-        );
+      if (hadEscrow) {
+        const resolved = resolveRefundTarget(lockedOrder);
 
-        if (balanceResult.rows.length > 0) {
+        if (resolved.kind === 'no_escrow') {
+          // Should not happen given hadEscrow — defensive only.
+          logger.warn('[Atomic] Cancel refund: resolver says no_escrow despite tx_hash', {
+            orderId,
+          });
+        } else if (resolved.kind === 'indeterminate') {
+          // Legacy order with no recorded fields AND not derivable from
+          // roles. Refusing is safer than guessing — this previously
+          // silently skipped the refund and cancelled the order anyway,
+          // leaving the seller short.
+          logger.error('[security] Cancel refund: target indeterminate; REFUSING refund', {
+            orderId,
+            reason: resolved.reason,
+            order_type: lockedOrder.type,
+            escrow_debited_entity_id: lockedOrder.escrow_debited_entity_id,
+          });
+          throw new Error(`REFUND_TARGET_INDETERMINATE:${resolved.reason}`);
+        } else {
+          const validation = validateRefundTarget(lockedOrder, {
+            entityId: resolved.entityId,
+            entityType: resolved.entityType,
+          });
+          if (!validation.ok) {
+            logRefundTargetMismatch(orderId, resolved, lockedOrder, validation.reason ?? 'unspecified');
+            throw new Error(`REFUND_TARGET_MISMATCH:${validation.reason ?? 'unspecified'}`);
+          }
+
+          if (resolved.kind === 'legacy_derived') {
+            logLegacyRefundDerivation(orderId, resolved);
+          }
+
+          const refundTable = resolved.entityType === 'merchant' ? 'merchants' : 'users';
+
+          const balanceResult = await client.query(
+            `SELECT balance FROM ${refundTable} WHERE id = $1 FOR UPDATE`,
+            [resolved.entityId]
+          );
+
+          if (balanceResult.rows.length === 0) {
+            // Hard fail — was previously a soft log. Cancelling the order
+            // without the refund would leave the seller with no record of
+            // the lost balance.
+            throw new Error('REFUND_TARGET_NOT_FOUND');
+          }
+
           const balanceBefore = parseFloat(String(balanceResult.rows[0].balance));
 
           await client.query(
             `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
-            [escrowDebitedAmount, escrowDebitedEntityId]
+            [resolved.amount, resolved.entityId]
           );
 
-          // TASK 3: Validate balance consistency post-UPDATE
+          // Per-row balance invariant
           const balanceCheck = await client.query(
             `SELECT balance FROM ${refundTable} WHERE id = $1`,
-            [escrowDebitedEntityId]
+            [resolved.entityId]
           );
           const balanceAfter = parseFloat(String(balanceCheck.rows[0].balance));
-          const expectedBalance = balanceBefore + escrowDebitedAmount;
-
+          const expectedBalance = balanceBefore + resolved.amount;
           if (Math.abs(balanceAfter - expectedBalance) > 0.00000001) {
             throw new Error(
               `BALANCE_MISMATCH: refund balance ${balanceAfter} != expected ${expectedBalance}`
             );
           }
 
-          // Insert ESCROW_REFUND ledger entry (ON CONFLICT for idempotency — TASK 2)
           await client.query(
             `INSERT INTO ledger_entries
              (account_type, account_id, entry_type, amount, asset,
@@ -149,14 +194,16 @@ export async function atomicCancelWithRefund(
                  AND entry_type IN ('ESCROW_LOCK', 'ESCROW_RELEASE', 'ESCROW_REFUND', 'FEE')
              DO NOTHING`,
             [
-              escrowDebitedEntityType,
-              escrowDebitedEntityId,
-              escrowDebitedAmount,
+              resolved.entityType,
+              resolved.entityId,
+              resolved.amount,
               lockedOrder.crypto_currency || 'USDT',
               orderId,
               `Escrow refunded for cancelled order #${lockedOrder.order_number}`,
               JSON.stringify({
                 reason: reason || 'Cancelled by ' + actorType,
+                target_source: resolved.kind,
+                target_rationale: resolved.rationale,
                 original_lock_at: lockedOrder.escrow_debited_at,
               }),
               balanceBefore,
@@ -164,19 +211,48 @@ export async function atomicCancelWithRefund(
             ]
           );
 
+          // System-level ledger invariant — same check as
+          // atomicFinalizeDispute. Skips quietly when no LOCK row exists
+          // (legacy data predates ledger).
+          const ledgerSumRes = await client.query(
+            `SELECT entry_type, COALESCE(SUM(amount), 0)::numeric AS total
+               FROM ledger_entries
+              WHERE related_order_id = $1
+                AND entry_type IN ('ESCROW_LOCK', 'ESCROW_RELEASE', 'ESCROW_REFUND')
+              GROUP BY entry_type`,
+            [orderId]
+          );
+          const sums: Record<string, number> = {};
+          for (const r of ledgerSumRes.rows as Array<{ entry_type: string; total: string }>) {
+            sums[r.entry_type] = parseFloat(String(r.total));
+          }
+          const lockTotal = sums['ESCROW_LOCK'] ?? 0;
+          const releaseTotal = sums['ESCROW_RELEASE'] ?? 0;
+          const refundTotal = sums['ESCROW_REFUND'] ?? 0;
+          if (lockTotal === 0) {
+            logger.warn('[Atomic] Cancel refund: ledger invariant skipped (no LOCK row, legacy)', {
+              orderId, refundTotal, releaseTotal,
+            });
+          } else if (Math.abs(lockTotal - releaseTotal - refundTotal) > 0.00000001) {
+            throw new Error(
+              `LEDGER_INVARIANT_VIOLATION: lock=${lockTotal} release=${releaseTotal} refund=${refundTotal}`
+            );
+          }
+
+          refundedTo = {
+            entityId: resolved.entityId,
+            entityType: resolved.entityType,
+            amount: resolved.amount,
+          };
+
           logger.info('[Atomic] Escrow balance refunded', {
             orderId,
-            refundedTo: escrowDebitedEntityId,
-            refundedType: escrowDebitedEntityType,
-            amount: escrowDebitedAmount,
+            refundedTo: resolved.entityId,
+            refundedType: resolved.entityType,
+            amount: resolved.amount,
+            source: resolved.kind,
             balanceBefore,
             balanceAfter,
-          });
-        } else {
-          logger.error('[Atomic] Escrow debited entity not found for refund', {
-            orderId,
-            escrowDebitedEntityId,
-            escrowDebitedEntityType,
           });
         }
       }
@@ -228,9 +304,9 @@ export async function atomicCancelWithRefund(
           JSON.stringify({
             reason: reason || 'Cancelled by ' + actorType,
             had_escrow: hadEscrow,
-            refunded_amount: hadEscrow ? escrowDebitedAmount : 0,
-            refunded_entity_type: hadEscrow ? escrowDebitedEntityType : null,
-            refunded_entity_id: hadEscrow ? escrowDebitedEntityId : null,
+            refunded_amount: refundedTo?.amount ?? 0,
+            refunded_entity_type: refundedTo?.entityType ?? null,
+            refunded_entity_id: refundedTo?.entityId ?? null,
             atomic_cancellation: true,
           }),
         ]
@@ -297,6 +373,52 @@ export async function atomicCancelWithRefund(
       return {
         success: false,
         error: 'Order status changed - cancellation no longer valid',
+      };
+    }
+
+    if (errMsg === 'REFUND_TARGET_NOT_FOUND') {
+      logger.error('[Atomic] Cancel refund target row missing — transaction rolled back', {
+        orderId,
+      });
+      return {
+        success: false,
+        error: 'Escrow-debited entity not found — cannot refund. Manual review required.',
+      };
+    }
+    if (errMsg.startsWith('REFUND_TARGET_INDETERMINATE')) {
+      logger.error('[security] Cancel aborted — refund target indeterminate', {
+        orderId, error: errMsg,
+      });
+      return {
+        success: false,
+        error: 'Cannot determine refund target for this order — manual review required.',
+      };
+    }
+    if (errMsg.startsWith('REFUND_TARGET_MISMATCH')) {
+      logger.error('[security] Cancel aborted — refund target mismatch', {
+        orderId, error: errMsg,
+      });
+      return {
+        success: false,
+        error: 'Refund target validation failed — manual review required.',
+      };
+    }
+    if (errMsg.startsWith('BALANCE_MISMATCH')) {
+      logger.error('[Atomic] Cancel balance invariant violated — transaction rolled back', {
+        orderId, error: errMsg,
+      });
+      return {
+        success: false,
+        error: 'Balance invariant violated — refund aborted. On-call paged.',
+      };
+    }
+    if (errMsg.startsWith('LEDGER_INVARIANT_VIOLATION')) {
+      logger.error('[Atomic] Cancel ledger invariant violated — transaction rolled back', {
+        orderId, error: errMsg,
+      });
+      return {
+        success: false,
+        error: 'Ledger invariant violated — refund aborted. On-call paged.',
       };
     }
 

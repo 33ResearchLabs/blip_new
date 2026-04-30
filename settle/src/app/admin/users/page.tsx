@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
 import {
   formatCount,
   formatCrypto,
@@ -165,13 +166,16 @@ export default function AdminUsersPage() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const savedToken = localStorage.getItem("blip_admin_token");
-        if (savedToken) {
-          const res = await fetchWithAuth("/api/auth/admin", { headers: { Authorization: `Bearer ${savedToken}` } });
-          const data = await res.json();
-          if (data.success && data.data?.valid) { setAdminToken(savedToken); setIsAuthenticated(true); }
-          else { localStorage.removeItem("blip_admin"); localStorage.removeItem("blip_admin_token"); }
-        }
+        const legacyToken = localStorage.getItem("blip_admin_token");
+        const headers: Record<string, string> = {};
+        if (legacyToken) headers.Authorization = `Bearer ${legacyToken}`;
+        const res = await fetchWithAuth("/api/auth/admin", { headers });
+        const data = await res.json();
+        if (data.success && data.data?.valid) {
+          setAdminToken(ADMIN_COOKIE_SENTINEL);
+          setIsAuthenticated(true);
+          if (legacyToken) localStorage.removeItem("blip_admin_token");
+        } else { localStorage.removeItem("blip_admin"); localStorage.removeItem("blip_admin_token"); }
       } catch { localStorage.removeItem("blip_admin"); localStorage.removeItem("blip_admin_token"); }
       finally { setIsCheckingSession(false); }
     };
@@ -183,17 +187,17 @@ export default function AdminUsersPage() {
     try {
       const res = await fetchWithAuth("/api/auth/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(adminLoginForm) });
       const data = await res.json();
-      if (data.success && data.data?.admin && data.data?.token) {
+      if (data.success && data.data?.admin) {
         localStorage.setItem("blip_admin", JSON.stringify(data.data.admin));
-        localStorage.setItem("blip_admin_token", data.data.token);
-        setAdminToken(data.data.token); setIsAuthenticated(true);
+        setAdminToken(ADMIN_COOKIE_SENTINEL); setIsAuthenticated(true);
       } else { setAdminLoginError(data.error || "Login failed"); }
     } catch { setAdminLoginError("Connection failed"); }
     finally { setIsAdminLoggingIn(false); }
   };
 
-  const handleAdminLogout = () => {
-    localStorage.removeItem("blip_admin"); localStorage.removeItem("blip_admin_token");
+  const handleAdminLogout = async () => {
+    try { await fetchWithAuth("/api/auth/admin/logout", { method: "POST" }); } catch { /* ignore */ }
+    localStorage.removeItem("blip_admin");
     setAdminToken(null); setIsAuthenticated(false);
   };
 
@@ -211,7 +215,7 @@ export default function AdminUsersPage() {
       if (volumeTierFilter) params.set("volume_tier", volumeTierFilter);
       if (ratingFilter) params.set("rating", ratingFilter);
 
-      const res = await fetchWithAuth(`/api/admin/users?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetchWithAuth(`/api/admin/users?${params}`);
       const data = await res.json();
       if (data.success) {
         setUsers(data.data);

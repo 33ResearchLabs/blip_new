@@ -22,7 +22,7 @@ export async function GET(
   { params }: { params: Promise<{ entityId: string }> }
 ) {
   // Admin-only endpoint
-  const authErr = requireAdminAuth(request);
+  const authErr = await requireAdminAuth(request);
   if (authErr) return authErr;
 
   try {

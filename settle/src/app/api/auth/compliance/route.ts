@@ -4,7 +4,7 @@ import { isComplianceWallet, addComplianceWallet, COMPLIANCE_WALLETS } from '@/l
 import crypto from 'crypto';
 import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 import { createSession } from '@/lib/auth/sessions';
-import { verifyWalletSignature } from '@/lib/solana/verifySignature';
+import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 
 // Compliance team authentication (supports both email/password and wallet)
 export async function POST(request: NextRequest) {
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     // Wallet-based authentication (DAO/multi-sig style)
     if (action === 'wallet_login') {
-      const { signature, message } = body;
+      const { signature, message, nonce } = body;
       if (!wallet_address || !signature || !message) {
         return NextResponse.json(
           { success: false, error: 'Wallet address, signature, and message are required' },
@@ -22,12 +22,19 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Verify wallet signature BEFORE checking whitelist
-      const isValidSig = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValidSig) {
+      // Strict: signature + nonce + timestamp window all required, BEFORE
+      // checking the compliance whitelist (so a missing nonce produces a 400
+      // and not a 403, which would leak whitelist membership).
+      const authResult = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!authResult.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: authResult.error },
+          { status: authResult.status }
         );
       }
 

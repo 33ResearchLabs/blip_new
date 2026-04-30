@@ -9,7 +9,7 @@ const PAYMENT_SENT_TIMEOUT_HOURS = 24;
 
 export async function POST(request: NextRequest) {
   // Require admin auth for expiring orders — always enforced
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {

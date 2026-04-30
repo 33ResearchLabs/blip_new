@@ -168,29 +168,17 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
-    // Security: enforce actor matches authenticated identity
-    // Must run BEFORE canAccessOrder so auth context is correct
-    const headerMerchantId = request.headers.get("x-merchant-id");
-    const actorMatchesAuth = parseResult.data.actor_id === auth.actorId;
-    const actorMatchesMerchant =
-      parseResult.data.actor_type === "merchant" &&
-      headerMerchantId &&
-      parseResult.data.actor_id === headerMerchantId;
-    if (!actorMatchesAuth && !actorMatchesMerchant) {
+    // Security: enforce actor matches authenticated identity (JWT only).
+    // No more x-merchant-id swap — that header was the impersonation channel.
+    if (parseResult.data.actor_id !== auth.actorId) {
       return forbiddenResponse(
         "actor_id does not match authenticated identity",
       );
     }
-    if (!actorMatchesAuth && actorMatchesMerchant) {
-      auth.actorType = "merchant";
-      auth.actorId = headerMerchantId;
-      auth.merchantId = headerMerchantId;
-    }
-    // Ensure merchantId is always set when x-merchant-id header is present,
-    // even if actorMatchesAuth is true (user's auth ID matched).
-    // Without this, canAccessOrder with actorType='user' can't check merchant_id.
-    if (headerMerchantId && !auth.merchantId) {
-      auth.merchantId = headerMerchantId;
+    if (parseResult.data.actor_type === "merchant" && auth.actorType !== "merchant") {
+      return forbiddenResponse(
+        "actor_type='merchant' requires a merchant token",
+      );
     }
 
     // Verify access to this order (after auth context is resolved)
@@ -334,6 +322,37 @@ export async function POST(
       );
     }
 
+    // ── PDA BINDING VERIFICATION ──
+    // Re-derive the canonical trade + escrow PDAs from
+    // (creator_wallet, trade_id) and refuse any submitted PDA that
+    // doesn't match. This MUST happen before verifyEscrowTx — otherwise
+    // a malicious client could point us at someone else's on-chain
+    // trade account that happens to have the right amount in it, and
+    // the deposit would be recorded against this order.
+    const { verifyEscrowPdaBinding } = await import('@/lib/solana/v2/verifyPdaBinding');
+    const pdaBinding = verifyEscrowPdaBinding({
+      orderId: id,
+      creatorWallet: parseResult.data.escrow_creator_wallet,
+      tradeId: parseResult.data.escrow_trade_id ?? null,
+      submittedTradePda: parseResult.data.escrow_trade_pda,
+      submittedEscrowPda: parseResult.data.escrow_pda ?? null,
+    });
+    if (!pdaBinding.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Escrow PDA binding rejected: ${pdaBinding.reason}`,
+          code: 'ESCROW_PDA_MISMATCH',
+          field: pdaBinding.field ?? null,
+        },
+        { status: 400 },
+      );
+    }
+    // Replace client-submitted PDAs with the canonical derived values.
+    // verifyEscrowTx and the proxied core-api call both consume these.
+    parseResult.data.escrow_trade_pda = pdaBinding.derived.tradePda;
+    parseResult.data.escrow_pda = pdaBinding.derived.escrowPda;
+
     // ── ON-CHAIN VERIFICATION ──
     // Fail closed: until we've confirmed the tx exists on-chain, is
     // successful, invoked the Blip V2 program, and actually deposited the
@@ -449,23 +468,16 @@ export async function PATCH(
 
     const { tx_hash, actor_type, actor_id } = parseResult.data;
 
-    // Security: enforce actor matches authenticated identity (with merchant header fallback)
-    // Must run BEFORE canAccessOrder so auth context is correct
-    const relHeaderMerchantId = request.headers.get("x-merchant-id");
-    const relActorMatchesAuth = actor_id === auth.actorId;
-    const relActorMatchesMerchant =
-      actor_type === "merchant" &&
-      relHeaderMerchantId &&
-      actor_id === relHeaderMerchantId;
-    if (!relActorMatchesAuth && !relActorMatchesMerchant) {
+    // Security: enforce actor matches authenticated identity (JWT only).
+    if (actor_id !== auth.actorId) {
       return forbiddenResponse(
         "actor_id does not match authenticated identity",
       );
     }
-    if (!relActorMatchesAuth && relActorMatchesMerchant) {
-      auth.actorType = "merchant";
-      auth.actorId = relHeaderMerchantId;
-      auth.merchantId = relHeaderMerchantId;
+    if (actor_type === "merchant" && auth.actorType !== "merchant") {
+      return forbiddenResponse(
+        "actor_type='merchant' requires a merchant token",
+      );
     }
 
     // Verify access to this order (after auth context is resolved)
@@ -661,6 +673,84 @@ export async function PATCH(
         },
         { status: 500 },
       );
+    }
+
+    // ── Defense-in-depth: re-verify buyer wallet ownership at release ──
+    // Even with checks at order creation and SEND_PAYMENT, a wallet that
+    // slipped through (legacy order from before the ownership guard, or
+    // a row tampered with via a future bug) must not direct funds to a
+    // wallet the buyer doesn't own. Recompute the buyer's verified
+    // wallet now and compare to the stored payout destination.
+    //
+    // Buyer is whichever party is NOT the escrow funder (= seller).
+    //   BUY (U2M)   buyer = user_id
+    //   SELL (U2M)  buyer = merchant_id
+    //   M2M         buyer = buyer_merchant_id
+    {
+      const { query: dbQ } = await import("@/lib/db");
+      const sellerId = order.escrow_debited_entity_id;
+      let buyerType: "user" | "merchant" | null = null;
+      let buyerId: string | null = null;
+      if (order.buyer_merchant_id && sellerId === order.merchant_id) {
+        buyerType = "merchant";
+        buyerId = order.buyer_merchant_id;
+      } else if (sellerId === order.merchant_id) {
+        buyerType = "user";
+        buyerId = order.user_id;
+      } else if (sellerId === order.user_id) {
+        buyerType = "merchant";
+        buyerId = order.merchant_id;
+      }
+
+      const storedPayoutWallet =
+        order.acceptor_wallet_address || order.buyer_wallet_address || null;
+
+      if (buyerId && buyerType && storedPayoutWallet) {
+        const tbl = buyerType === "merchant" ? "merchants" : "users";
+        const buyerRows = await dbQ<{ wallet_address: string | null }>(
+          `SELECT wallet_address FROM ${tbl} WHERE id = $1`,
+          [buyerId],
+        );
+        const buyerVerifiedWallet = buyerRows[0]?.wallet_address ?? null;
+
+        if (
+          !buyerVerifiedWallet ||
+          buyerVerifiedWallet !== storedPayoutWallet
+        ) {
+          const strict = process.env.WALLET_OWNERSHIP_STRICT === "true";
+          if (strict) {
+            logger.error(
+              "[security][wallet_inject] Release blocked — stored payout wallet does not match buyer's verified wallet",
+              {
+                orderId: id,
+                buyerType,
+                buyerId,
+                storedPayoutWallet,
+                buyerVerifiedWallet,
+              },
+            );
+            return NextResponse.json(
+              {
+                success: false,
+                error:
+                  "Buyer wallet ownership cannot be verified at release. Manual review required.",
+                code: "WALLET_OWNERSHIP_RELEASE_BLOCK",
+              },
+              { status: 422 },
+            );
+          }
+          logger.warn(
+            "[security][wallet_inject] Release proceeding despite buyer wallet mismatch (lax mode)",
+            {
+              orderId: id,
+              buyerType,
+              buyerId,
+              storedPayoutWallet,
+              buyerVerifiedWallet,
+            },
+          );
+        }
+      }
     }
 
     // All pre-flight checks passed — log the release attempt

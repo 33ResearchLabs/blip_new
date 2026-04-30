@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   // Require admin auth for reputation recalculation — always enforced
   const { requireAdminAuth } = await import('@/lib/middleware/auth');
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   // Require admin auth for table initialization — always enforced
   const { requireAdminAuth: requireAdminAuthPut } = await import('@/lib/middleware/auth');
-  const authErrorPut = requireAdminAuthPut(request);
+  const authErrorPut = await requireAdminAuthPut(request);
   if (authErrorPut) return authErrorPut;
 
   try {

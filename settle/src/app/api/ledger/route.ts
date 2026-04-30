@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
 // POST /api/ledger - Manually log a ledger entry (admin only)
 export async function POST(request: NextRequest) {
   // Always require admin auth for manual ledger entries
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {

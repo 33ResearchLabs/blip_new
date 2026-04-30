@@ -1,8 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
-  generateLoginMessage,
-  requestWalletSignature,
   authenticateMerchantWithWallet,
   createMerchantAccount,
 } from '@/lib/auth/walletAuth';
@@ -48,14 +46,9 @@ export function useMerchantAuth() {
     try {
       const walletAddress = publicKey.toBase58();
 
-      // Generate message to sign
-      const message = generateLoginMessage(walletAddress);
-
-      // Request signature
-      const signature = await requestWalletSignature(signMessage, message);
-
-      // Authenticate with API
-      const result = await authenticateMerchantWithWallet(walletAddress, signature, message);
+      // Helper fetches a server-issued nonce, signs the canonical message,
+      // and posts. No client-generated message — replay-safe.
+      const result = await authenticateMerchantWithWallet(walletAddress, signMessage);
 
       if (!result.success) {
         setAuthError(result.error || 'Authentication failed');
@@ -127,12 +120,8 @@ export function useMerchantAuth() {
     try {
       const walletAddress = publicKey.toBase58();
 
-      // Generate new message and signature
-      const message = generateLoginMessage(walletAddress);
-      const signature = await requestWalletSignature(signMessage, message);
-
-      // Create merchant account
-      const result = await createMerchantAccount(walletAddress, signature, message, username);
+      // Helper fetches a server-issued nonce, signs, and posts.
+      const result = await createMerchantAccount(walletAddress, signMessage, username);
 
       if (!result.success) {
         return result;

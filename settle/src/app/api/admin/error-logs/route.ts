@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
   }
 
-  const authErr = requireAdminAuth(request);
+  const authErr = await requireAdminAuth(request);
   if (authErr) return authErr;
 
   const sp = request.nextUrl.searchParams;
@@ -194,7 +194,7 @@ export async function DELETE(request: NextRequest) {
   if (!ERROR_TRACKING_ENABLED) {
     return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
   }
-  const authErr = requireAdminAuth(request);
+  const authErr = await requireAdminAuth(request);
   if (authErr) return authErr;
 
   const scope = request.nextUrl.searchParams.get('scope') || 'test';
@@ -239,7 +239,7 @@ export async function PATCH(request: NextRequest) {
   if (!ERROR_TRACKING_ENABLED) {
     return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
   }
-  const authErr = requireAdminAuth(request);
+  const authErr = await requireAdminAuth(request);
   if (authErr) return authErr;
 
   let body: { ids?: string[]; resolved?: boolean; type?: string; message?: string };

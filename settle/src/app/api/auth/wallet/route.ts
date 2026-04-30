@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { guardAuthVelocity } from '@/lib/guards';
 import { generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 import { createSession } from '@/lib/auth/sessions';
+import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 
 // Connect wallet - creates user if not exists
 export async function POST(request: NextRequest) {
@@ -29,12 +30,28 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(errors);
     }
 
-    const { wallet_address, type, name } = parseResult.data;
+    const { wallet_address, type, name, signature, message, nonce } = parseResult.data;
 
     // Detection guard: log warning for suspicious auth velocity
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim()
       || request.headers.get('x-real-ip') || 'unknown';
     guardAuthVelocity(ip, wallet_address);
+
+    // Strict replay protection — every wallet-connect must carry a
+    // server-issued nonce + signed message + timestamp. The legacy unsigned
+    // and signature-only paths have been removed.
+    const result = await verifyWalletAuthRequest({
+      walletAddress: wallet_address,
+      signature,
+      message,
+      nonce,
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        { success: false, error: result.error },
+        { status: result.status }
+      );
+    }
 
     if (type === 'merchant') {
       // Check if merchant exists

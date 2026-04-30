@@ -8,7 +8,7 @@ import { setPriceConfig, getPriceConfig, getPairConfig, SUPPORTED_PAIRS, type Pr
 // so admin tokens cannot read it from the admin price page — this is the
 // admin-side counterpart for restoring state on page refresh.
 export async function GET(request: NextRequest) {
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 // POST /api/admin/set-price-mode
 // Body: { pair: "usdt_inr", price_mode: "MANUAL", admin_price: 83.50 }
 export async function POST(request: NextRequest) {
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne } from '@/lib/db';
+import { query, queryOne, transaction } from '@/lib/db';
 import { requireAuth } from '@/lib/middleware/auth';
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 import { auditLog } from '@/lib/auditLog';
+import { logger } from '@/lib/logger';
 
 async function hasComplianceAccess(auth: { actorType: string; merchantId?: string }): Promise<boolean> {
   if (auth.actorType === 'compliance' || auth.actorType === 'system') return true;
@@ -101,66 +102,76 @@ export async function POST(
       );
     }
 
-    // Ensure the pending_confirmation status exists, or use investigating as fallback
-    // We'll store the status as a string since we might not have the enum value
-    try {
-      await query(
-        `UPDATE disputes
-         SET status = 'investigating'::dispute_status,
-             proposed_resolution = $1,
-             proposed_by = $2,
-             proposed_at = NOW(),
-             resolution_notes = $3,
-             split_percentage = $4,
-             user_confirmed = false,
-             merchant_confirmed = false
-         WHERE order_id = $5`,
-        [
-          resolution,
-          complianceId,
-          notes || '',
-          splitPercentage ? JSON.stringify(splitPercentage) : null,
-          realOrderId
-        ]
-      );
-    } catch (updateErr) {
-      console.log('Update with investigating status:', updateErr);
-      // Try without enum casting
-      await query(
-        `UPDATE disputes
-         SET proposed_resolution = $1,
-             proposed_by = $2,
-             proposed_at = NOW(),
-             resolution_notes = $3,
-             split_percentage = $4,
-             user_confirmed = false,
-             merchant_confirmed = false
-         WHERE order_id = $5`,
-        [
-          resolution,
-          complianceId,
-          notes || '',
-          splitPercentage ? JSON.stringify(splitPercentage) : null,
-          realOrderId
-        ]
-      );
-    }
+    // Atomic propose: dispute UPDATE + chat INSERT must commit or roll back
+    // together. Without the wrapping transaction(), a failure between the two
+    // (pool error, statement timeout) would leave a "proposed" dispute row
+    // with no chat message — or the catch-fallback could double-write.
+    //
+    // The enum-cast fallback (some envs lack the dispute_status value) is
+    // preserved via SAVEPOINT: if the cast attempt fails, we ROLLBACK only
+    // the savepoint and re-issue without the cast — the chat INSERT below
+    // still runs in the same outer transaction.
+    await transaction(async (client) => {
+      const updateParams = [
+        resolution,
+        complianceId,
+        notes || '',
+        splitPercentage ? JSON.stringify(splitPercentage) : null,
+        realOrderId,
+      ];
 
-    // Add message to chat about proposed resolution (use chat_messages table)
-    try {
-      await query(
+      await client.query('SAVEPOINT propose_status_cast');
+      try {
+        await client.query(
+          `UPDATE disputes
+             SET status = 'investigating'::dispute_status,
+                 proposed_resolution = $1,
+                 proposed_by = $2,
+                 proposed_at = NOW(),
+                 resolution_notes = $3,
+                 split_percentage = $4,
+                 user_confirmed = false,
+                 merchant_confirmed = false
+           WHERE order_id = $5`,
+          updateParams
+        );
+        await client.query('RELEASE SAVEPOINT propose_status_cast');
+      } catch (updateErr) {
+        logger.warn('[Dispute] propose: enum cast UPDATE failed, retrying without cast', {
+          orderId: realOrderId,
+          error: (updateErr as Error)?.message,
+        });
+        await client.query('ROLLBACK TO SAVEPOINT propose_status_cast');
+        await client.query('RELEASE SAVEPOINT propose_status_cast');
+        await client.query(
+          `UPDATE disputes
+             SET proposed_resolution = $1,
+                 proposed_by = $2,
+                 proposed_at = NOW(),
+                 resolution_notes = $3,
+                 split_percentage = $4,
+                 user_confirmed = false,
+                 merchant_confirmed = false
+           WHERE order_id = $5`,
+          updateParams
+        );
+      }
+
+      await client.query(
         `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, created_at)
          VALUES ($1, 'system'::actor_type, $2, $3, 'system'::message_type, NOW())`,
-        [realOrderId, complianceId, JSON.stringify({
-          resolution,
-          notes,
-          splitPercentage,
-          type: 'resolution_proposed'
-        })]
+        [
+          realOrderId,
+          complianceId,
+          JSON.stringify({
+            resolution,
+            notes,
+            splitPercentage,
+            type: 'resolution_proposed',
+          }),
+        ]
       );
-    } catch (msgErr) {
-      console.log('Chat message insert note:', msgErr);
-    }
+    });
 
     auditLog('compliance.dispute_resolved', complianceId, auth.actorType, realOrderId, {
       resolution,

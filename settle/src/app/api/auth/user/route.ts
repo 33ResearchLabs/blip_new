@@ -9,7 +9,6 @@ import {
   getUserByUsername,
   linkWalletToUser,
 } from '@/lib/db/repositories/users';
-import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { validateUsername } from '@/lib/validation/username';
@@ -73,14 +72,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Verify signature + nonce + timestamp window. Nonce is required when
-      // LOGIN_NONCE_REQUIRED=true; legacy clients (no nonce) are accepted
-      // with a warn-log while the flag is off during rollout.
+      // Strict: signature + nonce + timestamp window all required.
       const authResult = await verifyWalletAuthRequest({
         walletAddress: wallet_address,
         signature,
         message,
-        nonce: nonce ?? null,
+        nonce,
       });
       if (!authResult.ok) {
         return NextResponse.json(
@@ -171,19 +168,25 @@ export async function POST(request: NextRequest) {
 
     // Set username for first-time users
     if (action === 'set_username') {
-      if (!wallet_address || !signature || !message || !username) {
+      if (!wallet_address || !signature || !message || !nonce || !username) {
         return NextResponse.json(
-          { success: false, error: 'wallet_address, signature, message, and username are required' },
+          { success: false, error: 'wallet_address, signature, message, nonce, and username are required' },
           { status: 400 }
         );
       }
 
-      // Verify the wallet signature
-      const isValid = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValid) {
+      // Same strict nonce + timestamp + signature check as wallet_login —
+      // a captured `set_username` signature must not be replayable.
+      const setNameAuth = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!setNameAuth.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: setNameAuth.error },
+          { status: setNameAuth.status }
         );
       }
 
@@ -478,19 +481,26 @@ export async function POST(request: NextRequest) {
     if (action === 'link_wallet') {
       const { user_id } = body;
 
-      if (!user_id || !wallet_address || !signature || !message) {
+      if (!user_id || !wallet_address || !signature || !message || !nonce) {
         return NextResponse.json(
-          { success: false, error: 'user_id, wallet_address, signature, and message are required' },
+          { success: false, error: 'user_id, wallet_address, signature, message, and nonce are required' },
           { status: 400 }
         );
       }
 
-      // Verify the wallet signature
-      const isValid = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValid) {
+      // Strict signature + nonce + timestamp. Replaying a captured link_wallet
+      // signature would otherwise let an attacker re-bind the same wallet to
+      // a controlled account.
+      const linkAuth = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!linkAuth.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: linkAuth.error },
+          { status: linkAuth.status }
         );
       }
 

@@ -26,12 +26,8 @@ export async function POST(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Resolve merchant identity from header (must happen BEFORE canAccessOrder)
-    // Only trust header if the authenticated token is a merchant token
-    const dispHeaderMerchantId = request.headers.get('x-merchant-id');
-    if (dispHeaderMerchantId && auth.actorType === 'merchant' && !auth.merchantId) {
-      auth.merchantId = dispHeaderMerchantId;
-    }
+    // Identity comes only from the JWT — auth.merchantId is already
+    // populated by getAuthContext for merchant tokens.
 
     // Verify access to this order
     const canAccess = await canAccessOrder(auth, orderId);
@@ -64,10 +60,12 @@ export async function POST(
       ? (user_id || '')
       : (merchant_id || '');
 
-    // Security: enforce actor matches authenticated identity
-    // Only allow merchant header fallback if authenticated as merchant
-    if (actorId !== auth.actorId && !(initiated_by === 'merchant' && auth.actorType === 'merchant' && dispHeaderMerchantId && actorId === dispHeaderMerchantId)) {
+    // Security: enforce actor matches authenticated identity (JWT only).
+    if (actorId !== auth.actorId) {
       return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+    if (initiated_by === 'merchant' && auth.actorType !== 'merchant') {
+      return forbiddenResponse("initiated_by='merchant' requires a merchant token");
     }
 
     // ── STATUS + ROLE VALIDATION ──

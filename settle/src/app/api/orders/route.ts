@@ -28,6 +28,7 @@ import { auditLog } from '@/lib/auditLog';
 import { getIdempotencyKey, withIdempotency } from '@/lib/idempotency';
 import { createHash } from 'crypto';
 import { guardOrderCreation } from '@/lib/guards';
+import { assertWalletOwnership } from '@/lib/auth/walletOwnership';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
@@ -142,6 +143,25 @@ export async function POST(request: NextRequest) {
 
     if (type === 'buy' && !buyer_wallet_address) {
       return validationErrorResponse(['buyer_wallet_address is required for buy orders. Please connect your wallet.']);
+    }
+
+    // ── Wallet-injection guard ──
+    // The buyer is the authenticated user (line 127–131 enforces actor==user_id).
+    // Their buyer_wallet_address becomes the on-chain payout destination, so it
+    // MUST belong to them. Option A is enforced; no Option B at creation
+    // because there is no orderId yet to bind a signature to. If a user wants
+    // to receive crypto at a different wallet, they update their account
+    // wallet first (which already requires a signed wallet_login).
+    if (type === 'buy' && buyer_wallet_address) {
+      const ownership = await assertWalletOwnership({
+        auth,
+        walletAddress: buyer_wallet_address,
+      });
+      if (!ownership.ok) {
+        return forbiddenResponse(
+          `buyer_wallet_address ownership not verified: ${ownership.reason ?? 'unknown'}`
+        );
+      }
     }
 
     // Parallelize independent DB lookups: user verification + payment method check

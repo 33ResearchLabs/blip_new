@@ -64,7 +64,6 @@ import idlRaw from '@/lib/solana/v2/idl.json';
 import { convertIdlToAnchor29 } from '@/lib/solana/idlConverter';
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
-import { generateLoginMessage } from '@/lib/solana/verifySignature';
 
 // IDL conversion (same as SolanaWalletContext) — kept for reference but
 // the inline copy was buggy: it did not materialise event `fields` from
@@ -196,65 +195,87 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [walletState, keypair, refreshBalances]);
 
-  // Sync wallet address to merchant DB record when unlocked
+  // Sync wallet address to merchant DB record when unlocked.
+  // Proves ownership of the NEW wallet via server-issued nonce + signature
+  // signed with the embedded keypair (the secret key we already hold).
   useEffect(() => {
     if (walletState !== 'unlocked' || !keypair) return;
     const walletAddress = keypair.publicKey.toBase58();
-    try {
-      const saved = localStorage.getItem('blip_merchant');
-      if (!saved) return;
-      const merchant = JSON.parse(saved);
-      if (!merchant.id) return;
-      // Skip if already synced
-      if (merchant.wallet_address === walletAddress) return;
-      // Update DB
-      fetch('/api/auth/merchant', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ merchant_id: merchant.id, wallet_address: walletAddress }),
-      }).then(() => {
-        // Update local cache too
+    (async () => {
+      try {
+        const saved = localStorage.getItem('blip_merchant');
+        if (!saved) return;
+        const merchant = JSON.parse(saved);
+        if (!merchant.id) return;
+        if (merchant.wallet_address === walletAddress) return;
+
+        const { fetchLoginNonce } = await import('@/lib/auth/walletAuth');
+        const issued = await fetchLoginNonce(walletAddress);
+        const sigBytes = nacl.sign.detached(
+          new TextEncoder().encode(issued.message),
+          keypair.secretKey,
+        );
+        const signature = bs58.encode(sigBytes);
+
+        const res = await fetch('/api/auth/merchant', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            merchant_id: merchant.id,
+            wallet_address: walletAddress,
+            signature,
+            message: issued.message,
+            nonce: issued.nonce,
+          }),
+        });
+        if (!res.ok) return;
         merchant.wallet_address = walletAddress;
         localStorage.setItem('blip_merchant', JSON.stringify(merchant));
-      }).catch(() => {});
-    } catch {}
+      } catch { /* swallow — best-effort sync */ }
+    })();
   }, [walletState, keypair]);
 
   // Mirror the above for a signed-in user. The embedded keypair is
-  // authoritative for ownership, so we sign a fresh challenge with the
-  // secret key we already hold and submit it to /api/auth/user:link_wallet
-  // (which verifies the signature server-side before writing to
-  // users.wallet_address).
+  // authoritative for ownership, so we fetch a server-issued nonce, sign the
+  // canonical message with the secret key we already hold, and submit it to
+  // /api/auth/user:link_wallet. Server enforces nonce single-use + timestamp
+  // window so a captured request can't be replayed to re-bind the wallet.
   useEffect(() => {
     if (walletState !== 'unlocked' || !keypair) return;
     const walletAddress = keypair.publicKey.toBase58();
-    try {
-      const saved = localStorage.getItem('blip_user');
-      if (!saved) return;
-      const user = JSON.parse(saved);
-      if (!user.id) return;
-      if (user.wallet_address === walletAddress) return;
+    (async () => {
+      try {
+        const saved = localStorage.getItem('blip_user');
+        if (!saved) return;
+        const user = JSON.parse(saved);
+        if (!user.id) return;
+        if (user.wallet_address === walletAddress) return;
 
-      const message = generateLoginMessage(walletAddress);
-      const sigBytes = nacl.sign.detached(new TextEncoder().encode(message), keypair.secretKey);
-      const signature = bs58.encode(sigBytes);
+        const { fetchLoginNonce } = await import('@/lib/auth/walletAuth');
+        const issued = await fetchLoginNonce(walletAddress);
+        const sigBytes = nacl.sign.detached(
+          new TextEncoder().encode(issued.message),
+          keypair.secretKey,
+        );
+        const signature = bs58.encode(sigBytes);
 
-      fetch('/api/auth/user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'link_wallet',
-          user_id: user.id,
-          wallet_address: walletAddress,
-          signature,
-          message,
-        }),
-      }).then((res) => {
+        const res = await fetch('/api/auth/user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'link_wallet',
+            user_id: user.id,
+            wallet_address: walletAddress,
+            signature,
+            message: issued.message,
+            nonce: issued.nonce,
+          }),
+        });
         if (!res.ok) return;
         user.wallet_address = walletAddress;
         localStorage.setItem('blip_user', JSON.stringify(user));
-      }).catch(() => {});
-    } catch {}
+      } catch { /* swallow — best-effort link */ }
+    })();
   }, [walletState, keypair]);
 
   // Unlock wallet
