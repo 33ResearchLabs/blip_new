@@ -223,9 +223,14 @@ function formatGuardFailure(g: SecurityGuard): string {
 // Auto-validate on import — crash in production if critical vars are missing.
 // Skipped under Jest (JEST_WORKER_ID is set by every Jest worker) so tests can
 // import this module to call the pure resolvers without triggering process.exit.
+// Also skipped during `next build` page-data collection — runtime secrets aren't
+// available at build time, only Docker ARGs / NEXT_PUBLIC_* are. Runtime fail-fast
+// still happens because NEXT_PHASE is unset (or 'phase-production-server') at boot.
 const _isJest = typeof process !== 'undefined' && !!process.env.JEST_WORKER_ID;
+const _isBuildPhase =
+  typeof process !== 'undefined' && process.env.NEXT_PHASE === 'phase-production-build';
 const _envResult = validateEnv();
-if (!_isJest && isProduction && !_envResult.valid) {
+if (!_isJest && !_isBuildPhase && isProduction && !_envResult.valid) {
   const msg = `[env] FATAL: Missing required environment variables: ${_envResult.missing.join(', ')}`;
   console.error(msg);
   console.error('[env] Server cannot start without these.');
@@ -246,7 +251,7 @@ if (!_isJest && isProduction && !_envResult.valid) {
 // failure first.
 {
   const _forbiddenResult = checkForbiddenValues();
-  if (!_isJest && isProductionDeployment() && _forbiddenResult.failed.length > 0) {
+  if (!_isJest && !_isBuildPhase && isProductionDeployment() && _forbiddenResult.failed.length > 0) {
     console.error('[env] FATAL: forbidden production env values:');
     for (const f of _forbiddenResult.failed) {
       console.error(`  • ${f.key} must not be "${f.forbiddenValue}" in production`);
@@ -270,7 +275,7 @@ if (!_isJest && isProduction && !_envResult.valid) {
 // Security-guard gate (separate from the missing-required-vars check above
 // because the failure modes and the right ops response differ).
 const _guardResult = resolveSecurityGuards();
-if (!_isJest && _guardResult.enforced && _guardResult.failed.length > 0) {
+if (!_isJest && !_isBuildPhase && _guardResult.enforced && _guardResult.failed.length > 0) {
   console.error('[env] FATAL: Security guards failed for production deployment:');
   for (const g of _guardResult.failed) {
     console.error(`  • ${formatGuardFailure(g)}`);
