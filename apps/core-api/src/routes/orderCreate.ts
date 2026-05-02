@@ -284,14 +284,22 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
     // Manual claim model: merchant_id and offer_id can be null (broadcast orders)
     const isManualClaimOrder = !data.merchant_id || !data.offer_id;
 
-    // Idempotency check: prevent duplicate order creation from retries
+    // Idempotency-Key is REQUIRED for order creation. A missing header is
+    // a client-side bug (the settle proxy is responsible for forwarding the
+    // key) and we refuse to mint money rails without it. 400 — fail closed.
     const idem = resolveIdempotency(request, actorId, 'create_order');
-    if (idem) {
-      const cached = await checkIdempotencyLog(idem.scopedKey);
-      if (cached) {
-        logger.info('[order-create] Idempotent replay', { actorId, offerId: data.offer_id });
-        return reply.status(cached.status_code).send(cached.response);
-      }
+    if (!idem) {
+      return reply.status(400).send({
+        success: false,
+        error:
+          'Idempotency-Key header is required for order creation. ' +
+          'Send a unique value (UUIDv4 recommended) per logical request.',
+      });
+    }
+    const cached = await checkIdempotencyLog(idem.scopedKey);
+    if (cached) {
+      logger.info('[order-create] Idempotent replay', { actorId, offerId: data.offer_id });
+      return reply.status(cached.status_code).send(cached.response);
     }
 
     // Build INSERT params outside the transaction to minimize lock duration
@@ -405,14 +413,21 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Idempotency check (was missing on merchant route)
+      // Idempotency-Key is REQUIRED for merchant order creation — same
+      // contract as the user-facing /v1/orders route.
       const idem = resolveIdempotency(request, actorId, 'create_merchant_order');
-      if (idem) {
-        const cached = await checkIdempotencyLog(idem.scopedKey);
-        if (cached) {
-          logger.info('[merchant-order-create] Idempotent replay', { actorId, offerId: data.offer_id });
-          return reply.status(cached.status_code).send(cached.response);
-        }
+      if (!idem) {
+        return reply.status(400).send({
+          success: false,
+          error:
+            'Idempotency-Key header is required for merchant order creation. ' +
+            'Send a unique value (UUIDv4 recommended) per logical request.',
+        });
+      }
+      const cached = await checkIdempotencyLog(idem.scopedKey);
+      if (cached) {
+        logger.info('[merchant-order-create] Idempotent replay', { actorId, offerId: data.offer_id });
+        return reply.status(cached.status_code).send(cached.response);
       }
 
       const { allFields, allPlaceholders, values } = buildOrderInsertParams(data);

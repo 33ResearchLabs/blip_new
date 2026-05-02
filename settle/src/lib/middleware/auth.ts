@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual, randomBytes } from 'crypto';
 import { getOrderById } from '../db/repositories/orders';
 import { getUserById } from '../db/repositories/users';
-import { getMerchantById } from '../db/repositories/merchants';
+import { getMerchantByIdInternal } from '../db/repositories/merchants';
 import { verifySessionToken } from '../auth/sessionToken';
 import { checkBlacklist } from './blacklist';
 import { hasNoActiveSessions, isSessionValid } from '../auth/sessions';
@@ -240,9 +240,26 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
  */
 export function getAuthContext(request: NextRequest): AuthContext | null {
   // ── Token-based auth (trusted, cryptographically verified) ──
+  //
+  // Two equally-trusted sources for the access token, in priority order:
+  //   1. Authorization: Bearer <token>      — used by API clients/tests
+  //   2. Cookie: blip_access_token           — used by browser fetches
+  //                                            (httpOnly, XSS-safe — see
+  //                                            ACCESS_COOKIE_OPTIONS)
+  //
+  // The cookie path closes the legacy XSS window where the access token
+  // had to be readable by JS to be sent on `Authorization` headers. New
+  // browser code should rely on the cookie (no header build step needed).
   const authHeader = request.headers.get('authorization');
+  let rawToken: string | null = null;
   if (authHeader?.startsWith('Bearer ')) {
-    const tokenPayload = verifySessionToken(authHeader.slice(7));
+    rawToken = authHeader.slice(7);
+  } else {
+    const cookieToken = request.cookies.get('blip_access_token')?.value;
+    if (cookieToken && cookieToken.length > 0) rawToken = cookieToken;
+  }
+  if (rawToken) {
+    const tokenPayload = verifySessionToken(rawToken);
     if (tokenPayload) {
       const ctx: AuthContext = {
         actorType: tokenPayload.actorType,
@@ -646,7 +663,7 @@ export async function verifyUser(userId: string): Promise<boolean> {
  */
 export async function verifyMerchant(merchantId: string): Promise<boolean> {
   try {
-    const merchant = await getMerchantById(merchantId);
+    const merchant = await getMerchantByIdInternal(merchantId);
     return merchant !== null && merchant.status === 'active';
   } catch {
     return false;
@@ -710,7 +727,7 @@ export async function canMerchantAccessOrder(
     }
     // Merchant with compliance access can access disputed orders
     if (order.status === 'disputed') {
-      const merchant = await getMerchantById(merchantId);
+      const merchant = await getMerchantByIdInternal(merchantId);
       if (merchant?.has_compliance_access) {
         return true;
       }
@@ -735,7 +752,7 @@ export async function canComplianceAccessOrder(
     let isValid = await verifyComplianceMember(complianceId);
     // Fallback: check if it's a merchant with compliance access
     if (!isValid) {
-      const merchant = await getMerchantById(complianceId);
+      const merchant = await getMerchantByIdInternal(complianceId);
       isValid = merchant?.has_compliance_access === true;
     }
     if (!isValid) return false;
@@ -793,7 +810,7 @@ export async function canAccessOrder(
       }
       // Merchant with compliance access can access disputed orders
       if (order.status === 'disputed') {
-        const merchant = await getMerchantById(auth.actorId);
+        const merchant = await getMerchantByIdInternal(auth.actorId);
         if (merchant?.has_compliance_access) {
           return true;
         }

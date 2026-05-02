@@ -7,6 +7,7 @@ import { validateFields } from '@/lib/middleware/validation';
 import { getOrderWithRelations } from '@/lib/db/repositories/orders';
 import { resolveTradeRole } from '@/lib/orders/handleOrderAction';
 import { normalizeStatus } from '@/lib/orders/statusNormalizer';
+import { getIdempotencyKey, requireIdempotencyKey } from '@/lib/idempotency';
 import { logger } from 'settlement-core';
 
 // Create a dispute for an order
@@ -25,6 +26,13 @@ export async function POST(
     // Require authentication
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+
+    // Idempotency-Key is REQUIRED for opening a dispute (state-changing
+    // financial workflow — opens disputes locks escrow timers, notifies
+    // counterparty, possibly auto-resolves to refund). Settle forwards
+    // the key; core-api commits the idempotency record atomically.
+    const missingKey = requireIdempotencyKey(request);
+    if (missingKey) return missingKey;
 
     // Identity comes only from the JWT — auth.merchantId is already
     // populated by getAuthContext for merchant tokens.
@@ -105,9 +113,30 @@ export async function POST(
       );
     }
 
+    // Idempotency-Key is REQUIRED by core-api on the dispute open path —
+    // surface as a clean 400 here instead of a confusing proxy passthrough.
+    const idempotencyKey = getIdempotencyKey(request);
+    if (!idempotencyKey || idempotencyKey.trim().length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Idempotency-Key header is required for dispute creation. ' +
+            'Send a unique value (UUIDv4 recommended) per logical request.',
+        },
+        { status: 400 },
+      );
+    }
+
     return proxyCoreApi(`/v1/orders/${orderId}/dispute`, {
       method: 'POST',
       body: { reason, description, initiated_by, actor_id: actorId },
+      // Bind the signed actor headers explicitly. Without this, core-api's
+      // ownership assertion sees only x-actor-id (auto-derived from body)
+      // and is missing x-actor-type, weakening the bind.
+      actorType: initiated_by,
+      actorId,
+      idempotencyKey,
     });
   } catch (error) {
     console.error('Failed to create dispute:', error);

@@ -16,7 +16,7 @@ import { debugRoutes } from './routes/debug';
 import { conversionRoutes } from './routes/conversion';
 import { corridorRoutes } from './routes/corridor';
 import { reputationRoutes } from './routes/reputation';
-import { authHook } from './hooks/auth';
+import { installAuthHook, assertStrictAuthInProduction } from './hooks/auth';
 import { initWebSocketServer, closeWebSocketServer } from './ws/broadcast';
 import { startOutboxWorker, stopOutboxWorker } from './workers/notificationOutbox';
 import { startCorridorTimeoutWorker, stopCorridorTimeoutWorker } from './workers/corridorTimeoutWorker';
@@ -130,8 +130,20 @@ fastify.addHook('onRequest', async (request) => {
 // Register event listeners (before routes so they're ready when first request arrives)
 registerAllListeners();
 
-// Register auth hook (before routes)
-await fastify.register(authHook);
+// Production must enforce strict (timestamp-bound) actor signatures.
+// Crash at boot rather than silently accepting legacy signatures if the
+// deploy template ships with CORE_API_STRICT_AUTH explicitly disabled.
+try {
+  assertStrictAuthInProduction();
+} catch (err) {
+  console.error((err as Error).message);
+  process.exit(1);
+}
+
+// Install auth hook directly on the root instance (NOT via register()).
+// register() wraps the hook in an encapsulation context that hides it from
+// sibling-registered routes — see installAuthHook docblock for details.
+installAuthHook(fastify);
 
 // Register routes
 await fastify.register(healthRoutes);

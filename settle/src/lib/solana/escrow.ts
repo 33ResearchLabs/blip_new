@@ -22,13 +22,21 @@ export * from './v2';
 // Legacy exports for backwards compatibility
 export const USDT_DEVNET_MINT = new PublicKey('FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z');
 export const USDT_MAINNET_MINT = new PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
-// Prefer the project-configured RPC (Helius/QuickNode/etc via NEXT_PUBLIC_SOLANA_RPC_URL).
-// The public api.devnet.solana.com endpoint is rate-limited and frequently
-// triggers "Failed to fetch" errors in the browser. Fall back to it only if
-// no env override is set.
-export const DEVNET_RPC =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SOLANA_RPC_URL)
-    || 'https://api.devnet.solana.com';
+// RPC endpoint resolution. In the browser, route through the server-side
+// proxy at `/api/rpc` so the keyed upstream URL (Helius/QuickNode) is never
+// shipped in the client bundle. On the server we use the private
+// SOLANA_RPC_URL_PRIVATE env, falling back to the legacy public env for
+// backward compatibility, then to the network default.
+export const DEVNET_RPC = (() => {
+  if (typeof window !== 'undefined') {
+    return process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY_URL?.trim() || '/api/rpc';
+  }
+  const priv = process.env?.SOLANA_RPC_URL_PRIVATE?.trim();
+  if (priv) return priv;
+  const pub = process.env?.NEXT_PUBLIC_SOLANA_RPC_URL?.trim();
+  if (pub) return pub;
+  return 'https://api.devnet.solana.com';
+})();
 
 // Get connection
 export function getConnection(network: 'devnet' | 'mainnet-beta' = 'devnet'): Connection {

@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/auth';
 import { revokeAllSessions, revokeSession } from '@/lib/auth/sessions';
-import { REFRESH_TOKEN_COOKIE } from '@/lib/auth/sessionToken';
+import { clearAuthCookies } from '@/lib/auth/sessionToken';
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -29,18 +29,14 @@ export async function POST(request: NextRequest) {
       revoked = await revokeAllSessions(auth.actorId, auth.actorType);
     }
 
-    // Clear refresh token cookie
+    // Clear BOTH auth cookies (access + refresh). httpOnly access cookie
+    // is the new XSS-safe identity carrier; clearing both ensures the
+    // browser session is fully torn down on logout / revoke-all.
     const response = NextResponse.json({
       success: true,
       data: { revoked, message: `${revoked} session(s) revoked` },
     });
-    response.cookies.set(REFRESH_TOKEN_COOKIE, '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/api/auth',
-      maxAge: 0, // expire immediately
-    });
+    clearAuthCookies(response);
 
     return response;
   } catch {

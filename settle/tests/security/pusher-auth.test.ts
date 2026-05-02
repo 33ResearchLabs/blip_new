@@ -36,7 +36,13 @@ jest.mock('../../src/lib/db/repositories/users', () => ({
   getUserById: jest.fn(),
 }));
 jest.mock('../../src/lib/db/repositories/merchants', () => ({
-  getMerchantById: jest.fn(),
+  // The pusher route now uses the Safe variant for display name; the auth
+  // middleware (`verifyMerchant`) still uses the Internal variant for the
+  // status check. Both must be mocked or the merchant lookups fall through
+  // to a no-op `jest.fn()` returning undefined → verifyMerchant returns
+  // false → 401 on every B5+ test.
+  getMerchantByIdSafe: jest.fn(),
+  getMerchantByIdInternal: jest.fn(),
 }));
 jest.mock('../../src/lib/db/repositories/orders', () => ({
   getOrderById: jest.fn(),
@@ -61,11 +67,15 @@ jest.mock('../../src/lib/errorTracking/logger', () => ({
 import { generateAccessToken } from '../../src/lib/auth/sessionToken';
 import { POST } from '../../src/app/api/pusher/auth/route';
 import { getUserById } from '../../src/lib/db/repositories/users';
-import { getMerchantById } from '../../src/lib/db/repositories/merchants';
+import {
+  getMerchantByIdSafe,
+  getMerchantByIdInternal,
+} from '../../src/lib/db/repositories/merchants';
 import { getOrderById } from '../../src/lib/db/repositories/orders';
 
 const mockedGetUserById = getUserById as jest.MockedFunction<typeof getUserById>;
-const mockedGetMerchantById = getMerchantById as jest.MockedFunction<typeof getMerchantById>;
+const mockedGetMerchantById = getMerchantByIdSafe as jest.MockedFunction<typeof getMerchantByIdSafe>;
+const mockedGetMerchantByIdInternal = getMerchantByIdInternal as jest.MockedFunction<typeof getMerchantByIdInternal>;
 const mockedGetOrderById = getOrderById as jest.MockedFunction<typeof getOrderById>;
 
 // ── Request stub matching what the route reads from NextRequest ──────
@@ -99,6 +109,9 @@ beforeEach(() => {
   // Default DB stubs — overridden per test
   mockedGetUserById.mockResolvedValue({ id: 'user-1', username: 'alice' } as any);
   mockedGetMerchantById.mockResolvedValue({ id: 'merch-1', business_name: 'Acme', status: 'active' } as any);
+  // verifyMerchant in middleware/auth.ts reads through getMerchantByIdInternal —
+  // mock the same shape so it returns true for active merchants.
+  mockedGetMerchantByIdInternal.mockResolvedValue({ id: 'merch-1', business_name: 'Acme', status: 'active' } as any);
   mockedGetOrderById.mockResolvedValue(null);
 });
 

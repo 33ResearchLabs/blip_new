@@ -15,20 +15,43 @@ interface ProxyOptions {
   body?: unknown;
   actorType?: string;
   actorId?: string;
+  /**
+   * Idempotency-Key to forward to core-api. Required for financial mutation
+   * routes (create_order, payment_sent, release_escrow, cancel_order,
+   * dispute open/confirm, cancel_request_respond). Settle's outer
+   * withIdempotency already chose this value — we just propagate it so
+   * core-api's idempotency_log keys off the same string.
+   */
+  idempotencyKey?: string;
 }
 
 /**
- * Compute HMAC-SHA256 signature for actor identity headers.
- * Returns hex-encoded signature, or undefined if inputs are missing.
+ * Compute timestamped HMAC-SHA256 signature for actor identity headers.
+ *
+ * Payload bound by the HMAC: `actorType:actorId:timestamp` (unix seconds).
+ * Core-api rejects requests where the timestamp is outside the configured
+ * skew window (default ±60s), making a captured signature usable only for
+ * a brief replay window — drastically reducing the blast radius of a
+ * leaked CORE_API_SECRET.
+ *
+ * `timestamp` may be passed in for deterministic tests; in production the
+ * caller omits it and we use the current wall clock.
+ *
+ * Returns BOTH the signature and the timestamp it was computed against,
+ * so the caller can place them in the matching headers (the verifier needs
+ * the same timestamp it was signed with).
  */
 export function signActorHeaders(
   secret: string,
   actorType: string,
-  actorId: string
-): string {
-  return createHmac('sha256', secret)
-    .update(`${actorType}:${actorId}`)
+  actorId: string,
+  timestamp?: number,
+): { signature: string; timestamp: number } {
+  const ts = timestamp ?? Math.floor(Date.now() / 1000);
+  const signature = createHmac('sha256', secret)
+    .update(`${actorType}:${actorId}:${ts}`)
     .digest('hex');
+  return { signature, timestamp: ts };
 }
 
 /**
@@ -71,9 +94,19 @@ export async function proxyCoreApi(
   if (actorType) headers['x-actor-type'] = actorType;
   if (actorId) headers['x-actor-id'] = actorId;
 
-  // HMAC-sign actor headers
+  // HMAC-sign actor headers — bound to a fresh timestamp so a captured
+  // signature is valid only for the configured skew window on the verifier.
   if (actorType && actorId) {
-    headers['x-actor-signature'] = signActorHeaders(coreApiSecret, actorType, actorId);
+    const signed = signActorHeaders(coreApiSecret, actorType, actorId);
+    headers['x-actor-signature'] = signed.signature;
+    headers['x-actor-timestamp'] = String(signed.timestamp);
+  }
+
+  // Forward the Idempotency-Key. Core-api requires this header on every
+  // financial mutation; if the settle caller forgot to pass it, we still
+  // surface the failure as a clear 400 rather than ship an unsafe call.
+  if (options.idempotencyKey) {
+    headers['idempotency-key'] = options.idempotencyKey;
   }
 
   const controller = new AbortController();

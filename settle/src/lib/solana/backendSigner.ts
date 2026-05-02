@@ -53,7 +53,13 @@ export function getBackendKeypair(): Keypair | null {
 export function getBackendConnection(): Connection {
   if (cachedConnection) return cachedConnection;
 
-  const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+  // Backend always runs server-side — prefer the private (keyed) URL. Fall
+  // back to the legacy public env for backward compat, then to the public
+  // devnet endpoint for local/dev parity.
+  const rpcUrl =
+    process.env.SOLANA_RPC_URL_PRIVATE ||
+    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+    'https://api.devnet.solana.com';
   cachedConnection = new Connection(rpcUrl, 'confirmed');
   return cachedConnection;
 }

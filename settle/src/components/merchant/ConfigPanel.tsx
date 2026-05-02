@@ -185,10 +185,16 @@ export const ConfigPanel = memo(function ConfigPanel({
   const [newPm, setNewPm] = useState<{ type: 'bank' | 'cash' | 'card' | 'mobile' | 'crypto'; name: string; details: string }>({ type: 'bank', name: '', details: '' });
   const [savingPm, setSavingPm] = useState(false);
 
+  // The `me` alias is resolved server-side from auth.actorId. We do NOT
+  // depend on the `merchantId` prop here — that prop hydrates from
+  // localStorage which can race the session-token hydration and lead
+  // to an empty payload (the dropdown then shows "No payment methods"
+  // permanently because the effect never re-runs). With `me`, the
+  // request only depends on the auth cookie/token being present, which
+  // fetchWithAuth handles via its automatic refresh-on-401 path.
   const fetchPaymentMethods = async () => {
-    if (!merchantId) return;
     try {
-      const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`);
+      const res = await fetchWithAuth(`/api/merchant/me/payment-methods`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
@@ -202,11 +208,11 @@ export const ConfigPanel = memo(function ConfigPanel({
   useEffect(() => {
     fetchPaymentMethods();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [merchantId]);
+  }, []);
 
   const [pmError, setPmError] = useState<string | null>(null);
   const handleAddPaymentMethod = async () => {
-    if (!merchantId) return;
+    // No `merchantId` guard — the server resolves `me` from the auth token.
     const name = newPm.name.trim();
     const details = newPm.details.trim();
     // Mirror server rules so a bad input fails here with a visible message
@@ -222,7 +228,7 @@ export const ConfigPanel = memo(function ConfigPanel({
     setPmError(null);
     setSavingPm(true);
     try {
-      const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`, {
+      const res = await fetchWithAuth(`/api/merchant/me/payment-methods`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

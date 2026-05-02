@@ -160,8 +160,8 @@ export async function POST(
     // Verify has_compliance_access BEFORE accepting sender_type to prevent spoofing
     let senderMatchesComplianceMerchant = false;
     if (sender_type === 'compliance' && auth.actorType === 'merchant' && sender_id === auth.actorId) {
-      const { getMerchantById } = await import('@/lib/db/repositories/merchants');
-      const merchant = await getMerchantById(auth.actorId);
+      const { getMerchantByIdSafe } = await import('@/lib/db/repositories/merchants');
+      const merchant = await getMerchantByIdSafe(auth.actorId);
       senderMatchesComplianceMerchant = !!merchant?.has_compliance_access;
     }
     if (!senderMatchesAuth && !senderMatchesUserId && !senderMatchesMerchantId && !senderMatchesComplianceMerchant) {
@@ -195,8 +195,8 @@ export async function POST(
         if (order.status === 'escrowed' && !order.buyer_merchant_id) return true;
         // Merchant with compliance access can send messages on disputed orders
         if (senderMatchesComplianceMerchant && order.status === 'disputed') {
-          const { getMerchantById } = await import('@/lib/db/repositories/merchants');
-          const merchant = await getMerchantById(auth.actorId);
+          const { getMerchantByIdSafe } = await import('@/lib/db/repositories/merchants');
+          const merchant = await getMerchantByIdSafe(auth.actorId);
           if (merchant?.has_compliance_access) return true;
         }
         return false;

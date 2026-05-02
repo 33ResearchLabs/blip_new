@@ -224,18 +224,24 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
 
     setConnectionState('connecting');
 
-    // Build WebSocket URL — include token when available, plus legacy params as fallback
+    // Build WebSocket URL. The session token is NEVER placed in the query
+    // string — proxies and log aggregators capture query params and would
+    // exfiltrate it. Auth flows over `Sec-WebSocket-Protocol: bearer, <token>`
+    // (the only header browsers can set on `new WebSocket(...)`).
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
+    const url = `${protocol}//${host}/ws/chat?actorType=${actorType}&actorId=${actorId}`;
     const sessionToken = useMerchantStore.getState().sessionToken
       || sessionStorage.getItem('blip_session_token');
-    const tokenParam = sessionToken ? `&token=${encodeURIComponent(sessionToken)}` : '';
-    const url = `${protocol}//${host}/ws/chat?actorType=${actorType}&actorId=${actorId}${tokenParam}`;
 
     console.log('[WebSocket] Connecting to:', url);
 
     try {
-      const ws = new WebSocket(url);
+      // Pass token via subprotocol field — server reads it from
+      // `sec-websocket-protocol` and verifies before accept.
+      const ws = sessionToken
+        ? new WebSocket(url, ['bearer', sessionToken])
+        : new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {

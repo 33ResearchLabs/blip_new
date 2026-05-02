@@ -10,7 +10,13 @@ import {
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
 import { logger } from '@/lib/logger';
 import { guardAuthVelocity } from '@/lib/guards';
-import { generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import {
+  generateAccessToken,
+  REFRESH_TOKEN_COOKIE,
+  REFRESH_COOKIE_OPTIONS,
+  ACCESS_TOKEN_COOKIE,
+  ACCESS_COOKIE_OPTIONS,
+} from '@/lib/auth/sessionToken';
 import { createSession } from '@/lib/auth/sessions';
 import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 
@@ -113,6 +119,14 @@ export async function POST(request: NextRequest) {
     });
     if (refreshToken) {
       response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
+    }
+    // Issue the access token as an httpOnly cookie too, so the browser can
+    // authenticate subsequent requests automatically without exposing the
+    // token to JavaScript (XSS-safe). The JSON body still contains the
+    // token for backward compatibility with older clients that rely on
+    // the Authorization: Bearer pattern.
+    if (accessToken) {
+      response.cookies.set(ACCESS_TOKEN_COOKIE, accessToken, ACCESS_COOKIE_OPTIONS);
     }
     return response;
   } catch (error) {

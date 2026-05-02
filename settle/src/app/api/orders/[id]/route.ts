@@ -396,6 +396,10 @@ export async function PATCH(
               reason,
               acceptor_wallet_address,
             },
+            // Forward the SAME key — core-api requires it for these
+            // status transitions (payment_sent / cancel_order /
+            // release_escrow path).
+            idempotencyKey,
           });
           const respData = await resp.json();
           return { data: respData, statusCode: resp.status };

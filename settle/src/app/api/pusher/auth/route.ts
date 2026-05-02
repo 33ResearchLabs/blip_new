@@ -205,8 +205,8 @@ export async function POST(request: NextRequest) {
           const user = await getUserById(actorId);
           if (user?.username) displayName = user.username;
         } else if (actorType === 'merchant') {
-          const { getMerchantById } = await import('@/lib/db/repositories/merchants');
-          const merchant = await getMerchantById(actorId);
+          const { getMerchantByIdSafe } = await import('@/lib/db/repositories/merchants');
+          const merchant = await getMerchantByIdSafe(actorId);
           if (merchant?.business_name) displayName = merchant.business_name;
         } else if (actorType === 'compliance') {
           displayName = 'Compliance Officer';

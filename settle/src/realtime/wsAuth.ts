@@ -64,31 +64,30 @@ function loadVerifier(): Verifier {
 }
 
 export function extractToken(req: IncomingMessage): string | null {
+  // 1. Authorization: Bearer <token> — preferred for non-browser clients
+  //    (workers, tests) that can set arbitrary HTTP headers.
   const authHeader = req.headers['authorization'];
   if (authHeader && typeof authHeader === 'string') {
     const m = authHeader.match(/^Bearer\s+(.+)$/i);
     if (m) return m[1];
   }
-  // Browsers can't set headers on WebSocket. The standard workaround is
-  // the Sec-WebSocket-Protocol header: client sends ['bearer', '<token>'],
-  // we pull the second item. Production-safe (not logged like query params).
+
+  // 2. Sec-WebSocket-Protocol: bearer, <token>
+  //    Browsers cannot set arbitrary headers on `new WebSocket(...)` — the
+  //    standard workaround is the subprotocol field. Production-safe:
+  //    proxies/log aggregators do not capture this header the way they
+  //    capture query strings.
   const sub = req.headers['sec-websocket-protocol'];
   if (sub && typeof sub === 'string') {
     const parts = sub.split(',').map((s) => s.trim());
     const idx = parts.indexOf('bearer');
     if (idx !== -1 && parts[idx + 1]) return parts[idx + 1];
   }
-  // Query-string fallback is dev-only — proxies/log aggregators capture
-  // query params, so production must use the Authorization header.
-  if (process.env.NODE_ENV !== 'production') {
-    try {
-      const url = new URL(req.url || '/', 'http://localhost');
-      const qp = url.searchParams.get('token');
-      if (qp) return qp;
-    } catch {
-      // ignore
-    }
-  }
+
+  // 3. NO query-string fallback — even in development. Query params are
+  //    logged by every reverse proxy (Cloudflare, ingress, ALB, Nginx) and
+  //    persisted in browser history. The previous `?token=...` path was a
+  //    high-value exfiltration target. Removed entirely.
   return null;
 }
 

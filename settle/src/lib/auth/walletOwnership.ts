@@ -16,15 +16,16 @@
  *     produces, so this isn't a new client contract — just turning on the
  *     verification that was already supposed to happen.
  *
- * Backward compatibility: WALLET_OWNERSHIP_STRICT controls the failure mode.
- *   strict=false (default during rollout) → mismatch logs WARN and is
- *     allowed through, so existing in-flight orders and old clients don't
- *     break the day this ships.
- *   strict=true → mismatch is a hard 403. Flip after the warn-rate trends
- *     to zero.
+ * STRICT MODE IS THE ONLY MODE.
+ *   The previous lax/dual-mode rollout (`WALLET_OWNERSHIP_STRICT=false`) was
+ *   a temporary on-ramp. It is now removed: a wallet that fails BOTH Option A
+ *   and Option B is ALWAYS rejected with a 403. There is no warn-only path.
+ *   This eliminates the bypass where an attacker could supply an arbitrary
+ *   payout wallet by simply not providing a signature and relying on the
+ *   default-off env var.
  *
  * Pure-ish module: only side effects are DB reads (wallet lookups) and
- * structured warn-logs. No writes, no transactions.
+ * structured error logs. No writes, no transactions.
  */
 
 import { query } from '@/lib/db';
@@ -36,14 +37,6 @@ export type ActorType = 'user' | 'merchant' | 'compliance' | 'system';
 export interface AuthLike {
   actorType: ActorType | string;
   actorId: string;
-}
-
-/**
- * Strict mode. Default OFF during the dual-mode rollout — flip to `true`
- * after the [security][wallet_inject] warn-rate falls to zero in prod.
- */
-export function isWalletOwnershipStrict(): boolean {
-  return process.env.WALLET_OWNERSHIP_STRICT === 'true';
 }
 
 /**
@@ -89,7 +82,14 @@ export function buildOrderBindingMessage(
 
 export interface OwnershipVerification {
   ok: boolean;
-  source: 'auth_match' | 'signature' | 'no_check_needed' | 'lax_allowed';
+  /**
+   * - 'auth_match'      : Option A succeeded (wallet matches actor wallet on file)
+   * - 'signature'       : Option B succeeded (or signature was rejected — see ok)
+   * - 'no_check_needed' : caller passed no wallet to validate
+   *
+   * Note: 'lax_allowed' was removed — there is no warn-only acceptance path.
+   */
+  source: 'auth_match' | 'signature' | 'no_check_needed';
   reason?: string;
 }
 
@@ -104,27 +104,35 @@ export interface AssertWalletOwnershipInput {
   /** Which action is being signed — affects message format. */
   signatureAction?: 'Claim' | 'Confirm';
   /**
-   * If true, this call is happening for a sensitive operation (release,
-   * payout, accept-with-funds) and the strict-mode failure should be 403
-   * regardless of WALLET_OWNERSHIP_STRICT. Used at escrow release to
-   * never let unverified wallets past the final gate.
+   * Historically forced strict at sensitive sites (escrow release) when the
+   * env-var-controlled default was lax. Now that strict is the only mode,
+   * this flag is a no-op kept for caller backward-compatibility — it does
+   * not relax or tighten anything. Will be removed in a follow-up after
+   * call sites are updated to drop it.
+   *
+   * @deprecated strict is the default and only mode
    */
   alwaysStrict?: boolean;
 }
 
 /**
  * Decide whether to allow `walletAddress` to be associated with an order
- * mutation by `auth`. Centralises the Option A / Option B / lax-mode logic
- * so the routes don't replicate it.
+ * mutation by `auth`. Centralises the Option A / Option B logic so the
+ * routes don't replicate it.
  *
  * Routes call this BEFORE persisting the wallet or proxying to core-api.
- * On `ok: false`, return 403 to the caller; on `ok: true` with
- * `source === 'lax_allowed'`, the warn log has already been emitted.
+ * On `ok: false`, return 403 to the caller.
+ *
+ * Failure modes (all 403-mappable, none allowed-through):
+ *   - walletAddress provided but doesn't match actor and no signature →
+ *     reject with reason "wallet differs from authenticated actor wallet"
+ *   - actor has no wallet on file and no signature → reject
+ *   - signature provided but invalid → reject
  */
 export async function assertWalletOwnership(
   input: AssertWalletOwnershipInput
 ): Promise<OwnershipVerification> {
-  const { auth, walletAddress, orderId, signature, signatureAction, alwaysStrict } = input;
+  const { auth, walletAddress, orderId, signature, signatureAction } = input;
 
   // Empty/absent wallet: nothing to verify. Caller decides whether the
   // wallet was required at all.
@@ -152,8 +160,6 @@ export async function assertWalletOwnership(
       });
       return { ok: true, source: 'signature' };
     }
-    // Signature provided but invalid — treat as a hard reject regardless
-    // of strict mode. A bad signature is never legitimate.
     logger.error('[security][wallet_inject] Option B signature INVALID — rejecting', {
       orderId,
       actorId: auth.actorId,
@@ -167,33 +173,19 @@ export async function assertWalletOwnership(
     };
   }
 
-  // ── No Option A match, no valid Option B signature ─────────────────
+  // ── No Option A match, no valid Option B signature: REJECT ─────────
+  // (formerly: "lax mode allow with warning" — removed)
   const reason =
     actorWallet === null
       ? 'actor has no wallet on file and no signature provided'
       : 'wallet differs from authenticated actor wallet and no signature provided';
 
-  if (alwaysStrict || isWalletOwnershipStrict()) {
-    logger.error('[security][wallet_inject] wallet ownership not verified — REJECTING', {
-      orderId,
-      actorId: auth.actorId,
-      actorType: auth.actorType,
-      providedWallet: walletAddress,
-      actorWallet: actorWallet ?? null,
-      strict: true,
-      alwaysStrict: !!alwaysStrict,
-    });
-    return { ok: false, source: 'auth_match', reason };
-  }
-
-  // Lax mode — log loudly so we can track legacy traffic during rollout.
-  logger.warn('[security][wallet_inject] wallet ownership unverified — allowing in lax mode', {
+  logger.error('[security][wallet_inject] wallet ownership not verified — REJECTING', {
     orderId,
     actorId: auth.actorId,
     actorType: auth.actorType,
     providedWallet: walletAddress,
     actorWallet: actorWallet ?? null,
-    reason,
   });
-  return { ok: true, source: 'lax_allowed', reason };
+  return { ok: false, source: 'auth_match', reason };
 }

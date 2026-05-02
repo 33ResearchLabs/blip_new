@@ -128,7 +128,10 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ success: true, data: merchant });
+    // updateMerchant returns the full row (RETURNING *) — project through the
+    // DTO serializer so password_hash / totp_secret / synthetic_rate / etc.
+    // are stripped before reaching the client.
+    return NextResponse.json({ success: true, data: serializeMerchant(merchant) });
   } catch (error) {
     console.error('[API] PATCH /api/merchant/[id] error:', error);
     return NextResponse.json(

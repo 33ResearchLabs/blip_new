@@ -2,7 +2,25 @@ import { query, queryOne } from '../index';
 import { Merchant, MerchantOffer, MerchantOfferWithMerchant, PaymentMethod, OfferType } from '../../types/database';
 import { getCachedMerchant, invalidateMerchantCache } from '@/lib/cache';
 
-export async function getMerchantById(id: string): Promise<Merchant | null> {
+/**
+ * Internal merchant fetch — returns the FULL row including auth secrets
+ * (password_hash, totp_secret, totp_enabled, totp_verified_at), internal-only
+ * config (synthetic_rate, max_sinr_exposure, auto_accept_*, telegram_chat_id),
+ * and all other columns. Cached.
+ *
+ * ⚠️ DO NOT use this in any code path that serializes merchant data back to a
+ * client. Use {@link getMerchantByIdSafe} instead. The `Internal` suffix is the
+ * tripwire — every API-route reviewer must explicitly justify why they need
+ * the full row before approving an import. An ESLint rule
+ * (`no-restricted-imports` in `.eslintrc`) flags any file under `src/app/api/`
+ * that imports this name.
+ *
+ * Legitimate callers are limited to:
+ *   - middleware/auth.ts        (boolean access checks; never serialized)
+ *   - auth/merchant/route.ts    (password + TOTP verification)
+ *   - 2fa/{enable,disable}/...  (TOTP secret roundtrip)
+ */
+export async function getMerchantByIdInternal(id: string): Promise<Merchant | null> {
   return getCachedMerchant<Merchant>(id, (merchantId) =>
     queryOne<Merchant>('SELECT * FROM merchants WHERE id = $1', [merchantId])
   );
@@ -52,7 +70,7 @@ export const SAFE_MERCHANT_COLUMNS = [
  * Read a merchant row using an explicit column projection (no SELECT *).
  * Use this for any endpoint that returns merchant data to a client.
  *
- * NOT cached — the full-row cache (`getMerchantById`) is reused by the auth
+ * NOT cached — the full-row cache (`getMerchantByIdInternal`) is reused by the auth
  * middleware which needs password_hash/totp_secret. Mixing the two through one
  * cache key would either poison auth (truncated row) or leak secrets (full row
  * served from a "safe" call site). Two functions, two paths.
@@ -145,7 +163,7 @@ export async function updateMerchant(
     values.push(data.bio);
   }
 
-  if (fields.length === 0) return getMerchantById(id);
+  if (fields.length === 0) return getMerchantByIdInternal(id);
 
   fields.push(`updated_at = NOW()`);
   values.push(id);

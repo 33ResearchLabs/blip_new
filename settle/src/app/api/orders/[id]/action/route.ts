@@ -25,7 +25,7 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
-import { getIdempotencyKey, withIdempotency } from '@/lib/idempotency';
+import { getIdempotencyKey, requireIdempotencyKey, withIdempotency } from '@/lib/idempotency';
 import { mockEscrowLock } from '@/lib/money/escrowLock';
 import { atomicCancelWithRefund } from '@/lib/orders/atomicCancel';
 import {
@@ -107,6 +107,18 @@ export async function POST(
       : await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
+    // 3b. Idempotency-Key header is MANDATORY for any state-changing action
+    // that touches money (SEND_PAYMENT, CONFIRM_PAYMENT, CANCEL, LOCK_ESCROW).
+    // Settle no longer caches; the header is forwarded to core-api where
+    // `withTxIdempotency` commits the idempotency record atomically with the
+    // mutation. Without the header a network-level retry could execute the
+    // same financial transition twice.
+    const idempotencyRequired = ['SEND_PAYMENT', 'CONFIRM_PAYMENT', 'LOCK_ESCROW', 'CANCEL'];
+    if (idempotencyRequired.includes(action)) {
+      const missingKey = requireIdempotencyKey(request);
+      if (missingKey) return missingKey;
+    }
+
     // 4. Security: enforce actor matches authenticated identity.
     // Identity is taken ONLY from the cryptographically-signed JWT
     // (auth.actorId / auth.actorType). The previous header-based "actor
@@ -139,9 +151,9 @@ export async function POST(
     // their authenticated wallet (Option A) or they sign the canonical
     // binding message and submit it as `acceptor_wallet_signature` (Option B).
     //
-    // During rollout (WALLET_OWNERSHIP_STRICT=false) a mismatch is allowed
-    // through with a `[security][wallet_inject]` warn-log so legacy
-    // clients don't break. Strict mode promotes the same case to a 403.
+    // Strict-only: a wallet failing both Option A and Option B is ALWAYS
+    // rejected with 403. The legacy WALLET_OWNERSHIP_STRICT=false bypass
+    // has been removed.
     if (acceptor_wallet_address) {
       const { assertWalletOwnership } = await import('@/lib/auth/walletOwnership');
       const sigAction: 'Claim' | 'Confirm' =
@@ -382,6 +394,9 @@ export async function POST(
               actor_type,
               actor_id,
             },
+            // Forward the same effective key so core-api's idempotency_log
+            // for confirm_payment / release_escrow keys off the same value.
+            idempotencyKey,
           });
           const respData = await resp.json();
           return { data: respData, statusCode: resp.status };
@@ -589,6 +604,13 @@ export async function POST(
     // ── ACCEPT, SEND_PAYMENT, DISPUTE: standard status transitions via core-api ──
     const isFinancial = action === 'SEND_PAYMENT';
     const idempotencyKey = getIdempotencyKey(request);
+    // The 30-second auto-key falls back when the client did not send a
+    // header. We compute it once here so executeTransition can forward
+    // the SAME value into the proxy that the outer settle wrapper keys
+    // off — if the two diverged, settle would dedupe but core-api would
+    // see distinct keys and risk mutating twice.
+    const window30s = Math.floor(Date.now() / 30000);
+    const effectiveKey = idempotencyKey || `${id}:${action}:${actor_id}:${window30s}`;
 
     const executeTransition = async () => {
       const resp = await proxyCoreApi(`/v1/orders/${id}`, {
@@ -602,6 +624,11 @@ export async function POST(
           // For ACCEPT on unclaimed orders: assign the claiming merchant
           ...(action === 'ACCEPT' && !order.merchant_id && actor_type === 'merchant' ? { merchant_id: actor_id } : {}),
         },
+        // Forward the SAME key the settle wrapper uses so core-api's
+        // idempotency_log lines up. Required: PATCH /v1/orders/:id wraps
+        // payment_sent/cancel_order in withIdempotency which now 400s
+        // on missing key.
+        idempotencyKey: effectiveKey,
       });
       const respData = await resp.json();
       return { data: respData, statusCode: resp.status };
@@ -611,9 +638,7 @@ export async function POST(
       // 30-second time window — collapses double-clicks to one execution but
       // allows genuine retries after the window. Client-provided Idempotency-Key
       // (if present) overrides this.
-      const window30s = Math.floor(Date.now() / 30000);
-      const key = idempotencyKey || `${id}:${action}:${actor_id}:${window30s}`;
-      const idempotencyResult = await withIdempotency(key, 'payment_sent', id, executeTransition);
+      const idempotencyResult = await withIdempotency(effectiveKey, 'payment_sent', id, executeTransition);
 
       if (idempotencyResult.cached) {
         logger.info('[Action] Returning cached SEND_PAYMENT result', { orderId: id });

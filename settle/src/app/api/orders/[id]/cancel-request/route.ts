@@ -12,7 +12,7 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
-import { getIdempotencyKey, withIdempotency } from '@/lib/idempotency';
+import { getIdempotencyKey, requireIdempotencyKey, withIdempotency } from '@/lib/idempotency';
 import { getOrderWithRelations } from '@/lib/db/repositories/orders';
 import { resolveTradeRole } from '@/lib/orders/handleOrderAction';
 import { normalizeStatus } from '@/lib/orders/statusNormalizer';
@@ -93,9 +93,13 @@ export async function POST(
       );
     }
 
-    // TASK 10: Enforce idempotency for cancel requests
-    const idempotencyKey = getIdempotencyKey(request);
-    const effectiveKey = idempotencyKey || `cancel:${id}:${parseResult.data.actor_id}:${Date.now()}`;
+    // Idempotency-Key header is MANDATORY for cancel-request POST. The legacy
+    // `Date.now()` auto-key was effectively never deduplicated (a retry would
+    // mint a fresh key) — fail-closed 400 is the only safe behaviour.
+    const missingKey = requireIdempotencyKey(request);
+    if (missingKey) return missingKey;
+    const idempotencyKey = getIdempotencyKey(request) as string;
+    const effectiveKey = idempotencyKey;
 
     const idempotencyResult = await withIdempotency(
       effectiveKey,
@@ -105,6 +109,9 @@ export async function POST(
         const resp = await proxyCoreApi(`/v1/orders/${id}/cancel-request`, {
           method: 'POST',
           body: parseResult.data,
+          // Forward the same key so core-api's idempotency_log keys off
+          // the same value. Required: core-api now rejects missing key.
+          idempotencyKey: effectiveKey,
         });
         const respData = await resp.json();
         return { data: respData, statusCode: resp.status };
@@ -146,9 +153,22 @@ export async function PUT(
       return forbiddenResponse("actor_type='merchant' requires a merchant token");
     }
 
+    // Idempotency-Key is REQUIRED on the respond path — the underlying core-api
+    // route mutates balances + offer liquidity and will reject missing-key calls
+    // with 400. We surface that requirement here so callers see a clean 400
+    // from settle instead of a confusing proxy passthrough.
+    const idempotencyKey = getIdempotencyKey(request);
+    if (!idempotencyKey || idempotencyKey.trim().length === 0) {
+      return validationErrorResponse([
+        'Idempotency-Key header is required for cancel-request responses. ' +
+        'Send a unique value (UUIDv4 recommended) per logical request.',
+      ]);
+    }
+
     return proxyCoreApi(`/v1/orders/${id}/cancel-request`, {
       method: 'PUT',
       body: parseResult.data,
+      idempotencyKey,
     });
   } catch (error) {
     logger.api.error('PUT', '/api/orders/[id]/cancel-request', error as Error);

@@ -9,6 +9,31 @@ const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '4545', 10);
 
+// ── Production security env-var gate ───────────────────────────────────
+// Refuses to boot if any of NODE_ENV / LOGIN_NONCE_REQUIRED /
+// WALLET_OWNERSHIP_STRICT is missing or wrong. In dev (NODE_ENV !=
+// 'production') this only warns — set the vars to silence the warning.
+//
+// Defense-in-depth: the runtime code paths that USED to branch on these
+// flags have had their lax modes removed, but this gate ensures any
+// future regression that reintroduces a `=== 'false'` check still cannot
+// reach production.
+//
+// Operator escape hatch: SKIP_PRODUCTION_ENV_CHECK=true (logs loudly).
+{
+  const { assertProductionSecurityEnv } = require('./src/lib/security/productionEnvGuard.js');
+  try {
+    assertProductionSecurityEnv({ mode: dev ? 'warn' : 'enforce' });
+  } catch (err) {
+    // The assertion already logged the structured summary. Exit non-zero
+    // so Railway/Docker restart loops surface the failure rather than
+    // silently proceed (a swallowed startup error would let the server
+    // stay alive in a half-configured state).
+    console.error('[security][startup] Server boot aborted.');
+    process.exit(1);
+  }
+}
+
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 

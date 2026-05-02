@@ -713,34 +713,58 @@ export async function PATCH(
         );
         const buyerVerifiedWallet = buyerRows[0]?.wallet_address ?? null;
 
-        if (
-          !buyerVerifiedWallet ||
-          buyerVerifiedWallet !== storedPayoutWallet
-        ) {
-          const strict = process.env.WALLET_OWNERSHIP_STRICT === "true";
-          if (strict) {
-            logger.error(
-              "[security][wallet_inject] Release blocked — stored payout wallet does not match buyer's verified wallet",
-              {
-                orderId: id,
-                buyerType,
-                buyerId,
-                storedPayoutWallet,
-                buyerVerifiedWallet,
-              },
-            );
-            return NextResponse.json(
-              {
-                success: false,
-                error:
-                  "Buyer wallet ownership cannot be verified at release. Manual review required.",
-                code: "WALLET_OWNERSHIP_RELEASE_BLOCK",
-              },
-              { status: 422 },
-            );
-          }
-          logger.warn(
-            "[security][wallet_inject] Release proceeding despite buyer wallet mismatch (lax mode)",
+        // Two trust paths at release time:
+        //   (a) storedPayoutWallet === buyerVerifiedWallet
+        //         Direct match — the buyer's registered wallet is the payout
+        //         destination. Always safe.
+        //   (b) storedPayoutWallet === order.acceptor_wallet_address
+        //         The acceptor wallet was vetted at ACCEPT time by
+        //         assertWalletOwnership (Option A or signed Option B). It
+        //         cannot have been written to the order without that gate
+        //         passing. The order has progressed past `accepted`
+        //         (current status: payment_sent or later), proving the
+        //         gate fired. Trusting it here matches the
+        //         embedded-wallet flow where the user's primary
+        //         users.wallet_address differs from their per-session
+        //         in-app keypair.
+        //
+        // Block ONLY when neither (a) nor (b) holds — i.e. the stored
+        // wallet is a pre-026 buyer_wallet_address fallback that doesn't
+        // match the buyer's verified wallet. That's the genuine
+        // injection risk this gate is here to catch.
+        const matchesVerified =
+          !!buyerVerifiedWallet && buyerVerifiedWallet === storedPayoutWallet;
+        const matchesAcceptor =
+          !!order.acceptor_wallet_address &&
+          order.acceptor_wallet_address === storedPayoutWallet;
+
+        if (!matchesVerified && !matchesAcceptor) {
+          logger.error(
+            "[security][wallet_inject] Release blocked — stored payout wallet matches neither buyer's verified wallet nor the accept-time wallet",
+            {
+              orderId: id,
+              buyerType,
+              buyerId,
+              storedPayoutWallet,
+              buyerVerifiedWallet,
+              acceptorWallet: order.acceptor_wallet_address ?? null,
+              buyerWallet: order.buyer_wallet_address ?? null,
+            },
+          );
+          return NextResponse.json(
+            {
+              success: false,
+              error:
+                "Buyer wallet ownership cannot be verified at release. Manual review required.",
+              code: "WALLET_OWNERSHIP_RELEASE_BLOCK",
+            },
+            { status: 422 },
+          );
+        }
+
+        if (!matchesVerified && matchesAcceptor) {
+          logger.info(
+            "[security][wallet_inject] Release proceeding via accept-time-verified acceptor wallet (embedded-wallet flow)",
             {
               orderId: id,
               buyerType,
@@ -766,8 +790,22 @@ export async function PATCH(
       txHash: tx_hash,
     });
 
-    // Enforce idempotency for release
+    // Enforce idempotency for release. Reject missing-key calls with 400 —
+    // core-api's withIdempotency wrapper requires the header on
+    // /v1/orders/:id/events for release_escrow.
     const idempotencyKey = getIdempotencyKey(request);
+    if (!idempotencyKey || idempotencyKey.trim().length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Idempotency-Key header is required for escrow release. ' +
+            'Send a unique value (UUIDv4 recommended) per logical request.',
+          code: 'MISSING_IDEMPOTENCY_KEY',
+        },
+        { status: 400 },
+      );
+    }
     const idempotencyResult = await withIdempotency(
       idempotencyKey,
       "release_escrow",
@@ -779,6 +817,7 @@ export async function PATCH(
           body: { event_type: "release", tx_hash },
           actorType: actor_type,
           actorId: actor_id,
+          idempotencyKey,
         });
 
         const responseData = await releaseResponse.json();

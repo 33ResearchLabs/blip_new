@@ -288,7 +288,13 @@ function applySecurityHeaders(response: NextResponse, nonce: string): NextRespon
 // Middleware Entry Point
 // =============================================================================
 
+// MOCK_MODE is a non-security build switch (test fixtures, fake balances).
+// CSRF protection and rate limiting MUST run regardless of this flag — the
+// production guard in env.ts (NEXT_PUBLIC_MOCK_MODE !== 'true') is the boot
+// fence. This local boolean is retained ONLY for tracing/log enrichment;
+// it is no longer consulted by any security branch below.
 const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+void isMockMode; // intentionally unread — kept as a debugging breadcrumb
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -362,7 +368,9 @@ export function middleware(request: NextRequest) {
   }
 
   // ── 1. Rate Limiting ──────────────────────────────────────────────────
-  if (!isMockMode) {
+  // Always on. MOCK_MODE no longer disables this — security toggles MUST
+  // NOT depend on a client-exposed env var.
+  {
     let rateLimitResult: NextResponse | null = null;
 
     if (pathname.startsWith('/api/auth/')) {
@@ -408,7 +416,8 @@ export function middleware(request: NextRequest) {
   }
 
   // ── 2. CSRF Protection ────────────────────────────────────────────────
-  if (!isMockMode) {
+  // Always on. MOCK_MODE no longer disables this.
+  {
     const csrfResult = csrfCheck(request);
     if (csrfResult) {
       return applySecurityHeaders(csrfResult, nonce);

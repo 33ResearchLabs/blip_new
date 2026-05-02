@@ -105,6 +105,54 @@ describe('L4: serializeMerchant DTO allowlist (defense in depth)', () => {
   });
 });
 
+describe('L3: Internal vs Safe API split (rename contract)', () => {
+  test('repository exports BOTH names; the unsuffixed legacy name is gone', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const repo = require('../../src/lib/db/repositories/merchants');
+    expect(typeof repo.getMerchantByIdInternal).toBe('function');
+    expect(typeof repo.getMerchantByIdSafe).toBe('function');
+    // The legacy name MUST be unexported — guards against an accidental
+    // re-export that would silently re-introduce SELECT * in API routes
+    // looking up an old import.
+    expect(repo.getMerchantById).toBeUndefined();
+  });
+});
+
+describe('L3: getMerchantByIdInternal returns the FULL row (regression — auth flows depend on it)', () => {
+  let capturedSql = '';
+
+  jest.isolateModules(() => {
+    jest.doMock('../../src/lib/db', () => ({
+      __esModule: true,
+      query: jest.fn(),
+      queryOne: jest.fn((sql: string) => {
+        capturedSql = sql;
+        return Promise.resolve(null);
+      }),
+    }));
+    jest.doMock('../../src/lib/cache', () => ({
+      __esModule: true,
+      getCachedMerchant: (
+        _id: string,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        loader: (id: string) => Promise<any>,
+      ) => loader(_id),
+      invalidateMerchantCache: jest.fn(),
+    }));
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getMerchantByIdInternal } = require('../../src/lib/db/repositories/merchants');
+    return getMerchantByIdInternal('22222222-2222-2222-2222-222222222222');
+  });
+
+  test('Internal variant SQL uses SELECT * (auth/2FA flows need password_hash, totp_secret)', () => {
+    // This test pins behaviour. If a future refactor narrows the Internal
+    // projection without also rewiring auth/merchant/route.ts and 2fa/*,
+    // this test fires before login breaks in prod.
+    expect(capturedSql).toMatch(/SELECT\s+\*\s+FROM\s+merchants/i);
+  });
+});
+
 describe('L3: getMerchantByIdSafe SQL inspection', () => {
   // We mock the underlying queryOne to capture the SQL string and assert
   // (a) no SELECT *, (b) no forbidden columns, (c) parameterized id.

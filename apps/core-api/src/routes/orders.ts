@@ -30,6 +30,7 @@ import { insertOutboxEvent, insertOutboxEventDirect } from '../outbox';
 import { withIdempotency, getIdempotencyKey } from '../idempotency';
 import { checkFinancialRateLimit } from '../rateLimit';
 import { createOrderReceipt, updateOrderReceipt } from '../receipts';
+import { assertActorIsParticipant } from '../ownership';
 
 // Defense-in-depth sync helper. Mirrors what receiptListener does via the
 // BullMQ queue, but inline so a transient enqueue failure doesn't drop the
@@ -146,6 +147,19 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             error: 'Order not found',
           });
         }
+
+        // Derived owner: the caller's signed x-actor-id must match one of the
+        // order's participants. settle's GET handler already enforces its own
+        // canAccessOrder check; this is the second wall in case core-api is
+        // reached directly with a leaked CORE_API_SECRET or via a future
+        // worker that forgets to filter.
+        const ownershipFail = assertActorIsParticipant(
+          request,
+          reply,
+          [order.user_id, order.merchant_id, order.buyer_merchant_id],
+          'order_get',
+        );
+        if (ownershipFail) return ownershipFail;
 
         const orderWithMinimalStatus = {
           ...order,

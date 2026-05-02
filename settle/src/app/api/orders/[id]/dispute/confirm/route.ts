@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { requireAuth } from '@/lib/middleware/auth';
+import { getIdempotencyKey } from '@/lib/idempotency';
 
 // Confirm or reject a proposed dispute resolution
 export async function POST(
@@ -45,9 +46,28 @@ export async function POST(
       );
     }
 
+    // Idempotency-Key required by core-api confirm path. Surface 400 here.
+    const idempotencyKey = getIdempotencyKey(request);
+    if (!idempotencyKey || idempotencyKey.trim().length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Idempotency-Key header is required to confirm a dispute resolution. ' +
+            'Send a unique value (UUIDv4 recommended) per logical request.',
+        },
+        { status: 400 },
+      );
+    }
+
     return proxyCoreApi(`/v1/orders/${orderId}/dispute/confirm`, {
       method: 'POST',
       body: { party, action, partyId },
+      // Bind the signed actor headers — body uses {party, partyId} which the
+      // proxy's body-fallback logic does not pick up automatically.
+      actorType: party,
+      actorId: partyId,
+      idempotencyKey,
     });
   } catch (error) {
     console.error('Failed to confirm resolution:', error);

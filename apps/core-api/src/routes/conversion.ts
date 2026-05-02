@@ -8,6 +8,7 @@
  */
 import type { FastifyPluginAsync } from 'fastify';
 import { transaction, logger, MOCK_MODE } from 'settlement-core';
+import { assertActorOwnership } from '../ownership';
 
 interface ConvertPayload {
   account_type: 'merchant' | 'user';
@@ -129,6 +130,16 @@ export const conversionRoutes: FastifyPluginAsync = async (fastify) => {
         error: 'Amount must be positive',
       });
     }
+
+    // Bind body identity to the signed x-actor-id header. Even with a leaked
+    // CORE_API_SECRET, an attacker can only act on the account they spoofed
+    // as actor — they cannot mix actor=A with body.account_id=B.
+    const ownershipFail = assertActorOwnership(request, reply, {
+      expectedActorId: account_id,
+      expectedActorType: account_type,
+      context: 'convert_usdt_to_sinr',
+    });
+    if (ownershipFail) return ownershipFail;
 
     try {
       const result = await transaction(async (client) => {
@@ -291,6 +302,13 @@ export const conversionRoutes: FastifyPluginAsync = async (fastify) => {
         error: 'Amount must be positive',
       });
     }
+
+    const ownershipFail = assertActorOwnership(request, reply, {
+      expectedActorId: account_id,
+      expectedActorType: account_type,
+      context: 'convert_sinr_to_usdt',
+    });
+    if (ownershipFail) return ownershipFail;
 
     try {
       const result = await transaction(async (client) => {

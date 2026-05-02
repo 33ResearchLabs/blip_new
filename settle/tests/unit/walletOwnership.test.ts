@@ -1,14 +1,20 @@
 /**
- * Wallet-injection guard — assertWalletOwnership contract.
+ * Wallet-injection guard — assertWalletOwnership contract (strict-only).
  *
  * Three accept paths:
  *   - auth_match (Option A): walletAddress equals actor's verified wallet
  *   - signature  (Option B): valid signature over canonical binding message
- *   - lax_allowed: strict-mode off, mismatch logged but allowed
+ *   - no_check_needed: caller passed no wallet to validate
  *
- * Two reject paths:
- *   - signature provided but invalid → reject regardless of strict mode
- *   - no match + no signature + strict=true → reject
+ * Reject paths (ALWAYS reject — there is no warn-only allow-through):
+ *   - mismatch + no signature → reject (regardless of env)
+ *   - actor has no wallet on file + no signature → reject
+ *   - signature provided but invalid → reject
+ *
+ * The previous lax/dual-mode rollout (WALLET_OWNERSHIP_STRICT=false) has
+ * been removed. The env var is no longer read by the helper. The
+ * `alwaysStrict` parameter is retained as a no-op for caller backward
+ * compat; setting it true or false changes nothing.
  */
 
 const mockQuery = jest.fn();
@@ -26,7 +32,6 @@ import {
   assertWalletOwnership,
   buildOrderBindingMessage,
   getActorWallet,
-  isWalletOwnershipStrict,
 } from '@/lib/auth/walletOwnership';
 
 const USER = { actorType: 'user' as const, actorId: 'user-1' };
@@ -37,17 +42,9 @@ const ORDER_ID = 'order-42';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Strict-only: env var is no longer consulted. Set every flavor to prove
+  // each test below behaves identically regardless of what's in the env.
   delete process.env.WALLET_OWNERSHIP_STRICT;
-});
-
-describe('isWalletOwnershipStrict', () => {
-  test('defaults to false (dual-mode rollout)', () => {
-    expect(isWalletOwnershipStrict()).toBe(false);
-  });
-  test('true when env=true', () => {
-    process.env.WALLET_OWNERSHIP_STRICT = 'true';
-    expect(isWalletOwnershipStrict()).toBe(true);
-  });
 });
 
 describe('buildOrderBindingMessage matches frontend format', () => {
@@ -98,7 +95,6 @@ describe('assertWalletOwnership — accept paths', () => {
       auth: USER, walletAddress: WALLET_AUTH,
     });
     expect(r).toEqual({ ok: true, source: 'auth_match' });
-    // No signature verification needed
     expect(mockVerifySig).not.toHaveBeenCalled();
   });
 
@@ -115,7 +111,6 @@ describe('assertWalletOwnership — accept paths', () => {
     });
 
     expect(r).toEqual({ ok: true, source: 'signature' });
-    // Verifies the EXACT canonical message, not arbitrary text
     const verifyCall = mockVerifySig.mock.calls[0];
     expect(verifyCall[0]).toBe(WALLET_OTHER);
     expect(verifyCall[1]).toBe('sig-good');
@@ -123,25 +118,10 @@ describe('assertWalletOwnership — accept paths', () => {
       `Confirm order ${ORDER_ID} - I will send fiat payment. Wallet: ${WALLET_OTHER}`
     );
   });
-
-  test('lax mode: mismatch + no signature → lax_allowed with WARN log', async () => {
-    mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
-
-    const r = await assertWalletOwnership({
-      auth: USER, walletAddress: WALLET_OTHER,
-    });
-
-    expect(r.ok).toBe(true);
-    expect(r.source).toBe('lax_allowed');
-    const warnCalls = mockLog.warn.mock.calls.flatMap(c => c);
-    const tag = warnCalls.find(x => typeof x === 'string' && x.includes('[security][wallet_inject]'));
-    expect(tag).toBeTruthy();
-  });
 });
 
-describe('assertWalletOwnership — reject paths', () => {
-  test('strict mode: mismatch + no signature → ok=false with ERROR log', async () => {
-    process.env.WALLET_OWNERSHIP_STRICT = 'true';
+describe('assertWalletOwnership — strict-only reject paths', () => {
+  test('mismatch + no signature → REJECT with reason "wallet differs…" (no env required)', async () => {
     mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
 
     const r = await assertWalletOwnership({
@@ -149,12 +129,15 @@ describe('assertWalletOwnership — reject paths', () => {
     });
 
     expect(r.ok).toBe(false);
+    expect(r.source).toBe('auth_match');
     expect(r.reason).toMatch(/wallet differs from authenticated/);
     expect(mockLog.error).toHaveBeenCalled();
+    // No "lax" warn — the lax allow-through is gone
+    const warnCalls = mockLog.warn.mock.calls.flatMap(c => c);
+    expect(warnCalls.find(x => typeof x === 'string' && x.includes('lax'))).toBeUndefined();
   });
 
-  test('strict mode: actor has no wallet on file + no signature → reject', async () => {
-    process.env.WALLET_OWNERSHIP_STRICT = 'true';
+  test('actor has no wallet on file + no signature → REJECT', async () => {
     mockQuery.mockResolvedValueOnce([{ wallet_address: null }]);
 
     const r = await assertWalletOwnership({
@@ -165,9 +148,7 @@ describe('assertWalletOwnership — reject paths', () => {
     expect(r.reason).toMatch(/no wallet on file/);
   });
 
-  test('signature provided but INVALID → reject regardless of strict flag', async () => {
-    // Even in lax mode, a presented-but-invalid signature is never trusted.
-    process.env.WALLET_OWNERSHIP_STRICT = 'false';
+  test('signature provided but INVALID → REJECT', async () => {
     mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
     mockVerifySig.mockResolvedValueOnce(false);
 
@@ -184,14 +165,37 @@ describe('assertWalletOwnership — reject paths', () => {
     expect(mockLog.error).toHaveBeenCalled();
   });
 
-  test('alwaysStrict: forces strict regardless of env', async () => {
-    process.env.WALLET_OWNERSHIP_STRICT = 'false'; // lax in env
+  test('WALLET_OWNERSHIP_STRICT=false in env → STILL rejects (env is no longer consulted)', async () => {
+    process.env.WALLET_OWNERSHIP_STRICT = 'false';
+    mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
+
+    const r = await assertWalletOwnership({
+      auth: USER, walletAddress: WALLET_OTHER,
+    });
+
+    expect(r.ok).toBe(false);
+    // Same reject path as the env-unset case above — proves the env var
+    // does not control behavior any more.
+  });
+
+  test('alwaysStrict=false → STILL rejects (parameter is a no-op)', async () => {
+    mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
+
+    const r = await assertWalletOwnership({
+      auth: USER, walletAddress: WALLET_OTHER,
+      alwaysStrict: false,
+    });
+
+    expect(r.ok).toBe(false);
+  });
+
+  test('alwaysStrict=true → rejects (same as default; parameter is a no-op)', async () => {
     mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
 
     const r = await assertWalletOwnership({
       auth: USER,
       walletAddress: WALLET_OTHER,
-      alwaysStrict: true,    // ← release-time guard
+      alwaysStrict: true,
     });
 
     expect(r.ok).toBe(false);
@@ -201,10 +205,8 @@ describe('assertWalletOwnership — reject paths', () => {
 describe('Option B canonical message — replay/spoof guard', () => {
   test('signature for orderId X cannot be replayed on orderId Y', async () => {
     mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
-    // Mock simulates real verify: returns true ONLY when message matches
-    // signature inputs (signed for order-X but presented as order-Y).
     mockVerifySig.mockImplementationOnce(async (_w, _sig, msg) => {
-      return msg.includes(`order order-X-real`); // signed-for order
+      return msg.includes(`order order-X-real`);
     });
 
     const r = await assertWalletOwnership({
@@ -222,7 +224,7 @@ describe('Option B canonical message — replay/spoof guard', () => {
   test('signature for action=Claim cannot satisfy a Confirm verification', async () => {
     mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
     mockVerifySig.mockImplementationOnce(async (_w, _sig, msg) => {
-      return msg.startsWith('Claim order'); // signed for Claim
+      return msg.startsWith('Claim order');
     });
 
     const r = await assertWalletOwnership({
@@ -234,5 +236,30 @@ describe('Option B canonical message — replay/spoof guard', () => {
     });
 
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('source field — lax_allowed is gone from the type union', () => {
+  test('every reject path returns source = auth_match or signature, never lax_allowed', async () => {
+    // Mismatch
+    mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
+    const r1 = await assertWalletOwnership({ auth: USER, walletAddress: WALLET_OTHER });
+    expect(r1.source).not.toBe('lax_allowed' as never);
+    expect(['auth_match', 'signature']).toContain(r1.source);
+
+    // No wallet on file
+    mockQuery.mockResolvedValueOnce([{ wallet_address: null }]);
+    const r2 = await assertWalletOwnership({ auth: USER, walletAddress: WALLET_OTHER });
+    expect(r2.source).not.toBe('lax_allowed' as never);
+
+    // Bad signature
+    mockQuery.mockResolvedValueOnce([{ wallet_address: WALLET_AUTH }]);
+    mockVerifySig.mockResolvedValueOnce(false);
+    const r3 = await assertWalletOwnership({
+      auth: USER, walletAddress: WALLET_OTHER,
+      orderId: ORDER_ID, signature: 'bad', signatureAction: 'Confirm',
+    });
+    expect(r3.source).toBe('signature');
+    expect(r3.source).not.toBe('lax_allowed' as never);
   });
 });

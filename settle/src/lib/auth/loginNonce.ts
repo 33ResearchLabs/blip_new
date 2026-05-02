@@ -29,15 +29,121 @@ export const TIMESTAMP_WINDOW_MS = NONCE_TTL_SECONDS * 1000;
 
 const REDIS_NONCE_PREFIX = 'login_nonce:';
 
+const DEFAULT_LOGIN_DOMAIN = 'blip.money';
+const DEFAULT_LOGIN_URI = 'https://blip.money';
+
+/**
+ * The expected Domain / URI that all signed login messages must contain.
+ *
+ * Resolved at *call time* (not module-load) so a single Next.js process can
+ * serve multiple environments under different envs in tests, and so a
+ * configuration change does not require a redeploy.
+ */
+function getExpectedDomain(): string {
+  return process.env.LOGIN_DOMAIN?.trim() || DEFAULT_LOGIN_DOMAIN;
+}
+function getExpectedUri(): string {
+  return process.env.LOGIN_URI?.trim() || DEFAULT_LOGIN_URI;
+}
+function isStrictDomainMode(): boolean {
+  const v = process.env.LOGIN_STRICT_DOMAIN?.trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
 export interface IssuedNonce {
   nonce: string;
   message: string;
   expiresAt: string; // ISO-8601
 }
 
-/** Canonical login-message format. Server and client must agree byte-for-byte. */
-export function buildLoginMessage(walletAddress: string, nonce: string, timestamp: number): string {
-  return `Sign this message to authenticate with Blip Money\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
+/**
+ * Canonical login-message format. Server and client must agree byte-for-byte
+ * (the client signs the exact string the server returns from /api/auth/nonce).
+ *
+ * Domain / URI are baked in to make the signature non-replayable across
+ * origins: a phishing site running at evil.example signing the same payload
+ * (Domain: blip.money) cannot lure a wallet user — most modern wallets show
+ * the message preview, and even when they don't, the server-side check below
+ * (`assertDomainBinding`) refuses any signature whose payload claims a
+ * different Domain than this server expects.
+ *
+ * `domain` / `uri` are accepted as overrides for tests; production callers
+ * leave them unset and pick up the env-resolved defaults.
+ */
+export function buildLoginMessage(
+  walletAddress: string,
+  nonce: string,
+  timestamp: number,
+  domain: string = getExpectedDomain(),
+  uri: string = getExpectedUri(),
+): string {
+  return (
+    `Sign this message to authenticate with Blip Money\n\n` +
+    `Domain: ${domain}\n` +
+    `URI: ${uri}\n` +
+    `Wallet: ${walletAddress}\n` +
+    `Timestamp: ${timestamp}\n` +
+    `Nonce: ${nonce}`
+  );
+}
+
+/**
+ * Domain-binding check. Mirrors the design intent of EIP-4361 (Sign-In With
+ * Ethereum) for Solana wallets: a signed message names the origin it was
+ * intended for, and the verifier rejects anything else.
+ *
+ * Behaviour:
+ *   - message contains a `Domain:` line that matches expected → ok
+ *   - message contains a `Domain:` line that doesn't match     → 401 (always)
+ *   - message has no `Domain:` line                            → legacy fallback
+ *       - lax mode (default): accept + log so we can confirm the
+ *         shift to new format before flipping LOGIN_STRICT_DOMAIN.
+ *       - strict mode: reject 401.
+ *
+ * URI is checked the same way when present, but absence is tolerated even in
+ * strict mode — Domain alone is sufficient to prevent cross-origin reuse.
+ */
+export function assertDomainBinding(
+  message: string,
+): { status: number; error: string } | null {
+  const expectedDomain = getExpectedDomain();
+  const expectedUri = getExpectedUri();
+  const strict = isStrictDomainMode();
+
+  const domainMatch = message.match(/^Domain:\s*(.+)$/m);
+  const uriMatch = message.match(/^URI:\s*(.+)$/m);
+
+  if (!domainMatch) {
+    if (strict) {
+      console.warn('[security][login] strict mode rejected legacy unbound message (missing Domain)');
+      return { status: 401, error: 'Login message is missing Domain binding' };
+    }
+    // Once the rollout is complete, ops flips LOGIN_STRICT_DOMAIN=true and
+    // this branch is removed. The warn line is the signal: it should hit
+    // zero before strict mode is enabled.
+    console.warn('[security][login] legacy login message accepted — caller must include Domain');
+    return null;
+  }
+
+  const declaredDomain = domainMatch[1].trim();
+  if (declaredDomain !== expectedDomain) {
+    console.warn(
+      `[security][login] Domain mismatch — declared='${declaredDomain}' expected='${expectedDomain}'`,
+    );
+    return { status: 401, error: 'Login message Domain does not match this server' };
+  }
+
+  if (uriMatch) {
+    const declaredUri = uriMatch[1].trim();
+    if (declaredUri !== expectedUri) {
+      console.warn(
+        `[security][login] URI mismatch — declared='${declaredUri}' expected='${expectedUri}'`,
+      );
+      return { status: 401, error: 'Login message URI does not match this server' };
+    }
+  }
+
+  return null;
 }
 
 /** Issue a new nonce bound to a wallet. Caller must validate the wallet first. */
@@ -160,6 +266,12 @@ export async function verifyWalletAuthRequest(input: {
       error: 'wallet_address, signature, message, and nonce are required',
     };
   }
+
+  // Domain binding — a signed message names the server it was intended for,
+  // so a signature captured by phishing.example cannot be presented to
+  // blip.money. Cheap; runs before signature verification.
+  const domainErr = assertDomainBinding(message);
+  if (domainErr) return { ok: false, ...domainErr };
 
   // Timestamp window — defense-in-depth even if a nonce somehow leaked past
   // its TTL. Cheap check, runs before signature verification.

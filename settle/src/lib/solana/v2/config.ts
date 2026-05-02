@@ -22,12 +22,20 @@ export const TREASURY_WALLET = new PublicKey('8G55Mg2QmeR5LTz1Ckp8fH2cYh4H3HpLHz
 // Fee basis points (2.5% = 250 bps)
 export const FEE_BPS = 250;
 
-// Devnet RPC — prefer the project-configured RPC (Helius/QuickNode via
-// NEXT_PUBLIC_SOLANA_RPC_URL). The public api.devnet.solana.com endpoint is
-// rate-limited and frequently triggers "Failed to fetch" errors in the browser.
-export const DEVNET_RPC =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SOLANA_RPC_URL)
-    || 'https://api.devnet.solana.com';
+// Devnet RPC. Browser uses the `/api/rpc` proxy so the keyed upstream URL
+// is never shipped to clients. Server uses SOLANA_RPC_URL_PRIVATE (preferred)
+// or the legacy NEXT_PUBLIC_SOLANA_RPC_URL fallback. See src/lib/solana/rpc.ts
+// for the canonical resolver and src/app/api/rpc/route.ts for the proxy.
+export const DEVNET_RPC = (() => {
+  if (typeof window !== 'undefined') {
+    return process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY_URL?.trim() || '/api/rpc';
+  }
+  const priv = process.env?.SOLANA_RPC_URL_PRIVATE?.trim();
+  if (priv) return priv;
+  const pub = process.env?.NEXT_PUBLIC_SOLANA_RPC_URL?.trim();
+  if (pub) return pub;
+  return 'https://api.devnet.solana.com';
+})();
 
 // Compliance/DAO wallets for dispute resolution
 // These wallets have authority to release or refund escrow in disputed orders
