@@ -171,21 +171,81 @@ async function reconcileTransaction(
   connection: Connection,
   signature: TransactionSignature,
 ): Promise<boolean> {
-  try {
-    const result = await connection.getTransaction(signature, {
-      maxSupportedTransactionVersion: 0,
-      commitment: 'confirmed',
-    });
-    if (!result) return false;
-    // Has error? Landed but failed on-chain → NOT a success
-    return !result.meta?.err;
-  } catch (err) {
-    logger.warn('[safeTx] Reconciliation check failed', {
-      signature,
-      error: (err as Error)?.message,
-    });
-    return false;
+  // Solana's index is asynchronous: a transaction can be accepted by the
+  // cluster yet remain invisible to `getTransaction()` for 5-15 seconds.
+  // The original single-shot probe happens microseconds after a confirm
+  // timeout / blockheight-exceeded error and returns null even when the tx
+  // actually lands moments later. That false-negative is what creates
+  // orphan escrows: client declares failure → caller skips the settle
+  // PATCH → on-chain funds locked, no DB record, no automated refund.
+  //
+  // We now poll first via the lighter `getSignatureStatuses` (which Solana
+  // RPCs surface faster than the full tx index) and fall back to
+  // `getTransaction` for the canonical err/no-err verdict. Total budget is
+  // 30 s — enough to cover devnet's typical indexing tail without blocking
+  // the UX for an unreasonable time.
+  const POLL_INTERVAL_MS = 1500;
+  const TOTAL_BUDGET_MS = 30_000;
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
+
+  while (Date.now() < deadline) {
+    // Phase 1: cheap signature-status probe (returns earlier than tx index)
+    try {
+      const statusRes = await connection.getSignatureStatuses([signature], {
+        searchTransactionHistory: true,
+      });
+      const status = statusRes?.value?.[0];
+      if (status) {
+        if (status.err) {
+          logger.info('[safeTx] reconcile: signature has err on-chain', {
+            signature,
+            err: status.err,
+          });
+          return false;
+        }
+        // confirmed or finalized → landed. Confirm via getTransaction below
+        // for the meta.err verdict, but we know it landed.
+        if (
+          status.confirmationStatus === 'confirmed' ||
+          status.confirmationStatus === 'finalized'
+        ) {
+          // fall through to full lookup for canonical verdict
+        }
+      }
+    } catch (err) {
+      // Network blip — fall through to getTransaction or next iteration
+      logger.debug('[safeTx] reconcile: getSignatureStatuses failed', {
+        signature,
+        error: (err as Error)?.message,
+      });
+    }
+
+    // Phase 2: canonical lookup
+    try {
+      const result = await connection.getTransaction(signature, {
+        maxSupportedTransactionVersion: 0,
+        commitment: 'confirmed',
+      });
+      if (result) {
+        // Has on-chain error? Landed but failed → NOT a success.
+        return !result.meta?.err;
+      }
+    } catch (err) {
+      logger.debug('[safeTx] reconcile: getTransaction probe failed', {
+        signature,
+        error: (err as Error)?.message,
+      });
+    }
+
+    // Not yet indexed — wait and retry until budget exhausted
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
+
+  logger.warn('[safeTx] reconcile: tx not found within budget', {
+    signature,
+    budgetMs: TOTAL_BUDGET_MS,
+  });
+  return false;
 }
 
 /**

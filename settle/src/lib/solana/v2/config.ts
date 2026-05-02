@@ -26,15 +26,48 @@ export const FEE_BPS = 250;
 // is never shipped to clients. Server uses SOLANA_RPC_URL_PRIVATE (preferred)
 // or the legacy NEXT_PUBLIC_SOLANA_RPC_URL fallback. See src/lib/solana/rpc.ts
 // for the canonical resolver and src/app/api/rpc/route.ts for the proxy.
+//
+// Solana's `Connection` constructor rejects relative URLs ("Endpoint URL
+// must start with `http:` or `https:`."), so the browser path resolves the
+// proxy path against `window.location.origin` to produce an absolute URL.
 export const DEVNET_RPC = (() => {
   if (typeof window !== 'undefined') {
-    return process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY_URL?.trim() || '/api/rpc';
+    const override = process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY_URL?.trim();
+    if (override && /^https?:\/\//i.test(override)) return override;
+    // Default proxy path — make it absolute so `new Connection(...)` accepts it.
+    const proxyPath = override || '/api/rpc';
+    return `${window.location.origin}${proxyPath.startsWith('/') ? '' : '/'}${proxyPath}`;
   }
   const priv = process.env?.SOLANA_RPC_URL_PRIVATE?.trim();
   if (priv) return priv;
   const pub = process.env?.NEXT_PUBLIC_SOLANA_RPC_URL?.trim();
   if (pub) return pub;
   return 'https://api.devnet.solana.com';
+})();
+
+/**
+ * WebSocket endpoint for Solana subscriptions (account/signature watches).
+ *
+ * web3.js's `Connection` auto-derives a wsEndpoint from the http URL by
+ * swapping the scheme. For our `/api/rpc` proxy that yields
+ * `ws://<origin>/api/rpc` — which is NOT a websocket server, so the lib
+ * surfaces "ws error: undefined" in the console every time
+ * `confirmTransaction` (or any subscription path) opens a watch.
+ *
+ * We point the WS at a real public Solana endpoint instead. Subscriptions
+ * only return public chain state, so there's no quota-leak concern in
+ * sending them direct from the browser. The proxied http URL stays in front
+ * of the keyed RPC for everything else.
+ */
+export const DEVNET_WS_ENDPOINT = (() => {
+  if (typeof window !== 'undefined') {
+    const override = process.env.NEXT_PUBLIC_SOLANA_WS_URL?.trim();
+    if (override && /^wss?:\/\//i.test(override)) return override;
+    return 'wss://api.devnet.solana.com';
+  }
+  const wsServer = process.env?.SOLANA_WS_URL?.trim();
+  if (wsServer && /^wss?:\/\//i.test(wsServer)) return wsServer;
+  return 'wss://api.devnet.solana.com';
 })();
 
 // Compliance/DAO wallets for dispute resolution

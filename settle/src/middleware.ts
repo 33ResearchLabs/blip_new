@@ -106,6 +106,14 @@ const PUBLIC_EXACT = new Set([
   '/api/convert',
   '/api/pusher/auth',
   '/api/dev-unlock',
+  // Solana JSON-RPC proxy — reads/writes to a public chain. The proxy itself
+  // (src/app/api/rpc/route.ts) enforces a per-IP rate limit + a method
+  // allowlist that blocks every destructive / quota-burning RPC. Forcing
+  // session auth on top breaks the embedded wallet's getBalance loop during
+  // the cookie-arrival race window (page load, post-refresh) — the user
+  // sees "401 Authentication required" in the console even though the
+  // request is just reading public chain state.
+  '/api/rpc',
   // 2FA login challenge — caller has a one-time pendingToken in body, NOT a session yet
   '/api/2fa/verify-login',
   // Error-tracking ingest — often called from anonymous/pre-auth pages
@@ -152,12 +160,19 @@ function isAdminRoute(pathname: string): boolean {
 // =============================================================================
 
 function hasActorIdentity(request: NextRequest): boolean {
-  // Headers
+  // Cookie auth — primary post-migration. The signed access token lives in
+  // an httpOnly cookie issued by /api/auth/{user,merchant,compliance}; the
+  // route handler's requireAuth() will verify the HMAC + revocation state.
+  // Here we only need to confirm an identity claim is PRESENT so the edge
+  // middleware doesn't 401-bounce the request before requireAuth runs.
+  if (request.cookies.get('blip_access_token')?.value) return true;
+
+  // Headers (legacy / non-browser clients)
   if (request.headers.get('x-user-id')) return true;
   if (request.headers.get('x-merchant-id')) return true;
   if (request.headers.get('x-compliance-id')) return true;
 
-  // Query params (existing pattern used by frontend)
+  // Query params (legacy frontend pattern)
   const sp = request.nextUrl.searchParams;
   if (sp.get('user_id')) return true;
   if (sp.get('merchant_id')) return true;
@@ -168,7 +183,11 @@ function hasActorIdentity(request: NextRequest): boolean {
 
 function hasBearerToken(request: NextRequest): boolean {
   const auth = request.headers.get('authorization');
-  return !!auth && auth.startsWith('Bearer ');
+  if (auth && auth.startsWith('Bearer ')) return true;
+  // Admin cookie also counts as bearer-equivalent for the admin-route gate
+  // — same rationale as hasActorIdentity above.
+  if (request.cookies.get('blip_admin_session')?.value) return true;
+  return false;
 }
 
 // =============================================================================
@@ -373,8 +392,28 @@ export function middleware(request: NextRequest) {
   {
     let rateLimitResult: NextResponse | null = null;
 
-    if (pathname.startsWith('/api/auth/')) {
-      rateLimitResult = checkRate(ip, 'auth', 10, 60);
+    // Brute-force-sensitive LOGIN endpoints — keep the strict 10/min ceiling.
+    // These accept credentials and must be throttled aggressively per IP.
+    const isLoginRoute =
+      method === 'POST' && (
+        pathname === '/api/auth/merchant' ||
+        pathname === '/api/auth/user' ||
+        pathname === '/api/auth/compliance' ||
+        pathname === '/api/auth/admin' ||
+        pathname === '/api/auth/wallet' ||
+        pathname === '/api/2fa/verify-login'
+      );
+
+    if (isLoginRoute) {
+      rateLimitResult = checkRate(ip, 'auth-login', 10, 60);
+    } else if (pathname.startsWith('/api/auth/')) {
+      // Session-management routes (/me, /refresh, /logout, /sessions, /nonce)
+      // are called from the authenticated dashboard on a normal cadence —
+      // /auth/me on mount + visibility change, /auth/refresh transparently on
+      // every 401, etc. Multiple tabs in the same browser share an IP and
+      // burn through the 10/min login bucket in seconds. Give them a much
+      // higher ceiling — they're not credential-accepting endpoints.
+      rateLimitResult = checkRate(ip, 'auth-session', 200, 60);
     } else if (
       method === 'POST' &&
       (pathname === '/api/orders' || pathname === '/api/merchant/orders')
@@ -387,6 +426,26 @@ export function middleware(request: NextRequest) {
       // Give them a much higher ceiling per IP — abuse is already blocked
       // by the HMAC auth requirement.
       rateLimitResult = checkRate(ip, 'admin', 1000, 60);
+    } else if (pathname.startsWith('/api/merchant/')) {
+      // Merchant dashboard endpoints (orders list, conversations, messages,
+      // direct-messages, contacts, payment-methods…) get hit by polling
+      // fallbacks AND on-demand UI fetches. The 100/min standard bucket is
+      // easy to exhaust with 2–3 tabs and a busy session. The merchant POST
+      // /api/merchant/orders mutation has its own tighter `order-mutation`
+      // bucket above (30/60s) so abuse is still capped on the actual
+      // money-moving path.
+      rateLimitResult = checkRate(ip, 'merchant', 400, 60);
+    } else if (
+      pathname === '/api/pusher/auth' ||
+      pathname === '/api/presence/heartbeat'
+    ) {
+      // High-frequency real-time plumbing: Pusher auth fires once per channel
+      // subscription (a merchant dashboard subscribes to ~5–15 channels at
+      // boot and re-fires on every reconnect), and presence heartbeat fires
+      // every 30s per tab. The standard 100/min bucket is easy to exhaust
+      // with 2–3 tabs. Give these their own larger bucket — they're already
+      // auth-gated and cheap.
+      rateLimitResult = checkRate(ip, 'realtime', 600, 60);
     } else {
       rateLimitResult = checkRate(ip, 'standard', 100, 60);
     }

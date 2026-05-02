@@ -27,9 +27,16 @@ export const USDT_MAINNET_MINT = new PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11
 // shipped in the client bundle. On the server we use the private
 // SOLANA_RPC_URL_PRIVATE env, falling back to the legacy public env for
 // backward compatibility, then to the network default.
+//
+// Solana's `Connection` constructor rejects relative URLs ("Endpoint URL
+// must start with `http:` or `https:`."), so the browser path resolves the
+// proxy path against `window.location.origin` to produce an absolute URL.
 export const DEVNET_RPC = (() => {
   if (typeof window !== 'undefined') {
-    return process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY_URL?.trim() || '/api/rpc';
+    const override = process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY_URL?.trim();
+    if (override && /^https?:\/\//i.test(override)) return override;
+    const proxyPath = override || '/api/rpc';
+    return `${window.location.origin}${proxyPath.startsWith('/') ? '' : '/'}${proxyPath}`;
   }
   const priv = process.env?.SOLANA_RPC_URL_PRIVATE?.trim();
   if (priv) return priv;

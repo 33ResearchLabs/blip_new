@@ -4,7 +4,7 @@ import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { requireTokenAuth } from '@/lib/middleware/auth';
 import { updateMerchantOnlineStatus, serializeMerchant } from '@/lib/db/repositories/merchants';
-import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS, ACCESS_TOKEN_COOKIE, ACCESS_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { validateUsername } from '@/lib/validation/username';
 import crypto from 'crypto';
@@ -125,6 +125,7 @@ export async function GET(request: NextRequest) {
       });
       // Set new refresh cookie if we created a new session
       if (checkRefreshToken) checkResponse.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshToken, REFRESH_COOKIE_OPTIONS);
+      if (accessToken) checkResponse.cookies.set(ACCESS_TOKEN_COOKIE, accessToken, ACCESS_COOKIE_OPTIONS);
       return checkResponse;
     }
 
@@ -307,6 +308,9 @@ export async function POST(request: NextRequest) {
         if (walletRefreshToken) {
           walletResponse.cookies.set(REFRESH_TOKEN_COOKIE, walletRefreshToken, REFRESH_COOKIE_OPTIONS);
         }
+        if (walletAccessToken) {
+          walletResponse.cookies.set(ACCESS_TOKEN_COOKIE, walletAccessToken, ACCESS_COOKIE_OPTIONS);
+        }
         return walletResponse;
       }
     }
@@ -444,6 +448,9 @@ export async function POST(request: NextRequest) {
 
       if (createRefreshToken) {
         createResponse.cookies.set(REFRESH_TOKEN_COOKIE, createRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
+      if (createAccessTk) {
+        createResponse.cookies.set(ACCESS_TOKEN_COOKIE, createAccessTk, ACCESS_COOKIE_OPTIONS);
       }
       return createResponse;
     }
@@ -787,6 +794,9 @@ export async function POST(request: NextRequest) {
 
       if (emailRefreshToken) {
         emailResponse.cookies.set(REFRESH_TOKEN_COOKIE, emailRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
+      if (emailAccessTk) {
+        emailResponse.cookies.set(ACCESS_TOKEN_COOKIE, emailAccessTk, ACCESS_COOKIE_OPTIONS);
       }
       return emailResponse;
     }

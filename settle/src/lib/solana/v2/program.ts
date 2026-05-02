@@ -667,7 +667,14 @@ export async function buildRefundEscrowTx(
     console.error('Failed to fetch trade account:', e);
   }
 
-  // refundEscrow takes no args per IDL
+  // refundEscrow takes no args per IDL — but the IDL DOES require a
+  // `depositor` account (the wallet that originally funded the escrow).
+  // Without it Anchor's instruction builder throws "Invalid arguments:
+  // depositor not provided." The depositor is read from on-chain escrow
+  // state above (offset 104..136). `creator` is unused by the on-chain
+  // program for refund and is silently dropped by Anchor; we leave it
+  // here for code-locality with the other instruction builders.
+  void creator;
   const accounts: Record<string, any> = {
     signer: refunder,
     trade: tradePda,
@@ -675,10 +682,9 @@ export async function buildRefundEscrowTx(
     vaultAuthority,
     vaultAta,
     depositorAta,
-    creator,
+    depositor: escrowDepositor,
     mint,
     tokenProgram: TOKEN_PROGRAM_ID,
-    protocolConfig: params.protocolConfigPda ?? null,
   };
 
   const refundIx = await (program.methods as any)

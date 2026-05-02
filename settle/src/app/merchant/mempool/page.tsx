@@ -8,7 +8,6 @@ import { MerchantQuoteControl } from '@/components/mempool/MerchantQuoteControl'
 import { MempoolFilters, MempoolFilterState } from '@/components/mempool/MempoolFilters';
 import { Zap, ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface MempoolOrder {
   id: string;
@@ -50,41 +49,40 @@ export default function MempoolPage() {
     maxAmount: '',
   });
 
-  // Restore merchant session from localStorage
+  // Restore merchant session via cookie-authed /api/auth/me. The httpOnly
+  // `blip_access_token` cookie is the durable identity; this works on hard
+  // refresh and deep-link entry without any client-writable storage.
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const savedMerchant = localStorage.getItem('blip_merchant');
-
-        if (savedMerchant) {
-          const merchant = JSON.parse(savedMerchant);
-
-          // Validate merchant still exists
-          const checkRes = await fetchWithAuth(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
-          if (checkRes.ok) {
-            const checkData = await checkRes.json();
-            if (checkData.success && checkData.data?.valid) {
-              const freshMerchant = checkData.data.merchant || merchant;
-              setMerchantId(freshMerchant.id);
-              setMerchantInfo(freshMerchant);
-              setIsLoading(false);
-              return;
-            }
-          }
-
-          // Session invalid, clear and redirect
-          localStorage.removeItem('blip_merchant');
-          localStorage.removeItem('merchant_info');
+        const res = await fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          setIsLoading(false);
+          router.push('/merchant/login');
+          return;
         }
+        const data = await res.json();
+        if (
+          data?.success &&
+          data?.data?.actorType === 'merchant' &&
+          data?.data?.merchant?.id
+        ) {
+          const merchant = data.data.merchant;
+          setMerchantId(merchant.id);
+          setMerchantInfo(merchant);
+          setIsLoading(false);
+          return;
+        }
+        setIsLoading(false);
+        router.push('/merchant/login');
       } catch (err) {
         console.error('Failed to restore merchant session:', err);
-        localStorage.removeItem('blip_merchant');
-        localStorage.removeItem('merchant_info');
+        setIsLoading(false);
+        router.push('/merchant/login');
       }
-
-      // No valid session, redirect to login
-      setIsLoading(false);
-      router.push('/merchant/login');
     };
 
     restoreSession();

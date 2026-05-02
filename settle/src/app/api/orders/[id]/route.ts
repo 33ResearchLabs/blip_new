@@ -478,8 +478,28 @@ export async function DELETE(
     const effectiveActorId = actorId || auth.actorId;
     const effectiveActorType = actorType || auth.actorType;
 
+    // Idempotency-Key required by core-api's withIdempotency wrapper on
+    // cancel_order. Reject upfront with 400 so the caller sees a clear
+    // error instead of an opaque core-api proxy failure.
+    const idempotencyKey = getIdempotencyKey(request);
+    if (!idempotencyKey || idempotencyKey.trim().length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Idempotency-Key header is required to cancel an order. " +
+            "Send a unique value (UUIDv4 recommended) per logical request.",
+          code: "MISSING_IDEMPOTENCY_KEY",
+        },
+        { status: 400 },
+      );
+    }
+
     const queryStr = `actor_type=${effectiveActorType}&actor_id=${effectiveActorId}${reason ? `&reason=${encodeURIComponent(reason)}` : ""}`;
-    return proxyCoreApi(`/v1/orders/${id}?${queryStr}`, { method: "DELETE" });
+    return proxyCoreApi(`/v1/orders/${id}?${queryStr}`, {
+      method: "DELETE",
+      idempotencyKey,
+    });
   } catch (error) {
     logger.api.error("DELETE", "/api/orders/[id]", error as Error);
     return errorResponse("Internal server error");

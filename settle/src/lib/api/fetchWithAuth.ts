@@ -1,122 +1,93 @@
 /**
- * fetchWithAuth — drop-in replacement for fetch() that injects identity headers
- * and transparently refreshes expired access tokens.
+ * fetchWithAuth — drop-in replacement for fetch() that flows the httpOnly
+ * `blip_access_token` cookie on every browser call and transparently
+ * refreshes it when expired.
  *
- * Auth strategy:
- *   1. If a signed session token exists → sends Authorization: Bearer <token>
- *   2. ALWAYS sends legacy x-merchant-id / x-user-id headers as fallback
- *   3. On 401 → attempts ONE silent refresh via /api/auth/refresh
- *   4. If refresh succeeds → retries original request with new token
- *   5. If refresh fails → clears token (caller handles logout)
+ * Auth model (browser):
+ *   - The browser sends `blip_access_token` automatically (httpOnly cookie,
+ *     `credentials: 'include'`). We add NO Authorization header and NO
+ *     x-{user,merchant,compliance}-id identity headers — those reflected
+ *     localStorage state, which an attacker could write to.
+ *   - On 401 → ONE silent refresh via POST /api/auth/refresh; the refresh
+ *     route rotates the cookie pair (httpOnly), and we retry the request.
+ *   - On retry-401 → /api/auth/logout (server clears cookies) and redirect.
  *
- * Usage:  import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
- *         const res = await fetchWithAuth('/api/merchant/orders?...');
+ * Auth model (SSR / server):
+ *   Node has no cookie jar. Server callers (RSC, server actions, API
+ *   routes calling other API routes, smoke scripts) must pass an explicit
+ *   `token` in `init.token`. We attach it as `Authorization: Bearer ...`
+ *   for that single call only. The token never reaches the browser.
+ *
+ * Identity is whatever the verified token (cookie OR explicit Bearer) says;
+ * nothing client-asserted.
+ *
+ * Usage (browser):
+ *   const res = await fetchWithAuth('/api/merchant/orders?...');
+ *
+ * Usage (SSR / server, e.g. in a server component or server action):
+ *   const res = await fetchWithAuth(`${origin}/api/merchant/orders`, {
+ *     token: serverSideAccessToken,   // mint server-side via setSessionOnResponse
+ *   });
  */
 
 import { useMerchantStore } from '@/stores/merchantStore';
 
-function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-
-  // 0. Session token — cryptographically signed, preferred auth method
-  let sessionToken = useMerchantStore.getState().sessionToken;
-  // Fallback: if store hasn't hydrated yet, check sessionStorage directly
-  if (!sessionToken) {
-    try {
-      sessionToken = sessionStorage.getItem('blip_session_token');
-    } catch {
-      // SSR — skip
-    }
-  }
-  if (sessionToken) {
-    headers['Authorization'] = `Bearer ${sessionToken}`;
-  }
-
-  // 1. Try Zustand store first (in-memory, most reliable)
-  const merchantId = useMerchantStore.getState().merchantId;
-  if (merchantId) {
-    headers['x-merchant-id'] = merchantId;
-  }
-
-  // 2. Fallback to localStorage if store is empty
-  if (!merchantId) {
-    try {
-      const saved = localStorage.getItem('blip_merchant');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.id) {
-          headers['x-merchant-id'] = parsed.id;
-        }
-      }
-    } catch {
-      // localStorage not available (SSR) or corrupt — skip
-    }
-  }
-
-  // 3. User ID from localStorage (user-facing app)
-  // Always send x-user-id when available — the server disambiguates
-  // using the route path (/merchant routes → merchant actor, else → user).
-  // Both headers must be present so users logged into merchant + user
-  // in the same browser can still create orders from the user side.
-  try {
-    const saved = localStorage.getItem('blip_user');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed?.id) {
-        headers['x-user-id'] = parsed.id;
-      }
-    }
-  } catch {
-    // SSR or corrupt — skip
-  }
-
-  // 4. Compliance officer ID from localStorage
-  try {
-    const saved = localStorage.getItem('compliance_member');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed?.id) {
-        headers['x-compliance-id'] = parsed.id;
-      }
-    }
-  } catch {
-    // SSR or corrupt — skip
-  }
-
-  // 5. Device fingerprint — cached in sessionStorage after first compute
-  try {
-    const cached = sessionStorage.getItem('blip_device_id');
-    if (cached) {
-      headers['x-device-id'] = cached;
-      const meta = sessionStorage.getItem('blip_device_meta');
-      if (meta) headers['x-device-meta'] = meta;
-    }
-  } catch {
-    // SSR — skip
-  }
-
-  return headers;
+/**
+ * Extension of `RequestInit` that allows server-side callers to pass an
+ * explicit access token. Browser callers MUST NOT use this — it would
+ * negate the point of the httpOnly cookie. We enforce the asymmetry at
+ * runtime: the token is silently dropped if `typeof window !== 'undefined'`.
+ */
+export interface FetchWithAuthInit extends RequestInit {
+  /** Server-side only. Forwarded as `Authorization: Bearer <token>`. */
+  token?: string;
 }
 
-/**
- * Compute device fingerprint and cache it in sessionStorage.
- * Called once on app load — async but non-blocking.
- */
-let _deviceInitialized = false;
+const IS_SERVER = typeof window === 'undefined';
+
+// Device fingerprint headers (NOT auth — used by risk/anomaly tracking on
+// the server). Cached in module scope rather than sessionStorage so we hold
+// no client-side state that could be confused for auth material. The cache
+// is per-tab for free (a new tab = a new module load).
+let _deviceId: string | null = null;
+let _deviceMeta: string | null = null;
+let _deviceInitPromise: Promise<void> | null = null;
+
 async function initDeviceFingerprint(): Promise<void> {
-  if (_deviceInitialized) return;
-  _deviceInitialized = true;
-  try {
-    if (typeof window === 'undefined') return;
-    // Skip if already cached
-    if (sessionStorage.getItem('blip_device_id')) return;
-    const { getDeviceInfo } = await import('@/lib/device/fingerprint');
-    const { deviceId, metadata } = await getDeviceInfo();
-    sessionStorage.setItem('blip_device_id', deviceId);
-    sessionStorage.setItem('blip_device_meta', JSON.stringify(metadata));
-  } catch {
-    // Non-critical — tracking will work without it
+  if (_deviceInitPromise) return _deviceInitPromise;
+  if (_deviceId) return;
+  _deviceInitPromise = (async () => {
+    try {
+      if (typeof window === 'undefined') return;
+      const { getDeviceInfo } = await import('@/lib/device/fingerprint');
+      const { deviceId, metadata } = await getDeviceInfo();
+      _deviceId = deviceId;
+      _deviceMeta = JSON.stringify(metadata);
+    } catch {
+      // Non-critical — risk tracking will still work without the FP header.
+    }
+  })();
+  return _deviceInitPromise;
+}
+
+function getAuthHeaders(serverToken?: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  // Identity comes from the cookie in the browser. The only header we
+  // attach there is the device fingerprint — explicitly NOT secret, used
+  // purely by the risk tracker on the server. If the FP isn't computed
+  // yet, send nothing rather than a half-formed value.
+  if (_deviceId) {
+    headers['x-device-id'] = _deviceId;
+    if (_deviceMeta) headers['x-device-meta'] = _deviceMeta;
   }
+  // Server-side ONLY: explicit Bearer for SSR/RSC/script callers that have
+  // no cookie jar. The IS_SERVER guard means a malicious client cannot
+  // smuggle a token through this path even if a typo causes `token` to be
+  // passed from browser code — the header is suppressed.
+  if (serverToken && IS_SERVER) {
+    headers['Authorization'] = `Bearer ${serverToken}`;
+  }
+  return headers;
 }
 
 /**
@@ -155,17 +126,22 @@ async function refreshAccessToken(): Promise<string | null> {
     try {
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
-        credentials: 'same-origin', // sends httpOnly cookies
+        // Required for the refresh cookie (httpOnly, path-narrow) to flow.
+        credentials: 'include',
       });
 
       if (!res.ok) {
-        // Refresh failed — token expired or revoked
+        // Refresh failed — server has rejected the refresh cookie. Drop
+        // the in-memory mirror so logged-in UI gates flip to logged-out.
         useMerchantStore.getState().setSessionToken(null);
         return null;
       }
 
       const data = await res.json();
       if (data.success && data.data?.accessToken) {
+        // Mirror the new access token in the store for UI observers. The
+        // durable copy is the rotated `blip_access_token` cookie that the
+        // refresh route just set — we never touch sessionStorage.
         useMerchantStore.getState().setSessionToken(data.data.accessToken);
         return data.data.accessToken as string;
       }
@@ -201,6 +177,12 @@ const NO_FORCED_LOGOUT_PATHS = [
   '/api/auth/admin',
   '/api/auth/wallet',
   '/api/2fa/verify-login',
+  // Pusher channel auth — a 401 here means the token aged out mid-session.
+  // The silent refresh + retry above handles recovery; if it still fails,
+  // realtime degrades gracefully (polling fallbacks kick in) but the user
+  // must NOT be log-out-redirected for it. Other foreground API calls will
+  // surface a real session expiry on their own when needed.
+  '/api/pusher/auth',
 ];
 
 function shouldForceLogoutOn401(url: string): boolean {
@@ -221,7 +203,9 @@ function forceLogoutAndRedirect(): void {
   if (typeof window === 'undefined') return;
 
   try {
-    // Wipe Zustand store (sessionToken, merchantId, merchantInfo)
+    // Wipe in-memory store mirrors. The DURABLE auth state lives in the
+    // httpOnly cookies — those get cleared by the /api/auth/logout call
+    // below (server response sets Max-Age=0 on both access + refresh).
     useMerchantStore.getState().setSessionToken(null);
     const setMerchantId = (useMerchantStore.getState() as any).setMerchantId;
     const setMerchantInfo = (useMerchantStore.getState() as any).setMerchantInfo;
@@ -229,13 +213,17 @@ function forceLogoutAndRedirect(): void {
     if (typeof setMerchantInfo === 'function') setMerchantInfo(null);
   } catch { /* store not hydrated — ignore */ }
 
+  // Tell the server to invalidate the session and clear the auth cookies.
+  // Fire-and-forget; we redirect even if this races, because the in-memory
+  // state is already wiped and the dead cookie can't authenticate anything
+  // useful in the time it takes the redirect to land.
   try {
-    sessionStorage.removeItem('blip_session_token');
-    localStorage.removeItem('blip_merchant');
-    localStorage.removeItem('merchant_info');
-    localStorage.removeItem('blip_user');
-    localStorage.removeItem('compliance_member');
-  } catch { /* SSR — ignore */ }
+    void fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      keepalive: true,
+    });
+  } catch { /* ignore — redirect proceeds */ }
 
   // Pick the right login page based on where the user currently is.
   // Drop on the dedicated login form (not the welcome page) with a reason
@@ -251,24 +239,35 @@ function forceLogoutAndRedirect(): void {
 }
 
 /**
- * Drop-in replacement for window.fetch with auth headers injected.
- * Signature matches fetch() exactly.
+ * Drop-in replacement for window.fetch with auth flowing via the httpOnly
+ * cookie (browser) or an explicit Bearer (server). Signature is fetch()
+ * plus an optional `token` field on init for SSR.
  *
- * - GET requests are automatically deduplicated
- * - 401 responses trigger transparent token refresh + retry (once)
+ * - GET requests are automatically deduplicated (browser only — server
+ *   calls bypass the dedup cache to avoid leaking tokens across requests)
+ * - 401 responses trigger transparent token refresh + retry (browser only)
  * - Auth routes are excluded from refresh to prevent loops
  */
 export function fetchWithAuth(
   input: RequestInfo | URL,
-  init?: RequestInit,
+  init?: FetchWithAuthInit,
 ): Promise<Response> {
-  // Lazily init device fingerprint (non-blocking, runs once)
+  // Lazily init device fingerprint (non-blocking, runs once). No-op on the
+  // server — `initDeviceFingerprint` early-returns when `window` is absent.
   initDeviceFingerprint().catch(() => {});
 
   const method = (init?.method || 'GET').toUpperCase();
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
-  // GET deduplication
+  // Server-side path: no GET dedup (each SSR/RSC pass should run its own
+  // fetches; sharing a promise across requests would leak the token from
+  // one render into another). No 401-refresh either — the server caller
+  // owns the token's lifecycle.
+  if (IS_SERVER) {
+    return executeServer(input, init, url);
+  }
+
+  // Browser GET deduplication
   if (method === 'GET') {
     const existing = inflightGets.get(url);
     if (existing) return existing.then(res => res.clone());
@@ -282,6 +281,40 @@ export function fetchWithAuth(
   }
 
   return executeWithRefresh(input, init, url);
+}
+
+/**
+ * Server-side fetch path. Cookies don't exist here — Next.js server runtimes
+ * have no jar — so the caller MUST supply `init.token` for any auth-required
+ * route. We attach it as Bearer once and do not retry on 401 (the caller
+ * already controls the token lifecycle).
+ */
+async function executeServer(
+  input: RequestInfo | URL,
+  init: FetchWithAuthInit | undefined,
+  url: string,
+): Promise<Response> {
+  const method = (init?.method || 'GET').toUpperCase();
+  const authHeaders = getAuthHeaders(init?.token);
+  // Strip our extension key before forwarding to native fetch.
+  const { token: _stripped, ...nativeInit } = init || {};
+  void _stripped;
+  try {
+    return await fetch(input, {
+      ...nativeInit,
+      // 'omit' is the safe default on the server: any cookie-like header
+      // present in `init.headers` would be the caller's deliberate choice;
+      // we don't auto-attach a cookie jar that doesn't exist.
+      credentials: nativeInit.credentials ?? 'omit',
+      headers: {
+        ...authHeaders,
+        ...nativeInit.headers,
+      },
+    });
+  } catch (networkErr) {
+    void logNetworkFailure(url, method, networkErr);
+    throw networkErr;
+  }
 }
 
 // ── Automatic API failure logging ─────────────────────────────────────
@@ -493,26 +526,107 @@ async function peekBody(response: Response): Promise<string | undefined> {
   }
 }
 
+// ── 429 backoff: skip same-bucket calls until Retry-After elapses ────
+// When an endpoint returns 429, every subsequent call to the same path
+// would ALSO be rejected until the window resets. Polling code (heartbeat,
+// chat refresh, dashboard inbox) keeps firing at fixed intervals and just
+// burns through the bucket again without ever giving the server a break.
+// We track a per-path "blocked until" timestamp; calls inside that window
+// short-circuit with a synthetic 429 instead of hitting the network.
+const blockedUntilByPath = new Map<string, number>();
+const MAX_BACKOFF_MS = 30_000;
+
+function isBlockedByBackoff(path: string): number {
+  const until = blockedUntilByPath.get(path);
+  if (!until) return 0;
+  const now = Date.now();
+  if (until <= now) {
+    blockedUntilByPath.delete(path);
+    return 0;
+  }
+  return until - now;
+}
+
+function markBlocked(path: string, retryAfterSec: number): void {
+  // Cap the block window — if a misconfigured server returns Retry-After:
+  // 3600, we don't want to lock the UI out for an hour.
+  const ms = Math.min(Math.max(retryAfterSec * 1000, 1000), MAX_BACKOFF_MS);
+  blockedUntilByPath.set(path, Date.now() + ms);
+}
+
+function syntheticRateLimitResponse(retryAfterMs: number): Response {
+  const retryAfter = Math.ceil(retryAfterMs / 1000);
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: 'Too many requests',
+      message: `Rate limited locally — retry in ${retryAfter}s`,
+      retryAfter,
+    }),
+    {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': retryAfter.toString(),
+        'X-RateLimit-Source': 'client-backoff',
+      },
+    },
+  );
+}
+
 /**
  * Execute a fetch with auth headers. If the response is 401 and the URL
  * is not an auth route, attempt ONE token refresh and retry.
+ *
+ * Browser-only path: the cookie carries auth, refresh runs against the
+ * httpOnly refresh cookie. Server-side calls take the executeServer branch
+ * above (no refresh, no dedup, explicit Bearer).
  */
 async function executeWithRefresh(
   input: RequestInfo | URL,
-  init: RequestInit | undefined,
+  init: FetchWithAuthInit | undefined,
   url: string,
 ): Promise<Response> {
+  // `token` is server-only; if a browser caller passes it, the IS_SERVER
+  // guard inside getAuthHeaders drops it. Strip it from the native init
+  // so it can't leak into the request body or headers via spread.
+  const { token: _stripped, ...nativeInit } = init || {};
+  void _stripped;
   const authHeaders = getAuthHeaders();
 
-  const method = (init?.method || 'GET').toUpperCase();
+  const method = (nativeInit?.method || 'GET').toUpperCase();
+  const path = extractPath(url).split('?')[0];
+
+  // Local backoff: if a recent GET to this path returned 429, short-circuit
+  // until the window expires. This protects the server from polling pressure
+  // (heartbeat, chat refresh, dashboard inbox) without changing observable
+  // behaviour — the next poll tick just gets a synthetic 429 instead of
+  // burning the bucket again.
+  //
+  // CRITICAL: only apply to GET. State-changing methods (POST/PATCH/DELETE)
+  // are user-initiated — clicking "Confirm Payment" must NEVER be silently
+  // rejected by client-side code as "Too many requests." If the server
+  // genuinely rate-limits a mutation, the user sees that error directly;
+  // we must not pre-empt with a fake one.
+  if (method === 'GET') {
+    const blockedFor = isBlockedByBackoff(path);
+    if (blockedFor > 0) {
+      return syntheticRateLimitResponse(blockedFor);
+    }
+  }
 
   let response: Response;
   try {
     response = await fetch(input, {
-      ...init,
+      ...nativeInit,
+      // `include` so the httpOnly cookie pair (`blip_access_token` +
+      // `blip_refresh_token`) flows on every request, including any future
+      // cross-origin deployment. Same-origin already gets cookies by
+      // default, but explicit > implicit when the credential IS the auth.
+      credentials: nativeInit.credentials ?? 'include',
       headers: {
         ...authHeaders,
-        ...init?.headers,
+        ...nativeInit.headers,
       },
     });
   } catch (networkErr) {
@@ -520,6 +634,16 @@ async function executeWithRefresh(
     // Log and re-throw so callers behave identically.
     void logNetworkFailure(url, method, networkErr);
     throw networkErr;
+  }
+
+  // 429 → record the cooldown window so subsequent same-path GETs skip
+  // the network until the server's bucket resets. Honor Retry-After when
+  // the server supplies it; fall back to 5s otherwise.
+  // Only seed the backoff from GETs — a mutation that 429s is one-shot
+  // user intent and shouldn't poison the bucket for anything else.
+  if (response.status === 429 && method === 'GET') {
+    const ra = parseInt(response.headers.get('Retry-After') || '0', 10);
+    markBlocked(path, ra > 0 ? ra : 5);
   }
 
   // If not 401, or if this is an auth route, return as-is
@@ -533,8 +657,13 @@ async function executeWithRefresh(
     return response;
   }
 
-  // Only attempt refresh if we had a token (otherwise 401 is expected — not logged in)
-  const hadToken = !!authHeaders['Authorization'];
+  // Probe the in-memory mirror to decide whether a 401 is worth refreshing
+  // for. If the user was never logged in (no in-memory token AND no
+  // sessionId observable), the 401 is expected — skip the refresh roundtrip.
+  // The previous gate keyed off `Authorization: Bearer ...`, but we no
+  // longer attach that header. Cookies aren't readable from JS by design,
+  // so the in-memory mirror is the only proxy we have.
+  const hadToken = !!useMerchantStore.getState().sessionToken;
   if (!hadToken) return response;
 
   // Attempt silent refresh
@@ -548,20 +677,28 @@ async function executeWithRefresh(
     return response;
   }
 
-  // Retry with new token
-  const retryHeaders = getAuthHeaders(); // re-read (now has new token)
+  // Retry with the rotated cookie pair (set by /api/auth/refresh).
+  const retryHeaders = getAuthHeaders();
   let retryResponse: Response;
   try {
     retryResponse = await fetch(input, {
-      ...init,
+      ...nativeInit,
+      credentials: nativeInit.credentials ?? 'include',
       headers: {
         ...retryHeaders,
-        ...init?.headers,
+        ...nativeInit.headers,
       },
     });
   } catch (retryNetErr) {
     void logNetworkFailure(url, method, retryNetErr);
     throw retryNetErr;
+  }
+
+  // 429 on the post-refresh retry → also feed the local backoff window
+  // (GETs only) so the next same-path call short-circuits.
+  if (retryResponse.status === 429 && method === 'GET') {
+    const ra = parseInt(retryResponse.headers.get('Retry-After') || '0', 10);
+    markBlocked(path, ra > 0 ? ra : 5);
   }
 
   // Log the retry failure too so every failed response is tracked

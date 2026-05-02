@@ -116,11 +116,16 @@ export function useMerchantConversations() {
     return () => clearTimeout(timer);
   }, [merchantId, orderConversations.length, sessionTokenPresent, fetchOrderConversations]);
 
-  // Polling fallback when Pusher is not connected (15s interval)
+  // Polling fallback when Pusher is not connected (~15s interval, jittered).
+  // The jitter is per-tab — without it, every tab opened at the same second
+  // hits the server in lockstep and collectively trips the per-IP rate limit.
+  // fetchWithAuth itself short-circuits same-path calls during a 429 backoff
+  // window, so we don't need additional in-hook backoff logic here.
   const isPusherConnected = !!(pusher as any)?.isConnected;
   useEffect(() => {
     if (!merchantId || isPusherConnected) return;
-    const interval = setInterval(fetchOrderConversations, 15000);
+    const intervalMs = 15_000 + Math.floor(Math.random() * 5_000);
+    const interval = setInterval(fetchOrderConversations, intervalMs);
     return () => clearInterval(interval);
   }, [merchantId, isPusherConnected, fetchOrderConversations]);
 

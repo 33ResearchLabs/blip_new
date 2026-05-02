@@ -338,9 +338,17 @@ export function useUserOrderActions({
           const msg = releaseErr?.message || "";
           console.error("[Release] releaseEscrow failed:", msg);
 
-          if (msg.includes("AccountNotInitialized")) {
+          // AccountNotInitialized OR already-Released → escrow is gone
+          // on-chain, just sync the backend and complete the order.
+          const isAlreadyReleased =
+            msg.includes("AccountNotInitialized") ||
+            msg.includes("Released") ||
+            msg.includes("already") ||
+            // Anchor error 6027 = trade in invalid state for release
+            msg.includes("6027");
+          if (isAlreadyReleased) {
             console.log(
-              "[Release] Escrow account missing — already released on-chain, completing order...",
+              "[Release] Escrow already released on-chain, completing order...",
             );
             let backendOk = false;
             try {
@@ -348,7 +356,11 @@ export function useUserOrderActions({
                 `/api/orders/${activeOrder.id}/escrow`,
                 {
                   method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
+                  headers: {
+                    "Content-Type": "application/json",
+                    // PATCH /escrow requires Idempotency-Key for the release transition.
+                    "Idempotency-Key": generateIdempotencyKey(),
+                  },
                   body: JSON.stringify({
                     tx_hash: activeOrder.escrowTxHash || "already-released",
                     actor_type: "user",
@@ -422,11 +434,18 @@ export function useUserOrderActions({
 
         console.log("[Release] Escrow released:", releaseResult.txHash);
 
+        // PATCH /escrow requires Idempotency-Key for the release transition —
+        // without it the backend silently rejects the sync, the DB stays at
+        // payment_sent, and the next click re-runs the on-chain release
+        // (which then fails because trade is already in Released state).
         const escrowRes = await fetchWithAuth(
           `/api/orders/${activeOrder.id}/escrow`,
           {
             method: "PATCH",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key": generateIdempotencyKey(),
+            },
             body: JSON.stringify({
               tx_hash: releaseResult.txHash,
               actor_type: "user",
@@ -532,11 +551,14 @@ export function useUserOrderActions({
       }
     } catch (err) {
       console.error("Failed to confirm payment:", err);
-      showAlert(
-        "Error",
-        "Failed to release escrow. Please try again.",
-        "error",
-      );
+      // Surface the actual error so the user (and we, in support) can see
+      // WHY the release failed — the previous generic message hid important
+      // signals like "trade in Released state" or "blockhash exceeded".
+      const rawMsg = err instanceof Error ? err.message : String(err ?? "");
+      const friendly = rawMsg
+        ? `Release failed: ${rawMsg.slice(0, 200)}`
+        : "Failed to release escrow. Please try again.";
+      showAlert("Error", friendly, "error");
     } finally {
       setIsLoading(false);
     }
@@ -576,9 +598,14 @@ export function useUserOrderActions({
         }
       }
 
+      // Dispute creation is a financial transition (freezes escrow funds) —
+      // backend rejects without Idempotency-Key (see /api/orders/[id]/dispute POST handler).
       const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/dispute`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": generateIdempotencyKey(),
+        },
         body: JSON.stringify({
           reason: disputeReason,
           description: disputeDescription,

@@ -49,6 +49,11 @@ export interface LoginNonce {
 export async function fetchLoginNonce(walletAddress: string): Promise<LoginNonce> {
   const res = await fetch('/api/auth/nonce', {
     method: 'POST',
+    // The auth endpoint sets the httpOnly access/refresh cookies on
+    // success — we need credentials so the browser honors Set-Cookie even
+    // if the deployment ends up cross-origin (and so any pre-existing
+    // refresh cookie flows during a session-restore handshake).
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ wallet_address: walletAddress }),
   });
@@ -100,6 +105,7 @@ export async function authenticateWithWallet(
     const { nonce, message, signature } = await signLoginNonce(walletAddress, signMessage);
     const response = await fetch('/api/auth/user', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'wallet_login',
@@ -138,6 +144,7 @@ export async function setUsername(
     const { nonce, message, signature } = await signLoginNonce(walletAddress, signMessage);
     const response = await fetch('/api/auth/user', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'set_username',
@@ -178,6 +185,7 @@ export async function authenticateMerchantWithWallet(
     const { nonce, message, signature } = await signLoginNonce(walletAddress, signMessage);
     const response = await fetch('/api/auth/merchant', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'wallet_login',
@@ -216,6 +224,7 @@ export async function createMerchantAccount(
     const { nonce, message, signature } = await signLoginNonce(walletAddress, signMessage);
     const response = await fetch('/api/auth/merchant', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'create_merchant',

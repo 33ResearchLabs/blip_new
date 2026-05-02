@@ -140,21 +140,16 @@ export default function LiveDashboardPage() {
 
   useEffect(() => {
     setMounted(true);
-    // Cookie-based session: probe /api/auth/admin (cookie auto-attached).
-    // For users still holding a legacy localStorage token, send it once
-    // as a Bearer header so the server can migrate them onto a cookie.
+    // Cookie-based session: probe /api/auth/admin. The httpOnly cookie
+    // `blip_admin_session` flows automatically on same-origin requests.
     let cancelled = false;
     (async () => {
       try {
-        const legacyToken = localStorage.getItem("blip_admin_token");
-        const headers: Record<string, string> = {};
-        if (legacyToken) headers.Authorization = `Bearer ${legacyToken}`;
-        const res = await fetch("/api/auth/admin", { headers });
+        const res = await fetch("/api/auth/admin", { credentials: "include" });
         const data = await res.json();
         if (cancelled) return;
         if (data?.success && data?.data?.valid) {
           tokenRef.current = ADMIN_COOKIE_SENTINEL;
-          if (legacyToken) localStorage.removeItem("blip_admin_token");
         } else {
           setNoAuth(true);
         }

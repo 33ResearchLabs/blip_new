@@ -5,7 +5,7 @@ import {
   Copy, Check, Lock, Trash2, Download, Loader2, Droplets, Wallet,
 } from 'lucide-react';
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { DEVNET_RPC } from '@/lib/solana/v2/config';
+import { DEVNET_RPC, DEVNET_WS_ENDPOINT } from '@/lib/solana/v2/config';
 import { exportPrivateKey } from '@/lib/wallet/embeddedWallet';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
@@ -52,7 +52,10 @@ export function EmbeddedWalletPanel({
     setAirdropMsg('');
 
     try {
-      const connection = new Connection(DEVNET_RPC, 'confirmed');
+      const connection = new Connection(DEVNET_RPC, {
+        commitment: 'confirmed',
+        wsEndpoint: DEVNET_WS_ENDPOINT,
+      });
       const sig = await connection.requestAirdrop(publicKey, 2 * LAMPORTS_PER_SOL);
       await connection.confirmTransaction(sig);
       setAirdropMsg('2 SOL airdropped!');

@@ -103,22 +103,17 @@ export default function DisputesPage() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const legacyToken = localStorage.getItem("blip_admin_token");
-        const headers: Record<string, string> = {};
-        if (legacyToken) headers.Authorization = `Bearer ${legacyToken}`;
-        const res = await fetchWithAuth("/api/auth/admin", { headers });
+        // Cookie auth — `blip_admin_session` flows automatically.
+        const res = await fetchWithAuth("/api/auth/admin");
         const data = await res.json();
         if (data.success && data.data?.valid) {
           setAdminToken(ADMIN_COOKIE_SENTINEL);
           setIsAuthenticated(true);
-          if (legacyToken) localStorage.removeItem("blip_admin_token");
         } else {
           localStorage.removeItem("blip_admin");
-          localStorage.removeItem("blip_admin_token");
         }
       } catch {
         localStorage.removeItem("blip_admin");
-        localStorage.removeItem("blip_admin_token");
       } finally {
         setIsCheckingSession(false);
       }

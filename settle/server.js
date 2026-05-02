@@ -81,10 +81,26 @@ try {
   console.log('> Using HTTP (no local certs - SSL handled by proxy)');
 }
 
-// Create WebSocket server attached to HTTP/HTTPS server
+// Create WebSocket server attached to HTTP/HTTPS server.
+//
+// `handleProtocols` is required for ticket-based auth: the browser sends
+// `Sec-WebSocket-Protocol: bearer, <ticket>` and the server MUST echo a
+// chosen subprotocol back (RFC 6455). If we don't echo "bearer", browsers
+// fail the handshake with a subprotocol mismatch. We never echo the ticket
+// itself — only the literal `bearer` marker — so the credential never
+// appears in the response headers (where intermediaries might log it).
 const wss = new WebSocketServer({
   server,
-  path: '/ws/chat'
+  path: '/ws/chat',
+  handleProtocols: (protocols /*, request */) => {
+    // `protocols` is a Set in ws v8+. Accept the connection only if the
+    // client offered our marker; the actual ticket lives at the next
+    // position in the offered list and is consumed in handleConnection.
+    if (protocols && typeof protocols.has === 'function' && protocols.has('bearer')) {
+      return 'bearer';
+    }
+    return false;
+  },
 });
 
 wss.on('connection', (ws, request) => {
@@ -235,6 +251,31 @@ app.prepare().then(async () => {
     console.log('> Payment-deadline worker started (pid:', deadlineWorker.pid + ')');
   } catch (deadlineErr) {
     console.warn('> Payment-deadline worker not available:', deadlineErr.message);
+  }
+
+  // Start escrow-reconciler — closes the on-chain ↔ DB orphan window. Reads
+  // pending_escrow rows registered by /api/orders/:id/escrow/intent and
+  // reflects on-chain reality into the orders table. Without this worker,
+  // any escrow lock where the client tab dies / Solana indexes slowly /
+  // network drops between sign and PATCH leaves funds locked on-chain
+  // with no DB record. CLAUDE.md flag: this worker is the durability
+  // anchor between Solana and Postgres.
+  try {
+    const { spawn } = require('child_process');
+    const path = require('path');
+    const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const reconcilerScript = path.join(__dirname, 'src/workers/escrow-reconciler.ts');
+    const reconcilerWorker = spawn(npxBin, ['tsx', reconcilerScript], {
+      stdio: 'inherit',
+      env: { ...process.env },
+      cwd: __dirname,
+    });
+    reconcilerWorker.on('exit', (code) => {
+      if (code !== 0) console.error(`> Escrow reconciler worker exited with code ${code}`);
+    });
+    console.log('> Escrow reconciler started (pid:', reconcilerWorker.pid + ')');
+  } catch (reconcilerErr) {
+    console.warn('> Escrow reconciler not available:', reconcilerErr.message);
   }
 
   // Start anomaly-sweeper — observability-only background process that scans

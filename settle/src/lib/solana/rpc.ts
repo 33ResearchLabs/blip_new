@@ -177,7 +177,11 @@ export function getPrimaryEndpoint(network: 'devnet' | 'mainnet-beta' = 'devnet'
   const isBrowser = typeof window !== 'undefined';
   if (isBrowser) {
     const proxyOverride = process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY_URL?.trim();
-    return proxyOverride && proxyOverride.length > 0 ? proxyOverride : '/api/rpc';
+    if (proxyOverride && /^https?:\/\//i.test(proxyOverride)) return proxyOverride;
+    // Solana's `Connection` rejects relative URLs — resolve the proxy path
+    // against `window.location.origin` so callers always get an absolute URL.
+    const proxyPath = proxyOverride && proxyOverride.length > 0 ? proxyOverride : '/api/rpc';
+    return `${window.location.origin}${proxyPath.startsWith('/') ? '' : '/'}${proxyPath}`;
   }
 
   // Server-side: prefer the private URL (no NEXT_PUBLIC_ prefix → not in

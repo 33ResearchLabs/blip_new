@@ -993,11 +993,12 @@ function ActivityFeed({ adminToken }: { adminToken: string }) {
     let cancelled = false;
     const fetchFeed = async () => {
       const token = tokenRef.current;
+      // The `token` ref is just a sentinel ('_cookie_session_') used as a
+      // "is admin authenticated" gate — never sent as Bearer. The actual
+      // credential is the httpOnly `blip_admin_session` cookie.
       if (!token) return;
       try {
-        const res = await fetchWithAuth("/api/admin/activity?limit=20", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetchWithAuth("/api/admin/activity?limit=20");
         const json = await res.json();
         if (!cancelled && json?.success && Array.isArray(json.data)) {
           setEvents(json.data as ActivityEvent[]);
@@ -1349,9 +1350,8 @@ function AllOrdersPanel({
       const url = tabDef.statusFilter
         ? `/api/admin/orders?status=${encodeURIComponent(tabDef.statusFilter)}&limit=100`
         : "/api/admin/orders?limit=100";
-      const res = await fetchWithAuth(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Cookie auth (`blip_admin_session`) flows automatically via fetchWithAuth.
+      const res = await fetchWithAuth(url);
       const json = await res.json();
       if (json?.success && Array.isArray(json.data)) {
         setOrders(json.data as AdminOrderRow[]);
@@ -1605,12 +1605,11 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
     setError(null);
     try {
       // Parallel: analytics + platform balance. Both back the new KPI strip.
-      const headers = { Authorization: `Bearer ${token}` };
+      // Cookie auth — `blip_admin_session` flows via fetchWithAuth's
+      // `credentials: 'include'`. No Authorization header needed.
       const [analyticsRes, balanceRes] = await Promise.allSettled([
-        fetchWithAuth(`/api/admin/analytics?timeframe=${timeframe}`, {
-          headers,
-        }),
-        fetchWithAuth("/api/admin/balance", { headers }),
+        fetchWithAuth(`/api/admin/analytics?timeframe=${timeframe}`),
+        fetchWithAuth("/api/admin/balance"),
       ]);
 
       if (analyticsRes.status === "fulfilled") {

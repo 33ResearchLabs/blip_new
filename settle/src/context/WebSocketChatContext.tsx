@@ -25,7 +25,6 @@ import type {
   WSMessagesReadEvent,
   WSOrderEvent,
 } from '@/lib/websocket/types';
-import { useMerchantStore } from '@/stores/merchantStore';
 
 // Connection states
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'failed';
@@ -97,6 +96,9 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
+  // Ref to `connect`, set on every render. Lets the retry scheduler call
+  // the latest `connect` without forming a useCallback dep cycle.
+  const connectRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   // Event callbacks
   const messageCallbacksRef = useRef<Set<MessageCallback>>(new Set());
@@ -217,31 +219,69 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
     }
   }, [send]);
 
-  // Connect to WebSocket
-  const connect = useCallback(() => {
+  // Connect to WebSocket.
+  //
+  // Auth: we fetch a single-use, short-lived ticket from POST /api/ws/ticket
+  // (cookie auth, no body). The ticket is passed in `Sec-WebSocket-Protocol`
+  // — the only header a browser can set on `new WebSocket(...)`. The server
+  // atomically consumes the ticket on upgrade and derives actorType/actorId
+  // from the consumed payload. No tokens in the URL, no localStorage reads,
+  // no client-asserted identity.
+  const connect = useCallback(async () => {
     if (!actorType || !actorId || !isMountedRef.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     setConnectionState('connecting');
 
-    // Build WebSocket URL. The session token is NEVER placed in the query
-    // string — proxies and log aggregators capture query params and would
-    // exfiltrate it. Auth flows over `Sec-WebSocket-Protocol: bearer, <token>`
-    // (the only header browsers can set on `new WebSocket(...)`).
+    // Mint a fresh ticket for every connect attempt. Tickets are single-use
+    // by design — replays after a network blip MUST get a new ticket.
+    let ticket: string | null = null;
+    try {
+      const res = await fetch('/api/ws/ticket', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        console.warn('[WebSocket] Ticket request failed:', res.status);
+        // 401 → auth cookie expired; user needs a real re-login. We let the
+        // existing reconnection backoff handle this; the next attempt may
+        // succeed if a refresh interceptor rotated the cookie in the
+        // meantime.
+        setConnectionState(retryCountRef.current >= MAX_RETRIES ? 'failed' : 'reconnecting');
+        scheduleReconnect();
+        return;
+      }
+      const json = await res.json();
+      ticket = json?.data?.ticket ?? null;
+    } catch (err) {
+      console.warn('[WebSocket] Ticket fetch threw:', err);
+      setConnectionState('reconnecting');
+      scheduleReconnect();
+      return;
+    }
+    if (!ticket) {
+      console.warn('[WebSocket] No ticket returned');
+      setConnectionState('reconnecting');
+      scheduleReconnect();
+      return;
+    }
+    if (!isMountedRef.current) {
+      // Tab unmounted while ticket was in flight — discard. The mint cost
+      // is sub-millisecond and the unused ticket expires in ~45s anyway.
+      return;
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const url = `${protocol}//${host}/ws/chat?actorType=${actorType}&actorId=${actorId}`;
-    const sessionToken = useMerchantStore.getState().sessionToken
-      || sessionStorage.getItem('blip_session_token');
+    // No actorType / actorId / token in the URL — the server derives the
+    // identity from the ticket. The URL stays free of any auth material.
+    const url = `${protocol}//${host}/ws/chat`;
 
     console.log('[WebSocket] Connecting to:', url);
 
     try {
-      // Pass token via subprotocol field — server reads it from
-      // `sec-websocket-protocol` and verifies before accept.
-      const ws = sessionToken
-        ? new WebSocket(url, ['bearer', sessionToken])
-        : new WebSocket(url);
+      const ws = new WebSocket(url, ['bearer', ticket]);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -260,28 +300,18 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
         setConnectionId(null);
         stopPing();
 
-        // Handle reconnection
+        // Handle reconnection. Each retry mints a fresh ticket — by design.
         if (event.code !== 1000 && retryCountRef.current < MAX_RETRIES) {
           setConnectionState('reconnecting');
           retryCountRef.current++;
-          const delay = getRetryDelay();
-          console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${retryCountRef.current}/${MAX_RETRIES})`);
-
-          retryTimeoutRef.current = setTimeout(() => {
-            if (isMountedRef.current) {
-              connect();
-            }
-          }, delay);
+          scheduleReconnect();
         } else if (retryCountRef.current >= MAX_RETRIES) {
           setConnectionState('failed');
-          // Use warn (not error) so Next.js dev overlay doesn't pop on transient WS outages.
           console.warn('[WebSocket] Max retries reached — will retry in 30s');
-          // Self-heal: cool off, reset the counter, and try again so the chat
-          // recovers automatically if the server comes back.
           retryTimeoutRef.current = setTimeout(() => {
             if (isMountedRef.current) {
               retryCountRef.current = 0;
-              connect();
+              void connect();
             }
           }, 30000);
         } else {
@@ -298,7 +328,28 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
       console.error('[WebSocket] Failed to create connection:', error);
       setConnectionState('failed');
     }
+  // scheduleReconnect is declared below; eslint exhaustive-deps would flag
+  // it, but the ref-based timer is intentional — reordering is awkward
+  // because connect and scheduleReconnect are mutually recursive.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actorType, actorId, handleMessage, startPing, stopPing, getRetryDelay]);
+
+  // Keep the latest `connect` reachable through a ref so the retry
+  // scheduler doesn't need it in a useCallback dep array (which would
+  // create a circular dep with `connect` itself capturing scheduleReconnect).
+  connectRef.current = connect;
+
+  // Pulled out of `connect` because the two ticket-failure paths and the
+  // onclose handler all schedule retries. Resolves connect via ref so its
+  // identity changing on actor / dep updates doesn't ruin memoization.
+  const scheduleReconnect = useCallback(() => {
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    const delay = getRetryDelay();
+    console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${retryCountRef.current}/${MAX_RETRIES})`);
+    retryTimeoutRef.current = setTimeout(() => {
+      if (isMountedRef.current) void connectRef.current();
+    }, delay);
+  }, [getRetryDelay]);
 
   // Initialize connection when actor is set
   useEffect(() => {
@@ -306,7 +357,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
 
     if (actorType && actorId) {
       const initTimeout = setTimeout(() => {
-        connect();
+        void connect();
       }, 100);
 
       return () => {
@@ -347,7 +398,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
     retryCountRef.current = 0;
     cleanup();
     if (actorType && actorId) {
-      connect();
+      void connect();
     }
   }, [actorType, actorId, cleanup, connect]);
 

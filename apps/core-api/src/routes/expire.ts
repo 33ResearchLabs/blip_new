@@ -25,6 +25,15 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
         buyer_merchant_id: string | null; type: string; crypto_amount: string;
         escrow_tx_hash: string | null; accepted_at: string | null;
       }>(
+        // Auto-cancel guard: skip any order that has an unresolved
+        // pending_escrow row. The escrow-reconciler worker is still
+        // deciding whether on-chain funds landed for that order. If we
+        // cancel now, we'd flip status='cancelled' on an order whose
+        // escrow may have actually locked successfully — repeating the
+        // exact orphan pattern this whole pipeline is designed to fix.
+        // The reconciler ALWAYS resolves a pending row within timeout_at
+        // (default 10 min); only after that does this query see the
+        // order as cancellable.
         `SELECT id, status, user_id, merchant_id, buyer_merchant_id, type, crypto_amount, escrow_tx_hash, accepted_at
          FROM orders
          WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed', 'payment_sent', 'payment_confirmed', 'releasing')
@@ -32,6 +41,11 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
            AND (
              (status = 'pending' AND created_at < NOW() - INTERVAL '15 minutes')
              OR (status NOT IN ('pending') AND COALESCE(accepted_at, created_at) < NOW() - INTERVAL '120 minutes')
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM pending_escrow pe
+              WHERE pe.order_id = orders.id
+                AND pe.resolved_at IS NULL
            )`
       );
 

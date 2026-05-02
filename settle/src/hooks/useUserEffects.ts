@@ -6,7 +6,7 @@ import { mapDbStatusToUI, mapDbOrderToUI } from "@/components/user/screens/helpe
 import { usePusher } from "@/context/PusherContext";
 import { useRealtimeChat } from "@/hooks/useRealtimeChat";
 import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 import { getUserChannel } from "@/lib/pusher/channels";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
 import { emitChatToast } from "@/lib/chat/chatToastBus";
@@ -643,6 +643,95 @@ export function useUserEffects({
       }
     });
   }, [activeChat, chatMessage, sendChatMessage, playSound, activeOrderId, setOrders]);
+
+  // ── Auto-refund stuck on-chain escrows (mirror of useMerchantEffects) ──
+  //
+  // The user-side trade-creation flow funds escrow on-chain BEFORE creating
+  // the settle order. If the on-chain tx lands but the client thinks it
+  // failed (slow Solana indexing → "block height exceeded" — see CLAUDE.md
+  // "Auto-Cancellation & Expiration Rules"), the order may be missing
+  // entirely OR the synthetic-recovery path (sweep-orphan-escrows.ts) may
+  // have inserted it as `cancelled` with all escrow_* set.
+  //
+  // This effect runs every 30 s, finds any cancelled/expired order whose
+  // on-chain escrow this user funded, and fires `refund_escrow` from the
+  // user's wallet. The on-chain program accepts only the depositor's
+  // signature for refunds, so this MUST happen client-side from the
+  // wallet that owns the trade — backend signer is rejected (error 6003).
+  const lastUserRefundScanRef = useRef(0);
+  const userRefundInFlightRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!solanaWallet?.connected || !solanaWallet?.walletAddress) return;
+    if (!solanaWallet?.refundEscrow) return; // wallet adapter not ready
+    if (orders.length === 0) return;
+
+    const now = Date.now();
+    if (now - lastUserRefundScanRef.current < 30_000) return;
+    lastUserRefundScanRef.current = now;
+
+    const stuck = orders.filter((o: any) =>
+      (o.status === 'cancelled' || o.status === 'expired') &&
+      o.escrowTxHash &&
+      !o.refundTxHash &&
+      o.escrowTradeId != null &&
+      o.escrowCreatorWallet === solanaWallet.walletAddress,
+    );
+
+    if (stuck.length === 0) return;
+    console.log(`[UserAutoRefund] Found ${stuck.length} stuck escrow(s) — refunding via user wallet…`);
+
+    for (const order of stuck) {
+      if (userRefundInFlightRef.current.has(order.id)) continue;
+      userRefundInFlightRef.current.add(order.id);
+
+      (async () => {
+        try {
+          const refund = await solanaWallet.refundEscrow({
+            creatorPubkey: order.escrowCreatorWallet || '',
+            tradeId: order.escrowTradeId || 0,
+          });
+          if (refund?.success && refund?.txHash) {
+            console.log(`[UserAutoRefund] ✓ ${order.id}: ${refund.txHash}`);
+            // Persist the refund tx hash so a subsequent scan won't try
+            // to refund again. Same shape that the merchant flow uses.
+            await fetchWithAuth(`/api/orders/${order.id}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                // status=cancelled is a financial transition — backend rejects without Idempotency-Key.
+                'Idempotency-Key': generateIdempotencyKey(),
+              },
+              body: JSON.stringify({
+                status: 'cancelled',
+                actor_type: 'user',
+                actor_id: userId,
+                refund_tx_hash: refund.txHash,
+              }),
+            }).catch(() => { /* network blip — next scan retries */ });
+            try { solanaWallet.refreshBalances?.(); } catch { /* ignore */ }
+          } else if (refund?.error) {
+            // Sentinel "already refunded" / "escrow account doesn't exist"
+            // are NOT real errors — escrow is already closed on-chain.
+            const msg = String(refund.error);
+            if (
+              msg.includes('does not exist') ||
+              msg.includes('already been refunded') ||
+              msg.includes('already-refunded') ||
+              msg.includes('AlreadyRefunded')
+            ) {
+              console.log(`[UserAutoRefund] ${order.id}: escrow already closed on-chain`);
+            } else {
+              console.warn(`[UserAutoRefund] ${order.id} refund failed:`, msg);
+            }
+          }
+        } catch (err) {
+          console.warn(`[UserAutoRefund] ${order.id} threw:`, (err as Error).message);
+        } finally {
+          userRefundInFlightRef.current.delete(order.id);
+        }
+      })();
+    }
+  }, [orders, solanaWallet?.connected, solanaWallet?.walletAddress, userId]);
 
   // Debug logging for chat issues (disabled — was causing re-render spam via chatWindows dep)
   // To re-enable, use a ref-based approach instead of chatWindows in deps

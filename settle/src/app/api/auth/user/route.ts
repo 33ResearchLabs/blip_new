@@ -17,7 +17,7 @@ import {
   validateUserEmail,
   validateUserPassword,
 } from '@/lib/validation/userAuth';
-import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS, ACCESS_TOKEN_COOKIE, ACCESS_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 import { query } from '@/lib/db';
@@ -163,6 +163,9 @@ export async function POST(request: NextRequest) {
       if (walletRefreshToken) {
         walletRes.cookies.set(REFRESH_TOKEN_COOKIE, walletRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
+      if (userAccessTk) {
+        walletRes.cookies.set(ACCESS_TOKEN_COOKIE, userAccessTk, ACCESS_COOKIE_OPTIONS);
+      }
       return walletRes;
     }
 
@@ -273,6 +276,9 @@ export async function POST(request: NextRequest) {
       if (setUnRefreshToken) {
         setUnRes.cookies.set(REFRESH_TOKEN_COOKIE, setUnRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
+      if (setUnAccessTk) {
+        setUnRes.cookies.set(ACCESS_TOKEN_COOKIE, setUnAccessTk, ACCESS_COOKIE_OPTIONS);
+      }
       return setUnRes;
     }
 
@@ -340,6 +346,9 @@ export async function POST(request: NextRequest) {
       });
       if (loginRefreshToken) {
         loginRes.cookies.set(REFRESH_TOKEN_COOKIE, loginRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
+      if (loginAccessTk) {
+        loginRes.cookies.set(ACCESS_TOKEN_COOKIE, loginAccessTk, ACCESS_COOKIE_OPTIONS);
       }
       return loginRes;
     }
@@ -473,6 +482,9 @@ export async function POST(request: NextRequest) {
       });
       if (regRefreshToken) {
         regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
+      if (regAccessTk) {
+        regRes.cookies.set(ACCESS_TOKEN_COOKIE, regAccessTk, ACCESS_COOKIE_OPTIONS);
       }
       return regRes;
     }
@@ -615,6 +627,7 @@ export async function GET(request: NextRequest) {
         },
       });
       if (checkRefreshToken) checkResponse.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshToken, REFRESH_COOKIE_OPTIONS);
+      if (checkAccessTk) checkResponse.cookies.set(ACCESS_TOKEN_COOKIE, checkAccessTk, ACCESS_COOKIE_OPTIONS);
       return checkResponse;
     }
 

@@ -42,6 +42,15 @@ interface PusherClientType {
   };
 }
 
+// ── Module-scope auth dedup + backoff ────────────────────────────────
+// Pusher's authorizer can fire many times for the same (socketId, channel)
+// during reconnect storms; without coalescing we issue N parallel POSTs to
+// /api/pusher/auth and trip the rate limiter on the first burst. The map is
+// keyed per (socketId|channel) and cleared shortly after the network call
+// resolves so subsequent legitimate auths still go through.
+const pusherAuthInflight = new Map<string, Promise<unknown>>();
+let pusherAuthBlockedUntil = 0;
+
 // Connection states
 type ConnectionState = 'initialized' | 'connecting' | 'connected' | 'disconnected' | 'unavailable' | 'failed';
 
@@ -178,6 +187,7 @@ export function PusherProvider({ children }: PusherProviderProps) {
       // (see /api/pusher/auth). x-actor-id / x-actor-type are NOT sent —
       // those headers were the bypass vector this fix removes.
       const { buildPusherAuthHeaders } = await import('@/lib/pusher/authHeaders');
+      const { fetchWithAuth } = await import('@/lib/api/fetchWithAuth');
 
       const pusher = new PusherClient(key, {
         cluster,
@@ -188,33 +198,71 @@ export function PusherProvider({ children }: PusherProviderProps) {
             socketId: string,
             callback: (err: Error | null, data: unknown) => void,
           ) => {
+            // De-dup concurrent authorize() calls for the same socket+channel
+            // (Pusher can re-invoke during reconnect storms) AND respect a
+            // local 429 backoff so we don't keep hammering /api/pusher/auth
+            // when the server has already rate-limited us.
+            const dedupKey = `${socketId}|${channel.name}`;
+            const inflight = pusherAuthInflight.get(dedupKey);
+            if (inflight) {
+              inflight
+                .then((data) => callback(null, data))
+                .catch((err) => callback(err, null));
+              return;
+            }
+
+            const blockedFor = pusherAuthBlockedUntil - Date.now();
+            if (blockedFor > 0) {
+              callback(
+                new Error(`Pusher auth backoff: retry in ${Math.ceil(blockedFor / 1000)}s`),
+                null,
+              );
+              return;
+            }
+
             const body = new URLSearchParams({
               socket_id: socketId,
               channel_name: channel.name,
             }).toString();
-            fetch('/api/pusher/auth', {
+            // Use fetchWithAuth (not raw fetch) so a 401 here triggers the
+            // shared silent-refresh path and retries with the rotated cookie.
+            // Without this, an expired access cookie keeps Pusher subscription
+            // failing forever — even though every other API call recovers
+            // transparently — until something else forces a re-auth.
+            const promise = fetchWithAuth('/api/pusher/auth', {
               method: 'POST',
-              credentials: 'same-origin', // sends refresh cookie if needed
+              credentials: 'include',
               headers: {
                 ...buildPusherAuthHeaders(),
                 'Content-Type': 'application/x-www-form-urlencoded',
               },
               body,
-            })
-              .then(async (res) => {
-                if (!res.ok) {
-                  let errMsg = `Pusher auth failed: ${res.status}`;
-                  try {
-                    const errBody = await res.json();
-                    if (errBody?.error) errMsg = `${errMsg} — ${errBody.error}`;
-                  } catch { /* non-JSON body */ }
-                  callback(new Error(errMsg), null);
-                  return;
-                }
-                const data = await res.json();
-                callback(null, data);
-              })
-              .catch((err) => callback(err instanceof Error ? err : new Error(String(err)), null));
+            }).then(async (res) => {
+              if (res.status === 429) {
+                const ra = parseInt(res.headers.get('Retry-After') || '0', 10);
+                const waitMs = (ra > 0 ? ra : 10) * 1000;
+                pusherAuthBlockedUntil = Date.now() + waitMs;
+              }
+              if (!res.ok) {
+                let errMsg = `Pusher auth failed: ${res.status}`;
+                try {
+                  const errBody = await res.json();
+                  if (errBody?.error) errMsg = `${errMsg} — ${errBody.error}`;
+                } catch { /* non-JSON body */ }
+                throw new Error(errMsg);
+              }
+              return res.json();
+            });
+
+            pusherAuthInflight.set(dedupKey, promise);
+            promise
+              .then((data) => callback(null, data))
+              .catch((err) => callback(err instanceof Error ? err : new Error(String(err)), null))
+              .finally(() => {
+                // Clear after a short delay so racing authorize() calls
+                // (same tick) still piggy-back on the one network request.
+                setTimeout(() => pusherAuthInflight.delete(dedupKey), 250);
+              });
           },
         }),
         // Enable auto-reconnect with exponential backoff

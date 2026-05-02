@@ -617,7 +617,17 @@ export async function requireTokenAuth(
   const blacklistResult = await checkBlacklist(request, auth);
   if (blacklistResult) return blacklistResult;
 
-  const hasValidToken = !!request.headers.get('authorization')?.startsWith('Bearer ');
+  // A "valid token" can come from EITHER carrier — both paths run through
+  // the same verifySessionToken() HMAC check inside getVerifiedAuthContext,
+  // so they're equally trustworthy:
+  //   1. Authorization: Bearer <token>   — non-browser clients (curl, tests)
+  //   2. Cookie: blip_access_token        — browsers (httpOnly, XSS-safe)
+  //
+  // Pre-cookie-migration this check only recognised (1); rejecting (2) here
+  // would 401 every browser-issued sensitive call right after login.
+  const hasBearer = !!request.headers.get('authorization')?.startsWith('Bearer ');
+  const hasAccessCookie = !!request.cookies.get('blip_access_token')?.value;
+  const hasValidToken = hasBearer || hasAccessCookie;
 
   if (hasValidToken) {
     authMigrationMetrics.sensitiveTokenAuth++;

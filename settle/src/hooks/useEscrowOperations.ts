@@ -5,7 +5,7 @@ import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { computeMyRole } from "@/lib/orders/statusResolver";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 import { isValidSolanaAddress } from '@/lib/validation/solana';
 import { showConfirm } from '@/context/ModalContext';
 
@@ -212,14 +212,89 @@ export function useEscrowOperations({
     dispatch({ type: 'SET_LOADING', op: 'lock', loading: true });
     dispatch({ type: 'SET_ERROR', op: 'lock', error: null });
 
+    // Pre-register the lock intent BEFORE the wallet popup. The
+    // escrow-reconciler worker can derive the trade PDA from this and
+    // reflect on-chain reality into the order — even if the client tab
+    // dies, the network drops, or Solana indexing makes us mis-classify a
+    // successful tx as failed. From this point forward orphans are
+    // structurally impossible: the pending_escrow row IS the durable
+    // anchor between on-chain and the orders table.
+    //
+    // Temp orders (merchant pre-funding their own future sell order) are
+    // skipped — the order row doesn't exist yet, and the legacy
+    // pendingSellOrder branch handles that flow specifically.
+    const isTempOrderForIntent = escrowOrder.id.startsWith('temp-');
+    let pendingIntentId: string | null = null;
+    let intentTradeId: number | null = null;
+
+    if (!isTempOrderForIntent && solanaWallet.walletAddress) {
+      // Generate trade_id once, BEFORE signing. Same value gets registered
+      // in pending_escrow and used to derive the on-chain trade PDA.
+      intentTradeId = Date.now();
+      try {
+        const intentRes = await fetchWithAuth(
+          `/api/orders/${escrowOrder.id}/escrow/intent`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              trade_id: intentTradeId,
+              expected_amount: escrowOrder.amount,
+              actor_wallet: solanaWallet.walletAddress,
+            }),
+          },
+        );
+        if (intentRes.ok) {
+          const intentData = await intentRes.json();
+          pendingIntentId = intentData?.data?.pending_id ?? null;
+          // If a previous intent for this order is still in-flight, the
+          // server returns it instead of creating a new one — its trade_id
+          // is what we MUST use to keep the on-chain PDA consistent.
+          if (intentData?.data?.trade_id) {
+            const reused = parseInt(intentData.data.trade_id, 10);
+            if (Number.isFinite(reused) && reused > 0) intentTradeId = reused;
+          }
+        } else {
+          // Intent registration failed — proceed anyway. Worse case: we
+          // fall back to the old behaviour for THIS one click. The
+          // safeTransaction reconcile-poll patch is still in place as the
+          // second line of defense.
+          console.warn('[Escrow] intent registration failed', intentRes.status);
+        }
+      } catch (intentErr) {
+        console.warn('[Escrow] intent registration threw', intentErr);
+      }
+    }
+
     try {
       const escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string } = await solanaWallet.depositToEscrowOpen({
         amount: escrowOrder.amount,
         side: 'sell',
+        // Pass through the trade_id we registered (when available) so the
+        // on-chain instruction's PDA matches the worker's lookup. Without
+        // this, the worker would derive a different PDA from a different
+        // trade_id and miss the funds entirely.
+        ...(intentTradeId !== null && { tradeId: intentTradeId }),
       });
 
       if (!escrowResult.success || !escrowResult.txHash) {
         throw new Error(escrowResult.error || 'Transaction failed');
+      }
+
+      // Best-effort: tell settle the signature so the next reconciler tick
+      // has a forensic link. Worker is correct without it.
+      if (pendingIntentId && escrowResult.txHash) {
+        fetchWithAuth(
+          `/api/orders/${escrowOrder.id}/escrow/intent`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pending_id: pendingIntentId,
+              reported_signature: escrowResult.txHash,
+            }),
+          },
+        ).catch(() => { /* ignore — worker is the source of truth */ });
       }
 
       dispatch({ type: 'SET_TX_HASH', op: 'lock', txHash: escrowResult.txHash });
@@ -242,7 +317,11 @@ export function useEscrowOperations({
         try {
           const res = await fetchWithAuth("/api/merchant/orders", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              // Required by core-api /v1/merchant/orders.
+              "Idempotency-Key": generateIdempotencyKey(),
+            },
             body: JSON.stringify({
               merchant_id: pendingSellOrder.merchantId,
               type: pendingSellOrder.tradeType,
@@ -340,10 +419,41 @@ export function useEscrowOperations({
       dispatch({ type: 'SET_LOADING', op: 'lock', loading: false });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      if (errorMsg.includes('block height exceeded') || errorMsg.includes('has expired')) {
-        dispatch({ type: 'SET_ERROR', op: 'lock', error: 'Transaction expired. Please approve the wallet popup faster (within 60 seconds). Try again.' });
+      const isExpiry =
+        errorMsg.includes('block height exceeded') ||
+        errorMsg.includes('has expired');
+
+      // If we pre-registered intent, the reconciler worker is now polling
+      // on-chain. A "block height exceeded" error here can mean either
+      // (a) tx genuinely never landed — worker times out, marks failed,
+      //     order auto-cancels safely (no orphan, no funds locked), OR
+      // (b) tx actually landed and we just missed the confirmation —
+      //     worker finds the funds, transitions order to escrowed.
+      // Either way the user does NOT need to "retry faster" — the system
+      // resolves itself. Soften the message accordingly.
+      if (isExpiry && pendingIntentId) {
+        dispatch({
+          type: 'SET_ERROR',
+          op: 'lock',
+          error:
+            'Transaction is taking longer than expected. We are confirming on-chain status — this order will sync automatically within a minute. Do NOT click Lock again.',
+        });
+      } else if (isExpiry) {
+        // No intent registered (temp order or intent call failed). Old
+        // safeTransaction reconcile-poll is the fallback; keep the retry
+        // hint but soften the urgency.
+        dispatch({
+          type: 'SET_ERROR',
+          op: 'lock',
+          error:
+            'Transaction expired before confirming. Please retry. If this repeats, refresh the page first.',
+        });
       } else {
-        dispatch({ type: 'SET_ERROR', op: 'lock', error: errorMsg || 'Failed to lock escrow. Please try again.' });
+        dispatch({
+          type: 'SET_ERROR',
+          op: 'lock',
+          error: errorMsg || 'Failed to lock escrow. Please try again.',
+        });
       }
       dispatch({ type: 'SET_LOADING', op: 'lock', loading: false });
       playSound('error');
@@ -489,9 +599,14 @@ export function useEscrowOperations({
       if (releaseResult.success) {
         dispatch({ type: 'SET_TX_HASH', op: 'release', txHash: releaseResult.txHash });
 
+        // Escrow release is a financial transition — backend rejects without
+        // Idempotency-Key (see /api/orders/[id]/escrow PATCH handler).
         const releaseBackendRes = await fetchWithAuth(`/api/orders/${releaseOrder.id}/escrow`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': generateIdempotencyKey(),
+          },
           body: JSON.stringify({
             tx_hash: releaseResult.txHash,
             actor_type: 'merchant',
@@ -587,9 +702,14 @@ export function useEscrowOperations({
       if (refundResult.success) {
         dispatch({ type: 'SET_TX_HASH', op: 'cancel', txHash: refundResult.txHash });
 
+        // status=cancelled is a financial transition — backend rejects
+        // without Idempotency-Key (see PATCH /api/orders/[id] handler).
         await fetchWithAuth(`/api/orders/${cancelOrder.id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': generateIdempotencyKey(),
+          },
           body: JSON.stringify({
             status: 'cancelled',
             actor_type: 'merchant',
@@ -624,8 +744,14 @@ export function useEscrowOperations({
     showConfirm('Cancel Order', 'Cancel this order? This action cannot be undone.', async () => {
       setCancellingOrderId(orderId);
       try {
+        // DELETE proxies to core-api's cancel_order which is wrapped in
+        // withIdempotency — Idempotency-Key is REQUIRED. The settle proxy
+        // must also be reading + forwarding it (see /api/orders/[id]/route.ts DELETE).
         const res = await fetchWithAuth(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
           method: 'DELETE',
+          headers: {
+            'Idempotency-Key': generateIdempotencyKey(),
+          },
         });
 
         if (res.ok) {

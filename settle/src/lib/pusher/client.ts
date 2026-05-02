@@ -47,7 +47,9 @@ export function getPusherClient(): PusherClient | null {
           }).toString();
           fetch('/api/pusher/auth', {
             method: 'POST',
-            credentials: 'same-origin',
+            // 'include' standardises on the same cookie-auth contract as
+            // fetchWithAuth — see PusherContext for rationale.
+            credentials: 'include',
             headers: {
               ...buildPusherAuthHeaders(),
               'Content-Type': 'application/x-www-form-urlencoded',

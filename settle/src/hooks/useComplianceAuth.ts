@@ -78,9 +78,11 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
       const data = await res.json();
 
       if (data.success) {
+        // In-memory only. Identity persists across reload via the httpOnly
+        // cookie set by this same response; the next mount restores via
+        // /api/auth/me. No localStorage mirror.
         setMember(data.data.member);
         setIsLoggedIn(true);
-        localStorage.setItem("compliance_member", JSON.stringify(data.data.member));
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
       } else {
         setLoginError(data.error || "Login failed");
@@ -116,10 +118,11 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
       const data = await res.json();
 
       if (data.success) {
+        // In-memory only — see handleLogin above. Cookie carries the
+        // session across reload.
         setMember(data.data.member);
         setAuthMethod("wallet");
         setIsLoggedIn(true);
-        localStorage.setItem("compliance_member", JSON.stringify({ ...data.data.member, authMethod: "wallet" }));
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
       } else {
         setLoginError(data.error || "Wallet not authorized for compliance access");
@@ -144,49 +147,64 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [solanaWallet.connected, solanaWallet.walletAddress, isLoggedIn, isWalletLoggingIn]);
 
-  // Check for saved session OR merchant with compliance access
+  // Restore compliance session via cookie-authed /api/auth/me. Two paths
+  // resolve to the compliance dashboard:
+  //   1. Actor is `compliance` — direct compliance team member, full access.
+  //   2. Actor is `merchant` AND merchant has compliance_access — promote
+  //      them to a "merchant-compliance" pseudo-member for UI purposes.
+  //
+  // No localStorage read for identity. The httpOnly access cookie is the
+  // only credential — works on hard refresh and deep-link entry.
   useEffect(() => {
-    const saved = localStorage.getItem("compliance_member");
-    if (saved) {
+    let cancelled = false;
+    (async () => {
       try {
-        const parsed = JSON.parse(saved);
-        setMember(parsed);
-        setIsLoggedIn(true);
-        return;
-      } catch {
-        localStorage.removeItem("compliance_member");
-      }
-    }
+        const meRes = await fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (cancelled || !meRes.ok) return;
+        const me = await meRes.json();
+        if (cancelled || !me?.success) return;
 
-    // Auto-login: check if logged-in merchant has compliance access
-    const merchantData = localStorage.getItem("blip_merchant");
-    if (merchantData) {
-      try {
-        const merchant = JSON.parse(merchantData);
-        if (merchant?.id) {
-          fetchWithAuth(`/api/compliance/disputes?limit=1`).then(res => {
-            if (res.ok) {
-              // Merchant has compliance access — auto-login
-              const complianceMember = {
-                id: merchant.id,
-                email: null,
-                wallet_address: null,
-                name: merchant.display_name || merchant.business_name || 'Merchant',
-                role: 'merchant-compliance',
-              };
-              setMember(complianceMember);
-              setIsLoggedIn(true);
-              localStorage.setItem("compliance_member", JSON.stringify(complianceMember));
-            }
-          }).catch(() => {});
+        const actorType = me?.data?.actorType;
+
+        if (actorType === 'compliance' && me?.data?.member) {
+          setMember(me.data.member);
+          setIsLoggedIn(true);
+          return;
         }
-      } catch {}
-    }
+
+        if (actorType === 'merchant' && me?.data?.merchant?.id) {
+          const merchant = me.data.merchant;
+          // Probe a compliance endpoint to check ACL — same heuristic as
+          // before, but the merchant identity comes from the verified cookie
+          // rather than a localStorage blob.
+          const aclRes = await fetchWithAuth(`/api/compliance/disputes?limit=1`);
+          if (cancelled) return;
+          if (aclRes.ok) {
+            setMember({
+              id: merchant.id,
+              email: null,
+              wallet_address: null,
+              name: merchant.display_name || merchant.business_name || 'Merchant',
+              role: 'merchant-compliance',
+            });
+            setIsLoggedIn(true);
+          }
+        }
+      } catch {
+        // Network error — leave the user signed-out. They'll see the login
+        // form and a fresh probe will run on the next mount.
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  // Logout
+  // Logout — clear in-memory state. Real cookie invalidation happens via
+  // /api/auth/logout in the page-level logout handlers; this hook just
+  // wipes the local UI state.
   const handleLogout = () => {
-    localStorage.removeItem("compliance_member");
     setMember(null);
     setIsLoggedIn(false);
   };

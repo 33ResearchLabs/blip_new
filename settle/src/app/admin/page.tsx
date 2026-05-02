@@ -232,30 +232,18 @@ export default function AdminConsolePage() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        // Token now lives in an httpOnly cookie — JS cannot read it.
-        // Always probe /api/auth/admin; the cookie (if present) goes
-        // along automatically (same-origin). For users still holding a
-        // legacy localStorage token, send it ONCE as a Bearer header so
-        // the server can re-issue it as a cookie, then drop the localStorage
-        // copy. This is the smooth-migration path and can be removed
-        // ~25h after deploy.
-        const legacyToken = localStorage.getItem("blip_admin_token");
-        const headers: Record<string, string> = {};
-        if (legacyToken) headers.Authorization = `Bearer ${legacyToken}`;
-
-        const res = await fetchWithAuth("/api/auth/admin", { headers });
+        // Token lives in an httpOnly cookie — JS cannot read it. The cookie
+        // travels automatically on same-origin requests; nothing to attach.
+        const res = await fetchWithAuth("/api/auth/admin");
         const data = await res.json();
         if (data.success && data.data?.valid) {
           setAdminToken(ADMIN_COOKIE_SENTINEL);
           setIsAuthenticated(true);
-          if (legacyToken) localStorage.removeItem("blip_admin_token");
         } else {
           localStorage.removeItem("blip_admin");
-          localStorage.removeItem("blip_admin_token");
         }
       } catch {
         localStorage.removeItem("blip_admin");
-        localStorage.removeItem("blip_admin_token");
       } finally {
         setIsCheckingSession(false);
       }

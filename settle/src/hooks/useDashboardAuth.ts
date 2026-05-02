@@ -70,10 +70,11 @@ export function useDashboardAuth({
         const data = await res.json();
         if (data.success) {
           const updatedMerchant = { ...merchantInfo, username: username.trim() };
+          // In-memory only. The durable copy of "who am I" lives in the
+          // signed cookie + the DB; on reload we re-fetch via /api/auth/me.
           setMerchantInfo(updatedMerchant);
           setIsLoggedIn(true);
           setShowUsernameModal(false);
-          localStorage.setItem('blip_merchant', JSON.stringify(updatedMerchant));
         } else {
           throw new Error(data.error || 'Failed to update username');
         }
@@ -111,7 +112,9 @@ export function useDashboardAuth({
         setMerchantInfo(merchant);
         setIsLoggedIn(true);
         setShowUsernameModal(false);
-        localStorage.setItem('blip_merchant', JSON.stringify(merchant));
+        // Identity persisted by the cookie set on this same response
+        // (Set-Cookie: blip_access_token / blip_refresh_token). Nothing
+        // to mirror to localStorage.
         if (data.data.token) setSessionToken(data.data.token);
       } else {
         throw new Error(data.error || 'Failed to create merchant');
@@ -131,7 +134,6 @@ export function useDashboardAuth({
         ...(bio !== undefined && { bio }),
       };
       setMerchantInfo(updatedInfo);
-      localStorage.setItem('blip_merchant', JSON.stringify(updatedInfo));
     }
   }, [merchantInfo, setMerchantInfo]);
 
@@ -162,7 +164,6 @@ export function useDashboardAuth({
         setMerchantId(data.data.merchant.id);
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
-        localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
         if (data.data.token) setSessionToken(data.data.token);
         if (!isMockMode && !data.data.merchant.wallet_address) {
           setTimeout(() => setShowWalletPrompt(true), 500);
@@ -215,7 +216,6 @@ export function useDashboardAuth({
         setMerchantId(data.data.merchant.id);
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
-        localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
         if (data.data.token) setSessionToken(data.data.token);
         setPending2FA(null);
         setTotpCode('');
@@ -293,7 +293,6 @@ export function useDashboardAuth({
         setMerchantId(data.data.merchant.id);
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
-        localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
         if (data.data.token) setSessionToken(data.data.token);
         if (!isMockMode) {
           setTimeout(() => setShowWalletPrompt(true), 500);
@@ -314,14 +313,22 @@ export function useDashboardAuth({
   }, [registerForm, isMockMode, setMerchantId, setMerchantInfo, setIsLoggedIn, setShowWalletPrompt]);
 
   const handleLogout = useCallback(() => {
-    // Clear all merchant-related state from storage
-    localStorage.removeItem('blip_merchant');
-    localStorage.removeItem('merchant_info');
-    localStorage.removeItem('blip_wallet_session');
-    localStorage.removeItem('blip_embedded_wallet');
-    localStorage.removeItem('pusherTransportTLS');
+    // Server-side logout — invalidates the session row and clears the
+    // httpOnly cookies (Set-Cookie: blip_access_token=; Max-Age=0 + same
+    // for the refresh cookie). Fire-and-forget with `keepalive` so the
+    // request still flushes if the redirect happens first.
+    try {
+      void fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        keepalive: true,
+      });
+    } catch { /* network error — redirect proceeds anyway */ }
 
-    // Clear merchant-specific keys (inr_cash_*, blip_unrecorded_escrow_*)
+    // Per-merchant ephemeral keys (inr_cash_*, blip_unrecorded_escrow_*)
+    // are non-secret operational state that the merchant dashboard caches
+    // between sessions. They are not auth material — but on logout we
+    // still wipe them so the next user on this device doesn't see them.
     try {
       const keysToRemove = Object.keys(localStorage).filter(k =>
         k.startsWith('inr_cash_') || k.startsWith('blip_unrecorded_escrow_')
@@ -329,11 +336,8 @@ export function useDashboardAuth({
       keysToRemove.forEach(k => localStorage.removeItem(k));
     } catch { /* ignore */ }
 
-    // Clear session storage
-    try {
-      sessionStorage.removeItem('blip_session_token');
-    } catch { /* ignore */ }
-
+    // In-memory store: drop the access-token mirror and identity. The
+    // durable copies live in the cookies (cleared above) and the DB.
     setSessionToken(null);
     if (solanaWallet.disconnect) {
       solanaWallet.disconnect();
@@ -341,51 +345,47 @@ export function useDashboardAuth({
     window.location.href = '/merchant';
   }, [solanaWallet, setSessionToken]);
 
-  // Session restore on mount
+  // Session restore on mount.
+  //
+  // Identity is whatever the cookie-bound session says it is. We hit
+  // /api/auth/me (cookie auth, no body) and either populate the store
+  // with the resolved merchant or leave the user logged-out. There is no
+  // localStorage probe — client-stored identity was a foot-gun and is gone.
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const savedMerchant = localStorage.getItem('blip_merchant');
-        if (savedMerchant) {
-          const merchant = JSON.parse(savedMerchant);
-
-          // Immediately set merchantId from localStorage so fetchOrders can
-          // run while session validation happens in the background. Without
-          // this, hard refresh leaves merchantId=null until the check_session
-          // API responds (300ms-1s), and all panels show empty.
-          if (merchant?.id) {
-            setMerchantId(merchant.id);
-            setMerchantInfo(merchant);
+        const meRes = await fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          if (
+            meData?.success &&
+            meData?.data?.actorType === 'merchant' &&
+            meData?.data?.merchant?.id
+          ) {
+            const freshMerchant = meData.data.merchant;
+            setMerchantId(freshMerchant.id);
+            setMerchantInfo(freshMerchant);
             setIsLoggedIn(true);
-          }
-
-          const checkRes = await fetchWithAuth(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
-          if (checkRes.ok) {
-            const checkData = await checkRes.json();
-            if (checkData.success && checkData.data?.valid) {
-              const freshMerchant = checkData.data.merchant || merchant;
-              setMerchantId(freshMerchant.id);
-              setMerchantInfo(freshMerchant);
-              setIsLoggedIn(true);
-              // Let useOrderFetching set isLoading=false after orders load.
-              // Safety net: if orders haven't loaded after 5s, force loading off
-              // to prevent infinite spinner on slow connections or edge cases.
-              setTimeout(() => setIsLoading(false), 5000);
-              localStorage.setItem('blip_merchant', JSON.stringify(freshMerchant));
-              if (checkData.data.token) setSessionToken(checkData.data.token);
-              if (!isMockMode && !freshMerchant.wallet_address && !solanaWallet.connected) {
-                setTimeout(() => setShowWalletPrompt(true), 1000);
-              }
-              return;
+            // Defer to useOrderFetching to flip isLoading off after the
+            // first orders payload lands. Safety net at 5s for slow links.
+            setTimeout(() => setIsLoading(false), 5000);
+            if (
+              !isMockMode &&
+              !freshMerchant.wallet_address &&
+              !solanaWallet.connected
+            ) {
+              setTimeout(() => setShowWalletPrompt(true), 1000);
             }
+            return;
           }
-          localStorage.removeItem('blip_merchant');
-          localStorage.removeItem('merchant_info');
         }
+        // 401 / non-merchant actor / shape mismatch → not logged in. No
+        // local state to clean up because we no longer keep any.
       } catch (err) {
         console.error('[Merchant] Failed to restore session:', err);
-        localStorage.removeItem('blip_merchant');
-        localStorage.removeItem('merchant_info');
       }
       setIsLoading(false);
     };

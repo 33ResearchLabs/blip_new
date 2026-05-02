@@ -23,6 +23,7 @@ import {
 } from '@/lib/middleware/auth';
 import { checkRateLimit, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
+import { getIdempotencyKey } from '@/lib/idempotency';
 import { query } from '@/lib/db';
 import { signPriceProof } from '@/lib/price/priceProof';
 import { getFinalPrice } from '@/lib/price/usdtInrPrice';
@@ -186,6 +187,25 @@ export async function POST(request: NextRequest) {
     // Authorization: require authenticated merchant
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+
+    // Idempotency-Key required by core-api /v1/merchant/orders. Reject
+    // upfront with a clear 400 so the caller doesn't get an opaque proxy
+    // failure later — and capture the key to forward when we actually proxy.
+    // Skipped for dry_run since no order is created.
+    const isDryRunPreflight = request.nextUrl.searchParams.get('dry_run') === 'true';
+    const idempotencyKey = getIdempotencyKey(request);
+    if (!isDryRunPreflight && (!idempotencyKey || idempotencyKey.trim().length === 0)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Idempotency-Key header is required for merchant order creation. ' +
+            'Send a unique value (UUIDv4 recommended) per logical request.',
+          code: 'MISSING_IDEMPOTENCY_KEY',
+        },
+        { status: 400 },
+      );
+    }
 
     // Validate request body
     const parseResult = merchantCreateOrderSchema.safeParse(body);
@@ -463,9 +483,13 @@ export async function POST(request: NextRequest) {
       return successResponse({ valid: true, rate: effectiveRate, corridor_id: corridorId });
     }
 
-    // Forward to core-api
+    // Forward to core-api. Pass through the same Idempotency-Key so
+    // core-api's withIdempotency wrapper keys off the same string and
+    // a network-level retry returns the cached response instead of
+    // creating a duplicate order.
     const response = await proxyCoreApi('/v1/merchant/orders', {
       method: 'POST',
+      idempotencyKey: idempotencyKey ?? undefined,
       body: {
         merchant_id: orderMerchantId,
         user_id: user.id,

@@ -20,7 +20,12 @@ export interface MerchantStoreState {
   isLoggedIn: boolean;
   isLoading: boolean;
 
-  // ─── Session token (persisted in sessionStorage) ──────
+  // ─── Access token (in-memory ONLY) ───────────────────
+  // Held purely in the Zustand store so other hooks (useOrderFetching,
+  // useMerchantConversations) can observe "is the user logged in yet?" the
+  // moment a login route returns. NEVER persisted: the httpOnly cookie
+  // `blip_access_token` is the durable auth artifact; on reload, a fresh
+  // /api/auth/me call (or refresh) re-establishes UI state.
   sessionToken: string | null;
 
   // ─── PendingOrdersPanel filter/sort state ──────────
@@ -63,7 +68,7 @@ export const useMerchantStore = create<MerchantStoreState>()(
     merchantInfo: null,
     isLoggedIn: false,
     isLoading: true,
-    sessionToken: (() => { try { return typeof window !== 'undefined' ? sessionStorage.getItem('blip_session_token') : null; } catch { return null; } })(),
+    sessionToken: null,
 
     // ─── Filter/sort initial state ─────────────────────
     searchQuery: '',
@@ -105,16 +110,13 @@ export const useMerchantStore = create<MerchantStoreState>()(
     },
 
     setSessionToken: (token) => {
+      // In-memory only. The token IS the access token returned by login
+      // routes — but the durable copy lives in the httpOnly `blip_access_token`
+      // cookie set by those same routes. We keep an in-memory mirror so
+      // UI state (useOrderFetching's logged-in gate, etc.) can react
+      // synchronously, and we do NOT mirror it to sessionStorage where it
+      // would be readable by any same-origin script (XSS exfil target).
       set({ sessionToken: token });
-      try {
-        if (token) {
-          sessionStorage.setItem('blip_session_token', token);
-        } else {
-          sessionStorage.removeItem('blip_session_token');
-        }
-      } catch {
-        // SSR or sessionStorage unavailable — ignore
-      }
     },
     setMerchantId: (id) => set({ merchantId: id }),
     setMerchantInfo: (infoOrFn) => {

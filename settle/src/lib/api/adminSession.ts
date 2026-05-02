@@ -1,16 +1,19 @@
 /**
- * Client-side helpers for admin session — post cookie migration.
+ * Client-side helpers for admin session — cookie-only.
  *
- * BEFORE: admin token was stored in localStorage, read on every fetch,
- * attached as `Authorization: Bearer <token>` header. XSS-readable.
+ * The admin token lives in an httpOnly + Secure + SameSite=Strict cookie
+ * (`blip_admin_session`) issued by /api/auth/admin. JS cannot read it.
+ * fetch() sends it automatically on same-origin requests; cross-origin
+ * requires `credentials: 'include'` (handled by fetchWithAuth).
  *
- * AFTER: token lives in an httpOnly + Secure + SameSite=Strict cookie
- * issued by /api/auth/admin. JS cannot read it. fetch() sends it
- * automatically on same-origin requests (default `credentials: 'same-origin'`).
+ * Components keep using a string `adminToken` state to gate UI — but the
+ * value is now this sentinel. The actual token is never exposed to JS.
  *
- * Components keep using a string `adminToken` state to gate UI — but
- * post-migration the value is just this sentinel. The actual token is
- * never exposed to JS.
+ * The previous version of this module read a legacy `blip_admin_token`
+ * from localStorage and sent it as a one-shot Bearer header so the server
+ * could migrate the session into a cookie. That migration window has
+ * closed; the legacy fallback is gone, and reading that key from
+ * localStorage anywhere in the app is a regression.
  */
 
 import { fetchWithAuth } from './fetchWithAuth';
@@ -22,50 +25,34 @@ import { fetchWithAuth } from './fetchWithAuth';
 export const ADMIN_COOKIE_SENTINEL = '_cookie_session_';
 
 /**
- * Probe the admin session.
+ * Probe the admin session via /api/auth/admin.
  *
- * If a legacy localStorage token is present, it is sent ONCE as a
- * Bearer header so the server can migrate the session into a cookie,
- * then deleted. This branch can be removed ~25h after deploy.
+ * Cookie travels automatically (same-origin) — no headers are attached.
  *
  * Returns:
  *   { valid: true, username }    — session live
  *   { valid: false }              — no session / expired / revoked
  */
 export async function probeAdminSession(): Promise<{ valid: boolean; username?: string }> {
-  let legacyToken: string | null = null;
   try {
-    legacyToken = localStorage.getItem('blip_admin_token');
-  } catch { /* SSR / disabled storage */ }
-
-  const headers: Record<string, string> = {};
-  if (legacyToken) headers.Authorization = `Bearer ${legacyToken}`;
-
-  try {
-    const res = await fetchWithAuth('/api/auth/admin', { headers });
+    const res = await fetchWithAuth('/api/auth/admin');
     const data = await res.json();
     if (data?.success && data?.data?.valid) {
-      // Migration succeeded (or wasn't needed). Drop the legacy copy.
-      if (legacyToken) {
-        try { localStorage.removeItem('blip_admin_token'); } catch { /* */ }
-      }
       return { valid: true, username: data.data.username };
     }
   } catch {
     // Network error — caller decides what to do
   }
-  // Always clear the legacy entry on a negative outcome to prevent it
-  // from being reused on the next mount.
-  try { localStorage.removeItem('blip_admin_token'); } catch { /* */ }
   return { valid: false };
 }
 
 /**
  * End the admin session: hits the server logout (which clears the cookie
- * and revokes the jti in Redis) and wipes any leftover localStorage.
+ * and revokes the jti in Redis).
  *
  * Always resolves — never throws. Logout must not be blocked by network
- * errors.
+ * errors. The non-secret `blip_admin` profile blob (username/role for UI
+ * display) is also dropped so the next login lands cleanly.
  */
 export async function adminLogout(): Promise<void> {
   try {
@@ -73,6 +60,5 @@ export async function adminLogout(): Promise<void> {
   } catch { /* ignore — local cleanup still proceeds */ }
   try {
     localStorage.removeItem('blip_admin');
-    localStorage.removeItem('blip_admin_token');
   } catch { /* SSR */ }
 }

@@ -13,6 +13,7 @@ export {
   TREASURY_WALLET,
   FEE_BPS,
   DEVNET_RPC,
+  DEVNET_WS_ENDPOINT,
   getV2ProgramId,
   getUsdtMint,
   getFeeTreasury,

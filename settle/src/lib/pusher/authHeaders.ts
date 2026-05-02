@@ -3,66 +3,23 @@
 /**
  * Headers attached to /api/pusher/auth requests by pusher-js.
  *
- * Mirrors fetchWithAuth's strategy:
- *   - Authorization: Bearer <session_token>   (preferred — verified by requireAuth)
- *   - x-{user|merchant|compliance}-id          (dev-only fallback for requireAuth)
+ * Auth model (post-cookie-migration): the httpOnly `blip_access_token`
+ * cookie is sent automatically on same-origin XHRs that pusher-js issues
+ * to /api/pusher/auth. We attach NO Authorization header, NO x-merchant-id
+ * / x-user-id / x-compliance-id — those used to read identity out of
+ * localStorage / sessionStorage, which is exactly the attack surface this
+ * round of work is closing.
  *
- * Called fresh on every channel-auth request so token refreshes are picked up.
+ * pusher-js calls this synchronously per channel-auth request, so identity
+ * always reflects whatever the cookie's signed token currently says — no
+ * stale snapshots.
  *
- * NOTE: x-actor-id / x-actor-type are intentionally NOT sent. The auth route
- * does not trust them — identity comes from the verified token only.
+ * NOTE: this function is preserved (rather than deleted) because pusher-js
+ * is configured with `auth.headers: () => buildPusherAuthHeaders()` from
+ * the PusherProvider. Returning `{}` is the correct no-op — auth still
+ * works because cookies flow on the same-origin request.
  */
 
-import { useMerchantStore } from '@/stores/merchantStore';
-
 export function buildPusherAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-
-  if (typeof window === 'undefined') return headers;
-
-  // Bearer token (cryptographically signed, server-verified)
-  let sessionToken: string | null = null;
-  try {
-    sessionToken = useMerchantStore.getState().sessionToken;
-  } catch { /* store not hydrated */ }
-  if (!sessionToken) {
-    try { sessionToken = sessionStorage.getItem('blip_session_token'); }
-    catch { /* SSR / disabled storage */ }
-  }
-  if (sessionToken) {
-    headers['Authorization'] = `Bearer ${sessionToken}`;
-  }
-
-  // Dev-fallback identity hints — requireAuth honors these only outside
-  // production AND only when no valid Bearer is present.
-  try {
-    const merchantId = useMerchantStore.getState().merchantId;
-    if (merchantId) {
-      headers['x-merchant-id'] = merchantId;
-    } else {
-      const saved = localStorage.getItem('blip_merchant');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.id) headers['x-merchant-id'] = parsed.id;
-      }
-    }
-  } catch { /* skip */ }
-
-  try {
-    const saved = localStorage.getItem('blip_user');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed?.id) headers['x-user-id'] = parsed.id;
-    }
-  } catch { /* skip */ }
-
-  try {
-    const saved = localStorage.getItem('compliance_member');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed?.id) headers['x-compliance-id'] = parsed.id;
-    }
-  } catch { /* skip */ }
-
-  return headers;
+  return {};
 }
