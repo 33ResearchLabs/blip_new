@@ -130,7 +130,7 @@ async function findOrphanedOrders(): Promise<OrphanedOrder[]> {
        FROM orders o
        LEFT JOIN order_receipts r ON r.order_id = o.id
       WHERE r.id IS NULL
-        AND o.status = ANY($1::text[])
+        AND o.status::text = ANY($1::text[])
         AND o.merchant_id IS NOT NULL
         AND o.updated_at < NOW() - ($2 || ' seconds')::interval
       ORDER BY o.updated_at ASC
