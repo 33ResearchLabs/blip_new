@@ -111,18 +111,36 @@ const inflightGets = new Map<string, Promise<Response>>();
 // ── Token refresh coalescing ─────────────────────────────────────────
 // If multiple requests 401 simultaneously, only ONE refresh call is made.
 // All waiting requests share the same refresh promise.
-let refreshPromise: Promise<string | null> | null = null;
 
 /**
- * Attempt to refresh the access token using the httpOnly refresh cookie.
- * Returns the new access token or null if refresh failed.
- * Coalesces concurrent calls into a single network request.
+ * Result of a refresh attempt. We distinguish three outcomes so the caller
+ * can react correctly:
+ *
+ *   - `ok: true`     → server minted a new access cookie; retry the request.
+ *   - `ok: false, revoked: true`  → server explicitly rejected the refresh
+ *     cookie (HTTP 401 / 403 / success:false). The session is dead — wipe
+ *     in-memory state and force the user to log in again.
+ *   - `ok: false, revoked: false` → transient failure (rate limit 429, 5xx,
+ *     network blip, malformed body). The session may still be valid — DO
+ *     NOT force logout. The caller returns the original 401 to its caller;
+ *     a subsequent action will retry refresh naturally.
+ *
+ * Why the distinction matters: under multi-tab load, /api/auth/refresh can
+ * occasionally hit the per-IP rate limit (or briefly time out). Treating
+ * those as "session dead" silently logs the user out and dumps them on the
+ * login screen — the symptom that motivated this change.
  */
-async function refreshAccessToken(): Promise<string | null> {
+type RefreshResult =
+  | { ok: true; token: string }
+  | { ok: false; revoked: boolean };
+
+let refreshPromise: Promise<RefreshResult> | null = null;
+
+async function refreshAccessToken(): Promise<RefreshResult> {
   // If a refresh is already in-flight, piggyback on it
   if (refreshPromise) return refreshPromise;
 
-  refreshPromise = (async () => {
+  refreshPromise = (async (): Promise<RefreshResult> => {
     try {
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
@@ -130,27 +148,38 @@ async function refreshAccessToken(): Promise<string | null> {
         credentials: 'include',
       });
 
-      if (!res.ok) {
-        // Refresh failed — server has rejected the refresh cookie. Drop
-        // the in-memory mirror so logged-in UI gates flip to logged-out.
+      // 401 / 403 = server explicitly rejected the refresh cookie. The
+      // session is genuinely dead (token revoked, expired, reused, or
+      // belongs to a banned actor). Wipe local mirror and let the caller
+      // force-logout.
+      if (res.status === 401 || res.status === 403) {
         useMerchantStore.getState().setSessionToken(null);
-        return null;
+        return { ok: false, revoked: true };
       }
 
-      const data = await res.json();
-      if (data.success && data.data?.accessToken) {
+      // Any other non-2xx (429 rate limit, 5xx, etc.) is TRANSIENT. The
+      // refresh cookie may still be valid; we just couldn't talk to the
+      // server right now. Keep the in-memory token so subsequent UI
+      // observers don't flip to "logged out" prematurely.
+      if (!res.ok) {
+        return { ok: false, revoked: false };
+      }
+
+      const data = await res.json().catch(() => null);
+      if (data?.success && data?.data?.accessToken) {
         // Mirror the new access token in the store for UI observers. The
         // durable copy is the rotated `blip_access_token` cookie that the
         // refresh route just set — we never touch sessionStorage.
         useMerchantStore.getState().setSessionToken(data.data.accessToken);
-        return data.data.accessToken as string;
+        return { ok: true, token: data.data.accessToken as string };
       }
 
-      useMerchantStore.getState().setSessionToken(null);
-      return null;
+      // 200 with malformed body — treat as transient (don't logout); the
+      // caller will retry on a future action.
+      return { ok: false, revoked: false };
     } catch {
-      // Network error during refresh
-      return null;
+      // Network error during refresh — transient by definition.
+      return { ok: false, revoked: false };
     } finally {
       // Clear coalescing lock after a short delay
       // (allow concurrent 401s to see the result before clearing)
@@ -667,11 +696,14 @@ async function executeWithRefresh(
   if (!hadToken) return response;
 
   // Attempt silent refresh
-  const newToken = await refreshAccessToken();
-  if (!newToken) {
-    // Refresh failed — server has rejected the session entirely.
-    // Wipe local auth state and force the user to log in again.
-    if (shouldForceLogoutOn401(url)) {
+  const refreshRes = await refreshAccessToken();
+  if (!refreshRes.ok) {
+    // Only force logout when the server EXPLICITLY revoked the session.
+    // Transient failures (429 from the per-IP bucket under multi-tab use,
+    // 5xx, network blips) must not eject the user — they should keep
+    // working with the cookie they already have, and we'll retry refresh
+    // on the next 401-triggering action.
+    if (refreshRes.revoked && shouldForceLogoutOn401(url)) {
       forceLogoutAndRedirect();
     }
     return response;

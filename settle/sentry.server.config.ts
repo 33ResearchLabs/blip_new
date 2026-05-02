@@ -14,7 +14,7 @@
  */
 
 import * as Sentry from '@sentry/nextjs';
-import type { Event, EventHint } from '@sentry/nextjs';
+import type { ErrorEvent, EventHint } from '@sentry/nextjs';
 
 const DSN = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -74,7 +74,7 @@ Sentry.init({
     tags: { app: 'blip-settle', runtime: 'nodejs' },
   },
 
-  beforeSend(event: Event, _hint: EventHint): Event | null {
+  beforeSend(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
     try {
       if (event.request) {
         event.request.cookies = undefined;
