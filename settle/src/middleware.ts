@@ -286,7 +286,7 @@ export function buildCsp(nonce: string): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://res.cloudinary.com",
+    "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com",
     "font-src 'self' data:",
     "connect-src 'self' wss: https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com",
     "frame-ancestors 'none'",

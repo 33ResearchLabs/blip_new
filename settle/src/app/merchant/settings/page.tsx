@@ -156,7 +156,9 @@ export default function MerchantSettingsPage({
     (merchantInfo as any)?.business_name || "",
   );
   const [bio, setBio] = useState<string>((merchantInfo as any)?.bio || "");
-  const [phone, setPhone] = useState<string>((merchantInfo as any)?.phone || "");
+  const [phone, setPhone] = useState<string>(
+    (merchantInfo as any)?.phone || "",
+  );
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(
     (merchantInfo as any)?.avatar_url || null,
   );
@@ -564,7 +566,13 @@ export default function MerchantSettingsPage({
         activePage="settings"
         merchantInfo={merchantInfo}
         onLogout={handleLogout}
-        onOpenSettings={onClose ? () => { /* already in settings */ } : undefined}
+        onOpenSettings={
+          onClose
+            ? () => {
+                /* already in settings */
+              }
+            : undefined
+        }
         onOpenWallet={onOpenWallet}
         onNavLinkClick={onClose}
         onBack={onClose ?? (() => router.push("/merchant"))}

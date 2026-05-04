@@ -26,7 +26,12 @@ import { BottomNav } from "./BottomNav";
 import { FilterDropdown } from "./ui/FilterDropdown";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
-import { formatCrypto, formatFiat, formatRate, formatPercentage } from "@/lib/format";
+import {
+  formatCrypto,
+  formatFiat,
+  formatRate,
+  formatPercentage,
+} from "@/lib/format";
 
 type RatePair = "usdt_aed" | "usdt_inr";
 
@@ -653,7 +658,7 @@ export const TradeCreationScreen = ({
         </motion.button>
 
         {/* ── Large order link ──────────────────────────────────────────── */}
-        <button
+        {/* <button
           onClick={() => setScreen("create-offer")}
           className="w-full mt-1 py-2 text-center text-[13px] font-semibold text-text-tertiary"
         >
@@ -661,7 +666,7 @@ export const TradeCreationScreen = ({
           <span className="text-text-secondary font-bold">
             Create a custom offer {"\u2192"}
           </span>
-        </button>
+        </button> */}
       </div>
 
       <BottomNav
