@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Loader2,
@@ -60,6 +60,42 @@ export function LoginScreen({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [showWelcome] = useState(!skipWelcome);
+  // "Remember me" persists the user's email locally so they don't have to
+  // retype it next visit. Default is unchecked for SSR-stable markup; the
+  // saved preference + email hydrate in the effect below.
+  const [rememberMe, setRememberMe] = useState(false);
+  useEffect(() => {
+    try {
+      const remembered = window.localStorage.getItem("blip:merchant:rememberMe") === "true";
+      if (!remembered) return;
+      setRememberMe(true);
+      const savedEmail = window.localStorage.getItem("blip:merchant:rememberedEmail") || "";
+      if (savedEmail && !loginForm.email) {
+        setLoginForm((p) => ({ ...p, email: savedEmail }));
+      }
+    } catch {
+      // localStorage unavailable; ignore.
+    }
+    // Run once on mount; we intentionally don't depend on loginForm.email so
+    // we don't keep re-applying the saved value after the user edits it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const toggleRememberMe = (checked: boolean) => {
+    setRememberMe(checked);
+    try {
+      if (checked) {
+        window.localStorage.setItem("blip:merchant:rememberMe", "true");
+        if (loginForm.email) {
+          window.localStorage.setItem("blip:merchant:rememberedEmail", loginForm.email);
+        }
+      } else {
+        window.localStorage.removeItem("blip:merchant:rememberMe");
+        window.localStorage.removeItem("blip:merchant:rememberedEmail");
+      }
+    } catch {
+      // Ignore storage failures; in-memory state still updates.
+    }
+  };
 
   if (showWelcome) {
     return (
@@ -176,8 +212,27 @@ export function LoginScreen({
                   label="Email Address"
                   value={loginForm.email}
                   placeholder="merchant@email.com"
-                  onChange={(v) => setLoginForm((p) => ({ ...p, email: v }))}
-                  onBlur={(v) => setLoginForm((p) => ({ ...p, email: v.trim() }))}
+                  onChange={(v) => {
+                    setLoginForm((p) => ({ ...p, email: v }));
+                    if (rememberMe) {
+                      try {
+                        window.localStorage.setItem("blip:merchant:rememberedEmail", v);
+                      } catch {
+                        // Ignore storage failures.
+                      }
+                    }
+                  }}
+                  onBlur={(v) => {
+                    const trimmed = v.trim();
+                    setLoginForm((p) => ({ ...p, email: trimmed }));
+                    if (rememberMe) {
+                      try {
+                        window.localStorage.setItem("blip:merchant:rememberedEmail", trimmed);
+                      } catch {
+                        // Ignore storage failures.
+                      }
+                    }
+                  }}
                 />
 
                 <FieldPassword
@@ -197,6 +252,16 @@ export function LoginScreen({
                     </Link>
                   }
                 />
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => toggleRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded border-white/20 bg-white/5 accent-orange-500"
+                  />
+                  <span className="text-[12px] text-white/60">Remember me</span>
+                </label>
 
                 <PrimaryButton
                   onClick={onLogin}
@@ -618,7 +683,7 @@ function FieldPassword({
         <input
           type={show ? "text" : "password"}
           value={value}
-          maxLength={100}
+          maxLength={24}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onEnter ? (e) => e.key === "Enter" && onEnter() : undefined}
           placeholder={placeholder}

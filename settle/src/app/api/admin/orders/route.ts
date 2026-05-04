@@ -34,6 +34,18 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status'); // Optional: filter by status
     const limit = parseInt(searchParams.get('limit') || '50');
     const minAmount = searchParams.get('min_amount'); // For big transactions
+    // Optional timeframe — must match the values the admin dashboard uses
+    // for /api/admin/analytics so the orders list and the dashboard's chip
+    // counts agree on what "the last 24h" means. Unknown / "all" / missing
+    // → no time filter (preserves prior behavior for any older callers).
+    const timeframe = searchParams.get('timeframe');
+    const TIMEFRAME_INTERVAL: Record<string, string> = {
+      '1h': '1 hour',
+      '24h': '24 hours',
+      '7d': '7 days',
+      '1month': '30 days',
+    };
+    const interval = timeframe ? TIMEFRAME_INTERVAL[timeframe] : undefined;
 
     let whereClause = '';
     const params: (string | number)[] = [];
@@ -49,6 +61,14 @@ export async function GET(request: NextRequest) {
       const connector = whereClause ? ' AND' : 'WHERE';
       whereClause += `${connector} o.crypto_amount >= $${paramIndex++}`;
       params.push(parseFloat(minAmount));
+    }
+
+    if (interval) {
+      const connector = whereClause ? ' AND' : 'WHERE';
+      // `interval` is one of the hard-coded constants above — never
+      // user-supplied — so it's safe to inline here. (Postgres' INTERVAL
+      // takes a literal, not a parameter.)
+      whereClause += `${connector} o.created_at >= NOW() - INTERVAL '${interval}'`;
     }
 
     params.push(limit);

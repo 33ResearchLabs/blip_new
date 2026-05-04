@@ -20,6 +20,7 @@ import {
   EyeOff,
   Plus,
   Trash2,
+  Pencil,
   Zap,
   Droplets,
   Monitor,
@@ -197,6 +198,10 @@ export default function MerchantSettingsPage({
   );
   const [isLoadingMethods, setIsLoadingMethods] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  // The full method object that PaymentMethodModal should open in edit
+  // mode. `null` means the modal opens in add mode. Set when the merchant
+  // clicks the Pencil on a row, cleared when the modal closes.
+  const [editingPaymentMethod, setEditingPaymentMethod] = useState<MerchantPaymentMethod | null>(null);
 
   // Notifications
   const [notifSettings, setNotifSettings] = useState({
@@ -453,6 +458,13 @@ export default function MerchantSettingsPage({
     } catch {
       // Silent fail
     }
+  };
+
+  // Pencil click → open the rich PaymentMethodModal in edit mode pre-filled
+  // with this method. The modal handles validation, parsing, and the PUT.
+  const startEditMethod = (method: MerchantPaymentMethod) => {
+    setEditingPaymentMethod(method);
+    setIsPaymentModalOpen(true);
   };
 
   // Fetch merchant payment methods when Payments tab opens
@@ -1164,6 +1176,13 @@ export default function MerchantSettingsPage({
                                 </button>
                               )}
                               <button
+                                onClick={() => startEditMethod(method)}
+                                className="p-2 text-white/20 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => handleDeleteMethod(method.id)}
                                 className="p-2 text-white/20 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded-lg transition-colors"
                                 title="Remove"
@@ -1316,9 +1335,11 @@ export default function MerchantSettingsPage({
         isOpen={isPaymentModalOpen}
         onClose={() => {
           setIsPaymentModalOpen(false);
+          setEditingPaymentMethod(null);
           fetchPaymentMethods();
         }}
         merchantId={merchantId || merchant?.id || ""}
+        editingMethod={editingPaymentMethod}
       />
     </div>
   );

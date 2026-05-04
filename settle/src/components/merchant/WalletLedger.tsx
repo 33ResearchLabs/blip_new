@@ -148,13 +148,27 @@ function exportToCSV(entries: LedgerEntry[], summary: LedgerSummary) {
     .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     .join('\n');
 
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  // Excel/Numbers misread UTF-8 CSV as Latin-1 unless a BOM is prepended,
+  // which mangles names with non-ASCII characters. The BOM is harmless on
+  // platforms that already handle UTF-8 correctly.
+  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = `wallet-ledger-${new Date().toISOString().split('T')[0]}.csv`;
+  // Anchors must be in the DOM for `.click()` to actually trigger a
+  // download in Firefox and Safari (Chrome is more forgiving). Append,
+  // click, then remove on the next tick.
+  link.style.display = 'none';
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  // Defer cleanup so the browser has a chance to start reading the blob
+  // before the URL is revoked. Revoking too early aborts the download in
+  // some browsers.
+  setTimeout(() => {
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, 0);
 }
 
 // ─── Component ───────────────────────────────────────────────────────

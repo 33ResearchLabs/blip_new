@@ -109,16 +109,22 @@ export function useUserTradeCreation({
       if (!offerRes.ok) {
         const errorMsg = `Server error (${offerRes.status})`;
         console.error('Failed to fetch offers:', errorMsg);
-        showAlert('No Offers', 'No offers available for this amount and payment method', 'warning');
+        showAlert(
+          'No Offers',
+          'No offers available for this amount and payment method. Try a different amount, switch payment method, or check back shortly.',
+          'warning'
+        );
         setIsLoading(false);
         return;
       }
       const offerData = await offerRes.json();
 
       if (!offerData.success || !offerData.data) {
-        const errorMsg = offerData.error || 'No offers available for this amount and payment method';
+        const serverErr = offerData.error;
+        const errorMsg = serverErr
+          || 'No offers available for this amount and payment method. Try a different amount, switch payment method, or check back shortly.';
         console.error('Failed to fetch offers:', errorMsg);
-        showAlert('Error', errorMsg, 'error');
+        showAlert(serverErr ? 'Error' : 'No Offers', errorMsg, serverErr ? 'error' : 'warning');
         setIsLoading(false);
         return;
       }

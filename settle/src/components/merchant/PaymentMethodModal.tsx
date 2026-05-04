@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Building2, Wallet, CreditCard, DollarSign, Check, Loader2, AlertCircle, Trash2, Star, Smartphone } from 'lucide-react';
+import { X, Plus, Building2, Wallet, CreditCard, DollarSign, Check, Loader2, AlertCircle, Trash2, Star, Smartphone, Pencil } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface PaymentMethod {
@@ -17,6 +17,81 @@ interface PaymentMethodModalProps {
   isOpen: boolean;
   onClose: () => void;
   merchantId: string;
+  // When set, the modal opens directly into the rich edit form for this
+  // method (skipping the list). Type chips are locked while editing.
+  editingMethod?: PaymentMethod | null;
+}
+
+type FormData = {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  iban: string;
+  swiftCode: string;
+  location: string;
+  walletAddress: string;
+  cardNumber: string;
+  cardholderName: string;
+  mobileNumber: string;
+  mobileProvider: string;
+};
+
+const EMPTY_FORM: FormData = {
+  bankName: '', accountName: '', accountNumber: '', iban: '', swiftCode: '',
+  location: '', walletAddress: '', cardNumber: '', cardholderName: '',
+  mobileNumber: '', mobileProvider: '',
+};
+
+// Inverse of the composition that happens in handleSaveMethod when a method
+// is saved. Methods are stored as `{name, details}` strings, so to put their
+// values back into the rich form we have to parse the composed details string
+// using the format the writer used. If parsing fails (older row, unexpected
+// shape, manual edit), we fall back to leaving the field empty so the user
+// can re-enter it — never throw.
+function parseDetailsForEdit(method: PaymentMethod): FormData {
+  const f = { ...EMPTY_FORM };
+  switch (method.type) {
+    case 'bank': {
+      // name = bankName; details = `${accountName} - ${accountNumber} (IBAN)`
+      f.bankName = method.name;
+      const ibanMatch = method.details.match(/\(([^)]+)\)\s*$/);
+      const withoutIban = method.details.replace(/\s*\([^)]+\)\s*$/, '');
+      if (ibanMatch) f.iban = ibanMatch[1].trim();
+      const dashIdx = withoutIban.lastIndexOf(' - ');
+      if (dashIdx >= 0) {
+        f.accountName = withoutIban.slice(0, dashIdx).trim();
+        f.accountNumber = withoutIban.slice(dashIdx + 3).trim();
+      } else {
+        f.accountName = withoutIban.trim();
+      }
+      break;
+    }
+    case 'cash':
+      // name = "Cash Meeting" (constant); details = location
+      f.location = method.details;
+      break;
+    case 'crypto':
+      // name = "Crypto Wallet" (constant); details = walletAddress
+      f.walletAddress = method.details;
+      break;
+    case 'card': {
+      // name = "Card Payment"; details = `${cardholderName} - **** ${last4}`
+      const m = method.details.match(/^(.*?)\s*-\s*\*+\s*(\d{4})\s*$/);
+      if (m) {
+        f.cardholderName = m[1].trim();
+        f.cardNumber = m[2];
+      } else {
+        f.cardholderName = method.details;
+      }
+      break;
+    }
+    case 'mobile':
+      // name = mobileProvider; details = mobileNumber
+      f.mobileProvider = method.name;
+      f.mobileNumber = method.details;
+      break;
+  }
+  return f;
 }
 
 const PAYMENT_METHOD_TYPES = [
@@ -77,7 +152,7 @@ function validateCash(location: string): string | null {
   return null;
 }
 
-export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMethodModalProps) {
+export function PaymentMethodModal({ isOpen, onClose, merchantId, editingMethod }: PaymentMethodModalProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedType, setSelectedType] = useState<'bank' | 'cash' | 'crypto' | 'card' | 'mobile'>('bank');
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -85,19 +160,16 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
-    bankName: '',
-    accountName: '',
-    accountNumber: '',
-    iban: '',
-    swiftCode: '',
-    location: '',
-    walletAddress: '',
-    cardNumber: '',
-    cardholderName: '',
-    mobileNumber: '',
-    mobileProvider: '',
-  });
+  // Edit mode. When set, the form acts as an editor for that method (PUT)
+  // instead of a creator (POST). The type is locked because changing it
+  // requires re-validating details against a different shape and could
+  // collide with the unique-default-method constraint when defaults move.
+  // `editingId` may be set either via the `editingMethod` prop (parent
+  // opened us in edit mode) or by clicking the Pencil on a row inside the
+  // modal's own list — both paths converge here.
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
 
   // Fetch existing payment methods from API
   const fetchMethods = useCallback(async () => {
@@ -129,16 +201,36 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
     }
   }, [isOpen, merchantId, fetchMethods]);
 
+  // When the parent opens us in edit mode (editingMethod prop), drop into
+  // the rich form pre-filled with the method's parsed values. We mirror
+  // this for in-modal Pencil clicks via `startEdit` below — both paths land
+  // on the same form so the UX is identical.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (editingMethod) {
+      setEditingId(editingMethod.id);
+      setSelectedType(editingMethod.type);
+      setFormData(parseDetailsForEdit(editingMethod));
+      setShowAddForm(true);
+      setError(null);
+    }
+  }, [isOpen, editingMethod]);
+
   const resetForm = () => {
-    setFormData({
-      bankName: '', accountName: '', accountNumber: '', iban: '', swiftCode: '',
-      location: '', walletAddress: '', cardNumber: '', cardholderName: '',
-      mobileNumber: '', mobileProvider: '',
-    });
+    setFormData(EMPTY_FORM);
+    setError(null);
+    setEditingId(null);
+  };
+
+  const startEdit = (m: PaymentMethod) => {
+    setEditingId(m.id);
+    setSelectedType(m.type);
+    setFormData(parseDetailsForEdit(m));
+    setShowAddForm(true);
     setError(null);
   };
 
-  const handleAddMethod = async () => {
+  const handleSaveMethod = async () => {
     setIsLoading(true);
     setError(null);
 
@@ -200,35 +292,47 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
         }
       }
 
-      // Persist to API
-      const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`, {
-        method: 'POST',
+      const isEdit = editingId !== null;
+      const url = isEdit
+        ? `/api/merchant/${merchantId}/payment-methods/${editingId}`
+        : `/api/merchant/${merchantId}/payment-methods`;
+      // Editing only sends `name` + `details`; the server's PUT route does
+      // not accept `type` (locked) or `is_default` (separate PATCH).
+      const body: Record<string, unknown> = isEdit
+        ? { name, details }
+        : { type: selectedType, name, details, is_default: paymentMethods.length === 0 };
+
+      const res = await fetchWithAuth(url, {
+        method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: selectedType,
-          name,
-          details,
-          is_default: paymentMethods.length === 0,
-        }),
+        body: JSON.stringify(body),
       });
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to save payment method');
+        throw new Error(json.error || (Array.isArray(json.errors) ? json.errors.join(', ') : 'Failed to save payment method'));
       }
 
       const saved = json.data;
-      setPaymentMethods([...paymentMethods, {
-        id: saved.id,
-        type: saved.type,
-        name: saved.name,
-        details: saved.details,
-        is_default: saved.is_default,
-      }]);
+      if (isEdit) {
+        setPaymentMethods(prev => prev.map(m => (
+          m.id === saved.id
+            ? { ...m, name: saved.name, details: saved.details }
+            : m
+        )));
+      } else {
+        setPaymentMethods([...paymentMethods, {
+          id: saved.id,
+          type: saved.type,
+          name: saved.name,
+          details: saved.details,
+          is_default: saved.is_default,
+        }]);
+      }
       resetForm();
       setShowAddForm(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add payment method');
+      setError(err instanceof Error ? err.message : 'Failed to save payment method');
     } finally {
       setIsLoading(false);
     }
@@ -350,9 +454,15 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                   <CreditCard className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-[15px] font-bold text-white">Payment Methods</h2>
+                  <h2 className="text-[15px] font-bold text-white">
+                    {editingId ? 'Edit Payment Method' : 'Payment Methods'}
+                  </h2>
                   <p className="text-[11px] text-white/30 font-mono mt-0.5">
-                    {isFetching ? 'Loading...' : `${paymentMethods.length} method${paymentMethods.length !== 1 ? 's' : ''} configured`}
+                    {editingId
+                      ? 'Update fields and save'
+                      : isFetching
+                        ? 'Loading...'
+                        : `${paymentMethods.length} method${paymentMethods.length !== 1 ? 's' : ''} configured`}
                   </p>
                 </div>
               </div>
@@ -388,7 +498,6 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                     paymentMethods.map((method, i) => {
                       const methodType = PAYMENT_METHOD_TYPES.find(t => t.type === method.type);
                       const Icon = methodType?.icon || CreditCard;
-
                       return (
                         <motion.div
                           key={method.id}
@@ -428,6 +537,13 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                                 </button>
                               )}
                               <button
+                                onClick={() => startEdit(method)}
+                                className="p-1.5 hover:bg-card rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-white/30 hover:text-primary" />
+                              </button>
+                              <button
                                 onClick={() => handleRemoveMethod(method.id)}
                                 className="p-1.5 hover:bg-[var(--color-error)]/10 rounded-lg transition-colors"
                                 title="Remove"
@@ -458,31 +574,45 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                   exit={{ opacity: 0, x: 10 }}
                   className="space-y-5"
                 >
-                  {/* Type selector */}
+                  {/* Type selector — locked while editing because the server's
+                      PUT route does not accept `type`. Switching type would
+                      require deleting + re-adding (also avoids the unique
+                      default-row constraint moving unexpectedly). */}
                   <div>
-                    <label className="text-[10px] text-white/30 font-mono uppercase tracking-widest mb-2.5 block">Payment Type</label>
+                    <label className="text-[10px] text-white/30 font-mono uppercase tracking-widest mb-2.5 block">
+                      {editingId ? 'Payment Type (locked)' : 'Payment Type'}
+                    </label>
                     <div className="grid grid-cols-2 gap-2">
-                      {PAYMENT_METHOD_TYPES.map((type) => (
-                        <button
-                          key={type.type}
-                          onClick={() => setSelectedType(type.type)}
-                          className={`p-3 rounded-xl border transition-all text-left ${
-                            selectedType === type.type
-                              ? `bg-gradient-to-br ${type.gradient} ${type.border} ring-1 ${type.ring}`
-                              : 'bg-white/[0.02] border-white/[0.06] hover:bg-card'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <type.icon className={`w-4 h-4 ${selectedType === type.type ? type.text : 'text-white/30'}`} />
-                            <div>
-                              <span className={`text-[12px] font-semibold block ${selectedType === type.type ? 'text-white' : 'text-white/50'}`}>
-                                {type.label}
-                              </span>
-                              <span className="text-[9px] text-white/20">{type.desc}</span>
+                      {PAYMENT_METHOD_TYPES.map((type) => {
+                        const isActive = selectedType === type.type;
+                        const disabled = editingId !== null && !isActive;
+                        return (
+                          <button
+                            key={type.type}
+                            disabled={disabled}
+                            title={disabled ? "Type can't be changed — delete and re-add to switch type" : undefined}
+                            onClick={() => {
+                              if (editingId) return;
+                              setSelectedType(type.type);
+                            }}
+                            className={`p-3 rounded-xl border transition-all text-left ${
+                              isActive
+                                ? `bg-gradient-to-br ${type.gradient} ${type.border} ring-1 ${type.ring}`
+                                : 'bg-white/[0.02] border-white/[0.06] hover:bg-card'
+                            } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <type.icon className={`w-4 h-4 ${isActive ? type.text : 'text-white/30'}`} />
+                              <div>
+                                <span className={`text-[12px] font-semibold block ${isActive ? 'text-white' : 'text-white/50'}`}>
+                                  {type.label}
+                                </span>
+                                <span className="text-[9px] text-white/20">{type.desc}</span>
+                              </div>
                             </div>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -504,18 +634,20 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                   {/* Actions */}
                   <div className="flex gap-2.5 pt-1">
                     <button
-                      onClick={() => { setShowAddForm(false); setError(null); }}
+                      onClick={() => { setShowAddForm(false); resetForm(); }}
                       className="flex-1 px-4 py-2.5 bg-white/[0.04] hover:bg-accent-subtle border border-white/[0.06] rounded-xl text-[12px] text-white/60 font-medium transition-all"
                     >
                       Cancel
                     </button>
                     <button
-                      onClick={handleAddMethod}
+                      onClick={handleSaveMethod}
                       disabled={isLoading}
                       className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary to-primary hover:from-primary/90 hover:to-primary/90 rounded-xl text-[12px] text-background font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
                     >
                       {isLoading ? (
-                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding...</>
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {editingId ? 'Saving...' : 'Adding...'}</>
+                      ) : editingId ? (
+                        <><Check className="w-3.5 h-3.5" /> Save Changes</>
                       ) : (
                         <><Check className="w-3.5 h-3.5" /> Add Method</>
                       )}

@@ -107,6 +107,18 @@ export const addBankAccountSchema = z.object({
   is_default: z.boolean().optional().default(false),
 });
 
+// Update is partial — any subset of bank_name/account_name/iban may change.
+// is_default is intentionally not editable here; use the dedicated default
+// endpoint so we don't duplicate the unique-default-row enforcement logic.
+export const updateBankAccountSchema = z.object({
+  bank_name: z.string().min(1, 'Bank name required').max(100).optional(),
+  account_name: z.string().min(1, 'Account name required').max(100).optional(),
+  iban: z.string().min(15, 'Invalid IBAN').max(34, 'Invalid IBAN').optional(),
+}).refine(
+  (data) => data.bank_name !== undefined || data.account_name !== undefined || data.iban !== undefined,
+  { message: 'Provide at least one field to update' }
+);
+
 // Offer schemas
 export const offerFiltersSchema = z.object({
   type: offerTypeSchema.optional(),

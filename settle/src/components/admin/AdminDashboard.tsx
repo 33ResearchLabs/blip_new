@@ -1326,9 +1326,14 @@ const STATUS_PILL: Record<string, { bg: string; text: string; label: string }> =
 function AllOrdersPanel({
   adminToken,
   orderCounts,
+  timeframe,
 }: {
   adminToken: string;
   orderCounts: AnalyticsResponse["orders"];
+  // Same `timeframe` value the analytics fetch uses (e.g. "24h"). The list
+  // is filtered by it so the rows match the chip counts. "all" or undefined
+  // → no time filter.
+  timeframe: string;
 }) {
   const [tab, setTab] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "buy" | "sell">("all");
@@ -1347,9 +1352,11 @@ function AllOrdersPanel({
     try {
       const tabDef =
         ALL_ORDERS_TABS.find((t) => t.key === tab) ?? ALL_ORDERS_TABS[0];
-      const url = tabDef.statusFilter
-        ? `/api/admin/orders?status=${encodeURIComponent(tabDef.statusFilter)}&limit=100`
-        : "/api/admin/orders?limit=100";
+      const qs = new URLSearchParams({ limit: "100" });
+      if (tabDef.statusFilter) qs.set("status", tabDef.statusFilter);
+      // "all" means no time filter — match server behavior.
+      if (timeframe && timeframe !== "all") qs.set("timeframe", timeframe);
+      const url = `/api/admin/orders?${qs.toString()}`;
       // Cookie auth (`blip_admin_session`) flows automatically via fetchWithAuth.
       const res = await fetchWithAuth(url);
       const json = await res.json();
@@ -1361,25 +1368,21 @@ function AllOrdersPanel({
     } finally {
       setLoading(false);
     }
-  }, [tab]);
+  }, [tab, timeframe]);
 
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
 
   // Counts for the tab pills come from the analytics breakdown so they match
-  // the rest of the dashboard.
-  const active = Math.max(
-    0,
-    orderCounts.total -
-      orderCounts.completed -
-      orderCounts.cancelled -
-      orderCounts.disputed,
-  );
+  // the rest of the dashboard's chip data. `pending` and `active` are both
+  // returned by /api/admin/analytics — using them directly avoids the prior
+  // bug where pending was hardcoded to 0 and active was derived by
+  // subtraction (which silently undercounted).
   const tabCounts: Record<string, number> = {
     all: orderCounts.total,
-    pending: 0, // not split out by analytics today; falls back to "—" in the UI
-    active,
+    pending: orderCounts.pending,
+    active: orderCounts.active,
     completed: orderCounts.completed,
     cancelled: orderCounts.cancelled,
     disputed: orderCounts.disputed,
@@ -1884,6 +1887,7 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
                 <AllOrdersPanel
                   adminToken={adminToken}
                   orderCounts={data.orders}
+                  timeframe={timeframe}
                 />
               </ChartCard>
             </div>

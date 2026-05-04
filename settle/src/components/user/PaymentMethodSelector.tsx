@@ -13,6 +13,7 @@ import {
   ChevronDown,
   X,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { colors } from "@/lib/design/theme";
@@ -57,11 +58,15 @@ export const PaymentMethodSelector = ({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Add form state
+  // Add / edit form state. When `editingId` is set, the form acts as
+  // an editor for that method (PUT) instead of a creator (POST). The type
+  // is locked while editing because the server's update schema does not
+  // accept `type` — switching type requires delete + re-add.
   const [addType, setAddType] = useState<MethodType>("bank");
   const [addLabel, setAddLabel] = useState("");
   const [addDetails, setAddDetails] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const selected = methods.find((m) => m.id === selectedId) || null;
 
@@ -89,6 +94,18 @@ export const PaymentMethodSelector = ({
     setAddLabel("");
     setAddDetails({});
     setFormError("");
+    setEditingId(null);
+  };
+
+  const startEdit = (m: PaymentMethodItem) => {
+    setEditingId(m.id);
+    setAddType(m.type);
+    setAddLabel(m.label);
+    // Clone so user edits don't mutate the list row prior to save.
+    setAddDetails({ ...m.details });
+    setFormError("");
+    setShowAddForm(true);
+    setExpanded(false);
   };
 
   // Auto-clear the "tap again to confirm" arming after a few seconds so a
@@ -150,19 +167,31 @@ export const PaymentMethodSelector = ({
 
     setSaving(true);
     try {
-      const res = await fetchWithAuth(`/api/users/${userId}/payment-methods`, {
-        method: "POST",
+      // Editing an existing method → PUT (label + details only). Creating a
+      // new one → POST (with type). The server rejects `type` on PUT so we
+      // omit it deliberately even though `addType` is still in state.
+      const isEdit = editingId !== null;
+      const url = isEdit
+        ? `/api/users/${userId}/payment-methods/${editingId}`
+        : `/api/users/${userId}/payment-methods`;
+      const body = isEdit
+        ? { label: addLabel.trim(), details: addDetails }
+        : { type: addType, label: addLabel.trim(), details: addDetails };
+      const res = await fetchWithAuth(url, {
+        method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: addType,
-          label: addLabel.trim(),
-          details: addDetails,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success && data.data) {
-        setMethods((prev) => [data.data, ...prev]);
-        onSelect(data.data);
+        if (isEdit) {
+          setMethods((prev) => prev.map((m) => (m.id === data.data.id ? data.data : m)));
+          // Keep the edited row selected if it already was.
+          if (selectedId === data.data.id) onSelect(data.data);
+        } else {
+          setMethods((prev) => [data.data, ...prev]);
+          onSelect(data.data);
+        }
         resetForm();
         setShowAddForm(false);
         setExpanded(false);
@@ -304,6 +333,17 @@ export const PaymentMethodSelector = ({
                         <p className="text-[11px] text-text-secondary truncate">{getSubtext(m)}</p>
                       </div>
                     </button>
+                    {/* Edit — opens the form pre-filled with this method */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEdit(m);
+                      }}
+                      aria-label="Edit payment method"
+                      className="shrink-0 h-8 px-2 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
                     {/* Two-tap delete — first tap arms, second confirms */}
                     <button
                       onClick={(e) => {
@@ -379,26 +419,36 @@ export const PaymentMethodSelector = ({
             style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[13px] font-semibold text-text-primary">Add Payment Method</span>
+              <span className="text-[13px] font-semibold text-text-primary">
+                {editingId ? "Edit Payment Method" : "Add Payment Method"}
+              </span>
               <button
-                onClick={() => { setShowAddForm(false); setFormError(""); }}
+                onClick={() => { resetForm(); setShowAddForm(false); }}
                 className="p-1 rounded-lg hover:bg-surface-hover"
               >
                 <X className="w-4 h-4 text-text-tertiary" />
               </button>
             </div>
 
-            {/* Type selector */}
+            {/* Type selector — locked while editing because the server's PUT
+                schema does not accept `type`. Users who need a different type
+                should delete and re-add. */}
             <div className="flex gap-1.5 mb-3">
               {(Object.keys(TYPE_CONFIG) as MethodType[]).map((t) => {
                 const cfg = TYPE_CONFIG[t];
                 const Ic = cfg.Icon;
                 const active = addType === t;
+                const disabled = editingId !== null && !active;
                 return (
                   <button
                     key={t}
-                    onClick={() => { setAddType(t); setAddDetails({}); setFormError(""); }}
-                    className="flex-1 flex flex-col items-center gap-1 rounded-lg py-2 transition-colors"
+                    disabled={disabled}
+                    title={disabled ? "Type can't be changed — delete and re-add to switch type" : undefined}
+                    onClick={() => {
+                      if (editingId) return;
+                      setAddType(t); setAddDetails({}); setFormError("");
+                    }}
+                    className={`flex-1 flex flex-col items-center gap-1 rounded-lg py-2 transition-colors ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
                     style={active
                       ? { background: colors.surface.active, border: `1px solid ${colors.border.medium}` }
                       : { background: colors.surface.glass }
@@ -565,6 +615,11 @@ export const PaymentMethodSelector = ({
               >
                 {saving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
+                ) : editingId ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Save Changes
+                  </>
                 ) : (
                   <>
                     <Plus className="w-4 h-4" />

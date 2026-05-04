@@ -77,6 +77,42 @@ export async function getMerchantDefaultPaymentMethod(merchantId: string): Promi
   );
 }
 
+// Edit an existing payment method's name and/or details. The `type` is
+// intentionally not editable — switching type would require re-validating
+// the details payload against a different shape; users should delete and
+// re-add instead. Default flag is also handled separately via PATCH.
+export async function updateMerchantPaymentMethod(
+  id: string,
+  merchantId: string,
+  data: { name?: string; details?: string }
+): Promise<MerchantPaymentMethodRow | null> {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let p = 1;
+  if (data.name !== undefined) {
+    sets.push(`name = $${p++}`);
+    values.push(data.name);
+  }
+  if (data.details !== undefined) {
+    sets.push(`details = $${p++}`);
+    values.push(data.details);
+  }
+  if (sets.length === 0) {
+    return queryOne<MerchantPaymentMethodRow>(
+      'SELECT * FROM merchant_payment_methods WHERE id = $1 AND merchant_id = $2 AND is_active = true',
+      [id, merchantId]
+    );
+  }
+  sets.push('updated_at = now()');
+  values.push(id, merchantId);
+  return queryOne<MerchantPaymentMethodRow>(
+    `UPDATE merchant_payment_methods SET ${sets.join(', ')}
+     WHERE id = $${p++} AND merchant_id = $${p++} AND is_active = true
+     RETURNING *`,
+    values
+  );
+}
+
 // Soft-delete (deactivate) a payment method
 export async function deleteMerchantPaymentMethod(id: string, merchantId: string): Promise<boolean> {
   const result = await query(

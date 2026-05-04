@@ -324,6 +324,44 @@ export async function addBankAccount(data: {
   return result!;
 }
 
+// Edit a bank account's mutable fields. Ownership is enforced by the
+// `user_id = $X` clause — the SQL is the authoritative gate, the API layer
+// is the convenience gate.
+export async function updateBankAccount(
+  id: string,
+  userId: string,
+  data: { bank_name?: string; account_name?: string; iban?: string }
+): Promise<UserBankAccount | null> {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let p = 1;
+  if (data.bank_name !== undefined) {
+    sets.push(`bank_name = $${p++}`);
+    values.push(data.bank_name);
+  }
+  if (data.account_name !== undefined) {
+    sets.push(`account_name = $${p++}`);
+    values.push(data.account_name);
+  }
+  if (data.iban !== undefined) {
+    sets.push(`iban = $${p++}`);
+    values.push(data.iban);
+  }
+  if (sets.length === 0) {
+    return queryOne<UserBankAccount>(
+      'SELECT * FROM user_bank_accounts WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+  }
+  values.push(id, userId);
+  return queryOne<UserBankAccount>(
+    `UPDATE user_bank_accounts SET ${sets.join(', ')}
+     WHERE id = $${p++} AND user_id = $${p++}
+     RETURNING *`,
+    values
+  );
+}
+
 export async function deleteBankAccount(id: string, userId: string): Promise<boolean> {
   const result = await query(
     'DELETE FROM user_bank_accounts WHERE id = $1 AND user_id = $2',

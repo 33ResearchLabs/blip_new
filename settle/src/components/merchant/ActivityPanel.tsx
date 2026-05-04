@@ -6,7 +6,10 @@ import { motion } from 'framer-motion';
 import { TransactionsTab } from './TransactionsTab';
 import { FilterDropdown, type FilterOption } from '@/components/user/screens/ui/FilterDropdown';
 
-type ActivityTab = 'transactions' | 'completed' | 'failed' | 'open';
+type ActivityTab = 'transactions' | 'completed' | 'failed' | 'open' | 'disputed';
+
+const ACTIVITY_TAB_STORAGE_KEY = 'blip:merchant:activityTab';
+const VALID_ACTIVITY_TABS: ReadonlyArray<ActivityTab> = ['transactions', 'completed', 'failed', 'open', 'disputed'];
 
 interface ActivityPanelProps {
   merchantId: string | null;
@@ -29,7 +32,27 @@ export const ActivityPanel = memo(function ActivityPanel({
   onSelectOrder,
   onCollapseChange,
 }: ActivityPanelProps) {
-  const [activeTab, setActiveTab] = useState<ActivityTab>('transactions');
+  // Default to 'transactions' for stable SSR/first-render markup. We then
+  // hydrate the persisted choice in an effect to avoid hydration mismatches.
+  const [activeTab, setActiveTabState] = useState<ActivityTab>('transactions');
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(ACTIVITY_TAB_STORAGE_KEY);
+      if (stored && (VALID_ACTIVITY_TABS as ReadonlyArray<string>).includes(stored)) {
+        setActiveTabState(stored as ActivityTab);
+      }
+    } catch {
+      // localStorage unavailable; keep default.
+    }
+  }, []);
+  const setActiveTab = (next: ActivityTab) => {
+    setActiveTabState(next);
+    try {
+      window.localStorage.setItem(ACTIVITY_TAB_STORAGE_KEY, next);
+    } catch {
+      // Ignore storage failures; in-memory state still updates.
+    }
+  };
   // Bumping this counter triggers TransactionsTab to refetch the ledger.
   const [txnRefreshKey, setTxnRefreshKey] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -73,14 +96,24 @@ export const ActivityPanel = memo(function ActivityPanel({
   const openOrders = [...ongoingOrders, ...pendingOrders];
   const openCount = openOrders.length;
   const failedCount = cancelledOrders.length;
+  // Disputed orders live inside `cancelledOrders` (the parent groups
+  // cancelled+disputed+expired together). We surface them in their own
+  // section so merchants can find their active disputes — without removing
+  // them from the existing "Failed" tab to keep behavior backward-compatible.
+  const disputedOrders = useMemo(
+    () => cancelledOrders.filter((o) => o?.status === 'disputed'),
+    [cancelledOrders]
+  );
+  const disputedCount = disputedOrders.length;
 
   // Build dropdown options dynamically so the labels still show counts.
   const activityOptions = useMemo<ReadonlyArray<FilterOption<ActivityTab>>>(() => [
     { key: 'transactions', label: 'Txns' },
     { key: 'completed',    label: completedOrders.length > 0 ? `Done ${completedOrders.length}` : 'Done' },
+    { key: 'disputed',     label: disputedCount > 0 ? `Disputed ${disputedCount}` : 'Disputed' },
     { key: 'failed',       label: failedCount > 0 ? `Failed ${failedCount}` : 'Failed' },
     { key: 'open',         label: openCount > 0 ? `Open ${openCount}` : 'Open' },
-  ], [completedOrders.length, failedCount, openCount]);
+  ], [completedOrders.length, disputedCount, failedCount, openCount]);
 
   // Detect stuck orders: in-progress > 30 min or pending > 15 min
   const isStuck = (order: any): boolean => {
@@ -342,6 +375,57 @@ export const ActivityPanel = memo(function ActivityPanel({
                     </motion.div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Disputed Tab — dedicated view for orders currently in dispute.
+             Pulls from the same cancelledOrders source as "Failed" but
+             filtered to status === 'disputed'. */}
+        {activeTab === 'disputed' && (
+          <div className="h-full overflow-y-auto p-1.5">
+            {disputedOrders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3">
+                <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-foreground/20" />
+                </div>
+                <div className="text-center">
+                  <p className="text-[11px] font-medium text-foreground/30 mb-0.5">No disputes</p>
+                  <p className="text-[9px] text-foreground/15 font-mono">Active disputes will appear here</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {disputedOrders.map((order, index) => (
+                  <motion.div
+                    key={order.id}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.02 }}
+                    className="p-2.5 glass-card rounded-lg hover:border-primary/[0.15] transition-colors cursor-pointer border border-primary/15 bg-primary/[0.03]"
+                    onClick={() => onSelectOrder?.(order.id)}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm">{order.emoji}</div>
+                        <span className="text-xs font-medium text-foreground/70">{order.user}</span>
+                      </div>
+                      <span className="flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/20">
+                        <AlertTriangle className="w-3 h-3" />
+                        Disputed
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="text-sm font-bold text-foreground/60 tabular-nums">
+                        {Math.round(order.amount).toLocaleString()} {order.fromCurrency}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-foreground/25 font-mono">
+                      {formatTime(order.timestamp)}
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             )}
           </div>
