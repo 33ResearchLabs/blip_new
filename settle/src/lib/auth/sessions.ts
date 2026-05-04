@@ -200,10 +200,16 @@ export async function getActiveSessions(entityId: string, entityType: string): P
 // ── Per-session validation ─────────────────────────────────────────────
 //
 // Strict policy: every request that carries a session-bound token revalidates
-// the session against the database. There is NO positive cache — we never
-// trust an in-memory "still valid" result, because that's how revocations
-// leak across devices. The DB lookup is a single primary-key index hit
-// (~1 ms) so the cost is acceptable for the safety guarantee.
+// the session against the database. The positive cache below holds verified
+// sessions for a SHORT window (default 2s) — its only job is to absorb the
+// burst of 5-15 parallel requests fired by a single page load against the
+// same session. invalidateSessionCache() clears both caches, so explicit
+// revocations propagate without the burst window.
+//
+// Tradeoff: a session revoked in the database (without going through the
+// invalidate hook — e.g., expired naturally) may keep working for up to
+// SESSION_POSITIVE_TTL_MS extra time. Set to 0 via env to disable entirely
+// and restore the previous "every request hits DB" behavior.
 //
 // We keep a small negative cache that flags KNOWN-revoked session IDs for
 // 60 s. This is purely an optimization to short-circuit replay attempts of
@@ -213,6 +219,13 @@ const revokedNegativeCache = new Map<string, number>(); // sessionId → cachedA
 const NEGATIVE_TTL_MS = 60_000;
 const NEGATIVE_CACHE_MAX = 10_000;
 
+// Short positive cache — bounded TTL is what makes this safe. Default 2s
+// catches the 5-15 parallel API calls a typical page load fires from one
+// authenticated browser tab. Override via SESSION_POSITIVE_TTL_MS env var.
+const validPositiveCache = new Map<string, number>(); // sessionId → validUntilMs
+const POSITIVE_TTL_MS = parseInt(process.env.SESSION_POSITIVE_TTL_MS || '2000', 10);
+const POSITIVE_CACHE_MAX = 10_000;
+
 /**
  * Check if a specific session is valid (not revoked, not expired).
  * Used by auth middleware for v2 tokens that embed a sessionId.
@@ -221,10 +234,21 @@ const NEGATIVE_CACHE_MAX = 10_000;
  * sessions known to be revoked.
  */
 export async function isSessionValid(sessionId: string): Promise<boolean> {
+  const now = Date.now();
+
   // Cheap rejection path for known-revoked sessions
   const negCachedAt = revokedNegativeCache.get(sessionId);
-  if (negCachedAt && Date.now() - negCachedAt < NEGATIVE_TTL_MS) {
+  if (negCachedAt && now - negCachedAt < NEGATIVE_TTL_MS) {
     return false;
+  }
+
+  // Short-window positive cache — absorbs the burst of parallel calls fired
+  // by a single page load. Disabled when POSITIVE_TTL_MS=0.
+  if (POSITIVE_TTL_MS > 0) {
+    const validUntil = validPositiveCache.get(sessionId);
+    if (validUntil && validUntil > now) {
+      return true;
+    }
   }
 
   const session = await queryOne<{ is_revoked: boolean; expires_at: string }>(
@@ -239,11 +263,20 @@ export async function isSessionValid(sessionId: string): Promise<boolean> {
 
   if (!valid) {
     // Remember the negative result so we don't pay the DB hit for replays
-    revokedNegativeCache.set(sessionId, Date.now());
+    revokedNegativeCache.set(sessionId, now);
     if (revokedNegativeCache.size > NEGATIVE_CACHE_MAX) {
-      const now = Date.now();
       for (const [key, ts] of revokedNegativeCache) {
         if (now - ts > NEGATIVE_TTL_MS) revokedNegativeCache.delete(key);
+      }
+    }
+    // Clear any positive entry if we just learned this session is dead
+    validPositiveCache.delete(sessionId);
+  } else if (POSITIVE_TTL_MS > 0) {
+    // Cache the positive result for the burst window
+    validPositiveCache.set(sessionId, now + POSITIVE_TTL_MS);
+    if (validPositiveCache.size > POSITIVE_CACHE_MAX) {
+      for (const [key, until] of validPositiveCache) {
+        if (until <= now) validPositiveCache.delete(key);
       }
     }
   }
@@ -252,15 +285,19 @@ export async function isSessionValid(sessionId: string): Promise<boolean> {
 }
 
 /** Mark a session as revoked in the negative cache. Called after explicit
- *  revocation so any process-local replay short-circuits without a DB hit. */
+ *  revocation so any process-local replay short-circuits without a DB hit.
+ *  Also clears the positive cache entry so the burst-window optimization
+ *  cannot leak validity past an explicit revoke. */
 export function invalidateSessionCache(sessionId: string): void {
   revokedNegativeCache.set(sessionId, Date.now());
+  validPositiveCache.delete(sessionId);
 }
 
-/** Clear the negative cache. Called after a global revoke; the next access
- *  for any session re-validates against the DB. */
+/** Clear both caches. Called after a global revoke; the next access for any
+ *  session re-validates against the DB. */
 export function invalidateAllSessionCaches(): void {
   revokedNegativeCache.clear();
+  validPositiveCache.clear();
 }
 
 /**

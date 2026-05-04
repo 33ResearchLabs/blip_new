@@ -38,10 +38,24 @@ export function useMerchantRealtimeEvents({
       debouncedFetchConversations();
     },
     onOrderStatusUpdated: (orderId, newStatus, _previousStatus, extra?: { buyerMerchantId?: string; merchantId?: string }) => {
-      if (newStatus === 'accepted' && extra?.buyerMerchantId) {
-        setOrders((prev: Order[]) => prev.map(o => o.id === orderId ? { ...o, buyerMerchantId: extra.buyerMerchantId, minimalStatus: 'accepted' } : o));
-      }
-      // Fast path: refetch single order for immediate UI update
+      // INLINE optimistic update — clears stale action buttons the instant the
+      // Pusher event lands, so the button never lingers behind the toast.
+      // The single-order refetch below replaces minimalStatus + primaryAction
+      // with the authoritative server-derived values ~100-300ms later.
+      setOrders((prev: Order[]) => prev.map(o => {
+        if (o.id !== orderId) return o;
+        const patch: Partial<Order> = { minimalStatus: newStatus as Order['minimalStatus'] };
+        // Stale primary/secondary actions for the previous status are no longer
+        // valid — wipe them so the user can't click an action that's already
+        // been taken. enrichOrderResponse will repopulate on refetch.
+        (patch as any).primaryAction = null;
+        (patch as any).secondaryAction = null;
+        if (newStatus === 'accepted' && extra?.buyerMerchantId) {
+          (patch as any).buyerMerchantId = extra.buyerMerchantId;
+        }
+        return { ...o, ...patch };
+      }));
+      // Fast path: refetch single order for authoritative state
       refetchSingleOrder(orderId);
       // Full list refetch to ensure enrichOrderResponse recomputes actions (primaryAction etc.)
       debouncedFetchOrders();

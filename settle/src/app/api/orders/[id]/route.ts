@@ -23,9 +23,24 @@ import {
 import { normalizeStatus as normalizeToMinimal } from "@/lib/orders/statusNormalizer";
 import { enrichOrderResponse } from "@/lib/orders/enrichOrderResponse";
 import { auditLog } from "@/lib/auditLog";
+import { query as dbQuery } from "@/lib/db";
 
 // Prevent Next.js from caching this route
 export const dynamic = "force-dynamic";
+
+// Persist timings to error_logs so we can read breakdown via SQL.
+function recordTiming(type: string, orderId: string, totalMs: number, marks: Array<{ label: string; at: number }>): void {
+  dbQuery(
+    `INSERT INTO error_logs (type, message, severity, order_id, source, metadata)
+     VALUES ($1, $2, 'INFO', $3, 'backend', $4::jsonb)`,
+    [
+      `timing.${type}`,
+      `Timing ${type}: ${totalMs}ms`,
+      orderId,
+      JSON.stringify({ total_ms: totalMs, marks }),
+    ]
+  ).catch(() => {});
+}
 
 // Validate order ID parameter
 async function validateOrderId(
@@ -74,8 +89,11 @@ export async function GET(
     // is already populated by getAuthContext from the same actorId. The
     // x-merchant-id header read here was redundant and a spoofing surface.
 
-    // Check authorization
-    const canAccess = await canAccessOrder(auth, id);
+    // Check authorization. Pass the already-fetched `order` so canAccessOrder
+    // doesn't issue a duplicate getOrderById — under pool starvation the
+    // duplicate query was timing out, throwing inside canAccessOrder's
+    // try/catch, and returning false → spurious 403 for legitimate participants.
+    const canAccess = await canAccessOrder(auth, id, order);
     if (!canAccess) {
       logger.auth.forbidden(
         `GET /api/orders/${id}`,
@@ -109,6 +127,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const __t0 = Date.now();
+  const __marks: Array<{ label: string; at: number }> = [];
+  const __mark = (label: string) => __marks.push({ label, at: Date.now() - __t0 });
   try {
     const { id } = await params;
 
@@ -119,12 +140,12 @@ export async function PATCH(
     }
 
     const body = await request.json();
+    __mark('parse');
 
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (auth instanceof NextResponse) return auth;
-
-    // Validate request body
+    // Validate request body FIRST so we know which auth strength to require.
+    // (Previously: requireAuth, then requireTokenAuth — duplicating session +
+    // blacklist DB lookups, the same queries appearing as 7-22 second outliers
+    // under load.)
     const parseResult = updateOrderStatusSchema.safeParse(body);
     if (!parseResult.success) {
       const errors = parseResult.error.errors.map(
@@ -142,12 +163,15 @@ export async function PATCH(
       refund_tx_hash,
     } = parseResult.data;
 
-    // Phase 3: Require token auth for sensitive financial transitions
+    // Single auth call: pick the strength based on status (matches the
+    // action route's pattern). Eliminates 2 redundant session/blacklist checks.
     const sensitiveStatuses = ["payment_sent", "completed", "cancelled"];
-    if (sensitiveStatuses.includes(status)) {
-      const tokenAuth = await requireTokenAuth(request);
-      if (tokenAuth instanceof NextResponse) return tokenAuth;
-    }
+    const isSensitive = sensitiveStatuses.includes(status);
+    const auth = isSensitive
+      ? await requireTokenAuth(request)
+      : await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    __mark('auth');
 
     // Security: enforce actor matches authenticated identity.
     // Identity comes ONLY from the JWT — the x-merchant-id header swap
@@ -160,18 +184,27 @@ export async function PATCH(
     }
     // No header-based actor swap — the JWT IS the merchant identity.
 
-    // Verify access to this order (now with correct actor identity resolved above)
-    // For claim transitions: skip canAccessOrder (merchant isn't assigned yet),
-    // but verify the order is actually unclaimed to prevent hijacking.
+    // ── (formerly) Acquire row-level lock for claim/financial actions ──
+    // The previous SELECT FOR UPDATE outside a transaction was a NO-OP:
+    // pg's autocommit released the lock immediately after the single statement.
+    // Core-api's stored procs already do FOR UPDATE atomically with the mutation,
+    // so removing this useless round-trip costs nothing.
+
+    // ── Fetch order once for all validation + access checks below ──
+    // Reordered: prefetch happens BEFORE access check so canAccessOrder
+    // can reuse the same row (saves a duplicate SELECT). Also lets the
+    // claim-transition path use the same row instead of issuing its own
+    // small SELECT.
     const isClaimTransition = ["accepted", "payment_pending"].includes(body.status);
+    const isActualClaim = isClaimTransition;
+    const prefetchedOrder = await getOrderWithRelations(id);
+    __mark('prefetch_order');
+
+    // Verify access to this order. For claim transitions, validate the order
+    // is claimable instead of running the participant check (acceptor isn't
+    // assigned yet).
     if (isClaimTransition) {
-      // Validate the order is claimable — don't skip auth entirely
-      const { query: checkQuery } = await import("@/lib/db");
-      const [targetOrder] = await checkQuery<{ merchant_id: string | null; buyer_merchant_id: string | null; status: string; type: string }>(
-        `SELECT merchant_id, buyer_merchant_id, status, type FROM orders WHERE id = $1`,
-        [id]
-      );
-      if (!targetOrder) return notFoundResponse("Order");
+      if (!prefetchedOrder) return notFoundResponse("Order");
       // Anti-hijack: only block when there's no claimable slot left for the actor.
       //
       // Shapes:
@@ -180,19 +213,15 @@ export async function PATCH(
       //   Fully claimed M2M:  both set with different merchants → no slot for a third party
       //   U2M / pre-assigned: merchant_id set, bmerch=null (handled by updateOrderStatus
       //                       which reassigns merchant_id on isMerchantClaiming=true)
-      //
-      // Block only when BOTH slots are taken by other merchants. A filled buyer
-      // slot by itself must not block a seller-slot claim (the M2M BUY broadcast
-      // case — otherwise no seller can ever claim it).
       const buyerFilledByOther =
-        !!targetOrder.buyer_merchant_id && targetOrder.buyer_merchant_id !== auth.actorId;
+        !!prefetchedOrder.buyer_merchant_id && prefetchedOrder.buyer_merchant_id !== auth.actorId;
       const sellerFilledByOther =
-        !!targetOrder.merchant_id && targetOrder.merchant_id !== auth.actorId;
+        !!prefetchedOrder.merchant_id && prefetchedOrder.merchant_id !== auth.actorId;
       if (buyerFilledByOther && sellerFilledByOther) {
         return forbiddenResponse("Order already assigned to another merchant");
       }
     } else {
-      const canAccess = await canAccessOrder(auth, id);
+      const canAccess = await canAccessOrder(auth, id, prefetchedOrder);
       if (!canAccess) {
         logger.auth.forbidden(
           `PATCH /api/orders/${id}`,
@@ -202,26 +231,7 @@ export async function PATCH(
         return forbiddenResponse("You do not have access to this order");
       }
     }
-
-    // ── Acquire row-level lock for claim/financial actions to prevent race conditions ──
-    const isActualClaim = ["accepted", "payment_pending"].includes(body.status);
-    const needsLock = isActualClaim || ["payment_sent", "completed", "cancelled"].includes(status);
-    if (needsLock) {
-      const { query: lockQuery } = await import("@/lib/db");
-      const lockResult = await lockQuery(
-        `SELECT id FROM orders WHERE id = $1 FOR UPDATE`,
-        [id]
-      );
-      if (!lockResult || lockResult.length === 0) {
-        return notFoundResponse("Order");
-      }
-    }
-
-    // ── Fetch order once for all validation checks below ──
-    // This single query replaces 4 separate getOrderWithRelations(id) calls
-    // that previously hit the same 7-table JOIN for self-accept, role validation,
-    // previousStatus, and escrow checks.
-    let prefetchedOrder = await getOrderWithRelations(id);
+    __mark('access_check');
 
     // Self-accept guard: prevent same wallet from creating and accepting an order.
     // Only applies to actual claiming actions (accepted/payment_pending),
@@ -305,7 +315,6 @@ export async function PATCH(
         // to satisfy the DB constraint chk_escrow_required_for_payment_statuses.
         // Seller determination depends on order type and M2M status.
         if (orderForCheck.status === "escrowed" && orderForCheck.merchant_id) {
-          const { query: dbQuery } = await import("@/lib/db");
           await dbQuery(
             `UPDATE orders
              SET escrow_debited_entity_id = COALESCE(escrow_debited_entity_id,
@@ -350,8 +359,7 @@ export async function PATCH(
 
     // If refund_tx_hash provided, save it to DB regardless of mode
     if (refund_tx_hash) {
-      const { query } = await import("@/lib/db");
-      await query(
+      await dbQuery(
         `UPDATE orders SET refund_tx_hash = $1 WHERE id = $2 AND status NOT IN ('completed', 'cancelled', 'expired')`,
         [refund_tx_hash, id],
       );
@@ -412,6 +420,10 @@ export async function PATCH(
           key: idempotencyKey,
         });
       }
+      __mark('proxy_core_api');
+      const __finTotal = Date.now() - __t0;
+      logger.info(`[Timing] PATCH.${status}`, { orderId: id, total_ms: __finTotal, marks: __marks });
+      recordTiming(`PATCH.${status}`, id, __finTotal, __marks);
       return NextResponse.json(idempotencyResult.data, {
         status: idempotencyResult.statusCode,
       });
@@ -422,6 +434,7 @@ export async function PATCH(
       method: "PATCH",
       body: { status, actor_type, actor_id, reason, acceptor_wallet_address },
     });
+    __mark('proxy_core_api');
 
     if (response.status < 400) {
       const action = status === 'cancelled' ? 'order.cancelled' as const : 'order.status_changed' as const;
@@ -431,6 +444,10 @@ export async function PATCH(
         reason,
       });
     }
+
+    const __nfTotal = Date.now() - __t0;
+    logger.info(`[Timing] PATCH.${status}`, { orderId: id, total_ms: __nfTotal, marks: __marks });
+    recordTiming(`PATCH.${status}`, id, __nfTotal, __marks);
 
     // Pusher notifications are now triggered by Core API directly
     return response;

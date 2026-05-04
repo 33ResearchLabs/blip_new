@@ -188,7 +188,7 @@ export function BackendOrderList({
                       </span>
                       <span className="text-xs text-zinc-500">for</span>
                       <span className="text-sm font-semibold text-green-400">
-                        {formatAmount(order.fiat_amount)} AED
+                        {formatAmount(order.fiat_amount)} {order.fiat_currency || ''}
                       </span>
                     </div>
 

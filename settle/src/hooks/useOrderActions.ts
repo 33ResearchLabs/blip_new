@@ -613,10 +613,17 @@ export function useOrderActions({
       return;
     }
 
-    // Safety: show confirmation dialog before proceeding
+    // Safety: show confirmation dialog before proceeding.
+    // Use the order's actual fiat currency (toCurrency) — the previous hardcoded
+    // 'AED' was wrong for INR/USD/etc. corridors.
+    const { formatFiat } = await import('@/lib/format');
+    const fiatCcy = order.toCurrency || order.dbOrder?.fiat_currency || '';
+    const fiatAmountFormatted = order.total
+      ? formatFiat(order.total, fiatCcy)
+      : `${order.amount} USDT worth`;
     showConfirm(
       'Confirm Payment Received',
-      `I confirm I have received the fiat payment of ${order.total ? `AED ${Math.round(order.total).toLocaleString()}` : `${order.amount} USDT worth`}. This will release escrow to the buyer and cannot be reversed.`,
+      `I confirm I have received the fiat payment of ${fiatAmountFormatted}. This will release escrow to the buyer and cannot be reversed.`,
       async () => {
         setConfirmingOrderId(orderId);
         try {
@@ -699,31 +706,65 @@ export function useOrderActions({
                   errMsg.includes('Released');
 
                 if (looksLikeAlreadyDone) {
-                  console.log('[Merchant] Escrow account missing — attempting DB sync in case it was already released on-chain');
+                  console.log('[Merchant] Escrow account missing — checking on-chain history for an actual ReleaseEscrow tx');
+                  // Look up the real release tx hash from on-chain. If a
+                  // ReleaseEscrow already ran successfully (race with a prior
+                  // click, reconciliation worker, etc.), we'll find its
+                  // signature and pass THAT to the backend sync — which is
+                  // truthful + auditable, unlike the previous 'already-released'
+                  // sentinel string. If nothing is found we treat it as the
+                  // buyer-never-joined case (escrow never funded).
+                  let onChainReleaseTxHash: string | null = null;
                   try {
-                    const syncRes = await fetchWithAuth(`/api/orders/${orderId}/escrow`, {
-                      method: 'PATCH',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Idempotency-Key': generateIdempotencyKey(),
-                      },
-                      body: JSON.stringify({
-                        tx_hash: order.escrowTxHash || 'already-released',
-                        actor_type: 'merchant',
-                        actor_id: merchantId,
-                      }),
-                    });
-                    if (syncRes.ok) {
-                      console.log('[Merchant] Backend confirmed release — marking order complete');
-                      playSound('trade_complete');
-                      addNotification('complete', `Order completed - ${order.amount} USDT released to buyer`, orderId);
-                      await afterMutationReconcile(orderId, { status: 'completed' as const });
-                      syncBalance();
-                      return;
+                    const { findOnChainTradeOutcome } = await import('@/lib/solana/v2/findOnChainRelease');
+                    const { findTradePda } = await import('@/lib/solana/v2/pdas');
+                    const { PublicKey } = await import('@solana/web3.js');
+                    if (order.escrowCreatorWallet && order.escrowTradeId) {
+                      const [tradePda] = findTradePda(
+                        new PublicKey(order.escrowCreatorWallet),
+                        order.escrowTradeId,
+                      );
+                      const outcome = await findOnChainTradeOutcome(
+                        solanaWallet.connection,
+                        tradePda,
+                      );
+                      if (outcome.kind === 'released') {
+                        onChainReleaseTxHash = outcome.signature;
+                        console.log('[Merchant] Found on-chain ReleaseEscrow tx:', outcome.signature);
+                      } else {
+                        console.log('[Merchant] No on-chain release found, outcome:', outcome.kind);
+                      }
                     }
-                    console.warn('[Merchant] Backend sync rejected — escrow likely never funded');
-                  } catch (syncErr) {
-                    console.warn('[Merchant] Backend sync failed:', syncErr);
+                  } catch (lookupErr) {
+                    console.warn('[Merchant] On-chain release lookup failed (non-fatal):', lookupErr);
+                  }
+
+                  if (onChainReleaseTxHash) {
+                    try {
+                      const syncRes = await fetchWithAuth(`/api/orders/${orderId}/escrow`, {
+                        method: 'PATCH',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Idempotency-Key': generateIdempotencyKey(),
+                        },
+                        body: JSON.stringify({
+                          tx_hash: onChainReleaseTxHash,
+                          actor_type: 'merchant',
+                          actor_id: merchantId,
+                        }),
+                      });
+                      if (syncRes.ok) {
+                        console.log('[Merchant] Backend confirmed release — marking order complete');
+                        playSound('trade_complete');
+                        addNotification('complete', `Order completed - ${order.amount} USDT released to buyer`, orderId);
+                        await afterMutationReconcile(orderId, { status: 'completed' as const });
+                        syncBalance();
+                        return;
+                      }
+                      console.warn('[Merchant] Backend sync rejected even with verified on-chain tx');
+                    } catch (syncErr) {
+                      console.warn('[Merchant] Backend sync failed:', syncErr);
+                    }
                   }
                 }
 

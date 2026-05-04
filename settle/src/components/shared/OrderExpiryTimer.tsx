@@ -13,8 +13,8 @@
  * Turns red under 5 minutes. Shows clock icon when urgent.
  */
 
-import { useState, useEffect } from 'react';
 import { Clock } from 'lucide-react';
+import { useGlobalNow } from '@/hooks/useGlobalNow';
 
 interface OrderExpiryTimerProps {
   expiresAt: Date | string;
@@ -48,12 +48,8 @@ export function OrderExpiryTimer({
   viewerRole,
   compact = false,
 }: OrderExpiryTimerProps) {
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // One shared 1-sec tick across all <OrderExpiryTimer/> instances on screen.
+  const now = useGlobalNow();
 
   const expiresMs = typeof expiresAt === 'string' ? new Date(expiresAt).getTime() : expiresAt.getTime();
   const diffSec = Math.max(0, Math.floor((expiresMs - now) / 1000));

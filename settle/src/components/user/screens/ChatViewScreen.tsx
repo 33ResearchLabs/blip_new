@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChatStatus } from "@/hooks/useChatStatus";
 import { ImagePreviewModal } from "@/components/chat/ImagePreviewModal";
 import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
@@ -189,37 +189,44 @@ export const ChatViewScreen = ({
   const [receiptStatuses, setReceiptStatuses] = useState<Record<string, string>>({});
   const pusher = usePusherOptional();
 
-  // Extract order numbers from receipt messages for status lookups + Pusher subscriptions
+  // Extract order numbers from receipt messages for status lookups + Pusher subscriptions.
+  // Only the SET of receipt order_numbers triggers a refetch — adding a regular
+  // text message no longer kicks off a fresh status query (that fired on every
+  // new message before, even when no new receipt appeared). Pusher events
+  // (chat:receipt-updated, order:status-updated) keep statuses live in between.
   const receiptOrderIds = useRef<string[]>([]);
-  useEffect(() => {
-    if (!activeChat?.messages) return;
-    const orderNumbers: string[] = [];
-    const orderIds: string[] = [];
+  const receiptOrderNumbersKey = useMemo(() => {
+    if (!activeChat?.messages) return '';
+    const nums = new Set<string>();
+    const ids = new Set<string>();
     for (const msg of activeChat.messages) {
       if (msg.messageType === 'receipt' && msg.receiptData) {
         const num = msg.receiptData.order_number as string | undefined;
-        if (num) orderNumbers.push(num);
-        if (activeChat.orderId) orderIds.push(activeChat.orderId);
+        if (num) nums.add(num);
+        if (activeChat.orderId) ids.add(activeChat.orderId);
         continue;
       }
       try {
         if (msg.text.startsWith('{')) {
           const parsed = JSON.parse(msg.text);
           if (parsed.type === 'order_receipt' && parsed.data?.order_number) {
-            orderNumbers.push(parsed.data.order_number);
-            if (activeChat.orderId) orderIds.push(activeChat.orderId);
+            nums.add(parsed.data.order_number);
+            if (activeChat.orderId) ids.add(activeChat.orderId);
           }
         }
       } catch { /* not JSON */ }
     }
-    receiptOrderIds.current = [...new Set(orderIds)];
-    if (orderNumbers.length === 0) return;
-    const unique = [...new Set(orderNumbers)];
-    fetchWithAuth(`/api/orders/status?order_numbers=${encodeURIComponent(unique.join(','))}`)
+    receiptOrderIds.current = [...ids];
+    return [...nums].sort().join(',');
+  }, [activeChat?.messages, activeChat?.orderId]);
+
+  useEffect(() => {
+    if (!receiptOrderNumbersKey) return;
+    fetchWithAuth(`/api/orders/status?order_numbers=${encodeURIComponent(receiptOrderNumbersKey)}`)
       .then(res => res.json())
       .then(data => { if (data.success && data.data) setReceiptStatuses(data.data); })
       .catch(() => {});
-  }, [activeChat?.messages?.length]);
+  }, [receiptOrderNumbersKey]);
 
   useEffect(() => {
     if (!pusher || receiptOrderIds.current.length === 0) return;
@@ -264,7 +271,9 @@ export const ChatViewScreen = ({
         pusher.unsubscribe(getOrderChannel(orderId));
       }
     };
-  }, [pusher, activeChat?.messages?.length]);
+    // Re-subscribe only when the SET of receipt orders changes — not on every
+    // new chat message (that previously caused unbind+subscribe churn per msg).
+  }, [pusher, receiptOrderNumbersKey]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawFile = e.target.files?.[0];

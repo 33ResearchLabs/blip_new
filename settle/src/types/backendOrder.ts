@@ -92,6 +92,8 @@ export interface BackendOrder {
   type: 'buy' | 'sell';
   crypto_amount: number;
   fiat_amount: number;
+  fiat_currency?: string;
+  crypto_currency?: string;
   rate: number;
   payment_method: 'bank' | 'cash';
   created_at: string;

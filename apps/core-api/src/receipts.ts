@@ -95,14 +95,16 @@ async function resolveParties(order: OrderForReceipt, actorId: string): Promise<
     const creatorMerchantId = (order.buyer_merchant_id && order.buyer_merchant_id !== actorId)
       ? order.buyer_merchant_id
       : order.merchant_id;
-    const creatorMerchant = await queryOne<{ business_name: string; wallet_address: string | null }>(
-      'SELECT business_name, wallet_address FROM merchants WHERE id = $1',
-      [creatorMerchantId]
-    );
-    const acceptorMerchant = await queryOne<{ business_name: string; wallet_address: string | null }>(
-      'SELECT business_name, wallet_address FROM merchants WHERE id = $1',
-      [actorId]
-    );
+    const [creatorMerchant, acceptorMerchant] = await Promise.all([
+      queryOne<{ business_name: string; wallet_address: string | null }>(
+        'SELECT business_name, wallet_address FROM merchants WHERE id = $1',
+        [creatorMerchantId]
+      ),
+      queryOne<{ business_name: string; wallet_address: string | null }>(
+        'SELECT business_name, wallet_address FROM merchants WHERE id = $1',
+        [actorId]
+      ),
+    ]);
 
     return {
       creator_type: 'merchant',

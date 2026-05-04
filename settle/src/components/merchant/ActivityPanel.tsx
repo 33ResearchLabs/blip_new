@@ -270,7 +270,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                         <div className="flex items-center gap-1 text-[10px] font-mono text-foreground/30">
                           <span className="tabular-nums">{Math.round(order.amount).toLocaleString()} {order.fromCurrency}</span>
                           <ArrowRight className="w-2.5 h-2.5 text-foreground/15" />
-                          <span className="tabular-nums text-primary/60">{Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} AED</span>
+                          <span className="tabular-nums text-primary/60">{Math.round(order.total ?? (order.amount * (order.rate || 0))).toLocaleString()} {order.toCurrency || ''}</span>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-0.5 shrink-0">

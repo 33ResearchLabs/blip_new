@@ -41,6 +41,22 @@ import { guardOrderClaim, guardPaymentRetry } from '@/lib/guards';
 import { fireInstantNotification } from '@/lib/notifications/instantNotify';
 import { invalidateOrderCache, updateOrderCache, invalidateMerchantOrderListCache } from '@/lib/cache';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
+import { query as dbQuery } from '@/lib/db';
+
+// Persist timings into error_logs so we can compare before/after via SQL.
+// Fire-and-forget — never blocks the response.
+function recordTiming(type: string, orderId: string, totalMs: number, marks: Array<{ label: string; at: number }>): void {
+  dbQuery(
+    `INSERT INTO error_logs (type, message, severity, order_id, source, metadata)
+     VALUES ($1, $2, 'INFO', $3, 'backend', $4::jsonb)`,
+    [
+      `timing.${type}`,
+      `Timing ${type}: ${totalMs}ms`,
+      orderId,
+      JSON.stringify({ total_ms: totalMs, marks }),
+    ]
+  ).catch(() => {});
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -68,8 +84,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const __t0 = Date.now();
+  const __mark = (label: string) => ({ label, at: Date.now() - __t0 });
+  const __marks: Array<{ label: string; at: number }> = [];
   try {
     const { id } = await params;
+    __marks.push(__mark('params'));
 
     // 1. Validate order ID format
     const idValidation = uuidSchema.safeParse(id);
@@ -106,6 +126,7 @@ export async function POST(
       ? await requireTokenAuth(request)
       : await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    __marks.push(__mark('auth'));
 
     // 3b. Idempotency-Key header is MANDATORY for any state-changing action
     // that touches money (SEND_PAYMENT, CONFIRM_PAYMENT, CANCEL, LOCK_ESCROW).
@@ -132,6 +153,7 @@ export async function POST(
     if (!order) {
       return notFoundResponse('Order');
     }
+    __marks.push(__mark('order_fetch'));
 
     // 6. Access check (skip for ACCEPT/SEND_FIAT — observer is joining/claiming)
     const isClaimingOrder = ['ACCEPT', 'SEND_FIAT', 'CLAIM'].includes(action);
@@ -292,6 +314,7 @@ export async function POST(
           escrow_creator_wallet: escrow_creator_wallet ?? undefined,
         }
       );
+      __marks.push(__mark('mock_escrow_lock'));
 
       if (!escrowResult.success) {
         return NextResponse.json(
@@ -319,6 +342,9 @@ export async function POST(
       const enrichedEscrow = escrowResult.order
         ? enrichOrderResponse(escrowResult.order, actor_id)
         : undefined;
+      const __lockTotal = Date.now() - __t0;
+      logger.info('[Timing] action.LOCK_ESCROW', { orderId: id, total_ms: __lockTotal, marks: __marks });
+      recordTiming('action.LOCK_ESCROW', id, __lockTotal, __marks);
       return successResponse({
         order: escrowResult.order,
         action,
@@ -550,7 +576,6 @@ export async function POST(
     // escrow_debited_entity_id for payment_sent/completed. On-chain escrow
     // may not have set this field. Backfill using seller-determination logic.
     if (action === 'SEND_PAYMENT' && !order.escrow_debited_entity_id && order.merchant_id) {
-      const { query: dbQuery } = await import('@/lib/db');
       await dbQuery(
         `UPDATE orders
          SET escrow_debited_entity_id = COALESCE(escrow_debited_entity_id,
@@ -580,7 +605,6 @@ export async function POST(
       let buyerWallet = acceptor_wallet_address;
       if (!buyerWallet) {
         // Look up from merchants table
-        const { query: dbQuery } = await import('@/lib/db');
         const walletResult = await dbQuery<{ wallet_address: string }>(
           'SELECT wallet_address FROM merchants WHERE id = $1',
           [actor_id]
@@ -588,7 +612,6 @@ export async function POST(
         buyerWallet = walletResult?.[0]?.wallet_address || null;
       }
       if (buyerWallet && buyerWallet !== order.acceptor_wallet_address) {
-        const { query: dbQuery } = await import('@/lib/db');
         await dbQuery(
           'UPDATE orders SET acceptor_wallet_address = $1 WHERE id = $2',
           [buyerWallet, id]
@@ -676,6 +699,9 @@ export async function POST(
         }
       }
 
+      const __spTotal = Date.now() - __t0;
+      logger.info('[Timing] action.SEND_PAYMENT', { orderId: id, total_ms: __spTotal, marks: __marks });
+      recordTiming('action.SEND_PAYMENT', id, __spTotal, __marks);
       return NextResponse.json(
         {
           ...(enrichedSendPayment ?? {}),
@@ -689,6 +715,7 @@ export async function POST(
 
     // Non-financial: execute directly (ACCEPT, DISPUTE)
     const transitionResult = await executeTransition();
+    __marks.push(__mark('proxy_core_api'));
 
     // Instant notification for non-financial transitions
     let enrichedTransition: Record<string, unknown> | undefined;
@@ -730,6 +757,10 @@ export async function POST(
     if (order.buyer_merchant_id && order.buyer_merchant_id !== order.merchant_id) {
       invalidateMerchantOrderListCache(order.buyer_merchant_id);
     }
+
+    const __actTotal = Date.now() - __t0;
+    logger.info(`[Timing] action.${action}`, { orderId: id, total_ms: __actTotal, marks: __marks });
+    recordTiming(`action.${action}`, id, __actTotal, __marks);
 
     return NextResponse.json(
       {

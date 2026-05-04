@@ -297,6 +297,20 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
     return null;
   }
 
+  // Defence-in-depth: even outside production, require an explicit
+  // ALLOW_HEADER_AUTH=1 to enable header-based identity. Prevents an
+  // accidental NODE_ENV=development on Railway from re-enabling full
+  // impersonation. Default unset → fall through to "no auth".
+  if (process.env.ALLOW_HEADER_AUTH !== '1') {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn(
+        '[AUTH] Header-based auth requested but ALLOW_HEADER_AUTH!=1 — rejecting',
+        { route: request.nextUrl.pathname },
+      );
+    }
+    return null;
+  }
+
   // ── Development-only: header fallback for testing ──
   // Only allow header fallback if the actor has at least one active session.
   // This ensures "revoke all sessions" works even in dev mode.

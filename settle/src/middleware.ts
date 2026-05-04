@@ -419,6 +419,21 @@ export function middleware(request: NextRequest) {
       (pathname === '/api/orders' || pathname === '/api/merchant/orders')
     ) {
       rateLimitResult = checkRate(ip, 'order-mutation', 30, 60);
+    } else if (
+      // Order-lifecycle mutations: escrow lock/release, action endpoint,
+      // status PATCH, events POST, dispute, cancel-request, extension.
+      // These are user-initiated button clicks ("Confirm Payment", "Lock
+      // Escrow", "Send Payment", "Cancel"). They MUST NOT share the standard
+      // 100/min bucket with polling GETs — under realtime-fanout pressure
+      // the bucket fills before the user's click lands and 429 silently
+      // strands the order between on-chain and DB state (real incident,
+      // BM-260504-950E). 60/min is generous for human clicks while still
+      // capping abuse, and core-api's idempotency log prevents double-spend
+      // if a user spam-clicks during the window.
+      (method === 'PATCH' || method === 'POST' || method === 'DELETE') &&
+      /^\/api\/orders\/[0-9a-fA-F-]{36}(\/(escrow|action|events|dispute|cancel-request|extension|claim-refund))?$/.test(pathname)
+    ) {
+      rateLimitResult = checkRate(ip, 'order-mutation-critical', 60, 60);
     } else if (pathname.startsWith('/api/admin/')) {
       // Admin routes are HMAC-authenticated (requireAdminAuth) and used by
       // real human operators hitting dashboards that poll every ~10s. The

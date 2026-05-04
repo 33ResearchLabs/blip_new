@@ -224,7 +224,12 @@ export function useUserOrderActions({
         }
       }
 
-      // Final step: Update order via API
+      // Update order via API. The Pusher inline fix in useRealtimeOrder /
+      // useUserEffects already hides the button the moment the server's
+      // status-updated push arrives — so during the in-flight window the
+      // user sees the "Processing..." loader on the button, then the button
+      // and the success toast swap in together when Pusher lands. No race,
+      // no stale button, and the user gets clear visual feedback.
       const res = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
         method: "PATCH",
         headers: {
@@ -248,7 +253,10 @@ export function useUserOrderActions({
         return;
       }
 
-      // Success! Update UI immediately.
+      // Defense-in-depth: if Pusher hasn't already moved us to payment_sent
+      // (e.g. push delivery failed, page just loaded with a stale connection),
+      // mirror the server response into local state so the button still hides.
+      // When Pusher already landed first, this is a harmless no-op merge.
       optimisticOrderUpdate(activeOrder.id, {
         status: "waiting" as OrderStatus,
         step: 3 as OrderStep,
@@ -495,6 +503,10 @@ export function useUserOrderActions({
         }
       }
 
+      // Update order via API. Loader stays on the button via isLoading until
+      // Pusher (handled inline by useRealtimeOrder + useUserEffects) flips
+      // the status to "completed", which both renders the success toast and
+      // hides the action button in the same render cycle.
       const res = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
         method: "PATCH",
         headers: {
@@ -511,6 +523,8 @@ export function useUserOrderActions({
 
       if (!res.ok || !data.success) {
         const errorMsg = data.error || "Failed to confirm payment";
+        // "already completed" is a benign race — server already advanced state.
+        // Mirror it locally and quietly continue.
         if (errorMsg.includes("already") && errorMsg.includes("completed")) {
           setOrders((prev) =>
             prev.map((o) =>
@@ -533,6 +547,8 @@ export function useUserOrderActions({
         return;
       }
 
+      // Defense-in-depth fallback for the case Pusher didn't deliver — mirror
+      // the success into local state. No-op merge when Pusher already landed.
       setOrders((prev) =>
         prev.map((o) =>
           o.id === activeOrder.id

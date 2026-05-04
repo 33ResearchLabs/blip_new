@@ -27,6 +27,7 @@ import {
   Lock,
   Smartphone,
   CreditCard,
+  Loader2,
 } from "lucide-react";
 import {
   getAuthoritativeStatus,
@@ -180,6 +181,11 @@ interface OrderDetailsPanelProps {
   onReleaseEscrow?: (orderId: string) => void;
   merchantId?: string;
   isRequestingCancel?: boolean;
+  /** Name of the handler currently in-flight, used to render a spinner on the
+   * primary button. Matches `ui.primaryAction.handler` strings, e.g.
+   * 'markFiatPaymentSent', 'confirmPayment', 'signAndProceed', 'lockEscrow',
+   * 'cancelOrderWithoutEscrow'. Pass `null`/undefined when nothing is pending. */
+  pendingAction?: string | null;
 }
 
 // Status configuration — uses minimal 8-state system
@@ -332,6 +338,7 @@ export function OrderDetailsPanel({
   onReleaseEscrow,
   merchantId,
   isRequestingCancel,
+  pendingAction,
 }: OrderDetailsPanelProps) {
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1784,20 +1791,48 @@ export function OrderDetailsPanel({
                 gold: "bg-primary/20 text-primary hover:bg-primary/30 border-primary/30",
               };
 
+              // Per-handler loading state. The parent passes `pendingAction`
+              // = the handler-name string (e.g. "markFiatPaymentSent") whenever
+              // a mutation is in-flight. We disable the button + swap the icon
+              // to a spinner so the merchant gets immediate visual feedback —
+              // previously the click registered silently and the user often
+              // double-clicked, hitting rate limits.
+              //
+              // Accept-family handlers are aliased: if any accept variant is
+              // in flight, all accept variant buttons should show the loader.
+              const ACCEPT_HANDLERS = new Set([
+                'acceptOrder', 'signToClaimOrder', 'signAndProceed',
+              ]);
+              const CANCEL_HANDLERS = new Set([
+                'cancelOrderWithoutEscrow', 'openCancelModal',
+              ]);
+              const isHandlerMatch = (a: string | null | undefined, b: string | undefined) => {
+                if (!a || !b) return false;
+                if (a === b) return true;
+                if (ACCEPT_HANDLERS.has(a) && ACCEPT_HANDLERS.has(b)) return true;
+                if (CANCEL_HANDLERS.has(a) && CANCEL_HANDLERS.has(b)) return true;
+                return false;
+              };
+              const isPrimaryLoading =
+                !!ui.primaryAction && isHandlerMatch(pendingAction, ui.primaryAction.handler);
               return (
                 <div className="space-y-2">
                   {ui.primaryAction && (
                     <button
                       data-testid="order-primary-action"
                       onClick={() => handleAction(ui.primaryAction!.handler)}
-                      disabled={ui.primaryAction.disabled}
+                      disabled={ui.primaryAction.disabled || isPrimaryLoading}
                       className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2
                                transition-colors border ${variantClasses[ui.primaryAction.variant]}
-                               ${ui.primaryAction.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                               ${ui.primaryAction.disabled || isPrimaryLoading ? "opacity-50 cursor-not-allowed" : ""}`}
                       title={ui.primaryAction.disabledReason}
                     >
-                      <Zap className="w-5 h-5" />
-                      {ui.primaryAction.label}
+                      {isPrimaryLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Zap className="w-5 h-5" />
+                      )}
+                      {isPrimaryLoading ? "Processing…" : ui.primaryAction.label}
                     </button>
                   )}
                   {ui.nextStepText && (

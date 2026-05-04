@@ -1,0 +1,49 @@
+# gitleaks config — extends the upstream default ruleset with project-specific guards.
+# Run locally: gitleaks detect --config .github/gitleaks.toml --no-git --redact
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "tracked-env-file"
+description = "Any .env file tracked in the repo (path-based block)"
+path = '''(^|/)\.env(\.local|\.production|\.development)?$'''
+
+[[rules]]
+id = "blip-core-api-secret"
+description = "CORE_API_SECRET literal"
+regex = '''(?i)CORE_API_SECRET\s*=\s*[A-Fa-f0-9]{32,}'''
+tags = ["secret", "blip"]
+
+[[rules]]
+id = "blip-pusher-secret"
+description = "Pusher app secret in env"
+regex = '''(?i)PUSHER_SECRET\s*=\s*[A-Za-z0-9]{16,}'''
+tags = ["secret", "blip"]
+
+[[rules]]
+id = "redis-url-with-password"
+description = "Redis URL containing inline password"
+regex = '''redis://[^:\s]+:[^@\s]+@'''
+tags = ["secret", "blip"]
+
+[[rules]]
+id = "solana-base58-keypair"
+description = "Possible Solana keypair (long base58 in env-shaped line)"
+regex = '''(?i)(KEYPAIR|PRIVATE_KEY|SECRET_KEY|SIGNER)\s*=\s*[1-9A-HJ-NP-Za-km-z]{64,}'''
+tags = ["secret", "blip", "solana"]
+
+[allowlist]
+description = "Files / paths allowed to contain example placeholders"
+paths = [
+  '''(^|/)\.env\.local\.example$''',
+  '''(^|/)\.env\.example$''',
+  '''(^|/)README\.md$''',
+]
+regexes = [
+  # Allow obvious placeholder values
+  '''=\s*<.*>\s*$''',
+  '''=\s*your[-_].+$''',
+  '''=\s*example[-_].+$''',
+  '''=\s*changeme.*$''',
+]

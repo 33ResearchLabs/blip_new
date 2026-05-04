@@ -25,6 +25,22 @@ import {
 
 // Fire-and-forget helper — logs errors but never blocks
 const bgQuery = (sql: string, params: unknown[]) => dbQuery(sql, params).catch(() => {});
+
+// Persist timing breakdowns into error_logs so we can compare before/after.
+// Fire-and-forget — never blocks the response. Writes once per top-level action.
+function recordTiming(type: string, orderId: string, breakdown: Record<string, number>): void {
+  const totalMs = breakdown.total_ms ?? Object.values(breakdown).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
+  bgQuery(
+    `INSERT INTO error_logs (type, message, severity, order_id, source, metadata)
+     VALUES ($1, $2, 'INFO', $3, 'backend', $4::jsonb)`,
+    [
+      `timing.${type}`,
+      `Timing ${type}: ${totalMs}ms`,
+      orderId,
+      JSON.stringify(breakdown),
+    ]
+  );
+}
 import { ORDER_EVENT, type OrderEventPayload } from '../events';
 import { insertOutboxEvent, insertOutboxEventDirect } from '../outbox';
 import { withIdempotency, getIdempotencyKey } from '../idempotency';
@@ -275,6 +291,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Fast path: accept via stored procedure (4 round-trips → 1)
       if (newStatus === 'accepted' || (newStatus === 'payment_pending' && request.body.metadata?.is_m2m)) {
+        const __acceptT0 = Date.now();
         // Belt-and-suspenders: block self-acceptance before stored proc
         if (actor_type === 'merchant') {
           const preCheck = await queryOne<{ merchant_id: string; user_id: string }>(
@@ -289,6 +306,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             }
           }
         }
+        const __acceptT1 = Date.now();
         const procResult = await queryOne<{ accept_order_v1: any }>(
           'SELECT accept_order_v1($1,$2,$3,$4)',
           [id, actor_type, actor_id, request.body.acceptor_wallet_address || null]
@@ -299,28 +317,31 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         }
         const order = data.order as OrderRow;
         const oldStatus = data.old_status;
+        const __acceptT2 = Date.now();
 
         // Attach accepting merchant's default payment method to the order
-        // so the counterparty knows where to send fiat
+        // so the counterparty knows where to send fiat.
+        // Fire-and-forget — frontend doesn't need this in the response.
         if (actor_type === 'merchant' && actor_id && !order.merchant_payment_method_id) {
-          try {
-            const mpm = await queryOne<{ id: string }>(
-              `SELECT id FROM merchant_payment_methods
-               WHERE merchant_id = $1 AND is_active = true
-               ORDER BY is_default DESC, created_at DESC LIMIT 1`,
-              [actor_id]
-            );
-            if (mpm) {
-              await dbQuery(
-                `UPDATE orders SET merchant_payment_method_id = $1
-                 WHERE id = $2 AND status NOT IN ('completed', 'cancelled', 'expired')`,
-                [mpm.id, id]
+          (async () => {
+            try {
+              const mpm = await queryOne<{ id: string }>(
+                `SELECT id FROM merchant_payment_methods
+                 WHERE merchant_id = $1 AND is_active = true
+                 ORDER BY is_default DESC, created_at DESC LIMIT 1`,
+                [actor_id]
               );
-              (order as any).merchant_payment_method_id = mpm.id;
+              if (mpm) {
+                await dbQuery(
+                  `UPDATE orders SET merchant_payment_method_id = $1
+                   WHERE id = $2 AND status NOT IN ('completed', 'cancelled', 'expired')`,
+                  [mpm.id, id]
+                );
+              }
+            } catch (e) {
+              logger.warn('[core-api] Failed to attach merchant payment method on accept', { orderId: id, error: e });
             }
-          } catch (e) {
-            logger.warn('[core-api] Failed to attach merchant payment method on accept', { orderId: id, error: e });
-          }
+          })();
         }
 
         await insertOutboxEventDirect({
@@ -334,46 +355,53 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           metadata: request.body.metadata,
         });
 
-        // Defense-in-depth: synchronously create the receipt here, in addition to
-        // the BullMQ enqueue triggered by the ACCEPTED listener. The queue path
-        // has dropped jobs silently (BED6, 04:57 cancel). createOrderReceipt's
-        // ON CONFLICT (order_id) DO NOTHING makes the duplicate harmless: whichever
-        // path lands first writes the row; the second path's INSERT is a no-op
-        // and skips the chat_messages/direct_messages INSERTs (per the early-return
-        // in receipts.ts after ON CONFLICT).
-        try {
-          await createOrderReceipt(
-            id,
-            {
-              id: order.id,
-              order_number: order.order_number,
-              type: order.type,
-              payment_method: order.payment_method,
-              crypto_amount: String(order.crypto_amount),
-              crypto_currency: order.crypto_currency,
-              fiat_amount: String(order.fiat_amount),
-              fiat_currency: order.fiat_currency,
-              rate: String(order.rate),
-              platform_fee: String(order.platform_fee ?? 0),
-              protocol_fee_amount: order.protocol_fee_amount ? String(order.protocol_fee_amount) : null,
-              status: order.status,
-              user_id: order.user_id,
-              merchant_id: order.merchant_id,
-              buyer_merchant_id: order.buyer_merchant_id ?? null,
-              acceptor_wallet_address: (order as any).acceptor_wallet_address ?? null,
-              buyer_wallet_address: (order as any).buyer_wallet_address ?? null,
-              escrow_tx_hash: (order as any).escrow_tx_hash ?? null,
-              payment_details: (order as any).payment_details ?? null,
-              accepted_at: order.accepted_at ? new Date(order.accepted_at) : new Date(),
-              escrowed_at: (order as any).escrowed_at ? new Date((order as any).escrowed_at) : null,
-            },
-            actor_id,
-          );
-        } catch (receiptErr) {
-          logger.warn('[core-api] Sync createOrderReceipt failed (queue path will retry)', {
+        // Defense-in-depth: create the receipt here, in addition to the BullMQ
+        // enqueue triggered by the ACCEPTED listener. The queue path has dropped
+        // jobs silently (BED6, 04:57 cancel). createOrderReceipt's ON CONFLICT
+        // (order_id) DO NOTHING makes the duplicate harmless. Fire-and-forget so
+        // the response returns ~150-400ms faster (UI consumes the receipt via
+        // chat:receipt-updated Pusher event, not by polling the response).
+        createOrderReceipt(
+          id,
+          {
+            id: order.id,
+            order_number: order.order_number,
+            type: order.type,
+            payment_method: order.payment_method,
+            crypto_amount: String(order.crypto_amount),
+            crypto_currency: order.crypto_currency,
+            fiat_amount: String(order.fiat_amount),
+            fiat_currency: order.fiat_currency,
+            rate: String(order.rate),
+            platform_fee: String(order.platform_fee ?? 0),
+            protocol_fee_amount: order.protocol_fee_amount ? String(order.protocol_fee_amount) : null,
+            status: order.status,
+            user_id: order.user_id,
+            merchant_id: order.merchant_id,
+            buyer_merchant_id: order.buyer_merchant_id ?? null,
+            acceptor_wallet_address: (order as any).acceptor_wallet_address ?? null,
+            buyer_wallet_address: (order as any).buyer_wallet_address ?? null,
+            escrow_tx_hash: (order as any).escrow_tx_hash ?? null,
+            payment_details: (order as any).payment_details ?? null,
+            accepted_at: order.accepted_at ? new Date(order.accepted_at) : new Date(),
+            escrowed_at: (order as any).escrowed_at ? new Date((order as any).escrowed_at) : null,
+          },
+          actor_id,
+        ).catch((receiptErr) => {
+          logger.warn('[core-api] Async createOrderReceipt failed (queue path will retry)', {
             orderId: id, error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
           });
-        }
+        });
+
+        const __acceptT3 = Date.now();
+        const __acceptBreakdown = {
+          total_ms: __acceptT3 - __acceptT0,
+          pre_check_ms: __acceptT1 - __acceptT0,
+          accept_proc_ms: __acceptT2 - __acceptT1,
+          outbox_ms: __acceptT3 - __acceptT2,
+        };
+        logger.info('[Timing] accept_fast_path', { orderId: id, ...__acceptBreakdown });
+        recordTiming('accept_fast_path', id, __acceptBreakdown);
 
         return reply.send({ success: true, data: { ...order, minimal_status: normalizeStatus(order.status as OrderStatus) } });
       }
@@ -735,47 +763,42 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ success: false, error: result.error });
       }
 
-      // Defense-in-depth: synchronously create the receipt for transitions that
-      // produce one (accept-into-escrowed claim, escrowed-claim, etc.). Mirror
-      // of the fast-accept-path safety net. Idempotent via ON CONFLICT.
-      // Only attempt on transitions where a receipt is expected — accepted/
-      // escrowed/payment_pending. Other transitions (payment_sent, completed,
-      // cancelled, expired, disputed) update an existing receipt via the listener.
+      // Defense-in-depth: create the receipt for transitions that produce one
+      // (accept-into-escrowed claim, escrowed-claim, etc.). Mirror of the
+      // fast-accept-path safety net. Idempotent via ON CONFLICT. Fire-and-forget.
       if (result.order && ['accepted', 'escrowed', 'payment_pending'].includes(String(result.order.status))) {
-        try {
-          const o = result.order;
-          await createOrderReceipt(
-            id,
-            {
-              id: o.id,
-              order_number: o.order_number,
-              type: o.type,
-              payment_method: o.payment_method,
-              crypto_amount: String(o.crypto_amount),
-              crypto_currency: o.crypto_currency,
-              fiat_amount: String(o.fiat_amount),
-              fiat_currency: o.fiat_currency,
-              rate: String(o.rate),
-              platform_fee: String(o.platform_fee ?? 0),
-              protocol_fee_amount: o.protocol_fee_amount ? String(o.protocol_fee_amount) : null,
-              status: o.status,
-              user_id: o.user_id,
-              merchant_id: o.merchant_id,
-              buyer_merchant_id: o.buyer_merchant_id ?? null,
-              acceptor_wallet_address: (o as any).acceptor_wallet_address ?? null,
-              buyer_wallet_address: (o as any).buyer_wallet_address ?? null,
-              escrow_tx_hash: (o as any).escrow_tx_hash ?? null,
-              payment_details: (o as any).payment_details ?? null,
-              accepted_at: o.accepted_at ? new Date(o.accepted_at) : null,
-              escrowed_at: (o as any).escrowed_at ? new Date((o as any).escrowed_at) : null,
-            },
-            actor_id,
-          );
-        } catch (receiptErr) {
-          logger.warn('[core-api] Sync createOrderReceipt (general TX) failed', {
+        const o = result.order;
+        createOrderReceipt(
+          id,
+          {
+            id: o.id,
+            order_number: o.order_number,
+            type: o.type,
+            payment_method: o.payment_method,
+            crypto_amount: String(o.crypto_amount),
+            crypto_currency: o.crypto_currency,
+            fiat_amount: String(o.fiat_amount),
+            fiat_currency: o.fiat_currency,
+            rate: String(o.rate),
+            platform_fee: String(o.platform_fee ?? 0),
+            protocol_fee_amount: o.protocol_fee_amount ? String(o.protocol_fee_amount) : null,
+            status: o.status,
+            user_id: o.user_id,
+            merchant_id: o.merchant_id,
+            buyer_merchant_id: o.buyer_merchant_id ?? null,
+            acceptor_wallet_address: (o as any).acceptor_wallet_address ?? null,
+            buyer_wallet_address: (o as any).buyer_wallet_address ?? null,
+            escrow_tx_hash: (o as any).escrow_tx_hash ?? null,
+            payment_details: (o as any).payment_details ?? null,
+            accepted_at: o.accepted_at ? new Date(o.accepted_at) : null,
+            escrowed_at: (o as any).escrowed_at ? new Date((o as any).escrowed_at) : null,
+          },
+          actor_id,
+        ).catch((receiptErr) => {
+          logger.warn('[core-api] Async createOrderReceipt (general TX) failed', {
             orderId: id, error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
           });
-        }
+        });
       }
 
       // Defense-in-depth: sync updateOrderReceipt for non-create transitions
@@ -1018,6 +1041,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Idempotency-protected: same key returns same response, no duplicate release
         return withIdempotency(request, reply, 'release_escrow', id, async () => {
+          const __relT0 = Date.now();
           // Security: verify actor is authorized to release this order
           const releaseOrder = await queryOne<{ status: string; merchant_id: string; user_id: string; buyer_merchant_id: string | null; release_tx_hash: string | null; escrow_debited_entity_id: string | null; payment_sent_at: string | null }>(
             'SELECT status, merchant_id, user_id, buyer_merchant_id, release_tx_hash, escrow_debited_entity_id, payment_sent_at FROM orders WHERE id = $1',
@@ -1061,6 +1085,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             return { statusCode: 403, body: { success: false, error: 'Not authorized to release this order' } };
           }
 
+          const __relT1 = Date.now();
           // Single stored procedure: FOR UPDATE + update + credit balance (1 round-trip)
           const procResult = await queryOne<{ release_order_v1: any }>(
             'SELECT release_order_v1($1,$2,$3)',
@@ -1074,6 +1099,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             return { statusCode: 400, body: { success: false, error: releaseData.error } };
           }
           const result = { updated: releaseData.order as OrderRow, oldOrder: { ...releaseData.order, status: releaseData.old_status } as OrderRow };
+          const __relT2 = Date.now();
 
           // Invariant check — fire-and-forget (don't block response)
           verifyReleaseInvariants({
@@ -1097,6 +1123,16 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             txHash: tx_hash, metadata: { tx_hash },
           });
           syncReceiptTransition(id, 'COMPLETED', { txHash: tx_hash });
+          const __relT3 = Date.now();
+
+          const __relBreakdown = {
+            total_ms: __relT3 - __relT0,
+            auth_pre_read_ms: __relT1 - __relT0,
+            release_proc_ms: __relT2 - __relT1,
+            outbox_and_receipt_ms: __relT3 - __relT2,
+          };
+          logger.info('[Timing] release_escrow', { orderId: id, ...__relBreakdown });
+          recordTiming('release_escrow', id, __relBreakdown);
 
           return {
             statusCode: 200,
