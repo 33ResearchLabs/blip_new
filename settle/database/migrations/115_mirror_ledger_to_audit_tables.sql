@@ -27,19 +27,24 @@
 --   DROP FUNCTION mirror_ledger_to_audit_tables();
 --   (Mirrored data in the audit tables is harmless to keep.)
 
--- ── 1. Schema parity: ensure merchant_transactions has a user_id column ───
+-- ── 1. Schema parity for merchant_transactions ───────────────────────────
 -- Railway was originally provisioned via `settle/database/railway-migration.sql`
--- which created merchant_transactions WITHOUT a user_id column. Local
--- (provisioned via `settle/migrations/add_merchant_transactions.sql`) DOES
--- have it. This migration references user_id, so on Railway the partial
--- unique index + the backfill INSERT both fail with 42703 "column does not
--- exist" and crash core-api startup.
--- Make the column conditional — both existing tables converge to the same
--- shape after this runs. ON DELETE CASCADE matches the merchant_id FK.
+-- which created the table WITHOUT a user_id column AND with merchant_id as
+-- NOT NULL. Local was provisioned via `settle/migrations/add_merchant_transactions.sql`
+-- which has both merchant_id AND user_id as nullable (the row uses ONE or
+-- the other depending on whether the actor is a merchant or a user).
+--
+-- This migration references user_id and inserts NULL into merchant_id for
+-- user-actor rows, so on Railway both sides break (42703 "column does not
+-- exist" then 23502 "null value violates not-null"). Make BOTH columns
+-- nullable and add user_id if missing — both existing schemas converge to
+-- the same shape after this runs. Idempotent.
+
+-- 1a. Add user_id column on Railway (no-op locally — already exists).
 ALTER TABLE merchant_transactions
   ADD COLUMN IF NOT EXISTS user_id UUID;
 
--- Add the FK separately (still idempotent — guards on constraint name).
+-- 1b. Add the user_id FK (idempotent via constraint-name check).
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -55,6 +60,24 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_merchant_transactions_user_id
   ON merchant_transactions (user_id) WHERE user_id IS NOT NULL;
+
+-- 1c. Drop NOT NULL on merchant_id — user-actor rows have merchant_id=NULL
+-- and user_id set instead. Application code already handles either-or
+-- (local has been running this way for months). Safe non-breaking
+-- schema change: existing rows are unaffected, future inserts can omit
+-- merchant_id when the actor is a user.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'merchant_transactions'
+      AND column_name = 'merchant_id'
+      AND is_nullable = 'NO'
+  ) THEN
+    ALTER TABLE merchant_transactions
+      ALTER COLUMN merchant_id DROP NOT NULL;
+  END IF;
+END $$;
 
 -- ── 2. Idempotency safeguards ───────────────────────────────────────────────
 
