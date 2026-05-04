@@ -172,6 +172,13 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
         if (actorType === 'compliance' && me?.data?.member) {
           setMember(me.data.member);
           setIsLoggedIn(true);
+          // Mirror the cookie's existence into the in-memory store. The real
+          // access token is httpOnly so JS can't read it, but fetchWithAuth's
+          // silent-refresh gate keys off `!!sessionToken` to decide whether
+          // a 401 is worth refreshing. Without this sentinel, the access
+          // cookie's 15-min expiry would silently break every API call after
+          // a page reload — refresh would never be attempted.
+          useMerchantStore.getState().setSessionToken('cookie-session');
           return;
         }
 
@@ -191,6 +198,7 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
               role: 'merchant-compliance',
             });
             setIsLoggedIn(true);
+            useMerchantStore.getState().setSessionToken('cookie-session');
           }
         }
       } catch {

@@ -369,6 +369,12 @@ export function useDashboardAuth({
             setMerchantId(freshMerchant.id);
             setMerchantInfo(freshMerchant);
             setIsLoggedIn(true);
+            // Mirror the cookie's existence into sessionToken so the silent
+            // refresh in fetchWithAuth fires when the 15-min access cookie
+            // expires. Without this, the refresh gate (`!!sessionToken`) is
+            // false on every page reload and 401s short-circuit instead of
+            // refreshing — see useComplianceAuth for the same fix.
+            setSessionToken('cookie-session');
             // Defer to useOrderFetching to flip isLoading off after the
             // first orders payload lands. Safety net at 5s for slow links.
             setTimeout(() => setIsLoading(false), 5000);
