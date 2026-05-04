@@ -121,7 +121,17 @@ function getTypeColor(entryType: string, amount: number): { text: string; bg: st
   return { text: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' };
 }
 
-function exportToCSV(entries: LedgerEntry[], summary: LedgerSummary) {
+async function exportToExcel(entries: LedgerEntry[], summary: LedgerSummary) {
+  // Lazy-loaded so the ~500KB xlsx library only ships to users who export.
+  const XLSX = await import('xlsx');
+
+  // API serializes Postgres numeric columns as strings; coerce to numbers so
+  // Excel treats amount/balance cells as numeric (sortable, summable).
+  const num = (v: unknown): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+  };
+
   const headers = ['Date', 'Time', 'Type', 'Description', 'Order #', 'Counterparty', 'Amount (USDT)', 'Balance Before', 'Balance After'];
   const rows = entries.map(e => [
     formatDate(e.created_at),
@@ -130,45 +140,40 @@ function exportToCSV(entries: LedgerEntry[], summary: LedgerSummary) {
     e.description || '',
     e.order_number || '',
     e.counterparty_name || '',
-    e.amount.toFixed(2),
-    e.balance_before.toFixed(2),
-    e.balance_after.toFixed(2),
+    num(e.amount),
+    num(e.balance_before),
+    num(e.balance_after),
   ]);
 
   const summaryRows = [
     [],
     ['Summary'],
-    ['Current Balance', summary.current_balance.toFixed(2)],
-    ['Total Credits', summary.total_credits.toFixed(2)],
-    ['Total Debits', summary.total_debits.toFixed(2)],
-    ['Total Transactions', summary.total_transactions.toString()],
+    ['Current Balance', num(summary.current_balance)],
+    ['Total Credits', num(summary.total_credits)],
+    ['Total Debits', num(summary.total_debits)],
+    ['Total Transactions', Number(summary.total_transactions) || 0],
   ];
 
-  const csv = [headers, ...rows, ...summaryRows]
-    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    .join('\n');
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows, ...summaryRows]);
 
-  // Excel/Numbers misread UTF-8 CSV as Latin-1 unless a BOM is prepended,
-  // which mangles names with non-ASCII characters. The BOM is harmless on
-  // platforms that already handle UTF-8 correctly.
-  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `wallet-ledger-${new Date().toISOString().split('T')[0]}.csv`;
-  // Anchors must be in the DOM for `.click()` to actually trigger a
-  // download in Firefox and Safari (Chrome is more forgiving). Append,
-  // click, then remove on the next tick.
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  // Defer cleanup so the browser has a chance to start reading the blob
-  // before the URL is revoked. Revoking too early aborts the download in
-  // some browsers.
-  setTimeout(() => {
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, 0);
+  // Column widths roughly sized to the longest expected content per column.
+  ws['!cols'] = [
+    { wch: 14 }, // Date
+    { wch: 12 }, // Time
+    { wch: 20 }, // Type
+    { wch: 40 }, // Description
+    { wch: 14 }, // Order #
+    { wch: 22 }, // Counterparty
+    { wch: 16 }, // Amount (USDT)
+    { wch: 16 }, // Balance Before
+    { wch: 16 }, // Balance After
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Wallet Ledger');
+
+  const filename = `wallet-ledger-${new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(wb, filename);
 }
 
 // ─── Component ───────────────────────────────────────────────────────
@@ -342,10 +347,10 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
 
-          {/* Export CSV */}
+          {/* Export Excel */}
           {entries.length > 0 && summary && (
             <button
-              onClick={() => exportToCSV(entries, summary)}
+              onClick={() => exportToExcel(entries, summary)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-lg text-sm text-white/70
                          hover:bg-white/10 hover:text-white/90 transition-colors border border-white/10"
             >

@@ -127,7 +127,7 @@ export function LoginScreen({
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-[#070708] text-white relative font-sans">
+    <div className="login-scope h-screen overflow-hidden bg-[#070708] text-white relative font-sans">
       {/* subtle grid pattern */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.04]"
