@@ -27,7 +27,36 @@
 --   DROP FUNCTION mirror_ledger_to_audit_tables();
 --   (Mirrored data in the audit tables is harmless to keep.)
 
--- ── 1. Idempotency safeguards ───────────────────────────────────────────────
+-- ── 1. Schema parity: ensure merchant_transactions has a user_id column ───
+-- Railway was originally provisioned via `settle/database/railway-migration.sql`
+-- which created merchant_transactions WITHOUT a user_id column. Local
+-- (provisioned via `settle/migrations/add_merchant_transactions.sql`) DOES
+-- have it. This migration references user_id, so on Railway the partial
+-- unique index + the backfill INSERT both fail with 42703 "column does not
+-- exist" and crash core-api startup.
+-- Make the column conditional — both existing tables converge to the same
+-- shape after this runs. ON DELETE CASCADE matches the merchant_id FK.
+ALTER TABLE merchant_transactions
+  ADD COLUMN IF NOT EXISTS user_id UUID;
+
+-- Add the FK separately (still idempotent — guards on constraint name).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'merchant_transactions_user_id_fkey'
+      AND conrelid = 'merchant_transactions'::regclass
+  ) THEN
+    ALTER TABLE merchant_transactions
+      ADD CONSTRAINT merchant_transactions_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES users(id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_merchant_transactions_user_id
+  ON merchant_transactions (user_id) WHERE user_id IS NOT NULL;
+
+-- ── 2. Idempotency safeguards ───────────────────────────────────────────────
 
 -- platform_fee_transactions: at most one row per order
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_fee_tx_order
@@ -45,9 +74,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_merchant_tx_order_type_user
   ON merchant_transactions (order_id, type, user_id)
   WHERE order_id IS NOT NULL AND user_id IS NOT NULL;
 
--- ── 2. One-time backfill ─────────────────────────────────────────────────────
+-- ── 3. One-time backfill ─────────────────────────────────────────────────────
 
--- 2a. platform_fee_transactions ← ledger_entries.FEE
+-- 3a. platform_fee_transactions ← ledger_entries.FEE
 -- platform_balance_after is reconstructed via cumulative SUM (historically accurate).
 INSERT INTO platform_fee_transactions
   (order_id, fee_amount, fee_percentage, spread_preference, platform_balance_after, created_at)
@@ -77,7 +106,7 @@ WHERE le.entry_type = 'FEE'
   )
 ON CONFLICT (order_id) WHERE order_id IS NOT NULL DO NOTHING;
 
--- 2b. merchant_transactions ← ledger_entries (ESCROW_LOCK, ESCROW_RELEASE, ESCROW_REFUND, FEE)
+-- 3b. merchant_transactions ← ledger_entries (ESCROW_LOCK, ESCROW_RELEASE, ESCROW_REFUND, FEE)
 -- Pre-existing data may have rare duplicate ledger entries (same order+type+account)
 -- from older code paths. We dedupe via DISTINCT ON so the migration succeeds; the
 -- unique partial indexes block any future duplicates.
@@ -119,7 +148,7 @@ FROM (
   ORDER BY le.related_order_id, le.entry_type, le.account_id, le.created_at ASC
 ) deduped;
 
--- ── 3. Going-forward trigger ────────────────────────────────────────────────
+-- ── 4. Going-forward trigger ────────────────────────────────────────────────
 -- Fires after a row is inserted into ledger_entries and mirrors the relevant
 -- types into the audit tables. Never throws — any internal error is logged
 -- as a WARNING and swallowed so the original ledger insert is unaffected.
