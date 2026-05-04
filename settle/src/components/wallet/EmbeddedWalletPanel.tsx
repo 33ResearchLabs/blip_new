@@ -205,18 +205,18 @@ export function EmbeddedWalletPanel({
       {/* Delete Confirm Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="bg-[#0d0d0d] rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-red-400 font-mono">Delete Wallet?</h3>
-            <p className="text-xs text-white/50 font-mono">
+          <div className="bg-card-solid rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-[var(--color-error)] font-mono">Delete Wallet?</h3>
+            <p className="text-xs text-foreground/60 font-mono">
               This removes the encrypted key from this device. Make sure you have exported your private key first.
             </p>
             <div className="flex gap-2">
               <button onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2 rounded-lg bg-white/[0.06] text-xs text-white/60 font-mono hover:bg-white/[0.08]">
+                className="flex-1 py-2 rounded-lg bg-foreground/[0.06] text-xs text-foreground/70 font-mono hover:bg-foreground/[0.10]">
                 Cancel
               </button>
               <button onClick={handleDelete}
-                className="flex-1 py-2 rounded-lg bg-red-500/20 border border-red-500/30 text-xs text-red-400 font-mono hover:bg-red-500/30">
+                className="flex-1 py-2 rounded-lg bg-[var(--color-error)]/15 border border-[var(--color-error)]/30 text-xs text-[var(--color-error)] font-mono hover:bg-[var(--color-error)]/25">
                 Delete
               </button>
             </div>

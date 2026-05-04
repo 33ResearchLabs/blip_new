@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, memo } from "react";
 import {
   Wallet,
   Loader2,
+  Lock,
   X,
   AlertCircle,
   Check,
@@ -48,6 +49,13 @@ interface StatusCardProps {
   completedOrders: number;
   cancelledOrders: number;
   isOnline: boolean;
+  /**
+   * 'ok'      — wallet is unlocked, show real balance (default)
+   * 'locked'  — wallet exists but is locked, needs password
+   * 'none'    — no wallet at all, user must add/create one
+   */
+  walletStatus?: 'ok' | 'locked' | 'none';
+  onAddWallet?: () => void;
   merchantId?: string;
   activeCorridor?: string;
   onCorridorChange?: (corridorId: string) => void;
@@ -75,6 +83,8 @@ export const StatusCard = memo(function StatusCard({
   completedOrders,
   cancelledOrders,
   isOnline,
+  walletStatus = 'ok',
+  onAddWallet,
   merchantId,
   activeCorridor = "USDT_INR",
   onCorridorChange,
@@ -358,8 +368,20 @@ export const StatusCard = memo(function StatusCard({
 
   const totalTrades = completedOrders + cancelledOrders;
   const winRate = totalTrades > 0 ? (completedOrders / totalTrades) * 100 : 0;
-  const refPrice = customRefPrice || corridor?.ref_price || 3.67;
-  const aedEquivalent = balance * refPrice;
+
+  // Fiat equivalent must match the ACTIVE corridor — previously this always
+  // computed the AED rate regardless of selection, so users on USDT/INR saw
+  // their INR balance labelled "AED". Pull the per-pair price from the prices
+  // map populated by fetchPrices() above; fall back to the unscoped corridor
+  // ref_price (legacy) and finally a per-pair sane default.
+  const isInrCorridor = activeCorridor === 'USDT_INR';
+  const fiatLabel = isInrCorridor ? 'INR' : 'AED';
+  const fiatRate =
+    customRefPrice ||
+    corridorPrices[activeCorridor] ||
+    corridor?.ref_price ||
+    (isInrCorridor ? 99 : 3.67);
+  const fiatEquivalent = balance * fiatRate;
 
   if (isLoading) {
     return (
@@ -432,28 +454,72 @@ export const StatusCard = memo(function StatusCard({
 
         {/* USDT Label */}
         <div className="flex items-center gap-1.5 mb-1 relative z-10">
-          <Wallet className="w-3 h-3 text-foreground/20" />
+          {walletStatus === 'locked' ? (
+            <Lock className="w-3 h-3 text-foreground/30" />
+          ) : walletStatus === 'none' ? (
+            <Plus className="w-3 h-3 text-foreground/30" />
+          ) : (
+            <Wallet className="w-3 h-3 text-foreground/20" />
+          )}
           <span className="text-[10px] text-foreground/30 font-mono uppercase tracking-widest">
-            Available Balance
+            {walletStatus === 'locked'
+              ? 'Wallet Locked'
+              : walletStatus === 'none'
+                ? 'No Wallet'
+                : 'Available Balance'}
           </span>
         </div>
 
-        {/* Big USDT Amount */}
+        {/* Big USDT Amount — branches on wallet state */}
         <div className="relative z-10 text-center">
-          <div className="text-4xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
-            {balance.toLocaleString(undefined, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            })}
-          </div>
-          <div className="text-[11px] text-foreground/20 font-mono mt-1 tabular-nums">
-            ≈{" "}
-            {aedEquivalent.toLocaleString(undefined, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            })}{" "}
-            AED
-          </div>
+          {walletStatus === 'locked' ? (
+            <>
+              <div className="text-4xl font-black text-foreground/30 font-mono tabular-nums tracking-tight leading-none">
+                ••••
+              </div>
+              <div className="text-[11px] text-foreground/30 font-mono mt-1">
+                Unlock to view balance
+              </div>
+            </>
+          ) : walletStatus === 'none' ? (
+            <>
+              <div className="text-4xl font-black text-foreground/30 font-mono tabular-nums tracking-tight leading-none">
+                ••••
+              </div>
+              {onAddWallet ? (
+                <button
+                  type="button"
+                  onClick={onAddWallet}
+                  className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/[0.10] border border-primary/25 text-[10px] font-bold text-primary font-mono hover:bg-primary/15 transition-colors"
+                >
+                  <Plus className="w-2.5 h-2.5" />
+                  Add Wallet
+                </button>
+              ) : (
+                <div className="text-[11px] text-foreground/30 font-mono mt-1">
+                  Add a wallet to view balance
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="text-4xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
+                {balance.toLocaleString(undefined, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}
+              </div>
+              <div className="text-[11px] text-foreground/20 font-mono mt-1 tabular-nums">
+                ≈{" "}
+                {isInrCorridor ? '₹' : ''}
+                {fiatEquivalent.toLocaleString(undefined, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}
+                {isInrCorridor ? '' : ' AED'}
+              </div>
+            </>
+          )}
         </div>
 
         {/* 24h Earnings badge */}

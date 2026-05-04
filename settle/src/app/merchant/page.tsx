@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Bell, Plus, Loader2, History, X } from "lucide-react";
 import { usePusher } from "@/context/PusherContext";
@@ -149,6 +150,7 @@ export default function MerchantDashboard() {
     return () => mql.removeEventListener("change", handler);
   }, []);
 
+  const router = useRouter();
   const solanaWallet = useSolanaWallet();
   const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
   const { isConnected: isPusherConnected } = usePusher();
@@ -821,6 +823,20 @@ export default function MerchantDashboard() {
         todayEarnings={todayEarnings}
         isMerchantOnline={isMerchantOnline}
         setIsMerchantOnline={setIsMerchantOnline}
+        walletStatus={
+          // External Solana wallet connected, or embedded wallet unlocked → balance is real
+          solanaWallet.connected || embeddedWallet?.state === 'unlocked'
+            ? 'ok'
+            // Embedded wallet exists and is locked → can be unlocked
+            : embeddedWallet?.state === 'locked'
+              ? 'locked'
+              // Embedded wallet still booting → don't flash anything misleading
+              : embeddedWallet?.state === 'initializing'
+                ? 'ok'
+                // No wallet at all (state === 'none' or undefined, and no external)
+                : 'none'
+        }
+        onAddWallet={() => router.push('/merchant/wallet')}
         activeCorridor={activeCorridor}
         onCorridorChange={setActiveCorridor}
         openTradeForm={openTradeForm}

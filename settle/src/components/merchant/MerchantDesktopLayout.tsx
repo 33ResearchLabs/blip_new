@@ -39,6 +39,8 @@ export interface MerchantDesktopLayoutProps {
   todayEarnings: number;
   isMerchantOnline: boolean;
   setIsMerchantOnline: React.Dispatch<React.SetStateAction<boolean>>;
+  walletStatus?: 'ok' | 'locked' | 'none';
+  onAddWallet?: () => void;
 
   // Corridor
   activeCorridor: string;
@@ -107,7 +109,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     pendingOrders, ongoingOrders, completedOrders, cancelledOrders,
     mempoolOrders, leaderboardData,
     merchantId, merchantInfo, effectiveBalance, todayEarnings,
-    isMerchantOnline, setIsMerchantOnline,
+    isMerchantOnline, setIsMerchantOnline, walletStatus, onAddWallet,
     activeCorridor, onCorridorChange,
     openTradeForm, setOpenTradeForm, isCreatingTrade,
     handleDirectOrderCreation, refreshBalance,
@@ -166,6 +168,8 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 balance={effectiveBalance || 0}
                 lockedInEscrow={lockedInEscrow}
                 isOnline={isMerchantOnline}
+                walletStatus={walletStatus}
+                onAddWallet={onAddWallet}
                 merchantId={merchantId || undefined}
                 activeCorridor={activeCorridor}
                 onCorridorChange={onCorridorChange}

@@ -1309,26 +1309,26 @@ export default function WalletPage({
           onClick={() => setShowDeleteConfirm(false)}
         >
           <div
-            className="bg-[#0d0d0d] rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-4"
+            className="bg-card-solid rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-red-400 font-mono">
+            <h3 className="text-base font-bold text-[var(--color-error)] font-mono">
               Delete Wallet?
             </h3>
-            <p className="text-xs text-white/50 font-mono leading-relaxed">
+            <p className="text-xs text-foreground/60 font-mono leading-relaxed">
               This removes the encrypted key from this device permanently. Make
               sure you have downloaded your backup file first.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-sm text-white/60 font-mono hover:bg-accent-subtle transition-colors"
+                className="flex-1 py-2.5 rounded-xl bg-foreground/[0.06] text-sm text-foreground/70 font-mono hover:bg-foreground/[0.10] transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 py-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-sm text-red-400 font-mono hover:bg-[var(--color-error)]/30 transition-colors"
+                className="flex-1 py-2.5 rounded-xl bg-[var(--color-error)]/15 border border-[var(--color-error)]/30 text-sm text-[var(--color-error)] font-mono hover:bg-[var(--color-error)]/25 transition-colors"
               >
                 Delete
               </button>
