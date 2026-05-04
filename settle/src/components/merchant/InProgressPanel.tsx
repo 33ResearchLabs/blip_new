@@ -33,6 +33,12 @@ interface InProgressPanelProps {
   merchantId?: string | null;
   lockingEscrowOrderId?: string | null;
   confirmingOrderId?: string | null;
+  /** Global flag — true while ANY mark-paid is in flight. The card uses this
+   *  in combination with the action label ("I've Paid"/"Send Payment") to
+   *  show a spinner when the merchant clicks the Send Payment button on a card. */
+  markingDone?: boolean;
+  acceptingOrderId?: string | null;
+  cancellingOrderId?: string | null;
 }
 
 // Viewer-perspective side resolver: matches the helper in
@@ -94,6 +100,9 @@ const InProgressOrderList = memo(function InProgressOrderList({
   merchantId,
   lockingEscrowOrderId,
   confirmingOrderId,
+  markingDone,
+  acceptingOrderId,
+  cancellingOrderId,
 }: {
   orders: any[];
   onSelectOrder: (order: any) => void;
@@ -105,6 +114,9 @@ const InProgressOrderList = memo(function InProgressOrderList({
   merchantId?: string | null;
   lockingEscrowOrderId?: string | null;
   confirmingOrderId?: string | null;
+  markingDone?: boolean;
+  acceptingOrderId?: string | null;
+  cancellingOrderId?: string | null;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -359,12 +371,35 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 ) : (() => {
                   const isLockingThis = lockingEscrowOrderId === order.id;
                   const isConfirmingThis = confirmingOrderId === order.id;
-                  const isActionLoading = isLockingThis || isConfirmingThis;
+                  const isAcceptingThis = acceptingOrderId === order.id;
+                  const isCancellingThis = cancellingOrderId === order.id;
+                  // markingDone is a global "mark-paid in flight" flag — we
+                  // only want to show the spinner on a card whose CURRENT
+                  // primary action is actually Send-Payment / I've-Paid, not
+                  // on every card on the screen. Detect via the action label.
+                  const labelLower = (nextAction || '').toLowerCase();
+                  const isPayActionCard =
+                    labelLower.includes('paid') ||
+                    labelLower.includes('send payment') ||
+                    labelLower.includes('mark payment');
+                  const isMarkingPaidThis = !!markingDone && isPayActionCard;
+                  const isActionLoading =
+                    isLockingThis ||
+                    isConfirmingThis ||
+                    isAcceptingThis ||
+                    isCancellingThis ||
+                    isMarkingPaidThis;
                   const loadingLabel = isLockingThis
                     ? 'Locking escrow…'
                     : isConfirmingThis
                       ? 'Confirming payment…'
-                      : null;
+                      : isAcceptingThis
+                        ? 'Accepting…'
+                        : isCancellingThis
+                          ? 'Cancelling…'
+                          : isMarkingPaidThis
+                            ? 'Marking as paid…'
+                            : null;
                   return (
                     <button
                       data-testid="order-primary-action"
@@ -462,7 +497,7 @@ const STATUS_FILTERS: { value: FilterValue; label: string }[] = [
   { value: 'cancel_requested', label: 'Cancel Req' },
 ];
 
-export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId, lockingEscrowOrderId, confirmingOrderId }: InProgressPanelProps) {
+export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId, lockingEscrowOrderId, confirmingOrderId, markingDone, acceptingOrderId, cancellingOrderId }: InProgressPanelProps) {
   const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
 
   const filteredOrders = useMemo(() => {
@@ -572,6 +607,9 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
           merchantId={merchantId}
           lockingEscrowOrderId={lockingEscrowOrderId}
           confirmingOrderId={confirmingOrderId}
+          markingDone={markingDone}
+          acceptingOrderId={acceptingOrderId}
+          cancellingOrderId={cancellingOrderId}
         />
       )}
     </div>

@@ -61,6 +61,10 @@ export interface MerchantDesktopLayoutProps {
   acceptingOrderId: string | null;
   lockingEscrowOrderId?: string | null;
   confirmingOrderId?: string | null;
+  /** Global "I've Paid in flight" flag — drives the spinner on the InProgress
+   *  card's primary button when the action is Send Payment / I've Paid. */
+  markingDone?: boolean;
+  cancellingOrderId?: string | null;
   handleCancelOrder: (order: Order) => void;
   handleOpenChat: (order: Order) => void;
   handleOrderAction: (order: any, action: string) => void;
@@ -114,7 +118,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     openTradeForm, setOpenTradeForm, isCreatingTrade,
     handleDirectOrderCreation, refreshBalance,
     setSelectedOrderPopup, setSelectedMempoolOrder, setSelectedOrderId,
-    acceptOrder, acceptingOrderId, lockingEscrowOrderId, confirmingOrderId, handleCancelOrder, handleOpenChat,
+    acceptOrder, acceptingOrderId, lockingEscrowOrderId, confirmingOrderId, markingDone, cancellingOrderId, handleCancelOrder, handleOpenChat,
     handleOrderAction, fetchOrders, loadMoreOrders, hasMoreOrders, isLoadingMore, openDisputeModal, setRatingModalData,
     inProgressCollapsed, setInProgressCollapsed,
     completedCollapsed, setCompletedCollapsed,
@@ -269,6 +273,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 merchantId={merchantId}
                 lockingEscrowOrderId={lockingEscrowOrderId}
                 confirmingOrderId={confirmingOrderId}
+                markingDone={markingDone}
+                acceptingOrderId={acceptingOrderId}
+                cancellingOrderId={cancellingOrderId}
               />
             </div>
             <div
