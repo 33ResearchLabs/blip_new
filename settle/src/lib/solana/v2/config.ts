@@ -218,3 +218,6 @@ export function getFeeTreasury(): PublicKey {
 export function getFeeBps(): number {
   return FEE_BPS;
 }
+
+// Cache-bust 20260506130748 — force Railway to rebuild settle bundle with current NEXT_PUBLIC_* env vars baked in.
+
