@@ -476,10 +476,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Dry run: all business validations passed (merchant exists, rate resolved,
-    // payment method resolved, placeholder user ready). Return early BEFORE
-    // the core-api proxy call so frontend can safely proceed to lock escrow.
+    // Dry run: validate everything that would cause a post-escrow failure
+    // BEFORE the frontend locks USDT on-chain. Without this, an incomplete
+    // merchant (no payment method) passes dry-run, locks escrow, then
+    // hits a hard rejection from core-api → orphaned escrow.
+    //
+    // For self-broadcast SELL (creator IS the seller), the merchant MUST have
+    // at least one payment method (where the buyer sends fiat). If they don't,
+    // fail dry-run with a clear, actionable message.
     if (isDryRun) {
+      if (!isM2MTrade && creatorIsSeller) {
+        const ownedPms = await getMerchantPaymentMethods(merchant_id);
+        const hasUsablePm =
+          (requestedPmId && ownedPms.some((pm) => pm.id === requestedPmId)) ||
+          ownedPms.length > 0;
+        if (!hasUsablePm) {
+          return validationErrorResponse([
+            'Add a payment method (bank account or wallet) before creating a sell order. The buyer needs to know where to send fiat.',
+          ]);
+        }
+      }
       return successResponse({ valid: true, rate: effectiveRate, corridor_id: corridorId });
     }
 
