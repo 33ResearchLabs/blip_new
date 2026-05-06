@@ -45,9 +45,25 @@ const V2_PROGRAM_ID = new PublicKey(
       ? 'gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS'
       : '6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87')
 );
-const RPC_URL =
-  process.env.SOLANA_RPC_URL
-  || (IS_MAINNET ? 'https://api.mainnet-beta.solana.com' : 'https://api.devnet.solana.com');
+// Defensive RPC URL resolution. Falls back to the public network endpoint
+// when the env var is unset, empty, whitespace-only, or not a valid http(s)
+// URL. Without this guard, web3.js's `Connection` constructor throws at
+// startup with "Endpoint URL must start with `http:` or `https:`."
+function resolveRpcUrl(): string {
+  const raw = (process.env.SOLANA_RPC_URL || '').trim();
+  const fallback = IS_MAINNET
+    ? 'https://api.mainnet-beta.solana.com'
+    : 'https://api.devnet.solana.com';
+  if (!raw) return fallback;
+  if (!/^https?:\/\//i.test(raw)) {
+    console.warn(
+      `⚠️  SOLANA_RPC_URL is set but not a valid http(s) URL: "${raw}". Falling back to ${fallback}.`
+    );
+    return fallback;
+  }
+  return raw;
+}
+const RPC_URL = resolveRpcUrl();
 const POLL_INTERVAL = 15000; // 15 seconds for forward polling (new txs)
 const BACKFILL_INTERVAL = 60000; // 60 seconds for backfill (historical txs)
 
