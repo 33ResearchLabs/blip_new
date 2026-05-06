@@ -22,9 +22,32 @@ const V2_IDL = JSON.parse(fs.readFileSync(v2IdlPath, 'utf-8'));
 // CONFIGURATION
 // ============================================
 
-const V1_PROGRAM_ID = new PublicKey('HZ9ZSXtebTKYGRR7ZNsetroAT7Kh8ymKExcf5FF9dLNq');
-const V2_PROGRAM_ID = new PublicKey('6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87');
-const RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+// Program IDs are env-driven so the indexer can target devnet (testing) or
+// mainnet (production) without a code change. Hard-coded fallbacks preserved
+// for local dev convenience.
+//
+// Mainnet v1.0 deploy (2026-04-27): gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS
+// Devnet:                            6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87
+//
+// Set on Railway / production:
+//   SOLANA_NETWORK=mainnet-beta
+//   V2_PROGRAM_ID=gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS
+//   SOLANA_RPC_URL=<mainnet Helius/QuickNode RPC>
+const SOLANA_NETWORK = process.env.SOLANA_NETWORK || 'devnet';
+const IS_MAINNET = SOLANA_NETWORK === 'mainnet-beta' || SOLANA_NETWORK === 'mainnet';
+
+const V1_PROGRAM_ID = new PublicKey(
+  process.env.V1_PROGRAM_ID || 'HZ9ZSXtebTKYGRR7ZNsetroAT7Kh8ymKExcf5FF9dLNq'
+);
+const V2_PROGRAM_ID = new PublicKey(
+  process.env.V2_PROGRAM_ID
+    || (IS_MAINNET
+      ? 'gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS'
+      : '6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87')
+);
+const RPC_URL =
+  process.env.SOLANA_RPC_URL
+  || (IS_MAINNET ? 'https://api.mainnet-beta.solana.com' : 'https://api.devnet.solana.com');
 const POLL_INTERVAL = 15000; // 15 seconds for forward polling (new txs)
 const BACKFILL_INTERVAL = 60000; // 60 seconds for backfill (historical txs)
 
@@ -112,6 +135,7 @@ class BlipScanIndexer {
 
   async start() {
     console.log('🚀 BlipScan Indexer Starting...');
+    console.log(`🌐 Network: ${SOLANA_NETWORK}${IS_MAINNET ? ' (MAINNET — real funds at stake)' : ''}`);
     console.log(`📡 RPC: ${RPC_URL}`);
     console.log(`🔗 V1 Program: ${V1_PROGRAM_ID.toString()}`);
     console.log(`🔗 V2 Program: ${V2_PROGRAM_ID.toString()}`);
