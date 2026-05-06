@@ -30,6 +30,7 @@ import {
   DEVNET_RPC,
   getV2ProgramId,
   getUsdtMint,
+  FEE_BPS_DEFAULT,
   TradeSide,
   DisputeResolution,
   type Lane,
@@ -96,7 +97,9 @@ function convertFields(fields: any[]): any[] {
 // anchor@0.29 with the V2.3 IDL.
 const idl = convertIdlToAnchor29(idlRaw);
 const PROGRAM_ID = new PublicKey((idlRaw as any).address || (idlRaw as any).metadata?.address || getV2ProgramId().toBase58());
-const USDT_MINT = getUsdtMint('devnet');
+// Respect the active network (NEXT_PUBLIC_SOLANA_NETWORK) — picks devnet
+// or mainnet USDT mint automatically. Critical for mainnet cutover.
+const USDT_MINT = getUsdtMint();
 const AUTO_LOCK_MS = 15 * 60 * 1000; // 15 minutes
 
 export type EmbeddedWalletState = 'initializing' | 'none' | 'locked' | 'unlocked';
@@ -336,7 +339,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
   // ---- Trade Operations ----
 
   const createTrade = useCallback(async (params: {
-    tradeId: number; amount: number; side: 'buy' | 'sell';
+    tradeId: number; amount: number; side: 'buy' | 'sell'; feeBps?: number;
   }) => {
     if (!keypair || !program) throw new Error('Wallet not connected');
     touchActivity();
@@ -348,7 +351,10 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     const [escrowPda] = findEscrowPda(tradePda);
 
     const tx = await buildCreateTradeTx(program, keypair.publicKey, USDT_MINT, {
-      tradeId: params.tradeId, amount: amountBN, side: sideEnum,
+      tradeId: params.tradeId,
+      amount: amountBN,
+      side: sideEnum,
+      feeBps: params.feeBps ?? FEE_BPS_DEFAULT,
     });
     const txHash = await signAndSend(tx);
     await refreshBalances();
@@ -357,7 +363,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
   }, [keypair, program, signAndSend, refreshBalances, ensureProtocolConfig, touchActivity]);
 
   const fundEscrowOnly = useCallback(async (params: {
-    tradeId: number; amount: number; side: 'buy' | 'sell';
+    tradeId: number; amount: number; side: 'buy' | 'sell'; feeBps?: number;
   }) => {
     if (!keypair || !program) throw new Error('Wallet not connected');
     touchActivity();
@@ -370,7 +376,10 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
 
     // Create trade + fund escrow in one tx
     const createTx = await buildCreateTradeTx(program, keypair.publicKey, USDT_MINT, {
-      tradeId: params.tradeId, amount: amountBN, side: sideEnum,
+      tradeId: params.tradeId,
+      amount: amountBN,
+      side: sideEnum,
+      feeBps: params.feeBps ?? FEE_BPS_DEFAULT,
     });
     const fundTx = await buildFundEscrowTx(program, keypair.publicKey, tradePda, USDT_MINT);
 

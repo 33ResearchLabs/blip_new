@@ -426,9 +426,26 @@ export async function buildCreateTradeTx(
 
   const sideEnum = params.side === TradeSide.Buy ? { buy: {} } : { sell: {} };
 
-  // Pass individual args (flattened) for IDL compatibility
+  // V2.3.1: feeBps is required. Caller picks a tier within the protocol's
+  // [min_fee_bps, max_fee_bps] range; the program rejects out-of-range values.
+  if (
+    typeof params.feeBps !== 'number' ||
+    !Number.isFinite(params.feeBps) ||
+    params.feeBps < 0 ||
+    params.feeBps > 1000
+  ) {
+    throw new Error(
+      `buildCreateTradeTx: feeBps must be 0-1000 bps; got ${String(params.feeBps)}`
+    );
+  }
+
   const instruction = await (program.methods as any)
-    .createTrade({ tradeId: new BN(params.tradeId), amount: params.amount, side: sideEnum })
+    .createTrade({
+      tradeId: new BN(params.tradeId),
+      amount: params.amount,
+      side: sideEnum,
+      feeBps: params.feeBps,
+    })
     .accounts({
       creator,
       protocolConfig: protocolConfigPda,

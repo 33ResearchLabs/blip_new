@@ -11,12 +11,17 @@ export {
   USDT_DEVNET_MINT,
   USDT_MAINNET_MINT,
   TREASURY_WALLET,
+  PROTOCOL_CONFIG_PDA,
   FEE_BPS,
+  FEE_BPS_DEFAULT,
+  FEE_BPS_MIN,
+  FEE_BPS_MAX,
   DEVNET_RPC,
   getV2ProgramId,
   getUsdtMint,
   getFeeTreasury,
   getFeeBps,
+  isMainnetActive,
 } from './config';
 
 // PDAs
