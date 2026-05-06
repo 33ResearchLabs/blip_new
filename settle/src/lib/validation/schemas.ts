@@ -346,11 +346,12 @@ export const createPaymentMethodSchema = z.object({
 }).refine(
   (data) => {
     if (data.type === 'bank') {
-      return data.details.bank_name && data.details.account_name && data.details.iban;
+      const hasAccount = data.details.account_number || data.details.iban;
+      return data.details.bank_name && data.details.account_name && hasAccount;
     }
     return true;
   },
-  { message: 'Bank details require bank_name, account_name, and iban' }
+  { message: 'Bank details require bank_name, account_name, and account_number or iban' }
 ).refine(
   (data) => {
     if (data.type === 'upi') {
