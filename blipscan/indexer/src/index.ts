@@ -198,9 +198,80 @@ class BlipScanIndexer {
     // One-time repair: backfill missing counterparties from on-chain
     await this.repairMissingCounterparties();
 
+    // Startup repair: insert v2_trades rows for any create_trade signatures
+    // that the cursor advanced past with a failed handler (e.g. before the
+    // snake_case IDL fix). Idempotent — ON CONFLICT DO UPDATE.
+    await this.repairMissingV2Trades();
+
     // Start forward polling (new txs, every 15s) and backfill (old txs, every 60s)
     this.poll();
     this.backfill();
+  }
+
+  /**
+   * Startup repair: re-process any v2 create_trade signatures whose
+   * trade_pda is missing from v2_trades (the cursor advances on poll
+   * regardless of handler success, so a failed handler permanently leaks
+   * that trade unless we backfill explicitly).
+   */
+  private async repairMissingV2Trades() {
+    const missing = await pool.query(
+      `SELECT t.signature, t.trade_pda, t.slot, t.block_time
+         FROM transactions t
+         LEFT JOIN v2_trades v ON v.trade_pda = t.trade_pda
+        WHERE t.program_id = $1
+          AND t.instruction_type = 'create_trade'
+          AND t.trade_pda IS NOT NULL
+          AND v.trade_pda IS NULL
+        ORDER BY t.block_time ASC`,
+      [V2_PROGRAM_ID.toString()]
+    );
+    if (missing.rows.length === 0) return;
+    console.log(`🔧 Backfilling ${missing.rows.length} v2_trades rows missed during prior polls`);
+    for (const row of missing.rows) {
+      try {
+        const accountInfo = await this.connection.getAccountInfo(new PublicKey(row.trade_pda));
+        if (!accountInfo) {
+          console.log(`  ⏭️  ${row.trade_pda.slice(0, 8)} — account closed/missing`);
+          continue;
+        }
+        const trade = this.decodeTrade(accountInfo.data);
+        const statusKey = trade.statusStr ?? Object.keys(trade.status || {})[0] ?? 'created';
+        const finalStatus = statusKey.toLowerCase() === 'created' ? 'funded' : statusKey.toLowerCase();
+        const treasuryPk = trade.treasury ? trade.treasury.toString() : null;
+        const feeBps = typeof trade.feeBps === 'number' ? trade.feeBps : (trade.feeBps?.toNumber?.() ?? 0);
+        await pool.query(
+          `INSERT INTO v2_trades (
+            program_id, trade_pda, trade_id, creator_pubkey, counterparty_pubkey,
+            mint_address, amount, fee_bps, treasury_pubkey, status, lane_id,
+            created_slot, created_at, created_signature
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          ON CONFLICT (trade_pda) DO UPDATE SET
+            created_signature = EXCLUDED.created_signature,
+            fee_bps = COALESCE(v2_trades.fee_bps, EXCLUDED.fee_bps),
+            treasury_pubkey = COALESCE(v2_trades.treasury_pubkey, EXCLUDED.treasury_pubkey)`,
+          [
+            V2_PROGRAM_ID.toString(),
+            row.trade_pda,
+            parseInt(trade.tradeId.toString()),
+            trade.creator.toString(),
+            trade.counterparty.toString() === PublicKey.default.toString() ? null : trade.counterparty.toString(),
+            trade.mint.toString(),
+            trade.amount.toString(),
+            feeBps,
+            treasuryPk,
+            finalStatus,
+            0,
+            row.slot ?? 0,
+            row.block_time,
+            row.signature,
+          ]
+        );
+        console.log(`  ✅ ${row.trade_pda.slice(0, 8)} amount=${trade.amount} status=${finalStatus}`);
+      } catch (err: any) {
+        console.error(`  ❌ ${row.trade_pda.slice(0, 8)}: ${err.message}`);
+      }
+    }
   }
 
   private async repairMissingCounterparties() {
