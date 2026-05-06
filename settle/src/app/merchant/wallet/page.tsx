@@ -40,6 +40,7 @@ import { Keypair } from "@solana/web3.js";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { showAlert } from "@/context/ModalContext";
 import { MOCK_MODE } from "@/lib/config/mockMode";
+import { networkLabel, usdtLabel, explorerUrl, isMainnet } from "@/lib/solana/networkLabel";
 
 interface MerchantInfo {
   id: string;
@@ -948,7 +949,7 @@ export default function WalletPage({
                     : "—"}
                 </div>
                 <div className="text-xs text-white/30 font-mono">
-                  {MOCK_MODE ? "Mock USDT" : "Fake USDT on Devnet"}
+                  {MOCK_MODE ? "Mock USDT" : usdtLabel()}
                 </div>
 
                 {/* SOL balance mini */}
@@ -968,8 +969,8 @@ export default function WalletPage({
                     <div className="text-[9px] text-white/30 font-mono uppercase">
                       Network
                     </div>
-                    <div className="text-sm font-medium text-primary font-mono">
-                      Devnet
+                    <div className={`text-sm font-medium font-mono ${isMainnet() ? 'text-emerald-400' : 'text-primary'}`}>
+                      {isMainnet() ? 'Mainnet' : 'Devnet'}
                     </div>
                   </div>
                 </div>
@@ -991,7 +992,7 @@ export default function WalletPage({
                 <div className="flex items-center gap-2">
                   {address && (
                     <a
-                      href={`https://explorer.solana.com/address/${address}?cluster=devnet`}
+                      href={explorerUrl('address', address)}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
@@ -1100,7 +1101,7 @@ export default function WalletPage({
                         USDT
                       </div>
                       <div className="text-[10px] text-white/30 font-mono">
-                        Fake USDT (Devnet)
+                        {usdtLabel()}
                       </div>
                     </div>
                   </div>

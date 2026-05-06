@@ -24,6 +24,7 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
 import type { Screen, Order, BankAccount } from "./types";
+import { networkLabel } from "@/lib/solana/networkLabel";
 import type { MutableRefObject } from "react";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
@@ -330,7 +331,7 @@ export const ProfileScreen = ({
             </div>
             <div className="flex-1 min-w-0">
               <p className={`${CARD_LABEL} mb-0.5`}>
-                {solanaWallet.connected ? 'Solana Devnet' : 'Not Connected'}
+                {solanaWallet.connected ? networkLabel() : 'Not Connected'}
               </p>
               <p className="text-[13px] font-bold text-text-primary font-mono">
                 {solanaWallet.connected && solanaWallet.walletAddress
