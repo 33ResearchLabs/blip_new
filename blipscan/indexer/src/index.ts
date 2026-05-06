@@ -12,19 +12,36 @@ import { initErrorTracking, safeLog } from './errorTracking';
 
 dotenv.config();
 
-// Load IDLs
-const v1IdlPath = './blip_escrow_idl.json';
-const v2IdlPath = './blip_protocol_v2_idl.json';
-const V1_IDL = JSON.parse(fs.readFileSync(v1IdlPath, 'utf-8'));
-const V2_IDL = JSON.parse(fs.readFileSync(v2IdlPath, 'utf-8'));
-
 // ============================================
 // CONFIGURATION
 // ============================================
+// Network selection — devnet (legacy V1 + V2.2) or mainnet (V1.0 only).
+// SOLANA_NETWORK env var: 'devnet' | 'mainnet-beta' | 'mainnet'.
+const NETWORK = (process.env.SOLANA_NETWORK || 'devnet').toLowerCase();
+const IS_MAINNET = NETWORK === 'mainnet-beta' || NETWORK === 'mainnet';
 
-const V1_PROGRAM_ID = new PublicKey('HZ9ZSXtebTKYGRR7ZNsetroAT7Kh8ymKExcf5FF9dLNq');
-const V2_PROGRAM_ID = new PublicKey('6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87');
-const RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+// Devnet program IDs (legacy)
+const DEVNET_V1_PROGRAM_ID = 'HZ9ZSXtebTKYGRR7ZNsetroAT7Kh8ymKExcf5FF9dLNq';
+const DEVNET_V2_PROGRAM_ID = '6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87';
+// Mainnet v1.0 deploy (2026-04-27) — V2.3.1 protocol logic, mainnet release naming.
+const MAINNET_V2_PROGRAM_ID = 'gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS';
+
+// V1 escrow only ever existed on devnet — disable indexing it on mainnet.
+const V1_PROGRAM_ID = IS_MAINNET ? null : new PublicKey(DEVNET_V1_PROGRAM_ID);
+const V2_PROGRAM_ID = new PublicKey(
+  process.env.V2_PROGRAM_ID
+  || (IS_MAINNET ? MAINNET_V2_PROGRAM_ID : DEVNET_V2_PROGRAM_ID)
+);
+
+// Load IDLs — use the mainnet IDL when targeting mainnet (instructions/accounts
+// schema differs: 16 instructions, no lanes, tiered fees, V2.3.1 domain sep).
+const v1IdlPath = './blip_escrow_idl.json';
+const v2IdlPath = IS_MAINNET ? './blip_protocol_v1_mainnet_idl.json' : './blip_protocol_v2_idl.json';
+const V1_IDL = V1_PROGRAM_ID ? JSON.parse(fs.readFileSync(v1IdlPath, 'utf-8')) : null;
+const V2_IDL = JSON.parse(fs.readFileSync(v2IdlPath, 'utf-8'));
+
+const RPC_URL = process.env.SOLANA_RPC_URL
+  || (IS_MAINNET ? 'https://api.mainnet-beta.solana.com' : 'https://api.devnet.solana.com');
 const POLL_INTERVAL = 15000; // 15 seconds for forward polling (new txs)
 const BACKFILL_INTERVAL = 60000; // 60 seconds for backfill (historical txs)
 
@@ -94,12 +111,14 @@ class BlipScanIndexer {
   private v2NewestSignature: string | null = null;
   private v1BackfillDone: boolean = true;  // Skip backfill — only index new transactions
   private v2BackfillDone: boolean = true;  // Skip backfill — only index new transactions
-  private v1Coder: BorshAccountsCoder;
+  private v1Coder: BorshAccountsCoder | null = null;
   private v2Coder: BorshAccountsCoder | null = null;
 
   constructor() {
     this.connection = new Connection(RPC_URL, 'confirmed');
-    this.v1Coder = new BorshAccountsCoder(V1_IDL);
+    if (V1_IDL) {
+      this.v1Coder = new BorshAccountsCoder(V1_IDL);
+    }
 
     // Try to create V2 coder, but don't fail if it doesn't work
     try {
@@ -112,8 +131,9 @@ class BlipScanIndexer {
 
   async start() {
     console.log('🚀 BlipScan Indexer Starting...');
+    console.log(`🌐 Network: ${IS_MAINNET ? 'mainnet-beta' : 'devnet'}`);
     console.log(`📡 RPC: ${RPC_URL}`);
-    console.log(`🔗 V1 Program: ${V1_PROGRAM_ID.toString()}`);
+    if (V1_PROGRAM_ID) console.log(`🔗 V1 Program: ${V1_PROGRAM_ID.toString()}`);
     console.log(`🔗 V2 Program: ${V2_PROGRAM_ID.toString()}`);
 
     // Wire up error tracking — reuses the indexer's existing pg pool so we
@@ -189,10 +209,12 @@ class BlipScanIndexer {
       }
     }
 
-    // V1 trades with null user but status Locked/Released
-    const v1Rows = await pool.query(
-      `SELECT trade_pda FROM trades WHERE "user" IS NULL AND state IN ('Locked', 'Released', 'Refunded')`
-    );
+    // V1 trades with null user but status Locked/Released — devnet only
+    const v1Rows = V1_PROGRAM_ID
+      ? await pool.query(
+          `SELECT trade_pda FROM trades WHERE "user" IS NULL AND state IN ('Locked', 'Released', 'Refunded')`
+        )
+      : { rows: [] as Array<{ trade_pda: string }> };
     for (const row of v1Rows.rows) {
       try {
         const accountInfo = await this.connection.getAccountInfo(new PublicKey(row.trade_pda));
@@ -216,21 +238,23 @@ class BlipScanIndexer {
   }
 
   private async loadCursors() {
-    // Load V1 backfill cursor
-    const v1Result = await pool.query(
-      'SELECT last_processed_signature, last_processed_slot FROM indexer_cursor WHERE program_id = $1',
-      [V1_PROGRAM_ID.toString()]
-    );
-
-    if (v1Result.rows.length > 0) {
-      this.v1BackfillSignature = v1Result.rows[0].last_processed_signature;
-      this.v1BackfillSlot = v1Result.rows[0].last_processed_slot || 0;
-      console.log(`📍 V1 backfill cursor at slot ${this.v1BackfillSlot}`);
-    } else {
-      await pool.query(
-        'INSERT INTO indexer_cursor (program_id, last_processed_slot) VALUES ($1, 0) ON CONFLICT DO NOTHING',
+    // Load V1 backfill cursor (devnet-only; V1 escrow never deployed to mainnet)
+    if (V1_PROGRAM_ID) {
+      const v1Result = await pool.query(
+        'SELECT last_processed_signature, last_processed_slot FROM indexer_cursor WHERE program_id = $1',
         [V1_PROGRAM_ID.toString()]
       );
+
+      if (v1Result.rows.length > 0) {
+        this.v1BackfillSignature = v1Result.rows[0].last_processed_signature;
+        this.v1BackfillSlot = v1Result.rows[0].last_processed_slot || 0;
+        console.log(`📍 V1 backfill cursor at slot ${this.v1BackfillSlot}`);
+      } else {
+        await pool.query(
+          'INSERT INTO indexer_cursor (program_id, last_processed_slot) VALUES ($1, 0) ON CONFLICT DO NOTHING',
+          [V1_PROGRAM_ID.toString()]
+        );
+      }
     }
 
     // Load V2 backfill cursor
@@ -251,13 +275,15 @@ class BlipScanIndexer {
     }
 
     // Load newest signatures from DB (most recent tx we've seen per program)
-    const v1Newest = await pool.query(
-      `SELECT signature FROM transactions WHERE program_id = $1 ORDER BY block_time DESC LIMIT 1`,
-      [V1_PROGRAM_ID.toString()]
-    );
-    if (v1Newest.rows.length > 0) {
-      this.v1NewestSignature = v1Newest.rows[0].signature;
-      console.log(`📍 V1 newest sig: ${this.v1NewestSignature?.slice(0, 8)}...`);
+    if (V1_PROGRAM_ID) {
+      const v1Newest = await pool.query(
+        `SELECT signature FROM transactions WHERE program_id = $1 ORDER BY block_time DESC LIMIT 1`,
+        [V1_PROGRAM_ID.toString()]
+      );
+      if (v1Newest.rows.length > 0) {
+        this.v1NewestSignature = v1Newest.rows[0].signature;
+        console.log(`📍 V1 newest sig: ${this.v1NewestSignature?.slice(0, 8)}...`);
+      }
     }
 
     const v2Newest = await pool.query(
@@ -273,10 +299,9 @@ class BlipScanIndexer {
   private async poll() {
     // Forward poll: catch NEW transactions (runs every 15s)
     try {
-      await Promise.all([
-        this.fetchNewTransactions(V1_PROGRAM_ID, 'v1'),
-        this.fetchNewTransactions(V2_PROGRAM_ID, 'v2.2'),
-      ]);
+      const tasks: Promise<void>[] = [this.fetchNewTransactions(V2_PROGRAM_ID, 'v2.2')];
+      if (V1_PROGRAM_ID) tasks.push(this.fetchNewTransactions(V1_PROGRAM_ID, 'v1'));
+      await Promise.all(tasks);
     } catch (error) {
       console.error('❌ Error forward polling:', error);
       const e = error as { message?: string; stack?: string; name?: string };
@@ -294,7 +319,7 @@ class BlipScanIndexer {
   private async backfill() {
     // Backfill: catch OLDER transactions we haven't seen yet
     try {
-      if (!this.v1BackfillDone) await this.fetchOlderTransactions(V1_PROGRAM_ID, 'v1');
+      if (!this.v1BackfillDone && V1_PROGRAM_ID) await this.fetchOlderTransactions(V1_PROGRAM_ID, 'v1');
       if (!this.v2BackfillDone) await this.fetchOlderTransactions(V2_PROGRAM_ID, 'v2.2');
     } catch (error) {
       console.error('❌ Error backfilling:', error);
@@ -695,6 +720,9 @@ class BlipScanIndexer {
 
   private async parseEscrowAccount(data: Buffer): Promise<any> {
     // Use Anchor's BorshAccountsCoder to properly deserialize
+    if (!this.v1Coder) {
+      throw new Error('V1 coder unavailable on this network (mainnet has no V1 escrow program)');
+    }
     const decoded = this.v1Coder.decode('Escrow', data);
 
     if (!decoded) {
@@ -1088,10 +1116,12 @@ class BlipScanIndexer {
       // Get mint from transaction if available
       for (const account of accounts) {
         const pubkey = (typeof account === 'string') ? account : (account?.pubkey || account?.toBase58?.() || account?.toString?.() || '');
-        // USDT mint on devnet or mainnet
-        if (pubkey === 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr' ||
-            pubkey === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' ||
-            pubkey === 'FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z') {
+        // Known stablecoin mints (devnet + mainnet) — used to pick the mint
+        // out of the account list when logs don't carry it.
+        if (pubkey === 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr' ||  // devnet test
+            pubkey === 'FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z' ||  // USDT devnet
+            pubkey === 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB' ||  // USDT mainnet
+            pubkey === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') {  // USDC mainnet
           mint = pubkey;
         }
       }

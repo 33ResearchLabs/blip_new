@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Search, Activity, DollarSign, Clock, CheckCircle, Copy, ChevronRight, BarChart3, Sun, Moon, Users, ExternalLink } from 'lucide-react';
 import { useTradeStream } from './hooks/useTradeStream';
+import { solscanTx } from './lib/solscan';
 
 interface Trade {
   id: string;
@@ -609,7 +610,7 @@ export default function HomePage() {
                             </td>
                             <td className="py-2.5 px-4 text-right">
                               <a
-                                href={`https://solscan.io/tx/${tx.signature}?cluster=devnet`}
+                                href={solscanTx(tx.signature)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="p-1 rounded hover:bg-secondary transition-colors inline-flex"
@@ -694,7 +695,7 @@ export default function HomePage() {
                             </td>
                             <td className="py-2.5 px-4 text-right">
                               <a
-                                href={`https://solscan.io/tx/${op.signature}?cluster=devnet`}
+                                href={solscanTx(op.signature)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="p-1 rounded hover:bg-secondary transition-colors inline-flex"

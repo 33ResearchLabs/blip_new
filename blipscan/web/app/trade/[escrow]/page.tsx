@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Copy, Check, ExternalLink, Clock, User, CheckCircle2, XCircle, Lock, ChevronRight, Sun, Moon, ArrowRight, Wallet, DollarSign } from 'lucide-react';
 import { useTradeStream } from '../../hooks/useTradeStream';
+import { solscanTx as solscanTxUrl, solscanAccount as solscanAccountUrl } from '../../lib/solscan';
 
 interface Trade {
   id: string;
@@ -111,7 +112,7 @@ function AddressCell({ address, link, label }: { address: string; link?: string;
         <span className="text-xs font-mono text-foreground">{address}</span>
       )}
       <CopyButton text={address} />
-      <a href={`https://solscan.io/account/${address}?cluster=devnet`} target="_blank" rel="noopener noreferrer"
+      <a href={solscanAccountUrl(address)} target="_blank" rel="noopener noreferrer"
         className="p-1 rounded hover:bg-secondary transition-colors">
         <ExternalLink size={11} className="text-muted-foreground" />
       </a>
@@ -195,8 +196,8 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
     return `${d}d ago`;
   };
 
-  const solscanTx = (sig: string) => `https://solscan.io/tx/${sig}?cluster=devnet`;
-  const solscanAccount = (addr: string) => `https://solscan.io/account/${addr}?cluster=devnet`;
+  const solscanTx = solscanTxUrl;
+  const solscanAccount = solscanAccountUrl;
 
   const statusConfig: Record<string, { dot: string; text: string; bg: string }> = {
     created: { dot: 'bg-gray-400', text: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-500/10' },
