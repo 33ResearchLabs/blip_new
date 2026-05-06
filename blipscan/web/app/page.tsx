@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Search, Activity, DollarSign, Clock, CheckCircle, Copy, ChevronRight, BarChart3, Sun, Moon, Users, ExternalLink } from 'lucide-react';
 import { useTradeStream } from './hooks/useTradeStream';
-import { solscanTx } from '@/lib/explorer';
+import { solscanTx, networkLabel, isMainnet } from '@/lib/explorer';
 
 interface Trade {
   id: string;
@@ -298,8 +298,8 @@ export default function HomePage() {
             </div>
             <div className="flex items-center gap-2">
               <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary text-xs text-muted-foreground">
-                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                Devnet
+                <div className={`w-1.5 h-1.5 rounded-full ${isMainnet() ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                {networkLabel()}
               </div>
               <ThemeToggle />
             </div>
@@ -722,7 +722,7 @@ export default function HomePage() {
 
         {/* Footer */}
         <div className="mt-4 text-center text-xs text-muted-foreground">
-          Blip Money P2P Escrow Explorer &middot; Solana Devnet
+          Blip Money P2P Escrow Explorer &middot; Solana {networkLabel()}
         </div>
       </div>
     </div>

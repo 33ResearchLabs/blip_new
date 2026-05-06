@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Copy, Check, ExternalLink, Sun, Moon, Users } from 'lucide-react';
-import { solscanAccount } from '@/lib/explorer';
+import { solscanAccount, networkLabel, isMainnet } from '@/lib/explorer';
 
 interface Merchant {
   merchant_pubkey: string;
@@ -102,8 +102,8 @@ export default function MerchantsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400">
-              Devnet
+            <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${isMainnet() ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400'}`}>
+              {networkLabel()}
             </span>
             <ThemeToggle />
           </div>
