@@ -17,6 +17,7 @@ import {
 import { copyToClipboard } from "@/lib/clipboard";
 import { BottomNav } from "./BottomNav";
 import type { Screen } from "./types";
+import { isMainnet, networkLabel, explorerUrl } from "@/lib/solana/networkLabel";
 
 export interface WalletScreenProps {
   screen: Screen;
@@ -237,8 +238,8 @@ export const WalletScreen = ({
         {/* Quick Actions */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="grid grid-cols-2 gap-3 mb-4">
-          {/* Airdrop (devnet) */}
-          {solanaWallet.requestAirdrop && (
+          {/* Airdrop (devnet only — hidden on mainnet because faucets are devnet-only) */}
+          {solanaWallet.requestAirdrop && !isMainnet() && (
             <motion.button whileTap={{ scale: 0.95 }} onClick={handleAirdrop} disabled={isAirdropping}
               className="flex items-center gap-3 rounded-[18px] p-3.5 bg-surface-card border border-border-subtle">
               {isAirdropping
@@ -250,10 +251,10 @@ export const WalletScreen = ({
               </div>
             </motion.button>
           )}
-          {/* Explorer */}
+          {/* Explorer — uses the active cluster automatically */}
           {solanaWallet.walletAddress && (
             <motion.button whileTap={{ scale: 0.95 }}
-              onClick={() => window.open(`https://explorer.solana.com/address/${solanaWallet.walletAddress}?cluster=devnet`, '_blank')}
+              onClick={() => window.open(explorerUrl('address', solanaWallet.walletAddress!), '_blank')}
               className="flex items-center gap-3 rounded-[18px] p-3.5 bg-surface-card border border-border-subtle">
               <ExternalLink size={18} className="text-info" />
               <div className="text-left">
@@ -350,7 +351,7 @@ export const WalletScreen = ({
               </div>
 
               <p className="text-xs mb-4 text-center text-text-tertiary">
-                Send USDT or SOL to this address on Solana (Devnet)
+                Send USDT or SOL to this address on {networkLabel()}
               </p>
 
               <div className="rounded-2xl p-4 mb-4 bg-surface-card border border-border-subtle">

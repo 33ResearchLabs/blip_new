@@ -27,6 +27,7 @@ import { ConnectionIndicator } from "@/components/NotificationToast";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
 import { compressImage } from "@/lib/utils/compressImage";
+import { explorerUrl } from "@/lib/solana/networkLabel";
 import type { Screen, Order } from "./types";
 import {
   type RefObject,
@@ -737,7 +738,7 @@ export const OrderDetailScreen = ({
                 <div className="flex items-center justify-between">
                   <span className="text-text-tertiary">Transaction</span>
                   <a
-                    href={`https://explorer.solana.com/tx/${activeOrder.escrowTxHash}?cluster=devnet`}
+                    href={explorerUrl('tx', activeOrder.escrowTxHash)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 text-text-secondary"

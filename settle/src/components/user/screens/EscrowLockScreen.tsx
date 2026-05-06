@@ -15,6 +15,7 @@ import {
 import type { Screen } from "./types";
 import { BankAccountSelector, type SelectedBankDetails } from "@/components/user/BankAccountSelector";
 import type { PaymentMethodItem } from "@/components/user/PaymentMethodSelector";
+import { networkLabel, explorerUrl } from "@/lib/solana/networkLabel";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -154,7 +155,7 @@ export const EscrowLockScreen = ({
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[15px] text-text-secondary">Network</span>
-            <span className="text-[14px] text-text-secondary">Solana Devnet</span>
+            <span className="text-[14px] text-text-secondary">{networkLabel()}</span>
           </div>
         </div>
 
@@ -266,7 +267,7 @@ export const EscrowLockScreen = ({
               </div>
               {escrowTxHash && (
                 <a
-                  href={`https://explorer.solana.com/tx/${escrowTxHash}?cluster=devnet`}
+                  href={explorerUrl('tx', escrowTxHash)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-[13px] text-success hover:text-success"

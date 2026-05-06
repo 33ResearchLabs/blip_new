@@ -33,6 +33,7 @@ import { usePusher } from "@/context/PusherContext";
 import { useComplianceAuth } from "@/hooks/useComplianceAuth";
 import { useDisputeManagement } from "@/hooks/useDisputeManagement";
 import type { DisputeOrder } from "@/hooks/useDisputeManagement";
+import { networkLabel } from "@/lib/solana/networkLabel";
 import DisputeCard, { getEmoji, formatTimeAgo } from "@/components/compliance/DisputeCard";
 import { ChatRoom } from "@/components/chat/ChatRoom";
 import ResolveModal from "@/components/compliance/ResolveModal";
@@ -263,7 +264,7 @@ export default function ComplianceDashboard() {
             )}
 
             <p className="text-[11px] text-muted text-center">
-              Authorized DAO members only (Devnet)
+              Authorized DAO members only ({networkLabel('')})
             </p>
 
             {/* Divider */}

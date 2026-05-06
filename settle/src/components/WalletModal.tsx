@@ -30,7 +30,7 @@ const THEMES = {
     textAccent: 'text-white',
     textAccentLight: 'text-white/70',
     loaderColor: 'text-white',
-    subtitle: 'Solana Devnet',
+    subtitle: 'Connect Solana Wallet',
     footer: 'By connecting, you agree to the Terms of Service',
   },
   merchant: {
@@ -46,7 +46,7 @@ const THEMES = {
     textAccentLight: 'text-white/70',
     loaderColor: 'text-white',
     subtitle: 'Merchant Dashboard',
-    footer: 'Solana Devnet - Merchant Portal',
+    footer: 'Merchant Portal',
   },
 };
 

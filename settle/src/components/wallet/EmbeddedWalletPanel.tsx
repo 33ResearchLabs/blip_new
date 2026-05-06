@@ -9,6 +9,7 @@ import { DEVNET_RPC, DEVNET_WS_ENDPOINT } from '@/lib/solana/v2/config';
 import { exportPrivateKey } from '@/lib/wallet/embeddedWallet';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
+import { isMainnet } from '@/lib/solana/networkLabel';
 
 interface EmbeddedWalletPanelProps {
   publicKey: PublicKey | null;
@@ -130,17 +131,19 @@ export function EmbeddedWalletPanel({
           </div>
         </div>
 
-        {/* Airdrop SOL */}
-        <button
-          onClick={handleAirdropSol}
-          disabled={isAirdropping}
-          className="w-full py-2 rounded-lg bg-white/[0.04] border border-white/[0.06]
-                     text-xs text-white/60 font-mono hover:bg-white/[0.06] transition-colors
-                     disabled:opacity-50 flex items-center justify-center gap-1.5"
-        >
-          {isAirdropping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Droplets className="w-3 h-3" />}
-          {isAirdropping ? 'Airdropping...' : 'Airdrop 2 SOL (Devnet)'}
-        </button>
+        {/* Airdrop SOL — devnet only. No public faucet on mainnet. */}
+        {!isMainnet() && (
+          <button
+            onClick={handleAirdropSol}
+            disabled={isAirdropping}
+            className="w-full py-2 rounded-lg bg-white/[0.04] border border-white/[0.06]
+                       text-xs text-white/60 font-mono hover:bg-white/[0.06] transition-colors
+                       disabled:opacity-50 flex items-center justify-center gap-1.5"
+          >
+            {isAirdropping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Droplets className="w-3 h-3" />}
+            {isAirdropping ? 'Airdropping...' : 'Airdrop 2 SOL (Devnet)'}
+          </button>
+        )}
         {airdropMsg && (
           <div className={`text-[10px] font-mono text-center ${airdropMsg.includes('airdropped') ? 'text-green-400' : 'text-red-400'}`}>
             {airdropMsg}
