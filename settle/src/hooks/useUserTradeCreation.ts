@@ -110,31 +110,11 @@ export function useUserTradeCreation({
         }
       } catch { /* keep last known rate */ }
 
-      // SELL flow still requires a merchant counterparty to lock escrow against.
-      // Until the on-chain program supports counterparty-less escrow we keep
-      // the offer lookup here; broadcast-SELL will be a follow-up.
+      // SELL flow — broadcast. User funds escrow without specifying a
+      // counterparty (depositToEscrowOpen / fundEscrow). A merchant joins
+      // later via acceptTrade.
       if (tradeType === "sell") {
-        const offerType = 'buy';
-        const params = new URLSearchParams({
-          amount, type: offerType, payment_method: paymentMethod,
-          preference: tradePreference, pair: selectedPair,
-        });
-        const offerRes = await fetchWithAuth(`/api/offers?${params}`);
-        const offerData = offerRes.ok ? await offerRes.json() : null;
-        if (!offerData?.success || !offerData.data) {
-          showAlert('No Buyers', 'No merchant is buying right now. Try again shortly or switch to BUY.', 'warning');
-          setIsLoading(false);
-          return;
-        }
-        const offer = offerData.data;
-        const merchantWallet = offer?.merchant?.wallet_address;
-        const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
-        if (!isValidSolanaAddress) {
-          showAlert('Wallet Not Linked', 'This merchant has not linked their Solana wallet yet. Try again later or pick a different amount.', 'warning');
-          setIsLoading(false);
-          return;
-        }
-        setSelectedOffer(offer);
+        setSelectedOffer(null);
         setEscrowTxStatus('idle');
         setEscrowTxHash(null);
         setEscrowError(null);
@@ -324,10 +304,10 @@ export function useUserTradeCreation({
   };
 
   const confirmEscrow = async () => {
-    console.log('[Escrow] confirmEscrow called', { selectedOffer, amount, userId });
-    if (!selectedOffer || !amount) {
-      console.log('[Escrow] Missing required data:', { selectedOffer: !!selectedOffer, amount: !!amount });
-      showAlert('Error', 'Missing order details', 'error');
+    console.log('[Escrow] confirmEscrow called', { amount, userId });
+    if (!amount) {
+      console.log('[Escrow] Missing amount');
+      showAlert('Error', 'Missing order amount', 'error');
       return;
     }
 
@@ -383,33 +363,17 @@ export function useUserTradeCreation({
     console.log('[Escrow] Starting escrow transaction');
 
     try {
-      const merchantWallet = selectedOffer?.merchant?.wallet_address;
-      console.log('[Escrow] Merchant wallet:', merchantWallet || '(MISSING!)');
-      console.log('[Escrow] Merchant name:', selectedOffer?.merchant?.display_name || '(unknown)');
       console.log('[Escrow] User wallet:', solanaWallet.walletAddress);
       console.log('[Escrow] Program ready:', solanaWallet.programReady);
-
-      const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
-      if (!isValidSolanaAddress) {
-        setEscrowError('This merchant has not linked their Solana wallet. Please choose a different offer or wait for the merchant to set up their wallet.');
-        setEscrowTxStatus('error');
-        setIsLoading(false);
-        return;
-      }
-
       console.log('[Escrow] Wallet state before escrow:', {
         connected: solanaWallet.connected,
         walletAddress: solanaWallet.walletAddress,
         hasPublicKey: !!solanaWallet.publicKey,
       });
 
-      // Pre-generate the trade_id we'll use on-chain. By committing it to a
-      // local breadcrumb BEFORE we sign, any failure between sign+confirm
-      // and the settle PATCH leaves a recoverable trail: the sweep script
-      // can derive the trade PDA from (wallet, trade_id) and synthesise
-      // a settle order. Without this breadcrumb the user-side flow has no
-      // anchor between Solana and Postgres — the orphan class this whole
-      // pipeline is supposed to close.
+      // Pre-generate the trade_id we'll use on-chain. Breadcrumb gives the
+      // sweep script a recoverable trail if we crash between sign+confirm
+      // and the settle POST.
       const userTradeId = Date.now();
       const breadcrumbKey = `blip_user_pending_escrow_${userTradeId}`;
       try {
@@ -419,28 +383,23 @@ export function useUserTradeCreation({
             tradeId: userTradeId,
             amount: amountNum,
             actorWallet: solanaWallet.walletAddress,
-            offerId: selectedOffer.id,
             timestamp: Date.now(),
           }),
         );
       } catch { /* non-fatal */ }
 
-      console.log('[Escrow] Calling depositToEscrow with:', {
+      console.log('[Escrow] Calling depositToEscrowOpen (broadcast) with:', {
         amount: amountNum,
-        merchantWallet,
         tradeId: userTradeId,
       });
 
       let escrowResult: { txHash: string; success: boolean; tradePda?: string; escrowPda?: string; tradeId?: number };
 
       try {
-        escrowResult = await solanaWallet.depositToEscrow({
+        escrowResult = await solanaWallet.depositToEscrowOpen({
           amount: amountNum,
-          merchantWallet,
-          // Pass our pre-generated trade_id through. solanaWallet.depositToEscrow
-          // accepts an optional tradeId; without it the wallet uses Date.now()
-          // internally — same generator, but losing the link to our breadcrumb.
           tradeId: userTradeId,
+          side: 'sell',
         });
         console.log('[Escrow] depositToEscrow result:', escrowResult);
 
@@ -501,7 +460,6 @@ export function useUserTradeCreation({
         },
         body: JSON.stringify({
           user_id: userId,
-          offer_id: selectedOffer.id,
           crypto_amount: amountNum,
           type: 'sell',
           payment_method: paymentMethod,
