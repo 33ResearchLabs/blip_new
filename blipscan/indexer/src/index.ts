@@ -214,12 +214,7 @@ class BlipScanIndexer {
       try {
         const accountInfo = await this.connection.getAccountInfo(new PublicKey(row.trade_pda));
         if (!accountInfo) continue;
-        let trade;
-        if (this.v2Coder) {
-          try { trade = this.v2Coder.decode('Trade', accountInfo.data); } catch { trade = this.parseV2TradeAccount(accountInfo.data); }
-        } else {
-          trade = this.parseV2TradeAccount(accountInfo.data);
-        }
+        const trade = this.decodeTrade(accountInfo.data);
         if (trade && trade.counterparty.toString() !== PublicKey.default.toString()) {
           await pool.query('UPDATE v2_trades SET counterparty_pubkey = $1, updated_at = NOW() WHERE trade_pda = $2', [trade.counterparty.toString(), row.trade_pda]);
           console.log(`  🔧 Fixed V2 counterparty for ${row.trade_pda.slice(0, 8)}... → ${trade.counterparty.toString().slice(0, 8)}...`);
@@ -771,6 +766,25 @@ class BlipScanIndexer {
   // Status enum: Created(0), Funded(1), Locked(2), PaymentSent(3), Disputed(4), Released(5), Refunded(6)
   private static V2_STATUS_MAP = ['created', 'funded', 'locked', 'payment_sent', 'disputed', 'released', 'refunded'];
 
+  /**
+   * Decode a Trade account and normalize fields. Anchor 0.30+ IDLs use
+   * snake_case field names, so the BorshAccountsCoder returns
+   * `trade_id`/`fee_bps` while older code expects `tradeId`/`feeBps`. This
+   * helper exposes both and falls back to the manual parser if decode fails.
+   */
+  private decodeTrade(data: Buffer): any {
+    let raw: any = null;
+    if (this.v2Coder) {
+      try { raw = this.v2Coder.decode('Trade', data); } catch { raw = null; }
+    }
+    if (!raw) return this.parseV2TradeAccount(data);
+    return {
+      ...raw,
+      tradeId: raw.tradeId ?? raw.trade_id,
+      feeBps: raw.feeBps ?? raw.fee_bps,
+    };
+  }
+
   private parseV2TradeAccount(data: Buffer): any {
     // V2.3 Trade struct layout (238 bytes total):
     //   8: discriminator
@@ -850,19 +864,7 @@ class BlipScanIndexer {
         return;
       }
 
-      // Parse trade data using V2 coder or manual parsing
-      let trade;
-      if (this.v2Coder) {
-        try {
-          trade = this.v2Coder.decode('Trade', accountInfo.data);
-        } catch (error) {
-          console.log('  ℹ️ Coder failed, using manual parsing');
-          trade = this.parseV2TradeAccount(accountInfo.data);
-        }
-      } else {
-        trade = this.parseV2TradeAccount(accountInfo.data);
-      }
-
+      const trade = this.decodeTrade(accountInfo.data);
       if (!trade) {
         throw new Error('Failed to decode trade account');
       }
@@ -941,16 +943,7 @@ class BlipScanIndexer {
       const accountInfo = await this.connection.getAccountInfo(new PublicKey(tradeAddress));
       if (!accountInfo) return;
 
-      let trade;
-      if (this.v2Coder) {
-        try {
-          trade = this.v2Coder.decode('Trade', accountInfo.data);
-        } catch (error) {
-          trade = this.parseV2TradeAccount(accountInfo.data);
-        }
-      } else {
-        trade = this.parseV2TradeAccount(accountInfo.data);
-      }
+      const trade = this.decodeTrade(accountInfo.data);
       if (!trade) return;
 
       // Try to extract lane_id from the transaction
@@ -989,12 +982,7 @@ class BlipScanIndexer {
       const accountInfo = await this.connection.getAccountInfo(new PublicKey(tradeAddress));
       let counterparty: string | null = null;
       if (accountInfo) {
-        let trade;
-        if (this.v2Coder) {
-          try { trade = this.v2Coder.decode('Trade', accountInfo.data); } catch { trade = this.parseV2TradeAccount(accountInfo.data); }
-        } else {
-          trade = this.parseV2TradeAccount(accountInfo.data);
-        }
+        const trade = this.decodeTrade(accountInfo.data);
         if (trade && trade.counterparty.toString() !== PublicKey.default.toString()) {
           counterparty = trade.counterparty.toString();
         }
@@ -1022,12 +1010,7 @@ class BlipScanIndexer {
       const accountInfo = await this.connection.getAccountInfo(new PublicKey(tradeAddress));
       let counterparty: string | null = null;
       if (accountInfo) {
-        let trade;
-        if (this.v2Coder) {
-          try { trade = this.v2Coder.decode('Trade', accountInfo.data); } catch { trade = this.parseV2TradeAccount(accountInfo.data); }
-        } else {
-          trade = this.parseV2TradeAccount(accountInfo.data);
-        }
+        const trade = this.decodeTrade(accountInfo.data);
         if (trade && trade.counterparty.toString() !== PublicKey.default.toString()) {
           counterparty = trade.counterparty.toString();
         }
@@ -1057,16 +1040,7 @@ class BlipScanIndexer {
         return;
       }
 
-      let trade;
-      if (this.v2Coder) {
-        try {
-          trade = this.v2Coder.decode('Trade', accountInfo.data);
-        } catch (error) {
-          trade = this.parseV2TradeAccount(accountInfo.data);
-        }
-      } else {
-        trade = this.parseV2TradeAccount(accountInfo.data);
-      }
+      const trade = this.decodeTrade(accountInfo.data);
 
       if (!trade) return;
 
