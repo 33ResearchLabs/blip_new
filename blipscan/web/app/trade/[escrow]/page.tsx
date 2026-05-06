@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Copy, Check, ExternalLink, Clock, User, CheckCircle2, XCircle, Lock, ChevronRight, Sun, Moon, ArrowRight, Wallet, DollarSign } from 'lucide-react';
 import { useTradeStream } from '../../hooks/useTradeStream';
-import { solscanTx, solscanAccount } from '@/lib/explorer';
+import { solscanTx, solscanAccount, networkLabel, isMainnet } from '@/lib/explorer';
 
 interface Trade {
   id: string;
@@ -390,7 +390,7 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400">Devnet</span>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${isMainnet() ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400'}`}>{networkLabel()}</span>
             <ThemeToggle />
           </div>
         </div>
