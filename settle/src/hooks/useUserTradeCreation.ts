@@ -97,65 +97,40 @@ export function useUserTradeCreation({
     setIsLoading(true);
 
     try {
-      const offerType = tradeType === 'buy' ? 'sell' : 'buy';
-      const params = new URLSearchParams({
-        amount: amount,
-        type: offerType,
-        payment_method: paymentMethod,
-        preference: tradePreference,
-        pair: selectedPair,
-      });
-      const offerRes = await fetchWithAuth(`/api/offers?${params}`);
-      if (!offerRes.ok) {
-        const errorMsg = `Server error (${offerRes.status})`;
-        console.error('Failed to fetch offers:', errorMsg);
-        showAlert(
-          'No Offers',
-          'No offers available for this amount and payment method. Try a different amount, switch payment method, or check back shortly.',
-          'warning'
-        );
-        setIsLoading(false);
-        return;
-      }
-      const offerData = await offerRes.json();
-
-      if (!offerData.success || !offerData.data) {
-        const serverErr = offerData.error;
-        const errorMsg = serverErr
-          || 'No offers available for this amount and payment method. Try a different amount, switch payment method, or check back shortly.';
-        console.error('Failed to fetch offers:', errorMsg);
-        showAlert(serverErr ? 'Error' : 'No Offers', errorMsg, serverErr ? 'error' : 'warning');
-        setIsLoading(false);
-        return;
-      }
-
-      const offer = offerData.data;
-
-      // Use corridor rate for the selected pair (admin-set price), not the offer's AED rate
-      if (selectedPair !== 'usdt_aed') {
-        try {
-          const priceRes = await fetchWithAuth(`/api/prices/current?pair=${selectedPair}`);
-          const priceData = await priceRes.json();
-          if (priceData?.success && priceData.data?.price) {
-            setCurrentRate(priceData.data.price);
-          } else {
-            setCurrentRate(parseFloat(offer.rate));
-          }
-        } catch {
-          setCurrentRate(parseFloat(offer.rate));
+      // Refresh corridor rate so the order's expected_rate matches what the
+      // server will see. No offer lookup — broadcast model: order sits in
+      // pending until any merchant claims it.
+      let liveRate = currentRate;
+      try {
+        const priceRes = await fetchWithAuth(`/api/prices/current?pair=${selectedPair}`);
+        const priceData = await priceRes.json();
+        if (priceData?.success && priceData.data?.price) {
+          liveRate = priceData.data.price;
+          setCurrentRate(liveRate);
         }
-      } else {
-        setCurrentRate(parseFloat(offer.rate));
-      }
+      } catch { /* keep last known rate */ }
 
-      // SELL orders MUST lock escrow first (escrow-first model), regardless of payment method.
-      // Route to escrow screen before anything else.
+      // SELL flow still requires a merchant counterparty to lock escrow against.
+      // Until the on-chain program supports counterparty-less escrow we keep
+      // the offer lookup here; broadcast-SELL will be a follow-up.
       if (tradeType === "sell") {
+        const offerType = 'buy';
+        const params = new URLSearchParams({
+          amount, type: offerType, payment_method: paymentMethod,
+          preference: tradePreference, pair: selectedPair,
+        });
+        const offerRes = await fetchWithAuth(`/api/offers?${params}`);
+        const offerData = offerRes.ok ? await offerRes.json() : null;
+        if (!offerData?.success || !offerData.data) {
+          showAlert('No Buyers', 'No merchant is buying right now. Try again shortly or switch to BUY.', 'warning');
+          setIsLoading(false);
+          return;
+        }
+        const offer = offerData.data;
         const merchantWallet = offer?.merchant?.wallet_address;
         const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
         if (!isValidSolanaAddress) {
-          console.error('[Trade] Merchant has no wallet address:', offer?.merchant?.display_name);
-          showAlert('Wallet Not Linked', 'This merchant has not linked their Solana wallet yet. Please try again later or choose a different amount to match with another merchant.', 'warning');
+          showAlert('Wallet Not Linked', 'This merchant has not linked their Solana wallet yet. Try again later or pick a different amount.', 'warning');
           setIsLoading(false);
           return;
         }
@@ -168,14 +143,7 @@ export function useUserTradeCreation({
         return;
       }
 
-      // BUY cash orders go to cash-confirm screen (no escrow needed from buyer)
-      if (paymentMethod === "cash") {
-        setSelectedOffer(offer);
-        setScreen("cash-confirm");
-        setIsLoading(false);
-        return;
-      }
-
+      // BUY flow — broadcast. No offer lookup; any merchant can claim later.
       // Buy orders require a connected wallet so the merchant can release escrow to the buyer
       if (!solanaWallet.walletAddress) {
         showAlert('Wallet Required', 'Please connect your Solana wallet before creating a buy order. The merchant needs your wallet address to release crypto to you.', 'warning');
@@ -187,19 +155,17 @@ export function useUserTradeCreation({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Required by /api/orders POST: server-side dedup of accidental
-          // double-clicks / network retries. UUIDv4 per logical request.
           'Idempotency-Key': generateIdempotencyKey(),
         },
         body: JSON.stringify({
           user_id: userId,
-          offer_id: offer.id,
           crypto_amount: parseFloat(amount),
           type: 'buy',
           payment_method: paymentMethod,
           preference: tradePreference,
           buyer_wallet_address: solanaWallet.walletAddress,
           pair: selectedPair,
+          expected_rate: liveRate,
         }),
       });
       if (!orderRes.ok) {
@@ -239,7 +205,7 @@ export function useUserTradeCreation({
       if (newOrder) {
         setOrders(prev => [...prev, newOrder]);
         setActiveOrderId(newOrder.id);
-        setPendingTradeData({ amount, fiatAmount: (parseFloat(amount) * parseFloat(offer.rate)).toFixed(2), type: tradeType, paymentMethod });
+        setPendingTradeData({ amount, fiatAmount: (parseFloat(amount) * liveRate).toFixed(2), type: tradeType, paymentMethod });
         setScreen("matching");
         setAmount("");
         playSound('trade_start');
