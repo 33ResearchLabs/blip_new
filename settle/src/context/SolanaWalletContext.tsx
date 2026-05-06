@@ -71,6 +71,7 @@ import {
   DisputeResolution,
   type Lane,
   getUsdtMint,
+  FEE_BPS_DEFAULT,
 } from '@/lib/solana/v2';
 
 // Get network from environment variable (defaults to devnet for safety)
@@ -808,6 +809,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     tradeId: number;
     amount: number;
     side: 'buy' | 'sell';
+    feeBps?: number;
   }): Promise<TradeOperationResult> => {
     if (!publicKey || !program || !signTransaction) {
       throw new Error('Wallet not connected');
@@ -825,6 +827,9 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
           tradeId: params.tradeId,
           amount: new BN(Math.floor(params.amount * 1_000_000)),
           side: params.side === 'buy' ? TradeSide.Buy : TradeSide.Sell,
+          // V2.3.1: tiered fees. Caller may override via params.feeBps
+          // (e.g. 150 / 200 / 250 from frontend tier buttons).
+          feeBps: params.feeBps ?? FEE_BPS_DEFAULT,
         }
       );
 
@@ -1118,6 +1123,8 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
           tradeId: params.tradeId,
           amount: amountBN,
           side: sideEnum,
+          // V2.3.1: tiered fees — fall back to default tier if caller didn't pick.
+          feeBps: (params as { feeBps?: number }).feeBps ?? FEE_BPS_DEFAULT,
         }
       );
 
@@ -1367,6 +1374,9 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
             tradeId,
             amount: amountBN,
             side: TradeSide.Sell, // User is selling crypto
+            // V2.3.1: tiered fees — depositToEscrow uses default tier
+            // unless caller passes feeBps explicitly via params.
+            feeBps: (params as { feeBps?: number }).feeBps ?? FEE_BPS_DEFAULT,
           }
         ),
         10000,

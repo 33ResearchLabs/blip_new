@@ -106,11 +106,18 @@ export interface WithdrawLaneParams {
   amount: BN;
 }
 
-// Create trade params
+// Create trade params (V2.3.1 — tiered fees)
 export interface CreateTradeParams {
   tradeId: number;
   amount: BN;
   side: TradeSide;
+  /**
+   * Fee tier in basis points. Must fall within the protocol's
+   * [min_fee_bps, max_fee_bps] range (defaults: 150 / 250 on mainnet).
+   * Snapshotted onto the on-chain Trade so future config changes don't
+   * affect this trade. Required by the v1 mainnet program.
+   */
+  feeBps: number;
 }
 
 // Fund escrow params (no counterparty needed)

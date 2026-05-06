@@ -1,5 +1,5 @@
 {
-  "address": "6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87",
+  "address": "gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS",
   "metadata": {
     "name": "blip_protocol_v2",
     "version": "2.0.0",
@@ -360,211 +360,6 @@
         }
       ],
       "args": []
-    },
-    {
-      "name": "create_lane",
-      "docs": [
-        "Create a liquidity lane for atomic matching"
-      ],
-      "discriminator": [
-        202,
-        246,
-        63,
-        11,
-        41,
-        211,
-        37,
-        227
-      ],
-      "accounts": [
-        {
-          "name": "merchant",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "lane",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  97,
-                  110,
-                  101,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "merchant"
-              },
-              {
-                "kind": "arg",
-                "path": "params.lane_id"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  97,
-                  110,
-                  101,
-                  45,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116,
-                  45,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "lane"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault_ata",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "vault_authority"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "mint"
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "params",
-          "type": {
-            "defined": {
-              "name": "CreateLaneParams"
-            }
-          }
-        }
-      ]
     },
     {
       "name": "create_trade",
@@ -1177,86 +972,6 @@
       "args": []
     },
     {
-      "name": "fund_lane",
-      "docs": [
-        "Fund a liquidity lane (merchant deposits tokens)"
-      ],
-      "discriminator": [
-        175,
-        20,
-        83,
-        179,
-        126,
-        192,
-        186,
-        165
-      ],
-      "accounts": [
-        {
-          "name": "merchant",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "lane"
-          ]
-        },
-        {
-          "name": "lane",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  97,
-                  110,
-                  101,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "merchant"
-              },
-              {
-                "kind": "account",
-                "path": "lane.lane_id",
-                "account": "Lane"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault_ata",
-          "writable": true
-        },
-        {
-          "name": "merchant_ata",
-          "writable": true
-        },
-        {
-          "name": "mint"
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "params",
-          "type": {
-            "defined": {
-              "name": "FundLaneParams"
-            }
-          }
-        }
-      ]
-    },
-    {
       "name": "initialize_config",
       "docs": [
         "Initialize protocol configuration (one-time setup)"
@@ -1710,375 +1425,6 @@
           "type": {
             "defined": {
               "name": "MatchOfferParams"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "match_offer_and_lock_from_lane",
-      "docs": [
-        "Match offer and lock escrow atomically from lane (PRIMARY PATH)",
-        "This is a single-transaction, instant matching flow using prefunded lane liquidity"
-      ],
-      "discriminator": [
-        96,
-        172,
-        99,
-        240,
-        173,
-        65,
-        162,
-        72
-      ],
-      "accounts": [
-        {
-          "name": "matcher",
-          "docs": [
-            "Matcher (pays PDA rent, anyone can match)"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "offer_creator",
-          "docs": [
-            "Also the lane merchant"
-          ]
-        },
-        {
-          "name": "protocol_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  116,
-                  111,
-                  99,
-                  111,
-                  108,
-                  45,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "lane",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  97,
-                  110,
-                  101,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "offer_creator"
-              },
-              {
-                "kind": "arg",
-                "path": "params.lane_id"
-              }
-            ]
-          }
-        },
-        {
-          "name": "lane_vault_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  97,
-                  110,
-                  101,
-                  45,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116,
-                  45,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "lane"
-              }
-            ]
-          }
-        },
-        {
-          "name": "lane_vault_ata",
-          "writable": true
-        },
-        {
-          "name": "trade",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  116,
-                  114,
-                  97,
-                  100,
-                  101,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "offer_creator"
-              },
-              {
-                "kind": "arg",
-                "path": "params.trade_id"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrow",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "trade"
-              }
-            ]
-          }
-        },
-        {
-          "name": "trade_vault_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116,
-                  45,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "escrow"
-              }
-            ]
-          }
-        },
-        {
-          "name": "trade_vault_ata",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "trade_vault_authority"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "offer_fill",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  102,
-                  102,
-                  101,
-                  114,
-                  45,
-                  102,
-                  105,
-                  108,
-                  108
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "params.offer_hash"
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "Mint must match lane's mint (verified in handler)"
-          ]
-        },
-        {
-          "name": "instructions_sysvar",
-          "address": "Sysvar1nstructions1111111111111111111111111"
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "params",
-          "type": {
-            "defined": {
-              "name": "MatchOfferAndLockFromLaneParams"
             }
           }
         }
@@ -2887,125 +2233,6 @@
           }
         }
       ]
-    },
-    {
-      "name": "withdraw_lane",
-      "docs": [
-        "Withdraw from liquidity lane (merchant withdraws available funds)"
-      ],
-      "discriminator": [
-        94,
-        241,
-        194,
-        223,
-        148,
-        113,
-        191,
-        32
-      ],
-      "accounts": [
-        {
-          "name": "merchant",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "lane"
-          ]
-        },
-        {
-          "name": "lane",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  97,
-                  110,
-                  101,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "merchant"
-              },
-              {
-                "kind": "account",
-                "path": "lane.lane_id",
-                "account": "Lane"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  97,
-                  110,
-                  101,
-                  45,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116,
-                  45,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121,
-                  45,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "lane"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault_ata",
-          "writable": true
-        },
-        {
-          "name": "merchant_ata",
-          "writable": true
-        },
-        {
-          "name": "mint"
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "params",
-          "type": {
-            "defined": {
-              "name": "WithdrawLaneParams"
-            }
-          }
-        }
-      ]
     }
   ],
   "accounts": [
@@ -3020,19 +2247,6 @@
         22,
         218,
         155
-      ]
-    },
-    {
-      "name": "Lane",
-      "discriminator": [
-        214,
-        116,
-        40,
-        235,
-        37,
-        29,
-        87,
-        202
       ]
     },
     {
@@ -3522,26 +2736,6 @@
       }
     },
     {
-      "name": "CreateLaneParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "lane_id",
-            "type": "u64"
-          },
-          {
-            "name": "min_amount",
-            "type": "u64"
-          },
-          {
-            "name": "max_amount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "CreateTradeParams",
       "type": {
         "kind": "struct",
@@ -3561,6 +2755,15 @@
                 "name": "TradeSide"
               }
             }
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Fee tier in basis points (V2.3.1). Caller picks a tier within the",
+              "protocol's [min_fee_bps, max_fee_bps] range. Snapshotted onto the",
+              "Trade so future config changes don't affect this trade."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -3723,18 +2926,6 @@
       }
     },
     {
-      "name": "FundLaneParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "amount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "InitializeConfigParams",
       "type": {
         "kind": "struct",
@@ -3755,110 +2946,6 @@
       }
     },
     {
-      "name": "Lane",
-      "docs": [
-        "Liquidity Lane - Merchant's prefunded vault for instant matching",
-        "",
-        "Seeds: [b\"lane-v2\", merchant, lane_id.to_le_bytes()]"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "merchant",
-            "docs": [
-              "Lane owner (merchant)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "lane_id",
-            "docs": [
-              "Lane ID (unique per merchant)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "mint",
-            "docs": [
-              "Token mint"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "vault_authority",
-            "docs": [
-              "Lane vault authority PDA"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "vault_ata",
-            "docs": [
-              "Lane vault token account"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "available_balance",
-            "docs": [
-              "Available balance (tracked on-chain)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "min_amount",
-            "docs": [
-              "Minimum order amount"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "max_amount",
-            "docs": [
-              "Maximum order amount"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "is_active",
-            "docs": [
-              "Is lane active (merchant can pause)"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "bump",
-            "docs": [
-              "Lane PDA bump"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "vault_bump",
-            "docs": [
-              "Vault authority bump"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "created_at",
-            "docs": [
-              "Created timestamp"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "updated_at",
-            "docs": [
-              "Last updated timestamp"
-            ],
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
       "name": "LockEscrowParams",
       "type": {
         "kind": "struct",
@@ -3866,98 +2953,6 @@
           {
             "name": "counterparty",
             "type": "pubkey"
-          }
-        ]
-      }
-    },
-    {
-      "name": "MatchOfferAndLockFromLaneParams",
-      "docs": [
-        "Minimal params to reduce stack usage",
-        "The offer hash is verified client-side; we trust it if the signature is valid"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "lane_id",
-            "docs": [
-              "Lane ID for PDA derivation"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "trade_id",
-            "docs": [
-              "Trade ID for PDA derivation"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "amount",
-            "docs": [
-              "Amount to trade"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "side",
-            "docs": [
-              "Trade side (0=Buy, 1=Sell)"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "expiry",
-            "docs": [
-              "Offer expiry timestamp"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "signature",
-            "docs": [
-              "Ed25519 signature over offer hash"
-            ],
-            "type": {
-              "array": [
-                "u8",
-                64
-              ]
-            }
-          },
-          {
-            "name": "counterparty",
-            "docs": [
-              "Counterparty for the trade"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "nonce",
-            "docs": [
-              "Nonce from the signed Offer — required to reconstruct the hash on-chain."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "offer_hash",
-            "docs": [
-              "SHA256 hash of the canonical offer"
-            ],
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "ed25519_ix_index",
-            "docs": [
-              "Index (in the current tx) of the Ed25519Verify instruction."
-            ],
-            "type": "u16"
           }
         ]
       }
@@ -4019,7 +3014,13 @@
         "V2.3: Added `counterparty` so offers are bound to the intended buyer at",
         "signature time. Without this binding, an attacker who observes a signed",
         "offer can race to match it with `params.counterparty = attacker`,",
-        "consuming the OfferFill PDA and locking out the intended buyer."
+        "consuming the OfferFill PDA and locking out the intended buyer.",
+        "",
+        "V2.3.1: Added `fee_bps` so the merchant's signed offer commits to a",
+        "specific fee tier within the protocol's [min_fee_bps, max_fee_bps] range.",
+        "Without this, a matcher could submit the offer with a different (lower)",
+        "fee than the merchant intended. Domain separator bumped to \\x02 because",
+        "the Offer layout changed — old SDK signatures will not validate."
       ],
       "type": {
         "kind": "struct",
@@ -4091,6 +3092,17 @@
               "Lane ID (v2.2) - 0 means no lane (fallback to two-step)"
             ],
             "type": "u64"
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Fee tier in basis points (V2.3.1). The merchant commits to a tier at",
+              "signing time; the program validates it falls within the protocol's",
+              "[min_fee_bps, max_fee_bps] range and snapshots it onto the Trade so",
+              "future config changes don't affect this trade. Typical tiers:",
+              "150 = 1.5% (cheap), 200 = 2% (standard), 250 = 2.5% (priority)."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -4761,18 +3773,6 @@
             "type": {
               "option": "bool"
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "WithdrawLaneParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "amount",
-            "type": "u64"
           }
         ]
       }
