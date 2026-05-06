@@ -26,6 +26,7 @@ import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsO
 import { copyToClipboard } from "@/lib/clipboard";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { DEVNET_RPC, DEVNET_WS_ENDPOINT } from "@/lib/solana/v2/config";
+import { confirmHttp } from "@/lib/solana/confirmHttp";
 import {
   generateWallet,
   importWallet,
@@ -367,7 +368,7 @@ export default function WalletPage({
         tx.sign(kp);
 
         const sig = await connection.sendRawTransaction(tx.serialize());
-        await connection.confirmTransaction(sig, "confirmed");
+        await confirmHttp(connection, sig);
         setSendSuccess(`Sent ${amount} SOL! Tx: ${sig.slice(0, 8)}...`);
       } else {
         // Send USDT (SPL token)
@@ -433,7 +434,7 @@ export default function WalletPage({
         tx.sign(kp);
 
         const sig = await connection.sendRawTransaction(tx.serialize());
-        await connection.confirmTransaction(sig, "confirmed");
+        await confirmHttp(connection, sig);
         setSendSuccess(`Sent ${amount} USDT! Tx: ${sig.slice(0, 8)}...`);
       }
 

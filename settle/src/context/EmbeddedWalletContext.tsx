@@ -63,6 +63,7 @@ import {
   clearSessionKeypair,
 } from '@/lib/wallet/embeddedWallet';
 import { createKeypairWalletAdapter } from '@/lib/wallet/keypairWalletAdapter';
+import { confirmHttp } from '@/lib/solana/confirmHttp';
 import idlRaw from '@/lib/solana/v2/idl.json';
 import { convertIdlToAnchor29 } from '@/lib/solana/idlConverter';
 import bs58 from 'bs58';
@@ -341,9 +342,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     const txHash = await connection.sendRawTransaction(transaction.serialize(), {
       maxRetries: 5,
     });
-
-    await connection.confirmTransaction({ signature: txHash, blockhash, lastValidBlockHeight });
-    return txHash;
+    return await confirmHttp(connection, txHash, { lastValidBlockHeight });
   }, [keypair, connection, touchActivity]);
 
   // ---- Protocol config check ----
