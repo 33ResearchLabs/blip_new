@@ -1,8 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
-  generateLoginMessage,
-  requestWalletSignature,
   authenticateWithWallet,
   setUsername as setUsernameAPI,
 } from '@/lib/auth/walletAuth';
@@ -48,16 +46,11 @@ export function useWalletAuth() {
     try {
       const walletAddress = publicKey.toBase58();
 
-      // Generate message to sign
-      const message = generateLoginMessage(walletAddress);
-      setCurrentMessage(message);
-
-      // Request signature
-      const signature = await requestWalletSignature(signMessage, message);
-      setCurrentSignature(signature);
-
-      // Authenticate with API
-      const result = await authenticateWithWallet(walletAddress, signature, message);
+      // The helper fetches a server-issued nonce, asks the wallet to sign it,
+      // and posts everything. No client-generated message — replay-safe.
+      const result = await authenticateWithWallet(walletAddress, signMessage);
+      setCurrentMessage('');
+      setCurrentSignature('');
 
       if (!result.success) {
         setAuthError(result.error || 'Authentication failed');
@@ -116,12 +109,9 @@ export function useWalletAuth() {
     try {
       const walletAddress = publicKey.toBase58();
 
-      // Generate new message and signature for username setting
-      const message = generateLoginMessage(walletAddress);
-      const signature = await requestWalletSignature(signMessage, message);
-
-      // Set username via API
-      const result = await setUsernameAPI(walletAddress, signature, message, username);
+      // Helper fetches a server-issued nonce, signs the canonical message,
+      // and posts. No client-generated message.
+      const result = await setUsernameAPI(walletAddress, signMessage, username);
 
       if (!result.success) {
         return result;

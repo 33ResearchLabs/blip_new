@@ -6,33 +6,29 @@
  */
 
 const { Pool } = require('pg');
-const url = require('url');
-const crypto = require('crypto');
+const { consumeTicket: consumeWsTicket } = require('./src/lib/auth/wsTicketStore');
 
 /**
- * Verify a session token (mirrors src/lib/auth/sessionToken.ts logic).
- * Returns { actorType, actorId } or null.
+ * Pull the WS connection ticket from the request.
+ *
+ * Browsers cannot set arbitrary headers on `new WebSocket(...)`. The standard
+ * (and only) browser-safe transport is the `Sec-WebSocket-Protocol` header,
+ * which the client populates from the second arg to the WebSocket
+ * constructor: `new WebSocket(url, ['bearer', ticket])`.
+ *
+ * We deliberately do NOT accept tickets in the URL (every reverse proxy
+ * logs query params) or in `Authorization` (browsers can't send it on a
+ * native WebSocket — only Node clients can, and the ticket flow expects
+ * the subprotocol path).
  */
-function verifySessionTokenWs(token) {
-  const secret = process.env.ADMIN_SECRET || process.env.SESSION_TOKEN_SECRET || '';
-  if (!secret || !token) return null;
-  try {
-    const decoded = Buffer.from(token, 'base64').toString();
-    const parts = decoded.split(':');
-    if (parts.length !== 4) return null;
-    const [actorType, actorId, tsStr, sig] = parts;
-    const ts = parseInt(tsStr, 10);
-    if (isNaN(ts)) return null;
-    const age = Math.floor(Date.now() / 1000) - ts;
-    if (age > 7 * 24 * 60 * 60 || age < 0) return null;
-    if (!['user', 'merchant', 'compliance'].includes(actorType)) return null;
-    const expected = crypto.createHmac('sha256', secret).update(`${actorType}:${actorId}:${tsStr}`).digest('hex');
-    if (sig.length !== expected.length) return null;
-    if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
-    return { actorType, actorId };
-  } catch {
-    return null;
-  }
+function extractTicketFromRequest(request) {
+  const sub = request.headers['sec-websocket-protocol'];
+  if (!sub || typeof sub !== 'string') return null;
+  const parts = sub.split(',').map((s) => s.trim());
+  const idx = parts.indexOf('bearer');
+  if (idx === -1) return null;
+  const ticket = parts[idx + 1];
+  return ticket || null;
 }
 
 // Connection pool for database
@@ -755,42 +751,56 @@ async function handleMessage(ws, rawData) {
 
 /**
  * Handle new WebSocket connection
+ *
+ * Auth model: ticket-based, single-use. The HTTP route POST /api/ws/ticket
+ * authenticates the caller via the httpOnly cookie and mints a 45-second
+ * opaque ticket. The browser opens
+ *   new WebSocket(url, ['bearer', <ticket>])
+ * which puts the ticket in `Sec-WebSocket-Protocol`. We atomically consume
+ * the ticket here (Redis GETDEL or in-memory Map.delete — both single-use)
+ * and derive actorType / actorId from the consumed payload. Replay of a
+ * captured handshake is impossible because the second consumeTicket call
+ * returns null.
+ *
+ * The previous URL-token + actorType/actorId-via-query paths are removed —
+ * tokens in the URL are logged by every reverse proxy, and trusting client-
+ * supplied actor identity is fail-open auth.
  */
 async function handleConnection(ws, request, wss) {
-  const parsedUrl = url.parse(request.url, true);
-  let { actorType, actorId } = parsedUrl.query;
-  let authMethod = 'query_params';
-
-  // Phase 1: Try signed token from query param (preferred, cryptographically verified)
-  const { token } = parsedUrl.query;
-  if (token) {
-    const tokenPayload = verifySessionTokenWs(token);
-    if (tokenPayload) {
-      actorType = tokenPayload.actorType;
-      actorId = tokenPayload.actorId;
-      authMethod = 'token';
-    }
-    // If token present but invalid, fall through to legacy query params
-  }
-
-  if (authMethod === 'query_params' && actorType && actorId) {
-    console.warn('[WS_AUTH_MIGRATION] Legacy query param auth used', { actorType, actorId });
-  }
-
-  // Validate required params
-  if (!actorType || !actorId) {
-    ws.close(WS_ERROR_CODES.AUTH_FAILED, 'Missing actorType or actorId');
+  const ticket = extractTicketFromRequest(request);
+  if (!ticket) {
+    ws.close(WS_ERROR_CODES.AUTH_FAILED, 'Missing ticket');
     return;
   }
 
-  // Reject 'system' actorType from external WebSocket connections —
-  // system actions must originate from server-side code, not client connections
-  if (actorType === 'system') {
-    ws.close(WS_ERROR_CODES.AUTH_FAILED, 'System actor type not allowed via WebSocket');
+  let payload;
+  try {
+    payload = await consumeWsTicket(ticket);
+  } catch (err) {
+    console.error('WS ticket consume error:', err && err.message ? err.message : err);
+    ws.close(WS_ERROR_CODES.AUTH_FAILED, 'Ticket validation failed');
+    return;
+  }
+  if (!payload) {
+    // Unknown, expired, or already-consumed ticket. Treat all three the
+    // same so timing/branching can't be used to distinguish them.
+    ws.close(WS_ERROR_CODES.AUTH_FAILED, 'Invalid or expired ticket');
     return;
   }
 
-  // Verify actor exists in DB before allowing connection
+  const { actorType, actorId } = payload;
+
+  // 'system' is an internal-only actor type. The ticket store rejects it on
+  // mint, but defence-in-depth: refuse anything that didn't come from one
+  // of the three client-side actor types.
+  if (!['user', 'merchant', 'compliance'].includes(actorType)) {
+    ws.close(WS_ERROR_CODES.AUTH_FAILED, 'Unsupported actor type');
+    return;
+  }
+
+  // Verify actor still exists / is active in DB. The ticket was minted
+  // moments ago and the cookie auth path already vetted the actor, but a
+  // disable / soft-delete in the meantime should NOT establish a socket.
   let isValid = false;
   if (actorType === 'user') {
     isValid = await verifyUser(actorId);

@@ -17,6 +17,7 @@ export {
   FEE_BPS_MIN,
   FEE_BPS_MAX,
   DEVNET_RPC,
+  DEVNET_WS_ENDPOINT,
   getV2ProgramId,
   getUsdtMint,
   getFeeTreasury,

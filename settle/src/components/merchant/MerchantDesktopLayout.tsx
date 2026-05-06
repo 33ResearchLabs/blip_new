@@ -39,6 +39,8 @@ export interface MerchantDesktopLayoutProps {
   todayEarnings: number;
   isMerchantOnline: boolean;
   setIsMerchantOnline: React.Dispatch<React.SetStateAction<boolean>>;
+  walletStatus?: 'ok' | 'locked' | 'none';
+  onAddWallet?: () => void;
 
   // Corridor
   activeCorridor: string;
@@ -59,6 +61,10 @@ export interface MerchantDesktopLayoutProps {
   acceptingOrderId: string | null;
   lockingEscrowOrderId?: string | null;
   confirmingOrderId?: string | null;
+  /** Global "I've Paid in flight" flag — drives the spinner on the InProgress
+   *  card's primary button when the action is Send Payment / I've Paid. */
+  markingDone?: boolean;
+  cancellingOrderId?: string | null;
   handleCancelOrder: (order: Order) => void;
   handleOpenChat: (order: Order) => void;
   handleOrderAction: (order: any, action: string) => void;
@@ -107,12 +113,12 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     pendingOrders, ongoingOrders, completedOrders, cancelledOrders,
     mempoolOrders, leaderboardData,
     merchantId, merchantInfo, effectiveBalance, todayEarnings,
-    isMerchantOnline, setIsMerchantOnline,
+    isMerchantOnline, setIsMerchantOnline, walletStatus, onAddWallet,
     activeCorridor, onCorridorChange,
     openTradeForm, setOpenTradeForm, isCreatingTrade,
     handleDirectOrderCreation, refreshBalance,
     setSelectedOrderPopup, setSelectedMempoolOrder, setSelectedOrderId,
-    acceptOrder, acceptingOrderId, lockingEscrowOrderId, confirmingOrderId, handleCancelOrder, handleOpenChat,
+    acceptOrder, acceptingOrderId, lockingEscrowOrderId, confirmingOrderId, markingDone, cancellingOrderId, handleCancelOrder, handleOpenChat,
     handleOrderAction, fetchOrders, loadMoreOrders, hasMoreOrders, isLoadingMore, openDisputeModal, setRatingModalData,
     inProgressCollapsed, setInProgressCollapsed,
     completedCollapsed, setCompletedCollapsed,
@@ -157,7 +163,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
         >
           <div className="flex flex-col h-full bg-background overflow-y-auto p-2 gap-2 scrollbar-thin scrollbar-thumb-white/10 border-r border-border">
             <div
-              className="glass-card rounded-xl overflow-hidden border border-foreground/[0.06]"
+              className="rounded-xl overflow-hidden border border-foreground/[0.06] bg-foreground/[0.025]"
             >
               <DashboardWidgets
                 todayEarnings={todayEarnings}
@@ -166,6 +172,8 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 balance={effectiveBalance || 0}
                 lockedInEscrow={lockedInEscrow}
                 isOnline={isMerchantOnline}
+                walletStatus={walletStatus}
+                onAddWallet={onAddWallet}
                 merchantId={merchantId || undefined}
                 activeCorridor={activeCorridor}
                 onCorridorChange={onCorridorChange}
@@ -173,7 +181,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onOpenCorridor={() => window.open("/merchant/mempool", "_blank")}
               />
             </div>
-            <div className="glass-card rounded-xl overflow-hidden border border-foreground/[0.06]">
+            <div className="rounded-xl overflow-hidden border border-foreground/[0.06] bg-foreground/[0.025]">
               <ConfigPanel
                 merchantId={merchantId}
                 merchantInfo={merchantInfo}
@@ -265,6 +273,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 merchantId={merchantId}
                 lockingEscrowOrderId={lockingEscrowOrderId}
                 confirmingOrderId={confirmingOrderId}
+                markingDone={markingDone}
+                acceptingOrderId={acceptingOrderId}
+                cancellingOrderId={cancellingOrderId}
               />
             </div>
             <div

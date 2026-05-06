@@ -139,11 +139,10 @@ export default function AdminAnalytics({ adminToken }: { adminToken: string }) {
 
   const fetchAnalytics = useCallback(async (tf: string) => {
     const token = tokenRef.current;
+    // Sentinel-only gate — the actual credential is the cookie.
     if (!token) return;
     try {
-      const res = await fetchWithAuth(`/api/admin/analytics?timeframe=${tf}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetchWithAuth(`/api/admin/analytics?timeframe=${tf}`);
       const json = await res.json();
       if (json.success) {
         setData(json.data);

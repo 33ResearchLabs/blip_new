@@ -7,7 +7,61 @@ import {
 } from '@/lib/arbiters/repository';
 import { VOTING_CONFIG } from '@/lib/arbiters/types';
 import { query } from '@/lib/db';
-import { requireAuth } from '@/lib/middleware/auth';
+import {
+  requireAuth,
+  forbiddenResponse,
+  type AuthContext,
+} from '@/lib/middleware/auth';
+
+/**
+ * Arbitration is a privileged compliance workflow. ALL three methods
+ * (GET / POST / PATCH) must restrict access to:
+ *
+ *   1. compliance actors (the only role authorised to oversee arbitration), OR
+ *   2. order participants (who may inspect the arbitration concerning their
+ *      own dispute, but never *initiate* or *force-conclude* it).
+ *
+ * Without these checks an authenticated user could read any arbitration's
+ * hidden state, spawn arbitration on any disputed order (disrupting
+ * compliance SLA tracking) or force-conclude voting prematurely.
+ *
+ * `assertArbitrationAccess` returns a 403 NextResponse when the actor
+ * fails the policy. The caller MUST `return` the response.
+ */
+async function assertArbitrationAccess(
+  auth: AuthContext,
+  orderId: string,
+  mode: 'read' | 'mutate',
+): Promise<NextResponse | null> {
+  // Compliance always allowed.
+  if (auth.actorType === 'compliance') return null;
+
+  // Mutation paths (POST start, PATCH conclude) are compliance-only.
+  if (mode === 'mutate') {
+    return forbiddenResponse(
+      'Arbitration management is restricted to compliance members',
+    );
+  }
+
+  // Read path: order participants can view, but only for their own order.
+  const rows = await query<{ user_id: string | null; merchant_id: string | null; buyer_merchant_id: string | null }>(
+    `SELECT user_id, merchant_id, buyer_merchant_id FROM orders WHERE id = $1`,
+    [orderId],
+  );
+  const order = rows[0];
+  if (!order) {
+    // Don't leak whether the order exists — same 403 as non-participant.
+    return forbiddenResponse('Not authorised for this arbitration');
+  }
+  const isParticipant =
+    auth.actorId === order.user_id ||
+    auth.actorId === order.merchant_id ||
+    (!!order.buyer_merchant_id && auth.actorId === order.buyer_merchant_id);
+  if (!isParticipant) {
+    return forbiddenResponse('Not authorised for this arbitration');
+  }
+  return null;
+}
 
 // GET - Get arbitration details for a dispute
 export async function GET(
@@ -15,11 +69,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authorization — mandatory
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     const { id: orderId } = await params;
+
+    const denied = await assertArbitrationAccess(auth, orderId, 'read');
+    if (denied) return denied;
 
     // Get arbitration by order ID
     const arbitration = await query(
@@ -74,17 +130,19 @@ export async function GET(
   }
 }
 
-// POST - Start arbitration for a dispute
+// POST - Start arbitration for a dispute (compliance-only)
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authorization — mandatory (compliance or system only)
     const authPost = await requireAuth(request);
     if (authPost instanceof NextResponse) return authPost;
 
     const { id: orderId } = await params;
+
+    const denied = await assertArbitrationAccess(authPost, orderId, 'mutate');
+    if (denied) return denied;
 
     // Initialize tables
     await initializeArbiterTables();
@@ -177,17 +235,19 @@ export async function POST(
   }
 }
 
-// PATCH - Check and conclude arbitration (can be called to force check)
+// PATCH - Check and conclude arbitration (compliance-only)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authorization — mandatory
     const authPatch = await requireAuth(request);
     if (authPatch instanceof NextResponse) return authPatch;
 
     const { id: orderId } = await params;
+
+    const denied = await assertArbitrationAccess(authPatch, orderId, 'mutate');
+    if (denied) return denied;
 
     const arbitration = await query(
       `SELECT id, status FROM dispute_arbitrations WHERE order_id = $1`,

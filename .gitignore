@@ -12,4 +12,15 @@ logs/
 .env.development
 **/.env
 **/.env.local
+
+# Defense-in-depth — explicit per-app env paths so no glob change can
+# accidentally unignore a known-leaky file. Pair with the gitleaks CI
+# guard in .github/workflows/secret-scan.yml.
+apps/core-api/.env
+settle/.env
+settle/.env.local
+blipscan/web/.env.local
+blipscan/indexer/.env
+telegram-bot/.env
+
 *.md

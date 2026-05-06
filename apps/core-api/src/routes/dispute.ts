@@ -8,13 +8,15 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   query as dbQuery,
   queryOne,
+  transaction,
   normalizeStatus,
   logger,
 } from 'settlement-core';
 import { ORDER_EVENT } from '../events';
-import { insertOutboxEventDirect } from '../outbox';
+import { insertOutboxEventDirect, insertOutboxEvent } from '../outbox';
 import { withIdempotency } from '../idempotency';
 import { checkFinancialRateLimit } from '../rateLimit';
+import { assertActorOwnership } from '../ownership';
 
 export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/:id/dispute - Open dispute
@@ -37,6 +39,15 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
         error: 'reason, initiated_by, and actor_id are required',
       });
     }
+
+    // Bind body.actor_id to the signed x-actor-id header. Rejects requests
+    // where a logged-in user supplies someone else's id in the body.
+    const ownershipFail = assertActorOwnership(request, reply, {
+      expectedActorId: actor_id,
+      expectedActorType: initiated_by,
+      context: 'dispute_open',
+    });
+    if (ownershipFail) return ownershipFail;
 
     const rl = checkFinancialRateLimit(request, 'open_dispute');
     if (rl) return reply.status(rl.statusCode).send(rl.body);
@@ -162,174 +173,312 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: 'party, action, and partyId required' });
     }
 
+    // Bind partyId to the signed x-actor-id header before doing any DB work.
+    // The post-lock check inside the txn additionally verifies partyId matches
+    // the order's user_id / merchant_id; this header check fails fast and
+    // closes the IDOR even if the body field accidentally happens to land on
+    // a real participant id (e.g. attacker is a participant but spoofs the
+    // counterparty's role).
+    const ownershipFail = assertActorOwnership(request, reply, {
+      expectedActorId: partyId,
+      expectedActorType: party,
+      context: 'dispute_confirm',
+    });
+    if (ownershipFail) return ownershipFail;
+
     return withIdempotency(request, reply, 'confirm_dispute', id, async () => {
-    try {
-      const disputeResult = await dbQuery(
-        `SELECT d.*, o.user_id, o.merchant_id
-         FROM disputes d JOIN orders o ON d.order_id = o.id
-         WHERE d.order_id = $1`,
-        [id]
-      );
+      try {
+        // Entire confirm/finalize flow runs in a single transaction with row-level
+        // locks on (orders, disputes). FOR UPDATE serializes concurrent confirms,
+        // closing the read-modify-write race that allowed double-credit. Lock order
+        // matches the open-dispute path (orders → disputes) to avoid deadlocks.
+        const result = await transaction(async (client) => {
+          const orderLock = await client.query(
+            `SELECT id, user_id, merchant_id, status, order_version, crypto_amount
+             FROM orders
+             WHERE id = $1
+             FOR UPDATE`,
+            [id]
+          );
+          if (orderLock.rows.length === 0) {
+            throw new Error('ORDER_NOT_FOUND');
+          }
+          const order = orderLock.rows[0] as any;
 
-      if (disputeResult.length === 0) {
-        return { statusCode: 404, body: { success: false, error: 'Dispute not found' } };
-      }
+          const disputeLock = await client.query(
+            `SELECT * FROM disputes WHERE order_id = $1 FOR UPDATE`,
+            [id]
+          );
+          if (disputeLock.rows.length === 0) {
+            throw new Error('DISPUTE_NOT_FOUND');
+          }
+          const dispute = disputeLock.rows[0] as any;
 
-      const dispute = disputeResult[0] as any;
+          // Verify party identity against the (now locked) order row
+          if (party === 'user' && partyId !== order.user_id) {
+            throw new Error('UNAUTHORIZED');
+          }
+          if (party === 'merchant' && partyId !== order.merchant_id) {
+            throw new Error('UNAUTHORIZED');
+          }
 
-      if (dispute.status !== 'pending_confirmation') {
-        return { statusCode: 400, body: { success: false, error: 'No pending resolution' } };
-      }
+          // Re-check post-lock: dispute must still be awaiting confirmation.
+          // If a parallel tx already finalized, status is 'resolved' here and we
+          // bail out before any balance write.
+          if (dispute.status !== 'pending_confirmation') {
+            throw new Error('NO_PENDING_RESOLUTION');
+          }
 
-      // Verify party identity
-      if (party === 'user' && partyId !== dispute.user_id) {
-        return { statusCode: 403, body: { success: false, error: 'Unauthorized' } };
-      }
-      if (party === 'merchant' && partyId !== dispute.merchant_id) {
-        return { statusCode: 403, body: { success: false, error: 'Unauthorized' } };
-      }
+          // Reject path — clear confirmations, return to investigating
+          if (action === 'reject') {
+            await client.query(
+              `UPDATE disputes
+               SET status = 'investigating'::dispute_status,
+                   proposed_resolution = NULL,
+                   user_confirmed = false,
+                   merchant_confirmed = false
+               WHERE order_id = $1`,
+              [id]
+            );
 
-      if (action === 'reject') {
-        await dbQuery(
-          `UPDATE disputes
-           SET status = 'investigating'::dispute_status,
-               proposed_resolution = NULL,
-               user_confirmed = false,
-               merchant_confirmed = false
-           WHERE order_id = $1`,
-          [id]
-        );
+            logger.info('[core-api] Dispute resolution rejected', {
+              orderId: id, party, partyId,
+            });
 
-        return {
-          statusCode: 200,
-          body: { success: true, data: { status: 'investigating', message: 'Resolution rejected' } },
-        };
-      }
+            return {
+              kind: 'rejected' as const,
+            };
+          }
 
-      // Accept
-      const updateField = party === 'user' ? 'user_confirmed' : 'merchant_confirmed';
-      await dbQuery(`UPDATE disputes SET ${updateField} = true WHERE order_id = $1`, [id]);
+          // Accept path — flip flag, re-read under lock to get authoritative state
+          const updateField = party === 'user' ? 'user_confirmed' : 'merchant_confirmed';
+          const flipResult = await client.query(
+            `UPDATE disputes
+             SET ${updateField} = true
+             WHERE order_id = $1
+             RETURNING user_confirmed, merchant_confirmed, proposed_resolution, status`,
+            [id]
+          );
+          const updated = flipResult.rows[0] as any;
 
-      const updated = await queryOne<{
-        user_confirmed: boolean; merchant_confirmed: boolean; proposed_resolution: string;
-      }>('SELECT user_confirmed, merchant_confirmed, proposed_resolution FROM disputes WHERE order_id = $1', [id]);
+          // Only one party confirmed so far — return progress, no finalize
+          if (!updated.user_confirmed || !updated.merchant_confirmed) {
+            return {
+              kind: 'pending' as const,
+              userConfirmed: !!updated.user_confirmed,
+              merchantConfirmed: !!updated.merchant_confirmed,
+            };
+          }
 
-      if (updated && updated.user_confirmed && updated.merchant_confirmed) {
-        // Both confirmed - finalize
-        const resolution = updated.proposed_resolution;
-
-        const orderResult = await dbQuery(
-          `SELECT o.*, d.split_percentage FROM orders o JOIN disputes d ON d.order_id = o.id WHERE o.id = $1`,
-          [id]
-        );
-        const order = orderResult[0] as any;
-        const amount = parseFloat(String(order.crypto_amount));
-
-        let userAmount = 0;
-        let merchantAmount = 0;
-        let orderStatus = 'completed';
-
-        if (resolution === 'user') {
-          userAmount = amount;
-          orderStatus = 'cancelled';
-        } else if (resolution === 'merchant') {
-          merchantAmount = amount;
-          orderStatus = 'completed';
-        } else if (resolution === 'split') {
-          const splitPct = order.split_percentage
-            ? (typeof order.split_percentage === 'string' ? JSON.parse(order.split_percentage) : order.split_percentage)
+          // Both confirmed — finalize once, atomically.
+          const resolution = updated.proposed_resolution;
+          const amount = parseFloat(String(order.crypto_amount));
+          const splitPct = dispute.split_percentage
+            ? (typeof dispute.split_percentage === 'string'
+                ? JSON.parse(dispute.split_percentage)
+                : dispute.split_percentage)
             : { user: 50, merchant: 50 };
-          userAmount = amount * (splitPct.user / 100);
-          merchantAmount = amount * (splitPct.merchant / 100);
-          orderStatus = 'completed';
-        }
 
-        if (userAmount > 0) {
-          await dbQuery('UPDATE users SET balance = balance + $1 WHERE id = $2', [userAmount, order.user_id]);
-        }
-        if (merchantAmount > 0) {
-          await dbQuery('UPDATE merchants SET balance = balance + $1 WHERE id = $2', [merchantAmount, order.merchant_id]);
-        }
+          let userAmount = 0;
+          let merchantAmount = 0;
+          let orderStatus: 'completed' | 'cancelled' = 'completed';
 
-        await dbQuery(
-          `UPDATE disputes SET status = 'resolved'::dispute_status, resolution = $1, resolved_at = NOW() WHERE order_id = $2`,
-          [resolution, id]
-        );
+          if (resolution === 'user') {
+            userAmount = amount;
+            orderStatus = 'cancelled';
+          } else if (resolution === 'merchant') {
+            merchantAmount = amount;
+            orderStatus = 'completed';
+          } else if (resolution === 'split') {
+            userAmount = amount * (splitPct.user / 100);
+            merchantAmount = amount * (splitPct.merchant / 100);
+            orderStatus = 'completed';
+          } else {
+            throw new Error('INVALID_RESOLUTION');
+          }
 
-        const resolveUpdate = await dbQuery(
-          `UPDATE orders SET status = $1::order_status, order_version = order_version + 1
-           WHERE id = $2 AND status = 'disputed'
-           RETURNING id`,
-          [orderStatus, id]
-        );
-        if (resolveUpdate.length === 0) {
-          return { statusCode: 409, body: { success: false, error: 'Order was modified concurrently during dispute resolution' } };
-        }
+          // Invariant: total credited must equal escrow amount (within fp epsilon).
+          // A violation would mean either creating value or losing escrow — abort
+          // and roll back. Surfaces config / split-percentage bugs in CI.
+          const credited = userAmount + merchantAmount;
+          if (Math.abs(credited - amount) > 1e-6) {
+            logger.error('[core-api] Dispute finalize invariant violation', {
+              orderId: id, resolution, credited, escrow: amount, splitPct,
+            });
+            throw new Error('INVARIANT_VIOLATION');
+          }
 
-        // Notification outbox
-        await dbQuery(
-          `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, $2, $3, 'pending')`,
-          [
-            id,
-            `ORDER_${orderStatus.toUpperCase()}`,
-            JSON.stringify({
-              orderId: id,
-              userId: order.user_id,
-              merchantId: order.merchant_id,
-              status: orderStatus,
-              previousStatus: 'disputed',
-              resolution,
-              updatedAt: new Date().toISOString(),
-            }),
-          ]
-        );
+          // Resolve the dispute row first — extra status-guard guarantees the
+          // finalize block executes at most once per dispute even if some future
+          // caller bypasses the FOR UPDATE serialization.
+          const resolveDispute = await client.query(
+            `UPDATE disputes
+             SET status = 'resolved'::dispute_status,
+                 resolution = $1,
+                 resolved_at = NOW()
+             WHERE order_id = $2 AND status = 'pending_confirmation'
+             RETURNING id`,
+            [resolution, id]
+          );
+          if (resolveDispute.rows.length === 0) {
+            throw new Error('ALREADY_FINALIZED');
+          }
 
-        logger.info('[core-api] Dispute resolved', { orderId: id, resolution, orderStatus });
+          // Credit balances under the same lock
+          if (userAmount > 0) {
+            await client.query(
+              'UPDATE users SET balance = balance + $1 WHERE id = $2',
+              [userAmount, order.user_id]
+            );
+          }
+          if (merchantAmount > 0) {
+            await client.query(
+              'UPDATE merchants SET balance = balance + $1 WHERE id = $2',
+              [merchantAmount, order.merchant_id]
+            );
+          }
 
-        const resolvedEvent = orderStatus === 'completed' ? ORDER_EVENT.COMPLETED
-          : orderStatus === 'cancelled' ? ORDER_EVENT.CANCELLED
-          : ORDER_EVENT.STATUS_CHANGED;
-        await insertOutboxEventDirect({
-          event: resolvedEvent,
-          orderId: id, previousStatus: 'disputed', newStatus: orderStatus,
-          actorType: 'system', actorId: partyId,
-          userId: order.user_id, merchantId: order.merchant_id,
-          order: order as unknown as Record<string, unknown>,
-          orderVersion: 0, minimalStatus: normalizeStatus(orderStatus as any),
-          metadata: { resolution },
+          // Resolve the order — version + status guard preserves existing optimistic-
+          // concurrency contract used elsewhere in the codebase.
+          const resolveOrder = await client.query(
+            `UPDATE orders
+             SET status = $1::order_status, order_version = order_version + 1
+             WHERE id = $2 AND order_version = $3 AND status = 'disputed'
+             RETURNING id`,
+            [orderStatus, id, order.order_version]
+          );
+          if (resolveOrder.rows.length === 0) {
+            throw new Error('ORDER_VERSION_CONFLICT');
+          }
+
+          // Notification outbox — inside txn so it commits atomically with the mutation
+          await client.query(
+            `INSERT INTO notification_outbox (order_id, event_type, payload, status)
+             VALUES ($1, $2, $3, 'pending')`,
+            [
+              id,
+              `ORDER_${orderStatus.toUpperCase()}`,
+              JSON.stringify({
+                orderId: id,
+                userId: order.user_id,
+                merchantId: order.merchant_id,
+                status: orderStatus,
+                previousStatus: 'disputed',
+                resolution,
+                updatedAt: new Date().toISOString(),
+              }),
+            ]
+          );
+
+          // Outbox event — use the transaction-aware helper instead of the standalone
+          // *Direct variant. Keeps the event commit atomic with the balance write.
+          const resolvedEvent =
+            orderStatus === 'completed' ? ORDER_EVENT.COMPLETED
+            : ORDER_EVENT.CANCELLED;
+          await insertOutboxEvent(client, {
+            event: resolvedEvent,
+            orderId: id,
+            previousStatus: 'disputed',
+            newStatus: orderStatus,
+            actorType: 'system',
+            actorId: partyId,
+            userId: order.user_id,
+            merchantId: order.merchant_id,
+            order: order as unknown as Record<string, unknown>,
+            orderVersion: 0,
+            minimalStatus: normalizeStatus(orderStatus as any),
+            metadata: { resolution },
+          });
+
+          logger.info('[core-api] Dispute finalized', {
+            orderId: id,
+            resolution,
+            orderStatus,
+            userId: order.user_id,
+            merchantId: order.merchant_id,
+            userAmount,
+            merchantAmount,
+            escrowAmount: amount,
+            triggeredBy: { party, partyId },
+          });
+
+          return {
+            kind: 'finalized' as const,
+            resolution,
+            orderStatus,
+            userAmount,
+            merchantAmount,
+            totalAmount: amount,
+          };
         });
 
+        // Map transaction result to HTTP response
+        if (result.kind === 'rejected') {
+          return {
+            statusCode: 200,
+            body: { success: true, data: { status: 'investigating', message: 'Resolution rejected' } },
+          };
+        }
+        if (result.kind === 'pending') {
+          return {
+            statusCode: 200,
+            body: {
+              success: true,
+              data: {
+                status: 'pending_confirmation',
+                userConfirmed: result.userConfirmed,
+                merchantConfirmed: result.merchantConfirmed,
+                finalized: false,
+              },
+            },
+          };
+        }
         return {
           statusCode: 200,
           body: {
             success: true,
             data: {
-              status: `resolved_${resolution}`,
-              orderStatus,
+              status: `resolved_${result.resolution}`,
+              orderStatus: result.orderStatus,
               finalized: true,
-              moneyReleased: { user: userAmount, merchant: merchantAmount, total: amount },
+              moneyReleased: {
+                user: result.userAmount,
+                merchant: result.merchantAmount,
+                total: result.totalAmount,
+              },
             },
           },
         };
-      }
+      } catch (error) {
+        const errMsg = (error as Error).message;
+        if (errMsg === 'ORDER_NOT_FOUND') {
+          return { statusCode: 404, body: { success: false, error: 'Order not found' } };
+        }
+        if (errMsg === 'DISPUTE_NOT_FOUND') {
+          return { statusCode: 404, body: { success: false, error: 'Dispute not found' } };
+        }
+        if (errMsg === 'UNAUTHORIZED') {
+          return { statusCode: 403, body: { success: false, error: 'Unauthorized' } };
+        }
+        if (errMsg === 'NO_PENDING_RESOLUTION') {
+          return { statusCode: 400, body: { success: false, error: 'No pending resolution' } };
+        }
+        if (errMsg === 'ALREADY_FINALIZED') {
+          return { statusCode: 409, body: { success: false, error: 'Dispute already finalized' } };
+        }
+        if (errMsg === 'INVALID_RESOLUTION') {
+          return { statusCode: 400, body: { success: false, error: 'Invalid proposed resolution' } };
+        }
+        if (errMsg === 'INVARIANT_VIOLATION') {
+          return { statusCode: 500, body: { success: false, error: 'Internal invariant violation' } };
+        }
+        if (errMsg === 'ORDER_VERSION_CONFLICT') {
+          return { statusCode: 409, body: { success: false, error: 'Order was modified concurrently during dispute resolution' } };
+        }
 
-      // One party confirmed
-      return {
-        statusCode: 200,
-        body: {
-          success: true,
-          data: {
-            status: 'pending_confirmation',
-            userConfirmed: party === 'user' ? true : dispute.user_confirmed,
-            merchantConfirmed: party === 'merchant' ? true : dispute.merchant_confirmed,
-            finalized: false,
-          },
-        },
-      };
-    } catch (error) {
-      fastify.log.error({ error, id }, 'Error confirming dispute');
-      return { statusCode: 500, body: { success: false, error: 'Internal server error' } };
-    }
+        fastify.log.error({ error, id }, 'Error confirming dispute');
+        return { statusCode: 500, body: { success: false, error: 'Internal server error' } };
+      }
     });
   });
 };

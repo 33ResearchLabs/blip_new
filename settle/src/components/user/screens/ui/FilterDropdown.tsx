@@ -17,6 +17,14 @@ interface FilterDropdownProps<T extends string> {
   ariaLabel?: string;
   /** Which side the menu's edge anchors to. Default "right" (menu opens leftward). */
   align?: "left" | "right";
+  /**
+   * Trigger shape.
+   * - "pill" (default): compact rounded-full pill — for filter toolbars.
+   * - "square": rounded-xl rectangular button — matches form controls
+   *   like the trade-modal's Sell/Buy buttons. Use for dropdowns that
+   *   sit next to a form label or other rectangular controls.
+   */
+  variant?: "pill" | "square";
 }
 
 /**
@@ -31,6 +39,7 @@ export function FilterDropdown<T extends string>({
   className = "",
   ariaLabel = "Filter",
   align = "right",
+  variant = "pill",
 }: FilterDropdownProps<T>) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -58,6 +67,14 @@ export function FilterDropdown<T extends string>({
 
   const activeLabel = options.find((o) => o.key === value)?.label ?? "";
 
+  // Trigger button shape — keep the legacy pill as the default so existing
+  // call sites (filter toolbars) don't change. The square variant matches
+  // the trade-modal's Sell/Buy form buttons for visual consistency.
+  const triggerClass =
+    variant === "square"
+      ? "flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all bg-white/[0.04] hover:bg-card text-white border border-white/10 text-[11px] font-semibold tracking-wide"
+      : "flex items-center gap-1 px-3 py-1 rounded-full transition-all bg-surface-active text-text-primary border border-border-medium text-[10px] font-bold tracking-[0.05em]";
+
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
@@ -66,11 +83,11 @@ export function FilterDropdown<T extends string>({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex items-center gap-1 px-3 py-1 rounded-full transition-all bg-surface-active text-text-primary border border-border-medium text-[10px] font-bold tracking-[0.05em]"
+        className={triggerClass}
       >
         <span>{activeLabel}</span>
         <ChevronDown
-          size={12}
+          size={variant === "square" ? 14 : 12}
           strokeWidth={2.5}
           className={`transition-transform ${open ? "rotate-180" : ""}`}
         />

@@ -63,6 +63,10 @@ export interface EntityStats {
   disputes_raised: number;
   disputes_won: number;
   disputes_lost: number;
+  // Disputes currently open or under investigation (not yet resolved against
+  // either party). Used to gate the "dispute_free" badge — a merchant with
+  // unresolved disputes is not dispute-free regardless of past outcomes.
+  active_disputes: number;
 
   // Activity stats
   active_days_last_30: number;
@@ -482,10 +486,14 @@ export function calculateBadges(stats: EntityStats): ReputationBadge[] {
     badges.push('perfect_rating');
   }
 
-  // Dispute free
+  // Dispute free — must have no resolved-against-them disputes AND no
+  // currently active ones. Without the second check, merchants with
+  // unresolved disputes (where `resolved_in_favor_of` is still NULL) were
+  // incorrectly being awarded the badge.
   if (
     stats.total_orders >= BADGE_REQUIREMENTS.dispute_free.min_orders &&
-    stats.disputes_lost === BADGE_REQUIREMENTS.dispute_free.disputes_lost
+    stats.disputes_lost === BADGE_REQUIREMENTS.dispute_free.disputes_lost &&
+    stats.active_disputes === 0
   ) {
     badges.push('dispute_free');
   }

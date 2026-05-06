@@ -385,6 +385,70 @@ html:not(.no-transitions) > body {
   color: color-mix(in srgb, var(--foreground) 45%, transparent) !important;
 }
 
+/* text-foreground/X — boost low opacity values for readability on light themes.
+   Dark text at 10–30% opacity on white is harder to read than white text at the
+   same opacity on near-black, so the floor is raised. Mirrors text-white/X above. */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/"] {
+  opacity: 1 !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/9"],
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/8"] {
+  color: color-mix(in srgb, var(--foreground) 90%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/7"] {
+  color: color-mix(in srgb, var(--foreground) 78%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/6"] {
+  color: color-mix(in srgb, var(--foreground) 68%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/5"] {
+  color: color-mix(in srgb, var(--foreground) 60%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/4"] {
+  color: color-mix(in srgb, var(--foreground) 55%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/3"] {
+  color: color-mix(in srgb, var(--foreground) 50%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/2"] {
+  color: color-mix(in srgb, var(--foreground) 45%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-foreground/1"] {
+  color: color-mix(in srgb, var(--foreground) 38%, transparent) !important;
+}
+
+/* ── Login scope — force dark rendering ──
+   The merchant login page is hardcoded dark (bg-[#070708]) regardless of the
+   active theme. When a user navigates from the clean/light dashboard, the
+   global :root.light text-white/text-foreground overrides above would map
+   white text to dark navy → invisible on the dark login background. This
+   block re-asserts white text inside .login-scope so the page stays legible
+   from any theme. The `:root` prefix matches the specificity of the global
+   light-theme overrides (each is 0,0,2,1); source order then wins because
+   these rules come after. Order: lower-opacity selectors come last so the
+   more-specific substring match (e.g. text-white/15) overrides the broader
+   one (text-white/1). */
+:root .login-scope.login-scope .text-white,
+:root .login-scope.login-scope [class*="text-white/"] {
+  color: #ffffff !important;
+}
+:root .login-scope.login-scope [class*="text-white/9"] { color: rgba(255, 255, 255, 0.92) !important; }
+:root .login-scope.login-scope [class*="text-white/8"] { color: rgba(255, 255, 255, 0.85) !important; }
+:root .login-scope.login-scope [class*="text-white/7"] { color: rgba(255, 255, 255, 0.75) !important; }
+:root .login-scope.login-scope [class*="text-white/6"] { color: rgba(255, 255, 255, 0.60) !important; }
+:root .login-scope.login-scope [class*="text-white/5"] { color: rgba(255, 255, 255, 0.50) !important; }
+:root .login-scope.login-scope [class*="text-white/55"] { color: rgba(255, 255, 255, 0.55) !important; }
+:root .login-scope.login-scope [class*="text-white/4"] { color: rgba(255, 255, 255, 0.40) !important; }
+:root .login-scope.login-scope [class*="text-white/3"] { color: rgba(255, 255, 255, 0.30) !important; }
+:root .login-scope.login-scope [class*="text-white/2"] { color: rgba(255, 255, 255, 0.20) !important; }
+:root .login-scope.login-scope [class*="text-white/1"] { color: rgba(255, 255, 255, 0.10) !important; }
+:root .login-scope.login-scope [class*="text-white/15"] { color: rgba(255, 255, 255, 0.15) !important; }
+
+/* Block the bg-white/border-white opacity remaps from the light overrides
+   above — login page wants dark surfaces with white hairlines. */
+:root .login-scope.login-scope [class*="bg-white/"] { background-color: rgba(255, 255, 255, 0.05) !important; }
+:root .login-scope.login-scope [class*="border-white/"] { border-color: rgba(255, 255, 255, 0.10) !important; }
+
 /* ALL bg-black → theme background */
 :is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="bg-black"] {
   background-color: var(--background) !important;
@@ -713,6 +777,15 @@ input[type="number"] { -moz-appearance: textfield; }
 .animate-scaleIn { animation: scaleIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 .animate-slideInRight { animation: slideInRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 .animate-slideInLeft { animation: slideInLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+/* Marquee — horizontal infinite scroll. The track contains the
+   content twice; translateX(-50%) loops one full content width
+   for a seamless cycle. Use with a flex track of duplicated items. */
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee-x { animation: marquee-x 30s linear infinite; }
 
 .delay-100 { animation-delay: 100ms; }
 .delay-200 { animation-delay: 200ms; }

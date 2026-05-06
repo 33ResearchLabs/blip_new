@@ -106,6 +106,14 @@ const PUBLIC_EXACT = new Set([
   '/api/convert',
   '/api/pusher/auth',
   '/api/dev-unlock',
+  // Solana JSON-RPC proxy — reads/writes to a public chain. The proxy itself
+  // (src/app/api/rpc/route.ts) enforces a per-IP rate limit + a method
+  // allowlist that blocks every destructive / quota-burning RPC. Forcing
+  // session auth on top breaks the embedded wallet's getBalance loop during
+  // the cookie-arrival race window (page load, post-refresh) — the user
+  // sees "401 Authentication required" in the console even though the
+  // request is just reading public chain state.
+  '/api/rpc',
   // 2FA login challenge — caller has a one-time pendingToken in body, NOT a session yet
   '/api/2fa/verify-login',
   // Error-tracking ingest — often called from anonymous/pre-auth pages
@@ -118,6 +126,10 @@ const PUBLIC_EXACT = new Set([
   // (ENABLE_ISSUE_REPORTING), STRICT rate-limited (10/min), and body-capped
   // (30MB for screenshot + attachments). Safe to accept without a session.
   '/api/issues/create',
+  // CSP violation reports — sent automatically by the browser when a script/style
+  // is blocked. Must be reachable anonymously and from any page (incl. login).
+  // The route itself caps the body, returns 204, and never reflects content.
+  '/api/csp-report',
   // Sentry tunnel route — created automatically by withSentryConfig to
   // bypass ad-blockers. Must be reachable anonymously or Sentry beacons fail.
   '/monitoring',
@@ -148,12 +160,19 @@ function isAdminRoute(pathname: string): boolean {
 // =============================================================================
 
 function hasActorIdentity(request: NextRequest): boolean {
-  // Headers
+  // Cookie auth — primary post-migration. The signed access token lives in
+  // an httpOnly cookie issued by /api/auth/{user,merchant,compliance}; the
+  // route handler's requireAuth() will verify the HMAC + revocation state.
+  // Here we only need to confirm an identity claim is PRESENT so the edge
+  // middleware doesn't 401-bounce the request before requireAuth runs.
+  if (request.cookies.get('blip_access_token')?.value) return true;
+
+  // Headers (legacy / non-browser clients)
   if (request.headers.get('x-user-id')) return true;
   if (request.headers.get('x-merchant-id')) return true;
   if (request.headers.get('x-compliance-id')) return true;
 
-  // Query params (existing pattern used by frontend)
+  // Query params (legacy frontend pattern)
   const sp = request.nextUrl.searchParams;
   if (sp.get('user_id')) return true;
   if (sp.get('merchant_id')) return true;
@@ -164,7 +183,11 @@ function hasActorIdentity(request: NextRequest): boolean {
 
 function hasBearerToken(request: NextRequest): boolean {
   const auth = request.headers.get('authorization');
-  return !!auth && auth.startsWith('Bearer ');
+  if (auth && auth.startsWith('Bearer ')) return true;
+  // Admin cookie also counts as bearer-equivalent for the admin-route gate
+  // — same rationale as hasActorIdentity above.
+  if (request.cookies.get('blip_admin_session')?.value) return true;
+  return false;
 }
 
 // =============================================================================
@@ -223,20 +246,60 @@ function csrfCheck(request: NextRequest): NextResponse | null {
 // Security Headers
 // =============================================================================
 
-const SECURITY_HEADERS: Record<string, string> = {
+const STATIC_SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com; font-src 'self' data:; connect-src 'self' wss: https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com; frame-ancestors 'none';",
+  // Reporting API v2 endpoint, paired with `report-to` directive in CSP below.
+  'Reporting-Endpoints': 'csp-endpoint="/api/csp-report"',
 };
 
-function applySecurityHeaders(response: NextResponse): NextResponse {
-  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+/**
+ * Generate a base64-encoded 128-bit nonce using Web Crypto (Edge-compatible).
+ * 128 bits is the CSP3 recommended minimum; 16 random bytes → 24-char base64.
+ */
+export function generateNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let str = '';
+  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+  // btoa is available in the Edge runtime
+  return btoa(str);
+}
+
+/**
+ * Build the Content-Security-Policy string.
+ *
+ * script-src is nonce-only: 'unsafe-inline' is REMOVED. Any inline script must
+ * carry the per-request nonce or the browser will block it. style-src keeps
+ * 'unsafe-inline' on purpose — Tailwind/styled-jsx emit inline style attributes
+ * that React doesn't currently nonce; locking that down is a separate task.
+ *
+ * `report-uri` covers older browsers; `report-to csp-endpoint` is the modern
+ * Reporting API v2 mechanism (matches the `Reporting-Endpoints` header).
+ */
+export function buildCsp(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com",
+    "font-src 'self' data:",
+    "connect-src 'self' wss: https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com",
+    "frame-ancestors 'none'",
+    'report-uri /api/csp-report',
+    'report-to csp-endpoint',
+  ].join('; ');
+}
+
+function applySecurityHeaders(response: NextResponse, nonce: string): NextResponse {
+  for (const [key, value] of Object.entries(STATIC_SECURITY_HEADERS)) {
     response.headers.set(key, value);
   }
+  response.headers.set('Content-Security-Policy', buildCsp(nonce));
   return response;
 }
 
@@ -244,7 +307,13 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
 // Middleware Entry Point
 // =============================================================================
 
+// MOCK_MODE is a non-security build switch (test fixtures, fake balances).
+// CSRF protection and rate limiting MUST run regardless of this flag — the
+// production guard in env.ts (NEXT_PUBLIC_MOCK_MODE !== 'true') is the boot
+// fence. This local boolean is retained ONLY for tracing/log enrichment;
+// it is no longer consulted by any security branch below.
 const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+void isMockMode; // intentionally unread — kept as a debugging breadcrumb
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -260,6 +329,15 @@ export function middleware(request: NextRequest) {
   ) {
     return NextResponse.next();
   }
+
+  // ── Per-request CSP nonce ─────────────────────────────────────────────
+  // Generated once per request; threaded through every response that flows
+  // out of this middleware. Forwarded to downstream server components via
+  // the `x-nonce` request header so RootLayout can stamp it onto inline
+  // <script> tags. Next.js also reads this header to nonce its own scripts.
+  const nonce = generateNonce();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
 
   // ── 0. Development Access Lock ────────────────────────────────────────
   // When DEV_ACCESS_PASSWORD is set, gate ALL routes behind a shared password.
@@ -289,7 +367,8 @@ export function middleware(request: NextRequest) {
             NextResponse.json(
               { success: false, error: 'Dev access required' },
               { status: 401 }
-            )
+            ),
+            nonce
           );
         }
         const url = request.nextUrl.clone();
@@ -299,22 +378,62 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Non-API routes — no further middleware processing needed
+  // Non-API routes — apply CSP + forward nonce to server components.
+  // (Previously short-circuited without security headers, so pages got NO CSP.
+  //  That's the very surface XSS lives on — it must carry the strict CSP.)
   if (!pathname.startsWith('/api/')) {
-    return NextResponse.next();
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    return applySecurityHeaders(response, nonce);
   }
 
   // ── 1. Rate Limiting ──────────────────────────────────────────────────
-  if (!isMockMode) {
+  // Always on. MOCK_MODE no longer disables this — security toggles MUST
+  // NOT depend on a client-exposed env var.
+  {
     let rateLimitResult: NextResponse | null = null;
 
-    if (pathname.startsWith('/api/auth/')) {
-      rateLimitResult = checkRate(ip, 'auth', 10, 60);
+    // Brute-force-sensitive LOGIN endpoints — keep the strict 10/min ceiling.
+    // These accept credentials and must be throttled aggressively per IP.
+    const isLoginRoute =
+      method === 'POST' && (
+        pathname === '/api/auth/merchant' ||
+        pathname === '/api/auth/user' ||
+        pathname === '/api/auth/compliance' ||
+        pathname === '/api/auth/admin' ||
+        pathname === '/api/auth/wallet' ||
+        pathname === '/api/2fa/verify-login'
+      );
+
+    if (isLoginRoute) {
+      rateLimitResult = checkRate(ip, 'auth-login', 10, 60);
+    } else if (pathname.startsWith('/api/auth/')) {
+      // Session-management routes (/me, /refresh, /logout, /sessions, /nonce)
+      // are called from the authenticated dashboard on a normal cadence —
+      // /auth/me on mount + visibility change, /auth/refresh transparently on
+      // every 401, etc. Multiple tabs in the same browser share an IP and
+      // burn through the 10/min login bucket in seconds. Give them a much
+      // higher ceiling — they're not credential-accepting endpoints.
+      rateLimitResult = checkRate(ip, 'auth-session', 200, 60);
     } else if (
       method === 'POST' &&
       (pathname === '/api/orders' || pathname === '/api/merchant/orders')
     ) {
       rateLimitResult = checkRate(ip, 'order-mutation', 30, 60);
+    } else if (
+      // Order-lifecycle mutations: escrow lock/release, action endpoint,
+      // status PATCH, events POST, dispute, cancel-request, extension.
+      // These are user-initiated button clicks ("Confirm Payment", "Lock
+      // Escrow", "Send Payment", "Cancel"). They MUST NOT share the standard
+      // 100/min bucket with polling GETs — under realtime-fanout pressure
+      // the bucket fills before the user's click lands and 429 silently
+      // strands the order between on-chain and DB state (real incident,
+      // BM-260504-950E). 60/min is generous for human clicks while still
+      // capping abuse, and core-api's idempotency log prevents double-spend
+      // if a user spam-clicks during the window.
+      (method === 'PATCH' || method === 'POST' || method === 'DELETE') &&
+      /^\/api\/orders\/[0-9a-fA-F-]{36}(\/(escrow|action|events|dispute|cancel-request|extension|claim-refund))?$/.test(pathname)
+    ) {
+      rateLimitResult = checkRate(ip, 'order-mutation-critical', 60, 60);
     } else if (pathname.startsWith('/api/admin/')) {
       // Admin routes are HMAC-authenticated (requireAdminAuth) and used by
       // real human operators hitting dashboards that poll every ~10s. The
@@ -322,12 +441,32 @@ export function middleware(request: NextRequest) {
       // Give them a much higher ceiling per IP — abuse is already blocked
       // by the HMAC auth requirement.
       rateLimitResult = checkRate(ip, 'admin', 1000, 60);
+    } else if (pathname.startsWith('/api/merchant/')) {
+      // Merchant dashboard endpoints (orders list, conversations, messages,
+      // direct-messages, contacts, payment-methods…) get hit by polling
+      // fallbacks AND on-demand UI fetches. The 100/min standard bucket is
+      // easy to exhaust with 2–3 tabs and a busy session. The merchant POST
+      // /api/merchant/orders mutation has its own tighter `order-mutation`
+      // bucket above (30/60s) so abuse is still capped on the actual
+      // money-moving path.
+      rateLimitResult = checkRate(ip, 'merchant', 400, 60);
+    } else if (
+      pathname === '/api/pusher/auth' ||
+      pathname === '/api/presence/heartbeat'
+    ) {
+      // High-frequency real-time plumbing: Pusher auth fires once per channel
+      // subscription (a merchant dashboard subscribes to ~5–15 channels at
+      // boot and re-fires on every reconnect), and presence heartbeat fires
+      // every 30s per tab. The standard 100/min bucket is easy to exhaust
+      // with 2–3 tabs. Give these their own larger bucket — they're already
+      // auth-gated and cheap.
+      rateLimitResult = checkRate(ip, 'realtime', 600, 60);
     } else {
       rateLimitResult = checkRate(ip, 'standard', 100, 60);
     }
 
     if (rateLimitResult) {
-      return applySecurityHeaders(rateLimitResult);
+      return applySecurityHeaders(rateLimitResult, nonce);
     }
   }
 
@@ -347,14 +486,15 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.json(
       { success: false, error: 'Request body too large' },
       { status: 413 }
-    ));
+    ), nonce);
   }
 
   // ── 2. CSRF Protection ────────────────────────────────────────────────
-  if (!isMockMode) {
+  // Always on. MOCK_MODE no longer disables this.
+  {
     const csrfResult = csrfCheck(request);
     if (csrfResult) {
-      return applySecurityHeaders(csrfResult);
+      return applySecurityHeaders(csrfResult, nonce);
     }
   }
 
@@ -362,8 +502,8 @@ export function middleware(request: NextRequest) {
 
   // Public routes — pass through
   if (isPublicRoute(pathname, method)) {
-    const response = NextResponse.next();
-    return applySecurityHeaders(response);
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    return applySecurityHeaders(response, nonce);
   }
 
   // Hard-block test/seed routes in production regardless of auth
@@ -371,7 +511,7 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.json(
       { success: false, error: 'Not found' },
       { status: 404 }
-    ));
+    ), nonce);
   }
 
   // Admin routes — need Bearer token
@@ -381,11 +521,11 @@ export function middleware(request: NextRequest) {
         { success: false, error: 'Admin authentication required' },
         { status: 401 }
       );
-      return applySecurityHeaders(res);
+      return applySecurityHeaders(res, nonce);
     }
     // Token validity is checked by the route handler (needs Node crypto)
-    const response = NextResponse.next();
-    return applySecurityHeaders(response);
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    return applySecurityHeaders(response, nonce);
   }
 
   // Protected routes — need actor identity
@@ -399,13 +539,13 @@ export function middleware(request: NextRequest) {
         },
         { status: 401 }
       );
-      return applySecurityHeaders(res);
+      return applySecurityHeaders(res, nonce);
     }
   }
 
   // ── 4. Pass Through with Security Headers ─────────────────────────────
-  const response = NextResponse.next();
-  return applySecurityHeaders(response);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  return applySecurityHeaders(response, nonce);
 }
 
 // =============================================================================

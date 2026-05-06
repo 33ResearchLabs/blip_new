@@ -121,7 +121,17 @@ function getTypeColor(entryType: string, amount: number): { text: string; bg: st
   return { text: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' };
 }
 
-function exportToCSV(entries: LedgerEntry[], summary: LedgerSummary) {
+async function exportToExcel(entries: LedgerEntry[], summary: LedgerSummary) {
+  // Lazy-loaded so the ~500KB xlsx library only ships to users who export.
+  const XLSX = await import('xlsx');
+
+  // API serializes Postgres numeric columns as strings; coerce to numbers so
+  // Excel treats amount/balance cells as numeric (sortable, summable).
+  const num = (v: unknown): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+  };
+
   const headers = ['Date', 'Time', 'Type', 'Description', 'Order #', 'Counterparty', 'Amount (USDT)', 'Balance Before', 'Balance After'];
   const rows = entries.map(e => [
     formatDate(e.created_at),
@@ -130,31 +140,40 @@ function exportToCSV(entries: LedgerEntry[], summary: LedgerSummary) {
     e.description || '',
     e.order_number || '',
     e.counterparty_name || '',
-    e.amount.toFixed(2),
-    e.balance_before.toFixed(2),
-    e.balance_after.toFixed(2),
+    num(e.amount),
+    num(e.balance_before),
+    num(e.balance_after),
   ]);
 
   const summaryRows = [
     [],
     ['Summary'],
-    ['Current Balance', summary.current_balance.toFixed(2)],
-    ['Total Credits', summary.total_credits.toFixed(2)],
-    ['Total Debits', summary.total_debits.toFixed(2)],
-    ['Total Transactions', summary.total_transactions.toString()],
+    ['Current Balance', num(summary.current_balance)],
+    ['Total Credits', num(summary.total_credits)],
+    ['Total Debits', num(summary.total_debits)],
+    ['Total Transactions', Number(summary.total_transactions) || 0],
   ];
 
-  const csv = [headers, ...rows, ...summaryRows]
-    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    .join('\n');
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows, ...summaryRows]);
 
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `wallet-ledger-${new Date().toISOString().split('T')[0]}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  // Column widths roughly sized to the longest expected content per column.
+  ws['!cols'] = [
+    { wch: 14 }, // Date
+    { wch: 12 }, // Time
+    { wch: 20 }, // Type
+    { wch: 40 }, // Description
+    { wch: 14 }, // Order #
+    { wch: 22 }, // Counterparty
+    { wch: 16 }, // Amount (USDT)
+    { wch: 16 }, // Balance Before
+    { wch: 16 }, // Balance After
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Wallet Ledger');
+
+  const filename = `wallet-ledger-${new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(wb, filename);
 }
 
 // ─── Component ───────────────────────────────────────────────────────
@@ -328,10 +347,10 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
 
-          {/* Export CSV */}
+          {/* Export Excel */}
           {entries.length > 0 && summary && (
             <button
-              onClick={() => exportToCSV(entries, summary)}
+              onClick={() => exportToExcel(entries, summary)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-lg text-sm text-white/70
                          hover:bg-white/10 hover:text-white/90 transition-colors border border-white/10"
             >
@@ -350,47 +369,51 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
         />
       )}
 
-      {/* Ledger Table */}
+      {/* Ledger Table — wraps header + body in a single overflow-x-auto
+          container with a min-width so all 5 columns stay legible on
+          phone-width viewports and the user can scroll horizontally. */}
       <div className="bg-white/[0.03] rounded-xl border border-white/10 overflow-hidden">
-        {/* Table Header */}
-        <div className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-2.5 border-b border-white/10 bg-white/[0.03]">
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider">Transaction</span>
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Amount</span>
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Before</span>
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">After</span>
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Date</span>
-        </div>
-
-        {/* Table Body */}
-        {isLoading && entries.length === 0 ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 text-white/30 animate-spin" />
-          </div>
-        ) : entries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <div className="w-12 h-12 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-white/20" />
+        <div className="overflow-x-auto">
+          <div className="min-w-[640px]">
+            {/* Table Header */}
+            <div className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-2.5 border-b border-white/10 bg-white/[0.03]">
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider">Transaction</span>
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Amount</span>
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Before</span>
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">After</span>
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Date</span>
             </div>
-            <div className="text-center">
-              <p className="text-sm font-medium text-white/40">No transactions found</p>
-              <p className="text-xs text-white/25 mt-1">
-                {txType !== 'all' || timeRange !== 'all'
-                  ? 'Try adjusting your filters'
-                  : 'Transactions will appear here after your first trade'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="divide-y divide-white/[0.06]">
-            {entries.map((entry) => {
-              const isPositive = entry.amount >= 0;
-              const colors = getTypeColor(entry.entry_type, entry.amount);
 
-              return (
-                <div
-                  key={entry.id}
-                  className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-3 hover:bg-white/[0.03] transition-colors items-center"
-                >
+            {/* Table Body */}
+            {isLoading && entries.length === 0 ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 text-white/30 animate-spin" />
+              </div>
+            ) : entries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-12 h-12 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
+                  <BookOpen className="w-6 h-6 text-white/20" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-white/40">No transactions found</p>
+                  <p className="text-xs text-white/25 mt-1">
+                    {txType !== 'all' || timeRange !== 'all'
+                      ? 'Try adjusting your filters'
+                      : 'Transactions will appear here after your first trade'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/[0.06]">
+                {entries.map((entry) => {
+                  const isPositive = entry.amount >= 0;
+                  const colors = getTypeColor(entry.entry_type, entry.amount);
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-3 hover:bg-white/[0.03] transition-colors items-center"
+                    >
                   {/* Transaction Info */}
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${colors.bg} ${colors.border}`}>
@@ -444,6 +467,8 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
             })}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {/* Pagination */}

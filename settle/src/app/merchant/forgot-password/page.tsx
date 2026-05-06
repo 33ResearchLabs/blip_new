@@ -19,6 +19,7 @@ export default function ForgotPasswordPage() {
     try {
       const res = await fetch("/api/auth/merchant/forgot-password", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });

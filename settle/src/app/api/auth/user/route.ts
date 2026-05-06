@@ -9,12 +9,19 @@ import {
   getUserByUsername,
   linkWalletToUser,
 } from '@/lib/db/repositories/users';
-import { verifyWalletSignature } from '@/lib/solana/verifySignature';
+import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { validateUsername } from '@/lib/validation/username';
-import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import {
+  validateUserUsername,
+  validateUserEmail,
+  validateUserPassword,
+} from '@/lib/validation/userAuth';
+import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS, ACCESS_TOKEN_COOKIE, ACCESS_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
+import { query } from '@/lib/db';
+import crypto from 'crypto';
 
 /**
  * POST /api/auth/user
@@ -26,8 +33,9 @@ export async function POST(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
   try {
     const body = await request.json();
-    const { action, username: rawUsername, wallet_address, signature, message, password } = body;
+    const { action, username: rawUsername, wallet_address, signature, message, nonce, password, email: rawEmail } = body;
     const username = rawUsername?.trim();
+    const email: string | undefined = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : undefined;
 
     // Check username availability
     if (action === 'check_username') {
@@ -64,12 +72,17 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Verify the wallet signature
-      const isValid = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValid) {
+      // Strict: signature + nonce + timestamp window all required.
+      const authResult = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!authResult.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: authResult.error },
+          { status: authResult.status }
         );
       }
 
@@ -150,24 +163,33 @@ export async function POST(request: NextRequest) {
       if (walletRefreshToken) {
         walletRes.cookies.set(REFRESH_TOKEN_COOKIE, walletRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
+      if (userAccessTk) {
+        walletRes.cookies.set(ACCESS_TOKEN_COOKIE, userAccessTk, ACCESS_COOKIE_OPTIONS);
+      }
       return walletRes;
     }
 
     // Set username for first-time users
     if (action === 'set_username') {
-      if (!wallet_address || !signature || !message || !username) {
+      if (!wallet_address || !signature || !message || !nonce || !username) {
         return NextResponse.json(
-          { success: false, error: 'wallet_address, signature, message, and username are required' },
+          { success: false, error: 'wallet_address, signature, message, nonce, and username are required' },
           { status: 400 }
         );
       }
 
-      // Verify the wallet signature
-      const isValid = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValid) {
+      // Same strict nonce + timestamp + signature check as wallet_login —
+      // a captured `set_username` signature must not be replayable.
+      const setNameAuth = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!setNameAuth.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: setNameAuth.error },
+          { status: setNameAuth.status }
         );
       }
 
@@ -254,6 +276,9 @@ export async function POST(request: NextRequest) {
       if (setUnRefreshToken) {
         setUnRes.cookies.set(REFRESH_TOKEN_COOKIE, setUnRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
+      if (setUnAccessTk) {
+        setUnRes.cookies.set(ACCESS_TOKEN_COOKIE, setUnAccessTk, ACCESS_COOKIE_OPTIONS);
+      }
       return setUnRes;
     }
 
@@ -322,31 +347,34 @@ export async function POST(request: NextRequest) {
       if (loginRefreshToken) {
         loginRes.cookies.set(REFRESH_TOKEN_COOKIE, loginRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
+      if (loginAccessTk) {
+        loginRes.cookies.set(ACCESS_TOKEN_COOKIE, loginAccessTk, ACCESS_COOKIE_OPTIONS);
+      }
       return loginRes;
     }
 
-    // Register with username/password
+    // Register with username/password (+ email for verification & recovery).
     if (action === 'register') {
-      if (!username || !password) {
+      // Authoritative validation — same helpers the client runs at submit
+      // time, so the user can't bypass anything by hitting the API directly.
+      const usernameError = validateUserUsername(username || '');
+      if (usernameError) {
         return NextResponse.json(
-          { success: false, error: 'Username and password are required' },
+          { success: false, error: usernameError },
           { status: 400 }
         );
       }
-
-      // Validate username
-      const regUsernameError = validateUsername(username);
-      if (regUsernameError) {
+      const emailError = validateUserEmail(email || '');
+      if (emailError) {
         return NextResponse.json(
-          { success: false, error: regUsernameError },
+          { success: false, error: emailError },
           { status: 400 }
         );
       }
-
-      // Validate password
-      if (password.length < 6) {
+      const passwordError = validateUserPassword(password || '');
+      if (passwordError) {
         return NextResponse.json(
-          { success: false, error: 'Password must be at least 6 characters' },
+          { success: false, error: passwordError },
           { status: 400 }
         );
       }
@@ -360,13 +388,28 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Create user
+      // Check email uniqueness up-front so we can return a friendlier error
+      // than letting the DB unique index fire (the DB still enforces it).
+      const existingByEmail = await query<{ id: string }>(
+        `SELECT id FROM users WHERE LOWER(email) = $1`,
+        [email]
+      );
+      if (existingByEmail.length > 0) {
+        return NextResponse.json(
+          { success: false, error: 'Email already registered' },
+          { status: 409 }
+        );
+      }
+
+      // Create user — email_verified=false until they click the link.
       let user;
       try {
         user = await createUser({
           username,
           password,
           name: username,
+          email,
+          email_verified: false,
         });
       } catch (createErr: any) {
         if (createErr?.message === 'Username already taken') {
@@ -375,7 +418,35 @@ export async function POST(request: NextRequest) {
             { status: 409 }
           );
         }
+        if (createErr?.message === 'Email already registered') {
+          return NextResponse.json(
+            { success: false, error: 'Email already registered' },
+            { status: 409 }
+          );
+        }
         throw createErr;
+      }
+
+      // Fire-and-forget verification email — don't fail registration if SES
+      // is misconfigured, just log it. The user can request a resend later.
+      try {
+        const verifyToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
+        await query(
+          `INSERT INTO user_email_verification_tokens (user_id, token_hash, expires_at)
+           VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
+          [user.id, tokenHash]
+        );
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const verifyLink = `${appUrl}/api/auth/user/verify-email?token=${verifyToken}&id=${user.id}`;
+        const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
+        const emailContent = emailVerificationEmail(verifyLink, user.username || 'there');
+        // `email` is asserted non-null because validateUserEmail above
+        // returns early when it's missing — TS just can't track that.
+        sendEmail({ to: email!, ...emailContent })
+          .catch(err => console.error('[user register] verification email failed:', err));
+      } catch (emailErr) {
+        console.error('[user register] failed to create verification token:', emailErr);
       }
 
       console.log('[API] New user registered:', user.id, user.username);
@@ -403,12 +474,17 @@ export async function POST(request: NextRequest) {
         data: {
           user,
           needsWallet: true,
+          requiresEmailVerification: true,
+          message: 'Account created! Check your email to verify your account.',
           ...(registerToken && { token: registerToken }),
           ...(regAccessTk && { accessToken: regAccessTk }),
         },
       });
       if (regRefreshToken) {
         regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
+      if (regAccessTk) {
+        regRes.cookies.set(ACCESS_TOKEN_COOKIE, regAccessTk, ACCESS_COOKIE_OPTIONS);
       }
       return regRes;
     }
@@ -417,19 +493,26 @@ export async function POST(request: NextRequest) {
     if (action === 'link_wallet') {
       const { user_id } = body;
 
-      if (!user_id || !wallet_address || !signature || !message) {
+      if (!user_id || !wallet_address || !signature || !message || !nonce) {
         return NextResponse.json(
-          { success: false, error: 'user_id, wallet_address, signature, and message are required' },
+          { success: false, error: 'user_id, wallet_address, signature, message, and nonce are required' },
           { status: 400 }
         );
       }
 
-      // Verify the wallet signature
-      const isValid = await verifyWalletSignature(wallet_address, signature, message);
-      if (!isValid) {
+      // Strict signature + nonce + timestamp. Replaying a captured link_wallet
+      // signature would otherwise let an attacker re-bind the same wallet to
+      // a controlled account.
+      const linkAuth = await verifyWalletAuthRequest({
+        walletAddress: wallet_address,
+        signature,
+        message,
+        nonce,
+      });
+      if (!linkAuth.ok) {
         return NextResponse.json(
-          { success: false, error: 'Invalid wallet signature' },
-          { status: 401 }
+          { success: false, error: linkAuth.error },
+          { status: linkAuth.status }
         );
       }
 
@@ -544,6 +627,7 @@ export async function GET(request: NextRequest) {
         },
       });
       if (checkRefreshToken) checkResponse.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshToken, REFRESH_COOKIE_OPTIONS);
+      if (checkAccessTk) checkResponse.cookies.set(ACCESS_TOKEN_COOKIE, checkAccessTk, ACCESS_COOKIE_OPTIONS);
       return checkResponse;
     }
 

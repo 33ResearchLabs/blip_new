@@ -1466,9 +1466,13 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           <div className="flex-1 flex items-center gap-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors">
             <Search className="w-3 h-3 text-foreground/20" />
             <input
-              type="text"
-              name="search"
+              type="search"
+              role="searchbox"
+              name="orders-search"
               autoComplete="off"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-form-type="other"
               maxLength={100}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

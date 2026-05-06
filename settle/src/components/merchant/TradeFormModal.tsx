@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -9,10 +9,24 @@ import {
   Loader2,
   Zap,
   ChevronDown,
+  Plus,
 } from "lucide-react";
 import type { Order } from "@/types/merchant";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
+import { useCorridorPrices, resolveCorridorRef } from "@/hooks/useCorridorPrices";
+import { formatCrypto, formatRate } from "@/lib/format";
+
+const CORRIDOR_OPTIONS = [
+  { key: "USDT_AED", label: "🇦🇪 USDT / AED" },
+  { key: "USDT_INR", label: "🇮🇳 USDT / INR" },
+] as const;
+
+// Map a corridor id to its fiat currency code for labels in the preview row.
+function corridorFiat(corridorId: string | undefined): "AED" | "INR" {
+  return corridorId === "USDT_INR" ? "INR" : "AED";
+}
 
 interface MerchantPaymentMethod {
   id: string;
@@ -42,6 +56,15 @@ export interface TradeFormModalProps {
   setCreateTradeError: (error: string | null) => void;
   onClose: () => void;
   onSubmit: () => void;
+  // Active corridor (e.g. "USDT_AED" / "USDT_INR"). When provided, the modal
+  // shows a Trading Pair selector at the top so the user can switch corridor
+  // right inside the trade-creation flow.
+  activeCorridor?: string;
+  onCorridorChange?: (corridorId: string) => void;
+  // Opens the merchant's Payment Methods management overlay so a new method
+  // can be added without leaving the trade-creation flow. When omitted, the
+  // "+ Add payment method" affordance is hidden.
+  onAddPaymentMethod?: () => void;
 }
 
 export function TradeFormModal({
@@ -55,39 +78,76 @@ export function TradeFormModal({
   setCreateTradeError,
   onClose,
   onSubmit,
+  activeCorridor,
+  onCorridorChange,
+  onAddPaymentMethod,
 }: TradeFormModalProps) {
   const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
   const [showPmDropdown, setShowPmDropdown] = useState(false);
+  // Live ref price for the active corridor — drives the Trade Preview row
+  // so it always matches what the user picked at the top (USDT/AED vs USDT/INR).
+  const corridorPrices = useCorridorPrices();
+  const fiatCcy = corridorFiat(activeCorridor);
+  const liveRate = resolveCorridorRef(corridorPrices, activeCorridor, fiatCcy);
+
+  // Centralised "why is the submit button disabled" reason. Mirrored by the
+  // disabled check on the button itself so the visual + accessibility state
+  // and the human-readable explanation can never disagree.
+  const cryptoAmountNum = parseFloat(openTradeForm.cryptoAmount || "0");
+  const disabledReason: string | null = (() => {
+    if (isCreatingTrade) return null;
+    if (!openTradeForm.cryptoAmount || cryptoAmountNum <= 0) {
+      return "Enter a USDT amount to continue";
+    }
+    if (
+      openTradeForm.tradeType === "sell" &&
+      effectiveBalance !== null &&
+      cryptoAmountNum > effectiveBalance
+    ) {
+      return `Insufficient USDT — wallet has ${formatCrypto(effectiveBalance)} USDT`;
+    }
+    return null;
+  })();
+  const submitDisabled = isCreatingTrade || disabledReason !== null;
+
+  // Refetch helper — also called when the dropdown reopens so a payment
+  // method just added via the management overlay shows up immediately.
+  const loadPaymentMethods = useCallback(async () => {
+    if (!merchantId) return;
+    try {
+      const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setPaymentMethods(data.data);
+        // Auto-select default method if nothing is selected yet
+        if (!openTradeForm.paymentMethodId) {
+          const defaultPm = data.data.find((pm: MerchantPaymentMethod) => pm.is_default) || data.data[0];
+          if (defaultPm) {
+            setOpenTradeForm(prev => ({
+              ...prev,
+              paymentMethod: (defaultPm.type === 'cash' ? 'cash' : 'bank') as 'bank' | 'cash',
+              paymentMethodId: defaultPm.id,
+            }));
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch payment methods:", err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [merchantId]);
 
   useEffect(() => {
     if (!isOpen || !merchantId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`);
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (!cancelled && data.success && Array.isArray(data.data)) {
-          setPaymentMethods(data.data);
-          // Auto-select default method if nothing is selected yet
-          if (!openTradeForm.paymentMethodId) {
-            const defaultPm = data.data.find((pm: MerchantPaymentMethod) => pm.is_default) || data.data[0];
-            if (defaultPm) {
-              setOpenTradeForm(prev => ({
-                ...prev,
-                paymentMethod: (defaultPm.type === 'cash' ? 'cash' : 'bank') as 'bank' | 'cash',
-                paymentMethodId: defaultPm.id,
-              }));
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch payment methods:", err);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, merchantId]);
+    loadPaymentMethods();
+  }, [isOpen, merchantId, loadPaymentMethods]);
+
+  // Refetch on every dropdown open so new methods picked up after the
+  // management overlay closes don't require a modal remount.
+  useEffect(() => {
+    if (showPmDropdown) loadPaymentMethods();
+  }, [showPmDropdown, loadPaymentMethods]);
 
   const handleClose = () => {
     onClose();
@@ -140,34 +200,57 @@ export function TradeFormModal({
 
               {/* Form */}
               <div className="p-5 space-y-4">
-                {/* Trade Type */}
+                {/* Trading Pair — choose which crypto/fiat corridor to trade in */}
+                {activeCorridor && onCorridorChange && (
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-[11px] text-foreground/40">Trading Pair</label>
+                    <FilterDropdown<string>
+                      value={activeCorridor}
+                      onChange={onCorridorChange}
+                      ariaLabel="Select trading pair"
+                      align="right"
+                      variant="square"
+                      options={CORRIDOR_OPTIONS.map((c) => ({
+                        key: c.key,
+                        label: c.label,
+                      }))}
+                    />
+                  </div>
+                )}
+
+                {/* Trade Type — semantic colors so the merchant can tell at a
+                    glance which side they're on: Sell = primary, Buy = emerald. */}
                 <div>
                   <label className="text-[11px] text-foreground/40 mb-1.5 block">Trade Type</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "sell" }))}
-                      className={`py-3 rounded-xl text-xs font-medium transition-all ${
+                      className={`py-3 rounded-xl text-xs font-medium transition-all border ${
                         openTradeForm.tradeType === "sell"
-                          ? "bg-white/10 text-white border border-white/6"
-                          : "bg-white/[0.04] text-foreground/40 border border-transparent hover:bg-card"
+                          ? "bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20"
+                          : "bg-white/[0.04] text-foreground/40 border-transparent hover:bg-card"
                       }`}
                     >
                       <div className="flex flex-col items-center gap-1">
-                        <span>Sell USDT</span>
-                        <span className="text-[9px] text-foreground/35">You send USDT, get AED</span>
+                        <span className="font-semibold">Sell USDT</span>
+                        <span className={`text-[9px] ${openTradeForm.tradeType === "sell" ? "text-primary/70" : "text-foreground/35"}`}>
+                          You send USDT, get AED
+                        </span>
                       </div>
                     </button>
                     <button
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "buy" }))}
-                      className={`py-3 rounded-xl text-xs font-medium transition-all ${
+                      className={`py-3 rounded-xl text-xs font-medium transition-all border ${
                         openTradeForm.tradeType === "buy"
-                          ? "bg-white/10 text-white/70 border border-white/6"
-                          : "bg-white/[0.04] text-foreground/40 border border-transparent hover:bg-card"
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 ring-1 ring-emerald-500/20"
+                          : "bg-white/[0.04] text-foreground/40 border-transparent hover:bg-card"
                       }`}
                     >
                       <div className="flex flex-col items-center gap-1">
-                        <span>Buy USDT</span>
-                        <span className="text-[9px] text-foreground/35">You send AED, get USDT</span>
+                        <span className="font-semibold">Buy USDT</span>
+                        <span className={`text-[9px] ${openTradeForm.tradeType === "buy" ? "text-emerald-400/70" : "text-foreground/35"}`}>
+                          You send AED, get USDT
+                        </span>
                       </div>
                     </button>
                   </div>
@@ -205,9 +288,17 @@ export function TradeFormModal({
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setShowPmDropdown(!showPmDropdown)}
-                      disabled={paymentMethods.length === 0}
-                      className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.15] transition-all disabled:opacity-60"
+                      onClick={() => {
+                        // When there are no methods, the dropdown body itself
+                        // is empty — opening it is pointless. Jump straight to
+                        // the management overlay if the host wired one in.
+                        if (paymentMethods.length === 0 && onAddPaymentMethod) {
+                          onAddPaymentMethod();
+                          return;
+                        }
+                        setShowPmDropdown(!showPmDropdown);
+                      }}
+                      className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.15] transition-all"
                     >
                       {selectedPm ? (
                         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -225,8 +316,14 @@ export function TradeFormModal({
                           </div>
                         </div>
                       ) : paymentMethods.length === 0 ? (
-                        <span className="text-[11px] text-foreground/40">
-                          No payment methods — add one in Settings → Payments
+                        <span className="text-[11px] text-foreground/40 flex items-center gap-1.5">
+                          {onAddPaymentMethod ? (
+                            <>
+                              <Plus className="w-3.5 h-3.5" /> Add a payment method
+                            </>
+                          ) : (
+                            <>No payment methods — add one in Settings → Payments</>
+                          )}
                         </span>
                       ) : (
                         <span className="text-[11px] text-foreground/40">Select payment method</span>
@@ -271,6 +368,25 @@ export function TradeFormModal({
                             </button>
                           );
                         })}
+                        {/* Add new — opens the merchant's payment-methods overlay
+                            without dismissing the trade modal. The dropdown will
+                            refetch on its next open so a freshly added method
+                            appears immediately. */}
+                        {onAddPaymentMethod && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onAddPaymentMethod();
+                              setShowPmDropdown(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-left border-t border-white/[0.06] text-primary hover:bg-primary/[0.06] transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span className="text-[12px] font-semibold">
+                              Add payment method
+                            </span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -282,36 +398,36 @@ export function TradeFormModal({
                   <div className="grid grid-cols-3 gap-1.5 bg-white/[0.03] p-1.5 rounded-xl border border-white/[0.04]">
                     <button
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'best' }))}
-                      className={`px-3 py-3 rounded-lg text-center transition-all ${
+                      className={`px-3 py-3 rounded-lg text-center transition-all border ${
                         openTradeForm.spreadPreference === 'best'
-                          ? 'bg-white/10 text-white border border-white/10'
-                          : 'text-foreground/35 hover:text-foreground hover:bg-card'
+                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
+                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
                       }`}
                     >
                       <p className="text-xs font-bold">Best</p>
-                      <p className="text-[10px] text-foreground/35 mt-0.5">2.0%</p>
+                      <p className={`text-[10px] mt-0.5 ${openTradeForm.spreadPreference === 'best' ? 'text-primary/70' : 'text-foreground/35'}`}>2.0%</p>
                     </button>
                     <button
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'fastest' }))}
-                      className={`px-3 py-3 rounded-lg text-center transition-all ${
+                      className={`px-3 py-3 rounded-lg text-center transition-all border ${
                         openTradeForm.spreadPreference === 'fastest'
-                          ? 'bg-white/10 text-white border border-white/10'
-                          : 'text-foreground/35 hover:text-foreground hover:bg-card'
+                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
+                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
                       }`}
                     >
                       <p className="text-xs font-bold">Fast</p>
-                      <p className="text-[10px] text-foreground/35 mt-0.5">2.5%</p>
+                      <p className={`text-[10px] mt-0.5 ${openTradeForm.spreadPreference === 'fastest' ? 'text-primary/70' : 'text-foreground/35'}`}>2.5%</p>
                     </button>
                     <button
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'cheap' }))}
-                      className={`px-3 py-3 rounded-lg text-center transition-all ${
+                      className={`px-3 py-3 rounded-lg text-center transition-all border ${
                         openTradeForm.spreadPreference === 'cheap'
-                          ? 'bg-white/10 text-white border border-white/10'
-                          : 'text-foreground/35 hover:text-foreground hover:bg-card'
+                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
+                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
                       }`}
                     >
                       <p className="text-xs font-bold">Cheap</p>
-                      <p className="text-[10px] text-foreground/35 mt-0.5">1.5%</p>
+                      <p className={`text-[10px] mt-0.5 ${openTradeForm.spreadPreference === 'cheap' ? 'text-primary/70' : 'text-foreground/35'}`}>1.5%</p>
                     </button>
                   </div>
                   <div className="mt-2 text-center">
@@ -329,54 +445,63 @@ export function TradeFormModal({
                   <div className="flex items-center gap-2 bg-white/[0.03] p-1.5 rounded-xl border border-white/[0.04]">
                     <button
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, expiryMinutes: 15 as 15 | 90 }))}
-                      className={`flex-1 px-3 py-2.5 rounded-lg text-center transition-all ${
+                      className={`flex-1 px-3 py-2.5 rounded-lg text-center transition-all border ${
                         openTradeForm.expiryMinutes === 15
-                          ? 'bg-white/10 text-white border border-white/10'
-                          : 'text-foreground/35 hover:text-foreground hover:bg-card'
+                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
+                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
                       }`}
                     >
                       <p className="text-xs font-bold">15 min</p>
-                      <p className="text-[9px] text-foreground/35 mt-0.5">Default</p>
+                      <p className={`text-[9px] mt-0.5 ${openTradeForm.expiryMinutes === 15 ? 'text-primary/70' : 'text-foreground/35'}`}>Default</p>
                     </button>
                     <button
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, expiryMinutes: 90 as 15 | 90 }))}
-                      className={`flex-1 px-3 py-2.5 rounded-lg text-center transition-all ${
+                      className={`flex-1 px-3 py-2.5 rounded-lg text-center transition-all border ${
                         openTradeForm.expiryMinutes === 90
-                          ? 'bg-white/10 text-white border border-white/10'
-                          : 'text-foreground/35 hover:text-foreground hover:bg-card'
+                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
+                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
                       }`}
                     >
                       <p className="text-xs font-bold">90 min</p>
-                      <p className="text-[9px] text-foreground/35 mt-0.5">Extended</p>
+                      <p className={`text-[9px] mt-0.5 ${openTradeForm.expiryMinutes === 90 ? 'text-primary/70' : 'text-foreground/35'}`}>Extended</p>
                     </button>
                   </div>
                 </div>
 
-                {/* Trade Preview */}
-                {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (
-                  <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.04]">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Zap className="w-3.5 h-3.5 text-white" />
-                      <span className="text-[11px] font-medium text-white">Trade Preview</span>
+                {/* Trade Preview — uses the live ref price for the active
+                    corridor (set via the Trading Pair dropdown above). When
+                    the rate isn't loaded yet we render "—" rather than
+                    inventing a fallback (CLAUDE.md: no hardcoded rates). */}
+                {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (() => {
+                  const usdtAmount = parseFloat(openTradeForm.cryptoAmount);
+                  const fiatAmount = liveRate ? usdtAmount * liveRate : null;
+                  return (
+                    <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.04]">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Zap className="w-3.5 h-3.5 text-white" />
+                        <span className="text-[11px] font-medium text-white">Trade Preview</span>
+                      </div>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-foreground/35">USDT Amount</span>
+                          <span className="text-white">{formatCrypto(usdtAmount)} USDT</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-foreground/35">Rate (est.)</span>
+                          <span className="text-white">
+                            {liveRate ? `${formatRate(liveRate)} ${fiatCcy}/USDT` : "—"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between pt-2 border-t border-white/[0.04]">
+                          <span className="text-foreground/40">{fiatCcy} Amount</span>
+                          <span className="text-white font-bold">
+                            {fiatAmount !== null ? `${formatCrypto(fiatAmount)} ${fiatCcy}` : "—"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-2 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-foreground/35">USDT Amount</span>
-                        <span className="text-white">{parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDT</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-foreground/35">Rate (est.)</span>
-                        <span className="text-white">3.67 AED/USDT</span>
-                      </div>
-                      <div className="flex justify-between pt-2 border-t border-white/[0.04]">
-                        <span className="text-foreground/40">AED Amount</span>
-                        <span className="text-white font-bold">
-                          {(parseFloat(openTradeForm.cryptoAmount) * 3.67).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AED
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Error Message */}
                 {createTradeError && (
@@ -390,43 +515,48 @@ export function TradeFormModal({
               </div>
 
               {/* Footer */}
-              <div className="px-5 py-4 border-t border-white/[0.04] flex gap-3">
-                <button
-                  onClick={handleClose}
-                  className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] text-foreground/40 hover:bg-card transition-colors"
-                >
-                  Cancel
-                </button>
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  disabled={
-                    isCreatingTrade ||
-                    !openTradeForm.cryptoAmount ||
-                    parseFloat(openTradeForm.cryptoAmount) <= 0 ||
-                    (openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount) > effectiveBalance)
-                  }
-                  onClick={onSubmit}
-                  className={`flex-[2] py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
-                    isCreatingTrade ||
-                    !openTradeForm.cryptoAmount ||
-                    parseFloat(openTradeForm.cryptoAmount) <= 0 ||
-                    (openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount) > effectiveBalance)
-                      ? 'bg-gray-600 text-foreground/40 cursor-not-allowed'
-                      : 'bg-white/10 text-background hover:bg-accent-subtle'
-                  }`}
-                >
-                  {isCreatingTrade ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <ArrowLeftRight className="w-3.5 h-3.5" />
-                      Open Trade
-                    </>
-                  )}
-                </motion.button>
+              <div className="border-t border-white/[0.04]">
+                {/* Disabled reason — shown right above the action buttons so
+                    the user immediately sees WHY Open Trade is greyed out
+                    instead of guessing. */}
+                {disabledReason && (
+                  <div className="px-5 pt-3 -mb-1">
+                    <p className="text-[11px] text-amber-300 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{disabledReason}</span>
+                    </p>
+                  </div>
+                )}
+                <div className="px-5 py-4 flex gap-3">
+                  <button
+                    onClick={handleClose}
+                    className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] text-foreground/40 hover:bg-card transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    disabled={submitDisabled}
+                    onClick={onSubmit}
+                    className={`flex-[2] py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
+                      submitDisabled
+                        ? "bg-gray-600 text-foreground/40 cursor-not-allowed"
+                        : "bg-primary text-white hover:bg-primary/90"
+                    }`}
+                  >
+                    {isCreatingTrade ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowLeftRight className="w-3.5 h-3.5" />
+                        Open Trade
+                      </>
+                    )}
+                  </motion.button>
+                </div>
               </div>
             </div>
           </motion.div>

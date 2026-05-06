@@ -183,6 +183,14 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const chatWindowsRef = useRef(chatWindows);
   chatWindowsRef.current = chatWindows;
 
+  // Stable ref for onNewMessage so the merchant-channel + WS subscription
+  // effects don't tear down + recreate (= unsubscribe → re-auth → re-subscribe
+  // storm) every time the parent passes a new callback reference. The
+  // subscription needs the LATEST callback at fire time, but doesn't need
+  // to be re-bound just because the function identity changed.
+  const onNewMessageRef = useRef(onNewMessage);
+  onNewMessageRef.current = onNewMessage;
+
   // Use ref to always have access to latest actorId
   const actorIdRef = useRef(actorId);
   actorIdRef.current = actorId;
@@ -560,7 +568,9 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
           imageUrl: data.imageUrl,
           senderName: data.senderName,
         };
-        onNewMessage?.(data.orderId, message);
+        // Read the latest callback from the ref — see onNewMessageRef
+        // declaration above for why we don't depend on `onNewMessage` here.
+        onNewMessageRef.current?.(data.orderId, message);
       }
     };
 
@@ -570,7 +580,8 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       console.log('[useWebSocketChat] UNSUBSCRIBING merchant channel:', channelName);
       channel.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateMessage);
     };
-  }, [pusher, actorType, actorId, onNewMessage]);
+    // Intentionally NOT depending on onNewMessage — that's why the ref exists.
+  }, [pusher, actorType, actorId]);
 
   // Phase 3: reconnect catch-up. When Pusher reconnects, fetch any messages
   // we missed during the gap via /api/orders/:id/messages?after_seq=<lastSeq>.

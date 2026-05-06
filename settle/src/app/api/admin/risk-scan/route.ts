@@ -21,7 +21,7 @@ import { query } from '@/lib/db';
 import { insertRiskEvent } from '@/lib/db/repositories/risk';
 
 export async function POST(request: NextRequest) {
-  const authErr = requireAdminAuth(request);
+  const authErr = await requireAdminAuth(request);
   if (authErr) return authErr;
 
   const results = {

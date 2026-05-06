@@ -53,7 +53,7 @@ const SORT_COLUMNS: Record<string, string> = {
 
 // GET /api/admin/merchants - Get all merchants with stats
 export async function GET(request: NextRequest) {
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {
@@ -341,7 +341,7 @@ export async function GET(request: NextRequest) {
 // PATCH /api/admin/merchants - Toggle merchant access flags
 // Body: { merchantId: string, hasOpsAccess?: boolean, hasComplianceAccess?: boolean }
 export async function PATCH(request: NextRequest) {
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {

@@ -188,12 +188,32 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
 
         {/* Create tab */}
         {tab === 'create' && (
-          <div className="space-y-3">
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleCreate(); }}
+            autoComplete="off"
+            className="space-y-3"
+          >
+            {/* Hidden username anchor — keeps the password manager bound to
+                THIS form so saved logins don't leak into nearby text inputs. */}
+            <input
+              type="text"
+              name="wallet-account"
+              autoComplete="username"
+              value="blip-user-wallet"
+              readOnly
+              aria-hidden="true"
+              tabIndex={-1}
+              className="absolute opacity-0 pointer-events-none h-0 w-0"
+            />
             <div>
-              <label style={labelStyle}>Password</label>
+              <label htmlFor="user-wallet-new-password" style={labelStyle}>Password</label>
               <div className="relative">
                 <input
+                  id="user-wallet-new-password"
+                  name="user-wallet-new-password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  maxLength={100}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min 6 characters"
@@ -212,9 +232,13 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
             </div>
 
             <div>
-              <label style={labelStyle}>Confirm Password</label>
+              <label htmlFor="user-wallet-new-password-confirm" style={labelStyle}>Confirm Password</label>
               <input
+                id="user-wallet-new-password-confirm"
+                name="user-wallet-new-password-confirm"
                 type="password"
+                autoComplete="new-password"
+                maxLength={100}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter password"
@@ -223,22 +247,41 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
             </div>
 
             <button
-              onClick={handleCreate}
+              type="submit"
               disabled={isLoading}
               className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ background: colors.accent.primary, color: colors.accent.text }}
             >
               {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Key className="w-4 h-4" /> Create Wallet</>}
             </button>
-          </div>
+          </form>
         )}
 
         {/* Import tab */}
         {tab === 'import' && (
-          <div className="space-y-3">
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleImport(); }}
+            autoComplete="off"
+            className="space-y-3"
+          >
+            {/* Hidden username anchor — see comment in create form. */}
+            <input
+              type="text"
+              name="wallet-account"
+              autoComplete="username"
+              value="blip-user-wallet"
+              readOnly
+              aria-hidden="true"
+              tabIndex={-1}
+              className="absolute opacity-0 pointer-events-none h-0 w-0"
+            />
             <div>
-              <label style={labelStyle}>Private Key (Base58)</label>
+              <label htmlFor="user-wallet-import-key" style={labelStyle}>Private Key (Base58)</label>
               <textarea
+                id="user-wallet-import-key"
+                name="user-wallet-import-key"
+                autoComplete="off"
+                maxLength={128}
                 value={privateKeyInput}
                 onChange={(e) => setPrivateKeyInput(e.target.value)}
                 placeholder="Paste your base58 private key..."
@@ -249,9 +292,13 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
             </div>
 
             <div>
-              <label style={labelStyle}>Encryption Password</label>
+              <label htmlFor="user-wallet-import-password" style={labelStyle}>Encryption Password</label>
               <input
+                id="user-wallet-import-password"
+                name="user-wallet-import-password"
                 type="password"
+                autoComplete="new-password"
+                maxLength={100}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Min 6 characters"
@@ -260,14 +307,14 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
             </div>
 
             <button
-              onClick={handleImport}
+              type="submit"
               disabled={isLoading}
               className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ background: colors.accent.primary, color: colors.accent.text }}
             >
               {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</> : <><Download className="w-4 h-4" /> Import Wallet</>}
             </button>
-          </div>
+          </form>
         )}
 
         <p className="text-[9px] font-mono text-center" style={{ color: colors.text.tertiary }}>

@@ -132,13 +132,9 @@ export default function ErrorLogsPanel({ onRefreshStateChange }: ErrorLogsPanelP
   const [grouped, setGrouped] = useState(true);
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
 
-  const getToken = () => {
-    try {
-      return localStorage.getItem('blip_admin_token') || '';
-    } catch {
-      return '';
-    }
-  };
+  // Admin auth now travels via the httpOnly `blip_admin_session` cookie
+  // — sent automatically on same-origin requests. No Authorization
+  // header is needed; the cookie cannot be read from JS.
 
   const resolveRow = useCallback(
     async (row: ErrorLogRow) => {
@@ -150,10 +146,7 @@ export default function ErrorLogsPanel({ onRefreshStateChange }: ErrorLogsPanelP
           : { ids: [row.id], resolved: true };
         const res = await fetch(`/api/admin/error-logs`, {
           method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${getToken()}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -183,9 +176,7 @@ export default function ErrorLogsPanel({ onRefreshStateChange }: ErrorLogsPanelP
       if (grouped) qs.set('grouped', 'true');
       qs.set('limit', '200');
 
-      const res = await fetch(`/api/admin/error-logs?${qs.toString()}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
+      const res = await fetch(`/api/admin/error-logs?${qs.toString()}`);
       if (res.status === 404) {
         setError('Error tracking is disabled. Set ENABLE_ERROR_TRACKING=true on the server.');
         setRows([]);
@@ -304,7 +295,6 @@ export default function ErrorLogsPanel({ onRefreshStateChange }: ErrorLogsPanelP
             try {
               const res = await fetch('/api/admin/error-logs?scope=test', {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${getToken()}` },
               });
               const data = await res.json().catch(() => ({}));
               if (res.ok && data?.success) {
@@ -334,10 +324,7 @@ export default function ErrorLogsPanel({ onRefreshStateChange }: ErrorLogsPanelP
                 rows.map((r) =>
                   fetch('/api/admin/error-logs', {
                     method: 'PATCH',
-                    headers: {
-                      Authorization: `Bearer ${getToken()}`,
-                      'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(
                       grouped
                         ? { type: r.type, message: r.message, resolved: true }

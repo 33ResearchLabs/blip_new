@@ -116,9 +116,18 @@ export async function checkEndpointHealth(url: string): Promise<EndpointHealth> 
 
 /**
  * Get the healthiest RPC endpoint for a network
- * Checks all endpoints in parallel and returns the fastest healthy one
+ * Checks all endpoints in parallel and returns the fastest healthy one.
+ *
+ * In the browser, the proxy is the only legitimate target — there's no
+ * value (and significant leak risk) in probing arbitrary upstream URLs from
+ * the client. We always return `getPrimaryEndpoint()` (which itself returns
+ * `/api/rpc` in browser context). On the server, we still probe the
+ * configured candidates and pick the fastest healthy one.
  */
 export async function getHealthyEndpoint(network: 'devnet' | 'mainnet-beta' = 'devnet'): Promise<string> {
+  if (typeof window !== 'undefined') {
+    return getPrimaryEndpoint(network);
+  }
   const endpoints = getRpcEndpoints(network);
 
   if (endpoints.length === 0) {
@@ -150,15 +159,37 @@ export async function getHealthyEndpoint(network: 'devnet' | 'mainnet-beta' = 'd
 }
 
 /**
- * Get the primary RPC endpoint without health checking
- * Used for initial connection before health checks complete
+ * Get the primary RPC endpoint without health checking.
+ * Used for initial connection before health checks complete.
+ *
+ * Browser path: routes through `/api/rpc` (server-side proxy holding the
+ * keyed upstream URL). The browser never sees the paid endpoint, so the
+ * API key cannot leak through the bundle / Network tab / HAR.
+ *
+ * Server path: prefers SOLANA_RPC_URL_PRIVATE (the keyed URL), falling
+ * back to NEXT_PUBLIC_SOLANA_RPC_URL for backward compatibility, finally
+ * falling back to the configured network-default.
+ *
+ * Override: a deployment can override the client proxy path with
+ * NEXT_PUBLIC_SOLANA_RPC_PROXY_URL (e.g. an absolute URL on a CDN/edge).
  */
 export function getPrimaryEndpoint(network: 'devnet' | 'mainnet-beta' = 'devnet'): string {
-  // Check for override first
-  const override = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
-  if (override) {
-    return override;
+  const isBrowser = typeof window !== 'undefined';
+  if (isBrowser) {
+    const proxyOverride = process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY_URL?.trim();
+    if (proxyOverride && /^https?:\/\//i.test(proxyOverride)) return proxyOverride;
+    // Solana's `Connection` rejects relative URLs — resolve the proxy path
+    // against `window.location.origin` so callers always get an absolute URL.
+    const proxyPath = proxyOverride && proxyOverride.length > 0 ? proxyOverride : '/api/rpc';
+    return `${window.location.origin}${proxyPath.startsWith('/') ? '' : '/'}${proxyPath}`;
   }
+
+  // Server-side: prefer the private URL (no NEXT_PUBLIC_ prefix → not in
+  // the client bundle). Fall back to the public one for dev/local parity.
+  const priv = process.env.SOLANA_RPC_URL_PRIVATE?.trim();
+  if (priv) return priv;
+  const pub = process.env.NEXT_PUBLIC_SOLANA_RPC_URL?.trim();
+  if (pub) return pub;
 
   const endpoints = getRpcEndpoints(network);
   return endpoints[0]?.url || 'https://api.devnet.solana.com';

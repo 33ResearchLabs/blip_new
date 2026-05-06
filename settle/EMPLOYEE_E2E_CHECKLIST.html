@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Blip Money — Employee E2E QA Checklist</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #070708;
+    --surface: #0F1011;
+    --surface-2: #16171A;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.16);
+    --text: #FFFFFF;
+    --muted: rgba(255,255,255,0.55);
+    --dim: rgba(255,255,255,0.35);
+    --orange: #F97316;
+    --orange-light: #FB923C;
+    --green: #34D399;
+    --red: #F87171;
+    --amber: #FBBF24;
+    --violet: #A78BFA;
+  }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 10% 0%, rgba(249,115,22,0.10), transparent 40%),
+      radial-gradient(circle at 90% 100%, rgba(249,115,22,0.10), transparent 40%);
+    background-attachment: fixed;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  /* Header */
+  header.page {
+    background: linear-gradient(180deg, var(--surface) 0%, transparent 100%);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  header.page::before {
+    content: "";
+    position: absolute; inset: -50% -10% auto auto;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(249,115,22,0.18), transparent 70%);
+    filter: blur(40px); pointer-events: none;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; position: relative; z-index: 1; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--orange-light), var(--orange));
+    display: grid; place-items: center;
+    box-shadow: 0 0 20px rgba(249,115,22,0.4);
+    font-size: 16px;
+  }
+  .brand-name { font-size: 20px; font-weight: 700; }
+  .brand-name em { font-weight: 300; font-style: italic; opacity: 0.8; }
+  h1.title {
+    font-size: 30px; font-weight: 800; letter-spacing: -0.02em;
+    margin-bottom: 6px; position: relative; z-index: 1;
+  }
+  h1.title span { color: var(--orange); }
+  p.subtitle { color: var(--muted); font-size: 14px; max-width: 700px; position: relative; z-index: 1; }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px; margin-top: 20px; position: relative; z-index: 1;
+  }
+  .meta-field {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .meta-field label {
+    display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--dim); margin-bottom: 4px; font-weight: 600;
+  }
+  .meta-field input {
+    width: 100%; background: transparent; border: none; outline: none;
+    color: var(--text); font-size: 14px; font-family: inherit;
+  }
+
+  /* Overall progress */
+  .overall-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 22px;
+    margin-bottom: 22px;
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 16px; align-items: center;
+  }
+  .overall-card .label { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .overall-card .stat { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .progress-track {
+    height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--orange), var(--orange-light));
+    border-radius: 999px;
+    transition: width 0.3s ease;
+  }
+  .toolbar { display: flex; gap: 8px; }
+  .btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+  .btn:hover { background: rgba(255,255,255,0.08); border-color: var(--border-strong); }
+  .btn.danger:hover { background: rgba(248,113,113,0.15); border-color: rgba(248,113,113,0.4); color: var(--red); }
+  .btn.primary {
+    background: linear-gradient(90deg, var(--orange), var(--orange-light));
+    border-color: transparent;
+    color: white;
+  }
+  .btn.primary:hover { filter: brightness(1.1); }
+
+  /* Phase nav */
+  .phase-nav {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .phase-pill {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 8px;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .phase-pill:hover { color: var(--text); border-color: var(--border-strong); }
+  .phase-pill.active {
+    background: rgba(249,115,22,0.12);
+    border-color: rgba(249,115,22,0.45);
+    color: var(--orange);
+  }
+  .phase-pill .pill-num {
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .phase-pill.active .pill-num {
+    background: var(--orange);
+    color: white;
+  }
+  .phase-pill .pill-prog {
+    font-size: 10px;
+    background: rgba(255,255,255,0.06);
+    padding: 2px 6px;
+    border-radius: 6px;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .phase-pill .pill-prog.complete {
+    background: rgba(52,211,153,0.18);
+    color: var(--green);
+  }
+
+  /* Phase content */
+  .phase {
+    display: none;
+  }
+  .phase.active {
+    display: block;
+    animation: fadeIn 0.25s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .phase-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .phase-header .phase-num {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(249,115,22,0.25), rgba(249,115,22,0.10));
+    border: 1px solid rgba(249,115,22,0.3);
+    color: var(--orange);
+    display: grid; place-items: center;
+    font-weight: 800; font-size: 18px;
+  }
+  .phase-header .phase-title { font-size: 18px; font-weight: 700; }
+  .phase-header .phase-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .phase-header .phase-prog {
+    margin-left: auto;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .phase-header .phase-prog .num { font-size: 18px; font-weight: 700; }
+  .phase-header .phase-prog .lbl { font-size: 11px; color: var(--muted); }
+
+  .phase.critical .phase-header .phase-num {
+    background: linear-gradient(135deg, rgba(248,113,113,0.25), rgba(248,113,113,0.10));
+    border-color: rgba(248,113,113,0.3);
+    color: var(--red);
+  }
+
+  /* Section */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .section-head {
+    padding: 14px 20px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 12px;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .section-head:hover { background: rgba(255,255,255,0.02); }
+  .section-head .caret {
+    width: 16px; height: 16px;
+    transition: transform 0.2s;
+    color: var(--dim);
+  }
+  .section.open .section-head .caret { transform: rotate(90deg); }
+  .section-head .sec-num {
+    font-size: 11px;
+    color: var(--orange);
+    background: rgba(249,115,22,0.10);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .section-head .sec-title {
+    font-size: 14px; font-weight: 600;
+    flex: 1;
+  }
+  .section-head .sec-prog {
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .section-head .sec-prog.complete { color: var(--green); }
+  .section-body {
+    padding: 0 20px 16px;
+    display: none;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    margin-top: 0;
+  }
+  .section.open .section-body { display: block; }
+
+  .group-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--orange);
+    margin-top: 12px;
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .group-label:first-child { margin-top: 0; }
+
+  .quote {
+    background: rgba(249,115,22,0.06);
+    border-left: 3px solid var(--orange);
+    padding: 8px 12px;
+    margin: 0 0 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Checklist items */
+  .item {
+    display: flex;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    transition: background 0.1s;
+    cursor: pointer;
+    align-items: flex-start;
+  }
+  .item:hover { background: rgba(255,255,255,0.025); }
+  .item input[type="checkbox"] {
+    appearance: none;
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 3px;
+    position: relative;
+    transition: all 0.15s;
+    background: rgba(255,255,255,0.02);
+  }
+  .item input[type="checkbox"]:hover { border-color: var(--orange); }
+  .item input[type="checkbox"]:checked {
+    background: linear-gradient(135deg, var(--orange), var(--orange-light));
+    border-color: transparent;
+  }
+  .item input[type="checkbox"]:checked::after {
+    content: "✓";
+    position: absolute;
+    inset: 0;
+    display: grid; place-items: center;
+    color: white;
+    font-size: 11px;
+    font-weight: 900;
+  }
+  .item-label {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.55;
+    user-select: none;
+  }
+  .item input[type="checkbox"]:checked ~ .item-label {
+    color: var(--dim);
+    text-decoration: line-through;
+  }
+  .item-label code {
+    background: rgba(255,255,255,0.05);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--orange-light);
+    border: 1px solid var(--border);
+  }
+  .item-label strong { color: white; font-weight: 700; }
+
+  .nested {
+    margin-left: 24px;
+    padding-left: 12px;
+    border-left: 1px solid var(--border);
+  }
+
+  /* Defect log */
+  .defects {
+    margin-top: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+  }
+  .defects h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .defects h2::before {
+    content: "";
+    width: 8px; height: 24px;
+    background: var(--red);
+    border-radius: 4px;
+  }
+  .defects p { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .defects table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .defects th, .defects td {
+    border-bottom: 1px solid var(--border);
+    padding: 8px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .defects th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    font-weight: 700;
+  }
+  .defects input, .defects select, .defects textarea {
+    width: 100%;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text);
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 28px;
+  }
+  .defects input:focus, .defects select:focus, .defects textarea:focus {
+    outline: none;
+    border-color: var(--orange);
+    background: rgba(255,255,255,0.04);
+  }
+  .defects td.row-actions {
+    width: 32px; text-align: center;
+  }
+  .defects td.row-actions button {
+    background: transparent;
+    color: var(--red);
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+  }
+  .defects td.row-actions button:hover { opacity: 1; }
+  .badge-sev {
+    padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+
+  /* Sign-off */
+  .signoff {
+    margin-top: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .signoff label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .signoff input {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+  }
+
+  /* Footer */
+  footer.page {
+    margin-top: 40px;
+    text-align: center;
+    color: var(--dim);
+    font-size: 11px;
+  }
+
+  /* Print */
+  @media print {
+    body { background: white; color: black; }
+    .toolbar, .phase-nav, .btn { display: none !important; }
+    .phase { display: block !important; page-break-before: always; }
+    .phase:first-of-type { page-break-before: auto; }
+    .section { break-inside: avoid; border: 1px solid #ccc; background: white; }
+    .section-body { display: block !important; }
+    .item input[type="checkbox"] { border-color: #888; }
+    header.page, .overall-card, .defects, .signoff { background: white; border: 1px solid #ccc; }
+    .item-label, .item-label strong, .brand-name, h1.title, .phase-header .phase-title { color: black !important; }
+    .item-label code { color: #c2410c; background: #fff7ed; }
+    .item input[type="checkbox"]:checked ~ .item-label { color: #888 !important; }
+  }
+
+  @media (max-width: 640px) {
+    .container { padding: 16px 12px 60px; }
+    h1.title { font-size: 22px; }
+    .overall-card { grid-template-columns: 1fr 1fr; }
+    .signoff { grid-template-columns: 1fr; }
+    .phase-header { flex-wrap: wrap; }
+    .phase-header .phase-prog { margin-left: 0; width: 100%; text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header class="page">
+    <div class="brand">
+      <div class="brand-mark">⚡</div>
+      <div class="brand-name">Blip <em>money</em></div>
+    </div>
+    <h1 class="title">Employee End-to-End QA Checklist <span>· 10 Phases</span></h1>
+    <p class="subtitle">
+      Settle (Next.js) + Core-API (Fastify). Verify every page, every tab, every button, every input.
+      Tick items as you complete them — progress is saved to your browser. Use the defect log for any failures.
+    </p>
+    <div class="meta-grid">
+      <div class="meta-field"><label>Tester</label><input id="meta-tester" placeholder="Your name" /></div>
+      <div class="meta-field"><label>Date</label><input id="meta-date" type="date" /></div>
+      <div class="meta-field"><label>Build / Commit</label><input id="meta-build" placeholder="abc1234 or v1.2.3" /></div>
+      <div class="meta-field"><label>Environment</label><input id="meta-env" placeholder="local / staging / prod" /></div>
+    </div>
+  </header>
+
+  <!-- Overall progress -->
+  <div class="overall-card">
+    <div>
+      <div class="label">OVERALL PROGRESS</div>
+      <div class="stat" id="overall-stat">0 / 0</div>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="overall-fill" style="width: 0%"></div></div>
+    <div class="stat" id="overall-pct">0%</div>
+    <div class="toolbar">
+      <button class="btn" onclick="expandAll()">Expand all</button>
+      <button class="btn" onclick="collapseAll()">Collapse all</button>
+      <button class="btn primary" onclick="window.print()">Print / PDF</button>
+      <button class="btn danger" onclick="resetAll()">Reset</button>
+    </div>
+  </div>
+
+  <!-- Phase nav -->
+  <nav class="phase-nav" id="phase-nav"></nav>
+
+  <!-- Phases container -->
+  <main id="phases"></main>
+
+  <!-- Defect log -->
+  <section class="defects">
+    <h2>Defect Log</h2>
+    <p>Add a row for every failed item. Severity: P0 = blocker · P1 = high · P2 = medium · P3 = low.</p>
+    <table id="defect-table">
+      <thead>
+        <tr>
+          <th style="width: 40px">#</th>
+          <th style="width: 80px">Severity</th>
+          <th style="width: 110px">Phase / §</th>
+          <th>Description</th>
+          <th>Steps to reproduce</th>
+          <th>Expected</th>
+          <th>Actual</th>
+          <th style="width: 110px">Owner</th>
+          <th style="width: 90px">Status</th>
+          <th class="row-actions"></th>
+        </tr>
+      </thead>
+      <tbody id="defect-body"></tbody>
+    </table>
+    <div style="margin-top: 12px"><button class="btn primary" onclick="addDefect()">＋ Add defect</button></div>
+  </section>
+
+  <!-- Sign-off -->
+  <section class="signoff">
+    <div>
+      <label>Tester signature</label>
+      <input id="sign-tester" placeholder="Type your name to sign" />
+    </div>
+    <div>
+      <label>Approver signature</label>
+      <input id="sign-approver" placeholder="Type approver name" />
+    </div>
+  </section>
+
+  <footer class="page">
+    Saved locally in your browser · Source: <code>EMPLOYEE_E2E_CHECKLIST.md</code> · Blip Money QA
+  </footer>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   CHECKLIST DATA — 10 phases mapped from EMPLOYEE_E2E_CHECKLIST.md
+   ════════════════════════════════════════════════════════════════════ */
+const PHASES = [
+  {
+    id: 1, title: "Foundation", desc: "Setup, dev access lock, auth & onboarding",
+    sections: [
+      { id: "0.1", title: "Setup", items: [
+        "<code>.env.local</code> configured (DB_HOST, DB_NAME, ADMIN_SECRET, ADMIN_PASSWORD, COMPLIANCE_PASSWORD, PUSHER_*, NEXT_PUBLIC_PUSHER_KEY, TOTP_ISSUER, NEXT_PUBLIC_MOCK_MODE=true)",
+        "DB migrations applied: <code>psql -U zeus -d settle -f database/migrations/*.sql</code> (no errors)",
+        "Seed data: <code>GET /api/setup/seed</code> returns 200",
+        "Init balances: <code>POST /api/setup/init-balances</code> returns 200",
+        "<code>pnpm dev</code> runs cleanly (no compile errors)",
+        "Health check: <code>GET /api/health</code> returns <code>{ success: true }</code>",
+        "Core-api up on its own port (mutations proxy works)",
+        "Redis reachable (or graceful fallback noted)",
+        "Pusher test event echoes in browser console",
+        "WebSocket chat server connects on the same port as <code>server.js</code>",
+      ]},
+      { id: "0.2", title: "Test accounts (create one of each)", items: [
+        "User A (buyer in BUY flow, seller in SELL flow)",
+        "User B (counter-party)",
+        "Merchant A (auto-accept ON)",
+        "Merchant B (auto-accept OFF)",
+        "Admin (admin password)",
+        "Compliance (compliance password)",
+        "Arbiter-eligible user (>10 trades, >30d, ≥4.0★, ≥100 rep)",
+      ]},
+      { id: "0.3", title: "Browser matrix", items: [
+        "Chrome 120+ (desktop)",
+        "Chrome (mobile / Android emulator)",
+        "Safari 17+ (desktop)",
+        "Safari (iOS)",
+        "Firefox 120+",
+        "Edge",
+      ]},
+      { id: "1", title: "Dev access lock (<code>/dev-lock</code>)", items: [
+        "Hitting any URL with <code>DEV_LOCK_ENABLED=true</code> and no cookie → redirected to <code>/dev-lock</code>",
+        "Wrong password → error message, no cookie set",
+        "Correct password → cookie <code>dev_access_granted</code> set (httpOnly, 7d), redirected to original URL",
+        "Static assets (<code>/_next/</code>, <code>favicon.ico</code>, <code>/icons/</code>, <code>manifest.json</code>) load <strong>without</strong> unlock",
+        "Password input has <code>maxLength</code> and is masked",
+        "Cookie expires after 7 days → re-prompt",
+      ]},
+      { id: "2.1", title: "User sign up (root <code>/</code>)", items: [
+        "Welcome screen renders (logo, CTAs, feature overview)",
+        "\"Sign Up\" CTA → registration form",
+        "Email input — required, format validated, <code>maxLength=254</code>",
+        "Username input — required, <code>maxLength=50</code>",
+        "Password input — masked, complexity rule, <code>maxLength=24</code>",
+        "Confirm password — must match",
+        "\"Agree to terms\" checkbox required",
+        "Submit → email OTP sent",
+        "OTP input <code>maxLength=6</code>, only digits",
+        "Wrong OTP → error",
+        "Resend OTP → cooldown countdown shown",
+        "Correct OTP → account created, logged in, redirected to home",
+        "Show/hide password toggle works",
+        "\"Already have account?\" toggles to Sign In",
+      ]},
+      { id: "2.2", title: "User sign in", items: [
+        "Username/email + password → success",
+        "Wrong password → error banner, no token issued",
+        "Empty fields → inline validation",
+        "\"Forgot password\" link → reset flow",
+        "2FA-enabled account → OTP step appears",
+        "Session expiry banner appears after refresh-token expiry (7d)",
+        "Logout clears <code>blip_refresh_token</code> cookie + localStorage tokens",
+        "After logout, deep links bounce back to login",
+      ]},
+      { id: "2.3", title: "Session / token (cross-cutting)", items: [
+        "Access token v2 (<code>access:type:id:sid:ts:sig</code>) refreshes silently before 15-min expiry",
+        "Refresh-token rotation works (old refresh becomes invalid after use)",
+        "Refresh-token reuse → all sessions revoked (security alert)",
+        "<code>x-user-id</code> / <code>x-merchant-id</code> headers rejected in production",
+        "User-type token can NOT impersonate merchant via <code>x-merchant-id</code>",
+      ]},
+      { id: "2.4", title: "Merchant login (<code>/merchant/login</code>)", items: [
+        "Credentials accepted, redirected to <code>/merchant</code>",
+        "Wrong creds → error",
+        "\"Remember me\" checkbox persists session correctly",
+        "Forgot password link → <code>/merchant/forgot-password</code>",
+        "Register link → registration form",
+      ]},
+      { id: "2.5", title: "Merchant forgot / reset password", items: [
+        "<code>/merchant/forgot-password</code>: email submit → \"check inbox\" confirmation",
+        "Reset email link → <code>/merchant/reset-password?token=...</code>",
+        "Token invalid/expired → error page",
+        "New password + confirm match → success → redirect to login",
+        "Old password no longer works",
+      ]},
+      { id: "2.6", title: "Merchant verify email", items: [
+        "OTP <code>maxLength=6</code>",
+        "Verify → status flips to verified",
+        "Resend code with cooldown",
+        "Back to signup link works",
+      ]},
+      { id: "2.7", title: "Admin login (<code>/admin</code>)", items: [
+        "Username + password (matches <code>ADMIN_PASSWORD</code>) → token saved as <code>blip_admin_token</code>",
+        "Wrong creds → error, no token",
+        "Token validates via <code>GET /api/auth/admin</code>",
+        "Token expires after 24h → re-prompt",
+      ]},
+      { id: "2.8", title: "Compliance login (<code>/compliance</code>)", items: [
+        "Password matches <code>COMPLIANCE_PASSWORD</code>",
+        "Wallet-connect path works (Solana wallet)",
+        "Logout works",
+      ]},
+    ]
+  },
+  {
+    id: 2, title: "User App", desc: "End-user trading flow at root /",
+    sections: [
+      { id: "3.1", title: "Home screen", items: [
+        "Active orders card lists current orders with countdown",
+        "\"Buy USDT\" button → trade-creation screen (Buy preset)",
+        "\"Sell USDT\" button → trade-creation screen (Sell preset)",
+        "Live rate banner refreshes (USDT/INR or USDT/AED corridor)",
+        "\"View pending\" / \"View completed\" / \"View all\" links navigate to correct tabs",
+        "Wallet button → wallet screen",
+        "Bottom nav (mobile) tabs visible & switch correctly",
+      ]},
+      { id: "3.2", title: "Trade creation", items: [
+        "Tab Buy / Sell switches correctly",
+        "Crypto amount input <code>maxLength=14</code>, only digits + <code>.</code>",
+        "Below min / above max → button disabled with reason",
+        "Payment-method toggle Bank / Cash works",
+        "Payment-method dropdown lists user's saved methods",
+        "Spread preference radios: Best / Fastest / Cheap",
+        "Expiry selector: 15 / 90 minutes",
+        "Submit creates order (<code>POST /api/orders</code>) — verify status <code>pending</code>",
+        "Idempotency: repeat-clicking submit doesn't create duplicate orders",
+        "Back button preserves form state OR cleanly cancels",
+        "Server error → toast with retry",
+      ]},
+      { id: "3.3", title: "Escrow lock screen", items: [
+        "Bank details rendered correctly (corridor-specific)",
+        "Copy-to-clipboard works on each field (toast confirms)",
+        "\"Confirm & lock in escrow\" → status flips to <code>escrowed</code>",
+        "Mock-mode escrow lock succeeds without real Solana tx",
+        "On-chain mode shows tx hash + Solana explorer link",
+        "Error path (insufficient balance / RPC down) → user-readable error",
+        "Cancel before lock → returns to home, order goes to <code>cancelled</code>",
+      ]},
+      { id: "3.4", title: "Order detail", items: [
+        "All amounts use <code>formatCrypto</code> / <code>formatFiat</code> (no raw numbers, locale en-US)",
+        "Status badge & progress bar reflect lifecycle stage",
+        "\"Accept order\" button only on <code>pending</code>, only for buyer",
+        "\"Mark payment sent\" button only on <code>escrowed</code>, buyer only — flips to <code>payment_sent</code>",
+        "\"Confirm fiat received\" button only on <code>payment_sent</code>, seller only — flips to <code>completed</code>",
+        "\"Dispute\" button visible on <code>escrowed</code> and <code>payment_sent</code>",
+        "Dispute modal: reason dropdown + description (<code>maxLength=2000</code>) + submit",
+        "Dispute submitted → status <code>disputed</code>, both parties notified",
+        "Extension request opens form, both parties see request",
+        "Approve / decline extension updates <code>expires_at</code>",
+        "Cancel order from <code>accepted</code>/<code>escrowed</code> works (with confirmation)",
+        "After completion: rating modal (1-5★) + comment, submit",
+        "Rating writes to <code>ratings</code> table, reflected on profile",
+        "Refund claim button (post-disputed-cancelled) only for escrow funder",
+        "Idempotency-Key header sent for <code>payment_sent</code>, <code>release_escrow</code>, <code>cancel_order</code>",
+        "Concurrent click on \"Mark payment sent\" doesn't double-fire (button disables)",
+      ]},
+      { id: "3.5", title: "Order chat (per order)", items: [
+        "Chat opens, shows historical messages",
+        "Message input <code>maxLength=1000</code>",
+        "Send via Enter and via Send button",
+        "Optimistic message rendering, then server-confirmed",
+        "Typing indicator visible to other party",
+        "Read receipts update",
+        "Load older messages (scroll-up pagination)",
+        "Compliance/admin can spectate when investigating",
+        "Chat freeze (compliance) blocks new messages",
+        "WebSocket disconnect → reconnect banner & auto-reconnect",
+      ]},
+      { id: "3.6", title: "Orders list", items: [
+        "Tabs: Active / Completed / Cancelled — counts correct",
+        "Filters preserve selection on navigation back",
+        "Pagination (or infinite scroll) loads next page",
+        "Pull-to-refresh on mobile",
+        "Tap order → opens detail",
+      ]},
+      { id: "3.7", title: "Notifications", items: [
+        "Notification list paginated",
+        "Unread count matches badge",
+        "Mark single read removes badge",
+        "Mark all read clears all",
+        "New notifications arrive in real time via Pusher",
+        "Toast appears for high-priority events",
+      ]},
+      { id: "3.8", title: "Profile", items: [
+        "Display name + emoji avatar visible",
+        "Stats: completed / cancelled / disputes — correct counts",
+        "Wallet address copyable",
+        "Add bank account: bank name, IBAN (<code>maxLength=34</code>), account name → save",
+        "Delete bank account → confirmation modal → removed",
+        "View bank ledger / transaction history",
+        "Theme toggle (dark/light) persists across reload",
+        "Logout → tokens cleared",
+      ]},
+      { id: "3.9", title: "Wallet (user)", items: [
+        "Connect Solana wallet (Phantom / Solflare)",
+        "Balance reflects on-chain (or mock balance)",
+        "Refresh button updates balance",
+        "Lock/unlock embedded wallet (PIN flow)",
+        "Setup wallet flow for first-time users",
+      ]},
+      { id: "3.10", title: "Create offer (M2M / open order)", items: [
+        "Form fields: type, amount, corridor, payment method, expiry",
+        "Submit creates open order with <code>m2m_*</code> placeholder username",
+        "Visible in mempool until claimed",
+        "Cancel offer button works",
+      ]},
+      { id: "3.11", title: "Cash confirm screen", items: [
+        "All fields readable & match order",
+        "Confirm button advances flow",
+        "Back button cancels safely",
+      ]},
+      { id: "3.12", title: "Matching screen", items: [
+        "Real-time matching animation",
+        "Cancel mid-match safely",
+        "On match → escrow lock screen",
+      ]},
+    ]
+  },
+  {
+    id: 3, title: "Merchant App", desc: "Merchant dashboard, settings, offers, mempool",
+    sections: [
+      { id: "4.1", title: "Dashboard stats card", items: [
+        "Live ticker: name, active orders, tx/h, avg response",
+        "Balance (USDT) — uses <code>formatCrypto</code>",
+        "Today's profit badge",
+        "Revenue / Escrow / Fees / 24h Vol grid — values + deltas",
+        "Trades count + Online dot",
+      ]},
+      { id: "4.2", title: "Offers widget", items: [
+        "Active corridors list (USDT→INR, USDT→AED, …)",
+        "Rate + premium % shown via <code>formatRate</code> / <code>formatPercentage</code>",
+        "Liquidity per corridor",
+        "Edit corridor button → premium / spread modal → save",
+        "Disable corridor toggle works",
+        "No-corridor state shows price unavailable error (not hardcoded fallback)",
+      ]},
+      { id: "4.3", title: "In-progress orders pane", items: [
+        "All open / accepted / escrowed / payment_sent orders listed",
+        "Per-order action buttons gated by role + status",
+        "Claim broadcast order → status <code>escrowed</code>, <code>merchant_id</code> reassigned to claimer (non-M2M)",
+        "M2M claim → <code>buyer_merchant_id</code> (SELL) or <code>merchant_id</code> (BUY) populated",
+        "Lock escrow button only for seller",
+        "Confirm payment button only for seller, only on <code>payment_sent</code>",
+        "Hijack-prevention: a different merchant can NOT claim already-claimed M2M order",
+        "Auto-accept merchant claims pending orders within 1 sec of broadcast",
+      ]},
+      { id: "4.4", title: "Completed orders pane", items: [
+        "Last N completed/cancelled orders",
+        "Rating shown if reviewed",
+        "Click → order detail",
+      ]},
+      { id: "4.5", title: "Chat list / active conversations", items: [
+        "Per-order threads with unread badges",
+        "Open thread → full chat",
+        "Message preview shows latest line",
+      ]},
+      { id: "4.6", title: "Notifications bell", items: [
+        "Badge count updates in real time",
+        "Dropdown lists recent items",
+        "Click navigates to source",
+      ]},
+      { id: "4.7", title: "Leaderboard tabs", items: [
+        "Traders / Top rated / Reputation tabs switch",
+        "Self row highlighted",
+      ]},
+      { id: "4.8", title: "Floating actions", items: [
+        "\"+\" creates trade / broadcast offer modal opens",
+        "Modal validates inputs before submit",
+      ]},
+      { id: "4.9", title: "Mobile tab nav", items: [
+        "Home / Orders / Escrow / Chat / History / Marketplace switch correctly",
+        "Active tab indicator visible",
+        "State persists across tab switches",
+      ]},
+      { id: "4.10", title: "Merchant settings (<code>/merchant/settings</code>)", groups: [
+        { label: "Profile", items: [
+          "Display name (<code>maxLength=50</code>) saves",
+          "Business name (<code>maxLength=100</code>) saves",
+          "Bio (<code>maxLength=200</code>) saves — try paste >200 chars rejected at element",
+          "Phone (<code>maxLength=20</code>) saves",
+          "Avatar grid select → save → reflected everywhere",
+        ]},
+        { label: "Account", items: [
+          "Email read-only",
+          "Account ID copyable",
+          "Status badge correct",
+          "Delete account → confirmation modal → password re-entry → soft delete",
+        ]},
+        { label: "Security", items: [
+          "Current password required to change password",
+          "New password complexity enforced",
+          "2FA toggle: setup TOTP → QR + secret → verify code → enabled",
+          "2FA disable requires current TOTP",
+          "Session list shows all active sessions; per-session logout works",
+          "Logout-all-sessions kills every session except current",
+        ]},
+        { label: "Theme", items: [
+          "All 7 themes selectable; preview live; persists across reload",
+        ]},
+        { label: "Payments", items: [
+          "Add bank account: name + IBAN (34) + account name → save",
+          "Delete bank account works",
+          "Add payment method modal: type selector (bank/cash/crypto/card/mobile) renders correct fields",
+          "Set as default toggle → only one default per type",
+          "Edit existing method updates",
+          "Each new field has <code>maxLength</code> (none unbounded)",
+        ]},
+        { label: "Notifications", items: [
+          "Per-event toggles persist",
+          "Channel selector (in-app/email/push) saves",
+          "Digest frequency saves",
+        ]},
+        { label: "Liquidity", items: [
+          "Available USDT correct (matches <code>merchant_balances</code>)",
+          "Locked-in-escrow correct",
+          "Pending withdrawals listed",
+          "Request liquidity form submits",
+        ]},
+        { label: "Reputation", items: [
+          "Overall ★ matches DB",
+          "Dispute history list correct",
+          "Star breakdown 5/4/3/2/1 percentages add up to 100%",
+        ]},
+        { label: "Ledger", items: [
+          "Transaction table renders all columns",
+          "Date-range filter works",
+          "Type filter works",
+          "Export CSV downloads valid file",
+          "Pagination works",
+        ]},
+      ]},
+      { id: "4.11", title: "Merchant analytics (<code>/merchant/analytics</code>)", items: [
+        "Time range dropdown (7d/30d/90d/all)",
+        "All stat cards render numeric (no NaN, no <code>undefined</code>)",
+        "Volume line chart renders + tooltips work",
+        "Trade-count bar chart renders",
+        "Buy vs Sell pie renders",
+        "Per-order metric list paginated",
+      ]},
+      { id: "4.12", title: "Merchant wallet (<code>/merchant/wallet</code>)", items: [
+        "Wallet address shown abbreviated + copyable",
+        "USDT balance correct",
+        "Deposit address copyable",
+        "Tx history (latest 20) renders",
+        "Withdraw form: amount, destination — submits",
+        "Import keypair (advanced) — masked input, success toast",
+      ]},
+      { id: "4.13", title: "My issues (<code>/merchant/my-issues</code> + <code>/[id]</code>)", items: [
+        "Issue list paginated",
+        "Create new issue: subject + description → save",
+        "Detail page: thread of messages",
+        "Reply textarea <code>maxLength=2000</code>",
+        "Close issue (when open) / reopen (when closed) buttons",
+        "Status badge updates",
+      ]},
+      { id: "4.14", title: "Public merchant profile (<code>/merchant/profile/[id]</code>)", items: [
+        "Loads via direct URL with valid id",
+        "Invalid id → 404",
+        "Rating + review count shown",
+        "Payment-method badges visible",
+        "Verified badge correct",
+        "Report-merchant button → reason form → submit",
+        "Direct message button (if enabled) opens chat",
+        "Reviews list paginated",
+      ]},
+      { id: "4.15", title: "Mempool (<code>/merchant/mempool</code>)", items: [
+        "Filters: type (Buy/Sell/All), status, corridor",
+        "Order list refreshes via Pusher",
+        "Claim/match button calls accept transition",
+        "After claim, order leaves mempool",
+        "Two merchants race to claim → only one succeeds (SELECT FOR UPDATE)",
+      ]},
+    ]
+  },
+  {
+    id: 4, title: "Admin Panel", desc: "All /admin sub-pages: console, users, merchants, disputes, monitor…",
+    note: "Every admin page has the shared nav: Console / Live / Access Control / Accounts / Disputes / Monitor / Observability / Price. Verify nav links work on every page (no dead pills).",
+    sections: [
+      { id: "5.1", title: "Admin auth gate", items: [
+        "Username <code>maxLength=100</code>",
+        "Password <code>maxLength=100</code>, show/hide toggle",
+        "Wrong creds → error",
+        "Right creds → token saved → console renders",
+        "Logout button clears token",
+      ]},
+      { id: "5.2", title: "Admin console / home (<code>/admin</code>)", groups: [
+        { label: "Dashboard tab", items: [
+          "Live tx/min badge updates",
+          "Refresh button reloads data",
+          "Stats hero: platform balance, escrow locked, today's revenue, REVENUE/ESCROW/FEES/24H VOL grid",
+          "Trades / Users / Open orders row",
+          "Health gauge % matches success rate",
+          "Active disputes alert visible if >0",
+          "Order breakdown bars proportions correct",
+        ]},
+        { label: "Orders tab (4-panel resizable)", items: [
+          "Panels can be resized (drag dividers)",
+          "Orders table search filters by ID / parties",
+          "Status filter pills (All/Pending/Active/Completed/Cancelled/Disputed) with live counts",
+          "Type filter (All/Buy/Sell)",
+          "Sort (Newest/Oldest/High $/Low $)",
+          "Click order row → drill-down (or modal)",
+          "24h Activity chart hover tooltip",
+          "Active Orders panel: progress bar, urgent red <2min countdown",
+          "Recent Completed/Cancelled list updates live",
+          "Top Merchants ranking (gold/silver/bronze badges)",
+          "Online dot reflects presence",
+          "Activity feed streams events with correct icons",
+        ]},
+        { label: "Analytics tab", items: [
+          "Charts render without console errors",
+          "Time-range selector works",
+          "Export buttons (if any) succeed",
+        ]},
+      ]},
+      { id: "5.3", title: "Live feed (<code>/admin/live</code>)", items: [
+        "Real-time event stream renders",
+        "Status badges per event",
+        "Pause/resume toggle (if present)",
+        "Filter by event type",
+        "Auto-scroll behavior is sensible (sticks to bottom unless scrolled up)",
+      ]},
+      { id: "5.4", title: "Access control (<code>/admin/access-control</code>)", items: [
+        "Tabs: Compliance / Ops switch correctly",
+        "Search input <code>maxLength=100</code> filters list",
+        "Status filter dropdown (All / Granted / No access)",
+        "Add User button focuses search",
+        "Table sorts on each header",
+        "Permission badges color-coded (read-only vs full)",
+        "Grant access action menu → confirms → row updates",
+        "Revoke access action menu → confirms → row updates",
+        "Pagination controls (prev/next/page #/page size)",
+        "Page-size selector (10/25/50/100) updates URL or query",
+      ]},
+      { id: "5.5", title: "Compliance access (<code>/admin/compliance-access</code>)", items: [
+        "Page renders (or correctly redirects to access-control with tab=compliance)",
+        "Same controls as access-control behave identically",
+      ]},
+      { id: "5.6", title: "Ops access (<code>/admin/ops-access</code>)", items: [
+        "Page renders (or redirects to access-control with tab=ops)",
+        "Withdraw permission listed (ops-specific)",
+      ]},
+      { id: "5.7", title: "Accounts (<code>/admin/accounts</code>)", items: [
+        "Floating tab switch Users / Merchants",
+        "Sub-pages load correct table",
+        "Active-tab styling correct",
+      ]},
+      { id: "5.8", title: "Users (<code>/admin/users</code>)", items: [
+        "All summary cards: Total / Active / Verified / Volume / Trades — numbers match DB",
+        "Search <code>maxLength=100</code> filters by name / email / wallet",
+        "Risk filter dropdown each option works",
+        "KYC filter (All/Verified/Pending/None/Rejected)",
+        "Volume filter buckets correct",
+        "Rating filter buckets correct",
+        "Clear Filters resets all",
+        "Export CSV downloads file with current filters applied",
+        "Add User button opens form (or page) — required fields validated",
+        "Sort on every sortable column toggles asc/desc",
+        "Per-row checkbox + select-all-on-page",
+        "Active/Idle indicator (<30 days = active)",
+        "Row 3-dot menu: view / ban / freeze / export — each action confirms + updates DB",
+        "Pagination \"Showing X to Y of Z\" correct",
+        "Page-size dropdown 10/25/50/100 works",
+        "All numeric columns right-aligned, formatted with <code>formatCrypto</code> / <code>formatCount</code>",
+      ]},
+      { id: "5.9", title: "Merchants (<code>/admin/merchants</code>)", items: [
+        "Same coverage as users page (cards / filters / sort / pagination)",
+        "Risk filter includes Critical (≥80) and High Risk (>60)",
+        "Status filter (Active/Pending/Suspended/Banned)",
+        "Online filter (All/Online/Offline)",
+        "AUTO badge appears for auto-accept merchants",
+        "Risk-score column links to <code>/admin/risk-profile/[entityId]</code>",
+        "Per-row menu: ban / suspend / activate / view / export",
+      ]},
+      { id: "5.10", title: "Disputes (<code>/admin/disputes</code>)", items: [
+        "Summary cards (Total / Active / Auto Resolved / Volume) live",
+        "\"Active now\" pulse animation when count > 0",
+        "Most-disputed Merchants column ranked correctly",
+        "Most-disputed Users column ranked correctly",
+        "Recent disputes table: order, amount, user, merchant, raised-by, status, resolution",
+        "Sortable / scrollable",
+        "Refresh button forces re-fetch",
+        "Click row → dispute detail (or compliance handoff)",
+      ]},
+      { id: "5.11", title: "Monitor (<code>/admin/monitor</code>)", items: [
+        "Security alerts list (security_alerts table)",
+        "HIGH / MEDIUM badges color-coded",
+        "Per-alert source: order creation / claim / payment retry / auth velocity",
+        "Acknowledge / dismiss button per alert",
+        "Filter by severity / time range",
+        "Export alerts",
+      ]},
+      { id: "5.12", title: "Observability (<code>/admin/observability</code>)", items: [
+        "System health card (uptime, error rate, latency)",
+        "DB performance metrics",
+        "API latency p50/p95/p99",
+        "Memory / CPU graphs (if displayed)",
+        "No console errors",
+      ]},
+      { id: "5.13", title: "Error logs (<code>/admin/error-logs</code>)", items: [
+        "Paginated list",
+        "Filters: severity / service / timestamp range",
+        "Click entry → expand stack trace",
+        "Search by error message",
+      ]},
+      { id: "5.14", title: "Issues (<code>/admin/issues</code>)", items: [
+        "Status filter (open / investigating / resolved)",
+        "Per-issue detail with thread",
+        "Assign to staff dropdown",
+        "Close / reopen buttons",
+      ]},
+      { id: "5.15", title: "Risk profile (<code>/admin/risk-profile/[entityId]</code>)", items: [
+        "Direct URL with valid merchant id loads",
+        "Invalid id → 404",
+        "Dispute history table",
+        "Chargeback rate / velocity metrics",
+        "Manual risk-adjustment slider / input",
+        "Save updates DB",
+        "Audit log of risk changes",
+      ]},
+      { id: "5.16", title: "USDT/INR price (<code>/admin/usdt-inr-price</code>)", items: [
+        "Live market price displays",
+        "Override input takes value, saves to corridor_prices",
+        "Save → orders use overridden rate",
+        "Reset to live → override removed",
+        "Spread / premium fields validated (min/max)",
+        "Audit log entry per change",
+      ]},
+    ]
+  },
+  {
+    id: 5, title: "Compliance & Arbiter", desc: "Dispute investigation, resolution, arbiter voting",
+    sections: [
+      { id: "6.1", title: "Compliance auth", items: [
+        "Wallet-connect path or password login both work",
+        "Logout clears state",
+      ]},
+      { id: "6.2", title: "Compliance header", items: [
+        "Logo, online indicator, notification bell w/ badge, profile, logout all clickable",
+      ]},
+      { id: "6.3", title: "Compliance tabs (with counts)", items: [
+        "Open Disputes",
+        "Investigating",
+        "Resolved",
+        "Chat",
+      ]},
+      { id: "6.4", title: "Open disputes tab", items: [
+        "Cards list disputes raised by user/merchant/system",
+        "Click → dispute detail loads",
+        "\"Start investigating\" button moves to Investigating tab + status updates",
+      ]},
+      { id: "6.5", title: "Investigating tab", items: [
+        "Split view: notes + evidence chat",
+        "Upload evidence (image / PDF) succeeds",
+        "File-size cap enforced (and message shown when exceeded)",
+        "Notes textarea <code>maxLength=2000</code>",
+        "Status dropdown (still investigating / ready to resolve)",
+        "Quick-Question buttons send predefined messages",
+        "All chat parties (user / merchant / compliance) tagged correctly",
+      ]},
+      { id: "6.6", title: "Resolved tab", items: [
+        "Resolution summary correct",
+        "Filter by date range / decision",
+      ]},
+      { id: "6.7", title: "Resolve modal", items: [
+        "Three decisions: Release to user / Refund merchant / Split 50/50",
+        "Reason <code>maxLength=2000</code> required",
+        "Confirm → status <code>resolved</code>, escrow movement happens",
+        "Funds land in correct entity's balance",
+        "If split → ledger shows 2 entries summing to escrow amount",
+      ]},
+      { id: "6.8", title: "Profile modal", items: [
+        "Compliance member info, stats, status correct",
+      ]},
+      { id: "6.9", title: "Compliance mobile view", items: [
+        "View selector (Open / Investigating / Resolved / Chat) cycles",
+        "Bottom nav tabs visible",
+      ]},
+      { id: "7.1", title: "Arbiter eligibility gate", items: [
+        "Connect Wallet button visible when not connected",
+        "Ineligible user → requirements list shown (10 trades, 30d, 4.0★, 100 rep)",
+        "Eligible user → portal loads",
+        "Cooldown banner displays if on cooldown",
+      ]},
+      { id: "7.2", title: "Arbiter stats grid", items: [
+        "Won / Total / Accuracy / Trades counts correct vs DB",
+      ]},
+      { id: "7.3", title: "Arbiter tabs", items: [
+        "Pending (badge count)",
+        "History",
+        "Leaderboard",
+      ]},
+      { id: "7.4", title: "Pending tab", items: [
+        "Vote card per dispute: order #, time-remaining countdown, vote weight",
+        "\"Review & Vote\" button opens vote modal",
+        "Empty state shown if no votes",
+      ]},
+      { id: "7.5", title: "Vote modal", items: [
+        "Dispute info correct",
+        "Three options: Favor User / Favor Merchant / Split 50/50",
+        "Reasoning textarea: <code>maxLength=2000</code>, <strong>min 50 chars enforced</strong>",
+        "Char counter X/50 visible",
+        "Submit disabled until both option + 50 chars present",
+        "\"Cannot be changed\" warning visible",
+        "Submit succeeds → vote recorded, removed from pending",
+        "Resubmit attempt blocked",
+      ]},
+      { id: "7.6", title: "History tab", items: [
+        "Vote records render with matched/mismatched/pending icon",
+        "Reputation deltas correct (+/-)",
+        "Empty state if none",
+      ]},
+      { id: "7.7", title: "Leaderboard tab", items: [
+        "Top arbiters ranked, gold/silver/bronze badges",
+        "Self row highlighted \"(You)\"",
+      ]},
+    ]
+  },
+  {
+    id: 6, title: "Console & Ops", desc: "Closed orders console + dev/ops debug pages",
+    sections: [
+      { id: "8", title: "Console (<code>/console</code>)", items: [
+        "Stats cards: total / completed / expired / cancelled / disputed / volume / success-rate",
+        "Status filter pills (All / Expired / Cancelled / Disputed)",
+        "Type filter (All / Buy / Sell)",
+        "Closed-orders table renders all columns",
+        "Click row → expanded detail or modal",
+        "Reason summary present",
+        "Pagination works",
+      ]},
+      { id: "9.1", title: "Ops auth (dev/localhost only)", items: [
+        "Production → returns 404",
+        "Localhost → admin-secret prompt",
+        "Wrong secret → blocked",
+        "Right secret → tabs render",
+      ]},
+      { id: "9.2", title: "Ops tabs", items: [
+        "Outbox / Stuck Orders / Workers / Order Search switch correctly",
+      ]},
+      { id: "9.3", title: "Outbox", items: [
+        "Pending actions listed",
+        "Retry per row works",
+        "Flush queue button (if exposed) confirms first",
+      ]},
+      { id: "9.4", title: "Stuck orders", items: [
+        "Failed-state orders listed with error",
+        "Force state / retry / refund actions confirmed before action",
+        "After action, list refreshes",
+      ]},
+      { id: "9.5", title: "Workers", items: [
+        "Payment-deadline / dispute-resolver / auto-cancel worker statuses + last-run / next-run shown",
+        "Queued / failed counts present",
+      ]},
+      { id: "9.6", title: "Order search", items: [
+        "Order ID input accepts UUID / numeric",
+        "Search returns full data (JSON), state history, action log",
+        "Empty / invalid id handled",
+      ]},
+    ]
+  },
+  {
+    id: 7, title: "Money Flow E2E", desc: "Order lifecycle — CRITICAL real-money paths",
+    critical: true,
+    note: "Run each scenario top-to-bottom; verify DB state and balances after each step.",
+    sections: [
+      { id: "10.1", title: "U2M BUY (user buys USDT from merchant)", items: [
+        "User creates BUY → status <code>pending</code>",
+        "Merchant accepts → status <code>accepted</code>, <code>merchant_id</code> set to acceptor",
+        "Merchant locks escrow → status <code>escrowed</code>, USDT debited from merchant",
+        "User sends fiat → status <code>payment_sent</code>",
+        "Merchant confirms → status <code>completed</code>, USDT credited to user",
+        "Order_version increments at each transition",
+        "Idempotency-Key prevents duplicate",
+        "Balance invariant holds (sum of debits == credits)",
+      ]},
+      { id: "10.2", title: "U2M SELL (user sells USDT to merchant)", items: [
+        "User creates SELL → status <code>pending</code>",
+        "Merchant accepts → status <code>accepted</code>",
+        "User locks escrow (user is seller) → status <code>escrowed</code>, USDT debited from user",
+        "Merchant sends fiat → status <code>payment_sent</code>",
+        "User confirms → status <code>completed</code>, USDT credited to merchant",
+      ]},
+      { id: "10.3", title: "M2M BUY (merchant A buys from merchant B)", items: [
+        "Merchant A creates BUY broadcast → username <code>m2m_*</code>",
+        "Merchant B claims (becomes seller) → <code>merchant_id</code> reassigned to B",
+        "B locks escrow, A sends fiat, B confirms → <code>completed</code>",
+        "<code>buyer_merchant_id</code> = A throughout",
+        "Hijack: another merchant C trying to claim → blocked",
+      ]},
+      { id: "10.4", title: "M2M SELL", items: [
+        "Merchant A creates SELL broadcast",
+        "Merchant B (buyer) claims → <code>buyer_merchant_id</code> set to B",
+        "A locks escrow, B sends fiat, A confirms → <code>completed</code>",
+      ]},
+      { id: "10.5", title: "Cancellation paths", items: [
+        "Cancel from <code>pending</code> → <code>cancelled</code>, no refund needed",
+        "Cancel from <code>accepted</code> (no escrow yet) → <code>cancelled</code>",
+        "Cancel from <code>escrowed</code> → <code>cancelled</code> + atomic refund to escrow funder",
+        "Cancel attempt from <code>payment_sent</code> → blocked (must dispute)",
+        "Balance invariant holds after every cancellation",
+      ]},
+      { id: "10.6", title: "Dispute paths", items: [
+        "Dispute from <code>escrowed</code> → <code>disputed</code>",
+        "Dispute from <code>payment_sent</code> → <code>disputed</code>",
+        "Compliance Release-to-user → user credited",
+        "Compliance Refund-merchant → merchant credited",
+        "Compliance Split → both credited 50/50",
+        "Auto-resolve at 24h → atomic refund to escrow funder",
+        "Arbiter votes feed into resolution (if enabled)",
+      ]},
+      { id: "10.7", title: "Auto-cancellation / expiration", items: [
+        "<code>pending</code> order → <code>expired</code> after 15 min (cron)",
+        "<code>accepted</code> w/o escrow → <code>cancelled</code> after 120 min (cron)",
+        "<code>escrowed</code> → <code>disputed</code> after 120 min (cron)",
+        "<code>payment_sent</code> → <code>disputed</code> after 24h (settle cron)",
+        "<code>escrowed</code> past <code>expires_at</code> → <code>cancelled</code> + refund (worker)",
+        "<code>disputed</code> past <code>dispute_auto_resolve_at</code> → <code>cancelled</code> + refund (worker)",
+        "All refunds land in <code>escrow_debited_entity_id</code>",
+      ]},
+    ]
+  },
+  {
+    id: 8, title: "Cross-Cutting & Quality", desc: "Formatting, limits, idempotency, security, perf, a11y",
+    sections: [
+      { id: "11.1", title: "Number / currency formatting", items: [
+        "No raw <code>Number</code> or <code>.toLocaleString()</code> rendering anywhere user-visible",
+        "All amounts via <code>formatCrypto</code> / <code>formatFiat</code> / <code>formatRate</code> / <code>formatPercentage</code> / <code>formatCount</code>",
+        "Locale always en-US (no comma-vs-period regional differences)",
+        "<code>null</code> / <code>undefined</code> shows <code>—</code> not \"NaN\" or \"0\"",
+      ]},
+      { id: "11.2", title: "Input limits", items: [
+        "Every <code>&lt;input&gt;</code> has <code>maxLength</code> (or <code>max</code> for type=number)",
+        "Every <code>&lt;textarea&gt;</code> has <code>maxLength</code> HTML attribute (NOT <code>.slice()</code> in onChange)",
+        "Server-side Zod <code>.max()</code> matches or exceeds frontend <code>maxLength</code>",
+        "Body >100KB → 413 (middleware)",
+      ]},
+      { id: "11.3", title: "Idempotency", items: [
+        "Order create: spam-clicking creates only 1 order in 30s window",
+        "Payment-sent / release-escrow / cancel-order all require Idempotency-Key",
+        "Replayed Idempotency-Key returns same result",
+      ]},
+      { id: "11.4", title: "Rate limits", items: [
+        "Auth >5/min → 429",
+        "Order >20/min → 429",
+        "Payment >5/min → 429",
+        "Message >30/min → 429",
+        "Search >60/min → 429",
+        "Webhook >200/min → 429",
+        "Standard >100/min → 429",
+        "Redis down → in-memory fallback still rate-limits",
+      ]},
+      { id: "11.5", title: "Security guards", items: [
+        ">3 orders/min same user → HIGH alert in <code>/admin/monitor</code>",
+        ">2 claims/min same order → MEDIUM alert",
+        ">2 payment actions/min same order → HIGH alert",
+        ">10 auth/min same IP → MEDIUM alert",
+      ]},
+      { id: "11.6", title: "CSRF / origin", items: [
+        "POST/PATCH from foreign Origin → blocked",
+        "Same-origin requests succeed",
+      ]},
+      { id: "11.7", title: "Auth boundaries", items: [
+        "User token cannot hit admin endpoints",
+        "Merchant token cannot hit compliance-only endpoints",
+        "Compliance cannot mutate orders directly (only resolve)",
+        "<code>\"system\"</code> actor type rejected on client-facing endpoints",
+      ]},
+      { id: "11.8", title: "Real-time", items: [
+        "Pusher channel <code>private-user-{id}</code> receives user-only events",
+        "<code>private-merchant-{id}</code> for merchant",
+        "<code>private-admin</code> for admin events",
+        "WebSocket chat reconnects on network drop",
+        "Typing indicator clears on user disconnect (timeout)",
+      ]},
+      { id: "11.9", title: "Performance", items: [
+        "Lighthouse score (mobile) ≥ 80 perf, ≥ 90 a11y",
+        "Initial JS bundle < 500KB gzipped (target)",
+        "Largest Contentful Paint < 2.5s on 4G throttle",
+        "Admin tables with 1000+ rows scroll smoothly (virtualized if needed)",
+      ]},
+      { id: "11.10", title: "Accessibility", items: [
+        "All interactive elements keyboard reachable (Tab order sane)",
+        "Focus ring visible",
+        "Form fields have associated labels",
+        "Color contrast AA on dark + light themes",
+        "Screen reader announces status changes",
+      ]},
+      { id: "11.11", title: "Responsive", items: [
+        "360px (small phone)",
+        "768px (tablet)",
+        "1024px (small desktop)",
+        "1440px (desktop)",
+        "1920px+ (wide)",
+        "No horizontal scroll on mobile",
+        "Tap targets ≥ 44×44 px",
+      ]},
+      { id: "11.12", title: "Error states", items: [
+        "Network offline → friendly \"you're offline\" banner",
+        "500 → \"something went wrong\" + retry",
+        "401 mid-session → silent token refresh, then retry",
+        "403 → \"you don't have permission\"",
+        "404 page renders for invalid routes",
+        "Sentry receives errors (<code>sentry.client.config.ts</code>)",
+      ]},
+      { id: "11.13", title: "Empty states", items: [
+        "Empty orders list → CTA to create order",
+        "Empty notifications → friendly message",
+        "Empty disputes → reassuring message",
+        "Empty leaderboards → message + invite",
+      ]},
+      { id: "11.14", title: "Loading states", items: [
+        "Every async action shows spinner / skeleton",
+        "Buttons disable during pending request",
+        "No double-submission possible",
+      ]},
+      { id: "11.15", title: "Browser back / forward", items: [
+        "Back from order detail returns to prior tab + scroll position",
+        "Forward re-opens detail",
+        "No state-loss warnings on safe navigation",
+      ]},
+      { id: "11.16", title: "Deep links", items: [
+        "Direct URL to <code>/admin/users?status=verified&page=2</code> preserves filters",
+        "Direct URL to <code>/merchant/profile/[id]</code> works without nav from index",
+        "Direct URL to <code>/orders/[id]</code> works for both parties (auth-checked)",
+      ]},
+    ]
+  },
+  {
+    id: 9, title: "API Verification", desc: "Backend endpoints — health, auth, orders, chat, admin, compliance",
+    sections: [
+      { id: "12.1", title: "Health", items: [
+        "<code>GET /api/health</code> 200",
+        "DB connectivity verified",
+        "Redis (or fallback) verified",
+      ]},
+      { id: "12.2", title: "Setup endpoints", items: [
+        "<code>GET /api/setup/seed</code> (dev only) populates demo data",
+        "<code>POST /api/setup/init-balances</code> (dev only) sets balances",
+      ]},
+      { id: "12.3", title: "Auth endpoints", items: [
+        "<code>POST /api/auth/login</code> (user)",
+        "<code>POST /api/auth/refresh</code> rotates refresh token",
+        "<code>POST /api/auth/logout</code> revokes session",
+        "<code>GET /api/auth/admin</code> validates admin token",
+        "<code>POST /api/auth/2fa/setup</code> returns QR + secret",
+        "<code>POST /api/auth/2fa/verify</code> toggles 2FA on",
+        "<code>POST /api/auth/2fa/disable</code> requires current TOTP",
+      ]},
+      { id: "12.4", title: "Order endpoints", items: [
+        "<code>POST /api/orders</code> create",
+        "<code>PATCH /api/orders/[id]</code> action transitions (ACCEPT, LOCK_ESCROW, CLAIM, SEND_PAYMENT, CONFIRM_PAYMENT, CANCEL, DISPUTE)",
+        "<code>GET /api/orders/[id]</code> returns latest version",
+        "<code>GET /api/orders</code> paginated, filterable",
+        "<code>POST /api/orders/expire</code> runs settle expire path",
+      ]},
+      { id: "12.5", title: "Chat endpoints", items: [
+        "<code>GET /api/orders/[id]/messages</code>",
+        "<code>POST /api/orders/[id]/messages</code>",
+        "WebSocket connects with auth header",
+        "Compliance can read all messages on disputed orders only",
+      ]},
+      { id: "12.6", title: "Admin endpoints", items: [
+        "<code>GET /api/admin/users</code> paginated",
+        "<code>GET /api/admin/merchants</code> paginated",
+        "<code>GET /api/admin/disputes</code>",
+        "<code>GET /api/admin/security-alerts</code>",
+        "<code>POST /api/admin/access-control/grant</code>",
+        "<code>POST /api/admin/access-control/revoke</code>",
+      ]},
+      { id: "12.7", title: "Compliance endpoints", items: [
+        "<code>GET /api/compliance/disputes</code> filtered by status",
+        "<code>POST /api/compliance/disputes/[id]/resolve</code> → release / refund / split",
+        "<code>POST /api/compliance/disputes/[id]/freeze</code> → chat freeze",
+      ]},
+    ]
+  },
+  {
+    id: 10, title: "Regression & Sign-off", desc: "Automated suite + pre-release sign-off",
+    sections: [
+      { id: "13", title: "Regression suite (run after every change)", items: [
+        "All Playwright e2e specs pass: <code>pnpm playwright test</code>",
+        "↳ cancel-flow.spec.ts",
+        "↳ chat-lifecycle.spec.ts",
+        "↳ chat.spec.ts",
+        "↳ expiry-flow.spec.ts",
+        "↳ p2p-edge-cases.spec.ts",
+        "↳ p2p-m2m.spec.ts",
+        "↳ p2p-user-buy.spec.ts",
+        "↳ p2p-user-sell.spec.ts",
+        "↳ state-matrix.spec.ts",
+        "↳ trade-buy-flow.spec.ts",
+        "↳ ui-regression.spec.ts",
+        "Jest unit tests pass: <code>pnpm test</code>",
+        "Jest integration tests pass: <code>pnpm test:integration</code>",
+        "TypeScript build clean: <code>pnpm tsc --noEmit</code>",
+        "ESLint clean: <code>pnpm lint</code>",
+        "Production build: <code>pnpm build</code> no errors",
+      ]},
+      { id: "14", title: "Pre-release sign-off", items: [
+        "All P0 items above are GREEN",
+        "No <code>console.error</code> in dev or prod console during golden-path flows",
+        "No unhandled promise rejections",
+        "Sentry shows no new errors in last 1h of testing",
+        "DB migrations applied to staging match prod plan",
+        "Env vars audited (no secrets in <code>NEXT_PUBLIC_*</code>, no leaks in source)",
+        "Mock mode disabled before prod release",
+        "Smoke test on staging URL with real Solana devnet",
+        "Roll-back plan documented",
+      ]},
+    ]
+  },
+];
+
+/* ════════════════════════════════════════════════════════════════════
+   STORAGE
+   ════════════════════════════════════════════════════════════════════ */
+const LS_PREFIX = "blip-qa-";
+const KEY_CHECKS = LS_PREFIX + "checks";
+const KEY_META = LS_PREFIX + "meta";
+const KEY_DEFECTS = LS_PREFIX + "defects";
+const KEY_SIGN = LS_PREFIX + "sign";
+const KEY_OPEN = LS_PREFIX + "open-sections";
+const KEY_PHASE = LS_PREFIX + "active-phase";
+
+const loadJSON = (k, dflt) => {
+  try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : dflt; } catch { return dflt; }
+};
+const saveJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+let checks = loadJSON(KEY_CHECKS, {});
+let openSections = new Set(loadJSON(KEY_OPEN, []));
+let activePhase = loadJSON(KEY_PHASE, 1);
+
+/* ════════════════════════════════════════════════════════════════════
+   RENDER
+   ════════════════════════════════════════════════════════════════════ */
+function itemId(phaseId, sectionId, idx) {
+  return `p${phaseId}-${sectionId}-${idx}`;
+}
+
+function renderPhases() {
+  const navEl = document.getElementById("phase-nav");
+  const mainEl = document.getElementById("phases");
+  navEl.innerHTML = "";
+  mainEl.innerHTML = "";
+
+  PHASES.forEach((phase) => {
+    // Pill
+    const pill = document.createElement("button");
+    pill.className = "phase-pill" + (phase.id === activePhase ? " active" : "");
+    pill.dataset.phase = phase.id;
+    pill.innerHTML = `
+      <span class="pill-num">${phase.id}</span>
+      <span>${phase.title}</span>
+      <span class="pill-prog" data-pill-prog="${phase.id}">0/0</span>
+    `;
+    pill.onclick = () => setActivePhase(phase.id);
+    navEl.appendChild(pill);
+
+    // Phase content
+    const phaseEl = document.createElement("section");
+    phaseEl.className = "phase" + (phase.id === activePhase ? " active" : "") + (phase.critical ? " critical" : "");
+    phaseEl.dataset.phase = phase.id;
+
+    let html = `
+      <div class="phase-header">
+        <div class="phase-num">${phase.id}</div>
+        <div>
+          <div class="phase-title">${phase.title}</div>
+          <div class="phase-desc">${phase.desc}</div>
+        </div>
+        <div class="phase-prog">
+          <div class="num"><span data-phase-done="${phase.id}">0</span> / <span data-phase-total="${phase.id}">0</span></div>
+          <div class="lbl">items checked</div>
+        </div>
+      </div>
+    `;
+    if (phase.note) {
+      html += `<div class="quote" style="margin: 0 0 14px">${phase.note}</div>`;
+    }
+
+    phase.sections.forEach((section) => {
+      const isOpen = openSections.has(`${phase.id}-${section.id}`);
+      html += `
+        <div class="section${isOpen ? " open" : ""}" data-section="${phase.id}-${section.id}">
+          <div class="section-head" onclick="toggleSection('${phase.id}-${section.id}')">
+            <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <span class="sec-num">§ ${section.id}</span>
+            <span class="sec-title">${section.title}</span>
+            <span class="sec-prog" data-sec-prog="${phase.id}-${section.id}">0/0</span>
+          </div>
+          <div class="section-body">
+      `;
+
+      const renderItems = (items, prefix = "") => {
+        return items.map((item, idx) => {
+          const id = itemId(phase.id, section.id + prefix, idx);
+          const checked = checks[id] === true;
+          return `
+            <label class="item">
+              <input type="checkbox" data-item-id="${id}" data-phase="${phase.id}" data-section="${phase.id}-${section.id}" ${checked ? "checked" : ""} />
+              <span class="item-label">${item}</span>
+            </label>
+          `;
+        }).join("");
+      };
+
+      if (section.groups) {
+        section.groups.forEach((group, gIdx) => {
+          html += `<div class="group-label">${group.label}</div>`;
+          html += renderItems(group.items, `-g${gIdx}`);
+        });
+      } else {
+        html += renderItems(section.items);
+      }
+
+      html += `</div></div>`;
+    });
+
+    phaseEl.innerHTML = html;
+    mainEl.appendChild(phaseEl);
+  });
+
+  // Bind checkboxes
+  document.querySelectorAll('input[data-item-id]').forEach(cb => {
+    cb.addEventListener("change", (e) => {
+      const id = e.target.dataset.itemId;
+      if (e.target.checked) checks[id] = true;
+      else delete checks[id];
+      saveJSON(KEY_CHECKS, checks);
+      updateProgress();
+    });
+  });
+
+  updateProgress();
+}
+
+function setActivePhase(id) {
+  activePhase = id;
+  saveJSON(KEY_PHASE, id);
+  document.querySelectorAll(".phase-pill").forEach(p => p.classList.toggle("active", +p.dataset.phase === id));
+  document.querySelectorAll(".phase").forEach(p => p.classList.toggle("active", +p.dataset.phase === id));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function toggleSection(key) {
+  const el = document.querySelector(`[data-section="${key}"]`);
+  if (!el) return;
+  el.classList.toggle("open");
+  if (el.classList.contains("open")) openSections.add(key);
+  else openSections.delete(key);
+  saveJSON(KEY_OPEN, [...openSections]);
+}
+
+function expandAll() {
+  document.querySelectorAll(`.phase.active .section`).forEach(s => {
+    s.classList.add("open");
+    openSections.add(s.dataset.section);
+  });
+  saveJSON(KEY_OPEN, [...openSections]);
+}
+function collapseAll() {
+  document.querySelectorAll(`.phase.active .section`).forEach(s => {
+    s.classList.remove("open");
+    openSections.delete(s.dataset.section);
+  });
+  saveJSON(KEY_OPEN, [...openSections]);
+}
+
+function updateProgress() {
+  let totalAll = 0, doneAll = 0;
+  PHASES.forEach((phase) => {
+    let total = 0, done = 0;
+    phase.sections.forEach((section) => {
+      const items = section.groups
+        ? section.groups.flatMap((g, gi) => g.items.map((_, i) => itemId(phase.id, section.id + "-g" + gi, i)))
+        : section.items.map((_, i) => itemId(phase.id, section.id, i));
+      const sectDone = items.filter(id => checks[id]).length;
+      const sectEl = document.querySelector(`[data-sec-prog="${phase.id}-${section.id}"]`);
+      if (sectEl) {
+        sectEl.textContent = `${sectDone}/${items.length}`;
+        sectEl.classList.toggle("complete", sectDone === items.length && items.length > 0);
+      }
+      total += items.length;
+      done += sectDone;
+    });
+    const doneEl = document.querySelector(`[data-phase-done="${phase.id}"]`);
+    const totalEl = document.querySelector(`[data-phase-total="${phase.id}"]`);
+    const pillEl = document.querySelector(`[data-pill-prog="${phase.id}"]`);
+    if (doneEl) doneEl.textContent = done;
+    if (totalEl) totalEl.textContent = total;
+    if (pillEl) {
+      pillEl.textContent = `${done}/${total}`;
+      pillEl.classList.toggle("complete", done === total && total > 0);
+    }
+    totalAll += total;
+    doneAll += done;
+  });
+  document.getElementById("overall-stat").textContent = `${doneAll} / ${totalAll}`;
+  const pct = totalAll === 0 ? 0 : Math.round((doneAll / totalAll) * 100);
+  document.getElementById("overall-fill").style.width = pct + "%";
+  document.getElementById("overall-pct").textContent = pct + "%";
+}
+
+function resetAll() {
+  if (!confirm("Reset all progress, defects, and sign-off? This cannot be undone.")) return;
+  Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX)).forEach(k => localStorage.removeItem(k));
+  checks = {};
+  openSections = new Set();
+  activePhase = 1;
+  document.querySelectorAll(".meta-field input, .signoff input").forEach(i => i.value = "");
+  document.getElementById("defect-body").innerHTML = "";
+  renderPhases();
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   META + SIGN-OFF
+   ════════════════════════════════════════════════════════════════════ */
+function bindField(id, key) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const meta = loadJSON(key, {});
+  if (meta[id] !== undefined) el.value = meta[id];
+  el.addEventListener("input", () => {
+    const m = loadJSON(key, {});
+    m[id] = el.value;
+    saveJSON(key, m);
+  });
+}
+
+["meta-tester","meta-date","meta-build","meta-env"].forEach(id => bindField(id, KEY_META));
+["sign-tester","sign-approver"].forEach(id => bindField(id, KEY_SIGN));
+if (!document.getElementById("meta-date").value) {
+  document.getElementById("meta-date").value = new Date().toISOString().split("T")[0];
+  saveJSON(KEY_META, { ...loadJSON(KEY_META, {}), "meta-date": document.getElementById("meta-date").value });
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   DEFECT LOG
+   ════════════════════════════════════════════════════════════════════ */
+const SEVERITIES = ["P0","P1","P2","P3"];
+const STATUSES = ["Open","In progress","Fixed","Won't fix","Verified"];
+
+function addDefect(data = {}) {
+  const tbody = document.getElementById("defect-body");
+  const idx = tbody.children.length + 1;
+  const row = document.createElement("tr");
+  row.innerHTML = `
+    <td>${idx}</td>
+    <td><select data-field="severity">${SEVERITIES.map(s => `<option ${data.severity === s ? "selected" : ""}>${s}</option>`).join("")}</select></td>
+    <td><input data-field="phase" placeholder="e.g. 4 / 5.10" value="${data.phase || ""}" /></td>
+    <td><textarea data-field="desc" rows="1" placeholder="Brief description">${data.desc || ""}</textarea></td>
+    <td><textarea data-field="repro" rows="1" placeholder="1. … 2. …">${data.repro || ""}</textarea></td>
+    <td><textarea data-field="expected" rows="1" placeholder="Expected">${data.expected || ""}</textarea></td>
+    <td><textarea data-field="actual" rows="1" placeholder="Actual">${data.actual || ""}</textarea></td>
+    <td><input data-field="owner" placeholder="@username" value="${data.owner || ""}" /></td>
+    <td><select data-field="status">${STATUSES.map(s => `<option ${data.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></td>
+    <td class="row-actions"><button onclick="this.closest('tr').remove(); saveDefects(); renumberDefects();">×</button></td>
+  `;
+  row.querySelectorAll("input, select, textarea").forEach(el => el.addEventListener("input", saveDefects));
+  tbody.appendChild(row);
+  saveDefects();
+}
+
+function saveDefects() {
+  const rows = [...document.querySelectorAll("#defect-body tr")].map(tr => {
+    const obj = {};
+    tr.querySelectorAll("[data-field]").forEach(el => obj[el.dataset.field] = el.value);
+    return obj;
+  });
+  saveJSON(KEY_DEFECTS, rows);
+}
+function renumberDefects() {
+  [...document.querySelectorAll("#defect-body tr")].forEach((tr, i) => tr.cells[0].textContent = i + 1);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   INIT
+   ════════════════════════════════════════════════════════════════════ */
+renderPhases();
+loadJSON(KEY_DEFECTS, []).forEach(addDefect);
+
+</script>
+</body>
+</html>

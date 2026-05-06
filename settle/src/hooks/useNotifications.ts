@@ -11,6 +11,16 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   }, []);
 
+  // Bulk mark — used by the "Mark all read" affordance in the notifications
+  // overlays. Skips the state update when nothing is unread to avoid an
+  // unnecessary re-render.
+  const markAllNotificationsRead = useCallback(() => {
+    setNotifications(prev => {
+      if (!prev.some(n => !n.read)) return prev;
+      return prev.map(n => (n.read ? n : { ...n, read: true }));
+    });
+  }, []);
+
   // Batched notification helper — coalesces rapid-fire events into one state update
   const notifQueueRef = useRef<Notification[]>([]);
   const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,5 +140,6 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
     setNotifications,
     addNotification,
     markNotificationRead,
+    markAllNotificationsRead,
   };
 }

@@ -15,6 +15,7 @@ import {
   Transaction,
   LAMPORTS_PER_SOL,
   Keypair,
+  ComputeBudgetProgram,
 } from '@solana/web3.js';
 import {
   AnchorProvider,
@@ -28,6 +29,7 @@ import {
 } from '@solana/spl-token';
 import {
   DEVNET_RPC,
+  DEVNET_WS_ENDPOINT,
   getV2ProgramId,
   getUsdtMint,
   FEE_BPS_DEFAULT,
@@ -65,7 +67,6 @@ import idlRaw from '@/lib/solana/v2/idl.json';
 import { convertIdlToAnchor29 } from '@/lib/solana/idlConverter';
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
-import { generateLoginMessage } from '@/lib/solana/verifySignature';
 
 // IDL conversion (same as SolanaWalletContext) — kept for reference but
 // the inline copy was buggy: it did not materialise event `fields` from
@@ -111,7 +112,13 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<number | null>(null);
 
-  const connectionRef = useRef<Connection>(new Connection(DEVNET_RPC, 'confirmed'));
+  // Explicit wsEndpoint stops web3.js from auto-deriving ws://<origin>/api/rpc
+  // (which is not a websocket server) and emitting "ws error: undefined" on
+  // every confirmTransaction subscription.
+  const connectionRef = useRef<Connection>(new Connection(DEVNET_RPC, {
+    commitment: 'confirmed',
+    wsEndpoint: DEVNET_WS_ENDPOINT,
+  }));
   const lastActivityRef = useRef<number>(Date.now());
   const autoLockTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -199,65 +206,77 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [walletState, keypair, refreshBalances]);
 
-  // Sync wallet address to merchant DB record when unlocked
+  // Sync wallet address to whichever actor (merchant OR user) is currently
+  // authenticated. Identity is derived from the cookie-authed /api/auth/me
+  // probe — never from localStorage (which we no longer write). Proves
+  // ownership of the NEW wallet via server-issued nonce + signature signed
+  // with the embedded keypair.
+  //
+  // Best-effort: any failure is swallowed silently. This is a UX nicety
+  // (auto-link the embedded wallet to the logged-in account) — the merchant /
+  // user profile already loaded their own session before this fires.
   useEffect(() => {
     if (walletState !== 'unlocked' || !keypair) return;
     const walletAddress = keypair.publicKey.toBase58();
-    try {
-      const saved = localStorage.getItem('blip_merchant');
-      if (!saved) return;
-      const merchant = JSON.parse(saved);
-      if (!merchant.id) return;
-      // Skip if already synced
-      if (merchant.wallet_address === walletAddress) return;
-      // Update DB
-      fetch('/api/auth/merchant', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ merchant_id: merchant.id, wallet_address: walletAddress }),
-      }).then(() => {
-        // Update local cache too
-        merchant.wallet_address = walletAddress;
-        localStorage.setItem('blip_merchant', JSON.stringify(merchant));
-      }).catch(() => {});
-    } catch {}
-  }, [walletState, keypair]);
+    (async () => {
+      try {
+        const meRes = await fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (!meRes.ok) return;
+        const me = await meRes.json();
+        if (!me?.success) return;
 
-  // Mirror the above for a signed-in user. The embedded keypair is
-  // authoritative for ownership, so we sign a fresh challenge with the
-  // secret key we already hold and submit it to /api/auth/user:link_wallet
-  // (which verifies the signature server-side before writing to
-  // users.wallet_address).
-  useEffect(() => {
-    if (walletState !== 'unlocked' || !keypair) return;
-    const walletAddress = keypair.publicKey.toBase58();
-    try {
-      const saved = localStorage.getItem('blip_user');
-      if (!saved) return;
-      const user = JSON.parse(saved);
-      if (!user.id) return;
-      if (user.wallet_address === walletAddress) return;
+        const actorType = me?.data?.actorType;
+        if (actorType !== 'merchant' && actorType !== 'user') return;
 
-      const message = generateLoginMessage(walletAddress);
-      const sigBytes = nacl.sign.detached(new TextEncoder().encode(message), keypair.secretKey);
-      const signature = bs58.encode(sigBytes);
+        const actor =
+          actorType === 'merchant' ? me?.data?.merchant : me?.data?.user;
+        if (!actor?.id) return;
+        // Already in sync — nothing to do.
+        if (actor.wallet_address === walletAddress) return;
 
-      fetch('/api/auth/user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'link_wallet',
-          user_id: user.id,
-          wallet_address: walletAddress,
-          signature,
-          message,
-        }),
-      }).then((res) => {
-        if (!res.ok) return;
-        user.wallet_address = walletAddress;
-        localStorage.setItem('blip_user', JSON.stringify(user));
-      }).catch(() => {});
-    } catch {}
+        const { fetchLoginNonce } = await import('@/lib/auth/walletAuth');
+        const issued = await fetchLoginNonce(walletAddress);
+        const sigBytes = nacl.sign.detached(
+          new TextEncoder().encode(issued.message),
+          keypair.secretKey,
+        );
+        const signature = bs58.encode(sigBytes);
+
+        if (actorType === 'merchant') {
+          await fetch('/api/auth/merchant', {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              merchant_id: actor.id,
+              wallet_address: walletAddress,
+              signature,
+              message: issued.message,
+              nonce: issued.nonce,
+            }),
+          });
+        } else {
+          await fetch('/api/auth/user', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'link_wallet',
+              user_id: actor.id,
+              wallet_address: walletAddress,
+              signature,
+              message: issued.message,
+              nonce: issued.nonce,
+            }),
+          });
+        }
+        // No localStorage mirror — the next /api/auth/me read will reflect
+        // the updated wallet_address from the DB.
+      } catch { /* swallow — best-effort sync */ }
+    })();
   }, [walletState, keypair]);
 
   // Unlock wallet
@@ -383,7 +402,12 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     });
     const fundTx = await buildFundEscrowTx(program, keypair.publicKey, tradePda, USDT_MINT);
 
+    // Prepend a priority-fee instruction so the lock-escrow tx lands within
+    // the blockhash window even under cluster congestion. 10_000 µ-lamports/CU
+    // matches the 'medium' preset used elsewhere — pennies in cost, dramatic
+    // reliability win on devnet.
     const transaction = new Transaction();
+    transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10_000 }));
     for (const ix of createTx.instructions) transaction.add(ix);
     for (const ix of fundTx.instructions) transaction.add(ix);
 

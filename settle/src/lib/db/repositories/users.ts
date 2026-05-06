@@ -79,6 +79,10 @@ type CreateUserInput = {
   password?: string;
   wallet_address?: string;
   name?: string;
+  email?: string;
+  // When true, the user record is marked as already-verified — used for
+  // wallet-based registrations where there's no email to verify yet.
+  email_verified?: boolean;
 };
 
 export async function createUser(
@@ -90,11 +94,17 @@ export async function createUser(
   const initialBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
   // wallet_address is NOT NULL in DB — generate a placeholder for system-created users
   const walletAddress = data.wallet_address ?? `placeholder_${crypto.randomUUID()}`;
+  // Normalise email so the unique LOWER(email) index can do its job and
+  // forgot-password lookups don't need to re-lower-case at query time.
+  const email = data.email?.trim().toLowerCase() || null;
+  // Default to true (legacy behavior) unless the caller explicitly passed
+  // false — preserves wallet-only signups without forcing email verification.
+  const emailVerified = data.email_verified ?? true;
   try {
     const result = await queryOne<User>(
       `
-      INSERT INTO users (username, password_hash, wallet_address, name, balance)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO users (username, password_hash, wallet_address, name, balance, email, email_verified)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
       `,
       [
@@ -103,14 +113,19 @@ export async function createUser(
         walletAddress,
         data.name?.trim() ?? null,
         initialBalance,
+        email,
+        emailVerified,
       ]
     );
 
     return sanitizeUser(result)!;
   } catch (err: any) {
-    // Handle race condition: username claimed between availability check and insert
-    if (err?.code === '23505' && data.username) {
-      throw new Error('Username already taken');
+    // 23505 = unique_violation. Disambiguate by constraint / index name so
+    // the API can show a helpful error.
+    if (err?.code === '23505') {
+      const detail = (err.detail || err.message || '').toLowerCase();
+      if (detail.includes('email')) throw new Error('Email already registered');
+      if (data.username) throw new Error('Username already taken');
     }
     throw err;
   }
@@ -307,6 +322,44 @@ export async function addBankAccount(data: {
     [data.user_id, data.bank_name, data.account_name, data.iban, data.is_default || false]
   );
   return result!;
+}
+
+// Edit a bank account's mutable fields. Ownership is enforced by the
+// `user_id = $X` clause — the SQL is the authoritative gate, the API layer
+// is the convenience gate.
+export async function updateBankAccount(
+  id: string,
+  userId: string,
+  data: { bank_name?: string; account_name?: string; iban?: string }
+): Promise<UserBankAccount | null> {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let p = 1;
+  if (data.bank_name !== undefined) {
+    sets.push(`bank_name = $${p++}`);
+    values.push(data.bank_name);
+  }
+  if (data.account_name !== undefined) {
+    sets.push(`account_name = $${p++}`);
+    values.push(data.account_name);
+  }
+  if (data.iban !== undefined) {
+    sets.push(`iban = $${p++}`);
+    values.push(data.iban);
+  }
+  if (sets.length === 0) {
+    return queryOne<UserBankAccount>(
+      'SELECT * FROM user_bank_accounts WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+  }
+  values.push(id, userId);
+  return queryOne<UserBankAccount>(
+    `UPDATE user_bank_accounts SET ${sets.join(', ')}
+     WHERE id = $${p++} AND user_id = $${p++}
+     RETURNING *`,
+    values
+  );
 }
 
 export async function deleteBankAccount(id: string, userId: string): Promise<boolean> {

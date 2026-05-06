@@ -52,12 +52,8 @@ export async function POST(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Merchants may pass x-merchant-id; only trusted when the token is a
-    // merchant token (same pattern as cancel-request/route.ts).
-    const merchantIdHeader = request.headers.get('x-merchant-id');
-    if (merchantIdHeader && auth.actorType === 'merchant' && !auth.merchantId) {
-      auth.merchantId = merchantIdHeader;
-    }
+    // Identity comes only from the JWT — auth.merchantId is already
+    // populated by getAuthContext for merchant tokens.
 
     const { id } = await params;
 

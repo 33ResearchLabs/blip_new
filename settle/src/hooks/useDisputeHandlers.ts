@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, Notification } from "@/types/merchant";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 import { fetchDisputeInfoFromApi } from '@/lib/api/disputeApi';
 
 interface UseDisputeHandlersParams {
@@ -80,10 +80,14 @@ export function useDisputeHandlers({
         }
       }
 
-      // Submit dispute to API
+      // Submit dispute to API. Dispute creation is a financial transition
+      // (freezes escrow) — backend rejects without Idempotency-Key.
       const res = await fetchWithAuth(`/api/orders/${disputeOrderId}/dispute`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': generateIdempotencyKey(),
+        },
         body: JSON.stringify({
           reason: disputeReason,
           description: disputeDescription,
@@ -216,9 +220,14 @@ export function useDisputeHandlers({
 
     setIsRespondingToResolution(true);
     try {
+      // Dispute resolution confirm is a financial transition (releases or
+      // refunds escrow) — backend rejects without Idempotency-Key.
       const res = await fetchWithAuth(`/api/orders/${orderId}/dispute/confirm`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': generateIdempotencyKey(),
+        },
         body: JSON.stringify({
           party: 'merchant',
           action,

@@ -3,7 +3,7 @@
 import { useRef, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, Notification } from "@/types/merchant";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 
 interface UseAutoRefundParams {
   solanaWallet: any;
@@ -38,9 +38,14 @@ export function useAutoRefund({
         addNotification('system', `Escrow auto-refunded! ${order.amount} USDT returned to your wallet.`, order.id);
         playSound('click');
 
+        // status=cancelled is a financial transition — backend rejects
+        // without Idempotency-Key.
         await fetchWithAuth(`/api/orders/${order.id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': generateIdempotencyKey(),
+          },
           body: JSON.stringify({
             status: 'cancelled',
             actor_type: 'merchant',

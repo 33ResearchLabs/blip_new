@@ -6,7 +6,7 @@ import { mapDbStatusToUI, mapDbOrderToUI } from "@/components/user/screens/helpe
 import { usePusher } from "@/context/PusherContext";
 import { useRealtimeChat } from "@/hooks/useRealtimeChat";
 import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 import { getUserChannel } from "@/lib/pusher/channels";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
 import { emitChatToast } from "@/lib/chat/chatToastBus";
@@ -55,6 +55,7 @@ export function useUserEffects({
     merchantName: string;
     cryptoAmount: number;
     fiatAmount: number;
+    fiatCurrency: string;
     orderType: 'buy' | 'sell';
   } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
@@ -254,6 +255,7 @@ export function useUserEffects({
           merchantName,
           cryptoAmount: orderData?.crypto_amount || 0,
           fiatAmount: orderData?.fiat_amount || 0,
+          fiatCurrency: (orderData as any)?.fiat_currency || '',
           orderType: orderData?.type || 'buy',
         });
         setShowAcceptancePopup(true);
@@ -413,6 +415,7 @@ export function useUserEffects({
         merchantName,
         cryptoAmount: (realtimeOrder as any).crypto_amount || 0,
         fiatAmount: (realtimeOrder as any).fiat_amount || 0,
+        fiatCurrency: (realtimeOrder as any).fiat_currency || '',
         orderType: (realtimeOrder as any).type || 'sell',
       });
       setShowAcceptancePopup(true);
@@ -643,6 +646,142 @@ export function useUserEffects({
       }
     });
   }, [activeChat, chatMessage, sendChatMessage, playSound, activeOrderId, setOrders]);
+
+  // ── Auto-refund stuck on-chain escrows (mirror of useMerchantEffects) ──
+  //
+  // The user-side trade-creation flow funds escrow on-chain BEFORE creating
+  // the settle order. If the on-chain tx lands but the client thinks it
+  // failed (slow Solana indexing → "block height exceeded" — see CLAUDE.md
+  // "Auto-Cancellation & Expiration Rules"), the order may be missing
+  // entirely OR the synthetic-recovery path (sweep-orphan-escrows.ts) may
+  // have inserted it as `cancelled` with all escrow_* set.
+  //
+  // This effect runs every 30 s, finds any cancelled/expired order whose
+  // on-chain escrow this user funded, and fires `refund_escrow` from the
+  // user's wallet. The on-chain program accepts only the depositor's
+  // signature for refunds, so this MUST happen client-side from the
+  // wallet that owns the trade — backend signer is rejected (error 6003).
+  const lastUserRefundScanRef = useRef(0);
+  const userRefundInFlightRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!solanaWallet?.connected || !solanaWallet?.walletAddress) return;
+    if (!solanaWallet?.refundEscrow) return; // wallet adapter not ready
+    if (orders.length === 0) return;
+
+    const now = Date.now();
+    if (now - lastUserRefundScanRef.current < 30_000) return;
+    lastUserRefundScanRef.current = now;
+
+    const stuck = orders.filter((o: any) =>
+      (o.status === 'cancelled' || o.status === 'expired') &&
+      o.escrowTxHash &&
+      !o.refundTxHash &&
+      o.escrowTradeId != null &&
+      o.escrowCreatorWallet === solanaWallet.walletAddress,
+    );
+
+    if (stuck.length === 0) return;
+    console.log(`[UserAutoRefund] Found ${stuck.length} stuck escrow(s) — refunding via user wallet…`);
+
+    for (const order of stuck) {
+      if (userRefundInFlightRef.current.has(order.id)) continue;
+      userRefundInFlightRef.current.add(order.id);
+
+      (async () => {
+        // Helper: persist a sentinel refund_tx_hash so the order is excluded
+        // from the next scan's `!o.refundTxHash` filter. Without this, every
+        // permanently-unrecoverable order kept getting retried every 30 s,
+        // hammering Solana RPC and producing the 429 + repeated console
+        // warnings that prompted this fix.
+        const markResolvedInDb = async (sentinel: string, reason: string) => {
+          try {
+            await fetchWithAuth(`/api/orders/${order.id}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'Idempotency-Key': generateIdempotencyKey(),
+              },
+              body: JSON.stringify({
+                status: 'cancelled',
+                actor_type: 'user',
+                actor_id: userId,
+                refund_tx_hash: sentinel,
+              }),
+            });
+            console.log(`[UserAutoRefund] ${order.id}: marked resolved (${reason})`);
+          } catch {
+            // Network blip — next scan will see the same state and retry. Not fatal.
+          }
+        };
+
+        try {
+          const refund = await solanaWallet.refundEscrow({
+            creatorPubkey: order.escrowCreatorWallet || '',
+            tradeId: order.escrowTradeId || 0,
+          });
+          if (refund?.success && refund?.txHash) {
+            console.log(`[UserAutoRefund] ✓ ${order.id}: ${refund.txHash}`);
+            await markResolvedInDb(refund.txHash, 'refunded on-chain');
+            try { solanaWallet.refreshBalances?.(); } catch { /* ignore */ }
+          } else if (refund?.error) {
+            const msg = String(refund.error);
+            // ── Permanently-unrecoverable cases: stop retrying forever ──
+            // 1. Escrow doesn't exist on-chain — already refunded by some
+            //    other path, or never funded. Either way, no more on-chain
+            //    work to do here.
+            // 2. AccountDidNotDeserialize (Anchor 3003 / 0xbbb) — the on-chain
+            //    Trade account exists but the program upgraded since this
+            //    trade was created and the account schema is incompatible.
+            //    Refund is unrecoverable from the client. Flag for admin.
+            const alreadyClosed =
+              msg.includes('does not exist') ||
+              msg.includes('already been refunded') ||
+              msg.includes('already-refunded') ||
+              msg.includes('AlreadyRefunded');
+            const programIncompatible =
+              msg.includes('AccountDidNotDeserialize') ||
+              msg.includes('0xbbb') ||
+              msg.includes('Error Number: 3003');
+
+            if (alreadyClosed) {
+              console.log(`[UserAutoRefund] ${order.id}: escrow already closed on-chain`);
+              await markResolvedInDb('already-closed-on-chain', 'escrow already closed');
+            } else if (programIncompatible) {
+              console.warn(`[UserAutoRefund] ${order.id}: program-incompatible — needs manual admin recovery`);
+              await markResolvedInDb('refund-unrecoverable-program-mismatch', 'program incompatible (3003)');
+            } else {
+              // Genuine transient error — leave for next scan. Logged for visibility.
+              console.warn(`[UserAutoRefund] ${order.id} refund failed (will retry):`, msg);
+            }
+          }
+        } catch (err) {
+          // Throwing path — could be network/RPC blip OR the same kinds of
+          // permanent failure surfaced as exceptions. Reuse the same
+          // classification so we don't ping-pong.
+          const msg = (err as Error).message || '';
+          const alreadyClosed =
+            msg.includes('does not exist') ||
+            msg.includes('already been refunded') ||
+            msg.includes('AlreadyRefunded');
+          const programIncompatible =
+            msg.includes('AccountDidNotDeserialize') ||
+            msg.includes('0xbbb') ||
+            msg.includes('Error Number: 3003');
+          if (alreadyClosed) {
+            console.log(`[UserAutoRefund] ${order.id}: escrow already closed on-chain (caught)`);
+            await markResolvedInDb('already-closed-on-chain', 'escrow already closed');
+          } else if (programIncompatible) {
+            console.warn(`[UserAutoRefund] ${order.id}: program-incompatible (caught) — needs manual admin recovery`);
+            await markResolvedInDb('refund-unrecoverable-program-mismatch', 'program incompatible (3003)');
+          } else {
+            console.warn(`[UserAutoRefund] ${order.id} threw (will retry):`, msg);
+          }
+        } finally {
+          userRefundInFlightRef.current.delete(order.id);
+        }
+      })();
+    }
+  }, [orders, solanaWallet?.connected, solanaWallet?.walletAddress, userId]);
 
   // Debug logging for chat issues (disabled — was causing re-render spam via chatWindows dep)
   // To re-enable, use a ref-based approach instead of chatWindows in deps

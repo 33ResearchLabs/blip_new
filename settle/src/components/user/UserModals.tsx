@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Check } from "lucide-react";
 import dynamic from "next/dynamic";
+import { formatFiat } from "@/lib/format";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -35,6 +36,7 @@ interface UserModalsProps {
     merchantName: string;
     cryptoAmount: number;
     fiatAmount: number;
+    fiatCurrency?: string;
     orderType: 'buy' | 'sell';
   } | null;
 }
@@ -131,7 +133,7 @@ export function UserModals({
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-semibold text-text-primary">{acceptedOrderInfo.cryptoAmount} USDT</span>
                     <span className="text-text-quaternary">{'\u2022'}</span>
-                    <span className="text-text-secondary">{acceptedOrderInfo.fiatAmount.toLocaleString()} AED</span>
+                    <span className="text-text-secondary">{formatFiat(acceptedOrderInfo.fiatAmount, acceptedOrderInfo.fiatCurrency)}</span>
                   </div>
                 </div>
                 <button

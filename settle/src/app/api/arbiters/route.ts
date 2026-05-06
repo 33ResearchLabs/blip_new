@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Admin-only endpoint
-    const adminAuth = requireAdminAuth(request);
+    const adminAuth = await requireAdminAuth(request);
     if (adminAuth) return adminAuth;
 
     await initializeArbiterTables();

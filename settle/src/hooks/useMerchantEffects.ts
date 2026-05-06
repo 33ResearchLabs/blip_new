@@ -177,13 +177,9 @@ export function useMerchantEffects({
         if (res.ok) {
           const data = await res.json();
           if (data.success) {
+            // Update the in-memory store. The DB is the durable copy; on
+            // next mount /api/auth/me re-reads it. No localStorage mirror.
             setMerchantInfo((prev: any) => prev ? { ...prev, wallet_address: solanaWallet.walletAddress! } : prev);
-            const stored = localStorage.getItem('blip_merchant');
-            if (stored) {
-              const merchantData = JSON.parse(stored);
-              merchantData.wallet_address = solanaWallet.walletAddress;
-              localStorage.setItem('blip_merchant', JSON.stringify(merchantData));
-            }
           }
         } else {
           console.error('[Merchant] Failed to link wallet:', await res.text());

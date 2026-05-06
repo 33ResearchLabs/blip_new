@@ -25,7 +25,7 @@ import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsOverlay";
 import { copyToClipboard } from "@/lib/clipboard";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { DEVNET_RPC } from "@/lib/solana/v2/config";
+import { DEVNET_RPC, DEVNET_WS_ENDPOINT } from "@/lib/solana/v2/config";
 import {
   generateWallet,
   importWallet,
@@ -37,7 +37,6 @@ import {
   hasEncryptedWallet,
 } from "@/lib/wallet/embeddedWallet";
 import { Keypair } from "@solana/web3.js";
-import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { showAlert } from "@/context/ModalContext";
 import { MOCK_MODE } from "@/lib/config/mockMode";
@@ -103,31 +102,37 @@ export default function WalletPage({
   const [pendingKeypair, setPendingKeypair] = useState<Keypair | null>(null);
   const [backupDownloaded, setBackupDownloaded] = useState(false);
 
-  // Restore merchant session
+  // Restore merchant session via cookie-authed /api/auth/me. Survives hard
+  // refresh and deep-link entry — identity comes from the signed cookie,
+  // not from any client-writable storage.
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const savedMerchant = localStorage.getItem("blip_merchant");
-        if (savedMerchant) {
-          const merchant = JSON.parse(savedMerchant);
-          const checkRes = await fetchWithAuth(
-            `/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`,
-          );
-          if (checkRes.ok) {
-            const checkData = await checkRes.json();
-            if (checkData.success && checkData.data?.valid) {
-              setMerchantInfo(checkData.data.merchant || merchant);
-              setIsLoading(false);
-              return;
-            }
-          }
-          localStorage.removeItem("blip_merchant");
+        const res = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "include",
+        });
+        if (!res.ok) {
+          setIsLoading(false);
+          router.push("/merchant/login");
+          return;
         }
+        const data = await res.json();
+        if (
+          data?.success &&
+          data?.data?.actorType === "merchant" &&
+          data?.data?.merchant?.id
+        ) {
+          setMerchantInfo(data.data.merchant);
+          setIsLoading(false);
+          return;
+        }
+        setIsLoading(false);
+        router.push("/merchant/login");
       } catch {
-        localStorage.removeItem("blip_merchant");
+        setIsLoading(false);
+        router.push("/merchant/login");
       }
-      setIsLoading(false);
-      router.push("/merchant/login");
     };
     restoreSession();
   }, [router]);
@@ -331,7 +336,10 @@ export default function WalletPage({
 
     setIsSending(true);
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(DEVNET_RPC, {
+        commitment: "confirmed",
+        wsEndpoint: DEVNET_WS_ENDPOINT,
+      });
 
       if (sendToken === "SOL") {
         // Send SOL
@@ -499,6 +507,7 @@ export default function WalletPage({
         onOpenSettings={onOpenSettingsProp ?? (() => setShowSettings(true))}
         onOpenWallet={onClose ? () => { /* already in wallet */ } : undefined}
         onNavLinkClick={onClose}
+        onBack={onClose ?? (() => router.push("/merchant"))}
       />
 
       {/* Main content — centered card */}
@@ -569,14 +578,35 @@ export default function WalletPage({
                 )}
 
                 {setupTab === "create" && (
-                  <div className="space-y-3">
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleCreate(); }}
+                    autoComplete="off"
+                    className="space-y-3"
+                  >
+                    {/* Hidden username anchor: keeps Chrome's password manager
+                        bound to THIS form so saved Gmail credentials don't bleed
+                        into the chat search input on the page behind. */}
+                    <input
+                      type="text"
+                      name="wallet-account"
+                      autoComplete="username"
+                      value="blip-merchant-wallet"
+                      readOnly
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      className="absolute opacity-0 pointer-events-none h-0 w-0"
+                    />
                     <div>
-                      <label className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                      <label htmlFor="wallet-new-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
                         Password
                       </label>
                       <div className="relative">
                         <input
+                          id="wallet-new-password"
+                          name="wallet-new-password"
                           type={showPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          maxLength={100}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="Min 6 characters"
@@ -598,11 +628,15 @@ export default function WalletPage({
                       </div>
                     </div>
                     <div>
-                      <label className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                      <label htmlFor="wallet-new-password-confirm" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
                         Confirm Password
                       </label>
                       <input
+                        id="wallet-new-password-confirm"
+                        name="wallet-new-password-confirm"
                         type="password"
+                        autoComplete="new-password"
+                        maxLength={100}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="Re-enter password"
@@ -612,7 +646,7 @@ export default function WalletPage({
                       />
                     </div>
                     <button
-                      onClick={handleCreate}
+                      type="submit"
                       disabled={setupLoading}
                       className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
                                  hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
@@ -628,16 +662,35 @@ export default function WalletPage({
                         </>
                       )}
                     </button>
-                  </div>
+                  </form>
                 )}
 
                 {setupTab === "import" && (
-                  <div className="space-y-3">
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleImport(); }}
+                    autoComplete="off"
+                    className="space-y-3"
+                  >
+                    {/* Hidden username anchor — see comment in create form. */}
+                    <input
+                      type="text"
+                      name="wallet-account"
+                      autoComplete="username"
+                      value="blip-merchant-wallet"
+                      readOnly
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      className="absolute opacity-0 pointer-events-none h-0 w-0"
+                    />
                     <div>
-                      <label className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                      <label htmlFor="wallet-import-key" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
                         Private Key (Base58)
                       </label>
                       <textarea
+                        id="wallet-import-key"
+                        name="wallet-import-key"
+                        autoComplete="off"
+                        maxLength={128}
                         value={privateKeyInput}
                         onChange={(e) => setPrivateKeyInput(e.target.value)}
                         placeholder="Paste your base58 private key..."
@@ -648,11 +701,15 @@ export default function WalletPage({
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                      <label htmlFor="wallet-import-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
                         Encryption Password
                       </label>
                       <input
+                        id="wallet-import-password"
+                        name="wallet-import-password"
                         type="password"
+                        autoComplete="new-password"
+                        maxLength={100}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Min 6 characters"
@@ -662,7 +719,7 @@ export default function WalletPage({
                       />
                     </div>
                     <button
-                      onClick={handleImport}
+                      type="submit"
                       disabled={setupLoading}
                       className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
                                  hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
@@ -678,7 +735,7 @@ export default function WalletPage({
                         </>
                       )}
                     </button>
-                  </div>
+                  </form>
                 )}
               </div>
 
@@ -783,39 +840,61 @@ export default function WalletPage({
                   </div>
                 )}
 
-                <div>
-                  <label className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={unlockPassword}
-                    onChange={(e) => setUnlockPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleUnlock()}
-                    placeholder="Enter your wallet password"
-                    autoFocus
-                    className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                               text-sm text-white font-mono placeholder:text-white/20
-                               focus:outline-none focus:border-white/20 transition-colors"
-                  />
-                </div>
-
-                <button
-                  onClick={handleUnlock}
-                  disabled={unlockLoading || !unlockPassword}
-                  className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
-                             hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleUnlock(); }}
+                  autoComplete="off"
+                  className="space-y-4"
                 >
-                  {unlockLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Unlocking...
-                    </>
-                  ) : (
-                    <>
-                      <Unlock className="w-4 h-4" /> Unlock
-                    </>
-                  )}
-                </button>
+                  {/* Hidden username anchor: keeps the password manager bound to
+                      THIS form so the saved Gmail credential doesn't leak into
+                      the chat search input on the page behind. */}
+                  <input
+                    type="text"
+                    name="wallet-account"
+                    autoComplete="username"
+                    value="blip-merchant-wallet"
+                    readOnly
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    className="absolute opacity-0 pointer-events-none h-0 w-0"
+                  />
+                  <div>
+                    <label htmlFor="wallet-unlock-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                      Password
+                    </label>
+                    <input
+                      id="wallet-unlock-password"
+                      name="wallet-unlock-password"
+                      type="password"
+                      autoComplete="current-password"
+                      maxLength={100}
+                      value={unlockPassword}
+                      onChange={(e) => setUnlockPassword(e.target.value)}
+                      placeholder="Enter your wallet password"
+                      autoFocus
+                      className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
+                                 text-sm text-white font-mono placeholder:text-white/20
+                                 focus:outline-none focus:border-white/20 transition-colors"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={unlockLoading || !unlockPassword}
+                    className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                               hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {unlockLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Unlocking...
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-4 h-4" /> Unlock
+                      </>
+                    )}
+                  </button>
+                </form>
 
                 <div className="flex items-center justify-between">
                   <button
@@ -1230,26 +1309,26 @@ export default function WalletPage({
           onClick={() => setShowDeleteConfirm(false)}
         >
           <div
-            className="bg-[#0d0d0d] rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-4"
+            className="bg-card-solid rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-red-400 font-mono">
+            <h3 className="text-base font-bold text-[var(--color-error)] font-mono">
               Delete Wallet?
             </h3>
-            <p className="text-xs text-white/50 font-mono leading-relaxed">
+            <p className="text-xs text-foreground/60 font-mono leading-relaxed">
               This removes the encrypted key from this device permanently. Make
               sure you have downloaded your backup file first.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-sm text-white/60 font-mono hover:bg-accent-subtle transition-colors"
+                className="flex-1 py-2.5 rounded-xl bg-foreground/[0.06] text-sm text-foreground/70 font-mono hover:bg-foreground/[0.10] transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 py-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-sm text-red-400 font-mono hover:bg-[var(--color-error)]/30 transition-colors"
+                className="flex-1 py-2.5 rounded-xl bg-[var(--color-error)]/15 border border-[var(--color-error)]/30 text-sm text-[var(--color-error)] font-mono hover:bg-[var(--color-error)]/25 transition-colors"
               >
                 Delete
               </button>

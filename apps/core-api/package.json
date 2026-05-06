@@ -7,11 +7,15 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "build": "tsc",
-    "test": "tsx tests/wsBroadcast.test.ts",
+    "test": "tsx tests/wsBroadcast.test.ts && tsx tests/disputeConfirmStructure.test.ts && tsx tests/disputeConfirmRace.test.ts && tsx tests/ownership.test.ts && tsx tests/ownershipIntegration.test.ts && tsx tests/authHookHmac.test.ts && tsx tests/escrowOrderV1Sql.test.ts && tsx tests/idempotencyRequired.test.ts && tsx tests/cancelRequestRespondRace.test.ts && tsx tests/authStrictModeProduction.test.ts",
+    "test:dispute": "tsx tests/disputeConfirmStructure.test.ts && tsx tests/disputeConfirmRace.test.ts",
+    "test:ownership": "tsx tests/ownership.test.ts && tsx tests/ownershipIntegration.test.ts",
+    "test:auth": "tsx tests/authHookHmac.test.ts",
     "worker:outbox": "tsx src/workers/notificationOutbox.ts",
     "worker:expiry": "tsx src/workers/expiryWorker.ts",
     "worker:receipt": "tsx -e \"import './src/loadEnv'; import { startReceiptWorker } from './src/workers/receiptWorker'; startReceiptWorker();\"",
-    "workers": "concurrently \"pnpm worker:outbox\" \"pnpm worker:expiry\" \"pnpm worker:receipt\""
+    "worker:onchain-recon": "tsx src/workers/onChainReconciliationWorker.ts",
+    "workers": "concurrently \"pnpm worker:outbox\" \"pnpm worker:expiry\" \"pnpm worker:receipt\" \"pnpm worker:onchain-recon\""
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

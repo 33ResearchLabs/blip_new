@@ -77,7 +77,11 @@ export function logClientError(payload: ClientErrorPayload): void {
       headers: { 'Content-Type': 'application/json' },
       body,
       keepalive: true,
-      credentials: 'same-origin',
+      // 'include' for parity with fetchWithAuth's cookie-based auth model.
+      // Same-origin browsers honor cookies on 'same-origin' too, but
+      // explicit > implicit, and this future-proofs us if /api/client-errors
+      // ever needs the access cookie to attribute errors to an actor.
+      credentials: 'include',
     }).catch(() => {
       /* swallow — logging is best-effort */
     });

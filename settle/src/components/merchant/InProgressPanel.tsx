@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useRef, useState, useMemo } from 'react';
-import { Shield, Zap, ChevronRight, ChevronDown, Flame, ArrowRight, Clock, XCircle, MessageSquare, AlertTriangle, Loader2 } from 'lucide-react';
+import { Shield, Zap, ChevronRight, ChevronDown, ArrowRight, Clock, XCircle, MessageSquare, AlertTriangle, Loader2 } from 'lucide-react';
 import { CountdownRing } from './CountdownRing';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus, MinimalStatus } from '@/lib/orders/statusResolver';
@@ -33,6 +33,12 @@ interface InProgressPanelProps {
   merchantId?: string | null;
   lockingEscrowOrderId?: string | null;
   confirmingOrderId?: string | null;
+  /** Global flag — true while ANY mark-paid is in flight. The card uses this
+   *  in combination with the action label ("I've Paid"/"Send Payment") to
+   *  show a spinner when the merchant clicks the Send Payment button on a card. */
+  markingDone?: boolean;
+  acceptingOrderId?: string | null;
+  cancellingOrderId?: string | null;
 }
 
 // Viewer-perspective side resolver: matches the helper in
@@ -94,6 +100,9 @@ const InProgressOrderList = memo(function InProgressOrderList({
   merchantId,
   lockingEscrowOrderId,
   confirmingOrderId,
+  markingDone,
+  acceptingOrderId,
+  cancellingOrderId,
 }: {
   orders: any[];
   onSelectOrder: (order: any) => void;
@@ -105,6 +114,9 @@ const InProgressOrderList = memo(function InProgressOrderList({
   merchantId?: string | null;
   lockingEscrowOrderId?: string | null;
   confirmingOrderId?: string | null;
+  markingDone?: boolean;
+  acceptingOrderId?: string | null;
+  cancellingOrderId?: string | null;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -170,27 +182,27 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
                 </span>
                 {/* Row 1: Counterparty + type on left, timer on right */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="text-base">{order.emoji}</div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <div className="text-base shrink-0">{order.emoji}</div>
                     {(() => {
                       const { seller, buyer } = getPartyNames(order.dbOrder);
                       const bothKnown = !!seller && !!buyer;
                       const soloName = seller || buyer || order.user || null;
                       return bothKnown ? (
-                        <span className="flex items-center gap-1 text-xs font-medium text-foreground/80 min-w-0">
-                          <span className="truncate max-w-[80px]" title={`Seller: ${seller}`}>{seller}</span>
+                        <span className="flex items-center gap-1 text-xs font-medium text-foreground/80 min-w-0 flex-1">
+                          <span className="truncate min-w-0" title={`Seller: ${seller}`}>{seller}</span>
                           <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
-                          <span className="truncate max-w-[80px]" title={`Buyer: ${buyer}`}>{buyer}</span>
+                          <span className="truncate min-w-0" title={`Buyer: ${buyer}`}>{buyer}</span>
                         </span>
                       ) : (
-                        <span className={`text-xs font-medium truncate max-w-[140px] ${soloName ? 'text-foreground/80' : 'text-foreground/40'}`}>
+                        <span className={`text-xs font-medium truncate min-w-0 flex-1 ${soloName ? 'text-foreground/80' : 'text-foreground/40'}`}>
                           {soloName || "—"}
                         </span>
                       );
                     })()}
                     {order.spreadPreference && (
-                      <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
+                      <span className={`shrink-0 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
                         order.spreadPreference === 'fastest'
                           ? 'bg-primary/10 border-primary/20 text-primary'
                           : order.spreadPreference === 'cheap'
@@ -202,32 +214,22 @@ const InProgressOrderList = memo(function InProgressOrderList({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {order.spreadPreference && (
-                      <div className="flex items-center gap-0.5">
-                        <Flame className="w-2.5 h-2.5 text-primary/60 animate-pulse" />
-                        <span className="text-[9px] font-bold text-foreground/40 font-mono">
-                          {order.spreadPreference === 'fastest' ? '5m' : order.spreadPreference === 'best' ? '15m' : '60m'}
-                        </span>
-                      </div>
-                    )}
-                    {/* payment_sent orders don't expire */}
-                    {order.minimalStatus === 'payment_sent' || order.dbOrder?.status === 'payment_sent' || order.dbOrder?.status === 'payment_confirmed' ? (
-                      <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/[0.06]">
-                        <Shield className="w-3 h-3 text-emerald-400/60" />
-                        <span className="text-[10px] font-bold font-mono text-emerald-400/60">No expiry</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-sm font-bold font-mono tabular-nums ${
-                          order.expiresIn <= 120 ? 'text-[var(--color-error)]' : 'text-primary'
-                        }`}>
-                          {order.expiresIn > 0 ? formatTimeRemaining(order.expiresIn) : 'Expired'}
-                        </span>
-                        <CountdownRing remaining={order.expiresIn} total={7200} size={18} strokeWidth={2.5} />
-                      </div>
-                    )}
-                  </div>
+                  {/* payment_sent orders don't expire */}
+                  {order.minimalStatus === 'payment_sent' || order.dbOrder?.status === 'payment_sent' || order.dbOrder?.status === 'payment_confirmed' ? (
+                    <div className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/[0.06]">
+                      <Shield className="w-3 h-3 text-emerald-400/60" />
+                      <span className="text-[10px] font-bold font-mono text-emerald-400/60">No expiry</span>
+                    </div>
+                  ) : (
+                    <div className="shrink-0 flex items-center gap-1 tabular-nums">
+                      <span className={`text-xs sm:text-sm font-bold font-mono ${
+                        order.expiresIn <= 120 ? 'text-[var(--color-error)]' : 'text-primary'
+                      }`}>
+                        {order.expiresIn > 0 ? formatTimeRemaining(order.expiresIn) : 'Expired'}
+                      </span>
+                      <CountdownRing remaining={order.expiresIn} total={7200} size={16} strokeWidth={2.5} />
+                    </div>
+                  )}
                 </div>
 
                 {/* Expiry warning banner — tiered so the merchant sees this
@@ -369,12 +371,35 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 ) : (() => {
                   const isLockingThis = lockingEscrowOrderId === order.id;
                   const isConfirmingThis = confirmingOrderId === order.id;
-                  const isActionLoading = isLockingThis || isConfirmingThis;
+                  const isAcceptingThis = acceptingOrderId === order.id;
+                  const isCancellingThis = cancellingOrderId === order.id;
+                  // markingDone is a global "mark-paid in flight" flag — we
+                  // only want to show the spinner on a card whose CURRENT
+                  // primary action is actually Send-Payment / I've-Paid, not
+                  // on every card on the screen. Detect via the action label.
+                  const labelLower = (nextAction || '').toLowerCase();
+                  const isPayActionCard =
+                    labelLower.includes('paid') ||
+                    labelLower.includes('send payment') ||
+                    labelLower.includes('mark payment');
+                  const isMarkingPaidThis = !!markingDone && isPayActionCard;
+                  const isActionLoading =
+                    isLockingThis ||
+                    isConfirmingThis ||
+                    isAcceptingThis ||
+                    isCancellingThis ||
+                    isMarkingPaidThis;
                   const loadingLabel = isLockingThis
                     ? 'Locking escrow…'
                     : isConfirmingThis
                       ? 'Confirming payment…'
-                      : null;
+                      : isAcceptingThis
+                        ? 'Accepting…'
+                        : isCancellingThis
+                          ? 'Cancelling…'
+                          : isMarkingPaidThis
+                            ? 'Marking as paid…'
+                            : null;
                   return (
                     <button
                       data-testid="order-primary-action"
@@ -472,7 +497,7 @@ const STATUS_FILTERS: { value: FilterValue; label: string }[] = [
   { value: 'cancel_requested', label: 'Cancel Req' },
 ];
 
-export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId, lockingEscrowOrderId, confirmingOrderId }: InProgressPanelProps) {
+export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId, lockingEscrowOrderId, confirmingOrderId, markingDone, acceptingOrderId, cancellingOrderId }: InProgressPanelProps) {
   const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
 
   const filteredOrders = useMemo(() => {
@@ -582,6 +607,9 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
           merchantId={merchantId}
           lockingEscrowOrderId={lockingEscrowOrderId}
           confirmingOrderId={confirmingOrderId}
+          markingDone={markingDone}
+          acceptingOrderId={acceptingOrderId}
+          cancellingOrderId={cancellingOrderId}
         />
       )}
     </div>

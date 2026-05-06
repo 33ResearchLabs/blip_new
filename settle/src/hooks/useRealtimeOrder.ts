@@ -207,6 +207,13 @@ export function useRealtimeOrder(
 
       previousStatusRef.current = data.status;
 
+      // INLINE optimistic update — flip status the instant the Pusher event
+      // lands so any status-gated UI (action buttons, badges) re-renders
+      // immediately. Without this, the status stayed stale for the duration
+      // of the refetch (~100-300ms), leaving "I've sent the payment" /
+      // "Confirm" buttons visible behind the success toast.
+      setOrder(prev => prev ? { ...prev, status: data.status } : prev);
+
       // Refetch full order data from API to get complete data including merchant
       fetchOrder(true);
     };

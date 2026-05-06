@@ -25,7 +25,7 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
-import { getIdempotencyKey, withIdempotency } from '@/lib/idempotency';
+import { getIdempotencyKey, requireIdempotencyKey, withIdempotency } from '@/lib/idempotency';
 import { mockEscrowLock } from '@/lib/money/escrowLock';
 import { atomicCancelWithRefund } from '@/lib/orders/atomicCancel';
 import {
@@ -41,6 +41,22 @@ import { guardOrderClaim, guardPaymentRetry } from '@/lib/guards';
 import { fireInstantNotification } from '@/lib/notifications/instantNotify';
 import { invalidateOrderCache, updateOrderCache, invalidateMerchantOrderListCache } from '@/lib/cache';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
+import { query as dbQuery } from '@/lib/db';
+
+// Persist timings into error_logs so we can compare before/after via SQL.
+// Fire-and-forget — never blocks the response.
+function recordTiming(type: string, orderId: string, totalMs: number, marks: Array<{ label: string; at: number }>): void {
+  dbQuery(
+    `INSERT INTO error_logs (type, message, severity, order_id, source, metadata)
+     VALUES ($1, $2, 'INFO', $3, 'backend', $4::jsonb)`,
+    [
+      `timing.${type}`,
+      `Timing ${type}: ${totalMs}ms`,
+      orderId,
+      JSON.stringify({ total_ms: totalMs, marks }),
+    ]
+  ).catch(() => {});
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +69,9 @@ const orderActionSchema = z.object({
   // Optional fields for specific actions
   reason: z.string().max(500).nullish(),                   // CANCEL reason
   tx_hash: z.string().min(1).nullish(),                    // LOCK_ESCROW tx hash
-  acceptor_wallet_address: z.string().nullish(),           // ACCEPT wallet
+  acceptor_wallet_address: z.string().nullish(),           // ACCEPT/CLAIM wallet
+  acceptor_wallet_signature: z.string().max(256).nullish(),// Option B: signature
+                                                            //   over `${Action} order ${orderId} - ... Wallet: ${addr}`
   escrow_trade_id: z.number().nullish(),                   // On-chain escrow refs
   escrow_trade_pda: z.string().nullish(),
   escrow_pda: z.string().nullish(),
@@ -66,8 +84,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const __t0 = Date.now();
+  const __mark = (label: string) => ({ label, at: Date.now() - __t0 });
+  const __marks: Array<{ label: string; at: number }> = [];
   try {
     const { id } = await params;
+    __marks.push(__mark('params'));
 
     // 1. Validate order ID format
     const idValidation = uuidSchema.safeParse(id);
@@ -90,6 +112,7 @@ export async function POST(
       reason,
       tx_hash,
       acceptor_wallet_address,
+      acceptor_wallet_signature,
       escrow_trade_id,
       escrow_trade_pda,
       escrow_pda,
@@ -103,29 +126,34 @@ export async function POST(
       ? await requireTokenAuth(request)
       : await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    __marks.push(__mark('auth'));
 
-    // 4. Security: enforce actor matches authenticated identity
-    const headerMerchantId = request.headers.get('x-merchant-id');
-    const actorMatchesAuth = actor_id === auth.actorId;
-    // Only trust x-merchant-id if the authenticated token is a merchant token
-    const actorMatchesMerchant =
-      actor_type === 'merchant' && auth.actorType === 'merchant' && headerMerchantId && actor_id === headerMerchantId;
-
-    if (!actorMatchesAuth && !actorMatchesMerchant) {
-      return forbiddenResponse('actor_id does not match authenticated identity');
+    // 3b. Idempotency-Key header is MANDATORY for any state-changing action
+    // that touches money (SEND_PAYMENT, CONFIRM_PAYMENT, CANCEL, LOCK_ESCROW).
+    // Settle no longer caches; the header is forwarded to core-api where
+    // `withTxIdempotency` commits the idempotency record atomically with the
+    // mutation. Without the header a network-level retry could execute the
+    // same financial transition twice.
+    const idempotencyRequired = ['SEND_PAYMENT', 'CONFIRM_PAYMENT', 'LOCK_ESCROW', 'CANCEL'];
+    if (idempotencyRequired.includes(action)) {
+      const missingKey = requireIdempotencyKey(request);
+      if (missingKey) return missingKey;
     }
 
-    // Override auth context if merchant is acting via their own merchant token
-    if (!actorMatchesAuth && actorMatchesMerchant) {
-      auth.actorId = headerMerchantId;
-      auth.merchantId = headerMerchantId;
-    }
+    // 4. Security: enforce actor matches authenticated identity.
+    // Identity is taken ONLY from the cryptographically-signed JWT
+    // (auth.actorId / auth.actorType). The previous header-based "actor
+    // swap" allowed any merchant to claim any other merchant's id.
+    const { assertActorMatchesAuth } = await import('@/lib/middleware/merchantIdentity');
+    const actorMismatch = assertActorMatchesAuth(auth, { actor_id, actor_type });
+    if (actorMismatch) return actorMismatch;
 
     // 5. Fetch order
     const order = await getOrderWithRelations(id);
     if (!order) {
       return notFoundResponse('Order');
     }
+    __marks.push(__mark('order_fetch'));
 
     // 6. Access check (skip for ACCEPT/SEND_FIAT — observer is joining/claiming)
     const isClaimingOrder = ['ACCEPT', 'SEND_FIAT', 'CLAIM'].includes(action);
@@ -134,6 +162,35 @@ export async function POST(
       if (!canAccess) {
         logger.auth.forbidden(`POST /api/orders/${id}/action`, auth.actorId, 'Not order participant');
         return forbiddenResponse('You do not have access to this order');
+      }
+    }
+
+    // 6b. Wallet-injection guard.
+    //
+    // Any action that supplies `acceptor_wallet_address` causes that wallet
+    // to flow into the order row and ultimately into the on-chain release
+    // destination. The caller MUST own that wallet — either it matches
+    // their authenticated wallet (Option A) or they sign the canonical
+    // binding message and submit it as `acceptor_wallet_signature` (Option B).
+    //
+    // Strict-only: a wallet failing both Option A and Option B is ALWAYS
+    // rejected with 403. The legacy WALLET_OWNERSHIP_STRICT=false bypass
+    // has been removed.
+    if (acceptor_wallet_address) {
+      const { assertWalletOwnership } = await import('@/lib/auth/walletOwnership');
+      const sigAction: 'Claim' | 'Confirm' =
+        action === 'CLAIM' || action === 'ACCEPT' ? 'Claim' : 'Confirm';
+      const ownership = await assertWalletOwnership({
+        auth,
+        walletAddress: acceptor_wallet_address,
+        orderId: id,
+        signature: acceptor_wallet_signature ?? null,
+        signatureAction: sigAction,
+      });
+      if (!ownership.ok) {
+        return forbiddenResponse(
+          `acceptor_wallet_address ownership not verified: ${ownership.reason ?? 'unknown'}`
+        );
       }
     }
 
@@ -190,6 +247,60 @@ export async function POST(
     // ── LOCK_ESCROW: atomic balance deduction + status update ──
     if (action === 'LOCK_ESCROW') {
       const escrowTxHash = tx_hash || `mock-escrow-${id}-${Date.now()}`;
+
+      // Server-side PDA binding verification. Re-derive the canonical
+      // tradePda + escrowPda from (creator_wallet, trade_id) and refuse
+      // any submitted PDA that doesn't match. The DERIVED values are
+      // stored — never the client-submitted attestations.
+      const { verifyEscrowPdaBinding, rejectsSubmittedPdaWithoutDerivationInputs } =
+        await import('@/lib/solana/v2/verifyPdaBinding');
+
+      const earlyReject = rejectsSubmittedPdaWithoutDerivationInputs({
+        creatorWallet: escrow_creator_wallet ?? null,
+        tradeId: escrow_trade_id ?? null,
+        submittedTradePda: escrow_trade_pda ?? null,
+        submittedEscrowPda: escrow_pda ?? null,
+      });
+      if (earlyReject && !earlyReject.ok) {
+        return NextResponse.json(
+          { success: false, error: earlyReject.reason, code: 'ESCROW_PDA_UNVERIFIABLE' },
+          { status: 400 }
+        );
+      }
+
+      // If any escrow on-chain reference was provided, the full quartet
+      // must be present and consistent. The verifier handles all the
+      // cross-checks and emits the structured security log on mismatch.
+      let derivedTradePda: string | undefined;
+      let derivedEscrowPda: string | undefined;
+      const anyEscrowFieldProvided =
+        !!escrow_creator_wallet ||
+        (escrow_trade_id !== null && escrow_trade_id !== undefined) ||
+        !!escrow_trade_pda ||
+        !!escrow_pda;
+      if (anyEscrowFieldProvided) {
+        const verify = verifyEscrowPdaBinding({
+          orderId: id,
+          creatorWallet: escrow_creator_wallet ?? null,
+          tradeId: escrow_trade_id ?? null,
+          submittedTradePda: escrow_trade_pda ?? null,
+          submittedEscrowPda: escrow_pda ?? null,
+        });
+        if (!verify.ok) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Escrow PDA binding rejected: ${verify.reason}`,
+              code: 'ESCROW_PDA_MISMATCH',
+              field: verify.field ?? null,
+            },
+            { status: 400 }
+          );
+        }
+        derivedTradePda = verify.derived.tradePda;
+        derivedEscrowPda = verify.derived.escrowPda;
+      }
+
       const escrowResult = await mockEscrowLock(
         id,
         actor_type,
@@ -197,11 +308,13 @@ export async function POST(
         escrowTxHash,
         {
           escrow_trade_id: escrow_trade_id ?? undefined,
-          escrow_trade_pda: escrow_trade_pda ?? undefined,
-          escrow_pda: escrow_pda ?? undefined,
+          // Always store the SERVER-DERIVED PDAs, never the client-submitted ones.
+          escrow_trade_pda: derivedTradePda ?? (escrow_trade_pda ?? undefined),
+          escrow_pda: derivedEscrowPda ?? (escrow_pda ?? undefined),
           escrow_creator_wallet: escrow_creator_wallet ?? undefined,
         }
       );
+      __marks.push(__mark('mock_escrow_lock'));
 
       if (!escrowResult.success) {
         return NextResponse.json(
@@ -229,6 +342,9 @@ export async function POST(
       const enrichedEscrow = escrowResult.order
         ? enrichOrderResponse(escrowResult.order, actor_id)
         : undefined;
+      const __lockTotal = Date.now() - __t0;
+      logger.info('[Timing] action.LOCK_ESCROW', { orderId: id, total_ms: __lockTotal, marks: __marks });
+      recordTiming('action.LOCK_ESCROW', id, __lockTotal, __marks);
       return successResponse({
         order: escrowResult.order,
         action,
@@ -304,6 +420,9 @@ export async function POST(
               actor_type,
               actor_id,
             },
+            // Forward the same effective key so core-api's idempotency_log
+            // for confirm_payment / release_escrow keys off the same value.
+            idempotencyKey,
           });
           const respData = await resp.json();
           return { data: respData, statusCode: resp.status };
@@ -457,7 +576,6 @@ export async function POST(
     // escrow_debited_entity_id for payment_sent/completed. On-chain escrow
     // may not have set this field. Backfill using seller-determination logic.
     if (action === 'SEND_PAYMENT' && !order.escrow_debited_entity_id && order.merchant_id) {
-      const { query: dbQuery } = await import('@/lib/db');
       await dbQuery(
         `UPDATE orders
          SET escrow_debited_entity_id = COALESCE(escrow_debited_entity_id,
@@ -487,7 +605,6 @@ export async function POST(
       let buyerWallet = acceptor_wallet_address;
       if (!buyerWallet) {
         // Look up from merchants table
-        const { query: dbQuery } = await import('@/lib/db');
         const walletResult = await dbQuery<{ wallet_address: string }>(
           'SELECT wallet_address FROM merchants WHERE id = $1',
           [actor_id]
@@ -495,7 +612,6 @@ export async function POST(
         buyerWallet = walletResult?.[0]?.wallet_address || null;
       }
       if (buyerWallet && buyerWallet !== order.acceptor_wallet_address) {
-        const { query: dbQuery } = await import('@/lib/db');
         await dbQuery(
           'UPDATE orders SET acceptor_wallet_address = $1 WHERE id = $2',
           [buyerWallet, id]
@@ -511,6 +627,13 @@ export async function POST(
     // ── ACCEPT, SEND_PAYMENT, DISPUTE: standard status transitions via core-api ──
     const isFinancial = action === 'SEND_PAYMENT';
     const idempotencyKey = getIdempotencyKey(request);
+    // The 30-second auto-key falls back when the client did not send a
+    // header. We compute it once here so executeTransition can forward
+    // the SAME value into the proxy that the outer settle wrapper keys
+    // off — if the two diverged, settle would dedupe but core-api would
+    // see distinct keys and risk mutating twice.
+    const window30s = Math.floor(Date.now() / 30000);
+    const effectiveKey = idempotencyKey || `${id}:${action}:${actor_id}:${window30s}`;
 
     const executeTransition = async () => {
       const resp = await proxyCoreApi(`/v1/orders/${id}`, {
@@ -524,6 +647,11 @@ export async function POST(
           // For ACCEPT on unclaimed orders: assign the claiming merchant
           ...(action === 'ACCEPT' && !order.merchant_id && actor_type === 'merchant' ? { merchant_id: actor_id } : {}),
         },
+        // Forward the SAME key the settle wrapper uses so core-api's
+        // idempotency_log lines up. Required: PATCH /v1/orders/:id wraps
+        // payment_sent/cancel_order in withIdempotency which now 400s
+        // on missing key.
+        idempotencyKey: effectiveKey,
       });
       const respData = await resp.json();
       return { data: respData, statusCode: resp.status };
@@ -533,9 +661,7 @@ export async function POST(
       // 30-second time window — collapses double-clicks to one execution but
       // allows genuine retries after the window. Client-provided Idempotency-Key
       // (if present) overrides this.
-      const window30s = Math.floor(Date.now() / 30000);
-      const key = idempotencyKey || `${id}:${action}:${actor_id}:${window30s}`;
-      const idempotencyResult = await withIdempotency(key, 'payment_sent', id, executeTransition);
+      const idempotencyResult = await withIdempotency(effectiveKey, 'payment_sent', id, executeTransition);
 
       if (idempotencyResult.cached) {
         logger.info('[Action] Returning cached SEND_PAYMENT result', { orderId: id });
@@ -573,6 +699,9 @@ export async function POST(
         }
       }
 
+      const __spTotal = Date.now() - __t0;
+      logger.info('[Timing] action.SEND_PAYMENT', { orderId: id, total_ms: __spTotal, marks: __marks });
+      recordTiming('action.SEND_PAYMENT', id, __spTotal, __marks);
       return NextResponse.json(
         {
           ...(enrichedSendPayment ?? {}),
@@ -586,6 +715,7 @@ export async function POST(
 
     // Non-financial: execute directly (ACCEPT, DISPUTE)
     const transitionResult = await executeTransition();
+    __marks.push(__mark('proxy_core_api'));
 
     // Instant notification for non-financial transitions
     let enrichedTransition: Record<string, unknown> | undefined;
@@ -627,6 +757,10 @@ export async function POST(
     if (order.buyer_merchant_id && order.buyer_merchant_id !== order.merchant_id) {
       invalidateMerchantOrderListCache(order.buyer_merchant_id);
     }
+
+    const __actTotal = Date.now() - __t0;
+    logger.info(`[Timing] action.${action}`, { orderId: id, total_ms: __actTotal, marks: __marks });
+    recordTiming(`action.${action}`, id, __actTotal, __marks);
 
     return NextResponse.json(
       {
@@ -670,9 +804,8 @@ export async function GET(
       return notFoundResponse('Order');
     }
 
-    // Determine actor ID from auth context
-    const headerMerchantId = request.headers.get('x-merchant-id');
-    const actorId = headerMerchantId || auth.actorId;
+    // Determine actor ID from auth context (cryptographically-signed JWT).
+    const actorId = auth.actorId;
 
     const allowedActions = getAllowedActions(order, actorId);
     const role = resolveTradeRole(order, actorId);

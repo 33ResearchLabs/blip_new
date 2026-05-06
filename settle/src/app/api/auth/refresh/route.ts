@@ -13,6 +13,8 @@ import {
   generateAccessToken,
   REFRESH_TOKEN_COOKIE,
   REFRESH_COOKIE_OPTIONS,
+  ACCESS_TOKEN_COOKIE,
+  ACCESS_COOKIE_OPTIONS,
 } from '@/lib/auth/sessionToken';
 import { rotateRefreshToken } from '@/lib/auth/sessions';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
       response.cookies.delete(REFRESH_TOKEN_COOKIE);
+      response.cookies.delete(ACCESS_TOKEN_COOKIE);
       return response;
     }
 
@@ -53,7 +56,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Set new rotated refresh token cookie
+    // Set new rotated refresh token cookie + new access cookie. The access
+    // cookie is httpOnly so JS cannot read it (XSS-safe). The accessToken
+    // also remains in the JSON body for backward compatibility with clients
+    // that still attach it as `Authorization: Bearer`.
     const response = NextResponse.json({
       success: true,
       data: {
@@ -63,6 +69,7 @@ export async function POST(request: NextRequest) {
       },
     });
     response.cookies.set(REFRESH_TOKEN_COOKIE, result.newRefreshToken, REFRESH_COOKIE_OPTIONS);
+    response.cookies.set(ACCESS_TOKEN_COOKIE, accessToken, ACCESS_COOKIE_OPTIONS);
 
     return response;
   } catch {

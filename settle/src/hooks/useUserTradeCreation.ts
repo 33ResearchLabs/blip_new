@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Screen, TradeType, TradePreference, PaymentMethod, Order, Offer, DbOrder } from "@/components/user/screens/types";
 import { mapDbOrderToUI } from "@/components/user/screens/helpers";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 import { showAlert } from '@/context/ModalContext';
 import type { SelectedBankDetails } from '@/components/user/BankAccountSelector';
 import type { PaymentMethodItem } from '@/components/user/PaymentMethodSelector';
@@ -109,16 +109,22 @@ export function useUserTradeCreation({
       if (!offerRes.ok) {
         const errorMsg = `Server error (${offerRes.status})`;
         console.error('Failed to fetch offers:', errorMsg);
-        showAlert('No Offers', 'No offers available for this amount and payment method', 'warning');
+        showAlert(
+          'No Offers',
+          'No offers available for this amount and payment method. Try a different amount, switch payment method, or check back shortly.',
+          'warning'
+        );
         setIsLoading(false);
         return;
       }
       const offerData = await offerRes.json();
 
       if (!offerData.success || !offerData.data) {
-        const errorMsg = offerData.error || 'No offers available for this amount and payment method';
+        const serverErr = offerData.error;
+        const errorMsg = serverErr
+          || 'No offers available for this amount and payment method. Try a different amount, switch payment method, or check back shortly.';
         console.error('Failed to fetch offers:', errorMsg);
-        showAlert('Error', errorMsg, 'error');
+        showAlert(serverErr ? 'Error' : 'No Offers', errorMsg, serverErr ? 'error' : 'warning');
         setIsLoading(false);
         return;
       }
@@ -179,7 +185,12 @@ export function useUserTradeCreation({
 
       const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // Required by /api/orders POST: server-side dedup of accidental
+          // double-clicks / network retries. UUIDv4 per logical request.
+          'Idempotency-Key': generateIdempotencyKey(),
+        },
         body: JSON.stringify({
           user_id: userId,
           offer_id: offer.id,
@@ -284,7 +295,10 @@ export function useUserTradeCreation({
     try {
       const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': generateIdempotencyKey(),
+        },
         body: JSON.stringify({
           user_id: userId,
           offer_id: selectedOffer.id,
@@ -422,7 +436,34 @@ export function useUserTradeCreation({
         walletAddress: solanaWallet.walletAddress,
         hasPublicKey: !!solanaWallet.publicKey,
       });
-      console.log('[Escrow] Calling depositToEscrow with:', { amount: amountNum, merchantWallet });
+
+      // Pre-generate the trade_id we'll use on-chain. By committing it to a
+      // local breadcrumb BEFORE we sign, any failure between sign+confirm
+      // and the settle PATCH leaves a recoverable trail: the sweep script
+      // can derive the trade PDA from (wallet, trade_id) and synthesise
+      // a settle order. Without this breadcrumb the user-side flow has no
+      // anchor between Solana and Postgres — the orphan class this whole
+      // pipeline is supposed to close.
+      const userTradeId = Date.now();
+      const breadcrumbKey = `blip_user_pending_escrow_${userTradeId}`;
+      try {
+        localStorage.setItem(
+          breadcrumbKey,
+          JSON.stringify({
+            tradeId: userTradeId,
+            amount: amountNum,
+            actorWallet: solanaWallet.walletAddress,
+            offerId: selectedOffer.id,
+            timestamp: Date.now(),
+          }),
+        );
+      } catch { /* non-fatal */ }
+
+      console.log('[Escrow] Calling depositToEscrow with:', {
+        amount: amountNum,
+        merchantWallet,
+        tradeId: userTradeId,
+      });
 
       let escrowResult: { txHash: string; success: boolean; tradePda?: string; escrowPda?: string; tradeId?: number };
 
@@ -430,24 +471,49 @@ export function useUserTradeCreation({
         escrowResult = await solanaWallet.depositToEscrow({
           amount: amountNum,
           merchantWallet,
+          // Pass our pre-generated trade_id through. solanaWallet.depositToEscrow
+          // accepts an optional tradeId; without it the wallet uses Date.now()
+          // internally — same generator, but losing the link to our breadcrumb.
+          tradeId: userTradeId,
         });
         console.log('[Escrow] depositToEscrow result:', escrowResult);
 
         if (!escrowResult.success) {
           throw new Error('Transaction failed');
         }
+        // Success — drop the breadcrumb. The order will be created next,
+        // and from that point the normal flow takes over.
+        try { localStorage.removeItem(breadcrumbKey); } catch { /* */ }
       } catch (escrowErr: any) {
         console.error('[Escrow] On-chain escrow failed:', escrowErr);
         console.error('[Escrow] Error message:', escrowErr?.message);
         console.error('[Escrow] Error stack:', escrowErr?.stack?.split('\n').slice(0, 3).join('\n'));
 
-        if (escrowErr?.message?.includes('program=false')) {
+        // Soften the messaging when this is the well-known indexing-lag
+        // pattern. The on-chain tx may have actually landed; the sweep
+        // script can still recover the funds.
+        const errMsg = escrowErr?.message || '';
+        const isExpiry =
+          errMsg.includes('block height exceeded') ||
+          errMsg.includes('has expired') ||
+          errMsg.includes('expired') ||
+          errMsg.includes('confirmation timed out');
+
+        if (errMsg.includes('program=false')) {
           console.error('[Escrow] CRITICAL: Anchor program is null - wallet may not be fully connected');
           setEscrowError('Wallet not fully connected. Please disconnect and reconnect your wallet, then try again.');
-        } else if (escrowErr?.message?.includes('User rejected')) {
+        } else if (errMsg.includes('User rejected')) {
           setEscrowError('Transaction was rejected. Please approve the transaction in your wallet.');
-        } else if (escrowErr?.message?.includes('Insufficient')) {
+          // User actively cancelled — drop the breadcrumb, no orphan possible.
+          try { localStorage.removeItem(breadcrumbKey); } catch { /* */ }
+        } else if (errMsg.includes('Insufficient')) {
           setEscrowError(escrowErr.message);
+          try { localStorage.removeItem(breadcrumbKey); } catch { /* */ }
+        } else if (isExpiry) {
+          // The breadcrumb stays — sweep can recover if the tx actually landed.
+          setEscrowError(
+            `Network was slow to confirm your transaction. Trade ID ${userTradeId} is recorded — if your USDT was debited on-chain, the system will recover it automatically. Do NOT click Lock again. Wait 1 minute, then refresh.`,
+          );
         } else {
           setEscrowError(`Escrow failed: ${escrowErr?.message || 'Unknown error'}. Please try again.`);
         }
@@ -463,7 +529,10 @@ export function useUserTradeCreation({
 
       const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': generateIdempotencyKey(),
+        },
         body: JSON.stringify({
           user_id: userId,
           offer_id: selectedOffer.id,

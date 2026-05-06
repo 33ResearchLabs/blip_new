@@ -21,17 +21,32 @@ export const dynamic = 'force-dynamic';
 const VALID_TYPES = ['bank', 'cash', 'crypto', 'card', 'mobile'] as const;
 
 // GET /api/merchant/[id]/payment-methods
+//
+// `[id]` accepts EITHER a merchant UUID OR the literal string `me`.
+// When `me`, the merchant id is taken from the authenticated session
+// (auth.actorId). This eliminates the client-side prop-vs-token race
+// where ConfigPanel could fire the request before its `merchantId` prop
+// hydrated from localStorage, AND removes the URL-tampering attack
+// surface (server uses the token, not whatever the URL says).
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { id: rawId } = await params;
+
+    // Authenticate first so we can resolve `me` from the token.
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
+    // Resolve `me` → auth.actorId. Only meaningful for merchant tokens;
+    // other actor types fall through to the ownership check and are
+    // correctly rejected with 403.
+    const id = rawId === 'me' ? auth.actorId : rawId;
+
     const v = uuidSchema.safeParse(id);
     if (!v.success) return validationErrorResponse(['Invalid merchant ID format']);
 
-    const auth = await requireAuth(request);
-    if (auth instanceof NextResponse) return auth;
     const isOwner = auth.actorType === 'merchant' && auth.actorId === id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden(`GET /api/merchant/${id}/payment-methods`, auth.actorId, 'Not owner');
@@ -47,17 +62,22 @@ export async function GET(
 }
 
 // POST /api/merchant/[id]/payment-methods
+// `[id]` may be the literal `me` — see GET handler comment.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const v = uuidSchema.safeParse(id);
-    if (!v.success) return validationErrorResponse(['Invalid merchant ID format']);
+    const { id: rawId } = await params;
 
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+
+    const id = rawId === 'me' ? auth.actorId : rawId;
+
+    const v = uuidSchema.safeParse(id);
+    if (!v.success) return validationErrorResponse(['Invalid merchant ID format']);
+
     const isOwner = auth.actorType === 'merchant' && auth.actorId === id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden(`POST /api/merchant/${id}/payment-methods`, auth.actorId, 'Not owner');
@@ -123,17 +143,22 @@ export async function POST(
 }
 
 // DELETE /api/merchant/[id]/payment-methods
+// `[id]` may be the literal `me` — see GET handler comment.
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const v = uuidSchema.safeParse(id);
-    if (!v.success) return validationErrorResponse(['Invalid merchant ID format']);
+    const { id: rawId } = await params;
 
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+
+    const id = rawId === 'me' ? auth.actorId : rawId;
+
+    const v = uuidSchema.safeParse(id);
+    if (!v.success) return validationErrorResponse(['Invalid merchant ID format']);
+
     const isOwner = auth.actorType === 'merchant' && auth.actorId === id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden(`DELETE /api/merchant/${id}/payment-methods`, auth.actorId, 'Not owner');
@@ -158,17 +183,22 @@ export async function DELETE(
 }
 
 // PATCH /api/merchant/[id]/payment-methods — set default
+// `[id]` may be the literal `me` — see GET handler comment.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const v = uuidSchema.safeParse(id);
-    if (!v.success) return validationErrorResponse(['Invalid merchant ID format']);
+    const { id: rawId } = await params;
 
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+
+    const id = rawId === 'me' ? auth.actorId : rawId;
+
+    const v = uuidSchema.safeParse(id);
+    if (!v.success) return validationErrorResponse(['Invalid merchant ID format']);
+
     const isOwner = auth.actorType === 'merchant' && auth.actorId === id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden(`PATCH /api/merchant/${id}/payment-methods`, auth.actorId, 'Not owner');

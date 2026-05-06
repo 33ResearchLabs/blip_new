@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
@@ -70,11 +71,13 @@ export default function ConsolePage() {
     const fetchClosedOrders = async () => {
       setIsLoading(true);
       try {
-        // Fetch all closed order types in parallel
+        // Fetch all closed order types in parallel. fetchWithAuth flows the
+        // httpOnly access cookie + refreshes silently on 401 — no Bearer
+        // header needed, no localStorage probe.
         const [expiredRes, cancelledRes, disputedRes] = await Promise.all([
-          fetch('/api/orders?status=expired'),
-          fetch('/api/orders?status=cancelled'),
-          fetch('/api/orders?status=disputed'),
+          fetchWithAuth('/api/orders?status=expired'),
+          fetchWithAuth('/api/orders?status=cancelled'),
+          fetchWithAuth('/api/orders?status=disputed'),
         ]);
 
         const mapOrder = (o: Record<string, unknown>, status: "expired" | "cancelled" | "disputed"): ClosedOrder => ({

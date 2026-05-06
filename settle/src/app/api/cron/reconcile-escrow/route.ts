@@ -42,7 +42,7 @@ function acceptsCronSecret(req: NextRequest): boolean {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // Primary path: admin HMAC bearer token.
-  const adminErr = requireAdminAuth(request);
+  const adminErr = await requireAdminAuth(request);
   // Fallback path: shared CRON_SECRET header (for plain cron runners).
   const authed = !adminErr || acceptsCronSecret(request);
   if (!authed) {

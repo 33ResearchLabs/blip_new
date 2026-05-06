@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
     // Filter by order status
     if (orderStatus) {
       const statuses = orderStatus.split(',');
-      conversationsQuery += ` AND o.status = ANY($${paramIndex}::text[])`;
+      conversationsQuery += ` AND o.status::text = ANY($${paramIndex}::text[])`;
       queryParams.push(statuses as unknown as string);
       paramIndex++;
     }
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
 
     if (orderStatus) {
       const statuses = orderStatus.split(',');
-      countQuery += ` AND o.status = ANY($${countParams.length + 1}::text[])`;
+      countQuery += ` AND o.status::text = ANY($${countParams.length + 1}::text[])`;
       countParams.push(statuses as unknown as string);
     }
 

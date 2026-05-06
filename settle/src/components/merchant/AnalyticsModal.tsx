@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, BarChart3, BookOpen } from "lucide-react";
-import { AnalyticsDashboard } from "@/components/merchant/AnalyticsDashboard";
+import { X } from "lucide-react";
 import { WalletLedger } from "@/components/merchant/WalletLedger";
 
 interface AnalyticsModalProps {
@@ -12,16 +10,9 @@ interface AnalyticsModalProps {
   onClose: () => void;
 }
 
-const TABS = [
-  { id: 'overview', label: 'Overview', Icon: BarChart3 },
-  { id: 'ledger', label: 'Ledger', Icon: BookOpen },
-] as const;
-
-type TabId = (typeof TABS)[number]['id'];
-
+// Overview tab removed per design — the dashboard had only placeholder
+// data. Modal now renders the Ledger directly so the header stays clean.
 export function AnalyticsModal({ show, merchantId, onClose }: AnalyticsModalProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
-
   return (
     <AnimatePresence>
       {show && merchantId && (
@@ -40,26 +31,7 @@ export function AnalyticsModal({ show, merchantId, onClose }: AnalyticsModalProp
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] sticky top-0 bg-card-solid z-10">
-              <div className="flex items-center gap-4">
-                <h2 className="text-lg font-semibold text-white">Analytics</h2>
-                {/* Tabs */}
-                <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5">
-                  {TABS.map(({ id, label, Icon }) => (
-                    <button
-                      key={id}
-                      onClick={() => setActiveTab(id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                        activeTab === id
-                          ? 'bg-white/10 text-white shadow-sm'
-                          : 'text-white/50 hover:text-white/70'
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <h2 className="text-lg font-semibold text-white">Analytics</h2>
               <button
                 onClick={onClose}
                 className="p-2 hover:bg-card rounded-lg transition-colors"
@@ -68,11 +40,7 @@ export function AnalyticsModal({ show, merchantId, onClose }: AnalyticsModalProp
               </button>
             </div>
             <div className="p-6">
-              {activeTab === 'overview' ? (
-                <AnalyticsDashboard merchantId={merchantId} />
-              ) : (
-                <WalletLedger merchantId={merchantId} />
-              )}
+              <WalletLedger merchantId={merchantId} />
             </div>
           </motion.div>
         </motion.div>

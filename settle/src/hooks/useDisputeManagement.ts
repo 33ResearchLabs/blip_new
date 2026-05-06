@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import type { ComplianceMember } from "./useComplianceAuth";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 
 interface DisputeOrder {
   id: string;
@@ -241,9 +241,14 @@ export function useDisputeManagement(
               if (result.success && result.txHash) {
                 addNotification("resolution", `On-chain dispute resolved: ${result.txHash.slice(0, 8)}...`, selectedDispute.id);
 
+                // Dispute resolution releases escrow — financial transition
+                // requires Idempotency-Key.
                 await fetchWithAuth(`/api/orders/${selectedDispute.id}/escrow`, {
                   method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": generateIdempotencyKey(),
+                  },
                   body: JSON.stringify({
                     tx_hash: result.txHash,
                     actor_type: "system",

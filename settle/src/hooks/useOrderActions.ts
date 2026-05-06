@@ -147,17 +147,24 @@ export function useOrderActions({
       if (isEscrowed && hasOnChainEscrow) {
         // Use SEND_PAYMENT action — backend handles atomic claim+pay for unclaimed,
         // or direct payment_sent transition for already-assigned merchants
+        const acceptAction = iAmAssignedMerchant ? 'SEND_PAYMENT' : 'CLAIM';
         const actionBody: Record<string, unknown> = {
-          action: iAmAssignedMerchant ? 'SEND_PAYMENT' : 'CLAIM',
+          action: acceptAction,
           actor_type: 'merchant',
           actor_id: merchantId,
         };
         if (isValidSolanaAddress(solanaWallet.walletAddress)) {
           actionBody.acceptor_wallet_address = solanaWallet.walletAddress;
         }
+        // SEND_PAYMENT is a financial transition — backend rejects without
+        // Idempotency-Key. CLAIM doesn't need one but the header is harmless.
+        const acceptHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        if (acceptAction === 'SEND_PAYMENT') {
+          acceptHeaders['Idempotency-Key'] = generateIdempotencyKey();
+        }
         acceptRes = await fetchWithAuth(`/api/orders/${order.id}/action`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: acceptHeaders,
           body: JSON.stringify(actionBody),
         });
       } else {
@@ -185,15 +192,32 @@ export function useOrderActions({
         } catch {
           errorMsg = errorText || errorMsg;
         }
-        console.error("Failed to accept order:", acceptRes.status, errorMsg);
-        addNotification('system', `Failed to accept order: ${errorMsg}`, order.id);
+        // 409 = order already claimed by another merchant. This is a normal
+        // race outcome (fastest-finger-first), not a bug — surface to the
+        // user via the toast but do NOT trip the dev error overlay.
+        const isClaimRace = acceptRes.status === 409;
+        const friendlyMsg = isClaimRace
+          ? 'Order already claimed by another merchant'
+          : `Failed to accept order: ${errorMsg}`;
+        if (isClaimRace) {
+          console.info('[Merchant] Lost claim race:', errorMsg);
+        } else {
+          console.error('Failed to accept order:', acceptRes.status, errorMsg);
+        }
+        addNotification('system', friendlyMsg, order.id);
         playSound('error');
         return;
       }
       const acceptData = await acceptRes.json();
 
       if (!acceptData.success) {
-        console.error("Failed to accept order:", acceptData.error);
+        // Server returned 200 but success=false — usually CLAIM_FAILED race.
+        const isClaimRace = /already (claim|accept|in progress)/i.test(acceptData.error || '');
+        if (isClaimRace) {
+          console.info('[Merchant] Lost claim race:', acceptData.error);
+        } else {
+          console.error('Failed to accept order:', acceptData.error);
+        }
         addNotification('system', `Failed to accept order: ${acceptData.error}`, order.id);
         playSound('error');
         return;
@@ -477,9 +501,14 @@ export function useOrderActions({
         actionBody.acceptor_wallet_address = solanaWallet.walletAddress;
       }
 
+      // SEND_PAYMENT is a financial transition — backend rejects without
+      // Idempotency-Key (matches the contract in src/app/api/orders/[id]/action/route.ts).
       const res = await fetchWithAuth(`/api/orders/${order.id}/action`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": generateIdempotencyKey(),
+        },
         body: JSON.stringify(actionBody),
       });
 
@@ -584,10 +613,17 @@ export function useOrderActions({
       return;
     }
 
-    // Safety: show confirmation dialog before proceeding
+    // Safety: show confirmation dialog before proceeding.
+    // Use the order's actual fiat currency (toCurrency) — the previous hardcoded
+    // 'AED' was wrong for INR/USD/etc. corridors.
+    const { formatFiat } = await import('@/lib/format');
+    const fiatCcy = order.toCurrency || order.dbOrder?.fiat_currency || '';
+    const fiatAmountFormatted = order.total
+      ? formatFiat(order.total, fiatCcy)
+      : `${order.amount} USDT worth`;
     showConfirm(
       'Confirm Payment Received',
-      `I confirm I have received the fiat payment of ${order.total ? `AED ${Math.round(order.total).toLocaleString()}` : `${order.amount} USDT worth`}. This will release escrow to the buyer and cannot be reversed.`,
+      `I confirm I have received the fiat payment of ${fiatAmountFormatted}. This will release escrow to the buyer and cannot be reversed.`,
       async () => {
         setConfirmingOrderId(orderId);
         try {
@@ -649,19 +685,93 @@ export function useOrderActions({
                 });
               } catch (releaseErr: unknown) {
                 const errMsg = releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
-                // On-chain release failed. DO NOT fabricate a "server-release-fallback"
-                // tx hash — that used to mark the order `completed` in the DB while
-                // real funds stayed locked in the on-chain vault (ghost release).
+
+                // AccountNotInitialized (3012 / 0xbc4) on the escrow account is
+                // ambiguous — it can mean either:
+                //   (a) buyer never called acceptTrade → trade was never funded
+                //       (escrow PDA never existed), OR
+                //   (b) escrow was ALREADY RELEASED on a previous click → escrow
+                //       PDA was closed and rent reclaimed.
+                // The DB currently being at payment_sent doesn't tell us which.
                 //
-                // Known non-fatal pattern: CannotRelease (6016/0x1780) means the
-                // buyer never called `acceptTrade` on-chain, so the trade's status
-                // is still `Created`/`PaymentSent` rather than `Locked`. The right
-                // resolution is an admin-signed release via the protocol authority
-                // (BACKEND_SIGNER_KEYPAIR), not a fake DB flip. Surface a clear
-                // error and stop.
+                // Optimistically try the backend sync — the release PATCH is
+                // idempotent and the server can verify on-chain truth from the
+                // trade PDA (which still exists in either case). If the backend
+                // confirms "already released" we mark the order complete; if it
+                // refuses we fall back to the "buyer hasn't joined" message.
+                const looksLikeAlreadyDone =
+                  errMsg.includes('AccountNotInitialized') ||
+                  errMsg.includes('0xbc4') ||
+                  errMsg.includes('3012') ||
+                  errMsg.includes('Released');
+
+                if (looksLikeAlreadyDone) {
+                  console.log('[Merchant] Escrow account missing — checking on-chain history for an actual ReleaseEscrow tx');
+                  // Look up the real release tx hash from on-chain. If a
+                  // ReleaseEscrow already ran successfully (race with a prior
+                  // click, reconciliation worker, etc.), we'll find its
+                  // signature and pass THAT to the backend sync — which is
+                  // truthful + auditable, unlike the previous 'already-released'
+                  // sentinel string. If nothing is found we treat it as the
+                  // buyer-never-joined case (escrow never funded).
+                  let onChainReleaseTxHash: string | null = null;
+                  try {
+                    const { findOnChainTradeOutcome } = await import('@/lib/solana/v2/findOnChainRelease');
+                    const { findTradePda } = await import('@/lib/solana/v2/pdas');
+                    const { PublicKey } = await import('@solana/web3.js');
+                    if (order.escrowCreatorWallet && order.escrowTradeId) {
+                      const [tradePda] = findTradePda(
+                        new PublicKey(order.escrowCreatorWallet),
+                        order.escrowTradeId,
+                      );
+                      const outcome = await findOnChainTradeOutcome(
+                        solanaWallet.connection,
+                        tradePda,
+                      );
+                      if (outcome.kind === 'released') {
+                        onChainReleaseTxHash = outcome.signature;
+                        console.log('[Merchant] Found on-chain ReleaseEscrow tx:', outcome.signature);
+                      } else {
+                        console.log('[Merchant] No on-chain release found, outcome:', outcome.kind);
+                      }
+                    }
+                  } catch (lookupErr) {
+                    console.warn('[Merchant] On-chain release lookup failed (non-fatal):', lookupErr);
+                  }
+
+                  if (onChainReleaseTxHash) {
+                    try {
+                      const syncRes = await fetchWithAuth(`/api/orders/${orderId}/escrow`, {
+                        method: 'PATCH',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Idempotency-Key': generateIdempotencyKey(),
+                        },
+                        body: JSON.stringify({
+                          tx_hash: onChainReleaseTxHash,
+                          actor_type: 'merchant',
+                          actor_id: merchantId,
+                        }),
+                      });
+                      if (syncRes.ok) {
+                        console.log('[Merchant] Backend confirmed release — marking order complete');
+                        playSound('trade_complete');
+                        addNotification('complete', `Order completed - ${order.amount} USDT released to buyer`, orderId);
+                        await afterMutationReconcile(orderId, { status: 'completed' as const });
+                        syncBalance();
+                        return;
+                      }
+                      console.warn('[Merchant] Backend sync rejected even with verified on-chain tx');
+                    } catch (syncErr) {
+                      console.warn('[Merchant] Backend sync failed:', syncErr);
+                    }
+                  }
+                }
+
+                // Either not a "looks already done" signal, or the backend
+                // sync rejected. Treat as the buyer-never-joined case.
                 console.error('[Merchant] On-chain release failed, NOT completing DB:', errMsg);
-                const isKnownCannotRelease =
-                  errMsg.includes('AccountNotInitialized') || errMsg.includes('0xbc4') || errMsg.includes('3012')
+                const isKnownCannotRelease = looksLikeAlreadyDone
                   || errMsg.includes('CannotRelease') || errMsg.includes('0x1780') || errMsg.includes('6016')
                   || (errMsg.includes('ConstraintRaw') && errMsg.includes('counterparty_ata'));
                 addNotification(
@@ -689,10 +799,14 @@ export function useOrderActions({
               releaseTxHash = `server-release-${Date.now()}`;
             }
 
-            // Sync release with backend (escrow endpoint accepts payment_sent directly)
+            // Sync release with backend (escrow endpoint accepts payment_sent directly).
+            // Release is a financial transition — Idempotency-Key required.
             const response = await fetchWithAuth(`/api/orders/${orderId}/escrow`, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'Idempotency-Key': generateIdempotencyKey(),
+              },
               body: JSON.stringify({
                 tx_hash: releaseTxHash,
                 actor_type: 'merchant',
@@ -811,7 +925,13 @@ export function useOrderActions({
         // BUY order flow: Create directly
         const res = await fetchWithAuth("/api/merchant/orders", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            // Required by core-api /v1/merchant/orders. Without this header
+            // the order create returns 400 with "Idempotency-Key header is
+            // required for merchant order creation."
+            "Idempotency-Key": generateIdempotencyKey(),
+          },
           body: JSON.stringify({
             merchant_id: merchantId,
             type: effectiveTradeType,

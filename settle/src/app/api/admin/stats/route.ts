@@ -26,7 +26,7 @@ interface ChangeRow {
 
 // GET /api/admin/stats - Get platform statistics
 export async function GET(request: NextRequest) {
-  const authError = requireAdminAuth(request);
+  const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {

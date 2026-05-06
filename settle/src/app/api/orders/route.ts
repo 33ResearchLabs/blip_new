@@ -25,9 +25,10 @@ import { getCurrentFeeBps } from '@/lib/money/feeBps';
 import { checkDrift } from '@/lib/money/driftGuard';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
 import { auditLog } from '@/lib/auditLog';
-import { getIdempotencyKey, withIdempotency } from '@/lib/idempotency';
+import { getIdempotencyKey, requireIdempotencyKey, withIdempotency } from '@/lib/idempotency';
 import { createHash } from 'crypto';
 import { guardOrderCreation } from '@/lib/guards';
+import { assertWalletOwnership } from '@/lib/auth/walletOwnership';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
@@ -133,7 +134,16 @@ export async function POST(request: NextRequest) {
     // Quick synchronous validations first (no DB calls)
     guardOrderCreation(user_id, type, crypto_amount);
 
+    // Idempotency-Key header is REQUIRED for create_order. Settle no longer
+    // owns an idempotency cache — the key is forwarded to core-api whose
+    // withTxIdempotency commits the idempotency record inside the same DB
+    // transaction as the mutation (atomic, no post-write gap). Missing key
+    // is fail-closed 400 here so a careless client cannot retry-and-double.
+    const missingKey = requireIdempotencyKey(request);
+    if (missingKey) return missingKey;
     const explicitKey = getIdempotencyKey(request);
+    // Auto-key retained as a defense-in-depth fingerprint logged alongside
+    // the explicit key — the explicit key is the only value used downstream.
     const timeWindow = Math.floor(Date.now() / 30000);
     const autoKey = createHash('sha256')
       .update(`create_order:${user_id}:${type}:${crypto_amount}:${payment_method || 'bank'}:${timeWindow}`)
@@ -142,6 +152,25 @@ export async function POST(request: NextRequest) {
 
     if (type === 'buy' && !buyer_wallet_address) {
       return validationErrorResponse(['buyer_wallet_address is required for buy orders. Please connect your wallet.']);
+    }
+
+    // ── Wallet-injection guard ──
+    // The buyer is the authenticated user (line 127–131 enforces actor==user_id).
+    // Their buyer_wallet_address becomes the on-chain payout destination, so it
+    // MUST belong to them. Option A is enforced; no Option B at creation
+    // because there is no orderId yet to bind a signature to. If a user wants
+    // to receive crypto at a different wallet, they update their account
+    // wallet first (which already requires a signed wallet_login).
+    if (type === 'buy' && buyer_wallet_address) {
+      const ownership = await assertWalletOwnership({
+        auth,
+        walletAddress: buyer_wallet_address,
+      });
+      if (!ownership.ok) {
+        return forbiddenResponse(
+          `buyer_wallet_address ownership not verified: ${ownership.reason ?? 'unknown'}`
+        );
+      }
     }
 
     // Parallelize independent DB lookups: user verification + payment method check
@@ -245,6 +274,9 @@ export async function POST(request: NextRequest) {
               corridor_id: orderCorridorId,
               fiat_currency: orderFiatCurrency,
             },
+            // Forward the same effective key — core-api now requires this
+            // header on /v1/orders and will 400 a missing-key call.
+            idempotencyKey,
           });
           const data = await resp.json();
           return { data, statusCode: resp.status };
@@ -312,6 +344,8 @@ export async function POST(request: NextRequest) {
             corridor_id: orderCorridorId,
             fiat_currency: orderFiatCurrency,
           },
+          // Forward the same effective key — core-api requires it.
+          idempotencyKey,
         });
         const data = await resp.json();
         return { data, statusCode: resp.status };

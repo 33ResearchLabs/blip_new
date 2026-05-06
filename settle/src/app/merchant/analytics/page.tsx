@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   TrendingUp,
@@ -22,8 +22,12 @@ import {
   Star,
 } from "lucide-react";
 import Link from "next/link";
+import { useMerchantStore } from "@/stores/merchantStore";
+import { getEffectiveStatus, TRADER_CUT_CONFIG } from "@/lib/orders/mappers";
+import { formatCrypto } from "@/lib/format";
 
-// Mock data
+// Empty until a real backend feed lands. Once data is wired, the chart
+// auto-shows again because the render is gated on length > 0.
 const weeklyData: { day: string; trades: number; volume: number; earnings: number }[] = [];
 
 const recentTrades: { id: number; user: string; amount: number; profit: number; time: string; rating: number }[] = [];
@@ -37,9 +41,18 @@ interface MerchantInfo {
   rating?: number;
 }
 
+// Convert the timeframe pill selection into an absolute cutoff timestamp.
+// "all" returns 0 so every order passes the filter.
+function timeframeCutoffMs(tf: "7d" | "30d" | "all"): number {
+  if (tf === "all") return 0;
+  const days = tf === "7d" ? 7 : 30;
+  return Date.now() - days * 24 * 60 * 60 * 1000;
+}
+
 export default function AnalyticsPage() {
   const [timeframe, setTimeframe] = useState<"7d" | "30d" | "all">("7d");
   const [merchantInfo, setMerchantInfo] = useState<MerchantInfo | null>(null);
+  const orders = useMerchantStore((s) => s.orders);
 
   // Load merchant info from localStorage
   useEffect(() => {
@@ -53,10 +66,31 @@ export default function AnalyticsPage() {
     }
   }, []);
 
+  // Real totals derived from the merchant's completed orders, filtered by
+  // the active timeframe pill. Re-computes when the user toggles 7d/30d/All.
+  const { totalTrades, totalVolume, totalEarnings } = useMemo(() => {
+    const cutoff = timeframeCutoffMs(timeframe);
+    let trades = 0;
+    let volume = 0;
+    let earnings = 0;
+    for (const o of orders) {
+      if (getEffectiveStatus(o) !== "completed") continue;
+      const completedAt =
+        o.dbOrder?.completed_at ||
+        (o.timestamp instanceof Date ? o.timestamp.toISOString() : undefined);
+      if (cutoff > 0) {
+        if (!completedAt) continue;
+        const t = new Date(completedAt).getTime();
+        if (!Number.isFinite(t) || t < cutoff) continue;
+      }
+      trades += 1;
+      volume += o.amount;
+      earnings += o.amount * TRADER_CUT_CONFIG.best;
+    }
+    return { totalTrades: trades, totalVolume: volume, totalEarnings: earnings };
+  }, [orders, timeframe]);
+
   const maxVolume = Math.max(...weeklyData.map(d => d.volume));
-  const totalTrades = weeklyData.reduce((sum, d) => sum + d.trades, 0);
-  const totalVolume = weeklyData.reduce((sum, d) => sum + d.volume, 0);
-  const totalEarnings = weeklyData.reduce((sum, d) => sum + d.earnings, 0);
   const avgResponseTime = 45;
 
   return (
@@ -165,7 +199,11 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Stats Grid */}
+        {/* Stats Grid — counts/totals derived live from completed orders
+            within the active timeframe pill (7d / 30d / All Time). The
+            "% vs last week" trend chips were removed because they were
+            hardcoded fake numbers; they can return when a real prior-period
+            comparison is available. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -174,11 +212,10 @@ export default function AnalyticsPage() {
               </div>
               <span className="text-xs text-foreground/35">Total Trades</span>
             </div>
-            <p className="text-2xl font-bold">{totalTrades}</p>
-            <div className="flex items-center gap-1 mt-1">
-              <ArrowUpRight className="w-3 h-3 text-emerald-400" />
-              <span className="text-[10px] text-emerald-400">+12% vs last week</span>
-            </div>
+            <p className="text-2xl font-bold tabular-nums">{totalTrades}</p>
+            <p className="text-[10px] text-foreground/30 mt-1">
+              {timeframe === "all" ? "All time" : `Last ${timeframe}`}
+            </p>
           </div>
 
           <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
@@ -188,11 +225,12 @@ export default function AnalyticsPage() {
               </div>
               <span className="text-xs text-foreground/35">Volume</span>
             </div>
-            <p className="text-2xl font-bold">${Math.round(totalVolume / 1000)}k</p>
-            <div className="flex items-center gap-1 mt-1">
-              <ArrowUpRight className="w-3 h-3 text-emerald-400" />
-              <span className="text-[10px] text-emerald-400">+8% vs last week</span>
-            </div>
+            <p className="text-2xl font-bold tabular-nums">
+              {formatCrypto(totalVolume)} <span className="text-xs text-foreground/40 font-medium">USDT</span>
+            </p>
+            <p className="text-[10px] text-foreground/30 mt-1">
+              {timeframe === "all" ? "All time" : `Last ${timeframe}`}
+            </p>
           </div>
 
           <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
@@ -202,11 +240,12 @@ export default function AnalyticsPage() {
               </div>
               <span className="text-xs text-foreground/35">Earnings</span>
             </div>
-            <p className="text-2xl font-bold">${Math.round(totalEarnings)}</p>
-            <div className="flex items-center gap-1 mt-1">
-              <ArrowUpRight className="w-3 h-3 text-emerald-400" />
-              <span className="text-[10px] text-emerald-400">+15% vs last week</span>
-            </div>
+            <p className="text-2xl font-bold tabular-nums">
+              {formatCrypto(totalEarnings)} <span className="text-xs text-foreground/40 font-medium">USDT</span>
+            </p>
+            <p className="text-[10px] text-foreground/30 mt-1">
+              {timeframe === "all" ? "All time" : `Last ${timeframe}`}
+            </p>
           </div>
 
           <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
@@ -216,53 +255,55 @@ export default function AnalyticsPage() {
               </div>
               <span className="text-xs text-foreground/35">Avg Response</span>
             </div>
-            <p className="text-2xl font-bold">{avgResponseTime}s</p>
-            <div className="flex items-center gap-1 mt-1">
-              <ArrowDownRight className="w-3 h-3 text-emerald-400" />
-              <span className="text-[10px] text-emerald-400">-5s faster</span>
-            </div>
+            <p className="text-2xl font-bold tabular-nums">{avgResponseTime}s</p>
+            <p className="text-[10px] text-foreground/30 mt-1">Last {timeframe === "all" ? "all time" : timeframe}</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Volume Chart */}
-          <div className="lg:col-span-2 bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold">Weekly Volume</h3>
-              <div className="flex items-center gap-3 text-[10px] text-foreground/35">
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-[#ff6b35]" />
-                  Volume
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  Trades
+        <div className={`grid grid-cols-1 ${weeklyData.length > 0 ? "lg:grid-cols-3" : ""} gap-4`}>
+          {/* Volume Chart — only render when we have data. The page used to
+              show an empty card with just the legend, which made the
+              merchant think the chart was broken. Comment per user request:
+              if data is unavailable, hide the section entirely. */}
+          {weeklyData.length > 0 && (
+            <div className="lg:col-span-2 bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold">Weekly Volume</h3>
+                <div className="flex items-center gap-3 text-[10px] text-foreground/35">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-[#ff6b35]" />
+                    Volume
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                    Trades
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Bar Chart */}
-            <div className="h-48 flex items-end gap-2">
-              {weeklyData.map((day, i) => (
-                <div key={day.day} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full flex flex-col items-center gap-1 h-40 justify-end">
-                    {/* Volume Bar */}
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${(day.volume / maxVolume) * 100}%` }}
-                      transition={{ delay: i * 0.05, duration: 0.4 }}
-                      className="w-full bg-gradient-to-t from-[#ff6b35] to-[#ff8c50] rounded-t-md relative group"
-                    >
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#1a1a1a] px-2 py-1 rounded text-[10px] whitespace-nowrap border border-white/[0.08]">
-                        ${day.volume.toLocaleString()}
-                      </div>
-                    </motion.div>
+              {/* Bar Chart */}
+              <div className="h-48 flex items-end gap-2">
+                {weeklyData.map((day, i) => (
+                  <div key={day.day} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full flex flex-col items-center gap-1 h-40 justify-end">
+                      {/* Volume Bar */}
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: `${(day.volume / maxVolume) * 100}%` }}
+                        transition={{ delay: i * 0.05, duration: 0.4 }}
+                        className="w-full bg-gradient-to-t from-[#ff6b35] to-[#ff8c50] rounded-t-md relative group"
+                      >
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#1a1a1a] px-2 py-1 rounded text-[10px] whitespace-nowrap border border-white/[0.08]">
+                          ${day.volume.toLocaleString()}
+                        </div>
+                      </motion.div>
+                    </div>
+                    <span className="text-[10px] text-foreground/35">{day.day}</span>
                   </div>
-                  <span className="text-[10px] text-foreground/35">{day.day}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Performance Metrics */}
           <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
@@ -347,74 +388,83 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Bottom Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-          {/* Recent Trades */}
-          <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold">Recent Trades</h3>
-              <button className="text-[10px] text-[#ff6b35] hover:text-[#ff8c50] transition-colors">
-                View all
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {recentTrades.map((trade) => (
-                <div
-                  key={trade.id}
-                  className="flex items-center gap-3 p-2.5 bg-[#151515] rounded-lg border border-white/[0.04]"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <Check className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{trade.user}</p>
-                    <p className="text-[10px] text-foreground/35">${trade.amount.toLocaleString()} USDT</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold text-emerald-400">+${trade.profit}</p>
-                    <p className="text-[10px] text-gray-600">{trade.time}</p>
-                  </div>
+        {/* Recent Trades + Top Users sections — hidden when their backing
+            arrays are empty. Same rationale as the Weekly Volume chart:
+            don't render an empty card that looks broken. They'll auto
+            re-appear once the backend feeds populate the arrays. */}
+        {(recentTrades.length > 0 || topUsers.length > 0) && (
+          <div
+            className={`grid grid-cols-1 ${recentTrades.length > 0 && topUsers.length > 0 ? "lg:grid-cols-2" : ""} gap-4 mt-4`}
+          >
+            {recentTrades.length > 0 && (
+              <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold">Recent Trades</h3>
+                  <button className="text-[10px] text-[#ff6b35] hover:text-[#ff8c50] transition-colors">
+                    View all
+                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Top Users */}
-          <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold">Top Users</h3>
-              <div className="flex items-center gap-1 text-[10px] text-foreground/35">
-                <Users className="w-3 h-3" />
-                By volume
+                <div className="space-y-2">
+                  {recentTrades.map((trade) => (
+                    <div
+                      key={trade.id}
+                      className="flex items-center gap-3 p-2.5 bg-[#151515] rounded-lg border border-white/[0.04]"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                        <Check className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{trade.user}</p>
+                        <p className="text-[10px] text-foreground/35">${trade.amount.toLocaleString()} USDT</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold text-emerald-400">+${trade.profit}</p>
+                        <p className="text-[10px] text-gray-600">{trade.time}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="space-y-2">
-              {topUsers.map((user, i) => (
-                <div
-                  key={user.name}
-                  className="flex items-center gap-3 p-2.5 bg-[#151515] rounded-lg border border-white/[0.04]"
-                >
-                  <div className="w-6 h-6 rounded-full bg-[#252525] flex items-center justify-center text-[10px] font-bold">
-                    {i + 1}
-                  </div>
-                  <div className="w-8 h-8 rounded-lg bg-[#1f1f1f] flex items-center justify-center text-lg">
-                    {user.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{user.name}</p>
-                    <p className="text-[10px] text-foreground/35">{user.trades} trades</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold">${Math.round(user.volume / 1000)}k</p>
-                    <p className="text-[10px] text-gray-600">volume</p>
+            {topUsers.length > 0 && (
+              <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold">Top Users</h3>
+                  <div className="flex items-center gap-1 text-[10px] text-foreground/35">
+                    <Users className="w-3 h-3" />
+                    By volume
                   </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="space-y-2">
+                  {topUsers.map((user, i) => (
+                    <div
+                      key={user.name}
+                      className="flex items-center gap-3 p-2.5 bg-[#151515] rounded-lg border border-white/[0.04]"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-[#252525] flex items-center justify-center text-[10px] font-bold">
+                        {i + 1}
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-[#1f1f1f] flex items-center justify-center text-lg">
+                        {user.emoji}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{user.name}</p>
+                        <p className="text-[10px] text-foreground/35">{user.trades} trades</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold">${Math.round(user.volume / 1000)}k</p>
+                        <p className="text-[10px] text-gray-600">volume</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </main>
     </div>
   );

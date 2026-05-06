@@ -136,10 +136,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Ownership check — can only query your own balance
-    // Allow merchant header fallback when both user+merchant headers are present
-    const headerMerchantId = request.headers.get('x-merchant-id');
-    const isOwner = auth.actorId === userId || (type === 'merchant' && headerMerchantId === userId);
+    // Ownership check — can only query your own balance. Identity is the
+    // JWT's actorId; for merchant lookups the auth must also be a merchant
+    // token. The previous header-based fallback let any caller request any
+    // merchant's balance by setting x-merchant-id.
+    const isOwner =
+      auth.actorId === userId &&
+      (type === 'merchant' ? auth.actorType === 'merchant' : auth.actorType === 'user');
     if (!isOwner) {
       return NextResponse.json(
         { success: false, error: 'You can only view your own balance' },

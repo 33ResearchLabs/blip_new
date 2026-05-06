@@ -29,6 +29,7 @@ import {
   ParticleAdapter,
 } from '@solana/wallet-adapter-wallets';
 import { getPrimaryEndpoint, getHealthyEndpoint } from '@/lib/solana/rpc';
+import { DEVNET_WS_ENDPOINT } from '@/lib/solana/v2/config';
 import { logger } from '@/lib/logger';
 import { sendAndConfirmSafe } from '@/lib/solana/safeTransaction';
 import { PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
@@ -596,6 +597,35 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     return () => window.removeEventListener('unhandledrejection', handler);
   }, []);
 
+  // Filter web3.js's transient retry chatter from console.error.
+  // The library logs `Server responded with 429 Too Many Requests. Retrying
+  // after Xms delay...` directly via console.error during its automatic
+  // retry-with-backoff. The retries succeed silently, but every line trips
+  // Next.js's dev error overlay — drowning real errors in noise. Downgrade
+  // these to console.warn so they're still visible but don't trigger the
+  // overlay. Idempotent: bails out if already installed.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const w = window as Window & { __web3jsRetryFilterInstalled?: boolean };
+    if (w.__web3jsRetryFilterInstalled) return;
+    w.__web3jsRetryFilterInstalled = true;
+
+    const originalError = console.error;
+    const RETRY_NOISE_RE = /Server responded with \d+.*Retrying after \d+ms delay/i;
+    console.error = function patchedError(...args: unknown[]) {
+      const first = args[0];
+      if (typeof first === 'string' && RETRY_NOISE_RE.test(first)) {
+        // Demote to warn — keeps the line visible for debugging but skips
+        // the Next.js error overlay.
+        console.warn('[web3.js retry]', ...args);
+        return;
+      }
+      originalError.apply(console, args as []);
+    };
+    // No teardown — patch survives provider remounts (StrictMode, fast
+    // refresh) and the idempotency guard means double-installs are no-ops.
+  }, []);
+
   // ============ PROTOCOL INITIALIZATION ============
 
   // Helper function to ensure protocol config is initialized
@@ -1114,6 +1144,12 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
       // Safe send+confirm — fresh blockhash on sign, retries on expiry,
       // reconciles via getTransaction if confirmation times out.
+      // priority='medium': lock-escrow is the user's first-impression on-chain
+      // operation. With priority='none', a congested cluster routinely lets
+      // the tx expire (block height exceeded) before it lands, surfacing the
+      // "Transaction is taking longer than expected" warning. A medium
+      // priority fee (~0.0001 SOL/CU) keeps the tx in the leader's queue
+      // through normal load while still being a fraction of a cent in cost.
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
@@ -1121,6 +1157,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         instructions,
         name: 'fundEscrow',
         maxRetries: 2,
+        priority: 'medium',
       });
       const txHash = safeResult.signature;
       console.log('[fundEscrowOnly] Success! Trade funded, waiting for counterparty to accept', {
@@ -1893,8 +1930,16 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
     return <>{children}</>;
   }
 
+  // Explicit wsEndpoint stops web3.js from auto-deriving a bogus
+  // ws://<origin>/api/rpc URL (which is not a websocket server) and emitting
+  // "ws error: undefined" on every confirmTransaction subscription.
+  const connectionConfig = useMemo(
+    () => ({ commitment: 'confirmed' as const, wsEndpoint: DEVNET_WS_ENDPOINT }),
+    [],
+  );
+
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider endpoint={endpoint} config={connectionConfig}>
       <WalletProvider wallets={wallets} autoConnect={false} onError={onError}>
         <WalletModalProvider>
           <SolanaWalletContextProvider>

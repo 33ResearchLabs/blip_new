@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 
 interface UseTradeCreationParams {
   solanaWallet: any;
@@ -103,7 +103,12 @@ export function useTradeCreation({
         const escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string } = await solanaWallet.depositToEscrowOpen({ amount: parseFloat(openTradeForm.cryptoAmount), side: 'sell' });
         if (!escrowResult.success || !escrowResult.txHash) throw new Error(escrowResult.error || 'Escrow transaction failed');
         const res = await fetchWithAuth("/api/merchant/orders", {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            // Required by core-api /v1/merchant/orders.
+            "Idempotency-Key": generateIdempotencyKey(),
+          },
           body: JSON.stringify({
             merchant_id: merchantId, type: openTradeForm.tradeType,
             crypto_amount: parseFloat(openTradeForm.cryptoAmount),
@@ -167,7 +172,12 @@ export function useTradeCreation({
     setCreateTradeError(null);
     try {
       const res = await fetchWithAuth("/api/merchant/orders", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Required by core-api /v1/merchant/orders.
+          "Idempotency-Key": generateIdempotencyKey(),
+        },
         body: JSON.stringify({
           merchant_id: merchantId, type: openTradeForm.tradeType,
           crypto_amount: parseFloat(openTradeForm.cryptoAmount),

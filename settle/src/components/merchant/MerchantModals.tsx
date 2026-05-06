@@ -175,6 +175,10 @@ export interface MerchantModalsProps {
   createTradeError: string | null;
   setCreateTradeError: (v: string | null) => void;
   handleCreateTrade: () => void;
+  // Active corridor + setter — surfaces the trading-pair picker inside
+  // the trade-creation modal so the user can switch corridor right there.
+  activeCorridor?: string;
+  onCorridorChange?: (corridorId: string) => void;
 
   // Order quick view
   selectedOrderPopup: Order | null;
@@ -242,6 +246,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
     solanaWalletAddressForCorridor, refreshBalance, fetchActiveOffers,
     showOpenTradeModal, setShowOpenTradeModal, openTradeForm, setOpenTradeForm,
     isCreatingTrade, createTradeError, setCreateTradeError, handleCreateTrade,
+    activeCorridor, onCorridorChange,
     selectedOrderPopup, setSelectedOrderPopup, markingDone, acceptingOrderId,
     confirmingOrderId, cancellingOrderId, isRequestingCancel,
     acceptOrder, openEscrowModal, markFiatPaymentSent, confirmPayment,
@@ -397,6 +402,9 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
         setCreateTradeError={setCreateTradeError}
         onClose={() => setShowOpenTradeModal(false)}
         onSubmit={handleCreateTrade}
+        activeCorridor={activeCorridor}
+        onCorridorChange={onCorridorChange}
+        onAddPaymentMethod={() => setShowPaymentMethods(true)}
       />
 
       <OrderQuickView
@@ -424,6 +432,20 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
         <OrderDetailsPanel
           orderId={selectedOrderId}
           merchantId={merchantId}
+          // Derive the in-flight handler name from the parent's existing
+          // loading flags so the panel can show a spinner on the right
+          // primary button. Strings here MUST match the handler names
+          // emitted by deriveOrderUI in statusResolver — see the switch
+          // in OrderDetailsPanel handleAction (markFiatPaymentSent,
+          // signAndProceed, signToClaimOrder, lockEscrow, confirmPayment,
+          // openReleaseModal, cancelOrderWithoutEscrow, openCancelModal).
+          pendingAction={
+            markingDone ? 'markFiatPaymentSent'
+            : confirmingOrderId === selectedOrderId ? 'confirmPayment'
+            : acceptingOrderId === selectedOrderId ? 'signAndProceed'
+            : cancellingOrderId === selectedOrderId ? 'cancelOrderWithoutEscrow'
+            : null
+          }
           onClose={() => setSelectedOrderId(null)}
           onOpenChat={(orderId, _targetId, _targetType, targetName) => {
             const order = orders.find((o) => o.id === orderId);

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
 
 // ============================================
 // TYPES
@@ -190,23 +191,17 @@ export default function MonitorPage() {
   useEffect(() => {
     const check = async () => {
       try {
-        const saved = localStorage.getItem("blip_admin_token");
-        if (saved) {
-          const res = await fetchWithAuth("/api/auth/admin", {
-            headers: { Authorization: `Bearer ${saved}` },
-          });
-          const data = await res.json();
-          if (data.success && data.data?.valid) {
-            setAdminToken(saved);
-            setIsAuthenticated(true);
-          } else {
-            localStorage.removeItem("blip_admin");
-            localStorage.removeItem("blip_admin_token");
-          }
+        // Cookie auth — `blip_admin_session` flows automatically.
+        const res = await fetchWithAuth("/api/auth/admin");
+        const data = await res.json();
+        if (data.success && data.data?.valid) {
+          setAdminToken(ADMIN_COOKIE_SENTINEL);
+          setIsAuthenticated(true);
+        } else {
+          localStorage.removeItem("blip_admin");
         }
       } catch {
         localStorage.removeItem("blip_admin");
-        localStorage.removeItem("blip_admin_token");
       } finally {
         setIsCheckingSession(false);
       }
@@ -224,10 +219,9 @@ export default function MonitorPage() {
         body: JSON.stringify(loginForm),
       });
       const data = await res.json();
-      if (data.success && data.data?.token) {
+      if (data.success && data.data?.admin) {
         localStorage.setItem("blip_admin", JSON.stringify(data.data.admin));
-        localStorage.setItem("blip_admin_token", data.data.token);
-        setAdminToken(data.data.token);
+        setAdminToken(ADMIN_COOKIE_SENTINEL);
         setIsAuthenticated(true);
       } else {
         setLoginError(data.error || "Login failed");
@@ -239,9 +233,9 @@ export default function MonitorPage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await fetchWithAuth("/api/auth/admin/logout", { method: "POST" }); } catch { /* ignore */ }
     localStorage.removeItem("blip_admin");
-    localStorage.removeItem("blip_admin_token");
     setAdminToken(null);
     setIsAuthenticated(false);
   };
@@ -251,13 +245,13 @@ export default function MonitorPage() {
   const fetchData = useCallback(async () => {
     const token = tokenRef.current;
     if (!token) return;
-    const headers = { Authorization: `Bearer ${token}` };
+    // Auth cookie auto-attached on same-origin requests.
     setIsRefreshing(true);
     try {
       const [statsRes, ordersRes, alertsRes] = await Promise.all([
-        fetchWithAuth("/api/admin/stats", { headers }),
-        fetchWithAuth("/api/admin/orders?limit=200", { headers }),
-        fetchWithAuth("/api/admin/alerts?limit=100", { headers }),
+        fetchWithAuth("/api/admin/stats"),
+        fetchWithAuth("/api/admin/orders?limit=200"),
+        fetchWithAuth("/api/admin/alerts?limit=100"),
       ]);
       const [statsData, ordersData, alertsData] = await Promise.all([
         statsRes.json(), ordersRes.json(), alertsRes.json(),

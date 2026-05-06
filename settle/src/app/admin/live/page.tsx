@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePusher } from "@/context/PusherContext";
+import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
 import {
   formatCount,
   formatCrypto,
@@ -139,12 +140,24 @@ export default function LiveDashboardPage() {
 
   useEffect(() => {
     setMounted(true);
-    const token = localStorage.getItem("blip_admin_token");
-    if (!token) {
-      setNoAuth(true);
-    } else {
-      tokenRef.current = token;
-    }
+    // Cookie-based session: probe /api/auth/admin. The httpOnly cookie
+    // `blip_admin_session` flows automatically on same-origin requests.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/admin", { credentials: "include" });
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.success && data?.data?.valid) {
+          tokenRef.current = ADMIN_COOKIE_SENTINEL;
+        } else {
+          setNoAuth(true);
+        }
+      } catch {
+        if (!cancelled) setNoAuth(true);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Tick every second for timer updates
@@ -162,10 +175,10 @@ export default function LiveDashboardPage() {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const headers = { Authorization: `Bearer ${token}` };
+      // Cookie auto-sent on same-origin fetch — no Bearer header needed.
       const [ordersRes, statsRes] = await Promise.all([
-        fetch("/api/admin/orders?limit=200", { headers, signal: controller.signal }),
-        fetch("/api/admin/stats", { headers, signal: controller.signal }),
+        fetch("/api/admin/orders?limit=200", { signal: controller.signal }),
+        fetch("/api/admin/stats", { signal: controller.signal }),
       ]);
       const [ordersData, statsData] = await Promise.all([
         ordersRes.json(),

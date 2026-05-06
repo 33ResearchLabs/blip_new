@@ -265,16 +265,21 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
     [userId]
   );
 
-  // Get dispute stats
+  // Get dispute stats. `active_disputes` covers open + investigating rows
+  // (i.e. anything not yet resolved against either side). Awarding the
+  // "dispute free" badge while a dispute is still in flight is a bug — the
+  // calculator now gates on this count too. See calculator.ts (badge logic).
   const disputeStats = await queryOne<{
     disputes_raised: number;
     disputes_won: number;
     disputes_lost: number;
+    active_disputes: number;
   }>(
     `SELECT
       COUNT(*)::int as disputes_raised,
       COUNT(*) FILTER (WHERE resolved_in_favor_of = 'user')::int as disputes_won,
-      COUNT(*) FILTER (WHERE resolved_in_favor_of = 'merchant')::int as disputes_lost
+      COUNT(*) FILTER (WHERE resolved_in_favor_of = 'merchant')::int as disputes_lost,
+      COUNT(*) FILTER (WHERE d.status IN ('open', 'investigating'))::int as active_disputes
     FROM disputes d
     JOIN orders o ON d.order_id = o.id
     WHERE o.user_id = $1 AND d.raiser_id = $1`,
@@ -342,6 +347,7 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
     disputes_raised: disputeStats?.disputes_raised || 0,
     disputes_won: disputeStats?.disputes_won || 0,
     disputes_lost: disputeStats?.disputes_lost || 0,
+    active_disputes: disputeStats?.active_disputes || 0,
     active_days_last_30: activityStats?.active_days || 0,
     orders_last_30_days: orderStats?.orders_last_30_days || 0,
     longest_inactive_streak: activityStats?.longest_inactive || 0,
@@ -417,16 +423,21 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
     [merchantId]
   );
 
-  // Get dispute stats
+  // Get dispute stats. `active_disputes` covers open + investigating rows
+  // (i.e. anything not yet resolved). Without this, a merchant with several
+  // unresolved disputes still counts `disputes_lost = 0` and the "dispute
+  // free" badge is wrongly awarded. See calculator.ts (badge logic).
   const disputeStats = await queryOne<{
     disputes_raised: number;
     disputes_won: number;
     disputes_lost: number;
+    active_disputes: number;
   }>(
     `SELECT
       COUNT(*)::int as disputes_raised,
       COUNT(*) FILTER (WHERE resolved_in_favor_of = 'merchant')::int as disputes_won,
-      COUNT(*) FILTER (WHERE resolved_in_favor_of = 'user')::int as disputes_lost
+      COUNT(*) FILTER (WHERE resolved_in_favor_of = 'user')::int as disputes_lost,
+      COUNT(*) FILTER (WHERE d.status IN ('open', 'investigating'))::int as active_disputes
     FROM disputes d
     JOIN orders o ON d.order_id = o.id
     WHERE o.merchant_id = $1`,
@@ -484,6 +495,7 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
     disputes_raised: disputeStats?.disputes_raised || 0,
     disputes_won: disputeStats?.disputes_won || 0,
     disputes_lost: disputeStats?.disputes_lost || 0,
+    active_disputes: disputeStats?.active_disputes || 0,
     active_days_last_30: activityStats?.active_days || 0,
     orders_last_30_days: orderStats?.orders_last_30_days || 0,
     longest_inactive_streak: activityStats?.longest_inactive || 0,

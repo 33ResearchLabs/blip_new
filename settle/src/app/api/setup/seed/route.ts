@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   // Require admin auth even in dev (unless ADMIN_SECRET not set)
   if (process.env.ADMIN_SECRET) {
-    const authError = requireAdminAuth(request);
+    const authError = await requireAdminAuth(request);
     if (authError) return authError;
   }
 

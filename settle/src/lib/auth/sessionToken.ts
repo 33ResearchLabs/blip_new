@@ -205,10 +205,17 @@ function verifyTokenInternal(
 
 // ── Cookie helpers ───────────────────────────────────────────────────
 
-/** Cookie name for refresh token */
+/** Cookie name for refresh token (httpOnly, narrow path). */
 export const REFRESH_TOKEN_COOKIE = 'blip_refresh_token';
 
-/** Cookie options for refresh token */
+/**
+ * Cookie name for the short-lived access token. httpOnly so JS in the
+ * browser cannot read it — defeats XSS-based session theft. Wide path so
+ * `fetch()` to any /api route automatically includes it.
+ */
+export const ACCESS_TOKEN_COOKIE = 'blip_access_token';
+
+/** Cookie options for refresh token (path-narrow, long-lived). */
 export const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
@@ -218,20 +225,52 @@ export const REFRESH_COOKIE_OPTIONS = {
 };
 
 /**
+ * Cookie options for access token (path-wide, short-lived).
+ *
+ * httpOnly:        true   — JS cannot read it (no XSS exfiltration)
+ * secure:          prod   — TLS only in production
+ * sameSite:strict        — no third-party CSRF; explicit user-initiated
+ *                          navigations still carry the cookie via referer
+ * path:'/'               — sent to every API route (replaces Bearer header)
+ * maxAge:15m             — matches token lifetime
+ *
+ * Frontend continues to receive the access token in the JSON response
+ * body for backward compatibility during migration; new code should rely
+ * on the cookie and stop persisting the token to localStorage.
+ */
+export const ACCESS_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  path: '/',
+  maxAge: ACCESS_TOKEN_MAX_AGE,
+};
+
+/**
  * Helper for login endpoints: create DB session + set cookie on response.
  * Returns the sessionId so callers can embed it in access tokens.
  * Falls back to stateless cookie if DB session creation fails (zero regression).
+ *
+ * If `accessToken` is supplied, ALSO sets the access-token cookie so the
+ * client's subsequent fetches authenticate via cookie instead of needing
+ * to read the token from localStorage. Callers that don't pass this still
+ * work — they are just leaving the access token for the JSON response only,
+ * which keeps the legacy localStorage flow alive during migration.
  */
 export async function setSessionOnResponse(
   response: import('next/server').NextResponse,
   payload: TokenPayload,
-  request?: any
+  request?: any,
+  accessToken?: string,
 ): Promise<string | null> {
   try {
     const { createSession } = await import('./sessions');
     const session = await createSession(payload, request);
     if (session) {
       response.cookies.set(REFRESH_TOKEN_COOKIE, session.refreshToken, REFRESH_COOKIE_OPTIONS);
+      if (accessToken) {
+        response.cookies.set(ACCESS_TOKEN_COOKIE, accessToken, ACCESS_COOKIE_OPTIONS);
+      }
       return session.sessionId;
     }
   } catch {
@@ -242,5 +281,17 @@ export async function setSessionOnResponse(
   if (refreshToken) {
     response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
   }
+  if (accessToken) {
+    response.cookies.set(ACCESS_TOKEN_COOKIE, accessToken, ACCESS_COOKIE_OPTIONS);
+  }
   return null;
+}
+
+/**
+ * Clear both auth cookies on logout / session revocation. Use from
+ * /api/auth/logout and any path that explicitly tears down the session.
+ */
+export function clearAuthCookies(response: import('next/server').NextResponse): void {
+  response.cookies.set(ACCESS_TOKEN_COOKIE, '', { ...ACCESS_COOKIE_OPTIONS, maxAge: 0 });
+  response.cookies.set(REFRESH_TOKEN_COOKIE, '', { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 });
 }

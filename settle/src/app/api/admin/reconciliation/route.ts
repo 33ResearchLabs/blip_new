@@ -17,7 +17,7 @@ import { query } from '@/lib/db';
 import { requireAdminAuth } from '@/lib/middleware/auth';
 
 export async function GET(request: NextRequest) {
-  const authErr = requireAdminAuth(request);
+  const authErr = await requireAdminAuth(request);
   if (authErr) return authErr;
 
   try {

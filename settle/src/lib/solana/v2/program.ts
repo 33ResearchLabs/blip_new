@@ -473,6 +473,7 @@ export async function buildFundEscrowTx(
 ): Promise<Transaction> {
   const [escrowPda] = findEscrowPda(tradePda);
   const [vaultAuthority] = findVaultAuthorityPda(escrowPda);
+  const [protocolConfigPda] = findProtocolConfigPda();
   const vaultAta = await getAssociatedTokenAddress(mint, vaultAuthority, true);
   const depositorAta = await getAssociatedTokenAddress(mint, depositor);
 
@@ -481,6 +482,7 @@ export async function buildFundEscrowTx(
     .fundEscrow()
     .accounts({
       depositor,
+      protocolConfig: protocolConfigPda,
       trade: tradePda,
       escrow: escrowPda,
       vaultAuthority,
@@ -509,12 +511,14 @@ export async function buildAcceptTradeTx(
   tradePda: PublicKey
 ): Promise<Transaction> {
   const [escrowPda] = findEscrowPda(tradePda);
+  const [protocolConfigPda] = findProtocolConfigPda();
 
   // acceptTrade takes no args - the signer becomes the counterparty
   const instruction = await (program.methods as any)
     .acceptTrade()
     .accounts({
       acceptor,
+      protocolConfig: protocolConfigPda,
       trade: tradePda,
       escrow: escrowPda,
       systemProgram: SystemProgram.programId,
@@ -537,6 +541,7 @@ export async function buildLockEscrowTx(
 ): Promise<Transaction> {
   const [escrowPda] = findEscrowPda(tradePda);
   const [vaultAuthority] = findVaultAuthorityPda(escrowPda);
+  const [protocolConfigPda] = findProtocolConfigPda();
   const vaultAta = await getAssociatedTokenAddress(mint, vaultAuthority, true);
   const depositorAta = await getAssociatedTokenAddress(mint, depositor);
 
@@ -545,6 +550,7 @@ export async function buildLockEscrowTx(
     .lockEscrow({ counterparty })
     .accounts({
       depositor,
+      protocolConfig: protocolConfigPda,
       trade: tradePda,
       escrow: escrowPda,
       vaultAuthority,
@@ -580,17 +586,15 @@ export async function buildReleaseEscrowTx(
   const treasury = getFeeTreasury();
   const treasuryAta = await getAssociatedTokenAddress(mint, treasury);
 
-  // Fetch trade to get creator. Use a raw getAccountInfo — the Anchor
-  // `.fetch()` path is broken under our converted IDL (accounts: []).
-  let creator = releaser;
-  try {
-    const info = await connection.getAccountInfo(tradePda, 'confirmed');
-    if (info && info.data.length >= 40) {
-      creator = new PublicKey(info.data.subarray(8, 40));
-    }
-  } catch (e) {
-    console.error('Failed to fetch trade account:', e);
+  // The on-chain program needs the escrow's depositor (whoever funded it).
+  // Escrow.depositor sits at offset 8(disc) + 32(trade) + 32(vault_auth) + 32(vault_ata) = 104.
+  const escrowInfo = await connection.getAccountInfo(escrowPda, 'confirmed');
+  if (!escrowInfo || escrowInfo.data.length < 136) {
+    throw new Error(
+      `Escrow account does not exist or has no data (${escrowPda.toString()}).`,
+    );
   }
+  const depositor = new PublicKey(escrowInfo.data.subarray(104, 136));
 
   const transaction = new Transaction();
 
@@ -625,14 +629,14 @@ export async function buildReleaseEscrowTx(
     .releaseEscrow()
     .accounts({
       signer: releaser,
+      protocolConfig: protocolConfigPda,
       trade: tradePda,
       escrow: escrowPda,
-      protocolConfig: protocolConfigPda,
       vaultAuthority,
       vaultAta,
       counterpartyAta,
       treasuryAta,
-      creator,
+      depositor,
       mint,
       tokenProgram: TOKEN_PROGRAM_ID,
     })
@@ -680,7 +684,14 @@ export async function buildRefundEscrowTx(
     console.error('Failed to fetch trade account:', e);
   }
 
-  // refundEscrow takes no args per IDL
+  // refundEscrow takes no args per IDL — but the IDL DOES require a
+  // `depositor` account (the wallet that originally funded the escrow).
+  // Without it Anchor's instruction builder throws "Invalid arguments:
+  // depositor not provided." The depositor is read from on-chain escrow
+  // state above (offset 104..136). `creator` is unused by the on-chain
+  // program for refund and is silently dropped by Anchor; we leave it
+  // here for code-locality with the other instruction builders.
+  void creator;
   const accounts: Record<string, any> = {
     signer: refunder,
     trade: tradePda,
@@ -688,10 +699,9 @@ export async function buildRefundEscrowTx(
     vaultAuthority,
     vaultAta,
     depositorAta,
-    creator,
+    depositor: escrowDepositor,
     mint,
     tokenProgram: TOKEN_PROGRAM_ID,
-    protocolConfig: params.protocolConfigPda ?? null,
   };
 
   const refundIx = await (program.methods as any)

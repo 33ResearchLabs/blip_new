@@ -12,6 +12,8 @@ import {
   Loader2,
   ChevronDown,
   X,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { colors } from "@/lib/design/theme";
@@ -51,12 +53,20 @@ export const PaymentMethodSelector = ({
   const [expanded, setExpanded] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Two-tap delete: first tap arms `confirmDeleteId`, second tap within
+  // 4s actually deletes. Avoids the jarring `window.confirm()` modal.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Add form state
+  // Add / edit form state. When `editingId` is set, the form acts as
+  // an editor for that method (PUT) instead of a creator (POST). The type
+  // is locked while editing because the server's update schema does not
+  // accept `type` — switching type requires delete + re-add.
   const [addType, setAddType] = useState<MethodType>("bank");
   const [addLabel, setAddLabel] = useState("");
   const [addDetails, setAddDetails] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const selected = methods.find((m) => m.id === selectedId) || null;
 
@@ -84,6 +94,48 @@ export const PaymentMethodSelector = ({
     setAddLabel("");
     setAddDetails({});
     setFormError("");
+    setEditingId(null);
+  };
+
+  const startEdit = (m: PaymentMethodItem) => {
+    setEditingId(m.id);
+    setAddType(m.type);
+    setAddLabel(m.label);
+    // Clone so user edits don't mutate the list row prior to save.
+    setAddDetails({ ...m.details });
+    setFormError("");
+    setShowAddForm(true);
+    setExpanded(false);
+  };
+
+  // Auto-clear the "tap again to confirm" arming after a few seconds so a
+  // forgotten arm doesn't fire a delete on a stray tap minutes later.
+  useEffect(() => {
+    if (!confirmDeleteId) return;
+    const id = setTimeout(() => setConfirmDeleteId(null), 4000);
+    return () => clearTimeout(id);
+  }, [confirmDeleteId]);
+
+  const handleDelete = async (methodId: string) => {
+    if (!userId) return;
+    setDeletingId(methodId);
+    try {
+      const res = await fetchWithAuth(
+        `/api/users/${userId}/payment-methods/${methodId}`,
+        { method: "DELETE" },
+      );
+      if (res.ok) {
+        setMethods((prev) => prev.filter((m) => m.id !== methodId));
+        // If the deleted one was selected, clear the selection so callers
+        // don't render a stale chip.
+        if (selectedId === methodId) onSelect(null);
+      }
+    } catch {
+      // Best-effort — leave the row in place if the API call failed.
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
   };
 
   const handleAdd = async () => {
@@ -115,19 +167,31 @@ export const PaymentMethodSelector = ({
 
     setSaving(true);
     try {
-      const res = await fetchWithAuth(`/api/users/${userId}/payment-methods`, {
-        method: "POST",
+      // Editing an existing method → PUT (label + details only). Creating a
+      // new one → POST (with type). The server rejects `type` on PUT so we
+      // omit it deliberately even though `addType` is still in state.
+      const isEdit = editingId !== null;
+      const url = isEdit
+        ? `/api/users/${userId}/payment-methods/${editingId}`
+        : `/api/users/${userId}/payment-methods`;
+      const body = isEdit
+        ? { label: addLabel.trim(), details: addDetails }
+        : { type: addType, label: addLabel.trim(), details: addDetails };
+      const res = await fetchWithAuth(url, {
+        method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: addType,
-          label: addLabel.trim(),
-          details: addDetails,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success && data.data) {
-        setMethods((prev) => [data.data, ...prev]);
-        onSelect(data.data);
+        if (isEdit) {
+          setMethods((prev) => prev.map((m) => (m.id === data.data.id ? data.data : m)));
+          // Keep the edited row selected if it already was.
+          if (selectedId === data.data.id) onSelect(data.data);
+        } else {
+          setMethods((prev) => [data.data, ...prev]);
+          onSelect(data.data);
+        }
         resetForm();
         setShowAddForm(false);
         setExpanded(false);
@@ -230,37 +294,80 @@ export const PaymentMethodSelector = ({
             className="overflow-hidden"
           >
             <div className="mt-1 space-y-1 max-h-[240px] overflow-y-auto">
-              {/* Show only methods OTHER than the currently selected one —
-                  the selected one is already rendered as the trigger card above. */}
-              {methods.filter((m) => m.id !== selectedId).map((m) => {
+              {/* All methods listed (including the selected one) so the user
+                  can delete any of them. The currently selected method gets a
+                  check mark so its identity stays clear. */}
+              {methods.map((m) => {
                 const cfg = TYPE_CONFIG[m.type];
                 const Ic = cfg.Icon;
+                const armed = confirmDeleteId === m.id;
+                const deleting = deletingId === m.id;
+                const isSelected = m.id === selectedId;
                 return (
-                  <button
+                  <div
                     key={m.id}
-                    onClick={() => {
-                      onSelect(m);
-                      setExpanded(false);
-                    }}
-                    className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors"
+                    className="w-full flex items-center gap-2 rounded-xl p-3 text-left transition-colors"
                     style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
                   >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ background: `${cfg.color}30` }}
+                    <button
+                      onClick={() => {
+                        onSelect(m);
+                        setExpanded(false);
+                      }}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
                     >
-                      <Ic className="w-3.5 h-3.5" style={{ color: cfg.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-text-primary truncate">
-                        {m.label}
-                        <span className="ml-1.5 text-[10px] text-text-secondary font-normal">
-                          {cfg.label}
-                        </span>
-                      </p>
-                      <p className="text-[11px] text-text-secondary truncate">{getSubtext(m)}</p>
-                    </div>
-                  </button>
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: `${cfg.color}30` }}
+                      >
+                        <Ic className="w-3.5 h-3.5" style={{ color: cfg.color }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-medium text-text-primary truncate flex items-center gap-1.5">
+                          <span className="truncate">{m.label}</span>
+                          {isSelected && <Check className="w-3 h-3 text-success shrink-0" />}
+                          <span className="ml-1.5 text-[10px] text-text-secondary font-normal">
+                            {cfg.label}
+                          </span>
+                        </p>
+                        <p className="text-[11px] text-text-secondary truncate">{getSubtext(m)}</p>
+                      </div>
+                    </button>
+                    {/* Edit — opens the form pre-filled with this method */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEdit(m);
+                      }}
+                      aria-label="Edit payment method"
+                      className="shrink-0 h-8 px-2 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    {/* Two-tap delete — first tap arms, second confirms */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (armed) handleDelete(m.id);
+                        else setConfirmDeleteId(m.id);
+                      }}
+                      disabled={deleting}
+                      aria-label={armed ? "Confirm delete" : "Delete payment method"}
+                      className={`shrink-0 h-8 px-2 rounded-lg flex items-center justify-center gap-1 transition-colors text-[11px] font-semibold ${
+                        armed
+                          ? "bg-error-dim text-error border border-error-border"
+                          : "text-text-tertiary hover:text-error hover:bg-error-dim"
+                      }`}
+                    >
+                      {deleting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : armed ? (
+                        <>Confirm</>
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                 );
               })}
 
@@ -312,26 +419,36 @@ export const PaymentMethodSelector = ({
             style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[13px] font-semibold text-text-primary">Add Payment Method</span>
+              <span className="text-[13px] font-semibold text-text-primary">
+                {editingId ? "Edit Payment Method" : "Add Payment Method"}
+              </span>
               <button
-                onClick={() => { setShowAddForm(false); setFormError(""); }}
+                onClick={() => { resetForm(); setShowAddForm(false); }}
                 className="p-1 rounded-lg hover:bg-surface-hover"
               >
                 <X className="w-4 h-4 text-text-tertiary" />
               </button>
             </div>
 
-            {/* Type selector */}
+            {/* Type selector — locked while editing because the server's PUT
+                schema does not accept `type`. Users who need a different type
+                should delete and re-add. */}
             <div className="flex gap-1.5 mb-3">
               {(Object.keys(TYPE_CONFIG) as MethodType[]).map((t) => {
                 const cfg = TYPE_CONFIG[t];
                 const Ic = cfg.Icon;
                 const active = addType === t;
+                const disabled = editingId !== null && !active;
                 return (
                   <button
                     key={t}
-                    onClick={() => { setAddType(t); setAddDetails({}); setFormError(""); }}
-                    className="flex-1 flex flex-col items-center gap-1 rounded-lg py-2 transition-colors"
+                    disabled={disabled}
+                    title={disabled ? "Type can't be changed — delete and re-add to switch type" : undefined}
+                    onClick={() => {
+                      if (editingId) return;
+                      setAddType(t); setAddDetails({}); setFormError("");
+                    }}
+                    className={`flex-1 flex flex-col items-center gap-1 rounded-lg py-2 transition-colors ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
                     style={active
                       ? { background: colors.surface.active, border: `1px solid ${colors.border.medium}` }
                       : { background: colors.surface.glass }
@@ -498,6 +615,11 @@ export const PaymentMethodSelector = ({
               >
                 {saving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
+                ) : editingId ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Save Changes
+                  </>
                 ) : (
                   <>
                     <Plus className="w-4 h-4" />

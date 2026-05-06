@@ -234,6 +234,31 @@ function buildOrderInsertParams(data: CreateOrderPayload & { corridor_id?: strin
 }
 
 /**
+ * Atomically deduct offer liquidity inside an open transaction.
+ * Returns the remaining `available_amount` on success.
+ * Throws { statusCode: 409 } 'Insufficient offer liquidity' if the row no
+ * longer has enough. The DB-level CHECK (available_amount >= 0) is the
+ * ultimate guard; the WHERE clause makes the deduction atomic.
+ */
+async function deductOfferLiquidity(
+  client: { query: (text: string, params?: unknown[]) => Promise<any> },
+  offerId: string,
+  cryptoAmount: number,
+): Promise<number> {
+  const { rows: deducted } = await client.query(
+    `UPDATE merchant_offers
+     SET available_amount = available_amount - $1, updated_at = NOW()
+     WHERE id = $2 AND available_amount >= $1
+     RETURNING id, available_amount`,
+    [cryptoAmount, offerId]
+  );
+  if (deducted.length === 0) {
+    throw Object.assign(new Error('Insufficient offer liquidity'), { statusCode: 409 });
+  }
+  return deducted[0].available_amount as number;
+}
+
+/**
  * Resolve idempotency key + actor from request + payload.
  */
 function resolveIdempotency(request: { headers: Record<string, unknown> }, actorId: string, action: string) {
@@ -259,14 +284,22 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
     // Manual claim model: merchant_id and offer_id can be null (broadcast orders)
     const isManualClaimOrder = !data.merchant_id || !data.offer_id;
 
-    // Idempotency check: prevent duplicate order creation from retries
+    // Idempotency-Key is REQUIRED for order creation. A missing header is
+    // a client-side bug (the settle proxy is responsible for forwarding the
+    // key) and we refuse to mint money rails without it. 400 — fail closed.
     const idem = resolveIdempotency(request, actorId, 'create_order');
-    if (idem) {
-      const cached = await checkIdempotencyLog(idem.scopedKey);
-      if (cached) {
-        logger.info('[order-create] Idempotent replay', { actorId, offerId: data.offer_id });
-        return reply.status(cached.status_code).send(cached.response);
-      }
+    if (!idem) {
+      return reply.status(400).send({
+        success: false,
+        error:
+          'Idempotency-Key header is required for order creation. ' +
+          'Send a unique value (UUIDv4 recommended) per logical request.',
+      });
+    }
+    const cached = await checkIdempotencyLog(idem.scopedKey);
+    if (cached) {
+      logger.info('[order-create] Idempotent replay', { actorId, offerId: data.offer_id });
+      return reply.status(cached.status_code).send(cached.response);
     }
 
     // Build INSERT params outside the transaction to minimize lock duration
@@ -286,17 +319,7 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         // Deduct liquidity — skip for manual claim orders (no offer to deduct from)
         let remainingLiquidityValue: number | null = null;
         if (!isManualClaimOrder) {
-          const { rows: deducted } = await client.query(
-            `UPDATE merchant_offers
-             SET available_amount = available_amount - $1, updated_at = NOW()
-             WHERE id = $2 AND available_amount >= $1
-             RETURNING id, available_amount`,
-            [data.crypto_amount, data.offer_id]
-          );
-          if (deducted.length === 0) {
-            throw Object.assign(new Error('Insufficient offer liquidity'), { statusCode: 409 });
-          }
-          remainingLiquidityValue = deducted[0].available_amount;
+          remainingLiquidityValue = await deductOfferLiquidity(client, data.offer_id, data.crypto_amount);
         }
 
         const { rows } = await client.query(
@@ -390,14 +413,21 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Idempotency check (was missing on merchant route)
+      // Idempotency-Key is REQUIRED for merchant order creation — same
+      // contract as the user-facing /v1/orders route.
       const idem = resolveIdempotency(request, actorId, 'create_merchant_order');
-      if (idem) {
-        const cached = await checkIdempotencyLog(idem.scopedKey);
-        if (cached) {
-          logger.info('[merchant-order-create] Idempotent replay', { actorId, offerId: data.offer_id });
-          return reply.status(cached.status_code).send(cached.response);
-        }
+      if (!idem) {
+        return reply.status(400).send({
+          success: false,
+          error:
+            'Idempotency-Key header is required for merchant order creation. ' +
+            'Send a unique value (UUIDv4 recommended) per logical request.',
+        });
+      }
+      const cached = await checkIdempotencyLog(idem.scopedKey);
+      if (cached) {
+        logger.info('[merchant-order-create] Idempotent replay', { actorId, offerId: data.offer_id });
+        return reply.status(cached.status_code).send(cached.response);
       }
 
       const { allFields, allPlaceholders, values } = buildOrderInsertParams(data);
@@ -414,17 +444,7 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           // price engine and escrow is locked on-chain — no pool to deduct from.
           let deductedAmount: number | null = null;
           if (data.offer_id) {
-            const { rows: deducted } = await client.query(
-              `UPDATE merchant_offers
-               SET available_amount = available_amount - $1, updated_at = NOW()
-               WHERE id = $2 AND available_amount >= $1
-               RETURNING id, available_amount`,
-              [data.crypto_amount, data.offer_id]
-            );
-            if (deducted.length === 0) {
-              throw Object.assign(new Error('Insufficient offer liquidity'), { statusCode: 409 });
-            }
-            deductedAmount = deducted[0].available_amount;
+            deductedAmount = await deductOfferLiquidity(client, data.offer_id, data.crypto_amount);
           }
 
           const { rows } = await client.query(

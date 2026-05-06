@@ -64,6 +64,7 @@
     "settlement-core": "workspace:*",
     "tweetnacl": "^1.0.3",
     "ws": "^8.18.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8",
     "zustand": "^5.0.11"
   },

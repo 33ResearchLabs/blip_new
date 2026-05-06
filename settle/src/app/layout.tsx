@@ -1,6 +1,18 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
+// Wallet-adapter UI styles — imported EAGERLY at the root layout so they
+// bundle into the main page CSS instead of being split into a runtime
+// chunk that Turbopack's dynamic-import async-loader has to fetch on
+// demand. The async-loader path was failing under Turbopack with
+// `ChunkLoadError: Failed to load chunk solana_wallet-adapter-react-ui_*.css`
+// because the CSS contains an `@import "https://fonts.googleapis.com/..."`
+// that the runtime loader couldn't resolve through our CSP. Importing
+// here makes it part of the initial CSS bundle and bypasses the loader
+// entirely. (The duplicate import inside SolanaWalletContext is left in
+// place for forward-compat; the build deduplicates the module.)
+import "@solana/wallet-adapter-react-ui/styles.css";
 import { AppProvider } from "@/context/AppContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { PusherProvider } from "@/context/PusherContext";
@@ -77,16 +89,36 @@ const swScript = `
   })();
 `;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Per-request CSP nonce, set by middleware in `x-nonce`. The two inline
+  // <script> blocks below MUST carry it or the browser will block them under
+  // the strict (no 'unsafe-inline') script-src.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <script dangerouslySetInnerHTML={{ __html: swScript }} />
+        {/* Convention so client libs (Vite/webpack chunk preloaders, etc.)
+            can locate the nonce via `meta[property="csp-nonce"]`. */}
+        {nonce && <meta property="csp-nonce" content={nonce} />}
+        {/* suppressHydrationWarning: modern browsers strip the `nonce`
+            attribute from the DOM after the CSP check, so React always
+            sees a server/client mismatch on these inline scripts. The
+            CSP enforcement happens at HTML-parse time and is unaffected. */}
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: themeScript }}
+          suppressHydrationWarning
+        />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: swScript }}
+          suppressHydrationWarning
+        />
         <link rel="apple-touch-icon" href="/icons/icon.svg" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />

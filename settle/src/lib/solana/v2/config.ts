@@ -57,7 +57,10 @@ export const PROTOCOL_CONFIG_PDA: PublicKey | null = (() => {
   return null; // devnet: derive lazily via PublicKey.findProgramAddressSync
 })();
 
-// Tiered fees (V2.3.1 — caller picks per trade in [min, max])
+// Tiered fees (V2.3.1 — caller picks per trade in [min, max]).
+// Frontend exposes 3 tier buttons (1.5% / 2% / 2.5% on mainnet); on-chain
+// program enforces values fall within the protocol's [min_fee_bps, max_fee_bps]
+// range and hard-caps at 1000 bps (10%).
 const parseBps = (envVal: string | undefined, fallback: number): number => {
   const n = envVal ? parseInt(envVal, 10) : NaN;
   return Number.isFinite(n) && n >= 0 && n <= 1000 ? n : fallback;
@@ -82,11 +85,65 @@ export const FEE_BPS_MAX = parseBps(
  */
 export const FEE_BPS = FEE_BPS_DEFAULT;
 
-// RPC — env-driven. Public Solana RPC is rate-limited; production should use
-// Helius/QuickNode/Triton via NEXT_PUBLIC_SOLANA_RPC_URL.
-export const DEVNET_RPC =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SOLANA_RPC_URL)
-    || (isMainnet ? 'https://api.mainnet-beta.solana.com' : 'https://api.devnet.solana.com');
+// RPC. Browser uses the `/api/rpc` proxy so the keyed upstream URL is
+// never shipped to clients. Server uses SOLANA_RPC_URL_PRIVATE (preferred)
+// or the legacy NEXT_PUBLIC_SOLANA_RPC_URL fallback. See src/lib/solana/rpc.ts
+// for the canonical resolver and src/app/api/rpc/route.ts for the proxy.
+//
+// Network-aware fallback: `mainnet-beta` resolves to mainnet's public RPC
+// when no env override is set; `devnet` (default) resolves to devnet.
+//
+// Solana's `Connection` constructor rejects relative URLs ("Endpoint URL
+// must start with `http:` or `https:`."), so the browser path resolves the
+// proxy path against `window.location.origin` to produce an absolute URL.
+const PUBLIC_HTTP_FALLBACK = isMainnet
+  ? 'https://api.mainnet-beta.solana.com'
+  : 'https://api.devnet.solana.com';
+const PUBLIC_WS_FALLBACK = isMainnet
+  ? 'wss://api.mainnet-beta.solana.com'
+  : 'wss://api.devnet.solana.com';
+
+export const DEVNET_RPC = (() => {
+  if (typeof window !== 'undefined') {
+    const override = process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY_URL?.trim();
+    if (override && /^https?:\/\//i.test(override)) return override;
+    // Default proxy path — make it absolute so `new Connection(...)` accepts it.
+    const proxyPath = override || '/api/rpc';
+    return `${window.location.origin}${proxyPath.startsWith('/') ? '' : '/'}${proxyPath}`;
+  }
+  const priv = process.env?.SOLANA_RPC_URL_PRIVATE?.trim();
+  if (priv) return priv;
+  const pub = process.env?.NEXT_PUBLIC_SOLANA_RPC_URL?.trim();
+  if (pub) return pub;
+  return PUBLIC_HTTP_FALLBACK;
+})();
+
+/**
+ * WebSocket endpoint for Solana subscriptions (account/signature watches).
+ *
+ * web3.js's `Connection` auto-derives a wsEndpoint from the http URL by
+ * swapping the scheme. For our `/api/rpc` proxy that yields
+ * `ws://<origin>/api/rpc` — which is NOT a websocket server, so the lib
+ * surfaces "ws error: undefined" in the console every time
+ * `confirmTransaction` (or any subscription path) opens a watch.
+ *
+ * We point the WS at a real public Solana endpoint instead. Subscriptions
+ * only return public chain state, so there's no quota-leak concern in
+ * sending them direct from the browser. The proxied http URL stays in front
+ * of the keyed RPC for everything else.
+ *
+ * Network-aware: `mainnet-beta` -> wss://api.mainnet-beta.solana.com, else devnet.
+ */
+export const DEVNET_WS_ENDPOINT = (() => {
+  if (typeof window !== 'undefined') {
+    const override = process.env.NEXT_PUBLIC_SOLANA_WS_URL?.trim();
+    if (override && /^wss?:\/\//i.test(override)) return override;
+    return PUBLIC_WS_FALLBACK;
+  }
+  const wsServer = process.env?.SOLANA_WS_URL?.trim();
+  if (wsServer && /^wss?:\/\//i.test(wsServer)) return wsServer;
+  return PUBLIC_WS_FALLBACK;
+})();
 
 // Compliance/DAO wallets for dispute resolution
 // These wallets have authority to release or refund escrow in disputed orders

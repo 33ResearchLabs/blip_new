@@ -35,7 +35,7 @@ export async function GET(
   if (!ISSUE_REPORTING_ENABLED) {
     return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
   }
-  const authErr = requireAdminAuth(request);
+  const authErr = await requireAdminAuth(request);
   if (authErr) return authErr;
 
   const { id } = await context.params;
@@ -56,7 +56,7 @@ export async function PATCH(
   if (!ISSUE_REPORTING_ENABLED) {
     return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
   }
-  const authErr = requireAdminAuth(request);
+  const authErr = await requireAdminAuth(request);
   if (authErr) return authErr;
 
   const { id } = await context.params;

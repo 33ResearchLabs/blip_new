@@ -29,6 +29,14 @@ export interface MerchantMobileContentProps {
   acceptingOrderId: string | null;
   handleOpenChat: (order: Order) => void;
   dismissBigOrder: (id: string) => void;
+  // Cancel a still-pending order — routes through the page-level wrapper
+  // (escrow-cancel modal vs no-escrow cancel call) so the Trade tab can
+  // expose a Cancel button on the user's own offers.
+  handleCancelOrder?: (order: Order) => void;
+  cancellingOrderId?: string | null;
+  // Open the order quick-view popup. Used by mobile History card taps so
+  // the same details panel the desktop uses also surfaces on phone.
+  setSelectedOrderPopup?: (order: Order | null) => void;
 
   // Escrow actions
   markingDone: any;
@@ -74,6 +82,15 @@ export interface MerchantMobileContentProps {
   isCreatingTrade: boolean;
   onCreateTrade: () => void;
   onShowWalletModal: () => void;
+  // Opens the full wallet overlay (wallet management screen)
+  onOpenWallet?: () => void;
+
+  // Embedded wallet lock state — used by mobile home to gate the balance display
+  embeddedWalletState?: "initializing" | "none" | "locked" | "unlocked";
+
+  // Active corridor (e.g. "USDT_AED" / "USDT_INR") for the home trading pair selector
+  activeCorridor?: string;
+  onCorridorChange?: (corridorId: string) => void;
 
   // Bottom nav counts
   totalUnread: number;
@@ -84,6 +101,8 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     mobileView, setMobileView,
     pendingOrders, ongoingOrders, completedOrders, cancelledOrders, bigOrders,
     acceptOrder, acceptingOrderId, handleOpenChat, dismissBigOrder,
+    handleCancelOrder, cancellingOrderId,
+    setSelectedOrderPopup,
     markingDone, openEscrowModal, markFiatPaymentSent, confirmPayment,
     openDisputeModal, openCancelModal,
     merchantId, orderConversations, chatTotalUnread, isLoadingConversations,
@@ -93,6 +112,9 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     setShowAnalytics, setShowWalletModal, handleLogout,
     marketSubTab, setMarketSubTab, setOpenTradeForm, setShowOpenTradeModal, setShowCreateModal,
     openTradeForm, isCreatingTrade, onCreateTrade, onShowWalletModal,
+    onOpenWallet,
+    embeddedWalletState,
+    activeCorridor, onCorridorChange,
     totalUnread,
   } = props;
 
@@ -111,24 +133,25 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               pendingOrders={pendingOrders}
               ongoingOrders={ongoingOrders}
               completedOrders={completedOrders}
-              openTradeForm={openTradeForm}
-              setOpenTradeForm={setOpenTradeForm}
-              isCreatingTrade={isCreatingTrade}
-              onCreateTrade={onCreateTrade}
-              setShowOpenTradeModal={setShowOpenTradeModal}
               setMobileView={setMobileView}
               onShowWalletModal={onShowWalletModal}
+              onOpenWallet={onOpenWallet}
+              embeddedWalletState={embeddedWalletState}
+              onStartTrade={(side) => {
+                setOpenTradeForm({ ...openTradeForm, tradeType: side });
+                setShowOpenTradeModal(true);
+              }}
             />
           )}
           {mobileView === "orders" && (
             <MobileOrdersView
               pendingOrders={pendingOrders}
-              bigOrders={bigOrders}
               onAcceptOrder={acceptOrder}
               acceptingOrderId={acceptingOrderId}
               onOpenChat={handleOpenChat}
-              onDismissBigOrder={dismissBigOrder}
               setMobileView={setMobileView}
+              onCancelOrder={handleCancelOrder}
+              cancellingOrderId={cancellingOrderId}
             />
           )}
           {mobileView === "escrow" && (
@@ -173,6 +196,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               onShowAnalytics={() => setShowAnalytics(true)}
               onShowWalletModal={() => setShowWalletModal(true)}
               onLogout={handleLogout}
+              onSelectOrder={setSelectedOrderPopup}
             />
           )}
           {mobileView === "marketplace" && merchantId && (
@@ -196,8 +220,11 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
         </main>
       </div>
 
-      {/* Mobile FAB — hidden on home view (has its own trade button) */}
-      {mobileView !== "home" && (
+      {/* Mobile FAB — only on Home, where opening a new trade is the
+          natural primary action. Other tabs (Trade list, Chat, Escrow,
+          History) have their own primary tasks and shouldn't be covered
+          by a floating button. */}
+      {mobileView === "home" && (
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setShowOpenTradeModal(true)}

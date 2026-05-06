@@ -25,6 +25,7 @@ type AuditAction =
   | 'compliance.access_granted'
   | 'compliance.access_revoked'
   | 'admin.login'
+  | 'admin.logout'
   | 'admin.privilege_change';
 
 interface AuditEntry {

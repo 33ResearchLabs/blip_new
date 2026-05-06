@@ -83,6 +83,7 @@ export async function mockEscrowLock(
     };
   }
 
+  const __escT0 = Date.now();
   try {
     const order = await transaction(async (client) => {
       // 1. Lock the order row
@@ -151,18 +152,15 @@ export async function mockEscrowLock(
         throw new Error('INSUFFICIENT_BALANCE');
       }
 
-      // 5. Deduct balance
-      await client.query(
-        `UPDATE ${payer.table} SET balance = balance - $1 WHERE id = $2`,
+      // 5. Deduct balance — UPDATE … RETURNING saves a round-trip vs the
+      // previous UPDATE + separate SELECT pattern. Postgres NUMERIC is exact,
+      // so the returned value is identical to a follow-up SELECT in the same
+      // transaction. The invariant check below still guards against corruption.
+      const updateBalanceRes = await client.query(
+        `UPDATE ${payer.table} SET balance = balance - $1 WHERE id = $2 RETURNING balance`,
         [amount, payer.entityId]
       );
-
-      // TASK 3: Validate balance consistency post-UPDATE
-      const balanceCheck = await client.query(
-        `SELECT balance FROM ${payer.table} WHERE id = $1`,
-        [payer.entityId]
-      );
-      const balanceAfter = parseFloat(String(balanceCheck.rows[0].balance));
+      const balanceAfter = parseFloat(String(updateBalanceRes.rows[0].balance));
       const expectedBalance = currentBalance - amount;
 
       if (Math.abs(balanceAfter - expectedBalance) > 0.00000001) {
@@ -301,6 +299,10 @@ export async function mockEscrowLock(
       return updatedOrder;
     });
 
+    logger.info('[Timing] mockEscrowLock', {
+      orderId,
+      total_ms: Date.now() - __escT0,
+    });
     return { success: true, order };
   } catch (error) {
     const errMsg = (error as Error).message;

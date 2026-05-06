@@ -11,6 +11,8 @@ interface DashboardWidgetsProps {
   balance: number;
   lockedInEscrow: number;
   isOnline: boolean;
+  walletStatus?: 'ok' | 'locked' | 'none';
+  onAddWallet?: () => void;
   merchantId?: string;
   activeCorridor?: string;
   onCorridorChange?: (corridorId: string) => void;
@@ -25,6 +27,8 @@ export const DashboardWidgets = memo(function DashboardWidgets({
   balance,
   lockedInEscrow,
   isOnline,
+  walletStatus,
+  onAddWallet,
   merchantId,
   activeCorridor,
   onCorridorChange,
@@ -41,6 +45,8 @@ export const DashboardWidgets = memo(function DashboardWidgets({
           completedOrders={completedOrders}
           cancelledOrders={cancelledOrders}
           isOnline={isOnline}
+          walletStatus={walletStatus}
+          onAddWallet={onAddWallet}
           merchantId={merchantId}
           activeCorridor={activeCorridor}
           onCorridorChange={onCorridorChange}

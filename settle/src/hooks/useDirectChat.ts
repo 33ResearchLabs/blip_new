@@ -150,12 +150,15 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     fetchConversationsRef.current().finally(() => setIsLoadingConversations(false));
   }, [merchantId]);
 
-  // Conversation polling — only when Pusher is NOT delivering events
+  // Conversation polling — only when Pusher is NOT delivering events.
+  // Jittered ~15s interval prevents multi-tab lockstep from tripping the
+  // per-IP rate limiter; fetchWithAuth handles 429 backoff at the network layer.
   useEffect(() => {
     if (!merchantId || isPusherConnected) return;
+    const intervalMs = 15_000 + Math.floor(Math.random() * 5_000);
     pollConvRef.current = setInterval(() => {
       fetchConversationsRef.current();
-    }, 15000);
+    }, intervalMs);
     return () => {
       if (pollConvRef.current) clearInterval(pollConvRef.current);
     };
@@ -308,9 +311,10 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     if (isPusherConnected) return;
 
     const contactId = activeContactId;
+    const intervalMs = 5_000 + Math.floor(Math.random() * 2_000);
     pollMsgRef.current = setInterval(() => {
       fetchMessagesRef.current(contactId);
-    }, 5000);
+    }, intervalMs);
 
     return () => {
       if (pollMsgRef.current) clearInterval(pollMsgRef.current);

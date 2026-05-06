@@ -20,6 +20,7 @@ import {
   EyeOff,
   Plus,
   Trash2,
+  Pencil,
   Zap,
   Droplets,
   Monitor,
@@ -156,7 +157,9 @@ export default function MerchantSettingsPage({
     (merchantInfo as any)?.business_name || "",
   );
   const [bio, setBio] = useState<string>((merchantInfo as any)?.bio || "");
-  const [phone, setPhone] = useState<string>((merchantInfo as any)?.phone || "");
+  const [phone, setPhone] = useState<string>(
+    (merchantInfo as any)?.phone || "",
+  );
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(
     (merchantInfo as any)?.avatar_url || null,
   );
@@ -195,6 +198,10 @@ export default function MerchantSettingsPage({
   );
   const [isLoadingMethods, setIsLoadingMethods] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  // The full method object that PaymentMethodModal should open in edit
+  // mode. `null` means the modal opens in add mode. Set when the merchant
+  // clicks the Pencil on a row, cleared when the modal closes.
+  const [editingPaymentMethod, setEditingPaymentMethod] = useState<MerchantPaymentMethod | null>(null);
 
   // Notifications
   const [notifSettings, setNotifSettings] = useState({
@@ -207,22 +214,23 @@ export default function MerchantSettingsPage({
   // Copied state
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Redirect if not logged in
+  // Redirect if not logged in.
+  //
+  // Auth state is whatever the cookie-bound /api/auth/me restore wrote to
+  // the store on app boot (see useDashboardAuth). No localStorage probe —
+  // identity is the cookie's signed token, not anything the client wrote.
   useEffect(() => {
     if (!merchantId && !isLoggedIn) {
-      const saved = localStorage.getItem("blip_merchant");
-      if (!saved) {
-        router.push("/merchant");
-        return;
-      }
+      router.push("/merchant");
     }
   }, [merchantId, isLoggedIn, router]);
 
   // Fetch merchant data
   const fetchMerchant = useCallback(async () => {
-    const id =
-      merchantId ||
-      JSON.parse(localStorage.getItem("blip_merchant") || "{}")?.id;
+    // Identity comes from the store (populated by useDashboardAuth's
+    // /api/auth/me restore). When it's missing we just skip — the redirect
+    // effect above will bounce the user to /merchant.
+    const id = merchantId;
     if (!id) return;
 
     try {
@@ -267,9 +275,7 @@ export default function MerchantSettingsPage({
   // Fetch bank accounts
   useEffect(() => {
     const fetchBanks = async () => {
-      const id =
-        merchantId ||
-        JSON.parse(localStorage.getItem("blip_merchant") || "{}")?.id;
+      const id = merchantId;
       if (!id) return;
       try {
         const res = await fetchWithAuth(`/api/users/${id}/bank-accounts`);
@@ -322,16 +328,10 @@ export default function MerchantSettingsPage({
       setMerchant(data.data);
       setSaveSuccess(true);
 
-      // Update store and localStorage
+      // Update the in-memory store. The durable copy is the row in the
+      // merchants table that the API call above just updated; on next load
+      // /api/auth/me re-reads it from the DB. No localStorage mirror.
       setMerchantInfo((prev: any) => ({ ...prev, ...updates }));
-      const saved = localStorage.getItem("blip_merchant");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        localStorage.setItem(
-          "blip_merchant",
-          JSON.stringify({ ...parsed, ...updates }),
-        );
-      }
 
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -460,6 +460,13 @@ export default function MerchantSettingsPage({
     }
   };
 
+  // Pencil click → open the rich PaymentMethodModal in edit mode pre-filled
+  // with this method. The modal handles validation, parsing, and the PUT.
+  const startEditMethod = (method: MerchantPaymentMethod) => {
+    setEditingPaymentMethod(method);
+    setIsPaymentModalOpen(true);
+  };
+
   // Fetch merchant payment methods when Payments tab opens
   useEffect(() => {
     if (activeTab === "payments") {
@@ -534,18 +541,13 @@ export default function MerchantSettingsPage({
     }
 
     try {
+      // In-memory mirrors only — the durable auth state was the cookie
+      // pair, which the /api/auth/logout call above just cleared.
       useMerchantStore.getState().setSessionToken(null);
       useMerchantStore.getState().setMerchantId?.(null);
       useMerchantStore.getState().setMerchantInfo?.(null as any);
     } catch {
       /* store not hydrated */
-    }
-    try {
-      localStorage.removeItem("blip_merchant");
-      localStorage.removeItem("merchant_info");
-      sessionStorage.removeItem("blip_session_token");
-    } catch {
-      /* SSR */
     }
     window.location.href = "/merchant";
   };
@@ -576,9 +578,16 @@ export default function MerchantSettingsPage({
         activePage="settings"
         merchantInfo={merchantInfo}
         onLogout={handleLogout}
-        onOpenSettings={onClose ? () => { /* already in settings */ } : undefined}
+        onOpenSettings={
+          onClose
+            ? () => {
+                /* already in settings */
+              }
+            : undefined
+        }
         onOpenWallet={onOpenWallet}
         onNavLinkClick={onClose}
+        onBack={onClose ?? (() => router.push("/merchant"))}
       />
 
       <div className="max-w-5xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-50px)]">
@@ -1167,6 +1176,13 @@ export default function MerchantSettingsPage({
                                 </button>
                               )}
                               <button
+                                onClick={() => startEditMethod(method)}
+                                className="p-2 text-white/20 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => handleDeleteMethod(method.id)}
                                 className="p-2 text-white/20 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded-lg transition-colors"
                                 title="Remove"
@@ -1319,9 +1335,11 @@ export default function MerchantSettingsPage({
         isOpen={isPaymentModalOpen}
         onClose={() => {
           setIsPaymentModalOpen(false);
+          setEditingPaymentMethod(null);
           fetchPaymentMethods();
         }}
         merchantId={merchantId || merchant?.id || ""}
+        editingMethod={editingPaymentMethod}
       />
     </div>
   );
@@ -1336,9 +1354,7 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
   const [repLoading, setRepLoading] = useState(true);
 
   useEffect(() => {
-    const id =
-      merchantId ||
-      JSON.parse(localStorage.getItem("blip_merchant") || "{}")?.id;
+    const id = merchantId;
     if (!id) {
       setRepLoading(false);
       return;
@@ -2291,22 +2307,18 @@ function ActiveSessionsSection() {
       });
       const data = await res.json();
       if (data.success) {
-        // Wipe ALL local merchant state — token, store, localStorage —
-        // because every session was just revoked server-side. The next
-        // navigation must force a fresh login.
+        // Server revoked every session row — wipe the in-memory mirror so
+        // logged-in UI gates flip immediately. The cookie pair was cleared
+        // by the same response (DELETE /api/auth/sessions invalidates the
+        // current session and the access cookie expires shortly after).
+        // No localStorage / sessionStorage to clean — we no longer keep
+        // any identity material there.
         try {
           useMerchantStore.getState().setSessionToken(null);
           useMerchantStore.getState().setMerchantId?.(null);
           useMerchantStore.getState().setMerchantInfo?.(null as any);
         } catch {
           /* store not hydrated */
-        }
-        try {
-          localStorage.removeItem("blip_merchant");
-          localStorage.removeItem("merchant_info");
-          sessionStorage.removeItem("blip_session_token");
-        } catch {
-          /* SSR */
         }
         // Hard navigation so the new page tree boots without any cached
         // auth context, which is exactly what we want after a global logout.

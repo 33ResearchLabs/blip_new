@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
@@ -15,8 +15,12 @@ import {
   ChevronRight,
   LogOut,
   Currency,
+  Pencil,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
 import type { Screen, Order, BankAccount } from "./types";
@@ -96,7 +100,7 @@ export interface ProfileScreenProps {
   setBankAccounts: React.Dispatch<React.SetStateAction<BankAccount[]>>;
   setResolvedDisputes: React.Dispatch<React.SetStateAction<any[]>>;
   setLoginError: (v: string) => void;
-  setLoginForm: (v: { username: string; password: string }) => void;
+  setLoginForm: (v: { username: string; password: string; email: string }) => void;
   maxW: string;
 }
 
@@ -142,6 +146,104 @@ export const ProfileScreen = ({
   // there's no trade to attach a method to, so this is purely a visual hint
   // for which method is currently shown as the trigger card.
   const [profilePaymentMethodId, setProfilePaymentMethodId] = useState<string | null>(null);
+
+  // Inline edit state for the legacy Bank Accounts list. Edits the row's
+  // bank/name/iban via PUT /api/users/[id]/bank-accounts/[accountId]; delete
+  // uses DELETE on the same path. Two-tap delete pattern (arm → confirm) so
+  // we don't need a modal.
+  const [editingBankId, setEditingBankId] = useState<string | null>(null);
+  const [editBank, setEditBank] = useState({ bank: "", name: "", iban: "" });
+  const [editBankError, setEditBankError] = useState<string | null>(null);
+  const [isSavingBankEdit, setIsSavingBankEdit] = useState(false);
+  const [confirmDeleteBankId, setConfirmDeleteBankId] = useState<string | null>(null);
+  const [deletingBankId, setDeletingBankId] = useState<string | null>(null);
+
+  // Auto-disarm the delete confirmation after 4s so a forgotten arm doesn't
+  // fire on a stray tap minutes later. Same pattern as PaymentMethodSelector.
+  useEffect(() => {
+    if (!confirmDeleteBankId) return;
+    const id = setTimeout(() => setConfirmDeleteBankId(null), 4000);
+    return () => clearTimeout(id);
+  }, [confirmDeleteBankId]);
+
+  const startEditBank = (acc: BankAccount) => {
+    setEditingBankId(acc.id);
+    setEditBank({ bank: acc.bank, name: acc.name, iban: acc.iban });
+    setEditBankError(null);
+  };
+  const cancelEditBank = () => {
+    setEditingBankId(null);
+    setEditBankError(null);
+  };
+  const saveEditBank = async (accountId: string) => {
+    if (!userId) return;
+    setIsSavingBankEdit(true);
+    setEditBankError(null);
+    try {
+      const bank_name = editBank.bank.trim();
+      const account_name = editBank.name.trim();
+      const iban = editBank.iban.trim();
+      if (!bank_name) throw new Error("Bank name is required");
+      if (!account_name) throw new Error("Account holder name is required");
+      if (iban.length < 15 || iban.length > 34) throw new Error("IBAN must be 15–34 characters");
+
+      const res = await fetchWithAuth(
+        `/api/users/${userId}/bank-accounts/${accountId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bank_name, account_name, iban }),
+        },
+      );
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(
+          json.error ||
+            (Array.isArray(json.errors) ? json.errors.join(", ") : "Failed to update"),
+        );
+      }
+      const saved = json.data;
+      // Repository returns DB-shaped row (snake_case). The local list uses
+      // the lighter BankAccount shape — map it explicitly to avoid drift.
+      setBankAccounts((prev) =>
+        prev.map((a) =>
+          a.id === accountId
+            ? {
+                ...a,
+                bank: saved.bank_name,
+                name: saved.account_name,
+                iban: saved.iban,
+              }
+            : a,
+        ),
+      );
+      setEditingBankId(null);
+    } catch (err) {
+      setEditBankError(err instanceof Error ? err.message : "Failed to update bank account");
+    } finally {
+      setIsSavingBankEdit(false);
+    }
+  };
+
+  const deleteBankAccount = async (accountId: string) => {
+    if (!userId) return;
+    setDeletingBankId(accountId);
+    try {
+      const res = await fetchWithAuth(
+        `/api/users/${userId}/bank-accounts/${accountId}`,
+        { method: "DELETE" },
+      );
+      if (res.ok) {
+        setBankAccounts((prev) => prev.filter((a) => a.id !== accountId));
+      }
+    } catch {
+      // Best-effort — leave the row in place if the API call failed.
+    } finally {
+      setDeletingBankId(null);
+      setConfirmDeleteBankId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
@@ -303,24 +405,117 @@ export const ProfileScreen = ({
           </motion.button>
         </div>
         <div className="flex flex-col gap-2 mb-3">
-          {bankAccounts.map(acc => (
-            <div key={acc.id} className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${CARD}`}>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-active text-[18px]">
-                {'\uD83C\uDFE6'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em]">{acc.bank}</p>
-                  {acc.isDefault && (
-                    <span className="text-[8px] font-extrabold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-text">
-                      Default
-                    </span>
+          {bankAccounts.map(acc => {
+            const isEditing = editingBankId === acc.id;
+            const armed = confirmDeleteBankId === acc.id;
+            const deleting = deletingBankId === acc.id;
+            return (
+              <div key={acc.id} className={`flex items-start gap-3 rounded-2xl px-4 py-3 ${CARD}`}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-active text-[18px]">
+                  {'\uD83C\uDFE6'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  {isEditing ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={editBank.bank}
+                        maxLength={100}
+                        onChange={(e) => setEditBank((p) => ({ ...p, bank: e.target.value }))}
+                        placeholder="Bank Name"
+                        className="w-full px-3 py-2 rounded-lg text-[13px] text-text-primary bg-surface-raised border border-border-subtle focus:outline-none focus:border-border-strong"
+                      />
+                      <input
+                        type="text"
+                        value={editBank.name}
+                        maxLength={100}
+                        onChange={(e) => setEditBank((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="Account Holder Name"
+                        className="w-full px-3 py-2 rounded-lg text-[13px] text-text-primary bg-surface-raised border border-border-subtle focus:outline-none focus:border-border-strong"
+                      />
+                      <input
+                        type="text"
+                        value={editBank.iban}
+                        maxLength={34}
+                        onChange={(e) => setEditBank((p) => ({ ...p, iban: e.target.value.toUpperCase() }))}
+                        placeholder="IBAN"
+                        className="w-full px-3 py-2 rounded-lg text-[13px] text-text-primary font-mono bg-surface-raised border border-border-subtle focus:outline-none focus:border-border-strong"
+                      />
+                      {editBankError && (
+                        <p className="text-[11px] text-error">{editBankError}</p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={cancelEditBank}
+                          disabled={isSavingBankEdit}
+                          className="flex-1 px-3 py-1.5 bg-surface-raised border border-border-subtle rounded-lg text-[11px] text-text-secondary font-medium disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => saveEditBank(acc.id)}
+                          disabled={isSavingBankEdit}
+                          className="flex-1 px-3 py-1.5 bg-accent text-accent-text rounded-lg text-[11px] font-bold disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          {isSavingBankEdit ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" /> Saving</>
+                          ) : (
+                            <><Check className="w-3 h-3" /> Save</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em] truncate">{acc.bank}</p>
+                        {acc.isDefault && (
+                          <span className="text-[8px] font-extrabold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-text">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-text-tertiary font-mono truncate">{acc.iban}</p>
+                    </>
                   )}
                 </div>
-                <p className="text-[11px] text-text-tertiary font-mono">{acc.iban}</p>
+                {!isEditing && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => startEditBank(acc)}
+                      aria-label="Edit bank account"
+                      className="w-8 h-8 rounded-[10px] flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-surface-raised transition-colors"
+                    >
+                      <Pencil size={14} />
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        if (armed) deleteBankAccount(acc.id);
+                        else setConfirmDeleteBankId(acc.id);
+                      }}
+                      disabled={deleting}
+                      aria-label={armed ? "Confirm delete" : "Delete bank account"}
+                      className={`h-8 px-2 rounded-[10px] flex items-center justify-center gap-1 transition-colors text-[11px] font-semibold ${
+                        armed
+                          ? "bg-error-dim text-error border border-error-border"
+                          : "text-text-tertiary hover:text-error hover:bg-error-dim"
+                      }`}
+                    >
+                      {deleting ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : armed ? (
+                        "Confirm"
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                    </motion.button>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Console & Analytics */}
@@ -421,7 +616,7 @@ export const ProfileScreen = ({
             setBankAccounts([]);
             setResolvedDisputes([]);
             setLoginError('');
-            setLoginForm({ username: '', password: '' });
+            setLoginForm({ username: '', password: '', email: '' });
             if (solanaWallet.disconnect) {
               solanaWallet.disconnect();
             }

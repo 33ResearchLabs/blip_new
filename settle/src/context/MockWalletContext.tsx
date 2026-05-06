@@ -29,69 +29,82 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [mockUserType, setMockUserType] = useState<'user' | 'merchant'>('user');
   const [mockWalletAddress, setMockWalletAddress] = useState<string | null>(null);
 
-  // Read user info from localStorage on mount and watch for changes
+  // Discover the active user / merchant via cookie-authed /api/auth/me.
+  // Identity used to come from `blip_user` / `blip_merchant` localStorage
+  // entries — those are no longer written, so we ask the server who's logged
+  // in instead. Polls every 10s + listens for the in-app `blip-auth-change`
+  // signal so login/logout in another part of the app re-runs the probe.
   useEffect(() => {
-    const checkUser = () => {
+    let cancelled = false;
+    const checkUser = async () => {
       try {
-        // Check for user session
-        // Note: blip_user and blip_merchant store full JSON objects, not just IDs
-        const userRaw = localStorage.getItem('blip_user');
-        const merchantRaw = localStorage.getItem('blip_merchant');
-        const wallet = localStorage.getItem('blip_wallet');
+        const res = await fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (cancelled) return;
 
-        if (merchantRaw) {
+        // 401 / non-OK → not logged in
+        if (!res.ok) {
+          setMockUserId(null);
+          setMockWalletAddress(null);
+          return;
+        }
+        const json = await res.json();
+        if (cancelled) return;
+        if (!json?.success) {
+          setMockUserId(null);
+          setMockWalletAddress(null);
+          return;
+        }
+
+        const wallet = (() => {
           try {
-            const merchant = JSON.parse(merchantRaw);
-            const id = merchant.id || merchantRaw;
-            setMockUserId(id);
-            setMockUserType('merchant');
-            setMockWalletAddress(merchant.wallet_address || wallet || `MOCK_MERCHANT_${id.slice(0, 8)}`);
+            return localStorage.getItem('blip_wallet');
           } catch {
-            setMockUserId(merchantRaw);
-            setMockUserType('merchant');
-            setMockWalletAddress(wallet || `MOCK_MERCHANT_${merchantRaw.slice(0, 8)}`);
+            return null;
           }
-        } else if (userRaw) {
-          try {
-            const user = JSON.parse(userRaw);
-            const id = user.id || userRaw;
-            setMockUserId(id);
-            setMockUserType('user');
-            setMockWalletAddress(user.wallet_address || wallet || mockBase58Address(id));
-          } catch {
-            setMockUserId(userRaw);
-            setMockUserType('user');
-            setMockWalletAddress(wallet || mockBase58Address(userRaw));
-          }
+        })();
+
+        const actorType = json?.data?.actorType;
+        if (actorType === 'merchant' && json?.data?.merchant?.id) {
+          const merchant = json.data.merchant;
+          setMockUserId(merchant.id);
+          setMockUserType('merchant');
+          setMockWalletAddress(
+            merchant.wallet_address || wallet || `MOCK_MERCHANT_${String(merchant.id).slice(0, 8)}`
+          );
+        } else if (actorType === 'user' && json?.data?.user?.id) {
+          const user = json.data.user;
+          setMockUserId(user.id);
+          setMockUserType('user');
+          setMockWalletAddress(
+            user.wallet_address || wallet || mockBase58Address(String(user.id))
+          );
         } else {
           setMockUserId(null);
           setMockWalletAddress(null);
         }
       } catch {
-        // localStorage not available
+        // Network error — leave state as-is rather than flap to logged-out;
+        // a transient blip shouldn't kick the user out of mock mode.
       }
     };
 
-    checkUser();
+    void checkUser();
 
-    // Event-driven: 'storage' fires on cross-tab changes,
-    // 'blip-auth-change' is a custom event for same-tab changes
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'blip_user' || e.key === 'blip_merchant' || e.key === 'blip_wallet') {
-        checkUser();
-      }
-    };
-    const handleCustom = () => checkUser();
+    // In-app custom event fired by login / logout flows.
+    const handleCustom = () => { void checkUser(); };
 
-    // Low-frequency fallback poll (10s) catches same-tab localStorage writes
-    // that don't dispatch the custom event yet — 10x less than the previous 1s poll
-    const interval = setInterval(checkUser, 10000);
+    // Slow fallback poll (10s) — covers cases where the custom event was
+    // missed (e.g. another tab logged out and we have no storage event for
+    // cookies). The cost is one tiny GET; not a hot path.
+    const interval = setInterval(() => { void checkUser(); }, 10000);
 
-    window.addEventListener('storage', handleStorage);
     window.addEventListener('blip-auth-change', handleCustom);
     return () => {
+      cancelled = true;
       clearInterval(interval);
-      window.removeEventListener('storage', handleStorage);
       window.removeEventListener('blip-auth-change', handleCustom);
     };
   }, []);

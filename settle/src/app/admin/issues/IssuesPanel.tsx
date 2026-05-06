@@ -399,13 +399,9 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
 
   const dateRangeRef = useRef<HTMLDivElement | null>(null);
 
-  const getToken = () => {
-    try {
-      return localStorage.getItem('blip_admin_token') || '';
-    } catch {
-      return '';
-    }
-  };
+  // Admin auth now travels via the httpOnly `blip_admin_session` cookie
+  // — sent automatically on same-origin requests. No Authorization
+  // header is needed; the cookie cannot be read from JS.
 
   // ─── Fetch ─────────────────────────────────────────────────────────────
   const fetchIssues = useCallback(async () => {
@@ -417,9 +413,7 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
       if (categoryFilter) qs.set('category', categoryFilter);
       if (priorityFilter) qs.set('priority', priorityFilter);
       qs.set('limit', '500');
-      const res = await fetch(`/api/admin/issues?${qs.toString()}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
+      const res = await fetch(`/api/admin/issues?${qs.toString()}`);
       if (res.status === 404) {
         setError(
           'Issue reporting is disabled. Set ENABLE_ISSUE_REPORTING=true on the server.',
@@ -568,10 +562,7 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
       try {
         const res = await fetch(`/api/admin/issues/${id}`, {
           method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${getToken()}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),
         });
         const data = await res.json().catch(() => ({}));

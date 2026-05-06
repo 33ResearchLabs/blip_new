@@ -11,6 +11,7 @@ import {
   User,
   Settings,
   ChevronDown,
+  ChevronLeft,
   Activity,
   Shield,
   Menu,
@@ -18,6 +19,12 @@ import {
   Bell,
   BarChart3,
 } from "lucide-react";
+import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
+
+const CORRIDOR_OPTIONS = [
+  { key: "USDT_AED", label: "🇦🇪 USDT / AED" },
+  { key: "USDT_INR", label: "🇮🇳 USDT / INR" },
+] as const;
 
 export type NavPage = "dashboard" | "wallet" | "settings" | "ops";
 
@@ -40,6 +47,14 @@ interface MerchantNavbarProps {
   onNavLinkClick?: () => void;
   notificationCount?: number;
   onOpenNotifications?: () => void;
+  // When provided, the mobile navbar shows a back arrow that calls this.
+  // Used by overlay screens (wallet, settings) where there is no real route to "back" to.
+  onBack?: () => void;
+  // Active corridor (e.g. "USDT_AED" / "USDT_INR"). When both are provided,
+  // the mobile navbar exposes a dropdown so the user can switch trading pair
+  // from any tab. On desktop the corridor lives in StatusCard.
+  activeCorridor?: string;
+  onCorridorChange?: (corridorId: string) => void;
 }
 
 const pill = (active: boolean) =>
@@ -59,6 +74,9 @@ export function MerchantNavbar({
   onNavLinkClick,
   notificationCount = 0,
   onOpenNotifications,
+  onBack,
+  activeCorridor,
+  onCorridorChange,
 }: MerchantNavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -114,6 +132,17 @@ export function MerchantNavbar({
     <>
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border-strong">
         <div className="h-12 md:h-[50px] flex items-center px-3 md:px-4 gap-3">
+          {/* Mobile back button — only on overlay screens that pass onBack */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              aria-label="Back to dashboard"
+              className="md:hidden -ml-1 p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-foreground/70" />
+            </button>
+          )}
+
           {/* Left: Logo — always visible */}
           <div className="flex items-center shrink-0">
             <Link href="/merchant" className="flex items-center gap-2">
@@ -327,8 +356,21 @@ export function MerchantNavbar({
               </div>
             </div>
 
-            {/* Mobile: Notification bell + Hamburger */}
+            {/* Mobile: Corridor dropdown + Notification bell + Hamburger */}
             <div className="flex md:hidden items-center gap-1">
+              {/* {activeCorridor && onCorridorChange && (
+                <FilterDropdown<string>
+                  value={activeCorridor}
+                  onChange={onCorridorChange}
+                  ariaLabel="Select trading pair"
+                  align="right"
+                  variant="square"
+                  options={CORRIDOR_OPTIONS.map((c) => ({
+                    key: c.key,
+                    label: c.label,
+                  }))}
+                />
+              )} */}
               {onOpenNotifications && (
                 <button
                   onClick={onOpenNotifications}

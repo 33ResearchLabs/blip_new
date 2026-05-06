@@ -30,6 +30,7 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "reac
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { ADMIN_COOKIE_SENTINEL } from '@/lib/api/adminSession';
 import AdminAnalytics from "@/components/admin/AdminAnalytics";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 
@@ -231,23 +232,18 @@ export default function AdminConsolePage() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const savedToken = localStorage.getItem("blip_admin_token");
-        if (savedToken) {
-          const res = await fetchWithAuth("/api/auth/admin", {
-            headers: { Authorization: `Bearer ${savedToken}` },
-          });
-          const data = await res.json();
-          if (data.success && data.data?.valid) {
-            setAdminToken(savedToken);
-            setIsAuthenticated(true);
-          } else {
-            localStorage.removeItem("blip_admin");
-            localStorage.removeItem("blip_admin_token");
-          }
+        // Token lives in an httpOnly cookie — JS cannot read it. The cookie
+        // travels automatically on same-origin requests; nothing to attach.
+        const res = await fetchWithAuth("/api/auth/admin");
+        const data = await res.json();
+        if (data.success && data.data?.valid) {
+          setAdminToken(ADMIN_COOKIE_SENTINEL);
+          setIsAuthenticated(true);
+        } else {
+          localStorage.removeItem("blip_admin");
         }
       } catch {
         localStorage.removeItem("blip_admin");
-        localStorage.removeItem("blip_admin_token");
       } finally {
         setIsCheckingSession(false);
       }
@@ -265,10 +261,11 @@ export default function AdminConsolePage() {
         body: JSON.stringify(adminLoginForm),
       });
       const data = await res.json();
-      if (data.success && data.data?.admin && data.data?.token) {
+      // Server now issues the token only via Set-Cookie (httpOnly).
+      // The body carries `admin` profile but no token field.
+      if (data.success && data.data?.admin) {
         localStorage.setItem("blip_admin", JSON.stringify(data.data.admin));
-        localStorage.setItem("blip_admin_token", data.data.token);
-        setAdminToken(data.data.token);
+        setAdminToken(ADMIN_COOKIE_SENTINEL);
         setIsAuthenticated(true);
       } else {
         setAdminLoginError(data.error || "Login failed");
@@ -280,9 +277,13 @@ export default function AdminConsolePage() {
     }
   };
 
-  const handleAdminLogout = () => {
+  const handleAdminLogout = async () => {
+    try {
+      // Best-effort: clears the cookie + revokes the jti server-side.
+      // Network failure here doesn't block the local logout.
+      await fetchWithAuth("/api/auth/admin/logout", { method: "POST" });
+    } catch { /* ignore */ }
     localStorage.removeItem("blip_admin");
-    localStorage.removeItem("blip_admin_token");
     setAdminToken(null);
     setIsAuthenticated(false);
   };
@@ -290,14 +291,14 @@ export default function AdminConsolePage() {
   const fetchData = useCallback(async () => {
     const token = adminTokenRef.current;
     if (!token) return;
-    const headers = { Authorization: `Bearer ${token}` };
+    // Auth cookie travels automatically (same-origin). No more Bearer header.
     setIsRefreshing(true);
     try {
       const [statsRes, ordersRes, merchantsRes, activityRes] = await Promise.all([
-        fetchWithAuth("/api/admin/stats", { headers }),
-        fetchWithAuth("/api/admin/orders?limit=500", { headers }),
-        fetchWithAuth("/api/admin/merchants?sort=volume&limit=20", { headers }),
-        fetchWithAuth("/api/admin/activity?limit=30", { headers }),
+        fetchWithAuth("/api/admin/stats"),
+        fetchWithAuth("/api/admin/orders?limit=500"),
+        fetchWithAuth("/api/admin/merchants?sort=volume&limit=20"),
+        fetchWithAuth("/api/admin/activity?limit=30"),
       ]);
       const [statsData, ordersData, merchantsData, activityData] = await Promise.all([
         statsRes.json(), ordersRes.json(), merchantsRes.json(), activityRes.json(),

@@ -51,15 +51,12 @@ export async function POST(
 
     const { actor_type, actor_id, duration_minutes } = parseResult.data;
 
-    // Resolve merchant identity from header
-    const extHeaderMerchantId = request.headers.get('x-merchant-id');
-    if (extHeaderMerchantId && !auth.merchantId) {
-      auth.merchantId = extHeaderMerchantId;
-    }
-
-    // Security: enforce actor matches authenticated identity (with merchant header fallback)
-    if (actor_id !== auth.actorId && !(actor_type === 'merchant' && extHeaderMerchantId && actor_id === extHeaderMerchantId)) {
+    // Security: enforce actor matches authenticated identity (JWT only).
+    if (actor_id !== auth.actorId) {
       return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+    if (actor_type === 'merchant' && auth.actorType !== 'merchant') {
+      return forbiddenResponse("actor_type='merchant' requires a merchant token");
     }
 
     return proxyCoreApi(`/v1/orders/${id}/extension`, {
@@ -93,15 +90,12 @@ export async function PUT(
 
     const { actor_type, actor_id, accept } = parseResult.data;
 
-    // Resolve merchant identity from header
-    const putHeaderMerchantId = request.headers.get('x-merchant-id');
-    if (putHeaderMerchantId && !authPut.merchantId) {
-      authPut.merchantId = putHeaderMerchantId;
-    }
-
-    // Security: enforce actor matches authenticated identity (with merchant header fallback)
-    if (actor_id !== authPut.actorId && !(actor_type === 'merchant' && putHeaderMerchantId && actor_id === putHeaderMerchantId)) {
+    // Security: enforce actor matches authenticated identity (JWT only).
+    if (actor_id !== authPut.actorId) {
       return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+    if (actor_type === 'merchant' && authPut.actorType !== 'merchant') {
+      return forbiddenResponse("actor_type='merchant' requires a merchant token");
     }
 
     return proxyCoreApi(`/v1/orders/${id}/extension`, {

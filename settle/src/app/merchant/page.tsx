@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Bell, Plus, Loader2, History, X } from "lucide-react";
 import { usePusher } from "@/context/PusherContext";
@@ -43,6 +44,7 @@ import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayo
 import { MerchantTour } from "@/components/merchant/MerchantTour";
 import { useMerchantTour } from "@/hooks/useMerchantTour";
 import { MerchantMobileContent } from "@/components/merchant/MerchantMobileContent";
+import { MobilePriceTicker } from "@/components/merchant/MobilePriceTicker";
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
@@ -148,13 +150,14 @@ export default function MerchantDashboard() {
     return () => mql.removeEventListener("change", handler);
   }, []);
 
+  const router = useRouter();
   const solanaWallet = useSolanaWallet();
   const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
   const { isConnected: isPusherConnected } = usePusher();
 
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
     | {
-        state: "none" | "locked" | "unlocked";
+        state: "initializing" | "none" | "locked" | "unlocked";
         unlockWallet: (password: string) => Promise<boolean>;
         lockWallet: () => void;
         deleteWallet: () => void;
@@ -224,7 +227,7 @@ export default function MerchantDashboard() {
     setShowUsernameModal,
   });
 
-  const { notifications, addNotification, markNotificationRead } =
+  const { notifications, addNotification, markNotificationRead, markAllNotificationsRead } =
     useNotifications(merchantId, isLoggedIn);
 
   // Send presence heartbeat so other parties see this merchant as online
@@ -776,6 +779,8 @@ export default function MerchantDashboard() {
         onOpenWallet={() => setShowWallet(true)}
         notificationCount={notifications.filter(n => !n.read).length}
         onOpenNotifications={() => setShowNotifications(!showNotifications)}
+        activeCorridor={activeCorridor}
+        onCorridorChange={setActiveCorridor}
         rightActions={
           <>
             <motion.button
@@ -799,25 +804,10 @@ export default function MerchantDashboard() {
         }
       />
 
-      {/* Mobile Stats Bar */}
-      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-foreground/[0.02] border-b border-foreground/[0.04]">
-        <button
-          onClick={() => setShowWalletModal(true)}
-          className="flex items-center gap-1 px-2 py-1 bg-foreground/[0.04] rounded-md border border-foreground/[0.08] shrink-0"
-        >
-          <span className="text-[11px] font-mono text-foreground/70">
-            {effectiveBalance !== null
-              ? formatCrypto(effectiveBalance)
-              : "—"}
-          </span>
-        </button>
-        <div className="flex items-center gap-1 px-2 py-1 bg-foreground/[0.03] rounded-md shrink-0">
-          <span className="text-[10px] font-mono text-foreground/40">
-            ${formatCrypto(totalTradedVolume)}
-          </span>
-        </div>
-        <div className="flex-1" />
-      </div>
+      {/* Mobile live-price ticker — only shown on the Home tab. Balance is
+          visible in the home view's balance card; on other tabs the ticker
+          would just steal vertical space. */}
+      {mobileView === "home" && <MobilePriceTicker />}
 
       <MerchantDesktopLayout
         isWideScreen={isWideScreen}
@@ -833,6 +823,20 @@ export default function MerchantDashboard() {
         todayEarnings={todayEarnings}
         isMerchantOnline={isMerchantOnline}
         setIsMerchantOnline={setIsMerchantOnline}
+        walletStatus={
+          // External Solana wallet connected, or embedded wallet unlocked → balance is real
+          solanaWallet.connected || embeddedWallet?.state === 'unlocked'
+            ? 'ok'
+            // Embedded wallet exists and is locked → can be unlocked
+            : embeddedWallet?.state === 'locked'
+              ? 'locked'
+              // Embedded wallet still booting → don't flash anything misleading
+              : embeddedWallet?.state === 'initializing'
+                ? 'ok'
+                // No wallet at all (state === 'none' or undefined, and no external)
+                : 'none'
+        }
+        onAddWallet={() => router.push('/merchant/wallet')}
         activeCorridor={activeCorridor}
         onCorridorChange={setActiveCorridor}
         openTradeForm={openTradeForm}
@@ -847,6 +851,8 @@ export default function MerchantDashboard() {
         acceptingOrderId={acceptingOrderId}
         lockingEscrowOrderId={isLockingEscrow ? escrowOrder?.id ?? null : null}
         confirmingOrderId={confirmingOrderId}
+        markingDone={markingDone}
+        cancellingOrderId={cancellingOrderId}
         handleCancelOrder={handleCancelOrder}
         handleOpenChat={handleOpenChat}
         handleOrderAction={handleOrderAction}
@@ -891,6 +897,9 @@ export default function MerchantDashboard() {
         acceptingOrderId={acceptingOrderId}
         handleOpenChat={handleOpenChat}
         dismissBigOrder={dismissBigOrder}
+        handleCancelOrder={handleCancelOrder}
+        cancellingOrderId={cancellingOrderId}
+        setSelectedOrderPopup={setSelectedOrderPopup}
         markingDone={markingDone}
         openEscrowModal={openEscrowModal}
         markFiatPaymentSent={markFiatPaymentSent}
@@ -926,6 +935,10 @@ export default function MerchantDashboard() {
         isCreatingTrade={isCreatingTrade}
         onCreateTrade={handleCreateTrade}
         onShowWalletModal={() => setShowWalletModal(true)}
+        onOpenWallet={() => setShowWallet(true)}
+        embeddedWalletState={embeddedWallet?.state}
+        activeCorridor={activeCorridor}
+        onCorridorChange={setActiveCorridor}
         totalUnread={totalUnread}
       />
 
@@ -945,9 +958,19 @@ export default function MerchantDashboard() {
                   </span>
                 )}
               </div>
-              <button onClick={() => setShowNotifications(false)} className="p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors">
-                <X className="w-5 h-5 text-foreground/40" />
-              </button>
+              <div className="flex items-center gap-1">
+                {notifications.some(n => !n.read) && (
+                  <button
+                    onClick={markAllNotificationsRead}
+                    className="text-[11px] font-semibold text-primary px-2 py-1 rounded-md hover:bg-primary/10 transition-colors"
+                  >
+                    Mark all read
+                  </button>
+                )}
+                <button onClick={() => setShowNotifications(false)} className="p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors">
+                  <X className="w-5 h-5 text-foreground/40" />
+                </button>
+              </div>
             </div>
             {/* List */}
             <div className="flex-1 overflow-y-auto p-2">
@@ -979,7 +1002,17 @@ export default function MerchantDashboard() {
                     return (
                       <button
                         key={n.id}
-                        onClick={() => { markNotificationRead(n.id); }}
+                        onClick={() => {
+                          markNotificationRead(n.id);
+                          // If the notification is tied to an order, open its
+                          // quick-view popup so the merchant lands on the
+                          // relevant info instead of hunting for the order.
+                          if (n.orderId) {
+                            const target = orders.find((o) => o.id === n.orderId);
+                            if (target) setSelectedOrderPopup(target);
+                          }
+                          setShowNotifications(false);
+                        }}
                         className={`w-full text-left p-3 rounded-xl border transition-colors ${
                           n.read
                             ? 'opacity-50 border-transparent'
@@ -1074,6 +1107,8 @@ export default function MerchantDashboard() {
         createTradeError={createTradeError}
         setCreateTradeError={setCreateTradeError}
         handleCreateTrade={handleCreateTrade}
+        activeCorridor={activeCorridor}
+        onCorridorChange={setActiveCorridor}
         selectedOrderPopup={selectedOrderPopup}
         setSelectedOrderPopup={setSelectedOrderPopup}
         markingDone={markingDone}

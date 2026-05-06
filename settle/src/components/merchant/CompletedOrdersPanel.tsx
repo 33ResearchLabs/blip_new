@@ -286,7 +286,6 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
       items,
     }));
   }, [orders]);
-  console.log(orders);
   return (
     <div className={`flex flex-col ${collapsed ? "" : "h-full"}`}>
       {/* Header */}

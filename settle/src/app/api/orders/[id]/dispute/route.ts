@@ -7,6 +7,7 @@ import { validateFields } from '@/lib/middleware/validation';
 import { getOrderWithRelations } from '@/lib/db/repositories/orders';
 import { resolveTradeRole } from '@/lib/orders/handleOrderAction';
 import { normalizeStatus } from '@/lib/orders/statusNormalizer';
+import { getIdempotencyKey, requireIdempotencyKey } from '@/lib/idempotency';
 import { logger } from 'settlement-core';
 
 // Create a dispute for an order
@@ -26,12 +27,15 @@ export async function POST(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Resolve merchant identity from header (must happen BEFORE canAccessOrder)
-    // Only trust header if the authenticated token is a merchant token
-    const dispHeaderMerchantId = request.headers.get('x-merchant-id');
-    if (dispHeaderMerchantId && auth.actorType === 'merchant' && !auth.merchantId) {
-      auth.merchantId = dispHeaderMerchantId;
-    }
+    // Idempotency-Key is REQUIRED for opening a dispute (state-changing
+    // financial workflow — opens disputes locks escrow timers, notifies
+    // counterparty, possibly auto-resolves to refund). Settle forwards
+    // the key; core-api commits the idempotency record atomically.
+    const missingKey = requireIdempotencyKey(request);
+    if (missingKey) return missingKey;
+
+    // Identity comes only from the JWT — auth.merchantId is already
+    // populated by getAuthContext for merchant tokens.
 
     // Verify access to this order
     const canAccess = await canAccessOrder(auth, orderId);
@@ -64,10 +68,12 @@ export async function POST(
       ? (user_id || '')
       : (merchant_id || '');
 
-    // Security: enforce actor matches authenticated identity
-    // Only allow merchant header fallback if authenticated as merchant
-    if (actorId !== auth.actorId && !(initiated_by === 'merchant' && auth.actorType === 'merchant' && dispHeaderMerchantId && actorId === dispHeaderMerchantId)) {
+    // Security: enforce actor matches authenticated identity (JWT only).
+    if (actorId !== auth.actorId) {
       return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+    if (initiated_by === 'merchant' && auth.actorType !== 'merchant') {
+      return forbiddenResponse("initiated_by='merchant' requires a merchant token");
     }
 
     // ── STATUS + ROLE VALIDATION ──
@@ -107,9 +113,30 @@ export async function POST(
       );
     }
 
+    // Idempotency-Key is REQUIRED by core-api on the dispute open path —
+    // surface as a clean 400 here instead of a confusing proxy passthrough.
+    const idempotencyKey = getIdempotencyKey(request);
+    if (!idempotencyKey || idempotencyKey.trim().length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Idempotency-Key header is required for dispute creation. ' +
+            'Send a unique value (UUIDv4 recommended) per logical request.',
+        },
+        { status: 400 },
+      );
+    }
+
     return proxyCoreApi(`/v1/orders/${orderId}/dispute`, {
       method: 'POST',
       body: { reason, description, initiated_by, actor_id: actorId },
+      // Bind the signed actor headers explicitly. Without this, core-api's
+      // ownership assertion sees only x-actor-id (auto-derived from body)
+      // and is missing x-actor-type, weakening the bind.
+      actorType: initiated_by,
+      actorId,
+      idempotencyKey,
     });
   } catch (error) {
     console.error('Failed to create dispute:', error);

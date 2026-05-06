@@ -39,6 +39,7 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/context/ModalContext";
 import { formatCrypto, formatFiat } from "@/lib/format";
+import { useGlobalNow } from "@/hooks/useGlobalNow";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
@@ -84,11 +85,9 @@ import { OrderExpiryTimer } from '@/components/shared/OrderExpiryTimer';
 /** Glossy animated expiry bar — sits at the card's bottom edge.
  *  Shrinks with time. Shimmers to attract attention. Pulses red when urgent. */
 function ExpiryProgressBar({ expiresAt, createdAt }: { expiresAt: Date; createdAt: Date }) {
-  const [now, setNow] = useLocalState(Date.now());
-  useLocalEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // Shared 1-sec tick — was previously a per-instance setInterval that caused
+  // N timers + N re-renders/sec when N orders were on screen.
+  const now = useGlobalNow();
 
   const totalMs = expiresAt.getTime() - createdAt.getTime();
   const remainingMs = Math.max(0, expiresAt.getTime() - now);
