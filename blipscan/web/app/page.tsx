@@ -344,7 +344,13 @@ export default function HomePage() {
               </div>
               <div>
                 <p className="text-lg font-semibold text-foreground leading-tight">
-                  {stats.avg_completion_time ? `${Math.round(stats.avg_completion_time / 60)}m` : '—'}
+                  {(() => {
+                    const s = stats.avg_completion_time;
+                    if (!s || s <= 0) return '—';
+                    if (s < 60) return `${Math.round(s)}s`;
+                    if (s < 3600) return `${Math.round(s / 60)}m`;
+                    return `${(s / 3600).toFixed(1)}h`;
+                  })()}
                 </p>
                 <p className="text-xs text-muted-foreground">Avg Settlement</p>
               </div>

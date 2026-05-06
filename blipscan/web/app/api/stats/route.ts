@@ -25,16 +25,26 @@ export async function GET(request: NextRequest) {
           SELECT creator_pubkey as merchant FROM v2_trades
         ) combined
       `),
-      // Average completion time (V1 + V2 with locked_at)
+      // Average settlement time = create → release (full lifecycle).
+      // For trades not yet released, fall back to locked_at so the metric
+      // doesn't go to 0 if every trade is in-flight.
       pool.query(`
-        SELECT AVG(avg_seconds) as avg_seconds FROM (
-          SELECT EXTRACT(EPOCH FROM (locked_at - created_at)) as avg_seconds
+        SELECT AVG(seconds) as avg_seconds FROM (
+          SELECT EXTRACT(EPOCH FROM (
+            COALESCE(released_at, locked_at) - created_at
+          )) as seconds
           FROM trades
-          WHERE state IN ('Released', 'Locked') AND locked_at IS NOT NULL AND created_at IS NOT NULL
+          WHERE state IN ('Released', 'Locked')
+            AND created_at IS NOT NULL
+            AND COALESCE(released_at, locked_at) IS NOT NULL
           UNION ALL
-          SELECT EXTRACT(EPOCH FROM (locked_at - created_at)) as avg_seconds
+          SELECT EXTRACT(EPOCH FROM (
+            COALESCE(released_at, locked_at) - created_at
+          )) as seconds
           FROM v2_trades
-          WHERE status IN ('released', 'locked') AND locked_at IS NOT NULL AND created_at IS NOT NULL
+          WHERE status IN ('released', 'locked')
+            AND created_at IS NOT NULL
+            AND COALESCE(released_at, locked_at) IS NOT NULL
         ) combined
       `),
     ]);
