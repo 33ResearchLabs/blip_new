@@ -260,8 +260,6 @@ export async function getActiveOffers(filters?: {
     FROM merchant_offers o
     JOIN merchants m ON o.merchant_id = m.id
     WHERE o.is_active = true
-      AND m.status = 'active'
-      AND m.is_online = true
       AND o.available_amount > 0
   `;
 
@@ -336,8 +334,6 @@ export async function findBestOffer(
      FROM merchant_offers o
      JOIN merchants m ON o.merchant_id = m.id
      WHERE o.is_active = true
-       AND m.status = 'active'
-       AND m.is_online = true
        AND o.type = $1
        AND o.payment_method = $2
        AND o.min_amount <= $3
