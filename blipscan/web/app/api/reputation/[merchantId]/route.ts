@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/app/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Read-only reputation endpoint for BlipScan.
  * Reads from reputation_scores table (populated by Core API worker).

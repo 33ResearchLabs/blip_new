@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/app/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { escrow: string } }
