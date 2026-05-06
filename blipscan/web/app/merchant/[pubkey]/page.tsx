@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Copy, Check, ExternalLink, TrendingUp, Clock, CheckCircle2, XCircle, ChevronRight, Sun, Moon } from 'lucide-react';
+import { solscanAccount } from '@/lib/explorer';
 
 interface ReputationData {
   total_score: number;
@@ -144,7 +145,7 @@ export default function MerchantPage({ params }: { params: { pubkey: string } })
     return colors[status] || 'bg-gray-400';
   };
 
-  const solscanAccount = (addr: string) => `https://solscan.io/account/${addr}?cluster=devnet`;
+  // solscanAccount imported from @/lib/explorer (network-aware)
 
   if (loading) {
     return (

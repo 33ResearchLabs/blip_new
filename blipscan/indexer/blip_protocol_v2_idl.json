@@ -1,350 +1,3781 @@
 {
-  "address": "6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87",
-  "version": "2.3.0",
-  "name": "blip_protocol_v2",
+  "address": "gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS",
+  "metadata": {
+    "name": "blip_protocol_v2",
+    "version": "2.0.0",
+    "spec": "0.1.0",
+    "description": "Blip Protocol v2 - Hardened settlement layer with fee enforcement"
+  },
   "instructions": [
     {
-      "name": "initializeConfig",
-      "accounts": [
-        { "name": "authority", "isMut": true, "isSigner": true },
-        { "name": "protocolConfig", "isMut": true, "isSigner": false },
-        { "name": "treasury", "isMut": false, "isSigner": false },
-        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      "name": "accept_trade",
+      "docs": [
+        "Accept a funded trade as the counterparty",
+        "Transitions trade from Funded → Locked"
       ],
-      "args": [
-        { "name": "feeBps", "type": "u16" },
-        { "name": "maxFeeBps", "type": "u16" },
-        { "name": "minFeeBps", "type": "u16" }
-      ]
-    },
-    {
-      "name": "createTrade",
-      "accounts": [
-        { "name": "creator", "isMut": true, "isSigner": true },
-        { "name": "protocolConfig", "isMut": false, "isSigner": false },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      "discriminator": [
+        139,
+        218,
+        29,
+        95,
+        124,
+        75,
+        64,
+        116
       ],
-      "args": [
-        { "name": "tradeId", "type": "u64" },
-        { "name": "amount", "type": "u64" },
-        { "name": "side", "type": { "defined": "TradeSide" } }
-      ]
-    },
-    {
-      "name": "fundEscrow",
       "accounts": [
-        { "name": "depositor", "isMut": true, "isSigner": true },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "escrow", "isMut": true, "isSigner": false },
-        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
-        { "name": "vaultAta", "isMut": true, "isSigner": false },
-        { "name": "depositorAta", "isMut": true, "isSigner": false },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false },
-        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
-        { "name": "systemProgram", "isMut": false, "isSigner": false }
-      ],
-      "args": []
-    },
-    {
-      "name": "acceptTrade",
-      "accounts": [
-        { "name": "acceptor", "isMut": true, "isSigner": true },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "escrow", "isMut": false, "isSigner": false },
-        { "name": "systemProgram", "isMut": false, "isSigner": false }
-      ],
-      "args": []
-    },
-    {
-      "name": "lockEscrow",
-      "accounts": [
-        { "name": "depositor", "isMut": true, "isSigner": true },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "escrow", "isMut": true, "isSigner": false },
-        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
-        { "name": "vaultAta", "isMut": true, "isSigner": false },
-        { "name": "depositorAta", "isMut": true, "isSigner": false },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false },
-        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
-        { "name": "systemProgram", "isMut": false, "isSigner": false }
-      ],
-      "args": [
-        { "name": "counterparty", "type": "publicKey" }
-      ]
-    },
-    {
-      "name": "releaseEscrow",
-      "accounts": [
-        { "name": "signer", "isMut": true, "isSigner": true },
-        { "name": "protocolConfig", "isMut": false, "isSigner": false },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "escrow", "isMut": true, "isSigner": false },
-        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
-        { "name": "vaultAta", "isMut": true, "isSigner": false },
-        { "name": "counterpartyAta", "isMut": true, "isSigner": false },
-        { "name": "treasuryAta", "isMut": true, "isSigner": false },
-        { "name": "creator", "isMut": true, "isSigner": false },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false }
-      ],
-      "args": []
-    },
-    {
-      "name": "extendEscrow",
-      "accounts": [
-        { "name": "depositor", "isMut": true, "isSigner": true },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "escrow", "isMut": false, "isSigner": false }
-      ],
-      "args": [
-        { "name": "extensionSeconds", "type": "i64" }
-      ]
-    },
-    {
-      "name": "refundEscrow",
-      "accounts": [
-        { "name": "signer", "isMut": true, "isSigner": true },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "escrow", "isMut": true, "isSigner": false },
-        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
-        { "name": "vaultAta", "isMut": true, "isSigner": false },
-        { "name": "depositorAta", "isMut": true, "isSigner": false },
-        { "name": "creator", "isMut": true, "isSigner": false },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false }
-      ],
-      "args": []
-    },
-    {
-      "name": "confirmPayment",
-      "accounts": [
-        { "name": "buyer", "isMut": true, "isSigner": true },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "escrow", "isMut": false, "isSigner": false }
+        {
+          "name": "acceptor",
+          "docs": [
+            "The party accepting/joining the trade as counterparty"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": []
     },
     {
-      "name": "openDispute",
+      "name": "cancel_trade_mutual",
+      "docs": [
+        "Mutual cancellation — both parties co-sign. Allowed only in",
+        "Funded/Locked. Refunds to depositor; closes escrow."
+      ],
+      "discriminator": [
+        29,
+        18,
+        205,
+        41,
+        201,
+        53,
+        144,
+        224
+      ],
       "accounts": [
-        { "name": "initiator", "isMut": true, "isSigner": true },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "escrow", "isMut": false, "isSigner": false }
+        {
+          "name": "creator_signer",
+          "docs": [
+            "Trade creator (seller). Must sign."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "counterparty_signer",
+          "docs": [
+            "Trade counterparty (buyer). Must sign. In Funded state counterparty",
+            "has not yet been set (== default); we allow creator_signer to fill",
+            "this slot. In Locked state this MUST be the real counterparty."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          },
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_ata",
+          "writable": true
+        },
+        {
+          "name": "depositor_ata",
+          "writable": true
+        },
+        {
+          "name": "depositor",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
       ],
       "args": []
     },
     {
-      "name": "resolveDispute",
+      "name": "confirm_payment",
+      "docs": [
+        "Buyer confirms fiat payment sent",
+        "Transitions: Locked → PaymentSent",
+        "CRITICAL: After this, auto-refund is FORBIDDEN"
+      ],
+      "discriminator": [
+        221,
+        23,
+        112,
+        126,
+        29,
+        23,
+        159,
+        223
+      ],
       "accounts": [
-        { "name": "arbiter", "isMut": true, "isSigner": true },
-        { "name": "protocolConfig", "isMut": false, "isSigner": false },
-        { "name": "trade", "isMut": true, "isSigner": false },
-        { "name": "escrow", "isMut": true, "isSigner": false },
-        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
-        { "name": "vaultAta", "isMut": true, "isSigner": false },
-        { "name": "recipientAta", "isMut": true, "isSigner": false },
-        { "name": "treasuryAta", "isMut": true, "isSigner": false },
-        { "name": "creator", "isMut": true, "isSigner": false },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+        {
+          "name": "buyer",
+          "docs": [
+            "Buyer (counterparty) confirming they sent fiat"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          },
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_trade",
+      "docs": [
+        "Create a new trade"
+      ],
+      "discriminator": [
+        183,
+        82,
+        24,
+        245,
+        248,
+        30,
+        204,
+        246
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "params.trade_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": [
-        { "name": "resolution", "type": { "defined": "DisputeResolution" } }
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "CreateTradeParams"
+            }
+          }
+        }
       ]
     },
     {
-      "name": "createLane",
+      "name": "emergency_refund_v2",
+      "docs": [
+        "Emergency refund for V2.2 legacy accounts",
+        "Use this to refund accounts created before the V2.3 upgrade",
+        "that cannot be deserialized by the current program"
+      ],
+      "discriminator": [
+        217,
+        70,
+        19,
+        178,
+        195,
+        152,
+        239,
+        92
+      ],
       "accounts": [
-        { "name": "merchant", "isMut": true, "isSigner": true },
-        { "name": "lane", "isMut": true, "isSigner": false },
-        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
-        { "name": "vaultAta", "isMut": true, "isSigner": false },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false },
-        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
-        { "name": "systemProgram", "isMut": false, "isSigner": false }
+        {
+          "name": "signer",
+          "docs": [
+            "Signer — MUST equal `protocol_config.authority`."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trade",
+          "docs": [
+            "V2.2 Trade account - NOT deserialized, read raw bytes"
+          ],
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "docs": [
+            "Escrow account - same structure in V2.2 and V2.3",
+            "Closed on success so it cannot be reused by any future instruction.",
+            "Rent goes to the depositor (the party who funded the escrow)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "docs": [
+            "Vault authority PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_ata",
+          "docs": [
+            "Escrow vault token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "depositor_ata",
+          "docs": [
+            "Depositor's token account to receive refund"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "docs": [
+            "Trade creator account",
+            "checking the V2.2 layout, NOT for rent. Rent goes to depositor."
+          ],
+          "writable": true
+        },
+        {
+          "name": "depositor",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token mint"
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "extend_escrow",
+      "docs": [
+        "Extend escrow expiration (depositor only)"
+      ],
+      "discriminator": [
+        67,
+        7,
+        174,
+        188,
+        71,
+        4,
+        26,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "depositor",
+          "docs": [
+            "Depositor who funded the escrow (must be signer)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          },
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        }
       ],
       "args": [
-        { "name": "laneId", "type": "u64" },
-        { "name": "minAmount", "type": "u64" },
-        { "name": "maxAmount", "type": "u64" }
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ExtendEscrowParams"
+            }
+          }
+        }
       ]
     },
     {
-      "name": "fundLane",
+      "name": "fund_escrow",
+      "docs": [
+        "Fund escrow WITHOUT counterparty (open for acceptance)",
+        "Use this when you want to fund first and let someone join later"
+      ],
+      "discriminator": [
+        155,
+        18,
+        218,
+        141,
+        182,
+        213,
+        69,
+        201
+      ],
       "accounts": [
-        { "name": "merchant", "isMut": true, "isSigner": true },
-        { "name": "lane", "isMut": true, "isSigner": false },
-        { "name": "vaultAta", "isMut": true, "isSigner": false },
-        { "name": "merchantAta", "isMut": true, "isSigner": false },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault_authority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "depositor_ata",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_config",
+      "docs": [
+        "Initialize protocol configuration (one-time setup)"
+      ],
+      "discriminator": [
+        208,
+        127,
+        21,
+        1,
+        194,
+        190,
+        196,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": [
-        { "name": "amount", "type": "u64" }
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "InitializeConfigParams"
+            }
+          }
+        }
       ]
     },
     {
-      "name": "withdrawLane",
+      "name": "lock_escrow",
+      "docs": [
+        "Lock escrow (deposit funds WITH counterparty in one step)",
+        "Use this when you know the counterparty upfront"
+      ],
+      "discriminator": [
+        55,
+        16,
+        5,
+        80,
+        13,
+        102,
+        206,
+        104
+      ],
       "accounts": [
-        { "name": "merchant", "isMut": true, "isSigner": true },
-        { "name": "lane", "isMut": true, "isSigner": false },
-        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
-        { "name": "vaultAta", "isMut": true, "isSigner": false },
-        { "name": "merchantAta", "isMut": true, "isSigner": false },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault_authority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "depositor_ata",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": [
-        { "name": "amount", "type": "u64" }
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "LockEscrowParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "match_offer",
+      "docs": [
+        "Match a signed offer (v2.1 - with signature verification)"
+      ],
+      "discriminator": [
+        2,
+        116,
+        112,
+        106,
+        248,
+        62,
+        212,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "matcher",
+          "docs": [
+            "Matcher (pays PDA rent, anyone can match valid offers)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "offer_creator"
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer_creator"
+              },
+              {
+                "kind": "arg",
+                "path": "params.offer.trade_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "offer_fill",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  45,
+                  102,
+                  105,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "params.offer_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "MatchOfferParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "open_dispute",
+      "docs": [
+        "Open a dispute on the trade",
+        "Either party can call when in Locked or PaymentSent state",
+        "Transitions: Locked/PaymentSent → Disputed"
+      ],
+      "discriminator": [
+        137,
+        25,
+        99,
+        119,
+        23,
+        223,
+        161,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "initiator",
+          "docs": [
+            "Party initiating the dispute (must be seller or buyer)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          },
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "refund_escrow",
+      "docs": [
+        "Refund escrow to depositor (no fee)",
+        "STATE-AWARE:",
+        "Funded pre-expiry    → seller only",
+        "Funded post-expiry   → anyone",
+        "Locked post-window   → anyone (permissionless hard timeout)",
+        "PaymentSent/Disputed → BLOCKED (dispute path only)"
+      ],
+      "discriminator": [
+        107,
+        186,
+        89,
+        99,
+        26,
+        194,
+        23,
+        204
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "docs": [
+            "Signer — authorization is state-dependent (checked in handler)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          },
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_ata",
+          "writable": true
+        },
+        {
+          "name": "depositor_ata",
+          "writable": true
+        },
+        {
+          "name": "depositor",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "release_escrow",
+      "docs": [
+        "Release escrow to counterparty (with fee)"
+      ],
+      "discriminator": [
+        146,
+        253,
+        129,
+        233,
+        20,
+        145,
+        181,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "docs": [
+            "Signer (must be creator or counterparty)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          },
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_ata",
+          "writable": true
+        },
+        {
+          "name": "counterparty_ata",
+          "writable": true
+        },
+        {
+          "name": "treasury_ata",
+          "writable": true
+        },
+        {
+          "name": "depositor",
+          "docs": [
+            "party who funded the trade and paid the escrow + vault rent)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolve_dispute",
+      "docs": [
+        "Resolve a disputed trade (arbiter only)",
+        "Arbiter decides: ReleaseToBuyer or RefundToSeller",
+        "Transitions: Disputed → Released/Refunded"
+      ],
+      "discriminator": [
+        231,
+        6,
+        202,
+        6,
+        96,
+        103,
+        12,
+        230
+      ],
+      "accounts": [
+        {
+          "name": "arbiter",
+          "docs": [
+            "Arbiter (must be protocol authority)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          },
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_ata",
+          "writable": true
+        },
+        {
+          "name": "recipient_ata",
+          "docs": [
+            "Recipient ATA - will be either buyer or seller depending on resolution"
+          ],
+          "writable": true
+        },
+        {
+          "name": "treasury_ata",
+          "docs": [
+            "Treasury ATA for fees (only used if releasing to buyer).",
+            "V2.3: validate against `trade.treasury` snapshot so a post-creation",
+            "authority rotation cannot redirect this trade's fee."
+          ],
+          "writable": true
+        },
+        {
+          "name": "depositor",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ResolveDisputeParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "resolve_dispute_timeout",
+      "docs": [
+        "Permissionless fallback: refunds a Disputed trade to its depositor",
+        "once more than `DISPUTE_WINDOW` (72h) has elapsed since open_dispute.",
+        "Safeguards against an unresponsive arbiter."
+      ],
+      "discriminator": [
+        244,
+        133,
+        66,
+        200,
+        61,
+        38,
+        228,
+        115
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          },
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_ata",
+          "writable": true
+        },
+        {
+          "name": "depositor_ata",
+          "writable": true
+        },
+        {
+          "name": "depositor",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_config",
+      "docs": [
+        "Update protocol configuration (authority only)"
+      ],
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "protocol_config"
+          ]
+        },
+        {
+          "name": "protocol_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_treasury",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateConfigParams"
+            }
+          }
+        }
       ]
     }
   ],
   "accounts": [
     {
+      "name": "Escrow",
+      "discriminator": [
+        31,
+        213,
+        123,
+        187,
+        186,
+        22,
+        218,
+        155
+      ]
+    },
+    {
+      "name": "OfferFill",
+      "discriminator": [
+        135,
+        222,
+        170,
+        240,
+        207,
+        59,
+        143,
+        143
+      ]
+    },
+    {
       "name": "ProtocolConfig",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          { "name": "authority", "type": "publicKey" },
-          { "name": "treasury", "type": "publicKey" },
-          { "name": "feeBps", "type": "u16" },
-          { "name": "maxFeeBps", "type": "u16" },
-          { "name": "minFeeBps", "type": "u16" },
-          { "name": "bump", "type": "u8" },
-          { "name": "isFrozen", "type": "bool" },
-          { "name": "version", "type": "u8" }
-        ]
-      }
+      "discriminator": [
+        207,
+        91,
+        250,
+        28,
+        152,
+        179,
+        215,
+        209
+      ]
     },
     {
       "name": "Trade",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          { "name": "creator", "type": "publicKey" },
-          { "name": "counterparty", "type": "publicKey" },
-          { "name": "tradeId", "type": "u64" },
-          { "name": "mint", "type": "publicKey" },
-          { "name": "amount", "type": "u64" },
-          { "name": "status", "type": { "defined": "TradeStatus" } },
-          { "name": "feeBps", "type": "u16" },
-          { "name": "escrowBump", "type": "u8" },
-          { "name": "bump", "type": "u8" },
-          { "name": "createdAt", "type": "i64" },
-          { "name": "lockedAt", "type": "i64" },
-          { "name": "settledAt", "type": "i64" },
-          { "name": "side", "type": { "defined": "TradeSide" } },
-          { "name": "expiresAt", "type": "i64" },
-          { "name": "paymentConfirmedAt", "type": "i64" },
-          { "name": "disputedAt", "type": "i64" },
-          { "name": "disputeInitiator", "type": "publicKey" }
-        ]
-      }
+      "discriminator": [
+        132,
+        139,
+        123,
+        31,
+        157,
+        196,
+        244,
+        190
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ConfigUpdatedEvent",
+      "discriminator": [
+        245,
+        158,
+        129,
+        99,
+        60,
+        100,
+        214,
+        220
+      ]
     },
     {
-      "name": "Escrow",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          { "name": "trade", "type": "publicKey" },
-          { "name": "vaultAuthority", "type": "publicKey" },
-          { "name": "vaultAta", "type": "publicKey" },
-          { "name": "depositor", "type": "publicKey" },
-          { "name": "amount", "type": "u64" },
-          { "name": "bump", "type": "u8" },
-          { "name": "vaultBump", "type": "u8" }
-        ]
-      }
+      "name": "DisputeOpenedEvent",
+      "discriminator": [
+        91,
+        164,
+        118,
+        191,
+        199,
+        195,
+        118,
+        21
+      ]
     },
     {
-      "name": "Lane",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          { "name": "merchant", "type": "publicKey" },
-          { "name": "laneId", "type": "u64" },
-          { "name": "mint", "type": "publicKey" },
-          { "name": "vaultAuthority", "type": "publicKey" },
-          { "name": "vaultAta", "type": "publicKey" },
-          { "name": "availableBalance", "type": "u64" },
-          { "name": "minAmount", "type": "u64" },
-          { "name": "maxAmount", "type": "u64" },
-          { "name": "isActive", "type": "bool" },
-          { "name": "bump", "type": "u8" },
-          { "name": "vaultBump", "type": "u8" },
-          { "name": "createdAt", "type": "i64" },
-          { "name": "updatedAt", "type": "i64" }
-        ]
-      }
+      "name": "DisputeResolvedEvent",
+      "discriminator": [
+        152,
+        37,
+        98,
+        245,
+        229,
+        39,
+        150,
+        78
+      ]
+    },
+    {
+      "name": "OfferMatchedEvent",
+      "discriminator": [
+        75,
+        182,
+        238,
+        33,
+        19,
+        12,
+        48,
+        73
+      ]
+    },
+    {
+      "name": "PaymentConfirmedEvent",
+      "discriminator": [
+        162,
+        217,
+        241,
+        162,
+        243,
+        91,
+        228,
+        186
+      ]
+    },
+    {
+      "name": "TradeAcceptedEvent",
+      "discriminator": [
+        234,
+        199,
+        50,
+        103,
+        78,
+        221,
+        38,
+        184
+      ]
+    },
+    {
+      "name": "TradeCreatedEvent",
+      "discriminator": [
+        36,
+        143,
+        131,
+        237,
+        166,
+        44,
+        137,
+        206
+      ]
+    },
+    {
+      "name": "TradeExtendedEvent",
+      "discriminator": [
+        177,
+        16,
+        185,
+        53,
+        187,
+        153,
+        212,
+        151
+      ]
+    },
+    {
+      "name": "TradeFundedEvent",
+      "discriminator": [
+        194,
+        94,
+        28,
+        171,
+        166,
+        66,
+        189,
+        184
+      ]
+    },
+    {
+      "name": "TradeLockedEvent",
+      "discriminator": [
+        123,
+        22,
+        140,
+        227,
+        6,
+        63,
+        177,
+        57
+      ]
+    },
+    {
+      "name": "TradeRefundedEvent",
+      "discriminator": [
+        66,
+        51,
+        3,
+        31,
+        114,
+        242,
+        231,
+        22
+      ]
+    },
+    {
+      "name": "TradeReleasedEvent",
+      "discriminator": [
+        45,
+        110,
+        250,
+        63,
+        31,
+        113,
+        113,
+        203
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "FeeOutOfBounds",
+      "msg": "Fee is outside allowed bounds [min, max]"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidTreasury",
+      "msg": "Treasury account does not match protocol config"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidTradeState",
+      "msg": "Trade is in invalid state for this operation"
+    },
+    {
+      "code": 6003,
+      "name": "Unauthorized",
+      "msg": "Unauthorized signer for this operation"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidSignature",
+      "msg": "Offer signature verification failed"
+    },
+    {
+      "code": 6005,
+      "name": "OfferExpired",
+      "msg": "Offer has expired"
+    },
+    {
+      "code": 6006,
+      "name": "OfferAlreadyFilled",
+      "msg": "Offer already filled (replay protection)"
+    },
+    {
+      "code": 6007,
+      "name": "ProtocolFrozen",
+      "msg": "Protocol is frozen - new trades disabled"
+    },
+    {
+      "code": 6008,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6009,
+      "name": "InsufficientAmount",
+      "msg": "Insufficient amount to cover fee"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidMint",
+      "msg": "Invalid mint for token account"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidCounterparty",
+      "msg": "Invalid counterparty"
+    },
+    {
+      "code": 6012,
+      "name": "CannotFund",
+      "msg": "Trade cannot be funded in current state"
+    },
+    {
+      "code": 6013,
+      "name": "CannotAccept",
+      "msg": "Trade cannot be accepted in current state"
+    },
+    {
+      "code": 6014,
+      "name": "CannotAcceptOwnTrade",
+      "msg": "Cannot accept your own trade"
+    },
+    {
+      "code": 6015,
+      "name": "CannotLock",
+      "msg": "Trade cannot be locked in current state"
+    },
+    {
+      "code": 6016,
+      "name": "CannotRelease",
+      "msg": "Trade cannot be released in current state"
+    },
+    {
+      "code": 6017,
+      "name": "CannotRefund",
+      "msg": "Trade cannot be refunded in current state"
+    },
+    {
+      "code": 6018,
+      "name": "LaneNotActive",
+      "msg": "Lane is not active"
+    },
+    {
+      "code": 6019,
+      "name": "InsufficientLaneBalance",
+      "msg": "Insufficient balance in lane vault"
+    },
+    {
+      "code": 6020,
+      "name": "AmountOutsideLaneBounds",
+      "msg": "Amount outside lane min/max bounds"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidLane",
+      "msg": "Lane does not match offer"
+    },
+    {
+      "code": 6022,
+      "name": "NoLaneSpecified",
+      "msg": "Offer does not specify a lane"
+    },
+    {
+      "code": 6023,
+      "name": "EscrowExpired",
+      "msg": "Escrow has expired - auto-refund available"
+    },
+    {
+      "code": 6024,
+      "name": "NotExpired",
+      "msg": "Escrow has not expired yet"
+    },
+    {
+      "code": 6025,
+      "name": "NotDepositor",
+      "msg": "Only the depositor can extend escrow"
+    },
+    {
+      "code": 6026,
+      "name": "CannotExtend",
+      "msg": "Cannot extend - escrow already expired"
+    },
+    {
+      "code": 6027,
+      "name": "CannotConfirmPayment",
+      "msg": "Cannot confirm payment in current state"
+    },
+    {
+      "code": 6028,
+      "name": "NotBuyer",
+      "msg": "Only the buyer can confirm payment"
+    },
+    {
+      "code": 6029,
+      "name": "CannotDispute",
+      "msg": "Cannot dispute in current state"
+    },
+    {
+      "code": 6030,
+      "name": "NotParty",
+      "msg": "Only trade parties can open dispute"
+    },
+    {
+      "code": 6031,
+      "name": "NotDisputed",
+      "msg": "Trade is not in disputed state"
+    },
+    {
+      "code": 6032,
+      "name": "NotArbiter",
+      "msg": "Only authorized arbiters can resolve disputes"
+    },
+    {
+      "code": 6033,
+      "name": "MustUseDispute",
+      "msg": "Must use dispute resolution - payment already confirmed"
+    },
+    {
+      "code": 6034,
+      "name": "BuyerPayWindowActive",
+      "msg": "Buyer payment window still active - cannot cancel yet"
+    },
+    {
+      "code": 6035,
+      "name": "InvalidVault",
+      "msg": "Invalid vault account"
+    },
+    {
+      "code": 6036,
+      "name": "InvalidDepositor",
+      "msg": "Invalid depositor account"
+    },
+    {
+      "code": 6037,
+      "name": "InvalidV2AccountSize",
+      "msg": "Trade account is not the expected V2.2 size (150 bytes)"
+    },
+    {
+      "code": 6038,
+      "name": "InvalidTradeOwner",
+      "msg": "Trade account owner mismatch"
+    },
+    {
+      "code": 6039,
+      "name": "TradeAlreadySettled",
+      "msg": "Trade is already settled (Released or Refunded)"
+    },
+    {
+      "code": 6040,
+      "name": "CreatorMismatch",
+      "msg": "Creator account mismatch"
+    },
+    {
+      "code": 6041,
+      "name": "DisputeWindowActive",
+      "msg": "Dispute window has not yet elapsed"
+    },
+    {
+      "code": 6042,
+      "name": "InvalidExtension",
+      "msg": "Extension seconds must be positive"
+    },
+    {
+      "code": 6043,
+      "name": "ExtensionTooLong",
+      "msg": "Extension would exceed maximum trade lifetime"
+    },
+    {
+      "code": 6044,
+      "name": "PaymentNotStale",
+      "msg": "PaymentSent stale threshold has not elapsed"
+    },
+    {
+      "code": 6045,
+      "name": "InvalidAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6046,
+      "name": "InvalidLaneBounds",
+      "msg": "Lane bounds invalid: min must be > 0 and ≤ max"
+    },
+    {
+      "code": 6047,
+      "name": "MaxFeeBpsExceedsHardCap",
+      "msg": "max_fee_bps exceeds protocol-wide hard cap (10%)"
+    },
+    {
+      "code": 6048,
+      "name": "CounterpartyMismatch",
+      "msg": "Counterparty does not match the value bound to the signed offer"
     }
   ],
   "types": [
     {
-      "name": "TradeStatus",
+      "name": "ConfigUpdatedEvent",
       "type": {
-        "kind": "enum",
-        "variants": [
-          { "name": "Created" },
-          { "name": "Funded" },
-          { "name": "Locked" },
-          { "name": "PaymentSent" },
-          { "name": "Disputed" },
-          { "name": "Released" },
-          { "name": "Refunded" }
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_fee_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "new_treasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "new_authority",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "is_frozen",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
         ]
       }
     },
     {
-      "name": "TradeSide",
+      "name": "CreateTradeParams",
       "type": {
-        "kind": "enum",
-        "variants": [
-          { "name": "Buy" },
-          { "name": "Sell" }
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "side",
+            "type": {
+              "defined": {
+                "name": "TradeSide"
+              }
+            }
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Fee tier in basis points (V2.3.1). Caller picks a tier within the",
+              "protocol's [min_fee_bps, max_fee_bps] range. Snapshotted onto the",
+              "Trade so future config changes don't affect this trade."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisputeOpenedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "initiator",
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
         ]
       }
     },
     {
       "name": "DisputeResolution",
+      "docs": [
+        "Dispute resolution outcome"
+      ],
       "type": {
         "kind": "enum",
         "variants": [
-          { "name": "ReleaseToBuyer" },
-          { "name": "RefundToSeller" }
+          {
+            "name": "ReleaseToBuyer"
+          },
+          {
+            "name": "RefundToSeller"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisputeResolvedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "arbiter",
+            "type": "pubkey"
+          },
+          {
+            "name": "resolution",
+            "type": "u8"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Escrow",
+      "docs": [
+        "Escrow vault state",
+        "",
+        "Seeds: [b\"escrow-v2\", trade_key]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "docs": [
+              "Parent trade PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_authority",
+            "docs": [
+              "Vault authority PDA (signs token transfers)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_ata",
+            "docs": [
+              "Token account holding escrowed funds"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "docs": [
+              "Who deposited funds (for refund)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount locked in vault"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Escrow PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "docs": [
+              "Vault authority bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExtendEscrowParams",
+      "docs": [
+        "Parameters for extending escrow expiration"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "extension_seconds",
+            "docs": [
+              "Additional seconds to extend (e.g., 86400 for 24 hours)"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "min_fee_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LockEscrowParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MatchOfferParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer",
+            "type": {
+              "defined": {
+                "name": "Offer"
+              }
+            }
+          },
+          {
+            "name": "signature",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ed25519_ix_index",
+            "docs": [
+              "Index (in the current tx) of the Ed25519Verify instruction that",
+              "binds offer_creator/pubkey, offer_hash, signature."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Offer",
+      "docs": [
+        "Canonical offer structure for signing",
+        "",
+        "This MUST be serialized identically across all clients",
+        "to ensure signature verification works.",
+        "",
+        "V2.3: Added `counterparty` so offers are bound to the intended buyer at",
+        "signature time. Without this binding, an attacker who observes a signed",
+        "offer can race to match it with `params.counterparty = attacker`,",
+        "consuming the OfferFill PDA and locking out the intended buyer.",
+        "",
+        "V2.3.1: Added `fee_bps` so the merchant's signed offer commits to a",
+        "specific fee tier within the protocol's [min_fee_bps, max_fee_bps] range.",
+        "Without this, a matcher could submit the offer with a different (lower)",
+        "fee than the merchant intended. Domain separator bumped to \\x02 because",
+        "the Offer layout changed — old SDK signatures will not validate."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "docs": [
+              "Offer creator (signer)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "docs": [
+              "Counterparty the offer is bound to (the intended buyer).",
+              "Must equal `params.counterparty` at match time."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "Token mint"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Token amount"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "side",
+            "docs": [
+              "Trade side (buy/sell)"
+            ],
+            "type": {
+              "defined": {
+                "name": "TradeSide"
+              }
+            }
+          },
+          {
+            "name": "trade_id",
+            "docs": [
+              "Trade ID (unique per creator)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "docs": [
+              "Expiry timestamp (unix seconds)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Nonce for uniqueness"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lane_id",
+            "docs": [
+              "Lane ID (v2.2) - 0 means no lane (fallback to two-step)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Fee tier in basis points (V2.3.1). The merchant commits to a tier at",
+              "signing time; the program validates it falls within the protocol's",
+              "[min_fee_bps, max_fee_bps] range and snapshots it onto the Trade so",
+              "future config changes don't affect this trade. Typical tiers:",
+              "150 = 1.5% (cheap), 200 = 2% (standard), 250 = 2.5% (priority)."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferFill",
+      "docs": [
+        "Offer fill record (replay protection for v2.1)",
+        "",
+        "Seeds: [b\"offer-fill\", offer_hash]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_hash",
+            "docs": [
+              "Hash of the canonical offer"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "trade",
+            "docs": [
+              "Trade that consumed this offer"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "filled_at",
+            "docs": [
+              "Timestamp when filled"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "filler",
+            "docs": [
+              "Who matched the offer"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferMatchedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "offer_creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "matcher",
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PaymentConfirmedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolConfig",
+      "docs": [
+        "Global protocol configuration",
+        "",
+        "Single instance controls fees, treasury, and protocol state.",
+        "Authority can update mutable fields but cannot touch user funds."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "Protocol authority (can update config)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Protocol treasury (receives all fees - ENFORCED)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Current protocol fee in basis points (250 = 2.5%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_fee_bps",
+            "docs": [
+              "Maximum allowed fee (immutable cap set at init)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "min_fee_bps",
+            "docs": [
+              "Minimum allowed fee (immutable floor set at init)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "is_frozen",
+            "docs": [
+              "Emergency freeze (disables new trade creation)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "version",
+            "docs": [
+              "Config version for future upgrades"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ResolveDisputeParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "resolution",
+            "type": {
+              "defined": {
+                "name": "DisputeResolution"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Trade",
+      "docs": [
+        "Trade PDA - tracks lifecycle and metadata",
+        "",
+        "Seeds: [b\"trade-v2\", creator, trade_id.to_le_bytes()]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "docs": [
+              "Trade creator (initiator)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "docs": [
+              "Counterparty (set when locked)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_id",
+            "docs": [
+              "Unique trade ID (per creator)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "SPL token mint"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Token amount"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current trade status"
+            ],
+            "type": {
+              "defined": {
+                "name": "TradeStatus"
+              }
+            }
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Snapshot of protocol fee at creation (immutable)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Snapshot of protocol treasury at creation (immutable for the life",
+              "of this trade). The release path uses `trade.treasury` instead of",
+              "`protocol_config.treasury` so an admin who rotates the treasury",
+              "after a trade is created cannot redirect that trade's fees."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_bump",
+            "docs": [
+              "Escrow PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Trade PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Creation timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "locked_at",
+            "docs": [
+              "Lock timestamp (0 if not locked)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "settled_at",
+            "docs": [
+              "Settlement timestamp (0 if not settled)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "side",
+            "docs": [
+              "Trade side (buy/sell from creator perspective)"
+            ],
+            "type": {
+              "defined": {
+                "name": "TradeSide"
+              }
+            }
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "Escrow expiration timestamp (0 = no expiration, set when funded)",
+              "In Funded state: anyone can auto-refund after expiry",
+              "In Locked state: seller can cancel after buyer_pay_window",
+              "In PaymentSent/Disputed: NO auto-refund allowed"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "payment_confirmed_at",
+            "docs": [
+              "Timestamp when buyer confirmed payment (0 if not confirmed)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "disputed_at",
+            "docs": [
+              "Timestamp when dispute was opened (0 if not disputed)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "dispute_initiator",
+            "docs": [
+              "Who initiated the dispute (default = no dispute)"
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeAcceptedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeCreatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "side",
+            "type": {
+              "defined": {
+                "name": "TradeSide"
+              }
+            }
+          },
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeExtendedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "new_expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeFundedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_ata",
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeLockedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_ata",
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeRefundedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeReleasedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          },
+          {
+            "name": "payout",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeSide",
+      "docs": [
+        "Trade side from creator's perspective"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Buy"
+          },
+          {
+            "name": "Sell"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeStatus",
+      "docs": [
+        "Trade lifecycle states"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Created"
+          },
+          {
+            "name": "Funded"
+          },
+          {
+            "name": "Locked"
+          },
+          {
+            "name": "PaymentSent"
+          },
+          {
+            "name": "Disputed"
+          },
+          {
+            "name": "Released"
+          },
+          {
+            "name": "Refunded"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_authority",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "new_treasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "new_fee_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "is_frozen",
+            "type": {
+              "option": "bool"
+            }
+          }
         ]
       }
     }
-  ],
-  "errors": [
-    { "code": 6000, "name": "FeeOutOfBounds", "msg": "Fee is outside allowed bounds [min, max]" },
-    { "code": 6001, "name": "InvalidTreasury", "msg": "Treasury account does not match protocol config" },
-    { "code": 6002, "name": "InvalidTradeState", "msg": "Trade is in invalid state for this operation" },
-    { "code": 6003, "name": "Unauthorized", "msg": "Unauthorized signer for this operation" },
-    { "code": 6010, "name": "CannotFund", "msg": "Trade cannot be funded in current state" },
-    { "code": 6011, "name": "CannotAccept", "msg": "Trade cannot be accepted in current state" },
-    { "code": 6012, "name": "CannotAcceptOwnTrade", "msg": "Cannot accept your own trade" },
-    { "code": 6013, "name": "CannotLock", "msg": "Trade cannot be locked in current state" },
-    { "code": 6014, "name": "CannotRelease", "msg": "Trade cannot be released in current state" },
-    { "code": 6015, "name": "CannotRefund", "msg": "Trade cannot be refunded in current state" },
-    { "code": 6020, "name": "EscrowExpired", "msg": "Escrow has expired - auto-refund available" },
-    { "code": 6021, "name": "NotExpired", "msg": "Escrow has not expired yet" },
-    { "code": 6022, "name": "NotDepositor", "msg": "Only the depositor can extend escrow" },
-    { "code": 6023, "name": "CannotExtend", "msg": "Cannot extend - escrow already expired" },
-    { "code": 6030, "name": "CannotConfirmPayment", "msg": "Cannot confirm payment in current state" },
-    { "code": 6031, "name": "NotBuyer", "msg": "Only the buyer can confirm payment" },
-    { "code": 6032, "name": "CannotDispute", "msg": "Cannot dispute in current state" },
-    { "code": 6033, "name": "NotParty", "msg": "Only trade parties can open dispute" },
-    { "code": 6034, "name": "NotDisputed", "msg": "Trade is not in disputed state" },
-    { "code": 6035, "name": "NotArbiter", "msg": "Only authorized arbiters can resolve disputes" },
-    { "code": 6036, "name": "MustUseDispute", "msg": "Must use dispute resolution - payment already confirmed" },
-    { "code": 6037, "name": "BuyerPayWindowActive", "msg": "Buyer payment window still active - cannot cancel yet" }
-  ],
-  "metadata": {
-    "address": "6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87"
-  }
+  ]
 }

@@ -772,11 +772,26 @@ class BlipScanIndexer {
   private static V2_STATUS_MAP = ['created', 'funded', 'locked', 'payment_sent', 'disputed', 'released', 'refunded'];
 
   private parseV2TradeAccount(data: Buffer): any {
-    // Trade struct layout (206 bytes total):
-    // 8: discriminator, 32: creator, 32: counterparty, 8: tradeId, 32: mint,
-    // 8: amount, 1: status, 2: feeBps, 1: escrowBump, 1: bump,
-    // 8: createdAt, 8: lockedAt, 8: settledAt, 1: side,
-    // 8: expiresAt, 8: paymentConfirmedAt, 8: disputedAt, 32: disputeInitiator
+    // V2.3 Trade struct layout (238 bytes total):
+    //   8: discriminator
+    //  32: creator
+    //  32: counterparty
+    //   8: tradeId
+    //  32: mint
+    //   8: amount
+    //   1: status
+    //   2: feeBps
+    //  32: treasury           ← V2.3 added (snapshot to prevent admin redirect)
+    //   1: escrowBump
+    //   1: bump
+    //   8: createdAt
+    //   8: lockedAt
+    //   8: settledAt
+    //   1: side
+    //   8: expiresAt
+    //   8: paymentConfirmedAt
+    //   8: disputedAt
+    //  32: disputeInitiator
 
     let offset = 8; // Skip discriminator
 
@@ -801,6 +816,15 @@ class BlipScanIndexer {
     const feeBps = data.readUInt16LE(offset);
     offset += 2;
 
+    // V2.3: treasury — guard against pre-V2.3 accounts (which were 206 bytes
+    // and didn't include treasury). For older layouts the next 32 bytes would
+    // be other fields; in that case treasury stays null.
+    let treasury: PublicKey | null = null;
+    if (data.length >= offset + 32) {
+      treasury = new PublicKey(data.slice(offset, offset + 32));
+      offset += 32;
+    }
+
     const statusStr = BlipScanIndexer.V2_STATUS_MAP[statusByte] || 'unknown';
 
     return {
@@ -811,6 +835,7 @@ class BlipScanIndexer {
       amount,
       status: { [statusStr]: {} },
       feeBps,
+      treasury,
       statusStr,
     };
   }
@@ -862,13 +887,27 @@ class BlipScanIndexer {
       // Map 'created' to 'funded' for display (on-chain Created = just created, Funded = escrow deposited)
       if (statusStr === 'created') statusStr = 'funded';
 
+      // V2.3.1: pull fee_bps and treasury from the decoded Trade. Both are
+      // snapshotted on-chain at create time — the program guarantees they
+      // don't change for this trade's lifetime, so we can record them once
+      // here and trust the value forever.
+      const feeBps =
+        typeof trade.feeBps === 'number'
+          ? trade.feeBps
+          : (trade.feeBps?.toNumber?.() ?? 0);
+      const treasuryPubkey = trade.treasury ? trade.treasury.toString() : null;
+
       // Insert trade into v2_trades table (snake_case schema)
       const result = await pool.query(
         `INSERT INTO v2_trades (
           program_id, trade_pda, trade_id, creator_pubkey, counterparty_pubkey,
-          mint_address, amount, status, lane_id, created_slot, created_at, created_signature
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        ON CONFLICT (trade_pda) DO UPDATE SET created_signature = EXCLUDED.created_signature
+          mint_address, amount, fee_bps, treasury_pubkey, status, lane_id,
+          created_slot, created_at, created_signature
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        ON CONFLICT (trade_pda) DO UPDATE SET
+          created_signature = EXCLUDED.created_signature,
+          fee_bps           = COALESCE(v2_trades.fee_bps, EXCLUDED.fee_bps),
+          treasury_pubkey   = COALESCE(v2_trades.treasury_pubkey, EXCLUDED.treasury_pubkey)
         RETURNING id`,
         [
           V2_PROGRAM_ID.toString(),
@@ -878,6 +917,8 @@ class BlipScanIndexer {
           trade.counterparty.toString() === PublicKey.default.toString() ? null : trade.counterparty.toString(),
           trade.mint.toString(),
           trade.amount.toString(),
+          feeBps,
+          treasuryPubkey,
           statusStr,
           laneId,
           0, // created_slot - will be updated if available

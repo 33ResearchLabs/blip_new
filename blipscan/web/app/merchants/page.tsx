@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Copy, Check, ExternalLink, Sun, Moon, Users } from 'lucide-react';
+import { solscanAccount } from '@/lib/explorer';
 
 interface Merchant {
   merchant_pubkey: string;
@@ -82,7 +83,7 @@ export default function MerchantsPage() {
     return `${days}d ago`;
   };
 
-  const solscanAccount = (addr: string) => `https://solscan.io/account/${addr}?cluster=devnet`;
+  // solscanAccount imported from @/lib/explorer (network-aware)
 
   return (
     <div className="min-h-screen bg-background">
