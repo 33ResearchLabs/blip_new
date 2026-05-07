@@ -26,7 +26,6 @@ import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsO
 import { copyToClipboard } from "@/lib/clipboard";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { DEVNET_RPC, DEVNET_WS_ENDPOINT } from "@/lib/solana/v2/config";
-import { getRpcEndpoints } from "@/lib/solana/rpc";
 import { confirmHttp } from "@/lib/solana/confirmHttp";
 import {
   generateWallet,
@@ -205,81 +204,53 @@ export default function WalletPage({
   }, [isLoading, embeddedWallet?.state, solanaWallet.connected]);
 
   // ── Network status polling ────────────────────────────────────────────
-  // Probes the active Solana RPC for block height + round-trip latency so
-  // the Network Status card reflects what THIS client actually sees, not a
-  // generic upstream /health endpoint.
+  // Calls our server-side proxy at /api/solana/network-status instead of
+  // hitting the RPC directly. Why the proxy exists:
   //
-  // Why this is wrapped in retry / fallback logic rather than a single fetch:
-  //   - Env-configured RPCs (Helius, QuickNode, etc.) often require an API key
-  //     embedded in the URL and silently 401/403 from the browser without a
-  //     usable error body.
-  //   - Some RPCs reject `getBlockHeight` from anonymous origins but accept
-  //     `getSlot` (slot ≈ block height for status purposes — slots advance
-  //     ~400ms apart, blocks may skip). We try both.
-  //   - If everything env-configured fails we fall back to the canonical
-  //     public endpoint so the merchant always sees SOMETHING real instead of
-  //     a permanent "—".
+  //   Public Solana RPCs — api.mainnet-beta.solana.com, api.devnet.solana.com,
+  //   and most free mirrors — reject browser POSTs without a CORS allow-origin
+  //   header. The fetch throws before the body is even read, so a direct
+  //   client-side probe could only ever say "Down" on production. Doing the
+  //   same call from /api/solana/network-status (server-side, no CORS) reaches
+  //   the RPC normally and returns { slot, latency, healthy } as JSON.
   //
-  // 10s interval keeps the call count low; Solana's block time is ~400ms but
-  // sub-10s precision on a status pill is overkill.
+  //   The proxy caches results for 8s, so polling here at 10s yields at most
+  //   one upstream RPC call per network per ~8s no matter how many tabs are
+  //   open against this host.
+  //
+  // `latency` reported here is the proxy's server-to-RPC round-trip — that's
+  // also what matters operationally (transaction submission speed), so it's
+  // the more useful number to show the merchant anyway.
   useEffect(() => {
     if (view !== "main") return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const probe = async (url: string) => {
-      const start = performance.now();
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "getSlot",
-            params: [{ commitment: "confirmed" }],
-          }),
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
-        const latency = Math.round(performance.now() - start);
-        if (typeof data?.result !== "number") return null;
-        return { slot: data.result as number, latency };
-      } catch {
-        return null;
-      }
-    };
-
     const tick = async () => {
       const network = isMainnet() ? "mainnet-beta" : "devnet";
-      const configured = getRpcEndpoints(network).map((e) => e.url);
-      const publicFallback =
-        network === "mainnet-beta"
-          ? "https://api.mainnet-beta.solana.com"
-          : "https://api.devnet.solana.com";
-      // De-dupe in case env already lists the public one first.
-      const candidates = Array.from(new Set([...configured, publicFallback]));
-
-      let result: { slot: number; latency: number } | null = null;
-      for (const url of candidates) {
+      try {
+        const res = await fetchWithAuth(
+          `/api/solana/network-status?network=${network}`,
+        );
+        const json = await res.json();
         if (cancelled) return;
-        result = await probe(url);
-        if (result) break;
-      }
-
-      if (cancelled) return;
-      if (result) {
-        setNetworkStatus({
-          blockHeight: result.slot,
-          latency: result.latency,
-          healthy: true,
-        });
-      } else {
-        setNetworkStatus((prev) => ({ ...prev, healthy: false }));
-      }
-
-      if (!cancelled) {
-        timer = setTimeout(tick, 10_000);
+        if (json?.success && json.data?.healthy) {
+          setNetworkStatus({
+            blockHeight: typeof json.data.slot === "number" ? json.data.slot : null,
+            latency: typeof json.data.latency === "number" ? json.data.latency : null,
+            healthy: true,
+          });
+        } else {
+          setNetworkStatus((prev) => ({ ...prev, healthy: false }));
+        }
+      } catch {
+        if (!cancelled) {
+          setNetworkStatus((prev) => ({ ...prev, healthy: false }));
+        }
+      } finally {
+        if (!cancelled) {
+          timer = setTimeout(tick, 10_000);
+        }
       }
     };
     tick();
