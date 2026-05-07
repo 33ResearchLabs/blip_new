@@ -75,6 +75,13 @@ const RATE_OFFSETS = [
   -0.012, -0.006, 0.003, -0.009, 0.008, 0.014, 0.011, 0.019, 0.016, 0.024,
 ];
 
+function formatAmountInput(value: string): string {
+  if (!value) return value;
+  const [intPart, decPart] = value.split(".");
+  const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return decPart !== undefined ? `${withCommas}.${decPart}` : withCommas;
+}
+
 function RateSparkline({
   rate,
   positive,
@@ -199,8 +206,8 @@ export const TradeCreationScreen = ({
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="relative px-5 pt-10 pb-3 flex items-start gap-3 z-30 shrink-0">
-        <motion.button
+      <header className="relative px-5 pt-10 pb-2 flex items-start gap-2 z-30 shrink-0">
+        {/* <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setScreen("home")}
           className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle"
@@ -210,13 +217,13 @@ export const TradeCreationScreen = ({
             strokeWidth={2}
             className="text-text-secondary"
           />
-        </motion.button>
+        </motion.button> */}
         <div className="flex-1 min-w-0">
           {/* Top row: small label + corridor selector */}
           <div className="flex items-center justify-between gap-2 mb-0.5">
-            <p className="text-[11px] font-bold tracking-[0.22em] text-text-tertiary uppercase truncate">
-              P2P Exchange
-            </p>
+            <p className="text-[22px] font-extrabold tracking-[-0.03em] text-text-primary truncate">
+            Trade USDT
+          </p>
             <FilterDropdown
               className="shrink-0"
               value={ratePair}
@@ -232,14 +239,14 @@ export const TradeCreationScreen = ({
             />
           </div>
           {/* Big title — full width, no competing element */}
-          <p className="text-[22px] font-extrabold tracking-[-0.03em] text-text-primary truncate">
+          {/* <p className="text-[22px] font-extrabold tracking-[-0.03em] text-text-primary truncate">
             Trade USDT
-          </p>
+          </p> */}
         </div>
       </header>
 
       {/* ── Scrollable body ─────────────────────────────────────────────── */}
-      <div className="flex-1 px-5 pb-28 z-10 flex flex-col gap-3 overflow-y-auto no-scrollbar">
+      <div className="flex-1 px-5 pb-28 z-10 flex flex-col gap-2 overflow-y-auto no-scrollbar">
         {/* ── Buy / Sell — big cards ───────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 shrink-0">
           {(
@@ -315,11 +322,11 @@ export const TradeCreationScreen = ({
         </div>
 
         {/* ── Market Rate Card ─────────────────────────────────────────── */}
-        <motion.div
+        {/* <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className={`w-full rounded-[24px] shrink-0 overflow-hidden ${CARD}`}
+          className={`w-full rounded-[18px] shrink-0 overflow-hidden ${CARD}`}
         >
           <div className="flex items-center justify-between px-4 pt-3 pb-2">
             <div className="flex-1 min-w-0">
@@ -378,11 +385,14 @@ export const TradeCreationScreen = ({
               HIGH {ratePair === "usdt_aed" ? "3.694" : "93.50"}
             </span>
           </div>
-        </motion.div>
+        </motion.div> */}
+
+        
 
         {/* ── Amount input ──────────────────────────────────────────────── */}
+       
         <div
-          className={`w-full rounded-[28px] mb-3 flex flex-col items-center py-2 px-3 ${CARD}`}
+          className={`w-full rounded-[28px] mb-1 flex flex-col items-center py-2 px-3 ${CARD}`}
         >
           <p className="text-[10px] font-bold tracking-[0.28em] text-text-tertiary uppercase mb-2">
             {tradeType === "buy" ? "You Pay (USDT)" : "You Sell (USDT)"}
@@ -392,16 +402,23 @@ export const TradeCreationScreen = ({
             <input
               type="text"
               inputMode="decimal"
-              maxLength={14}
-              value={amount}
+              maxLength={18}
+              value={formatAmountInput(amount)}
               onChange={(e) =>
-                setAmount(clampDecimal(e.target.value, DECIMAL_PRESETS.amount))
+                setAmount(
+                  clampDecimal(
+                    e.target.value.replace(/,/g, ""),
+                    DECIMAL_PRESETS.amount,
+                  ),
+                )
               }
               placeholder="0"
               className={`text-[52px] font-extrabold tracking-[-0.06em] leading-none bg-transparent border-0 outline-none text-right max-w-64 ${
                 hasAmount ? "text-text-primary" : "text-text-quaternary"
               }`}
-              style={{ width: `${Math.max(38, (amount.length || 1) * 30)}px` }}
+              style={{
+                width: `${Math.max(38, (formatAmountInput(amount).length || 1) * 30)}px`,
+              }}
             />
             <span className="text-[20px] font-bold text-text-tertiary tracking-[-0.01em]">
               USDT
@@ -434,7 +451,7 @@ export const TradeCreationScreen = ({
           </div>
 
           {solanaWallet.connected && (
-            <div className="mt-2 flex items-center gap-1.5">
+            <div className="mt-2 flex items-center gap-2">
               <div className="px-3 py-1 rounded-full bg-surface-hover border border-border-subtle">
                 <span className="text-[11px] font-bold text-text-tertiary tracking-[0.08em]">
                   BAL{" "}
@@ -514,7 +531,7 @@ export const TradeCreationScreen = ({
                         receiving account, which already covers bank/cash/upi).
             We render only ONE of these to avoid the duplicate-section issue. */}
         {tradeType === "buy" ? (
-          <div className="mb-3">
+          <div className="mb-1">
             <p className="text-[10px] font-bold tracking-[0.28em] text-text-tertiary uppercase mb-2">
               Pay via
             </p>
@@ -591,7 +608,7 @@ export const TradeCreationScreen = ({
                   key: "fast" as const,
                   label: "Fastest",
                   sub: "~2 min",
-                  fee: "3.0%",
+                  fee: "2.9%",
                   barHex: "var(--color-warning)",
                 },
                 {
@@ -633,15 +650,15 @@ export const TradeCreationScreen = ({
                       <p className="text-[12px] font-bold text-text-primary">
                         {label}
                       </p>
-                      <p className="text-[10px] font-medium text-text-tertiary">
+                      {/* <p className="text-[10px] font-medium text-text-tertiary">
                         {sub}
-                      </p>
+                      </p> */}
                     </div>
                     <div
-                      className="flex items-center justify-center h-5 px-1 rounded-full border"
+                      className="flex items-center justify-center h-5 px-1 "
                       style={{
                         background: `${barHex}15`,
-                        borderColor: `${barHex}40`,
+                        // borderColor: `${barHex}40`,
                       }}
                     >
                       <span
@@ -663,7 +680,7 @@ export const TradeCreationScreen = ({
           whileTap={{ scale: 0.97 }}
           onClick={startTrade}
           disabled={!hasAmount || isLoading || !userId}
-          className={`w-full flex items-center justify-center gap-2 shrink-0 min-h-12 rounded-[14px] text-[14px] font-bold tracking-[-0.01em] ${
+          className={`w-full flex items-center justify-center gap-2 shrink-0 min-h-14 rounded-[14px] text-[16px] font-bold tracking-[-0.01em] ${
             hasAmount && !isLoading
               ? "bg-accent text-accent-text border border-border-strong shadow-[0_4px_16px_rgba(0,0,0,0.2)]"
               : "bg-surface-card text-text-quaternary border border-border-subtle"

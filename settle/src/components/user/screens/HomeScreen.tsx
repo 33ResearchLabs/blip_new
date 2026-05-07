@@ -317,7 +317,7 @@ export const HomeScreen = ({
          ══════════════════════════════════════════════ */}
       <div
         className="relative shrink-0 pb-3 rounded-b-[32px] bg-gradient-to-b from-surface-raised to-surface-base"
-        style={{ minHeight: cardH ? `${cardH}px` : '50svh' }}
+        style={isWalletReady ? undefined : { minHeight: cardH ? `${cardH}px` : '50svh' }}
       >
 
         {/* ── Ambient decorations ── */}
