@@ -165,7 +165,9 @@ export interface LeaderboardEntry {
   username: string;
   totalTrades: number;
   totalVolume: number;
-  rating: number;
+  /** null when the merchant has zero ratings yet — UI must guard against
+   *  null rather than rendering a phantom 5.0 default. */
+  rating: number | null;
   ratingCount: number;
   isOnline: boolean;
   avgResponseMins: number;

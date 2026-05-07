@@ -44,7 +44,10 @@ interface LeaderboardEntry {
   username: string;
   totalTrades: number;
   totalVolume: number;
-  rating: number;
+  /** null when the merchant has zero ratings yet — UI should show
+   *  "no ratings" / "—" instead of the deceptive 5.0 default the
+   *  column previously carried. */
+  rating: number | null;
   ratingCount: number;
   isOnline: boolean;
   avgResponseMins: number;
@@ -106,7 +109,16 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
     leaderboardTab === 'traders'
       ? [...leaderboardData].sort((a, b) => b.totalVolume - a.totalVolume)
       : leaderboardTab === 'rated'
-      ? [...leaderboardData].sort((a, b) => b.rating - a.rating)
+      // null rating sorts AFTER any real rating — unrated merchants belong
+      // at the bottom of the "Top Rated" tab, not at the top with phantom 5.0s.
+      ? [...leaderboardData].sort((a, b) => {
+          const aHas = a.rating != null;
+          const bHas = b.rating != null;
+          if (!aHas && !bHas) return 0;
+          if (!aHas) return 1;
+          if (!bHas) return -1;
+          return (b.rating as number) - (a.rating as number);
+        })
       : [];
 
   return (
@@ -249,11 +261,24 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                     {formatVolume(entry.totalVolume)}
                   </span>
 
-                  {/* Rating */}
-                  <span className="flex items-center gap-0.5 text-[11px] font-bold text-primary tabular-nums shrink-0 min-w-[34px] justify-end">
-                    <Star className="w-3 h-3 fill-primary text-primary" />
-                    {entry.rating.toFixed(1)}
-                  </span>
+                  {/* Rating — show "—" for new merchants with zero
+                      ratings instead of a phantom 5.0 (the column's
+                      historical default), so a freshly-signed-up merchant
+                      with NO reviews doesn't look identical to one with
+                      genuine 5/5 reviews. */}
+                  {entry.rating != null ? (
+                    <span className="flex items-center gap-0.5 text-[11px] font-bold text-primary tabular-nums shrink-0 min-w-[34px] justify-end">
+                      <Star className="w-3 h-3 fill-primary text-primary" />
+                      {entry.rating.toFixed(1)}
+                    </span>
+                  ) : (
+                    <span
+                      title="No ratings yet"
+                      className="text-[11px] font-bold text-foreground/30 tabular-nums shrink-0 min-w-[34px] text-right"
+                    >
+                      —
+                    </span>
+                  )}
                 </div>
               );
             })}
