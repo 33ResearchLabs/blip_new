@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Building2, Wallet, CreditCard, DollarSign, Check, Loader2, AlertCircle, Trash2, Star, Smartphone, Pencil } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
-interface PaymentMethod {
+export interface PaymentMethod {
   id: string;
   type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile';
   name: string;
@@ -660,5 +660,329 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId, editingMethod 
         </motion.div>
       </div>
     </AnimatePresence>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// PaymentMethodInlineForm
+// ────────────────────────────────────────────────────────────────────────
+// Same form body the modal uses, but rendered as a plain block (no overlay,
+// no list step) so the Settings page can pin it as a permanently-visible
+// right rail next to the methods list. All validation/save logic is shared
+// with the modal — the only differences are layout and the
+// `editingMethod` is passed in by the parent rather than pulled from props.
+//
+// Parents are responsible for supplying:
+//   - merchantId            : auth scope for the API
+//   - methodCount           : used to default-mark the first method
+//   - editingMethod         : null = fresh add, set = edit-in-place
+//   - onSaved(method, isEdit): notify the list to insert/update the row
+//   - onCancel              : optional — clears edit state in the parent
+
+interface PaymentMethodInlineFormProps {
+  merchantId: string;
+  methodCount: number;
+  editingMethod?: PaymentMethod | null;
+  onSaved: (saved: PaymentMethod, isEdit: boolean) => void;
+  onCancel?: () => void;
+  className?: string;
+}
+
+export function PaymentMethodInlineForm({
+  merchantId,
+  methodCount,
+  editingMethod,
+  onSaved,
+  onCancel,
+  className = '',
+}: PaymentMethodInlineFormProps) {
+  const [selectedType, setSelectedType] = useState<'bank' | 'cash' | 'crypto' | 'card' | 'mobile'>(
+    editingMethod?.type ?? 'bank',
+  );
+  const [formData, setFormData] = useState<FormData>(
+    editingMethod ? parseDetailsForEdit(editingMethod) : EMPTY_FORM,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Re-sync when the parent swaps which method we're editing (e.g. user
+  // clicks Edit on a different row). Without this, formData would be stuck
+  // showing the previously-edited method's values.
+  useEffect(() => {
+    if (editingMethod) {
+      setSelectedType(editingMethod.type);
+      setFormData(parseDetailsForEdit(editingMethod));
+    } else {
+      setSelectedType('bank');
+      setFormData(EMPTY_FORM);
+    }
+    setError(null);
+  }, [editingMethod?.id]);
+
+  const editingId = editingMethod?.id ?? null;
+  const selectedTypeInfo = PAYMENT_METHOD_TYPES.find((t) => t.type === selectedType)!;
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const f = trimAll(formData);
+      let name = '';
+      let details = '';
+
+      switch (selectedType) {
+        case 'bank': {
+          if (!f.bankName || !f.accountName || !f.accountNumber) {
+            throw new Error('Please fill in all bank details');
+          }
+          const err = validateBank({
+            bankName: f.bankName,
+            accountName: f.accountName,
+            accountNumber: f.accountNumber,
+            iban: f.iban,
+            swiftCode: f.swiftCode,
+          });
+          if (err) throw new Error(err);
+          name = f.bankName;
+          details = `${f.accountName} - ${f.accountNumber}`;
+          if (f.iban) details += ` (${f.iban.toUpperCase()})`;
+          break;
+        }
+        case 'cash': {
+          if (!f.location) throw new Error('Please specify meeting location');
+          const err = validateCash(f.location);
+          if (err) throw new Error(err);
+          name = 'Cash Meeting';
+          details = f.location;
+          break;
+        }
+        case 'crypto': {
+          if (!f.walletAddress) throw new Error('Please provide wallet address');
+          const err = validateCrypto(f.walletAddress);
+          if (err) throw new Error(err);
+          name = 'Crypto Wallet';
+          details = f.walletAddress;
+          break;
+        }
+        case 'card': {
+          if (!f.cardNumber || !f.cardholderName) throw new Error('Please provide card details');
+          const err = validateCard({ cardholderName: f.cardholderName, cardNumber: f.cardNumber });
+          if (err) throw new Error(err);
+          name = 'Card Payment';
+          details = `${f.cardholderName} - **** ${f.cardNumber.slice(-4)}`;
+          break;
+        }
+        case 'mobile': {
+          if (!f.mobileNumber || !f.mobileProvider) throw new Error('Please provide mobile payment details');
+          const err = validateMobile({ mobileProvider: f.mobileProvider, mobileNumber: f.mobileNumber });
+          if (err) throw new Error(err);
+          name = f.mobileProvider;
+          details = f.mobileNumber;
+          break;
+        }
+      }
+
+      const isEdit = editingId !== null;
+      const url = isEdit
+        ? `/api/merchant/${merchantId}/payment-methods/${editingId}`
+        : `/api/merchant/${merchantId}/payment-methods`;
+      const body: Record<string, unknown> = isEdit
+        ? { name, details }
+        : { type: selectedType, name, details, is_default: methodCount === 0 };
+
+      const res = await fetchWithAuth(url, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(
+          json.error ||
+            (Array.isArray(json.errors) ? json.errors.join(', ') : 'Failed to save payment method'),
+        );
+      }
+
+      onSaved(
+        {
+          id: json.data.id,
+          type: json.data.type,
+          name: json.data.name,
+          details: json.data.details,
+          is_default: json.data.is_default,
+        },
+        isEdit,
+      );
+      if (!isEdit) {
+        // After a successful add, reset the form so the user can keep adding
+        // without manually clearing fields. Edits leave the form populated
+        // because the parent typically clears `editingMethod` itself.
+        setFormData(EMPTY_FORM);
+        setSelectedType('bank');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save payment method');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderFields = () => {
+    switch (selectedType) {
+      case 'bank':
+        return (
+          <div className="space-y-2.5">
+            <input type="text" placeholder="Bank Name (e.g., Emirates NBD)" value={formData.bankName} maxLength={60}
+              onChange={(e) => setFormData({ ...formData, bankName: e.target.value })} className={inputClass} />
+            <input type="text" placeholder="Account Holder Name" value={formData.accountName} maxLength={60}
+              onChange={(e) => setFormData({ ...formData, accountName: e.target.value })} className={inputClass} />
+            <input type="text" inputMode="numeric" pattern="\d*" placeholder="Account Number (4–24 digits)" value={formData.accountNumber} maxLength={24}
+              onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value.replace(/\D/g, '') })} className={inputClass} />
+            <div className="grid grid-cols-2 gap-2.5">
+              <input type="text" placeholder="IBAN (Optional)" value={formData.iban} maxLength={34}
+                onChange={(e) => setFormData({ ...formData, iban: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} className={inputClass} />
+              <input type="text" placeholder="SWIFT Code (Optional)" value={formData.swiftCode} maxLength={11}
+                onChange={(e) => setFormData({ ...formData, swiftCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} className={inputClass} />
+            </div>
+          </div>
+        );
+      case 'cash':
+        return (
+          <textarea placeholder="Meeting Location (e.g., Dubai Mall, Burj Khalifa entrance)" value={formData.location} maxLength={120}
+            onChange={(e) => setFormData({ ...formData, location: e.target.value })} rows={3}
+            className={`${inputClass} resize-none`} />
+        );
+      case 'crypto':
+        return (
+          <input type="text" placeholder="Wallet Address (e.g., 0x...)" value={formData.walletAddress} maxLength={100}
+            onChange={(e) => setFormData({ ...formData, walletAddress: e.target.value.replace(/[^A-Za-z0-9]/g, '') })} className={`${inputClass} font-mono text-[12px]`} />
+        );
+      case 'card':
+        return (
+          <div className="space-y-2.5">
+            <input type="text" placeholder="Cardholder Name" value={formData.cardholderName} maxLength={60}
+              onChange={(e) => setFormData({ ...formData, cardholderName: e.target.value })} className={inputClass} />
+            <input type="text" inputMode="numeric" pattern="\d*" placeholder="Last 4 digits" value={formData.cardNumber}
+              onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value.replace(/\D/g, '') })} maxLength={4} className={inputClass} />
+          </div>
+        );
+      case 'mobile':
+        return (
+          <div className="space-y-2.5">
+            <input type="text" placeholder="Provider (e.g., PayTM, Google Pay)" value={formData.mobileProvider} maxLength={30}
+              onChange={(e) => setFormData({ ...formData, mobileProvider: e.target.value })} className={inputClass} />
+            <input type="tel" inputMode="tel" placeholder="Mobile Number (e.g., +971501234567)" value={formData.mobileNumber} maxLength={16}
+              onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value.replace(/[^\d+]/g, '') })} className={inputClass} />
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className={`bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6 ${className}`}>
+      <div className="flex items-start justify-between mb-1">
+        <div>
+          <h3 className="text-xl font-bold text-white">
+            {editingId ? 'Edit Payment Method' : 'Add Payment Method'}
+          </h3>
+          <p className="text-[12px] text-white/40 mt-0.5">
+            {editingId
+              ? 'Update fields and save your changes'
+              : 'Choose a method and add your details'}
+          </p>
+        </div>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            aria-label="Close"
+            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-white/40 hover:text-white/70"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      <div className="mt-5">
+        <p className="text-[10px] text-white/40 font-mono uppercase tracking-[0.18em] mb-3">
+          {editingId ? 'Payment Type (locked)' : 'Payment Type'}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {PAYMENT_METHOD_TYPES.map((type) => {
+            const isActive = selectedType === type.type;
+            const disabled = editingId !== null && !isActive;
+            return (
+              <button
+                key={type.type}
+                disabled={disabled}
+                title={disabled ? "Type can't be changed — delete and re-add to switch type" : undefined}
+                onClick={() => {
+                  if (editingId) return;
+                  setSelectedType(type.type);
+                }}
+                className={`p-3 rounded-xl border transition-all text-left ${
+                  isActive
+                    ? `bg-gradient-to-br ${type.gradient} ${type.border} ring-1 ${type.ring}`
+                    : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'
+                } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <type.icon className={`w-4 h-4 ${isActive ? type.text : 'text-white/30'}`} />
+                  <div>
+                    <span className={`text-[13px] font-semibold block ${isActive ? 'text-white' : 'text-white/60'}`}>
+                      {type.label}
+                    </span>
+                    <span className="text-[10px] text-white/30">{type.desc}</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <p className="text-[10px] text-white/40 font-mono uppercase tracking-[0.18em] mb-3">
+          {selectedTypeInfo.label} Details
+        </p>
+        {renderFields()}
+      </div>
+
+      {error && (
+        <div className="mt-4 flex items-center gap-2.5 p-3 bg-red-500/[0.06] border border-red-500/15 rounded-xl">
+          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+          <p className="text-[12px] text-red-400/80">{error}</p>
+        </div>
+      )}
+
+      <div className="mt-5 flex gap-2.5">
+        <button
+          onClick={() => {
+            setError(null);
+            if (editingId) {
+              onCancel?.();
+            } else {
+              setFormData(EMPTY_FORM);
+              setSelectedType('bank');
+            }
+          }}
+          className="flex-1 px-4 py-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl text-[13px] text-white/70 font-medium transition-all"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={isLoading}
+          className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 rounded-xl text-[13px] text-background font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {isLoading ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> {editingId ? 'Saving...' : 'Adding...'}</>
+          ) : editingId ? (
+            <><Check className="w-4 h-4" /> Save Changes</>
+          ) : (
+            <><Check className="w-4 h-4" /> Add Method</>
+          )}
+        </button>
+      </div>
+    </div>
   );
 }

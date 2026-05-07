@@ -37,7 +37,7 @@ import { useMerchantStore } from "@/stores/merchantStore";
 import { CorridorProviderSettings } from "@/components/merchant/CorridorProviderSettings";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { WalletLedger } from "@/components/merchant/WalletLedger";
-import { PaymentMethodModal } from "@/components/merchant/PaymentMethodModal";
+import { PaymentMethodModal, PaymentMethodInlineForm } from "@/components/merchant/PaymentMethodModal";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { useTheme, THEMES, type Theme } from "@/context/ThemeContext";
 import {
@@ -45,6 +45,22 @@ import {
   Wallet as WalletIconLucide,
   DollarSign,
   Star,
+  Mail,
+  IdCard,
+  Activity,
+  Calendar,
+  Volume2,
+  ShoppingCart,
+  MessageCircle,
+  Save,
+  ShieldCheck,
+  BarChart3,
+  PieChart,
+  Database,
+  Heart,
+  Medal,
+  Award,
+  Clock,
 } from "lucide-react";
 
 type MerchantPaymentMethod = {
@@ -463,8 +479,11 @@ export default function MerchantSettingsPage({
   // Pencil click → open the rich PaymentMethodModal in edit mode pre-filled
   // with this method. The modal handles validation, parsing, and the PUT.
   const startEditMethod = (method: MerchantPaymentMethod) => {
+    // Settings page uses an inline right-rail form (PaymentMethodInlineForm)
+    // — clicking Edit on a row just hands the method to that form via state.
+    // The modal wrapper still exists for callers outside Settings that
+    // depend on it, so we don't open it here.
     setEditingPaymentMethod(method);
-    setIsPaymentModalOpen(true);
   };
 
   // Fetch merchant payment methods when Payments tab opens
@@ -560,17 +579,24 @@ export default function MerchantSettingsPage({
     );
   }
 
-  const tabs: { id: SettingsTab; label: string; icon: any }[] = [
+  // Tabs are split into two groups so the sidebar can render `ACCOUNT` and
+  // `PREFERENCES` section headers (matching the design system mock the
+  // settings page is converging on). Order within each group is preserved
+  // from before — Profile first under Account, Alerts first under Prefs.
+  const accountTabs: { id: SettingsTab; label: string; icon: any }[] = [
     { id: "profile", label: "Profile", icon: User },
     { id: "account", label: "Account", icon: Shield },
     { id: "security", label: "Security", icon: Lock },
     { id: "theme", label: "Theme", icon: Palette },
     { id: "payments", label: "Payments", icon: CreditCard },
+  ];
+  const preferenceTabs: { id: SettingsTab; label: string; icon: any }[] = [
     { id: "notifications", label: "Alerts", icon: Bell },
     { id: "liquidity", label: "Liquidity", icon: Droplets },
     { id: "reputation", label: "Reputation", icon: Trophy },
     { id: "ledger", label: "Wallet Ledger", icon: BookOpen },
   ];
+  const tabs = [...accountTabs, ...preferenceTabs];
 
   return (
     <div className="min-h-screen bg-background text-white">
@@ -590,11 +616,20 @@ export default function MerchantSettingsPage({
         onBack={onClose ?? (() => router.push("/merchant"))}
       />
 
-      <div className="max-w-5xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-50px)]">
-        {/* Sidebar Tabs */}
-        <nav className="md:w-56 md:border-r border-white/[0.05] md:py-4 md:px-2 shrink-0">
-          {/* Mobile: horizontal scroll tabs */}
-          <div className="flex md:flex-col gap-1 overflow-x-auto px-3 py-2 md:p-0 scrollbar-hide">
+      {/* Full-bleed layout. Previous wrapper used `max-w-5xl mx-auto` which
+          capped the page at ~1024px and pushed unused space at both edges on
+          a desktop monitor. The settings UI is sidebar + content, both of
+          which look better as wide panes — sidebar gets a fixed 240px column,
+          content gets the rest with a comfortable 32px gutter. */}
+      <div className="w-full flex flex-col md:flex-row min-h-[calc(100vh-50px)]">
+        {/* Sidebar Tabs — sticky on desktop so it stays visible while the
+            content area scrolls. Anchored at top-[50px] (the height of the
+            MerchantNavbar) and capped at the viewport so very long sidebars
+            scroll internally instead of pushing the page taller. */}
+        <nav className="md:w-60 md:border-r border-white/[0.05] md:py-6 md:px-3 shrink-0 flex flex-col md:sticky md:top-[50px] md:self-start md:h-[calc(100vh-50px)] md:overflow-y-auto">
+          {/* Mobile: horizontal scroll tabs (single flat list, no section
+              headers — they only make sense in the vertical desktop layout). */}
+          <div className="flex md:hidden gap-1 overflow-x-auto px-3 py-2 scrollbar-hide">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -612,8 +647,54 @@ export default function MerchantSettingsPage({
                 </button>
               );
             })}
+          </div>
 
-            <div className="hidden md:block mt-auto pt-8">
+          {/* Desktop: grouped sidebar — ACCOUNT then PREFERENCES, with the
+              Logout pinned at the bottom via mt-auto. */}
+          <div className="hidden md:flex md:flex-col gap-1 flex-1">
+            <p className="px-3 mb-2 text-[10px] font-bold tracking-[0.18em] text-white/30 uppercase">
+              Account
+            </p>
+            {accountTabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? "bg-white/[0.08] text-white"
+                      : "text-white/40 hover:text-foreground/60 hover:bg-card"
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {tab.label}
+                </button>
+              );
+            })}
+
+            <p className="px-3 mt-5 mb-2 text-[10px] font-bold tracking-[0.18em] text-white/30 uppercase">
+              Preferences
+            </p>
+            {preferenceTabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? "bg-white/[0.08] text-white"
+                      : "text-white/40 hover:text-foreground/60 hover:bg-card"
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {tab.label}
+                </button>
+              );
+            })}
+
+            <div className="mt-auto pt-6 space-y-3">
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium text-red-400/70 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/[0.06] transition-all w-full"
@@ -625,8 +706,9 @@ export default function MerchantSettingsPage({
           </div>
         </nav>
 
-        {/* Content */}
-        <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
+        {/* Content — full remaining width with a comfortable max so very
+            wide monitors don't stretch the form fields edge-to-edge. */}
+        <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8 max-w-[1100px] w-full">
           {/* Success/Error banners */}
           {saveSuccess && (
             <motion.div
@@ -807,129 +889,209 @@ export default function MerchantSettingsPage({
           {activeTab === "account" && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-lg font-bold mb-1">Account</h2>
+                <h2 className="text-2xl font-bold mb-1">Account</h2>
                 <p className="text-sm text-white/40">
                   Account details and trading stats
                 </p>
               </div>
 
-              {/* Account Info */}
-              <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-3">
-                <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-2 block">
+              {/* Account Info — each row has a leading icon tile, label/value
+                  body, and a trailing edit (username/email) or copy (id/wallet)
+                  affordance. Matches the wider rhythm of the new settings
+                  layout. */}
+              <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-1">
+                <p className="text-[11px] text-white/40 font-mono uppercase tracking-[0.18em] mb-3">
                   Account Information
-                </label>
+                </p>
 
                 {/* Username */}
-                <div className="flex items-center justify-between py-2 border-b border-white/[0.04]">
-                  <div>
-                    <p className="text-xs text-white/30">Username</p>
-                    <p className="text-sm text-white/80 font-mono">
-                      {merchant?.username || "—"}
-                    </p>
+                <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
+                  <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                    <User className="w-4 h-4 text-white/60" />
                   </div>
+                  <p className="flex-1 text-[13px] text-white/60">Username</p>
+                  <p className="text-[13px] text-white font-medium">
+                    {merchant?.username || "—"}
+                  </p>
+                  <button
+                    aria-label="Edit username"
+                    onClick={() => setActiveTab("profile")}
+                    className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {/* Email */}
-                <div className="flex items-center justify-between py-2 border-b border-white/[0.04]">
-                  <div>
-                    <p className="text-xs text-white/30">Email</p>
-                    <p className="text-sm text-white/80">
-                      {merchant?.email || "Not set"}
-                    </p>
+                <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
+                  <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                    <Mail className="w-4 h-4 text-white/60" />
                   </div>
+                  <p className="flex-1 text-[13px] text-white/60">Email</p>
+                  <p className="text-[13px] text-white font-medium">
+                    {merchant?.email || "Not set"}
+                  </p>
+                  <button
+                    aria-label="Edit email"
+                    onClick={() => setActiveTab("profile")}
+                    className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {/* Merchant ID */}
-                <div className="flex items-center justify-between py-2 border-b border-white/[0.04]">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-white/30">Merchant ID</p>
-                    <p className="text-sm text-white/50 font-mono truncate">
-                      {merchant?.id || merchantId || "—"}
-                    </p>
+                <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
+                  <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                    <IdCard className="w-4 h-4 text-white/60" />
                   </div>
+                  <p className="flex-1 text-[13px] text-white/60">Merchant ID</p>
+                  <p className="text-[13px] text-white font-mono truncate max-w-[40ch]">
+                    {merchant?.id || merchantId || "—"}
+                  </p>
                   <button
+                    aria-label="Copy merchant id"
                     onClick={() =>
                       handleCopyField(
                         merchant?.id || merchantId || "",
                         "merchant_id",
                       )
                     }
-                    className="p-1.5 hover:bg-card rounded-lg transition-colors shrink-0 ml-2"
+                    className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
                   >
                     {copiedField === "merchant_id" ? (
                       <Check className="w-3.5 h-3.5 text-emerald-400" />
                     ) : (
-                      <Copy className="w-3.5 h-3.5 text-white/30" />
+                      <Copy className="w-3.5 h-3.5" />
                     )}
                   </button>
                 </div>
 
                 {/* Wallet */}
-                <div className="flex items-center justify-between py-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-white/30">Wallet Address</p>
-                    <p className="text-sm text-white/50 font-mono truncate">
-                      {merchant?.wallet_address || "Not connected"}
-                    </p>
+                <div className="flex items-center gap-4 py-3">
+                  <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                    <Wallet className="w-4 h-4 text-white/60" />
                   </div>
-                  {merchant?.wallet_address && (
+                  <p className="flex-1 text-[13px] text-white/60">Wallet Address</p>
+                  <p className="text-[13px] text-white font-mono truncate max-w-[40ch]">
+                    {merchant?.wallet_address || "Not connected"}
+                  </p>
+                  {merchant?.wallet_address ? (
                     <button
+                      aria-label="Copy wallet address"
                       onClick={() =>
                         handleCopyField(merchant.wallet_address, "wallet")
                       }
-                      className="p-1.5 hover:bg-card rounded-lg transition-colors shrink-0 ml-2"
+                      className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
                     >
                       {copiedField === "wallet" ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-white/30" />
+                        <Copy className="w-3.5 h-3.5" />
                       )}
                     </button>
+                  ) : (
+                    <span className="w-7" />
                   )}
                 </div>
               </div>
 
-              {/* Stats */}
+              {/* Trading Stats — each cell pairs an icon tile (left) with a
+                  label/value stack (right), with one accent value (rating
+                  stars / verified badge / etc) on the trailing edge. */}
               <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
-                <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-3 block">
+                <p className="text-[11px] text-white/40 font-mono uppercase tracking-[0.18em] mb-3">
                   Trading Stats
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                    <p className="text-[10px] text-white/30 font-mono uppercase">
-                      Total Trades
-                    </p>
-                    <p className="text-lg font-bold text-white/80 font-mono">
-                      {merchant?.total_trades || 0}
-                    </p>
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Total Trades */}
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <Activity className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider mb-0.5">
+                        Total Trades
+                      </p>
+                      <p className="text-2xl font-bold text-white tabular-nums leading-none">
+                        {merchant?.total_trades || 0}
+                      </p>
+                    </div>
                   </div>
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                    <p className="text-[10px] text-white/30 font-mono uppercase">
-                      Rating
-                    </p>
-                    <p className="text-lg font-bold text-white/80 font-mono">
-                      {parseFloat(String(merchant?.rating || 5)).toFixed(2)}
-                    </p>
+
+                  {/* Rating */}
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <Star className="w-4 h-4 text-primary fill-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider mb-0.5">
+                        Rating
+                      </p>
+                      <p className="text-2xl font-bold text-white tabular-nums leading-none">
+                        {parseFloat(String(merchant?.rating || 5)).toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`w-3.5 h-3.5 ${
+                            s <= Math.round(parseFloat(String(merchant?.rating || 5)))
+                              ? "fill-primary text-primary"
+                              : "text-white/15"
+                          }`}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                    <p className="text-[10px] text-white/30 font-mono uppercase">
-                      Status
-                    </p>
-                    <p
-                      className={`text-lg font-bold font-mono ${merchant?.status === "active" ? "text-emerald-400" : "text-red-400"}`}
-                    >
-                      {merchant?.status || "active"}
-                    </p>
+
+                  {/* Status */}
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <Activity className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider mb-0.5">
+                        Status
+                      </p>
+                      <p
+                        className={`text-lg font-bold leading-none ${
+                          merchant?.status === "active"
+                            ? "text-emerald-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        {(merchant?.status || "active").charAt(0).toUpperCase() +
+                          (merchant?.status || "active").slice(1)}
+                      </p>
+                    </div>
+                    {merchant?.status === "active" && (
+                      <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        Verified
+                      </span>
+                    )}
                   </div>
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                    <p className="text-[10px] text-white/30 font-mono uppercase">
-                      Joined
-                    </p>
-                    <p className="text-sm font-bold text-white/60 font-mono">
-                      {merchant?.created_at
-                        ? new Date(merchant.created_at).toLocaleDateString()
-                        : "—"}
-                    </p>
+
+                  {/* Joined */}
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <Calendar className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider mb-0.5">
+                        Joined
+                      </p>
+                      <p className="text-lg font-bold text-white leading-none">
+                        {merchant?.created_at
+                          ? new Date(merchant.created_at).toLocaleDateString(
+                              undefined,
+                              { month: "short", day: "numeric", year: "numeric" },
+                            )
+                          : "—"}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1086,52 +1248,57 @@ export default function MerchantSettingsPage({
             </div>
           )}
 
-          {/* Payments Tab */}
+          {/* Payments Tab — two-column: list on the left, persistent inline
+              add/edit form on the right. Replaces the old "click to open
+              modal" flow with a single screen where the form is always in
+              view, matching the design mock. The modal is still mounted
+              below for backwards compat (other surfaces may trigger it via
+              setIsPaymentModalOpen) but Settings doesn't use that path. */}
           {activeTab === "payments" && (
-            <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* LEFT — list / empty state */}
               <div>
-                <h2 className="text-lg font-bold mb-1">Payment Methods</h2>
-                <p className="text-sm text-white/40">
+                <h2 className="text-2xl font-bold mb-1">Payment Methods</h2>
+                <p className="text-sm text-white/40 mb-5">
                   Bank, card, crypto, cash and mobile methods used to send or
                   receive funds
                 </p>
-              </div>
 
-              <div className="space-y-3">
                 {isLoadingMethods && paymentMethods.length === 0 ? (
-                  <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-8 text-center">
+                  <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-12 text-center">
                     <Loader2 className="w-5 h-5 text-white/20 mx-auto animate-spin" />
                     <p className="text-xs text-white/30 mt-3">
                       Loading payment methods…
                     </p>
                   </div>
                 ) : paymentMethods.length === 0 ? (
-                  <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-8 text-center">
-                    <CreditCard className="w-10 h-10 text-white/10 mx-auto mb-3" />
-                    <p className="text-sm text-white/40 mb-4">
+                  <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] py-16 px-8 text-center min-h-[400px] flex flex-col items-center justify-center">
+                    <div className="w-20 h-20 mx-auto rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-5">
+                      <CreditCard className="w-9 h-9 text-white/30" />
+                    </div>
+                    <p className="text-base font-medium text-white mb-1">
                       No payment methods added yet
                     </p>
-                    <button
-                      onClick={() => setIsPaymentModalOpen(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 border border-primary/20 text-sm text-primary font-medium hover:bg-primary/20 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Payment Method
-                    </button>
+                    <p className="text-[13px] text-white/40">
+                      Use the form on the right to add one.
+                    </p>
                   </div>
                 ) : (
-                  <>
+                  <div className="space-y-3">
                     {paymentMethods.map((method) => {
                       const meta =
                         PM_TYPE_META[method.type] || PM_TYPE_META.bank;
                       const Icon = meta.Icon;
+                      const isBeingEdited = editingPaymentMethod?.id === method.id;
                       return (
                         <div
                           key={method.id}
                           className={`rounded-2xl border p-4 transition-colors overflow-hidden ${
-                            method.is_default
-                              ? "bg-gradient-to-r from-primary/[0.06] to-transparent border-primary/20"
-                              : "bg-white/[0.02] border-white/[0.06]"
+                            isBeingEdited
+                              ? "bg-primary/[0.06] border-primary/30 ring-1 ring-primary/20"
+                              : method.is_default
+                                ? "bg-gradient-to-r from-primary/[0.06] to-transparent border-primary/20"
+                                : "bg-white/[0.02] border-white/[0.06]"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -1142,7 +1309,7 @@ export default function MerchantSettingsPage({
                                 <Icon className={`w-5 h-5 ${meta.text}`} />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 flex-wrap">
                                   <p className="text-sm font-medium text-white/80 truncate min-w-0">
                                     {method.name}
                                   </p>
@@ -1155,6 +1322,11 @@ export default function MerchantSettingsPage({
                                       <span className="text-[9px] text-primary font-bold uppercase tracking-wider">
                                         Default
                                       </span>
+                                    </span>
+                                  )}
+                                  {isBeingEdited && (
+                                    <span className="text-[9px] text-primary font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20">
+                                      Editing
                                     </span>
                                   )}
                                 </div>
@@ -1194,15 +1366,45 @@ export default function MerchantSettingsPage({
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
 
-                    <button
-                      onClick={() => setIsPaymentModalOpen(true)}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/[0.08] text-sm text-white/30 hover:text-foreground/50 hover:border-border-strong transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Payment Method
-                    </button>
-                  </>
+              {/* RIGHT — always-visible add/edit form. The same component is
+                  used for both: when `editingPaymentMethod` is null it shows
+                  the Add UI; when set it switches to Edit mode for that row.
+                  Cancel from edit clears the parent's edit state and the
+                  form falls back to Add. */}
+              <div className="lg:sticky lg:top-6 self-start">
+                {(merchantId || merchant?.id) ? (
+                  <PaymentMethodInlineForm
+                    merchantId={(merchantId || merchant?.id) as string}
+                    methodCount={paymentMethods.length}
+                    editingMethod={editingPaymentMethod}
+                    onCancel={
+                      editingPaymentMethod
+                        ? () => setEditingPaymentMethod(null)
+                        : undefined
+                    }
+                    onSaved={(saved, isEdit) => {
+                      if (isEdit) {
+                        setPaymentMethods((prev) =>
+                          prev.map((m) =>
+                            m.id === saved.id
+                              ? { ...m, name: saved.name, details: saved.details }
+                              : m,
+                          ),
+                        );
+                        setEditingPaymentMethod(null);
+                      } else {
+                        setPaymentMethods((prev) => [...prev, saved]);
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-6 text-center text-sm text-white/40">
+                    Loading merchant…
+                  </div>
                 )}
               </div>
             </div>
@@ -1212,74 +1414,103 @@ export default function MerchantSettingsPage({
           {activeTab === "notifications" && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-lg font-bold mb-1">Notifications</h2>
+                <h2 className="text-2xl font-bold mb-1">Notifications</h2>
                 <p className="text-sm text-white/40">
                   Configure alerts and sounds
                 </p>
               </div>
 
-              <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-1">
-                {[
-                  {
-                    key: "sound" as const,
-                    label: "Sound Effects",
-                    desc: "Play sounds for new orders and messages",
-                  },
-                  {
-                    key: "orderAlerts" as const,
-                    label: "Order Alerts",
-                    desc: "Get notified about new and updated orders",
-                  },
-                  {
-                    key: "chatMessages" as const,
-                    label: "Chat Messages",
-                    desc: "Notifications for incoming messages",
-                  },
-                  {
-                    key: "systemUpdates" as const,
-                    label: "System Updates",
-                    desc: "Platform news and maintenance alerts",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.key}
-                    className="flex items-center justify-between py-3 border-b border-white/[0.04] last:border-0"
-                  >
-                    <div>
-                      <p className="text-sm text-white/80">{item.label}</p>
-                      <p className="text-xs text-white/30 mt-0.5">
-                        {item.desc}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setNotifSettings((prev) => ({
-                          ...prev,
-                          [item.key]: !prev[item.key],
-                        }))
-                      }
-                      className={`w-11 h-6 rounded-full transition-all relative ${
-                        notifSettings[item.key]
-                          ? "bg-primary"
-                          : "bg-white/[0.08]"
+              {/* Each preference row pairs a leading icon tile (chosen to
+                  visually match the action — speaker/cart/bubble/bell) with
+                  label + description + toggle. Same data + handlers as before,
+                  just restructured rows. */}
+              <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-2">
+                {(
+                  [
+                    {
+                      key: "sound" as const,
+                      label: "Sound Effects",
+                      desc: "Play sounds for new orders and messages.",
+                      Icon: Volume2,
+                    },
+                    {
+                      key: "orderAlerts" as const,
+                      label: "Order Alerts",
+                      desc: "Get notified about new and updated orders.",
+                      Icon: ShoppingCart,
+                    },
+                    {
+                      key: "chatMessages" as const,
+                      label: "Chat Messages",
+                      desc: "Notifications for incoming messages.",
+                      Icon: MessageCircle,
+                    },
+                    {
+                      key: "systemUpdates" as const,
+                      label: "System Updates",
+                      desc: "Platform news and maintenance alerts.",
+                      Icon: Bell,
+                    },
+                  ] as const
+                ).map((item, idx, arr) => {
+                  const Icon = item.Icon;
+                  const on = notifSettings[item.key];
+                  return (
+                    <div
+                      key={item.key}
+                      className={`flex items-center gap-4 px-4 py-4 ${
+                        idx < arr.length - 1
+                          ? "border-b border-white/[0.04]"
+                          : ""
                       }`}
                     >
-                      <div
-                        className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-all ${
-                          notifSettings[item.key] ? "left-[22px]" : "left-0.5"
+                      <div className="w-11 h-11 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                        <Icon className="w-5 h-5 text-white/70" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-bold text-white">
+                          {item.label}
+                        </p>
+                        <p className="text-[12px] text-white/40 mt-0.5">
+                          {item.desc}
+                        </p>
+                      </div>
+                      <button
+                        role="switch"
+                        aria-checked={on}
+                        onClick={() =>
+                          setNotifSettings((prev) => ({
+                            ...prev,
+                            [item.key]: !prev[item.key],
+                          }))
+                        }
+                        className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${
+                          on ? "bg-primary" : "bg-white/[0.10]"
                         }`}
-                      />
-                    </button>
-                  </div>
-                ))}
+                      >
+                        <div
+                          className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-all ${
+                            on ? "left-[26px]" : "left-0.5"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               <button
                 onClick={handleSaveNotifications}
-                className="w-full py-3 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
               >
+                <Save className="w-4 h-4" />
                 Save Preferences
               </button>
+
+              <div className="flex items-center justify-center gap-1.5 text-[12px] text-white/30">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Your preferences are securely saved
+              </div>
             </div>
           )}
 
@@ -1287,14 +1518,54 @@ export default function MerchantSettingsPage({
           {activeTab === "liquidity" && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-lg font-bold mb-1">Liquidity Provider</h2>
+                <h2 className="text-2xl font-bold mb-1">Liquidity Provider</h2>
                 <p className="text-sm text-white/40">
                   Earn fees by providing liquidity for other traders
                 </p>
               </div>
 
-              <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
+              {/* CorridorProviderSettings now owns its own header row +
+                  description, so the wrapper card is just the chrome. */}
+              <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-6">
                 <CorridorProviderSettings merchantId={merchantId || null} />
+              </div>
+
+              {/* Trust row — four-up feature highlights matching the LP mock. */}
+              <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  {
+                    Icon: ShieldCheck,
+                    title: "Secure & Reliable",
+                    desc: "Trusted by thousands of traders",
+                  },
+                  {
+                    Icon: BarChart3,
+                    title: "Competitive Fees",
+                    desc: "Set your fee and earn on every trade",
+                  },
+                  {
+                    Icon: Zap,
+                    title: "Instant Matching",
+                    desc: "Get matched with active traders",
+                  },
+                  {
+                    Icon: PieChart,
+                    title: "Real-time Analytics",
+                    desc: "Track performance and earnings",
+                  },
+                ].map(({ Icon, title, desc }) => (
+                  <div key={title} className="flex items-start gap-3">
+                    <Icon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-bold text-white leading-tight">
+                        {title}
+                      </p>
+                      <p className="text-[11px] text-white/40 mt-0.5 leading-snug">
+                        {desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -1401,12 +1672,43 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
     { start: 80, end: 100, color: "#06b6d4", label: "Excellent", offset: 42 },
   ];
 
-  const breakdownMap: Record<string, { label: string; key: string }> = {
-    execution_score: { label: "Reliability", key: "execution_score" },
-    volume_score: { label: "Volume", key: "volume_score" },
-    consistency_score: { label: "Speed", key: "consistency_score" },
-    trust_score: { label: "Liquidity", key: "trust_score" },
-    review_score: { label: "Trust", key: "review_score" },
+  // Each breakdown line has an icon tile + description so the card reads as
+  // "what is this, what does it measure" rather than just a number. Order
+  // matches the API's score keys; copy mirrors the reputation mock.
+  const breakdownMap: Record<
+    string,
+    { label: string; desc: string; key: string; Icon: any }
+  > = {
+    execution_score: {
+      label: "Reliability",
+      desc: "Consistent and successful trades",
+      key: "execution_score",
+      Icon: ShieldCheck,
+    },
+    volume_score: {
+      label: "Volume",
+      desc: "Total trading volume",
+      key: "volume_score",
+      Icon: Database,
+    },
+    consistency_score: {
+      label: "Speed",
+      desc: "Order completion speed",
+      key: "consistency_score",
+      Icon: Zap,
+    },
+    trust_score: {
+      label: "Liquidity",
+      desc: "Providing liquidity to the market",
+      key: "trust_score",
+      Icon: Droplets,
+    },
+    review_score: {
+      label: "Trust",
+      desc: "Positive feedback and dispute-free trades",
+      key: "review_score",
+      Icon: Heart,
+    },
   };
 
   if (repLoading) {
@@ -1417,19 +1719,53 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
     );
   }
 
+  // Standing label keyed off score band — shown next to "Your Score" so the
+  // merchant has a quick word to anchor the number. Threshold values mirror
+  // getColor() so the label matches the gauge tint.
+  const standing =
+    score >= 800
+      ? "Excellent standing"
+      : score >= 600
+        ? "Very good standing"
+        : score >= 400
+          ? "Good standing"
+          : score >= 200
+            ? "Fair standing"
+            : "Poor standing";
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold mb-1">Reputation Score</h2>
+        <h2 className="text-2xl font-bold mb-1">Reputation Score</h2>
         <p className="text-sm text-white/40">
           Your reputation based on trading history, speed, and trust
         </p>
       </div>
 
-      {/* Gauge */}
-      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-6">
-        <div className="flex flex-col items-center">
-          <div className="relative" style={{ width: 340, height: 200 }}>
+      {/* Gauge card — "Your Score" tile on the left, gauge on the right.
+          Stacks on mobile so the gauge is never squeezed. Badges live INSIDE
+          the gauge column so they sit centered under the score, not under
+          the wider outer card (which would visually pull them left of the
+          gauge because of the Your-Score tile on the left). */}
+      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="md:w-[180px] shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-2">
+              <Trophy className="w-4 h-4 text-primary" />
+            </div>
+            <p className="text-[14px] font-bold text-white">Your Score</p>
+            <p className="text-[11px] text-emerald-400 flex items-center gap-1.5 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              {standing}
+            </p>
+            <p className="text-[10px] text-white/30 flex items-center gap-1.5 mt-2">
+              <Clock className="w-3 h-3" />
+              Updated just now
+            </p>
+          </div>
+
+          <div className="flex-1 flex flex-col items-center min-w-0">
+            <div className="relative" style={{ width: 280, height: 170 }}>
             <svg
               viewBox="0 0 340 200"
               className="w-full h-full"
@@ -1568,59 +1904,76 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
           {/* Score */}
           <div className="flex flex-col items-center -mt-2">
             <span
-              className="text-5xl font-black"
+              className="text-4xl font-black"
               style={{ color: getColor(score) }}
             >
               {score}
             </span>
             <span
-              className="text-sm font-bold mt-1"
+              className="text-[13px] font-bold mt-0.5"
               style={{ color: getColor(score) }}
             >
               {tierLabels[tier] || tier}
             </span>
           </div>
-        </div>
 
-        {/* Badges */}
-        {badges.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-2 mt-4">
-            {badges.map((b: string) => (
-              <span
-                key={b}
-                className="px-3 py-1 rounded-full text-[11px] font-medium bg-white/[0.06] border border-white/[0.08] text-white/60"
-              >
-                {b.replace(/_/g, " ")}
-              </span>
-            ))}
+          {/* Badges — sit inside the gauge column so they center under the
+              score instead of spanning the full card (which would pull them
+              left of the gauge because of the Your-Score tile). */}
+          {badges.length > 0 && (
+            <div className="flex flex-wrap justify-center gap-1.5 mt-3 max-w-[320px]">
+              {badges.map((b: string) => (
+                <span
+                  key={b}
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.06] border border-white/[0.08] text-white/60"
+                >
+                  {b.replace(/_/g, " ")}
+                </span>
+              ))}
+            </div>
+          )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Breakdown */}
+      {/* Breakdown — each row has an icon tile + label/desc on the left,
+          score on the right, and a colored bar underneath. The bar color
+          tracks getColor(val * 10) so a low row reads red and a high row
+          reads green at a glance. */}
       <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
-        <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-4">
+        <h3 className="text-[11px] font-bold text-white/40 uppercase tracking-[0.18em] mb-4">
           Score Breakdown
         </h3>
-        <div className="space-y-3">
-          {Object.entries(breakdownMap).map(([key, { label }]) => {
+        <div className="space-y-4">
+          {Object.entries(breakdownMap).map(([key, { label, desc, Icon }]) => {
             const val = repData?.score?.[key] ?? 0;
             return (
-              <div key={key}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-white/60">{label}</span>
-                  <span className="text-sm font-bold text-white/80">
-                    {val} / 100
-                  </span>
+              <div key={key} className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                  <Icon className="w-4 h-4 text-white/60" />
                 </div>
-                <div className="h-2 rounded-full bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(100, val)}%`,
-                      backgroundColor: getColor(val * 10),
-                    }}
-                  />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-bold text-white">{label}</p>
+                      <p className="text-[11px] text-white/40 leading-tight">{desc}</p>
+                    </div>
+                    <span
+                      className="text-[14px] font-bold tabular-nums shrink-0"
+                      style={{ color: getColor(val * 10) }}
+                    >
+                      {val} <span className="text-white/30 font-normal">/ 100</span>
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/[0.06] mt-1.5">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(100, val)}%`,
+                        backgroundColor: getColor(val * 10),
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             );
@@ -1628,51 +1981,97 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats — same four numbers, but each card now has a top icon tile
+          for a stronger visual rhythm matching the Reputation mock. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
-          <p className="text-2xl font-bold text-white/80">
-            {repData?.score?.total_score ?? 0}
-          </p>
-          <p className="text-[11px] text-white/30 mt-1">Score</p>
-        </div>
-        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
-          <p className="text-2xl font-bold text-white/80">{tierLabels[tier]}</p>
-          <p className="text-[11px] text-white/30 mt-1">Tier</p>
-        </div>
-        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
-          <p className="text-2xl font-bold text-white/80">
-            {repData?.rank ?? "—"}
-          </p>
-          <p className="text-[11px] text-white/30 mt-1">Rank</p>
-        </div>
-        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
-          <p className="text-2xl font-bold text-white/80">{badges.length}</p>
-          <p className="text-[11px] text-white/30 mt-1">Badges</p>
-        </div>
+        {[
+          {
+            Icon: Trophy,
+            label: "Score",
+            value: String(repData?.score?.total_score ?? 0),
+          },
+          {
+            Icon: Medal,
+            label: "Tier",
+            value: tierLabels[tier] || "—",
+          },
+          {
+            Icon: BarChart3,
+            label: "Rank",
+            value: String(repData?.rank ?? "—"),
+          },
+          {
+            Icon: Shield,
+            label: "Badges",
+            value: String(badges.length),
+          },
+        ].map(({ Icon, label, value }) => (
+          <div
+            key={label}
+            className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-4 flex flex-col items-center text-center"
+          >
+            <div className="w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-2">
+              <Icon className="w-4 h-4 text-primary" />
+            </div>
+            <p className="text-2xl font-bold text-white leading-none">{value}</p>
+            <p className="text-[11px] text-white/40 mt-1.5">{label}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Progress to next tier */}
-      {repData?.progress && (
-        <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
-          <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">
-            Progress to Next Tier
-          </h3>
-          <p className="text-sm text-white/60 mb-3">
-            {repData.progress.pointsNeeded > 0
-              ? `${repData.progress.pointsNeeded} points to ${tierLabels[repData.progress.nextTier] || repData.progress.nextTier}`
-              : "Maximum tier reached!"}
-          </p>
-          <div className="h-3 rounded-full bg-white/[0.06]">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{
-                width: `${Math.min(100, repData.progress.progressPercent ?? 0)}%`,
-              }}
-            />
+      {/* Progress to next tier — icon tile + status line + percentage on the
+          right, with a tinted progress bar underneath.
+          Reads the real shape returned by /api/reputation:
+            progress: { currentTier, nextTier, progress }
+          Where `nextTier === null` is the only true signal of "maxed out",
+          and `progress` is the 0–100 percent toward the next tier. The
+          previous code read `pointsNeeded` and `progressPercent`, which
+          don't exist on this object — so a Silver merchant ended up showing
+          "Maximum tier reached! 0%" because both reads returned undefined. */}
+      {repData?.progress && (() => {
+        const pct = Math.min(
+          100,
+          Math.max(0, Number(repData.progress.progress ?? 0)),
+        );
+        const isMaxTier = repData.progress.nextTier == null;
+        const nextTierLabel = isMaxTier
+          ? null
+          : tierLabels[repData.progress.nextTier] ||
+            repData.progress.nextTier;
+        return (
+          <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
+            <h3 className="text-[11px] font-bold text-white/40 uppercase tracking-[0.18em] mb-3">
+              Progress to Next Tier
+            </h3>
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                <Award className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-bold text-white">
+                  {isMaxTier
+                    ? "Maximum tier reached!"
+                    : `Next: ${nextTierLabel} tier`}
+                </p>
+                <p className="text-[12px] text-white/40">
+                  {isMaxTier
+                    ? "You've reached the highest tier."
+                    : `${Math.round(pct)}% of the way to ${nextTierLabel}`}
+                </p>
+              </div>
+              <span className="text-[14px] font-bold text-primary tabular-nums shrink-0">
+                {isMaxTier ? "100%" : `${Math.round(pct)}%`}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-white/[0.06] mt-3">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${isMaxTier ? 100 : pct}%` }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

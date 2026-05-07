@@ -903,6 +903,29 @@ export function useOrderActions({
           pair,
         };
 
+        // Resolve the corridor's actual currency + live rate. Previously this
+        // block hardcoded `toCurrency: 'AED'` and `rate: 3.67` so an INR
+        // merchant who clicked Lock Escrow saw "FIAT VALUE: AED 66.06" — the
+        // EscrowLockModal reads `escrowOrder.toCurrency` directly, so the
+        // wrong currency rendered no matter which corridor was selected.
+        // Now: currency tracks the pair, and the rate is fetched live with a
+        // safe fallback so the total still renders if /api/prices is down.
+        const fiatCurrency = pair === 'usdt_inr' ? 'INR' : 'AED';
+        let liveRate = pair === 'usdt_inr' ? 92 : 3.67;
+        try {
+          const priceRes = await fetchWithAuth(
+            `/api/prices/current?pair=${pair}`,
+          );
+          const priceJson = await priceRes.json();
+          if (priceJson?.success && priceJson.data?.price) {
+            liveRate = Number(priceJson.data.price) || liveRate;
+          }
+        } catch {
+          // Keep fallback — modal will show approximate value rather than
+          // failing the whole flow. The DB order created later will use the
+          // backend's authoritative rate, so this is just for display.
+        }
+
         // Create temporary order for escrow modal — counterparty is TBD
         const tempOrder: Order = {
           id: 'temp-' + Date.now(),
@@ -910,9 +933,9 @@ export function useOrderActions({
           emoji: '📢',
           amount: parseFloat(openTradeForm.cryptoAmount),
           fromCurrency: 'USDT',
-          toCurrency: 'AED',
-          rate: 3.67,
-          total: parseFloat(openTradeForm.cryptoAmount) * 3.67,
+          toCurrency: fiatCurrency,
+          rate: liveRate,
+          total: parseFloat(openTradeForm.cryptoAmount) * liveRate,
           timestamp: new Date(),
           status: 'pending',
           expiresIn: 900,

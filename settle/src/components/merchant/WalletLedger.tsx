@@ -234,47 +234,49 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
 
   return (
     <div className="space-y-5">
-      {/* Summary Cards */}
+      {/* Summary Cards — bigger blocks with the credit/debit amount as the
+          primary visual element. Matches the redesigned ledger mock where
+          both cards are the same size and dominate the top of the view. */}
       {summary && (
-        <div className={`grid ${walletBalance != null ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
+        <div className={`grid ${walletBalance != null ? 'lg:grid-cols-3 grid-cols-1' : 'grid-cols-1 md:grid-cols-2'} gap-4`}>
           {walletBalance != null && (
-            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
-                  <TrendingUp className="w-4 h-4" />
-                </span>
-                <span className="text-xs text-white/50">Wallet Balance</span>
+            <div className="bg-white/[0.02] rounded-2xl p-5 border border-white/[0.06]">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-blue-400" />
+                </div>
+                <span className="text-[14px] font-bold text-white">Wallet Balance</span>
               </div>
-              <p className="text-2xl font-bold text-white font-mono tabular-nums">
+              <p className="text-4xl font-bold text-white font-mono tabular-nums leading-none">
                 {formatUSDT(walletBalance)}
               </p>
-              <p className="text-[10px] text-white/35 mt-1">USDT (on-chain)</p>
+              <p className="text-[11px] text-white/35 mt-2">USDT (on-chain)</p>
             </div>
           )}
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                <TrendingUp className="w-4 h-4" />
-              </span>
-              <span className="text-xs text-white/50">Total Credits</span>
+          <div className="bg-white/[0.02] rounded-2xl p-5 border border-white/[0.06] relative overflow-hidden">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-emerald-400" />
+              </div>
+              <span className="text-[14px] font-bold text-white">Total Credits</span>
             </div>
-            <p className="text-2xl font-bold text-emerald-400 font-mono tabular-nums">
+            <p className="text-4xl font-bold text-emerald-400 font-mono tabular-nums leading-none">
               +{formatUSDT(summary.total_credits)}
             </p>
-            <p className="text-[10px] text-white/35 mt-1">USDT</p>
+            <p className="text-[11px] text-white/35 mt-2">USDT</p>
           </div>
 
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="p-1.5 rounded-lg bg-red-500/10 text-red-400">
-                <TrendingDown className="w-4 h-4" />
-              </span>
-              <span className="text-xs text-white/50">Total Debits</span>
+          <div className="bg-white/[0.02] rounded-2xl p-5 border border-white/[0.06] relative overflow-hidden">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <TrendingDown className="w-5 h-5 text-red-400" />
+              </div>
+              <span className="text-[14px] font-bold text-white">Total Debits</span>
             </div>
-            <p className="text-2xl font-bold text-red-400 font-mono tabular-nums">
+            <p className="text-4xl font-bold text-red-400 font-mono tabular-nums leading-none">
               -{formatUSDT(summary.total_debits)}
             </p>
-            <p className="text-[10px] text-white/35 mt-1">USDT</p>
+            <p className="text-[11px] text-white/35 mt-2">USDT</p>
           </div>
         </div>
       )}
@@ -390,16 +392,16 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
                 <Loader2 className="w-6 h-6 text-white/30 animate-spin" />
               </div>
             ) : entries.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <div className="w-12 h-12 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
-                  <BookOpen className="w-6 h-6 text-white/20" />
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
+                <div className="w-16 h-16 rounded-full border border-white/[0.06] bg-white/[0.04] flex items-center justify-center">
+                  <BookOpen className="w-7 h-7 text-white/30" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-medium text-white/40">No transactions found</p>
-                  <p className="text-xs text-white/25 mt-1">
+                  <p className="text-base font-bold text-white/60">No transactions found</p>
+                  <p className="text-[13px] text-white/30 mt-1">
                     {txType !== 'all' || timeRange !== 'all'
                       ? 'Try adjusting your filters'
-                      : 'Transactions will appear here after your first trade'}
+                      : 'Transactions will appear here after your first trade.'}
                   </p>
                 </div>
               </div>
