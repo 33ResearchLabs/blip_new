@@ -434,14 +434,38 @@ export const TradeCreationScreen = ({
           </div>
 
           {solanaWallet.connected && (
-            <div className="mt-2 px-3 py-1 rounded-full bg-surface-hover border border-border-subtle">
-              <span className="text-[11px] font-bold text-text-tertiary tracking-[0.08em]">
-                BAL{" "}
-                {solanaWallet.usdtBalance !== null
-                  ? formatCrypto(solanaWallet.usdtBalance)
-                  : "\u2014"}{" "}
-                USDT
-              </span>
+            <div className="mt-2 flex items-center gap-1.5">
+              <div className="px-3 py-1 rounded-full bg-surface-hover border border-border-subtle">
+                <span className="text-[11px] font-bold text-text-tertiary tracking-[0.08em]">
+                  BAL{" "}
+                  {solanaWallet.usdtBalance !== null
+                    ? formatCrypto(solanaWallet.usdtBalance)
+                    : "\u2014"}{" "}
+                  USDT
+                </span>
+              </div>
+              {/* Max prefill \u2014 sell-only because for sell the input represents
+                  USDT the user is spending from their wallet, so "max" = full
+                  balance. Buy orders are paid in fiat (no on-chain balance to
+                  cap), so the button isn't meaningful there. */}
+              {tradeType === "sell" &&
+                solanaWallet.usdtBalance !== null &&
+                solanaWallet.usdtBalance > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAmount(
+                        clampDecimal(
+                          String(solanaWallet.usdtBalance),
+                          DECIMAL_PRESETS.amount,
+                        ),
+                      )
+                    }
+                    className="px-3 py-1 rounded-full bg-accent text-accent-text text-[11px] font-extrabold tracking-[0.08em] hover:opacity-90 active:scale-95 transition"
+                  >
+                    MAX
+                  </button>
+                )}
             </div>
           )}
 

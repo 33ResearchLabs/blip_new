@@ -1,15 +1,27 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { MessageCircle, Search, X, ChevronRight, CheckCheck, Shield, AlertTriangle, ArrowUpRight, ArrowDownLeft, Check, Info } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import type { OrderConversation } from '@/hooks/useMerchantConversations';
+import { useState, useEffect, useCallback } from "react";
+import {
+  MessageCircle,
+  Search,
+  X,
+  ChevronRight,
+  CheckCheck,
+  Shield,
+  AlertTriangle,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Check,
+  Info,
+} from "lucide-react";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import type { OrderConversation } from "@/hooks/useMerchantConversations";
 
 interface DisputeConversation {
   order_id: string;
   order_number: string;
   order_status: string;
-  order_type: 'buy' | 'sell';
+  order_type: "buy" | "sell";
   crypto_amount: number;
   fiat_amount: number;
   fiat_currency: string;
@@ -37,7 +49,12 @@ interface MerchantChatTabsProps {
   orderConversations: OrderConversation[];
   totalUnread: number;
   isLoading: boolean;
-  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
+  onOpenOrderChat: (
+    orderId: string,
+    userName: string,
+    orderNumber: string,
+    orderType?: "buy" | "sell",
+  ) => void;
   onOpenDisputeChat?: (orderId: string, userName: string) => void;
   onClearUnread?: (orderId: string) => void;
   onClearAllUnread?: () => void;
@@ -45,8 +62,21 @@ interface MerchantChatTabsProps {
 }
 
 function getUserEmoji(username: string): string {
-  const emojis = ['🦊', '🐻', '🐼', '🐨', '🦁', '🐯', '🐸', '🐙', '🦋', '🐳', '🦄', '🐲'];
-  const hash = username.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+  const emojis = [
+    "🦊",
+    "🐻",
+    "🐼",
+    "🐨",
+    "🦁",
+    "🐯",
+    "🐸",
+    "🐙",
+    "🦋",
+    "🐳",
+    "🦄",
+    "🐲",
+  ];
+  const hash = username.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
   return emojis[hash % emojis.length];
 }
 
@@ -58,7 +88,7 @@ function formatRelativeTime(dateStr: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'now';
+  if (diffMins < 1) return "now";
   if (diffMins < 60) return `${diffMins}m`;
   if (diffHours < 24) return `${diffHours}h`;
   if (diffDays < 7) return `${diffDays}d`;
@@ -67,24 +97,32 @@ function formatRelativeTime(dateStr: string): string {
 
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength - 3) + '...';
+  return text.slice(0, maxLength - 3) + "...";
 }
 
 function getSenderLabel(senderType: string): string {
-  if (senderType === 'compliance') return 'Compliance: ';
-  if (senderType === 'system') return '';
-  return '';
+  if (senderType === "compliance") return "Compliance: ";
+  if (senderType === "system") return "";
+  return "";
 }
 
 function getStatusColor(status: string): string {
   switch (status) {
-    case 'accepted': return 'text-blue-400 bg-blue-500/15';
-    case 'escrowed': return 'text-purple-400 bg-purple-500/15';
-    case 'payment_sent': return 'text-yellow-400 bg-yellow-500/15';
-    case 'completed': return 'text-green-400 bg-green-500/15';
-    case 'cancelled': case 'expired': return 'text-white/30 bg-white/[0.04]';
-    case 'disputed': return 'text-red-400 bg-red-500/15';
-    default: return 'text-white/40 bg-white/[0.04]';
+    case "accepted":
+      return "text-blue-400 bg-blue-500/15";
+    case "escrowed":
+      return "text-purple-400 bg-purple-500/15";
+    case "payment_sent":
+      return "text-yellow-400 bg-yellow-500/15";
+    case "completed":
+      return "text-green-400 bg-green-500/15";
+    case "cancelled":
+    case "expired":
+      return "text-white/30 bg-white/[0.04]";
+    case "disputed":
+      return "text-red-400 bg-red-500/15";
+    default:
+      return "text-white/40 bg-white/[0.04]";
   }
 }
 
@@ -99,11 +137,13 @@ export function MerchantChatTabs({
   onClearAllUnread,
   onClose,
 }: MerchantChatTabsProps) {
-  const [activeTab, setActiveTab] = useState<'orders' | 'disputes'>('orders');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<"orders" | "disputes">("orders");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Dispute conversations state (fetched independently)
-  const [disputeConversations, setDisputeConversations] = useState<DisputeConversation[]>([]);
+  const [disputeConversations, setDisputeConversations] = useState<
+    DisputeConversation[]
+  >([]);
   const [disputeUnread, setDisputeUnread] = useState(0);
   const [isLoadingDisputes, setIsLoadingDisputes] = useState(false);
 
@@ -111,15 +151,20 @@ export function MerchantChatTabs({
     if (!merchantId) return;
     setIsLoadingDisputes(true);
     try {
-      const res = await fetchWithAuth(`/api/merchant/messages?merchant_id=${merchantId}&tab=dispute&limit=50`);
-      if (!res.ok) throw new Error('Failed to fetch');
+      const res = await fetchWithAuth(
+        `/api/merchant/messages?merchant_id=${merchantId}&tab=dispute&limit=50`,
+      );
+      if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       if (data.success) {
         setDisputeConversations(data.data.conversations || []);
         setDisputeUnread(data.data.tabCounts?.disputeUnread || 0);
       }
-    } catch { /* best-effort */ }
-    finally { setIsLoadingDisputes(false); }
+    } catch {
+      /* best-effort */
+    } finally {
+      setIsLoadingDisputes(false);
+    }
   }, [merchantId]);
 
   useEffect(() => {
@@ -129,14 +174,16 @@ export function MerchantChatTabs({
   }, [fetchDisputes]);
 
   // Filter: search by order number or username
-  const filteredOrders = orderConversations.filter(conv =>
-    conv.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.user.username.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredOrders = orderConversations.filter(
+    (conv) =>
+      conv.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const filteredDisputes = disputeConversations.filter(conv =>
-    conv.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.user.username.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredDisputes = disputeConversations.filter(
+    (conv) =>
+      conv.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -151,7 +198,7 @@ export function MerchantChatTabs({
             </h2>
           </div>
           <div className="flex items-center gap-1">
-            {(totalUnread + disputeUnread) > 0 && (
+            {totalUnread + disputeUnread > 0 && (
               <span className="text-[10px] border border-primary/30 text-primary px-1.5 py-0.5 rounded-full font-mono tabular-nums">
                 {totalUnread + disputeUnread}
               </span>
@@ -187,7 +234,8 @@ export function MerchantChatTabs({
                 {/* Hover tooltip explaining what it does */}
                 <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-[180px] z-50 opacity-0 group-hover:opacity-100 transition-opacity">
                   <span className="block rounded-lg bg-foreground text-background text-[10.5px] font-medium px-2.5 py-1.5 leading-snug shadow-xl shadow-black/40">
-                    Clears unread counters on all order chats. Merchants can still scroll back to read the messages — nothing is deleted.
+                    Clears unread counters on all order chats. Merchants can
+                    still scroll back to read the messages — nothing is deleted.
                   </span>
                 </span>
               </div>
@@ -198,8 +246,11 @@ export function MerchantChatTabs({
               <Info className="w-3 h-3 text-white/25 hover:text-white/50 cursor-help transition-colors" />
               <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-[200px] z-50 opacity-0 group-hover:opacity-100 transition-opacity">
                 <span className="block rounded-lg bg-foreground text-background text-[10.5px] font-medium px-2.5 py-1.5 leading-snug shadow-xl shadow-black/40">
-                  <span className="block font-bold mb-0.5">About this inbox</span>
-                  Shows every order with a chat. Unread counter = messages you haven&apos;t seen. Click any card to open the chat.
+                  <span className="block font-bold mb-0.5">
+                    About this inbox
+                  </span>
+                  Shows every order with a chat. Unread counter = messages you
+                  haven&apos;t seen. Click any card to open the chat.
                 </span>
               </span>
             </div>
@@ -219,9 +270,11 @@ export function MerchantChatTabs({
       {/* Tabs */}
       <div className="flex border-b border-white/[0.04]">
         <button
-          onClick={() => setActiveTab('orders')}
+          onClick={() => setActiveTab("orders")}
           className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
-            activeTab === 'orders' ? 'text-white/80' : 'text-white/30 hover:text-foreground/50'
+            activeTab === "orders"
+              ? "text-white/80"
+              : "text-white/30 hover:text-foreground/50"
           }`}
         >
           <div className="flex items-center justify-center gap-1.5">
@@ -229,18 +282,20 @@ export function MerchantChatTabs({
             <span>Orders</span>
             {totalUnread > 0 && (
               <span className="w-4 h-4 bg-primary text-background text-[8px] font-bold rounded-full flex items-center justify-center">
-                {totalUnread > 9 ? '9+' : totalUnread}
+                {totalUnread > 9 ? "9+" : totalUnread}
               </span>
             )}
           </div>
-          {activeTab === 'orders' && (
+          {activeTab === "orders" && (
             <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
           )}
         </button>
         <button
-          onClick={() => setActiveTab('disputes')}
+          onClick={() => setActiveTab("disputes")}
           className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
-            activeTab === 'disputes' ? 'text-white/80' : 'text-white/30 hover:text-foreground/50'
+            activeTab === "disputes"
+              ? "text-white/80"
+              : "text-white/30 hover:text-foreground/50"
           }`}
         >
           <div className="flex items-center justify-center gap-1.5">
@@ -248,11 +303,11 @@ export function MerchantChatTabs({
             <span>Disputes</span>
             {disputeUnread > 0 && (
               <span className="w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
-                {disputeUnread > 9 ? '9+' : disputeUnread}
+                {disputeUnread > 9 ? "9+" : disputeUnread}
               </span>
             )}
           </div>
-          {activeTab === 'disputes' && (
+          {activeTab === "disputes" && (
             <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-red-500 rounded-full" />
           )}
         </button>
@@ -271,7 +326,9 @@ export function MerchantChatTabs({
             data-lpignore="true"
             data-form-type="other"
             maxLength={100}
-            placeholder={activeTab === 'orders' ? 'Search orders...' : 'Search disputes...'}
+            placeholder={
+              activeTab === "orders" ? "Search orders..." : "Search disputes..."
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 bg-transparent text-[11px] text-white placeholder:text-white/15 outline-none font-mono"
@@ -281,7 +338,7 @@ export function MerchantChatTabs({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-1.5">
-        {activeTab === 'orders' ? (
+        {activeTab === "orders" ? (
           /* ── Orders Tab ── */
           isLoading ? (
             <div className="flex items-center justify-center h-full">
@@ -290,36 +347,49 @@ export function MerchantChatTabs({
           ) : filteredOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-white/15">
               <MessageCircle className="w-8 h-8 mb-2 opacity-30" />
-              <p className="text-[10px] font-mono">{searchQuery ? 'No matches' : 'No order chats yet'}</p>
+              <p className="text-[10px] font-mono">
+                {searchQuery ? "No matches" : "No order chats yet"}
+              </p>
             </div>
           ) : (
             <div className="space-y-1">
               {filteredOrders.map((conv) => {
-                const isBuy = conv.order_type === 'buy';
+                const isBuy = conv.order_type === "buy";
                 const TypeIcon = isBuy ? ArrowDownLeft : ArrowUpRight;
                 const hasUnread = conv.unread_count > 0;
-                const fiatSymbol = conv.fiat_currency === 'INR' ? '₹' : conv.fiat_currency === 'AED' ? 'د.إ' : conv.fiat_currency;
-                const timestamp = conv.last_message?.created_at || conv.last_activity;
+                const fiatSymbol =
+                  conv.fiat_currency === "INR"
+                    ? "₹"
+                    : conv.fiat_currency === "AED"
+                      ? "د.إ"
+                      : conv.fiat_currency;
+                const timestamp =
+                  conv.last_message?.created_at || conv.last_activity;
 
                 return (
                   <button
                     key={conv.order_id}
                     onClick={() => {
                       onClearUnread?.(conv.order_id);
-                      onOpenOrderChat(conv.order_id, conv.user.username, conv.order_number, conv.order_type);
+                      onOpenOrderChat(
+                        conv.order_id,
+                        conv.user.username,
+                        conv.order_number,
+                        conv.order_type,
+                      );
                       // Persist read status to server so the badge doesn't
                       // reappear on refresh. Best-effort — OrderChatView's
                       // mount effect will retry if this fails.
                       fetchWithAuth(`/api/orders/${conv.order_id}/messages`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ reader_type: 'merchant' }),
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ reader_type: "merchant" }),
                       }).catch(() => {});
                     }}
                     className={`group relative w-full p-3 rounded-xl text-left overflow-hidden transition-all border ${
                       hasUnread
-                        ? 'bg-gradient-to-br from-primary/[0.05] to-transparent border-primary/20 hover:border-primary/40'
-                        : 'bg-gradient-to-br from-foreground/[0.03] to-transparent border-foreground/[0.06] hover:border-foreground/[0.12] hover:shadow-md hover:shadow-black/20'
+                        ? "bg-gradient-to-br from-primary/[0.05] to-transparent border-primary/20 hover:border-primary/40"
+                        : "bg-gradient-to-br from-foreground/[0.03] to-transparent border-foreground/[0.06] hover:border-foreground/[0.12] hover:shadow-md hover:shadow-black/20"
                     }`}
                   >
                     {/* Unread accent bar */}
@@ -330,22 +400,29 @@ export function MerchantChatTabs({
                     <div className="flex items-start gap-3">
                       {/* Avatar with type ring */}
                       <div className="relative shrink-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-base shadow-sm ring-2 ${
-                          isBuy
-                            ? 'ring-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.15] to-foreground/[0.03]'
-                            : 'ring-orange-500/20 bg-gradient-to-br from-orange-500/[0.15] to-foreground/[0.03]'
-                        }`}>
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-base shadow-sm ring-2 ${
+                            isBuy
+                              ? "ring-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.15] to-foreground/[0.03]"
+                              : "ring-orange-500/20 bg-gradient-to-br from-orange-500/[0.15] to-foreground/[0.03]"
+                          }`}
+                        >
                           {getUserEmoji(conv.user.username)}
                         </div>
                         {/* Direction mini-badge */}
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-background flex items-center justify-center ${
-                          isBuy ? 'bg-emerald-500' : 'bg-orange-500'
-                        }`}>
-                          <TypeIcon className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                        <div
+                          className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-background flex items-center justify-center ${
+                            isBuy ? "bg-emerald-500" : "bg-orange-500"
+                          }`}
+                        >
+                          <TypeIcon
+                            className="w-2.5 h-2.5 text-white"
+                            strokeWidth={3}
+                          />
                         </div>
                         {hasUnread && (
                           <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-primary text-background text-[10px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-background">
-                            {conv.unread_count > 9 ? '9+' : conv.unread_count}
+                            {conv.unread_count > 9 ? "9+" : conv.unread_count}
                           </span>
                         )}
                       </div>
@@ -354,47 +431,70 @@ export function MerchantChatTabs({
                       <div className="flex-1 min-w-0">
                         {/* Top row: username + timestamp */}
                         <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                          <span className={`text-[13px] font-bold truncate ${hasUnread ? 'text-white' : 'text-white/90'}`}>
+                          <span
+                            className={`text-[13px] font-bold truncate ${hasUnread ? "text-white" : "text-white/90"}`}
+                          >
                             {conv.user.username}
                           </span>
-                          <span className={`text-[10px] font-mono tabular-nums shrink-0 ${hasUnread ? 'text-primary/80' : 'text-white/30'}`}>
+                          <span
+                            className={`text-[10px] font-mono tabular-nums shrink-0 ${hasUnread ? "text-primary/80" : "text-white/30"}`}
+                          >
                             {formatRelativeTime(timestamp)}
                           </span>
                         </div>
 
                         {/* Amount row — crypto → fiat */}
                         <div className="flex items-center gap-1.5 mb-1">
-                          <span className={`text-[9px] font-extrabold font-mono tracking-[0.1em] px-1.5 py-px rounded ${
-                            isBuy
-                              ? 'bg-emerald-500/15 text-emerald-400'
-                              : 'bg-orange-500/15 text-orange-400'
-                          }`}>
-                            {isBuy ? 'BUY' : 'SELL'}
+                          <span
+                            className={`text-[9px] font-extrabold font-mono tracking-[0.1em] px-1.5 py-px rounded ${
+                              isBuy
+                                ? "bg-emerald-500/15 text-emerald-400"
+                                : "bg-orange-500/15 text-orange-400"
+                            }`}
+                          >
+                            {isBuy ? "BUY" : "SELL"}
                           </span>
                           <span className="text-[12px] font-bold text-white tabular-nums">
                             {Number(conv.crypto_amount).toFixed(2)}
-                            <span className="text-[9px] font-semibold text-white/40 ml-0.5">USDT</span>
+                            <span className="text-[9px] font-semibold text-white/40 ml-0.5">
+                              USDT
+                            </span>
                           </span>
-                          <ChevronRight className="w-3 h-3 text-white/20 shrink-0" strokeWidth={2.5} />
+                          <ChevronRight
+                            className="w-3 h-3 text-white/20 shrink-0"
+                            strokeWidth={2.5}
+                          />
                           <span className="text-[12px] font-bold text-white/80 tabular-nums truncate">
-                            {fiatSymbol}{Number(conv.fiat_amount).toLocaleString()}
+                            {fiatSymbol}
+                            {Number(conv.fiat_amount).toLocaleString()}
                           </span>
                         </div>
 
                         {/* Bottom row: last message OR status + order number */}
                         {conv.last_message ? (
                           <div className="flex items-center gap-1.5">
-                            {conv.last_message.sender_type === 'merchant' && (
-                              <CheckCheck className={`w-3 h-3 shrink-0 ${
-                                conv.last_message.is_read ? 'text-primary/80' : 'text-white/25'
-                              }`} strokeWidth={2.5} />
+                            {conv.last_message.sender_type === "merchant" && (
+                              <CheckCheck
+                                className={`w-3 h-3 shrink-0 ${
+                                  conv.last_message.is_read
+                                    ? "text-primary/80"
+                                    : "text-white/25"
+                                }`}
+                                strokeWidth={2.5}
+                              />
                             )}
-                            <p className={`text-[11px] truncate flex-1 ${
-                              hasUnread ? 'text-white/80 font-medium' : 'text-white/40'
-                            }`}>
+                            <p
+                              className={`text-[11px] truncate flex-1 ${
+                                hasUnread
+                                  ? "text-white/80 font-medium"
+                                  : "text-white/40"
+                              }`}
+                            >
                               {truncate(conv.last_message.content, 38)}
                             </p>
-                            <span className={`text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-px rounded shrink-0 ${getStatusColor(conv.order_status)}`}>
+                            <span
+                              className={`text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-px rounded shrink-0 ${getStatusColor(conv.order_status)}`}
+                            >
                               {conv.order_status}
                             </span>
                           </div>
@@ -403,7 +503,9 @@ export function MerchantChatTabs({
                             <span className="text-[10px] font-mono text-white/25 truncate">
                               #{conv.order_number}
                             </span>
-                            <span className={`text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-px rounded shrink-0 ${getStatusColor(conv.order_status)}`}>
+                            <span
+                              className={`text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-px rounded shrink-0 ${getStatusColor(conv.order_status)}`}
+                            >
                               {conv.order_status}
                             </span>
                           </div>
@@ -415,91 +517,98 @@ export function MerchantChatTabs({
               })}
             </div>
           )
+        ) : /* ── Disputes Tab ── (unchanged) */
+        isLoadingDisputes ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="w-4 h-4 border-2 border-red-500/40 border-t-red-400 rounded-full animate-spin" />
+          </div>
+        ) : filteredDisputes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-white/15">
+            <Shield className="w-8 h-8 mb-2 opacity-30" />
+            <p className="text-[10px] font-mono">
+              {searchQuery ? "No matches" : "No active disputes"}
+            </p>
+          </div>
         ) : (
-          /* ── Disputes Tab ── (unchanged) */
-          isLoadingDisputes ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="w-4 h-4 border-2 border-red-500/40 border-t-red-400 rounded-full animate-spin" />
-            </div>
-          ) : filteredDisputes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-white/15">
-              <Shield className="w-8 h-8 mb-2 opacity-30" />
-              <p className="text-[10px] font-mono">{searchQuery ? 'No matches' : 'No active disputes'}</p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {filteredDisputes.map((conv) => (
-                <button
-                  key={conv.order_id}
-                  onClick={() => {
-                    setDisputeConversations(prev => {
-                      let removed = 0;
-                      const next = prev.map(c => {
-                        if (c.order_id === conv.order_id) {
-                          removed += c.unread_count || 0;
-                          return { ...c, unread_count: 0 };
-                        }
-                        return c;
-                      });
-                      if (removed > 0) setDisputeUnread(t => Math.max(0, t - removed));
-                      return next;
+          <div className="space-y-1">
+            {filteredDisputes.map((conv) => (
+              <button
+                key={conv.order_id}
+                onClick={() => {
+                  setDisputeConversations((prev) => {
+                    let removed = 0;
+                    const next = prev.map((c) => {
+                      if (c.order_id === conv.order_id) {
+                        removed += c.unread_count || 0;
+                        return { ...c, unread_count: 0 };
+                      }
+                      return c;
                     });
-                    setTimeout(() => fetchDisputes(), 1500);
-                    onOpenDisputeChat?.(conv.order_id, conv.user.username);
-                  }}
-                  className="w-full p-2 glass-card rounded-lg hover:border-[var(--color-error)]/20 transition-colors text-left group"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-shrink-0">
-                      <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-sm">
-                        <AlertTriangle className="w-4 h-4 text-red-400" />
-                      </div>
-                      {conv.unread_count > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                          {conv.unread_count > 9 ? '9+' : conv.unread_count}
-                        </span>
-                      )}
+                    if (removed > 0)
+                      setDisputeUnread((t) => Math.max(0, t - removed));
+                    return next;
+                  });
+                  setTimeout(() => fetchDisputes(), 1500);
+                  onOpenDisputeChat?.(conv.order_id, conv.user.username);
+                }}
+                className="w-full p-2 glass-card rounded-lg hover:border-[var(--color-error)]/20 transition-colors text-left group"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-sm">
+                      <AlertTriangle className="w-4 h-4 text-red-400" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="text-xs font-medium text-white/70 truncate">
-                          Order #{conv.order_number}
-                        </span>
-                        <span className="text-[8px] px-1 py-0.5 bg-red-500/15 text-red-400 rounded font-mono">
-                          DISPUTE
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[9px] text-white/30 font-mono">
-                        <span>{conv.user.username}</span>
-                        <span className="text-white/10">·</span>
-                        <span>${Number(conv.crypto_amount).toFixed(2)}</span>
-                        {conv.last_message && (
-                          <>
-                            <span className="text-white/10">·</span>
-                            <span>{formatRelativeTime(conv.last_message.created_at)}</span>
-                          </>
-                        )}
-                      </div>
-                      {conv.last_message && (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {conv.last_message.sender_type === 'compliance' && (
-                            <Shield className="w-2.5 h-2.5 flex-shrink-0 text-red-400/60" />
-                          )}
-                          <p className={`text-[10px] truncate ${
-                            conv.unread_count > 0 ? 'text-white/60 font-medium' : 'text-white/30'
-                          }`}>
-                            {getSenderLabel(conv.last_message.sender_type)}
-                            {truncate(conv.last_message.content, 30)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    <ChevronRight className="w-3 h-3 text-white/10 group-hover:text-[var(--color-error)]/30 transition-colors self-center flex-shrink-0" />
+                    {conv.unread_count > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                        {conv.unread_count > 9 ? "9+" : conv.unread_count}
+                      </span>
+                    )}
                   </div>
-                </button>
-              ))}
-            </div>
-          )
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs font-medium text-white/70 truncate">
+                        Order #{conv.order_number}
+                      </span>
+                      <span className="text-[8px] px-1 py-0.5 bg-red-500/15 text-red-400 rounded font-mono">
+                        DISPUTE
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[9px] text-white/30 font-mono">
+                      <span>{conv.user.username}</span>
+                      <span className="text-white/10">·</span>
+                      <span>${Number(conv.crypto_amount).toFixed(2)}</span>
+                      {conv.last_message && (
+                        <>
+                          <span className="text-white/10">·</span>
+                          <span>
+                            {formatRelativeTime(conv.last_message.created_at)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {conv.last_message && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {conv.last_message.sender_type === "compliance" && (
+                          <Shield className="w-2.5 h-2.5 flex-shrink-0 text-red-400/60" />
+                        )}
+                        <p
+                          className={`text-[10px] truncate ${
+                            conv.unread_count > 0
+                              ? "text-white/60 font-medium"
+                              : "text-white/30"
+                          }`}
+                        >
+                          {getSenderLabel(conv.last_message.sender_type)}
+                          {truncate(conv.last_message.content, 30)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <ChevronRight className="w-3 h-3 text-white/10 group-hover:text-[var(--color-error)]/30 transition-colors self-center flex-shrink-0" />
+                </div>
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>
