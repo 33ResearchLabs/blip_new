@@ -10,6 +10,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
+import { formatFiat } from "@/lib/format";
 import type { Order } from "@/types/merchant";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
@@ -98,7 +99,13 @@ export function EscrowLockModal({
                     </div>
                     <div>
                       <p className="text-[10px] text-foreground/35 uppercase mb-1">Fiat Value</p>
-                      <p className="text-lg font-bold text-white">د.إ {Math.round(escrowOrder.total).toLocaleString()}</p>
+                      {/* Use the order's actual fiat currency. The previous
+                          hardcoded "د.إ" (AED) was wrong for INR / USD /
+                          other corridors — it ignored escrowOrder.toCurrency
+                          (which the order picker already resolved correctly). */}
+                      <p className="text-lg font-bold text-white">
+                        {formatFiat(escrowOrder.total, escrowOrder.toCurrency || escrowOrder.dbOrder?.fiat_currency || '')}
+                      </p>
                     </div>
                   </div>
                 </div>

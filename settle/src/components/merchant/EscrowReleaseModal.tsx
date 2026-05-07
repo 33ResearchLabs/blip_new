@@ -10,6 +10,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
+import { formatFiat } from "@/lib/format";
 import type { Order } from "@/types/merchant";
 
 interface EscrowReleaseModalProps {
@@ -90,7 +91,9 @@ export function EscrowReleaseModal({
                     </div>
                     <div>
                       <p className="text-[10px] text-foreground/35 uppercase mb-1">Fiat Received</p>
-                      <p className="text-lg font-bold text-white">د.إ {Math.round(releaseOrder.total).toLocaleString()}</p>
+                      <p className="text-lg font-bold text-white">
+                        {formatFiat(releaseOrder.total, releaseOrder.toCurrency || releaseOrder.dbOrder?.fiat_currency || '')}
+                      </p>
                     </div>
                   </div>
                 </div>
