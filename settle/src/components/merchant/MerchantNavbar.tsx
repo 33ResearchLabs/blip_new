@@ -133,7 +133,7 @@ export function MerchantNavbar({
   return (
     <>
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border-strong">
-        <div className="h-12 md:h-[50px] flex items-center px-3 md:px-4 gap-3">
+        <div className="relative h-12 md:h-[50px] flex items-center px-3 md:px-4 gap-3">
           {/* Mobile back button — only on overlay screens that pass onBack */}
           {onBack && (
             <button
@@ -156,9 +156,17 @@ export function MerchantNavbar({
             </Link>
           </div>
 
-          {/* Center: Nav pills — desktop only */}
-          <div className="hidden md:flex items-center gap-2 mx-auto">
-            <nav className="flex items-center gap-0.5 bg-foreground/[0.03] rounded-lg p-[3px]">
+          {/* Center: Nav pills — pinned to viewport center via absolute
+              positioning. Previous `mx-auto` only centered the block in the
+              REMAINING space between the logo and the right-side icon cluster,
+              so it drifted left whenever the right cluster grew (avatar +
+              report + bell + 2FA pill etc). With `left-1/2 -translate-x-1/2`
+              the pills sit exactly at 50% of the header width regardless of
+              what flanks them. `pointer-events-none` on the wrapper keeps the
+              empty space click-through; the inner <nav> re-enables pointer
+              events for the pills themselves. */}
+          <div className="hidden md:flex items-center gap-2 absolute left-1/2 -translate-x-1/2 pointer-events-none">
+            <nav className="pointer-events-auto flex items-center gap-0.5 bg-foreground/[0.03] rounded-lg p-[3px]">
               <Link
                 href="/merchant"
                 className={pill(activePage === "dashboard")}
