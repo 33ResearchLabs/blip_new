@@ -19,10 +19,22 @@ interface LoginScreenProps {
   authTab: "signin" | "create";
   setAuthTab: (tab: "signin" | "create") => void;
   loginForm: { email: string; password: string };
-  setLoginForm: React.Dispatch<React.SetStateAction<{ email: string; password: string }>>;
-  registerForm: { email: string; password: string; confirmPassword: string; businessName: string };
+  setLoginForm: React.Dispatch<
+    React.SetStateAction<{ email: string; password: string }>
+  >;
+  registerForm: {
+    email: string;
+    password: string;
+    confirmPassword: string;
+    businessName: string;
+  };
   setRegisterForm: React.Dispatch<
-    React.SetStateAction<{ email: string; password: string; confirmPassword: string; businessName: string }>
+    React.SetStateAction<{
+      email: string;
+      password: string;
+      confirmPassword: string;
+      businessName: string;
+    }>
   >;
   loginError: string;
   setLoginError: (err: string) => void;
@@ -71,10 +83,12 @@ export function LoginScreen({
   const [rememberMe, setRememberMe] = useState(false);
   useEffect(() => {
     try {
-      const remembered = window.localStorage.getItem("blip:merchant:rememberMe") === "true";
+      const remembered =
+        window.localStorage.getItem("blip:merchant:rememberMe") === "true";
       if (!remembered) return;
       setRememberMe(true);
-      const savedEmail = window.localStorage.getItem("blip:merchant:rememberedEmail") || "";
+      const savedEmail =
+        window.localStorage.getItem("blip:merchant:rememberedEmail") || "";
       if (savedEmail && !loginForm.email) {
         setLoginForm((p) => ({ ...p, email: savedEmail }));
       }
@@ -91,7 +105,10 @@ export function LoginScreen({
       if (checked) {
         window.localStorage.setItem("blip:merchant:rememberMe", "true");
         if (loginForm.email) {
-          window.localStorage.setItem("blip:merchant:rememberedEmail", loginForm.email);
+          window.localStorage.setItem(
+            "blip:merchant:rememberedEmail",
+            loginForm.email,
+          );
         }
       } else {
         window.localStorage.removeItem("blip:merchant:rememberMe");
@@ -159,253 +176,294 @@ export function LoginScreen({
       <div className="pointer-events-none absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-orange-500/[0.06] blur-[200px]" />
       <div className="pointer-events-none absolute -bottom-40 -right-40 w-[560px] h-[560px] rounded-full bg-orange-500/15 blur-[180px]" />
 
-      <div className="relative grid lg:grid-cols-2 h-full">
+      <div className="relative grid lg:grid-cols-1 h-full">
         {/* ─────────── LEFT PANEL — marketing ─────────── */}
-        <LeftPanel mode={authTab} />
+        {/* <LeftPanel mode={authTab} /> */}
 
         {/* ─────────── RIGHT PANEL — form ─────────── */}
         <div className="flex items-center justify-center px-6 py-6 lg:px-10 xl:px-14 h-full overflow-y-auto lg:overflow-hidden">
           <div className="relative w-full max-w-[440px]">
             {/* glow halo behind card */}
-            <div className="pointer-events-none absolute -inset-4 bg-gradient-to-br from-orange-500/20 via-orange-500/5 to-transparent rounded-3xl blur-2xl" />
+            <div className="pointer-events-none absolute -inset-4 bg-gradient-to-br from-orange-500/0 via-orange-500/5 to-transparent rounded-3xl blur-2xl" />
             <div className="relative bg-[#0C0C0E]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-7 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)]">
-            {/* MERCHANT PORTAL pill */}
-            <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 mb-3">
-              <span className="text-[10px] font-semibold tracking-[0.18em] text-orange-400">
-                MERCHANT PORTAL
-              </span>
-            </div>
-
-            {authTab === "signin" ? (
-              <>
-                <h1 className="text-2xl md:text-3xl font-bold text-white mb-1.5">Merchant Sign In</h1>
-                <p className="text-white/50 mb-5 text-[13px] leading-relaxed">
-                  Access your merchant dashboard and manage your business
-                </p>
-              </>
-            ) : (
-              <>
-                <h1 className="text-2xl md:text-[28px] font-bold text-white mb-1.5 leading-tight">
-                  Create your merchant account
-                </h1>
-                <p className="text-white/50 mb-4 text-[13px] leading-relaxed">
-                  Join Blip Money and start managing your business in minutes.
-                </p>
-              </>
-            )}
-
-            {/* Error banner */}
-            {loginError && loginError === "EMAIL_NOT_VERIFIED" ? (
-              <div className="mb-3 bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 space-y-2">
-                <p className="text-sm text-amber-400 font-medium">Email not verified</p>
-                <p className="text-xs text-white/50">Check your inbox for a verification link.</p>
-                {onResendVerification && (
-                  <button
-                    onClick={onResendVerification}
-                    disabled={isResendingVerification}
-                    className="w-full py-1.5 rounded-lg text-xs font-medium bg-amber-500/15 border border-amber-500/25 text-amber-400 hover:bg-amber-500/25 transition-colors disabled:opacity-50"
-                  >
-                    {isResendingVerification ? "Sending..." : "Resend Verification Email"}
-                  </button>
-                )}
+              {/* MERCHANT PORTAL pill */}
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 mb-3">
+                <span className="text-[10px] font-semibold tracking-[0.18em] text-orange-400">
+                  MERCHANT PORTAL
+                </span>
               </div>
-            ) : loginError ? (
-              <div className="mb-3 bg-red-500/10 border border-red-500/25 rounded-xl p-2.5 text-sm text-red-400">
-                {loginError}
-              </div>
-            ) : null}
 
-            {isAuthenticating && (
-              <div className="mb-3 bg-white/[0.04] border border-white/8 rounded-xl p-2.5 text-sm text-white/70 flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Authenticating with wallet...
-              </div>
-            )}
+              {authTab === "signin" ? (
+                <>
+                  <h1 className="text-2xl md:text-3xl font-bold text-white mb-1.5">
+                    Merchant Sign In
+                  </h1>
+                  <p className="text-white/50 mb-5 text-[13px] leading-relaxed">
+                    Access your merchant dashboard and manage your business
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-2xl md:text-[28px] font-bold text-white mb-1.5 leading-tight">
+                    Create your merchant account
+                  </h1>
+                  <p className="text-white/50 mb-4 text-[13px] leading-relaxed">
+                    Join Blip Money and start managing your business in minutes.
+                  </p>
+                </>
+              )}
 
-            {/* ─── SIGN IN FORM ─── */}
-            {authTab === "signin" && (
-              <div className="space-y-3.5">
-                <FieldEmail
-                  label="Email Address"
-                  value={loginForm.email}
-                  placeholder="merchant@email.com"
-                  onChange={(v) => {
-                    setLoginForm((p) => ({ ...p, email: v }));
-                    if (rememberMe) {
-                      try {
-                        window.localStorage.setItem("blip:merchant:rememberedEmail", v);
-                      } catch {
-                        // Ignore storage failures.
-                      }
-                    }
-                  }}
-                  onBlur={(v) => {
-                    const trimmed = v.trim();
-                    setLoginForm((p) => ({ ...p, email: trimmed }));
-                    if (rememberMe) {
-                      try {
-                        window.localStorage.setItem("blip:merchant:rememberedEmail", trimmed);
-                      } catch {
-                        // Ignore storage failures.
-                      }
-                    }
-                  }}
-                />
-
-                <FieldPassword
-                  label="Password"
-                  value={loginForm.password}
-                  show={showLoginPassword}
-                  setShow={setShowLoginPassword}
-                  placeholder="••••••••••••"
-                  onChange={(v) => setLoginForm((p) => ({ ...p, password: v }))}
-                  onEnter={onLogin}
-                  trailingLabel={
-                    <Link
-                      href="/merchant/forgot-password"
-                      className="text-[12px] text-orange-400 hover:text-orange-300 transition-colors"
+              {/* Error banner */}
+              {loginError && loginError === "EMAIL_NOT_VERIFIED" ? (
+                <div className="mb-3 bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 space-y-2">
+                  <p className="text-sm text-amber-400 font-medium">
+                    Email not verified
+                  </p>
+                  <p className="text-xs text-white/50">
+                    Check your inbox for a verification link.
+                  </p>
+                  {onResendVerification && (
+                    <button
+                      onClick={onResendVerification}
+                      disabled={isResendingVerification}
+                      className="w-full py-1.5 rounded-lg text-xs font-medium bg-amber-500/15 border border-amber-500/25 text-amber-400 hover:bg-amber-500/25 transition-colors disabled:opacity-50"
                     >
-                      Forgot password?
-                    </Link>
-                  }
-                />
+                      {isResendingVerification
+                        ? "Sending..."
+                        : "Resend Verification Email"}
+                    </button>
+                  )}
+                </div>
+              ) : loginError ? (
+                <div className="mb-3 bg-red-500/10 border border-red-500/25 rounded-xl p-2.5 text-sm text-red-400">
+                  {loginError}
+                </div>
+              ) : null}
 
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => toggleRememberMe(e.target.checked)}
-                    className="w-4 h-4 rounded border-white/20 bg-white/5 accent-orange-500"
-                  />
-                  <span className="text-[12px] text-white/60">Remember me</span>
-                </label>
+              {isAuthenticating && (
+                <div className="mb-3 bg-white/[0.04] border border-white/8 rounded-xl p-2.5 text-sm text-white/70 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Authenticating with wallet...
+                </div>
+              )}
 
-                <PrimaryButton
-                  onClick={onLogin}
-                  disabled={isLoggingIn || !loginForm.email || !loginForm.password}
-                  loading={isLoggingIn}
-                  loadingLabel="Signing in..."
-                  label="Sign In as Merchant"
-                />
-
-                <OrDivider />
-
-                <GoogleButton onClick={handleGoogle} />
-
-                <p className="text-center text-[13px] text-white/40">
-                  Don&apos;t have an account?{" "}
-                  <button
-                    onClick={() => {
-                      setAuthTab("create");
-                      setLoginError("");
+              {/* ─── SIGN IN FORM ─── */}
+              {authTab === "signin" && (
+                <div className="space-y-3.5">
+                  <FieldEmail
+                    label="Email Address"
+                    value={loginForm.email}
+                    placeholder="merchant@email.com"
+                    onChange={(v) => {
+                      setLoginForm((p) => ({ ...p, email: v }));
+                      if (rememberMe) {
+                        try {
+                          window.localStorage.setItem(
+                            "blip:merchant:rememberedEmail",
+                            v,
+                          );
+                        } catch {
+                          // Ignore storage failures.
+                        }
+                      }
                     }}
-                    className="text-orange-400 font-medium hover:text-orange-300 transition-colors"
-                  >
-                    Register as Merchant
-                  </button>
-                </p>
-              </div>
-            )}
+                    onBlur={(v) => {
+                      const trimmed = v.trim();
+                      setLoginForm((p) => ({ ...p, email: trimmed }));
+                      if (rememberMe) {
+                        try {
+                          window.localStorage.setItem(
+                            "blip:merchant:rememberedEmail",
+                            trimmed,
+                          );
+                        } catch {
+                          // Ignore storage failures.
+                        }
+                      }
+                    }}
+                  />
 
-            {/* ─── CREATE ACCOUNT FORM ─── */}
-            {authTab === "create" && (
-              <div className="space-y-2.5">
-                <FieldText
-                  label="Full Name"
-                  value={registerForm.businessName}
-                  placeholder="Enter your full name"
-                  maxLength={100}
-                  onChange={(v) => setRegisterForm((p) => ({ ...p, businessName: v }))}
-                  onBlur={(v) => setRegisterForm((p) => ({ ...p, businessName: v.trim() }))}
-                />
-
-                <FieldEmail
-                  label="Email Address"
-                  value={registerForm.email}
-                  placeholder="Enter your email address"
-                  onChange={(v) => setRegisterForm((p) => ({ ...p, email: v }))}
-                  onBlur={(v) => setRegisterForm((p) => ({ ...p, email: v.trim() }))}
-                />
-
-                <div>
                   <FieldPassword
                     label="Password"
-                    value={registerForm.password}
-                    show={showRegisterPassword}
-                    setShow={setShowRegisterPassword}
-                    placeholder="Create a strong password"
-                    onChange={(v) => setRegisterForm((p) => ({ ...p, password: v }))}
+                    value={loginForm.password}
+                    show={showLoginPassword}
+                    setShow={setShowLoginPassword}
+                    placeholder="••••••••••••"
+                    onChange={(v) =>
+                      setLoginForm((p) => ({ ...p, password: v }))
+                    }
+                    onEnter={onLogin}
+                    trailingLabel={
+                      <Link
+                        href="/merchant/forgot-password"
+                        className="text-[12px] text-orange-400 hover:text-orange-300 transition-colors"
+                      >
+                        Forgot password?
+                      </Link>
+                    }
                   />
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1.5">
-                    <PwdCheck ok={pwdChecks.length} label="8+ characters" />
-                    <PwdCheck ok={pwdChecks.upper} label="Uppercase letter" />
-                    <PwdCheck ok={pwdChecks.number} label="A number" />
-                    <PwdCheck ok={pwdChecks.special} label="Special character" />
-                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => toggleRememberMe(e.target.checked)}
+                      className="w-4 h-4 rounded border-white/20 bg-white/5 accent-orange-500"
+                    />
+                    <span className="text-[12px] text-white/60">
+                      Remember me
+                    </span>
+                  </label>
+
+                  <PrimaryButton
+                    onClick={onLogin}
+                    disabled={
+                      isLoggingIn || !loginForm.email || !loginForm.password
+                    }
+                    loading={isLoggingIn}
+                    loadingLabel="Signing in..."
+                    label="Sign In as Merchant"
+                  />
+
+                  <OrDivider />
+
+                  <GoogleButton onClick={handleGoogle} />
+
+                  <p className="text-center text-[13px] text-white/40">
+                    Don&apos;t have an account?{" "}
+                    <button
+                      onClick={() => {
+                        setAuthTab("create");
+                        setLoginError("");
+                      }}
+                      className="text-orange-400 font-medium hover:text-orange-300 transition-colors"
+                    >
+                      Register as Merchant
+                    </button>
+                  </p>
                 </div>
+              )}
 
-                <FieldPassword
-                  label="Confirm Password"
-                  value={registerForm.confirmPassword}
-                  show={showConfirmPassword}
-                  setShow={setShowConfirmPassword}
-                  placeholder="Confirm your password"
-                  onChange={(v) => setRegisterForm((p) => ({ ...p, confirmPassword: v }))}
-                  onEnter={onRegister}
-                />
-
-                <label className="flex items-start gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={agreeTerms}
-                    onChange={(e) => setAgreeTerms(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-white/20 bg-white/5 accent-orange-500"
+              {/* ─── CREATE ACCOUNT FORM ─── */}
+              {authTab === "create" && (
+                <div className="space-y-2.5">
+                  <FieldText
+                    label="Full Name"
+                    value={registerForm.businessName}
+                    placeholder="Enter your full name"
+                    maxLength={100}
+                    onChange={(v) =>
+                      setRegisterForm((p) => ({ ...p, businessName: v }))
+                    }
+                    onBlur={(v) =>
+                      setRegisterForm((p) => ({ ...p, businessName: v.trim() }))
+                    }
                   />
-                  <span className="text-[12px] text-white/60 leading-snug">
-                    I agree to the{" "}
-                    <a href="#" className="text-orange-400 hover:text-orange-300">
-                      Terms of Service
-                    </a>{" "}
-                    and{" "}
-                    <a href="#" className="text-orange-400 hover:text-orange-300">
-                      Privacy Policy
-                    </a>
-                  </span>
-                </label>
 
-                <PrimaryButton
-                  onClick={onRegister}
-                  disabled={
-                    isRegistering ||
-                    !registerForm.email ||
-                    !registerForm.password ||
-                    !registerForm.confirmPassword ||
-                    !registerForm.businessName?.trim() ||
-                    !agreeTerms
-                  }
-                  loading={isRegistering}
-                  loadingLabel="Creating Account..."
-                  label="Create Account"
-                />
+                  <FieldEmail
+                    label="Email Address"
+                    value={registerForm.email}
+                    placeholder="Enter your email address"
+                    onChange={(v) =>
+                      setRegisterForm((p) => ({ ...p, email: v }))
+                    }
+                    onBlur={(v) =>
+                      setRegisterForm((p) => ({ ...p, email: v.trim() }))
+                    }
+                  />
 
-                <OrDivider />
+                  <div>
+                    <FieldPassword
+                      label="Password"
+                      value={registerForm.password}
+                      show={showRegisterPassword}
+                      setShow={setShowRegisterPassword}
+                      placeholder="Create a strong password"
+                      onChange={(v) =>
+                        setRegisterForm((p) => ({ ...p, password: v }))
+                      }
+                    />
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1.5">
+                      <PwdCheck ok={pwdChecks.length} label="8+ characters" />
+                      <PwdCheck ok={pwdChecks.upper} label="Uppercase letter" />
+                      <PwdCheck ok={pwdChecks.number} label="A number" />
+                      <PwdCheck
+                        ok={pwdChecks.special}
+                        label="Special character"
+                      />
+                    </div>
+                  </div>
 
-                <GoogleButton onClick={handleGoogle} />
+                  <FieldPassword
+                    label="Confirm Password"
+                    value={registerForm.confirmPassword}
+                    show={showConfirmPassword}
+                    setShow={setShowConfirmPassword}
+                    placeholder="Confirm your password"
+                    onChange={(v) =>
+                      setRegisterForm((p) => ({ ...p, confirmPassword: v }))
+                    }
+                    onEnter={onRegister}
+                  />
 
-                <p className="text-center text-[13px] text-white/40">
-                  Already have an account?{" "}
-                  <button
-                    onClick={() => {
-                      setAuthTab("signin");
-                      setLoginError("");
-                    }}
-                    className="text-orange-400 font-medium hover:text-orange-300 transition-colors"
-                  >
-                    Sign In
-                  </button>
-                </p>
-              </div>
-            )}
+                  <label className="flex items-start gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={agreeTerms}
+                      onChange={(e) => setAgreeTerms(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded border-white/20 bg-white/5 accent-orange-500"
+                    />
+                    <span className="text-[12px] text-white/60 leading-snug">
+                      I agree to the{" "}
+                      <a
+                        href="#"
+                        className="text-orange-400 hover:text-orange-300"
+                      >
+                        Terms of Service
+                      </a>{" "}
+                      and{" "}
+                      <a
+                        href="#"
+                        className="text-orange-400 hover:text-orange-300"
+                      >
+                        Privacy Policy
+                      </a>
+                    </span>
+                  </label>
+
+                  <PrimaryButton
+                    onClick={onRegister}
+                    disabled={
+                      isRegistering ||
+                      !registerForm.email ||
+                      !registerForm.password ||
+                      !registerForm.confirmPassword ||
+                      !registerForm.businessName?.trim() ||
+                      !agreeTerms
+                    }
+                    loading={isRegistering}
+                    loadingLabel="Creating Account..."
+                    label="Create Account"
+                  />
+
+                  <OrDivider />
+
+                  <GoogleButton onClick={handleGoogle} />
+
+                  <p className="text-center text-[13px] text-white/40">
+                    Already have an account?{" "}
+                    <button
+                      onClick={() => {
+                        setAuthTab("signin");
+                        setLoginError("");
+                      }}
+                      className="text-orange-400 font-medium hover:text-orange-300 transition-colors"
+                    >
+                      Sign In
+                    </button>
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -449,7 +507,8 @@ function SignInLeft() {
         Designed for <span className="text-orange-500">Growth.</span>
       </h2>
       <p className="text-white/50 mt-4 text-[14px] leading-relaxed flex-shrink-0">
-        Everything you need to manage payments, earn rewards and scale your business.
+        Everything you need to manage payments, earn rewards and scale your
+        business.
       </p>
 
       <div className="grid grid-cols-1 gap-3 mt-7 flex-shrink-0">
@@ -528,7 +587,9 @@ function CreateLeft() {
           <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 ring-2 ring-[#070708]" />
         </div>
         <span>
-          Trusted by <span className="text-white font-semibold">100K+ merchants</span> across the globe
+          Trusted by{" "}
+          <span className="text-white font-semibold">100K+ merchants</span>{" "}
+          across the globe
         </span>
       </div>
     </div>
@@ -559,7 +620,9 @@ function StatCard({
       >
         {value}
       </div>
-      <div className="text-[11px] text-white/50 mt-0.5 leading-tight">{label}</div>
+      <div className="text-[11px] text-white/50 mt-0.5 leading-tight">
+        {label}
+      </div>
     </div>
   );
 }
@@ -579,12 +642,18 @@ function Feature({
 }) {
   return (
     <div className="flex items-center gap-2.5">
-      <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center flex-shrink-0`}>
+      <div
+        className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center flex-shrink-0`}
+      >
         {icon}
       </div>
       <div>
-        <div className="text-[13px] font-semibold text-white leading-tight">{title}</div>
-        <div className="text-[11px] text-white/50 leading-tight mt-0.5">{subtitle}</div>
+        <div className="text-[13px] font-semibold text-white leading-tight">
+          {title}
+        </div>
+        <div className="text-[11px] text-white/50 leading-tight mt-0.5">
+          {subtitle}
+        </div>
       </div>
     </div>
   );
@@ -702,7 +771,9 @@ function FieldPassword({
           value={value}
           maxLength={24}
           onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onEnter ? (e) => e.key === "Enter" && onEnter() : undefined}
+          onKeyDown={
+            onEnter ? (e) => e.key === "Enter" && onEnter() : undefined
+          }
           placeholder={placeholder}
           className="w-full bg-white/[0.04] rounded-lg px-3.5 py-2.5 pr-10 text-sm text-white outline-none placeholder:text-white/25 border border-white/8 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/30 transition-all"
         />
@@ -794,7 +865,14 @@ function GoogleButton({ onClick }: { onClick: () => void }) {
 
 function MailIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="m3 7 9 6 9-6" />
     </svg>
@@ -803,7 +881,14 @@ function MailIcon() {
 
 function LockIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <rect x="4" y="11" width="16" height="10" rx="2" />
       <path d="M8 11V7a4 4 0 1 1 8 0v4" />
     </svg>
