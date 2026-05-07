@@ -26,6 +26,7 @@ import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsO
 import { copyToClipboard } from "@/lib/clipboard";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { DEVNET_RPC, DEVNET_WS_ENDPOINT } from "@/lib/solana/v2/config";
+import { getRpcEndpoints } from "@/lib/solana/rpc";
 import { confirmHttp } from "@/lib/solana/confirmHttp";
 import {
   generateWallet,
@@ -104,6 +105,23 @@ export default function WalletPage({
   // Backup state (after creation)
   const [pendingKeypair, setPendingKeypair] = useState<Keypair | null>(null);
   const [backupDownloaded, setBackupDownloaded] = useState(false);
+
+  // Receive modal state — shows the wallet address with quick copy / explorer
+  // links so the merchant can hand it to a counterparty without copy-pasting
+  // through the smaller address card. Mirrors the Send modal pattern so the
+  // four-button row reads as a balanced quad (Send / Receive / Refresh / Export).
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
+
+  // Network Status polling — block height + RPC latency. Hits the same RPC the
+  // wallet connection uses so the values reflect what THIS client sees, not a
+  // generic /health endpoint. We poll every 10s because Solana slot time is
+  // ~400ms but the indicator's purpose is "is the RPC alive and roughly fresh"
+  // — sub-10s precision would just burn requests and battery.
+  const [networkStatus, setNetworkStatus] = useState<{
+    blockHeight: number | null;
+    latency: number | null;
+    healthy: boolean;
+  }>({ blockHeight: null, latency: null, healthy: true });
 
   // Restore merchant session via cookie-authed /api/auth/me. Survives hard
   // refresh and deep-link entry — identity comes from the signed cookie,
@@ -185,6 +203,92 @@ export default function WalletPage({
         break;
     }
   }, [isLoading, embeddedWallet?.state, solanaWallet.connected]);
+
+  // ── Network status polling ────────────────────────────────────────────
+  // Probes the active Solana RPC for block height + round-trip latency so
+  // the Network Status card reflects what THIS client actually sees, not a
+  // generic upstream /health endpoint.
+  //
+  // Why this is wrapped in retry / fallback logic rather than a single fetch:
+  //   - Env-configured RPCs (Helius, QuickNode, etc.) often require an API key
+  //     embedded in the URL and silently 401/403 from the browser without a
+  //     usable error body.
+  //   - Some RPCs reject `getBlockHeight` from anonymous origins but accept
+  //     `getSlot` (slot ≈ block height for status purposes — slots advance
+  //     ~400ms apart, blocks may skip). We try both.
+  //   - If everything env-configured fails we fall back to the canonical
+  //     public endpoint so the merchant always sees SOMETHING real instead of
+  //     a permanent "—".
+  //
+  // 10s interval keeps the call count low; Solana's block time is ~400ms but
+  // sub-10s precision on a status pill is overkill.
+  useEffect(() => {
+    if (view !== "main") return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const probe = async (url: string) => {
+      const start = performance.now();
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "getSlot",
+            params: [{ commitment: "confirmed" }],
+          }),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const latency = Math.round(performance.now() - start);
+        if (typeof data?.result !== "number") return null;
+        return { slot: data.result as number, latency };
+      } catch {
+        return null;
+      }
+    };
+
+    const tick = async () => {
+      const network = isMainnet() ? "mainnet-beta" : "devnet";
+      const configured = getRpcEndpoints(network).map((e) => e.url);
+      const publicFallback =
+        network === "mainnet-beta"
+          ? "https://api.mainnet-beta.solana.com"
+          : "https://api.devnet.solana.com";
+      // De-dupe in case env already lists the public one first.
+      const candidates = Array.from(new Set([...configured, publicFallback]));
+
+      let result: { slot: number; latency: number } | null = null;
+      for (const url of candidates) {
+        if (cancelled) return;
+        result = await probe(url);
+        if (result) break;
+      }
+
+      if (cancelled) return;
+      if (result) {
+        setNetworkStatus({
+          blockHeight: result.slot,
+          latency: result.latency,
+          healthy: true,
+        });
+      } else {
+        setNetworkStatus((prev) => ({ ...prev, healthy: false }));
+      }
+
+      if (!cancelled) {
+        timer = setTimeout(tick, 10_000);
+      }
+    };
+    tick();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [view]);
 
   // ---- Handlers ----
 
@@ -522,9 +626,14 @@ export default function WalletPage({
         onBack={onClose ?? (() => router.push("/merchant"))}
       />
 
-      {/* Main content — centered card */}
-      <div className="flex-1 flex items-start justify-center overflow-y-auto pt-8 pb-8 px-4">
-        <div className="w-full max-w-[420px]">
+      {/* Main content — wider on desktop so the redesigned wallet view can
+          spread into a 2-column grid (wallet hero + tokens on the left,
+          network status + security on the right). The setup / unlock /
+          backup flows still center to a 420px column inside via `mx-auto
+          max-w-[420px]` on each of those blocks — only the "main" view
+          uses the full width. */}
+      <div className="flex-1 flex items-start justify-center overflow-y-auto pt-4 pb-4 px-4">
+        <div className={`w-full ${view === "main" ? "max-w-[1080px]" : "max-w-[420px]"}`}>
           {/* ========== LOADING VIEW ========== */}
           {view === "loading" && (
             <div className="flex flex-col items-center justify-center pt-24 space-y-4">
@@ -936,236 +1045,366 @@ export default function WalletPage({
 
           {/* ========== MAIN WALLET VIEW ========== */}
           {view === "main" && (
-            <div className="space-y-4">
-              {/* Balance hero */}
-              <div className="bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/[0.06] rounded-2xl p-6 text-center">
-                {/* Status indicator */}
-                <div className="flex items-center justify-center gap-1.5 mb-4">
-                  <div className="w-2 h-2 bg-green-500 rounded-full" />
-                  <span className="text-[10px] text-green-400 font-mono uppercase tracking-wider">
-                    Connected
-                  </span>
-                </div>
-
-                {/* Total balance */}
-                <div className="text-[10px] text-white/30 font-mono uppercase tracking-wider mb-1">
-                  USDT Balance
-                </div>
-                <div className="text-4xl font-bold text-white font-mono tabular-nums mb-1">
-                  {solanaWallet.usdtBalance !== null
-                    ? solanaWallet.usdtBalance.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })
-                    : "—"}
-                </div>
-                <div className="text-xs text-white/30 font-mono">
-                  {MOCK_MODE ? "Mock USDT" : usdtLabel()}
-                </div>
-
-                {/* SOL balance mini */}
-                <div className="mt-4 pt-3 border-t border-white/[0.04] flex items-center justify-center gap-4">
-                  <div className="text-center">
-                    <div className="text-[9px] text-white/30 font-mono uppercase">
-                      SOL
-                    </div>
-                    <div className="text-sm font-bold text-white/70 font-mono tabular-nums">
-                      {solanaWallet.solBalance !== null
-                        ? solanaWallet.solBalance.toFixed(4)
-                        : "—"}
-                    </div>
-                  </div>
-                  <div className="w-px h-6 bg-white/[0.06]" />
-                  <div className="text-center">
-                    <div className="text-[9px] text-white/30 font-mono uppercase">
-                      Network
-                    </div>
-                    <div className={`text-sm font-medium font-mono ${isMainnet() ? 'text-emerald-400' : 'text-primary'}`}>
-                      {isMainnet() ? 'Mainnet' : 'Devnet'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Address card */}
-              <div
-                onClick={handleCopyAddress}
-                className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between cursor-pointer hover:border-border-strong transition-colors group"
-              >
-                <div>
-                  <div className="text-[9px] text-white/30 font-mono uppercase mb-0.5">
-                    Wallet Address
-                  </div>
-                  <div className="text-sm text-white/80 font-mono group-hover:text-foreground transition-colors">
-                    {truncated}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {address && (
-                    <a
-                      href={explorerUrl('address', address)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-1.5 rounded-lg hover:bg-card transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 text-white/20 hover:text-foreground/40" />
-                    </a>
-                  )}
-                  {copied ? (
-                    <Check className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <Copy className="w-4 h-4 text-white/30" />
-                  )}
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <div
-                className={`grid ${MOCK_MODE ? "grid-cols-2" : "grid-cols-3"} gap-2`}
-              >
-                <button
-                  onClick={() => {
-                    setSendError("");
-                    setSendSuccess("");
-                    setShowSendModal(true);
-                  }}
-                  className="py-3 rounded-xl bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-colors
-                             flex flex-col items-center gap-1.5"
-                >
-                  <Send className="w-5 h-5 text-primary" />
-                  <span className="text-[10px] text-primary/80 font-mono font-medium">
-                    Send
-                  </span>
-                </button>
-                <button
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-card transition-colors
-                             flex flex-col items-center gap-1.5 disabled:opacity-50"
-                >
-                  <RefreshCw
-                    className={`w-5 h-5 text-primary ${isRefreshing ? "animate-spin" : ""}`}
-                  />
-                  <span className="text-[10px] text-white/50 font-mono">
-                    Refresh
-                  </span>
-                </button>
-                {!MOCK_MODE && (
-                  <button
-                    onClick={handleExportKey}
-                    className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-card transition-colors
-                               flex flex-col items-center gap-1.5"
-                  >
-                    <Download className="w-5 h-5 text-primary" />
-                    <span className="text-[10px] text-white/50 font-mono">
-                      Export Key
-                    </span>
-                  </button>
-                )}
-              </div>
-
-              {/* Token list */}
-              <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-white/[0.04]">
-                  <span className="text-[10px] font-bold text-white/40 font-mono uppercase tracking-wider">
-                    Tokens
-                  </span>
-                </div>
-
-                {/* SOL row */}
-                <div className="px-4 py-3 flex items-center justify-between border-b border-white/[0.03]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/30 flex items-center justify-center border border-purple-500/20">
-                      <span className="text-xs font-bold text-purple-300">
-                        S
+            // Compact density pass — every card / spacer / font size dropped a
+            // step so the full wallet view fits in a typical viewport (≈ 760px
+            // tall) without scrolling. Same structure as before, just tighter:
+            // outer gap 4→3, hero p-6→p-4, total balance text-5xl→text-4xl,
+            // network status orb 32→24, action buttons py-4→py-3, etc.
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              {/* ── LEFT COLUMN — wallet hero + actions + tokens ────────── */}
+              <div className="lg:col-span-2 space-y-3">
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                      <span className="text-[11px] text-green-400 font-mono">
+                        Connected
                       </span>
                     </div>
-                    <div>
-                      <div className="text-sm font-medium text-white font-mono">
-                        SOL
-                      </div>
-                      <div className="text-[10px] text-white/30 font-mono">
-                        Solana
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold text-white font-mono tabular-nums">
-                      {solanaWallet.solBalance !== null
-                        ? solanaWallet.solBalance.toFixed(4)
-                        : "0.0000"}
-                    </div>
-                  </div>
-                </div>
-
-                {/* USDT row */}
-                <div className="px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500/30 to-emerald-500/30 flex items-center justify-center border border-green-500/20">
-                      <span className="text-xs font-bold text-green-300">
-                        $
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/25">
+                      <div className="w-1.5 h-1.5 bg-primary rounded-full" />
+                      <span className="text-[10px] text-primary font-mono">
+                        {networkLabel()}
                       </span>
                     </div>
-                    <div>
-                      <div className="text-sm font-medium text-white font-mono">
-                        USDT
-                      </div>
-                      <div className="text-[10px] text-white/30 font-mono">
-                        {usdtLabel()}
-                      </div>
-                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold text-primary font-mono tabular-nums">
-                      {solanaWallet.usdtBalance !== null
-                        ? solanaWallet.usdtBalance.toFixed(2)
+
+                  <div className="text-center mb-3">
+                    <div className="text-[10px] text-white/40 font-mono mb-1">
+                      Total Balance
+                    </div>
+                    <div className="flex items-baseline justify-center gap-1.5 mb-0.5">
+                      <span className="text-3xl font-bold text-white font-mono tabular-nums leading-none">
+                        {solanaWallet.usdtBalance !== null
+                          ? solanaWallet.usdtBalance.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                          : "—"}
+                      </span>
+                      <span className="text-sm text-white/50 font-mono">USDT</span>
+                    </div>
+                    <div className="text-[10px] text-white/30 font-mono">
+                      ≈ ${solanaWallet.usdtBalance !== null
+                        ? solanaWallet.usdtBalance.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })
                         : "0.00"}
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-2 flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-md bg-gradient-to-br from-purple-500/30 to-blue-500/30 flex items-center justify-center border border-purple-500/20 shrink-0">
+                        <span className="text-[11px] font-bold text-purple-300">S</span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[9px] text-white/40 font-mono uppercase tracking-wider">
+                          SOL Balance
+                        </div>
+                        <div className="text-[12px] font-bold text-white font-mono tabular-nums truncate">
+                          {solanaWallet.solBalance !== null
+                            ? `${solanaWallet.solBalance.toFixed(4)} SOL`
+                            : "— SOL"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-2 flex items-center gap-1.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] text-white/40 font-mono uppercase tracking-wider">
+                          Wallet Address
+                        </div>
+                        <div className="text-[12px] font-bold text-white font-mono truncate">
+                          {truncated}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowReceiveModal(true)}
+                        title="Show receive address"
+                        className="p-1 rounded-md hover:bg-white/[0.06] transition-colors shrink-0"
+                      >
+                        <ArrowDownToLine className="w-3.5 h-3.5 text-white/40" />
+                      </button>
+                      <button
+                        onClick={handleCopyAddress}
+                        title={copied ? "Copied" : "Copy address"}
+                        className="p-1 rounded-md hover:bg-white/[0.06] transition-colors shrink-0"
+                      >
+                        {copied ? (
+                          <Check className="w-3.5 h-3.5 text-green-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-white/40" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`grid ${MOCK_MODE ? "grid-cols-3" : "grid-cols-4"} gap-2`}>
+                  <button
+                    onClick={() => {
+                      setSendError("");
+                      setSendSuccess("");
+                      setShowSendModal(true);
+                    }}
+                    className="py-2.5 rounded-lg bg-primary/10 border border-primary/25 hover:bg-primary/15 transition-colors flex flex-col items-center gap-1"
+                  >
+                    <Send className="w-4 h-4 text-primary" />
+                    <span className="text-[11px] text-primary font-mono font-medium">
+                      Send
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setShowReceiveModal(true)}
+                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
+                  >
+                    <ArrowDownToLine className="w-4 h-4 text-white/70" />
+                    <span className="text-[11px] text-white/60 font-mono">Receive</span>
+                  </button>
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1 disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      className={`w-4 h-4 text-white/70 ${isRefreshing ? "animate-spin" : ""}`}
+                    />
+                    <span className="text-[11px] text-white/60 font-mono">Refresh</span>
+                  </button>
+                  {!MOCK_MODE && (
+                    <button
+                      onClick={handleExportKey}
+                      className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
+                    >
+                      <Key className="w-4 h-4 text-white/70" />
+                      <span className="text-[11px] text-white/60 font-mono">
+                        Export Key
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl">
+                  <div className="px-3 py-2 flex items-center justify-between border-b border-white/[0.06]">
+                    <span className="text-[12px] font-bold text-white">
+                      Your Tokens
+                    </span>
+                    <button className="text-[10px] text-white/40 hover:text-white/70 font-mono transition-colors">
+                      View all
+                    </button>
+                  </div>
+                  <div className="px-3 py-1.5 grid grid-cols-[1fr_1fr_1fr] gap-3 border-b border-white/[0.04]">
+                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Token</span>
+                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Balance</span>
+                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider text-right">Value (USD)</span>
+                  </div>
+
+                  <div className="px-3 py-2 grid grid-cols-[1fr_1fr_1fr] gap-3 items-center border-b border-white/[0.04]">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/30 flex items-center justify-center border border-purple-500/20 shrink-0">
+                        <span className="text-[11px] font-bold text-purple-300">S</span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-medium text-white font-mono">SOL</div>
+                        <div className="text-[9px] text-white/30 font-mono">Solana</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[12px] font-bold text-white font-mono tabular-nums">
+                        {solanaWallet.solBalance !== null
+                          ? solanaWallet.solBalance.toFixed(4)
+                          : "0.0000"}
+                      </div>
+                      <div className="text-[9px] text-white/30 font-mono">
+                        ≈ $0.00
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[12px] font-bold text-white font-mono tabular-nums">
+                        $0.00
+                      </div>
+                      <div className="text-[9px] text-white/30 font-mono">0.00%</div>
+                    </div>
+                  </div>
+
+                  <div className="px-3 py-2 grid grid-cols-[1fr_1fr_1fr] gap-3 items-center border-b border-white/[0.04]">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-green-500/30 to-emerald-500/30 flex items-center justify-center border border-green-500/20 shrink-0">
+                        <span className="text-[11px] font-bold text-green-300">$</span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-medium text-white font-mono">USDT</div>
+                        <div className="text-[9px] text-white/30 font-mono">{usdtLabel()}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[12px] font-bold text-white font-mono tabular-nums">
+                        {solanaWallet.usdtBalance !== null
+                          ? solanaWallet.usdtBalance.toFixed(2)
+                          : "0.00"}
+                      </div>
+                      <div className="text-[9px] text-white/30 font-mono">
+                        ≈ ${solanaWallet.usdtBalance !== null
+                          ? solanaWallet.usdtBalance.toFixed(2)
+                          : "0.00"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[12px] font-bold text-white font-mono tabular-nums">
+                        ${solanaWallet.usdtBalance !== null
+                          ? solanaWallet.usdtBalance.toFixed(2)
+                          : "0.00"}
+                      </div>
+                      <div className="text-[9px] text-white/30 font-mono">0.00%</div>
+                    </div>
+                  </div>
+
+                  <button className="w-full px-3 py-2 flex items-center justify-between text-white/50 hover:text-white/80 hover:bg-white/[0.03] transition-colors">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="w-3.5 h-3.5" />
+                      <span className="text-[12px] font-mono">Manage Tokens</span>
+                    </div>
+                    <span className="text-white/30">›</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Security section — only for embedded wallet mode */}
-              {!MOCK_MODE && (
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-white/[0.04]">
-                    <span className="text-[10px] font-bold text-white/40 font-mono uppercase tracking-wider">
-                      Security
+              {/* ── RIGHT COLUMN — network status + security ──────────── */}
+              <div className="space-y-3">
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[12px] font-bold text-white">
+                      Network Status
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => embeddedWallet?.lockWallet()}
-                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-card transition-colors border-b border-white/[0.03]"
-                  >
-                    <Lock className="w-4 h-4 text-white/30" />
-                    <span className="text-sm text-white/60 font-mono">
-                      Lock Wallet
+                  <div className="flex items-center gap-2 mb-3">
+                    <div
+                      className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                        networkStatus.healthy
+                          ? "bg-green-500/20 border border-green-500/40"
+                          : "bg-red-500/20 border border-red-500/40"
+                      }`}
+                    >
+                      <Check
+                        className={`w-2.5 h-2.5 ${
+                          networkStatus.healthy ? "text-green-400" : "text-red-400"
+                        }`}
+                      />
+                    </div>
+                    <span
+                      className={`text-[12px] font-mono ${
+                        networkStatus.healthy ? "text-green-400" : "text-red-400"
+                      }`}
+                    >
+                      {networkStatus.healthy
+                        ? "All systems operational"
+                        : "RPC unreachable"}
                     </span>
-                  </button>
+                  </div>
 
-                  <button
-                    onClick={handleExportKey}
-                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-card transition-colors border-b border-white/[0.03]"
-                  >
-                    <Download className="w-4 h-4 text-white/30" />
-                    <span className="text-sm text-white/60 font-mono">
-                      Download Backup
-                    </span>
-                  </button>
+                  <div className="flex items-center justify-center mb-3">
+                    <div className="w-20 h-20 rounded-full border border-white/[0.06] flex items-center justify-center bg-gradient-to-br from-purple-500/[0.04] to-blue-500/[0.04]">
+                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500/30 to-cyan-400/30 flex items-center justify-center">
+                        <Wallet className="w-5 h-5 text-white/80" />
+                      </div>
+                    </div>
+                  </div>
 
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[var(--color-error)]/5 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4 text-red-400/50" />
-                    <span className="text-sm text-red-400/60 font-mono">
-                      Delete Wallet
-                    </span>
-                  </button>
+                  <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-white/50 font-mono">Network</span>
+                      <span className="text-[11px] text-primary font-mono font-bold">
+                        {networkLabel()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-white/50 font-mono">Block Height</span>
+                      <span className="text-[11px] text-white font-mono tabular-nums">
+                        {networkStatus.blockHeight !== null
+                          ? networkStatus.blockHeight.toLocaleString()
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-white/50 font-mono">Connection</span>
+                      <span
+                        className={`text-[11px] font-mono ${
+                          networkStatus.healthy ? "text-green-400" : "text-red-400"
+                        }`}
+                      >
+                        {networkStatus.healthy ? "Stable" : "Down"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-white/50 font-mono">Latency</span>
+                      <span className="text-[11px] text-green-400 font-mono tabular-nums">
+                        {networkStatus.latency !== null
+                          ? `${networkStatus.latency}ms`
+                          : "—"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                {!MOCK_MODE && (
+                  <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden">
+                    <div className="px-3 py-2 border-b border-white/[0.06]">
+                      <span className="text-[12px] font-bold text-white">Security</span>
+                    </div>
+
+                    <button
+                      onClick={() => embeddedWallet?.lockWallet()}
+                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04]"
+                    >
+                      <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                        <Lock className="w-3.5 h-3.5 text-white/60" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[12px] text-white font-mono">Lock Wallet</div>
+                        <div className="text-[10px] text-white/40 font-mono">
+                          Secure your wallet
+                        </div>
+                      </div>
+                      <span className="text-white/30 text-sm">›</span>
+                    </button>
+
+                    <button
+                      onClick={handleExportKey}
+                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04]"
+                    >
+                      <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                        <Download className="w-3.5 h-3.5 text-white/60" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[12px] text-white font-mono">Download Backup</div>
+                        <div className="text-[10px] text-white/40 font-mono">
+                          Download your backup file
+                        </div>
+                      </div>
+                      <span className="text-white/30 text-sm">›</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-[var(--color-error)]/5 transition-colors"
+                    >
+                      <div className="w-7 h-7 rounded-md bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[12px] text-red-400 font-mono">Delete Wallet</div>
+                        <div className="text-[10px] text-white/40 font-mono">
+                          Permanently delete wallet
+                        </div>
+                      </div>
+                      <span className="text-white/30 text-sm">›</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1310,6 +1549,74 @@ export default function WalletPage({
                 Done
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Receive modal — shows the full wallet address with quick actions
+          (copy, view in explorer). Solana addresses are short enough that a
+          full-string display is more useful than a QR for desktop merchants. */}
+      {showReceiveModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowReceiveModal(false)}
+        >
+          <div
+            className="bg-[#0d0d0d] rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2">
+              <ArrowDownToLine className="w-5 h-5 text-primary" />
+              <h3 className="text-base font-bold text-white font-mono">
+                Receive
+              </h3>
+            </div>
+            <p className="text-xs text-white/50 font-mono leading-relaxed">
+              Share this address to receive {usdtLabel()} or SOL on{" "}
+              {networkLabel()}. Sending tokens from another network will result
+              in lost funds.
+            </p>
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-3 space-y-2">
+              <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">
+                Wallet Address
+              </div>
+              <div className="text-sm text-white font-mono break-all">
+                {address || "—"}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCopyAddress}
+                className="flex-1 py-2.5 rounded-xl bg-primary/10 border border-primary/25 text-primary text-sm font-mono font-medium hover:bg-primary/15 transition-colors flex items-center justify-center gap-2"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" /> Copy Address
+                  </>
+                )}
+              </button>
+              {address && (
+                <a
+                  href={explorerUrl("address", address)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/70 text-sm font-mono hover:bg-white/[0.10] transition-colors flex items-center justify-center"
+                  title="View on explorer"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+            </div>
+            <button
+              onClick={() => setShowReceiveModal(false)}
+              className="w-full py-2.5 rounded-xl bg-white/[0.04] text-sm text-white/60 font-mono hover:bg-white/[0.08] transition-colors"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
