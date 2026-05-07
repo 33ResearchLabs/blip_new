@@ -41,6 +41,7 @@ import { Keypair } from "@solana/web3.js";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { showAlert } from "@/context/ModalContext";
 import { MOCK_MODE } from "@/lib/config/mockMode";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { networkLabel, usdtLabel, explorerUrl, isMainnet } from "@/lib/solana/networkLabel";
 
 interface MerchantInfo {
@@ -107,10 +108,19 @@ export default function WalletPage({
   // Restore merchant session via cookie-authed /api/auth/me. Survives hard
   // refresh and deep-link entry — identity comes from the signed cookie,
   // not from any client-writable storage.
+  //
+  // Use fetchWithAuth so that a transient 401 (access-token expired between
+  // the last activity and this navigation, OR a slow session-check at the
+  // server timing out) gets ONE silent refresh-and-retry via the
+  // blip_refresh_token cookie before we redirect to /merchant/login. The
+  // previous raw `fetch` skipped that retry path and kicked the user to
+  // login → the login page saw isLoggedIn was still true in the merchant
+  // store and bounced them back, producing the visible logout-then-login
+  // flicker the user reported.
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const res = await fetch("/api/auth/me", {
+        const res = await fetchWithAuth("/api/auth/me", {
           method: "GET",
           credentials: "include",
         });
