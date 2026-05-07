@@ -494,27 +494,38 @@ export default function UserWalletPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Lightweight header — match the rest of the user shell's 440px column
-          so the wallet screen lines up under HomeScreen / ProfileScreen / etc.
-          (the user app uses max-w-[440px], not the merchant 420px). */}
-      <div className="border-b border-white/[0.06]">
-        <div className="max-w-[440px] mx-auto flex items-center justify-between px-4 h-14">
+    // Match the user shell exactly: `user-scope` activates the user design
+    // tokens, the outer div paints the "desk" frame around the 440px phone
+    // column, and the inner column uses `bg-surface-base` so the screen sits
+    // under the same surface every other user screen does (HomeScreen,
+    // ProfileScreen, etc.). Without this the wallet page reads as a single
+    // flat-black slab instead of the framed phone column the rest of the app
+    // uses, which is what the user flagged.
+    <div
+      className="user-scope min-h-dvh flex flex-col items-center overflow-y-auto"
+      style={{ background: "var(--user-frame)" }}
+    >
+      <div className="flex-1 w-full max-w-[440px] mx-auto flex flex-col bg-surface-base">
+        {/* Header row — flush with the 440px column, matching ProfileScreen's
+            `px-5` content gutter so the back-button / title line up with the
+            cards below. */}
+        <div className="px-5 pt-10 pb-4 shrink-0 flex items-center justify-between">
           <button
             onClick={() => router.push("/")}
-            className="flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 text-[13px] font-semibold text-text-tertiary hover:text-text-primary transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back
           </button>
-          <h1 className="text-sm font-bold text-white font-mono">My Wallet</h1>
+          <h1 className="text-[13px] font-bold text-text-primary tracking-tight">My Wallet</h1>
           <div className="w-12" />
         </div>
-      </div>
 
-      {/* Main content — centered card matching the user shell width */}
-      <div className="flex-1 flex items-start justify-center overflow-y-auto pt-8 pb-8 px-4">
-        <div className="w-full max-w-[440px]">
+        {/* Main content — px-5 mirrors ProfileScreen so cards sit at the same
+            inset as the rest of the user app. pb-10 keeps the last card off
+            the bottom edge (no BottomNav on this screen). */}
+        <div className="flex-1 px-5 pb-10 overflow-y-auto scrollbar-hide">
+          <div className="w-full">
           {/* ========== LOADING VIEW ========== */}
           {view === "loading" && (
             <div className="flex flex-col items-center justify-center pt-24 space-y-4">
@@ -1121,6 +1132,7 @@ export default function UserWalletPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Send modal */}
