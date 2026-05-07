@@ -185,7 +185,7 @@ function TransactionCard({
       <div className="flex flex-col items-end shrink-0">
         {merchantSold ? (
           <>
-            <span className="text-[12px] font-bold font-mono tabular-nums text-[var(--color-error)]">
+            <span className="text-[12px] font-bold font-mono tabular-nums text-foreground">
               -{Math.round(cryptoAmount).toLocaleString()} {cryptoCode}
             </span>
             <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
@@ -200,7 +200,7 @@ function TransactionCard({
           </>
         ) : merchantBought ? (
           <>
-            <span className="text-[12px] font-bold font-mono tabular-nums text-[var(--color-success)]">
+            <span className="text-[12px] font-bold font-mono tabular-nums text-foreground">
               +{Math.round(netCryptoAmount).toLocaleString()} {cryptoCode}
             </span>
             {feeAmount > 0.0001 ? (

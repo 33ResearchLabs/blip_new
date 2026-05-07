@@ -296,11 +296,7 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                                 <><span className="text-[var(--color-error)]">{paidLabel}</span> {cryptoAmount} {asset}</>
                               )}
                             </span>
-                            <span
-                              className={`text-[12px] font-bold font-mono tabular-nums shrink-0 ${
-                                isIncoming ? "text-[var(--color-success)]" : "text-[var(--color-error)]"
-                              }`}
-                            >
+                            <span className="text-[12px] font-bold font-mono tabular-nums shrink-0 text-foreground">
                               {isIncoming ? "+" : ""}{Number(entry.amount).toFixed(2)}
                             </span>
                           </div>

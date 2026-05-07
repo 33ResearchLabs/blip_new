@@ -1742,8 +1742,12 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
         />
       )}
 
-      {/* Load More button */}
-      {hasMore && onLoadMore && (
+      {/* Load More button — only shows on the All / Pending feeds (not the
+          "My Orders" tab, which has its own paginator), and only when there
+          are already rows visible. Without the empty-list guard the button
+          renders under the "No pending orders" empty state — confusing
+          because there's nothing to "load more" of from the user's POV. */}
+      {view !== "mine" && filteredOrders.length > 0 && hasMore && onLoadMore && (
         <div className="px-3 py-2 border-t border-section-divider">
           <button
             onClick={onLoadMore}

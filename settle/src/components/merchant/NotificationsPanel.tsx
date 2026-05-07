@@ -24,6 +24,7 @@ interface NotificationsPanelProps {
 interface GroupedNotification {
   latest: Notification;
   count: number;
+  unreadCount: number;
   ids: string[];
 }
 
@@ -68,13 +69,22 @@ export const NotificationsPanel = memo(function NotificationsPanel({
       const idx = seen.get(key);
       if (idx !== undefined) {
         groups[idx].count++;
+        if (!notif.read) groups[idx].unreadCount++;
         groups[idx].ids.push(notif.id);
         if (notif.timestamp > groups[idx].latest.timestamp) {
           groups[idx].latest = notif;
         }
       } else {
         seen.set(key, groups.length);
-        groups.push({ latest: notif, count: 1, ids: [notif.id] });
+        groups.push({
+          latest: notif,
+          count: 1,
+          // Badge only counts unread items so the number reflects what's
+          // actionable today. Without this the badge accumulates forever
+          // (e.g. 6 ORDER_PENDING showing 5d-old reads alongside today's).
+          unreadCount: notif.read ? 0 : 1,
+          ids: [notif.id],
+        });
       }
     }
     return groups;
@@ -199,10 +209,14 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                       {notif.type === 'message' && <MessageCircle className={`w-3.5 h-3.5 ${style.icon}`} strokeWidth={2.2} />}
                       {notif.type === 'system' && <Bell className={`w-3.5 h-3.5 ${style.icon}`} strokeWidth={2.2} />}
 
-                      {/* Group count badge */}
-                      {group.count > 1 && (
+                      {/* Group count badge — shows UNREAD count, not total.
+                          Without this the badge keeps growing forever as old
+                          read notifications stay in the list and get counted
+                          alongside fresh ones (the "5d ago" group inflation
+                          bug). */}
+                      {group.unreadCount > 1 && (
                         <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-foreground text-background text-[9px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-background tabular-nums">
-                          {group.count > 9 ? '9+' : group.count}
+                          {group.unreadCount > 9 ? '9+' : group.unreadCount}
                         </span>
                       )}
                     </div>
