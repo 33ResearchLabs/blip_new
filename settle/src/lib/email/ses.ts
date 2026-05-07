@@ -20,12 +20,12 @@ interface SendEmailParams {
 
 export async function sendEmail({ to, subject, html, text }: SendEmailParams): Promise<boolean> {
   if (!process.env.RESEND_API_KEY) {
-    console.error('[Email] RESEND_API_KEY not configured — skipping email');
+    console.error('[Email] RESEND_API_KEY not configured — skipping email', { to, subject });
     return false;
   }
 
   try {
-    const { error } = await getResendClient().emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: FROM_EMAIL,
       to,
       subject,
@@ -34,14 +34,29 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams): P
     });
 
     if (error) {
-      console.error('[Email] Resend error:', error);
+      // Resend error shape includes name/message/statusCode — log all of them
+      // so support can tell domain-not-verified vs invalid-recipient vs
+      // rate-limited vs upstream outage at a glance.
+      console.error('[Email] Resend rejected the send', {
+        to,
+        subject,
+        from: FROM_EMAIL,
+        errorName: (error as any)?.name,
+        errorMessage: (error as any)?.message,
+        statusCode: (error as any)?.statusCode,
+      });
       return false;
     }
 
-    console.log(`[Email] Sent to ${to}: ${subject}`);
+    console.log(`[Email] Sent to ${to}: ${subject}`, { resendId: data?.id });
     return true;
   } catch (error) {
-    console.error('[Email] Failed to send email:', error);
+    console.error('[Email] sendEmail threw — likely network/SDK bug', {
+      to,
+      subject,
+      from: FROM_EMAIL,
+      message: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }

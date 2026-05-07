@@ -39,6 +39,10 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    // Hash the email for log context — we want diagnostic visibility ("did
+    // anyone hit this route with this email?") WITHOUT leaking the actual
+    // address into the log stream where it could be searched/cached.
+    const emailLogHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex').slice(0, 12);
 
     // Always return success — prevents email enumeration via response shape.
     const successResponse = NextResponse.json({
@@ -46,17 +50,35 @@ export async function POST(request: NextRequest) {
       message: 'If an account with that email exists, a password reset link has been sent.',
     });
 
-    // Lookup — only password-bearing accounts can reset. Wallet-only
-    // accounts have no password to overwrite.
-    const users = await query<UserRow>(
-      `SELECT id, username, name, email FROM users
-       WHERE LOWER(email) = $1 AND password_hash IS NOT NULL`,
+    // Lookup BOTH password-bearing AND wallet-only accounts so we can log
+    // WHICH case we hit. The actual email is only sent for password
+    // accounts (wallet-only has nothing to reset). The response shape
+    // remains identical in all cases — anti-enumeration preserved.
+    const allUsers = await query<UserRow & { password_hash: string | null }>(
+      `SELECT id, username, name, email, password_hash FROM users
+       WHERE LOWER(email) = $1`,
       [normalizedEmail]
     );
 
-    if (users.length === 0) return successResponse;
+    if (allUsers.length === 0) {
+      console.log('[user forgot-password] email_not_found', { emailHash: emailLogHash });
+      return successResponse;
+    }
 
-    const user = users[0];
+    const candidate = allUsers[0];
+    if (!candidate.password_hash) {
+      console.log('[user forgot-password] wallet_only_account_no_password_to_reset', {
+        emailHash: emailLogHash,
+        userId: candidate.id,
+      });
+      return successResponse;
+    }
+
+    const user = candidate;
+    console.log('[user forgot-password] sending_reset_email', {
+      emailHash: emailLogHash,
+      userId: user.id,
+    });
 
     // Invalidate any existing unused tokens for this user — prevents
     // multiple in-flight reset links sitting in inboxes.

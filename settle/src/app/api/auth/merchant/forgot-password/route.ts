@@ -27,6 +27,8 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    // Diagnostic-only hash — see user/forgot-password/route.ts for rationale.
+    const emailLogHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex').slice(0, 12);
 
     // Always return success to prevent email enumeration
     const successResponse = NextResponse.json({
@@ -34,17 +36,33 @@ export async function POST(request: NextRequest) {
       message: 'If an account with that email exists, a password reset link has been sent.',
     });
 
-    // Look up merchant by email
-    const merchants = await query<MerchantRow>(
-      `SELECT id, display_name, email FROM merchants WHERE LOWER(email) = $1 AND password_hash IS NOT NULL`,
+    // Lookup BOTH password-bearing AND wallet-only merchants so we can log
+    // WHICH case we hit. Anti-enumeration preserved — response shape is
+    // identical in all branches; only the server log differs.
+    const allMerchants = await query<MerchantRow & { password_hash: string | null }>(
+      `SELECT id, display_name, email, password_hash FROM merchants WHERE LOWER(email) = $1`,
       [normalizedEmail]
     );
 
-    if (merchants.length === 0) {
+    if (allMerchants.length === 0) {
+      console.log('[forgot-password] email_not_found', { emailHash: emailLogHash });
       return successResponse;
     }
 
-    const merchant = merchants[0];
+    const candidate = allMerchants[0];
+    if (!candidate.password_hash) {
+      console.log('[forgot-password] wallet_only_account_no_password_to_reset', {
+        emailHash: emailLogHash,
+        merchantId: candidate.id,
+      });
+      return successResponse;
+    }
+
+    const merchant = candidate;
+    console.log('[forgot-password] sending_reset_email', {
+      emailHash: emailLogHash,
+      merchantId: merchant.id,
+    });
 
     // Invalidate any existing unused tokens for this merchant
     await query(
