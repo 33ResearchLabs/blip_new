@@ -461,12 +461,7 @@ export const TradeCreationScreen = ({
                   USDT
                 </span>
               </div>
-              {/* Max prefill \u2014 sell-only because for sell the input represents
-                  USDT the user is spending from their wallet, so "max" = full
-                  balance. Buy orders are paid in fiat (no on-chain balance to
-                  cap), so the button isn't meaningful there. */}
-              {tradeType === "sell" &&
-                solanaWallet.usdtBalance !== null &&
+              {solanaWallet.usdtBalance !== null &&
                 solanaWallet.usdtBalance > 0 && (
                   <button
                     type="button"
