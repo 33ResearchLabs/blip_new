@@ -12,6 +12,7 @@ import {
   Download,
   Trash2,
   Key,
+  KeyRound,
   Eye,
   EyeOff,
   ArrowDownToLine,
@@ -21,13 +22,15 @@ import {
   ExternalLink,
   Send,
   ArrowLeftRight,
-  ShoppingCart,
+  CreditCard,
   MoreHorizontal,
   Plus,
   ArrowDownRight,
   ArrowUpRight,
   XCircle,
   CheckCircle2,
+  ScanSearch,
+  LogOut,
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsOverlay";
@@ -1265,7 +1268,7 @@ export default function WalletPage({
                     }
                     className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
                   >
-                    <ShoppingCart className="w-4 h-4 text-white/70" />
+                    <CreditCard className="w-4 h-4 text-white/70" />
                     <span className="text-[11px] text-white/60 font-mono">Buy</span>
                   </button>
                   {!MOCK_MODE && (
@@ -1273,7 +1276,7 @@ export default function WalletPage({
                       onClick={handleExportKey}
                       className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
                     >
-                      <Key className="w-4 h-4 text-white/70" />
+                      <KeyRound className="w-4 h-4 text-white/70" />
                       <span className="text-[11px] text-white/60 font-mono">
                         Export Key
                       </span>
@@ -1436,12 +1439,16 @@ export default function WalletPage({
                           : isIncoming
                             ? "Receive"
                             : "Send";
+                      // Reuse the same icons as the action button row above
+                      // so a "Send" row visually matches the "Send" button
+                      // (paper plane), Receive row matches the Receive button
+                      // (down arrow), and Swap matches Swap.
                       const TypeIcon =
                         typeLabel === "Swap"
                           ? ArrowLeftRight
                           : isIncoming
-                            ? ArrowDownRight
-                            : ArrowUpRight;
+                            ? ArrowDownToLine
+                            : Send;
                       const cpRaw = tx.counterparty_name || tx.order_number || "—";
                       const cpDisplay =
                         cpRaw.length > 18 ? `${cpRaw.slice(0, 8)}…${cpRaw.slice(-6)}` : cpRaw;
@@ -1687,7 +1694,7 @@ export default function WalletPage({
                       className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04]"
                     >
                       <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <ExternalLink className="w-3.5 h-3.5 text-white/60" />
+                        <ScanSearch className="w-3.5 h-3.5 text-white/60" />
                       </div>
                       <div className="flex-1 text-left">
                         <div className="text-[12px] text-white font-mono">View on Solscan</div>
@@ -1695,7 +1702,7 @@ export default function WalletPage({
                           View wallet on Solscan
                         </div>
                       </div>
-                      <span className="text-white/30 text-sm">↗</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-white/30 shrink-0" />
                     </a>
                   )}
 
@@ -1725,7 +1732,7 @@ export default function WalletPage({
                       className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors"
                     >
                       <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <ArrowUpFromLine className="w-3.5 h-3.5 text-white/60" />
+                        <LogOut className="w-3.5 h-3.5 text-white/60" />
                       </div>
                       <div className="flex-1 text-left">
                         <div className="text-[12px] text-white font-mono">Disconnect Wallet</div>
@@ -1733,7 +1740,7 @@ export default function WalletPage({
                           Lock and disconnect
                         </div>
                       </div>
-                      <span className="text-white/30 text-sm">›</span>
+                      <LogOut className="w-3.5 h-3.5 text-white/30 shrink-0" />
                     </button>
                   )}
                 </div>
