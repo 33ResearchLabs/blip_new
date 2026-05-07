@@ -124,6 +124,16 @@ export default function WalletPage({
   // (re-shows on next visit by design).
   const [hideBalance, setHideBalance] = useState(false);
 
+  // Export-key password prompt — replaces the native window.prompt() the
+  // export flow used to call. window.prompt is unstyleable, can't show a
+  // password mask, and looks foreign on production. The local modal mirrors
+  // the rest of the wallet UI (dark glass card, primary CTA, eye toggle).
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportPassword, setExportPassword] = useState("");
+  const [showExportPassword, setShowExportPassword] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState("");
+
   // Recent transaction history — surfaces the latest 5 wallet-ledger entries
   // directly on the wallet page so the merchant doesn't have to dig into the
   // Settings → Wallet Ledger tab to see what just happened. Shape mirrors
@@ -600,36 +610,52 @@ export default function WalletPage({
     }
   };
 
+  // Open the in-app password modal. The actual decrypt/download runs in
+  // confirmExportKey below — splitting this lets the modal stay simple
+  // (no async logic in the click handler) and keeps the download path
+  // identical to the old prompt-based flow.
   const handleExportKey = () => {
-    // We need to prompt for password, decrypt, then download
-    const pw = prompt("Enter your wallet password to export the private key");
-    if (!pw) return;
+    setExportPassword("");
+    setShowExportPassword(false);
+    setExportError("");
+    setShowExportModal(true);
+  };
 
+  const confirmExportKey = async () => {
+    setExportError("");
+    if (!exportPassword) {
+      setExportError("Enter your wallet password");
+      return;
+    }
     const encrypted = loadEncryptedWallet();
     if (!encrypted) {
+      setShowExportModal(false);
       showAlert("Error", "No wallet found", "error");
       return;
     }
-
-    decryptWallet(encrypted, pw.trim())
-      .then((kp) => {
-        const key = exportPrivateKey(kp);
-        const blob = new Blob(
-          [
-            `Blip Money — Wallet Export\n\nPublic Key: ${kp.publicKey.toBase58()}\nPrivate Key: ${key}\n\nKeep this file safe.\nExported: ${new Date().toISOString()}\n`,
-          ],
-          { type: "text/plain" },
-        );
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `blip-wallet-export-${kp.publicKey.toBase58().slice(0, 8)}.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
-      })
-      .catch(() => {
-        showAlert("Error", "Wrong password", "error");
-      });
+    setExportLoading(true);
+    try {
+      const kp = await decryptWallet(encrypted, exportPassword.trim());
+      const key = exportPrivateKey(kp);
+      const blob = new Blob(
+        [
+          `Blip Money — Wallet Export\n\nPublic Key: ${kp.publicKey.toBase58()}\nPrivate Key: ${key}\n\nKeep this file safe.\nExported: ${new Date().toISOString()}\n`,
+        ],
+        { type: "text/plain" },
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `blip-wallet-export-${kp.publicKey.toBase58().slice(0, 8)}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setShowExportModal(false);
+      setExportPassword("");
+    } catch {
+      setExportError("Wrong password");
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   const handleDelete = () => {
@@ -1924,6 +1950,102 @@ export default function WalletPage({
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Export-key password modal — replaces the native window.prompt that
+          used to handle this. Same look as Send / Receive: dark overlay,
+          glass card, primary CTA. The actual decrypt + download runs in
+          confirmExportKey; this just collects the password. */}
+      {showExportModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !exportLoading && setShowExportModal(false)}
+        >
+          <div
+            className="bg-[#0d0d0d] rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-primary" />
+              <h3 className="text-base font-bold text-white font-mono">
+                Export Private Key
+              </h3>
+            </div>
+            <p className="text-xs text-white/50 font-mono leading-relaxed">
+              Enter your wallet password to decrypt and download the private
+              key. Keep the exported file offline and treat it like cash —
+              anyone with this key can move your funds.
+            </p>
+
+            {exportError && (
+              <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 font-mono">
+                {exportError}
+              </div>
+            )}
+
+            <div>
+              <label
+                htmlFor="export-password"
+                className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block"
+              >
+                Wallet Password
+              </label>
+              <div className="relative">
+                <input
+                  id="export-password"
+                  type={showExportPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  maxLength={100}
+                  value={exportPassword}
+                  onChange={(e) => setExportPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !exportLoading) confirmExportKey();
+                  }}
+                  placeholder="Enter wallet password"
+                  className="w-full px-3 py-3 pr-10 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowExportPassword(!showExportPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                >
+                  {showExportPassword ? (
+                    <EyeOff className="w-4 h-4 text-white/30" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-white/30" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowExportModal(false)}
+                disabled={exportLoading}
+                className="flex-1 py-2.5 rounded-xl bg-white/[0.04] text-sm text-white/60 font-mono hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmExportKey}
+                disabled={exportLoading || !exportPassword}
+                className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-background text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {exportLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Decrypting...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Export
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

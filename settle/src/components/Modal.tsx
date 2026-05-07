@@ -58,13 +58,17 @@ const VARIANT_CONFIG: Record<ModalVariant, {
     buttonShadow: 'shadow-[0_2px_12px_rgba(245,158,11,0.15)]',
   },
   info: {
+    // Info-variant button uses the brand primary so the modal CTA reads as
+    // the app's standard "OK / continue" affordance instead of a generic
+    // blue alert. Icon + iconBg keep the blue accent so the variant is still
+    // visually distinct from success/warning/error.
     icon: Info,
     iconColor: 'text-blue-400',
     iconBg: 'bg-blue-500/10',
     border: 'border-blue-500/20',
-    buttonBg: 'bg-gradient-to-b from-blue-500 to-blue-600',
-    buttonHover: 'hover:from-blue-400 hover:to-blue-500',
-    buttonShadow: 'shadow-[0_2px_12px_rgba(59,130,246,0.15)]',
+    buttonBg: 'bg-primary',
+    buttonHover: 'hover:bg-primary/90',
+    buttonShadow: 'shadow-[0_2px_12px_rgba(249,115,22,0.20)]',
   },
 };
 
@@ -217,7 +221,12 @@ export function Modal({
               <button
                 onClick={type === 'confirm' ? onConfirm : onClose}
                 disabled={loading}
-                className={`flex-1 px-3 py-2.5 rounded-xl ${config.buttonBg} text-white text-[12px] font-bold
+                className={`flex-1 px-3 py-2.5 rounded-xl ${config.buttonBg} ${
+                  // Info variant uses solid primary (orange) so the label
+                  // needs to be dark for AA contrast. Other variants keep
+                  // their light-on-saturated-color combo unchanged.
+                  variant === 'info' ? 'text-background' : 'text-white'
+                } text-[12px] font-bold
                            ${config.buttonHover} transition-all disabled:opacity-50 disabled:cursor-not-allowed
                            flex items-center justify-center gap-1.5 ${config.buttonShadow}`}
               >
