@@ -171,10 +171,9 @@ export function LoginScreen({
           backgroundSize: "48px 48px",
         }}
       />
-      {/* ambient orange glows */}
-      <div className="pointer-events-none absolute -top-40 -left-40 w-[560px] h-[560px] rounded-full bg-orange-500/15 blur-[180px]" />
-      <div className="pointer-events-none absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-orange-500/[0.06] blur-[200px]" />
-      <div className="pointer-events-none absolute -bottom-40 -right-40 w-[560px] h-[560px] rounded-full bg-orange-500/15 blur-[180px]" />
+      {/* Ambient glows removed — they pulled the entire login bg toward
+          orange. Background stays pure black; the brand accent lives only on
+          the CTA, links, and form badges where it actually signals action. */}
 
       <div className="relative grid lg:grid-cols-1 h-full">
         {/* ─────────── LEFT PANEL — marketing ─────────── */}
@@ -184,11 +183,11 @@ export function LoginScreen({
         <div className="flex items-center justify-center px-6 py-6 lg:px-10 xl:px-14 h-full overflow-y-auto lg:overflow-hidden">
           <div className="relative w-full max-w-[440px]">
             {/* glow halo behind card */}
-            <div className="pointer-events-none absolute -inset-4 bg-gradient-to-br from-orange-500/0 via-orange-500/5 to-transparent rounded-3xl blur-2xl" />
+            <div className="pointer-events-none absolute -inset-4  rounded-3xl blur-2xl" />
             <div className="relative bg-[#0C0C0E]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-7 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)]">
               {/* MERCHANT PORTAL pill */}
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 mb-3">
-                <span className="text-[10px] font-semibold tracking-[0.18em] text-orange-400">
+              <div className="inline-flex items-center px-3 py-1 rounded-full  border border-white/15 mb-3">
+                <span className="text-[10px] font-semibold tracking-[0.18em] text-white/70">
                   MERCHANT PORTAL
                 </span>
               </div>
@@ -296,7 +295,7 @@ export function LoginScreen({
                     trailingLabel={
                       <Link
                         href="/merchant/forgot-password"
-                        className="text-[12px] text-orange-400 hover:text-orange-300 transition-colors"
+                        className="text-[12px] text-white/70 hover:text-white transition-colors"
                       >
                         Forgot password?
                       </Link>
@@ -308,7 +307,7 @@ export function LoginScreen({
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => toggleRememberMe(e.target.checked)}
-                      className="w-4 h-4 rounded border-white/20 bg-white/5 accent-orange-500"
+                      className="w-4 h-4 rounded border-white/20 bg-white/5 accent-white"
                     />
                     <span className="text-[12px] text-white/60">
                       Remember me
@@ -336,7 +335,7 @@ export function LoginScreen({
                         setAuthTab("create");
                         setLoginError("");
                       }}
-                      className="text-orange-400 font-medium hover:text-orange-300 transition-colors"
+                      className="text-white font-medium hover:text-white/80 transition-colors"
                     >
                       Register as Merchant
                     </button>
@@ -411,20 +410,20 @@ export function LoginScreen({
                       type="checkbox"
                       checked={agreeTerms}
                       onChange={(e) => setAgreeTerms(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 rounded border-white/20 bg-white/5 accent-orange-500"
+                      className="mt-0.5 w-4 h-4 rounded border-white/20 bg-white/5 accent-white"
                     />
                     <span className="text-[12px] text-white/60 leading-snug">
                       I agree to the{" "}
                       <a
                         href="#"
-                        className="text-orange-400 hover:text-orange-300"
+                        className="text-white/70 hover:text-white"
                       >
                         Terms of Service
                       </a>{" "}
                       and{" "}
                       <a
                         href="#"
-                        className="text-orange-400 hover:text-orange-300"
+                        className="text-white/70 hover:text-white"
                       >
                         Privacy Policy
                       </a>
@@ -457,7 +456,7 @@ export function LoginScreen({
                         setAuthTab("signin");
                         setLoginError("");
                       }}
-                      className="text-orange-400 font-medium hover:text-orange-300 transition-colors"
+                      className="text-white font-medium hover:text-white/80 transition-colors"
                     >
                       Sign In
                     </button>
@@ -701,7 +700,7 @@ function FieldEmail({
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur ? (e) => onBlur(e.target.value) : undefined}
         placeholder={placeholder}
-        className="w-full bg-white/[0.04] rounded-lg px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-white/25 border border-white/8 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/30 transition-all"
+        className="w-full bg-white/[0.04] rounded-lg px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-neutral-500 border border-white/8 focus:border-white/40 focus:ring-1 focus:ring-white/20 transition-all"
       />
     </div>
   );
@@ -734,7 +733,7 @@ function FieldText({
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur ? (e) => onBlur(e.target.value) : undefined}
         placeholder={placeholder}
-        className="w-full bg-white/[0.04] rounded-lg px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-white/25 border border-white/8 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/30 transition-all"
+        className="w-full bg-white/[0.04] rounded-lg px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-neutral-500 border border-white/8 focus:border-white/40 focus:ring-1 focus:ring-white/20 transition-all"
       />
     </div>
   );
@@ -775,7 +774,7 @@ function FieldPassword({
             onEnter ? (e) => e.key === "Enter" && onEnter() : undefined
           }
           placeholder={placeholder}
-          className="w-full bg-white/[0.04] rounded-lg px-3.5 py-2.5 pr-10 text-sm text-white outline-none placeholder:text-white/25 border border-white/8 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/30 transition-all"
+          className="w-full bg-white/[0.04] rounded-lg px-3.5 py-2.5 pr-10 text-sm text-white outline-none placeholder:text-neutral-500 border border-white/8 focus:border-white/40 focus:ring-1 focus:ring-white/20 transition-all"
         />
         <button
           type="button"
@@ -821,7 +820,13 @@ function PrimaryButton({
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
       disabled={disabled}
-      className="w-full py-2.5 rounded-lg text-[14px] font-bold bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 text-white shadow-[0_8px_24px_-8px_rgba(255,122,26,0.6)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      // NOTE: hover uses bg-neutral-200 (not bg-white/90) on purpose. The
+      // login page has a global `[class*="bg-white/"]` override (globals.css)
+      // that remaps any element whose className contains the substring
+      // `bg-white/` to 5% opacity — so `hover:bg-white/90` would trigger
+      // that regex and dim the whole CTA. Keeping the hover as a plain
+      // neutral-200 avoids the substring match.
+      className="w-full py-2.5 rounded-lg text-[14px] font-bold bg-white hover:bg-neutral-200 text-black shadow-[0_8px_24px_-8px_rgba(255,255,255,0.25)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
     >
       {loading ? (
         <>
