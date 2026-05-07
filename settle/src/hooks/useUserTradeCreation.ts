@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Screen, TradeType, TradePreference, PaymentMethod, Order, Offer, DbOrder } from "@/components/user/screens/types";
 import { mapDbOrderToUI } from "@/components/user/screens/helpers";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { newSubmitId, txAnchoredKey } from '@/lib/api/idempotencyKeys';
 import { showAlert } from '@/context/ModalContext';
 import type { SelectedBankDetails } from '@/components/user/BankAccountSelector';
 import type { PaymentMethodItem } from '@/components/user/PaymentMethodSelector';
@@ -65,6 +66,18 @@ export function useUserTradeCreation({
   const [escrowError, setEscrowError] = useState<string | null>(null);
   const [selectedBankDetails, setSelectedBankDetails] = useState<SelectedBankDetails | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodItem | null>(null);
+
+  // Per-submission idempotency keys for the order-creation flows that have
+  // no on-chain anchor (BUY orders that don't escrow first). Held in refs so
+  // a network blip + user-driven retry (or a strict-mode double effect)
+  // presents the SAME key to the backend and collapses on the server's
+  // idempotency_log instead of double-creating an order. Reset on success
+  // so the next deliberate "Submit" click mints a fresh key. Failed attempts
+  // are NOT cached server-side (the idempotency record commits inside the
+  // mutation transaction), so a retry of a 4xx/5xx with the same key still
+  // runs fresh on core-api — no manual reset needed for those cases.
+  const startSubmitIdRef = useRef<string | null>(null);
+  const cashSubmitIdRef = useRef<string | null>(null);
 
   const startTrade = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -131,11 +144,23 @@ export function useUserTradeCreation({
         return;
       }
 
+      // Stable per-submission key. Reused across retries within this
+      // attempt so a network blip + click-again or page-reload-mid-request
+      // collapses on the backend's idempotency_log. Reset on success
+      // (below) so a fresh "Submit" mints a new key.
+      if (!startSubmitIdRef.current) startSubmitIdRef.current = newSubmitId();
+
       const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': generateIdempotencyKey(),
+          // Required by /api/orders POST: server-side dedup of accidental
+          // double-clicks / network retries. Reuses startSubmitIdRef.current
+          // (initialized just above on line 151) so any retry within the
+          // same submit attempt sends the SAME key — server treats it as a
+          // duplicate and returns the cached response. A fresh
+          // generateIdempotencyKey() per call would defeat the dedup.
+          'Idempotency-Key': startSubmitIdRef.current,
         },
         body: JSON.stringify({
           user_id: userId,
@@ -183,6 +208,9 @@ export function useUserTradeCreation({
 
       const newOrder = mapDbOrderToUI(orderData.data);
       if (newOrder) {
+        // Order committed — release the per-submission key so the next
+        // deliberate "Submit" click mints a fresh one.
+        startSubmitIdRef.current = null;
         setOrders(prev => [...prev, newOrder]);
         setActiveOrderId(newOrder.id);
         setPendingTradeData({ amount, fiatAmount: (parseFloat(amount) * liveRate).toFixed(2), type: tradeType, paymentMethod });
@@ -239,11 +267,15 @@ export function useUserTradeCreation({
     }
 
     try {
+      // Stable per-submission key — see startSubmitIdRef comment above for
+      // the rationale (collapses retries / strict-mode double-effects).
+      if (!cashSubmitIdRef.current) cashSubmitIdRef.current = newSubmitId();
+
       const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': generateIdempotencyKey(),
+          'Idempotency-Key': cashSubmitIdRef.current,
         },
         body: JSON.stringify({
           user_id: userId,
@@ -287,6 +319,9 @@ export function useUserTradeCreation({
 
       const newOrder = mapDbOrderToUI(orderData.data);
       if (newOrder) {
+        // Order committed — release the per-submission key so the next
+        // deliberate "Submit" click mints a fresh one.
+        cashSubmitIdRef.current = null;
         setOrders(prev => [...prev, newOrder]);
         setActiveOrderId(newOrder.id);
         setAmount("");
@@ -456,7 +491,13 @@ export function useUserTradeCreation({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': generateIdempotencyKey(),
+          // Anchor the key to the on-chain escrow signature. The signature
+          // is the natural unique identifier for THIS sell order — a retry
+          // (network blip after escrow lock, page reload before order
+          // commit) presents the SAME key and collapses on the backend
+          // instead of creating a second order against the same locked
+          // escrow.
+          'Idempotency-Key': txAnchoredKey(escrowResult.txHash, 'create_sell_order'),
         },
         body: JSON.stringify({
           user_id: userId,

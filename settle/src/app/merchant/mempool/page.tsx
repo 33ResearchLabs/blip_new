@@ -8,6 +8,7 @@ import { MerchantQuoteControl } from '@/components/mempool/MerchantQuoteControl'
 import { MempoolFilters, MempoolFilterState } from '@/components/mempool/MempoolFilters';
 import { Zap, ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface MempoolOrder {
   id: string;
@@ -49,13 +50,16 @@ export default function MempoolPage() {
     maxAmount: '',
   });
 
-  // Restore merchant session via cookie-authed /api/auth/me. The httpOnly
-  // `blip_access_token` cookie is the durable identity; this works on hard
-  // refresh and deep-link entry without any client-writable storage.
+  // Restore merchant session via cookie-authed /api/auth/me. Uses
+  // fetchWithAuth so a transient 401 (access token just expired, slow
+  // session check, etc.) gets ONE silent refresh-and-retry via the
+  // blip_refresh_token cookie before we redirect to /merchant/login —
+  // same fix as /merchant/wallet/page.tsx for the logout-then-relogin
+  // flicker users were seeing on production.
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const res = await fetch('/api/auth/me', {
+        const res = await fetchWithAuth('/api/auth/me', {
           method: 'GET',
           credentials: 'include',
         });

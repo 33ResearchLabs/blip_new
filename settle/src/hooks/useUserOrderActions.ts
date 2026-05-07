@@ -7,7 +7,8 @@ import type {
   OrderStep,
   BankAccount,
 } from "@/components/user/screens/types";
-import { fetchWithAuth, generateIdempotencyKey } from "@/lib/api/fetchWithAuth";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { orderActionKey, txAnchoredKey } from "@/lib/api/idempotencyKeys";
 import { fetchDisputeInfoFromApi } from "@/lib/api/disputeApi";
 import { showAlert } from "@/context/ModalContext";
 // Simple loading state — no step-by-step progress needed
@@ -234,7 +235,7 @@ export function useUserOrderActions({
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": generateIdempotencyKey(),
+          "Idempotency-Key": orderActionKey(activeOrder.id, 'patch_payment_sent'),
         },
         body: JSON.stringify({
           status: "payment_sent",
@@ -367,7 +368,9 @@ export function useUserOrderActions({
                   headers: {
                     "Content-Type": "application/json",
                     // PATCH /escrow requires Idempotency-Key for the release transition.
-                    "Idempotency-Key": generateIdempotencyKey(),
+                    // No real release tx in this branch (escrow already gone on-chain),
+                    // so anchor on (order, sync-after-already-released) instead.
+                    "Idempotency-Key": orderActionKey(activeOrder.id, 'release_already_done_sync'),
                   },
                   body: JSON.stringify({
                     tx_hash: activeOrder.escrowTxHash || "already-released",
@@ -389,7 +392,7 @@ export function useUserOrderActions({
                     method: "PATCH",
                     headers: {
                       "Content-Type": "application/json",
-                      "Idempotency-Key": generateIdempotencyKey(),
+                      "Idempotency-Key": orderActionKey(activeOrder.id, 'patch_completed_after_release'),
                     },
                     body: JSON.stringify({
                       status: "completed",
@@ -446,13 +449,16 @@ export function useUserOrderActions({
         // without it the backend silently rejects the sync, the DB stays at
         // payment_sent, and the next click re-runs the on-chain release
         // (which then fails because trade is already in Released state).
+        // Anchor on the on-chain release signature so a network-retried
+        // PATCH collapses on the backend instead of being treated as a
+        // separate request.
         const escrowRes = await fetchWithAuth(
           `/api/orders/${activeOrder.id}/escrow`,
           {
             method: "PATCH",
             headers: {
               "Content-Type": "application/json",
-              "Idempotency-Key": generateIdempotencyKey(),
+              "Idempotency-Key": txAnchoredKey(releaseResult.txHash, 'release_escrow'),
             },
             body: JSON.stringify({
               tx_hash: releaseResult.txHash,
@@ -511,7 +517,7 @@ export function useUserOrderActions({
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": generateIdempotencyKey(),
+          "Idempotency-Key": orderActionKey(activeOrder.id, 'patch_completed'),
         },
         body: JSON.stringify({
           status: "completed",
@@ -620,7 +626,7 @@ export function useUserOrderActions({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": generateIdempotencyKey(),
+          "Idempotency-Key": orderActionKey(activeOrder.id, 'open_dispute'),
         },
         body: JSON.stringify({
           reason: disputeReason,
@@ -864,7 +870,7 @@ export function useUserOrderActions({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Idempotency-Key": generateIdempotencyKey(),
+            "Idempotency-Key": orderActionKey(activeOrder.id, 'claim_refund'),
           },
         },
       );

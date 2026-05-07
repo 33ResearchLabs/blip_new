@@ -96,17 +96,67 @@ export function registerNotificationListener(): void {
   // Stats update on completion. A completed order always has merchant_id set
   // (a seller claimed — the M2M BUY broadcast shape with merchant_id=NULL can
   // only exist in pending/expired/cancelled states), but guard just in case.
+  //
+  // Volume is incremented in CRYPTO units (crypto_amount, denominated in
+  // USDT) — NOT fiat_amount. Mixing fiat across INR/AED/USD corridors into
+  // one column makes the leaderboard meaningless because callers treat
+  // total_volume as USDT.
+  //
+  // M2M trades update BOTH merchant participants: the seller (merchant_id)
+  // and the buyer (buyer_merchant_id). The previous code only credited the
+  // seller, undercounting any merchant who acted as buyer. The user-side
+  // (`users` row) is only updated when user_id is a real participant
+  // (M2M placeholder users have a synthetic id but should NOT accumulate
+  // stats — the listener payload's userId is set unconditionally so we
+  // gate on the order having a real user role).
   orderBus.safeOn(ORDER_EVENT.COMPLETED, (p: OrderEventPayload) => {
     if (!p.merchantId) {
       logger.warn('[NotificationListener] COMPLETED event with null merchantId — skipping stats update', { orderId: p.orderId });
       return;
     }
-    dbQuery(
-      `WITH u AS (UPDATE users SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2 RETURNING 1)
-       UPDATE merchants SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $3`,
-      [p.order.fiat_amount, p.userId, p.merchantId]
-    ).catch((err) => {
-      logger.error('[NotificationListener] Stats update failed', { orderId: p.orderId, error: String(err) });
+
+    const cryptoAmount = (p.order as { crypto_amount?: number | string })?.crypto_amount ?? 0;
+    const buyerMerchantId = p.buyerMerchantId ?? null;
+    const isM2M = !!buyerMerchantId;
+
+    // Sequential single-statement updates. Wrapped in Promise.all → catch
+    // so we don't lose visibility if any one fails. Errors are non-fatal
+    // (stats are denormalized convenience; reputation worker recomputes
+    // from the orders table separately).
+    const statements: Promise<unknown>[] = [];
+
+    // Seller / primary merchant
+    statements.push(dbQuery(
+      `UPDATE merchants SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2`,
+      [cryptoAmount, p.merchantId],
+    ));
+
+    // M2M buyer merchant — same credit as the seller. Both parties traded
+    // crypto_amount worth.
+    if (isM2M && buyerMerchantId !== p.merchantId) {
+      statements.push(dbQuery(
+        `UPDATE merchants SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2`,
+        [cryptoAmount, buyerMerchantId],
+      ));
+    }
+
+    // User stats — skip for M2M (the user_id on M2M is a placeholder, not
+    // a real trading user). For non-M2M, p.userId is the real counterparty.
+    if (!isM2M && p.userId) {
+      statements.push(dbQuery(
+        `UPDATE users SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2`,
+        [cryptoAmount, p.userId],
+      ));
+    }
+
+    Promise.allSettled(statements).then((results) => {
+      const failed = results.filter((r) => r.status === 'rejected');
+      if (failed.length > 0) {
+        logger.error('[NotificationListener] Stats update partial failure', {
+          orderId: p.orderId,
+          failures: failed.map((r) => (r as PromiseRejectedResult).reason).map(String),
+        });
+      }
     });
   });
 

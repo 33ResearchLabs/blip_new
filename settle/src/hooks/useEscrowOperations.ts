@@ -5,7 +5,8 @@ import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { computeMyRole } from "@/lib/orders/statusResolver";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { orderActionKey, txAnchoredKey } from '@/lib/api/idempotencyKeys';
 import { isValidSolanaAddress } from '@/lib/validation/solana';
 import { showConfirm } from '@/context/ModalContext';
 
@@ -319,8 +320,11 @@ export function useEscrowOperations({
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              // Required by core-api /v1/merchant/orders.
-              "Idempotency-Key": generateIdempotencyKey(),
+              // Required by core-api /v1/merchant/orders. Anchor the key to
+              // the on-chain escrow signature so a retry of THIS order
+              // creation (network blip, page reload mid-request) collapses
+              // server-side instead of double-creating the order.
+              "Idempotency-Key": txAnchoredKey(escrowResult.txHash, "create_merchant_sell_order"),
             },
             body: JSON.stringify({
               merchant_id: pendingSellOrder.merchantId,
@@ -600,12 +604,15 @@ export function useEscrowOperations({
         dispatch({ type: 'SET_TX_HASH', op: 'release', txHash: releaseResult.txHash });
 
         // Escrow release is a financial transition — backend rejects without
-        // Idempotency-Key (see /api/orders/[id]/escrow PATCH handler).
+        // Idempotency-Key (see /api/orders/[id]/escrow PATCH handler). Anchor
+        // to the release tx signature so a network-retried PATCH collapses
+        // into the cached response instead of attempting release_escrow twice
+        // against the same order.
         const releaseBackendRes = await fetchWithAuth(`/api/orders/${releaseOrder.id}/escrow`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Idempotency-Key': generateIdempotencyKey(),
+            'Idempotency-Key': txAnchoredKey(releaseResult.txHash, 'release_escrow'),
           },
           body: JSON.stringify({
             tx_hash: releaseResult.txHash,
@@ -704,11 +711,15 @@ export function useEscrowOperations({
 
         // status=cancelled is a financial transition — backend rejects
         // without Idempotency-Key (see PATCH /api/orders/[id] handler).
+        // Anchor to the on-chain refund tx so a network-retried PATCH
+        // collapses on the backend instead of attempting a second cancel
+        // (which would 4xx on the state guard but produces a noisier UX
+        // than a clean cached replay).
         await fetchWithAuth(`/api/orders/${cancelOrder.id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Idempotency-Key': generateIdempotencyKey(),
+            'Idempotency-Key': txAnchoredKey(refundResult.txHash, 'cancel_with_refund'),
           },
           body: JSON.stringify({
             status: 'cancelled',
@@ -747,10 +758,12 @@ export function useEscrowOperations({
         // DELETE proxies to core-api's cancel_order which is wrapped in
         // withIdempotency — Idempotency-Key is REQUIRED. The settle proxy
         // must also be reading + forwarding it (see /api/orders/[id]/route.ts DELETE).
+        // Stable key per (order, action): a retried cancel collapses into the
+        // cached response on the backend instead of executing twice.
         const res = await fetchWithAuth(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
           method: 'DELETE',
           headers: {
-            'Idempotency-Key': generateIdempotencyKey(),
+            'Idempotency-Key': orderActionKey(orderId, 'cancel_no_escrow'),
           },
         });
 

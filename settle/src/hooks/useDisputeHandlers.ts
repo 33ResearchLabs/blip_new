@@ -3,7 +3,8 @@
 import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, Notification } from "@/types/merchant";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { orderActionKey } from '@/lib/api/idempotencyKeys';
 import { fetchDisputeInfoFromApi } from '@/lib/api/disputeApi';
 
 interface UseDisputeHandlersParams {
@@ -86,7 +87,7 @@ export function useDisputeHandlers({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': generateIdempotencyKey(),
+          'Idempotency-Key': orderActionKey(disputeOrderId, 'open_dispute'),
         },
         body: JSON.stringify({
           reason: disputeReason,
@@ -221,12 +222,15 @@ export function useDisputeHandlers({
     setIsRespondingToResolution(true);
     try {
       // Dispute resolution confirm is a financial transition (releases or
-      // refunds escrow) — backend rejects without Idempotency-Key.
+      // refunds escrow) — backend rejects without Idempotency-Key. Stable
+      // per (order, respond) so a network-retried response collapses on
+      // the backend; the state machine prevents re-execution after the
+      // first response is recorded.
       const res = await fetchWithAuth(`/api/orders/${orderId}/dispute/confirm`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': generateIdempotencyKey(),
+          'Idempotency-Key': orderActionKey(orderId, 'dispute_respond'),
         },
         body: JSON.stringify({
           party: 'merchant',

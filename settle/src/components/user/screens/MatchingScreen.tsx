@@ -3,7 +3,8 @@
 import { motion } from "framer-motion";
 import { ChevronLeft, Check, Clock } from "lucide-react";
 import type { Screen, OrderStatus, OrderStep } from "./types";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { orderActionKey } from '@/lib/api/idempotencyKeys';
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -200,7 +201,7 @@ export const MatchingScreen = ({
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
-                        'Idempotency-Key': generateIdempotencyKey(),
+                        'Idempotency-Key': orderActionKey(activeOrderId, 'CANCEL'),
                       },
                       body: JSON.stringify({
                         action: 'CANCEL',

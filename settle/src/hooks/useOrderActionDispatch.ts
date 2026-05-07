@@ -13,6 +13,7 @@
 
 import { useCallback, useState, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { orderActionKey } from '@/lib/api/idempotencyKeys';
 import type {
   ActionType,
   OrderActionRequest,
@@ -47,19 +48,6 @@ interface DispatchOptions {
   escrow_creator_wallet?: string;
   /** Override idempotency key (auto-generated for financial actions if omitted) */
   idempotency_key?: string;
-}
-
-/** Generate a UUID v4 for idempotency */
-function generateIdempotencyKey(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  // Fallback for older browsers
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
 }
 
 export function useOrderActionDispatch(options: UseOrderActionDispatchOptions) {
@@ -103,10 +91,14 @@ export function useOrderActionDispatch(options: UseOrderActionDispatchOptions) {
           'Content-Type': 'application/json',
         };
 
-        // Auto-generate idempotency key for financial actions
+        // Auto-derive idempotency key for financial actions. Using a stable
+        // key tied to (orderId, action) means a network-retried POST collapses
+        // into the backend's idempotency_log instead of executing twice. The
+        // state machine is one-shot per (order, action) so a successful replay
+        // returns the cached 2xx instead of erroring with "invalid transition."
         const isFinancial = (FINANCIAL_ACTIONS as readonly string[]).includes(action);
         const idempotencyKey = dispatchOptions?.idempotency_key
-          || (isFinancial ? generateIdempotencyKey() : undefined);
+          || (isFinancial ? orderActionKey(orderId, action) : undefined);
 
         if (idempotencyKey) {
           headers['x-idempotency-key'] = idempotencyKey;

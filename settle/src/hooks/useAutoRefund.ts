@@ -3,7 +3,8 @@
 import { useRef, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, Notification } from "@/types/merchant";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { txAnchoredKey } from '@/lib/api/idempotencyKeys';
 
 interface UseAutoRefundParams {
   solanaWallet: any;
@@ -39,12 +40,14 @@ export function useAutoRefund({
         playSound('click');
 
         // status=cancelled is a financial transition — backend rejects
-        // without Idempotency-Key.
+        // without Idempotency-Key. Anchor on the on-chain refund signature
+        // so a network-retried PATCH collapses on the backend instead of
+        // re-attempting the cancel-with-refund.
         await fetchWithAuth(`/api/orders/${order.id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Idempotency-Key': generateIdempotencyKey(),
+            'Idempotency-Key': txAnchoredKey(refundResult.txHash, 'auto_refund_cancel'),
           },
           body: JSON.stringify({
             status: 'cancelled',

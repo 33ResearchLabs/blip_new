@@ -71,45 +71,45 @@ export function emailVerificationEmail(verifyLink: string, merchantName: string)
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0a;padding:40px 20px;">
+<body style="margin:0;padding:0;background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;padding:40px 20px;">
     <tr>
       <td align="center">
-        <table width="480" cellpadding="0" cellspacing="0" style="background-color:#1a1a1a;border-radius:12px;border:1px solid #2a2a2a;">
+        <table width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
           <tr>
             <td style="padding:32px 32px 0;text-align:center;">
-              <h1 style="margin:0;color:#00e676;font-size:24px;font-weight:700;">Blip Money</h1>
+              <h1 style="margin:0;color:#000000;font-size:24px;font-weight:700;">Blip Money</h1>
             </td>
           </tr>
           <tr>
             <td style="padding:24px 32px;">
-              <h2 style="margin:0 0 16px;color:#ffffff;font-size:20px;">Verify Your Email</h2>
-              <p style="margin:0 0 16px;color:#b0b0b0;font-size:14px;line-height:1.6;">
-                Hi <strong style="color:#ffffff;">${merchantName}</strong>,
+              <h2 style="margin:0 0 16px;color:#000000;font-size:20px;">Verify Your Email</h2>
+              <p style="margin:0 0 16px;color:#000000;font-size:14px;line-height:1.6;">
+                Hi <strong style="color:#000000;">${merchantName}</strong>,
               </p>
-              <p style="margin:0 0 24px;color:#b0b0b0;font-size:14px;line-height:1.6;">
-                Welcome to Blip Money! Please verify your email address to activate your merchant account. This link expires in <strong style="color:#ffffff;">24 hours</strong>.
+              <p style="margin:0 0 24px;color:#000000;font-size:14px;line-height:1.6;">
+                Welcome to Blip Money! Please verify your email address to activate your merchant account. This link expires in <strong style="color:#000000;">24 hours</strong>.
               </p>
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center" style="padding:8px 0 24px;">
-                    <a href="${verifyLink}" style="display:inline-block;background-color:#00e676;color:#000000;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;text-decoration:none;">
+                    <a href="${verifyLink}" style="display:inline-block;background-color:#000000;color:#ffffff;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;text-decoration:none;">
                       Verify Email
                     </a>
                   </td>
                 </tr>
               </table>
-              <p style="margin:0 0 8px;color:#808080;font-size:12px;">
+              <p style="margin:0 0 8px;color:#000000;font-size:12px;">
                 If you didn't create a Blip Money account, you can safely ignore this email.
               </p>
-              <p style="margin:0;color:#808080;font-size:12px;word-break:break-all;">
+              <p style="margin:0;color:#000000;font-size:12px;word-break:break-all;">
                 Link: ${verifyLink}
               </p>
             </td>
           </tr>
           <tr>
-            <td style="padding:16px 32px 24px;border-top:1px solid #2a2a2a;text-align:center;">
-              <p style="margin:0;color:#606060;font-size:11px;">
+            <td style="padding:16px 32px 24px;border-top:1px solid #e5e7eb;text-align:center;">
+              <p style="margin:0;color:#000000;font-size:11px;">
                 &copy; ${new Date().getFullYear()} Blip Money. All rights reserved.
               </p>
             </td>
@@ -136,48 +136,48 @@ export function passwordResetEmail(resetLink: string, merchantName: string): { s
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0a;padding:40px 20px;">
+<body style="margin:0;padding:0;background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;padding:40px 20px;">
     <tr>
       <td align="center">
-        <table width="480" cellpadding="0" cellspacing="0" style="background-color:#1a1a1a;border-radius:12px;border:1px solid #2a2a2a;">
+        <table width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
           <!-- Header -->
           <tr>
             <td style="padding:32px 32px 0;text-align:center;">
-              <h1 style="margin:0;color:#00e676;font-size:24px;font-weight:700;">Blip Money</h1>
+              <h1 style="margin:0;color:#000000;font-size:24px;font-weight:700;">Blip Money</h1>
             </td>
           </tr>
           <!-- Body -->
           <tr>
             <td style="padding:24px 32px;">
-              <h2 style="margin:0 0 16px;color:#ffffff;font-size:20px;">Password Reset</h2>
-              <p style="margin:0 0 16px;color:#b0b0b0;font-size:14px;line-height:1.6;">
-                Hi <strong style="color:#ffffff;">${merchantName}</strong>,
+              <h2 style="margin:0 0 16px;color:#000000;font-size:20px;">Password Reset</h2>
+              <p style="margin:0 0 16px;color:#000000;font-size:14px;line-height:1.6;">
+                Hi <strong style="color:#000000;">${merchantName}</strong>,
               </p>
-              <p style="margin:0 0 24px;color:#b0b0b0;font-size:14px;line-height:1.6;">
-                We received a request to reset your password. Click the button below to create a new password. This link expires in <strong style="color:#ffffff;">15 minutes</strong>.
+              <p style="margin:0 0 24px;color:#000000;font-size:14px;line-height:1.6;">
+                We received a request to reset your password. Click the button below to create a new password. This link expires in <strong style="color:#000000;">15 minutes</strong>.
               </p>
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center" style="padding:8px 0 24px;">
-                    <a href="${resetLink}" style="display:inline-block;background-color:#00e676;color:#000000;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;text-decoration:none;">
+                    <a href="${resetLink}" style="display:inline-block;background-color:#000000;color:#ffffff;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;text-decoration:none;">
                       Reset Password
                     </a>
                   </td>
                 </tr>
               </table>
-              <p style="margin:0 0 8px;color:#808080;font-size:12px;">
+              <p style="margin:0 0 8px;color:#000000;font-size:12px;">
                 If you didn't request this, you can safely ignore this email. Your password won't change.
               </p>
-              <p style="margin:0;color:#808080;font-size:12px;word-break:break-all;">
+              <p style="margin:0;color:#000000;font-size:12px;word-break:break-all;">
                 Link: ${resetLink}
               </p>
             </td>
           </tr>
           <!-- Footer -->
           <tr>
-            <td style="padding:16px 32px 24px;border-top:1px solid #2a2a2a;text-align:center;">
-              <p style="margin:0;color:#606060;font-size:11px;">
+            <td style="padding:16px 32px 24px;border-top:1px solid #e5e7eb;text-align:center;">
+              <p style="margin:0;color:#000000;font-size:11px;">
                 &copy; ${new Date().getFullYear()} Blip Money. All rights reserved.
               </p>
             </td>

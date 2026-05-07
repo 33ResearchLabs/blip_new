@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import type { ComplianceMember } from "./useComplianceAuth";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { txAnchoredKey } from '@/lib/api/idempotencyKeys';
 
 interface DisputeOrder {
   id: string;
@@ -242,12 +243,14 @@ export function useDisputeManagement(
                 addNotification("resolution", `On-chain dispute resolved: ${result.txHash.slice(0, 8)}...`, selectedDispute.id);
 
                 // Dispute resolution releases escrow — financial transition
-                // requires Idempotency-Key.
+                // requires Idempotency-Key. Anchor on the on-chain
+                // resolution signature so a network-retried PATCH collapses
+                // on the backend.
                 await fetchWithAuth(`/api/orders/${selectedDispute.id}/escrow`, {
                   method: "PATCH",
                   headers: {
                     "Content-Type": "application/json",
-                    "Idempotency-Key": generateIdempotencyKey(),
+                    "Idempotency-Key": txAnchoredKey(result.txHash, "dispute_resolution"),
                   },
                   body: JSON.stringify({
                     tx_hash: result.txHash,

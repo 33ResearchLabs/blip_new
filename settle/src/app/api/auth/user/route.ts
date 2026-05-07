@@ -438,7 +438,10 @@ export async function POST(request: NextRequest) {
           [user.id, tokenHash]
         );
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-        const verifyLink = `${appUrl}/api/auth/user/verify-email?token=${verifyToken}&id=${user.id}`;
+        // Point at the user-facing verify-email page (not the API endpoint
+        // directly). The page renders a success/error UI, then offers a
+        // "Sign In" button — mirrors the merchant flow at /merchant/verify-email.
+        const verifyLink = `${appUrl}/user/verify-email?token=${verifyToken}&id=${user.id}`;
         const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
         const emailContent = emailVerificationEmail(verifyLink, user.username || 'there');
         // `email` is asserted non-null because validateUserEmail above

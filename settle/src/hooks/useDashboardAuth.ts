@@ -351,10 +351,17 @@ export function useDashboardAuth({
   // /api/auth/me (cookie auth, no body) and either populate the store
   // with the resolved merchant or leave the user logged-out. There is no
   // localStorage probe — client-stored identity was a foot-gun and is gone.
+  //
+  // Using fetchWithAuth (not raw fetch) so a transient 401 — access token
+  // just expired between page-load and this call, slow session DB check,
+  // pool starvation — gets ONE silent refresh-and-retry via the
+  // blip_refresh_token cookie before we drop the user to logged-out.
+  // Without this, every cookie hiccup or slow query produced a brief
+  // logout flicker on dashboard mount.
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const meRes = await fetch('/api/auth/me', {
+        const meRes = await fetchWithAuth('/api/auth/me', {
           method: 'GET',
           credentials: 'include',
         });

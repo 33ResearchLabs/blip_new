@@ -59,7 +59,12 @@ export function LoginScreen({
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
-  const [showWelcome] = useState(!skipWelcome);
+  // Welcome page disabled — merchants land directly on the login/register
+  // form. To re-enable, change back to `useState(!skipWelcome)`.
+  const [showWelcome] = useState(false);
+  // Reference skipWelcome so the prop stays a meaningful part of the API
+  // (and TypeScript / linters don't flag it as unused) while welcome is off.
+  void skipWelcome;
   // "Remember me" persists the user's email locally so they don't have to
   // retype it next visit. Default is unchecked for SSR-stable markup; the
   // saved preference + email hydrate in the effect below.
@@ -97,6 +102,15 @@ export function LoginScreen({
     }
   };
 
+  // ── Welcome page disabled (kept for easy restore) ──────────────────────
+  // The merchant welcome screen used to greet first-time visitors with a
+  // marketing pitch + Get Started / Sign In CTAs. Now the route lands
+  // straight on the login/register form. Re-enable by:
+  //   1. Restoring `useState(!skipWelcome)` above
+  //   2. Uncommenting the block below
+  // The MerchantWelcomePage component file is untouched at
+  // src/components/merchant/MerchantWelcomePage.tsx.
+  /*
   if (showWelcome) {
     return (
       <MerchantWelcomePage
@@ -113,6 +127,9 @@ export function LoginScreen({
       />
     );
   }
+  */
+  // Reference once so the import isn't flagged as unused while welcome is off.
+  void MerchantWelcomePage;
 
   const handleGoogle = () => {
     alert("Google sign-in is coming soon");

@@ -10,7 +10,9 @@ export interface DbOrder {
   type: "buy" | "sell";
   payment_method: "bank" | "cash";
   crypto_amount: number | string;
+  crypto_currency?: string;
   fiat_amount: number | string;
+  fiat_currency?: string;
   rate: number | string;
   status: string;
   minimal_status?: string;

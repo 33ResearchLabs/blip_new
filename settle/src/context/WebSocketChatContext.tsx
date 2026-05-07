@@ -160,15 +160,34 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
       const message = JSON.parse(event.data) as ServerMessage;
 
       switch (message.type) {
-        case 'connected':
+        case 'connected': {
           setConnectionId(message.connectionId);
           console.log('[WebSocket] Connected:', message.connectionId);
 
-          // Re-subscribe to pending orders
-          pendingSubscriptionsRef.current.forEach((orderId) => {
+          // Re-subscribe to ALL rooms after (re)connect — not just the ones
+          // currently in `pending`. The server has no memory of our previous
+          // subscriptions on a fresh socket, and `subscribed` was a
+          // client-side cache of "the previous socket had these rooms."
+          // Without this, any room that completed its subscribe-success
+          // handshake before the disconnect would silently stop receiving
+          // messages until the consumer re-subscribed manually (e.g. via
+          // page reload), even though `isConnected` shows green.
+          //
+          // Move everything back into `pending` so the existing
+          // chat:subscribed handler promotes each room as the server
+          // confirms it.
+          const toResubscribe = [
+            ...subscribedOrdersRef.current,
+            ...pendingSubscriptionsRef.current,
+          ];
+          subscribedOrdersRef.current.clear();
+          pendingSubscriptionsRef.current.clear();
+          toResubscribe.forEach((orderId) => {
+            pendingSubscriptionsRef.current.add(orderId);
             send({ type: 'chat:subscribe', orderId });
           });
           break;
+        }
 
         case 'pong':
           // Heartbeat received

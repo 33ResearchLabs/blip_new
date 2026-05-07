@@ -11,17 +11,29 @@ import {
   Flame,
   ArrowRightLeft,
   Plus,
-  X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { MyOffers } from "@/components/merchant/MyOffers";
 import { ChevronRight, Package } from "lucide-react";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 
-// Matches server-side validation in /api/merchant/[id]/payment-methods.
-// Kept in sync with PaymentMethodModal.tsx NAME_RE.
-const PM_NAME_RE = /^[A-Za-z0-9 &.,'\-()/]{2,60}$/;
+// Use the same rich modal merchant settings uses, so the form fields adapt
+// per-type (bank → IBAN/account/SWIFT, cash → location, mobile → provider/
+// phone, crypto → wallet, card → cardholder/last4). Replaces the previous
+// generic 2-input inline form which forced merchants to cram type-specific
+// data (UPI ID, IBAN, etc.) into a free-text "details" field.
+const PaymentMethodModal = dynamic(
+  () => import("@/components/merchant/PaymentMethodModal").then((m) => ({ default: m.PaymentMethodModal })),
+  { ssr: false },
+);
+
+// Validation for payment-method name/details now lives in
+// PaymentMethodModal.tsx — the modal owns the form so the regex previously
+// duplicated here was removed. Single source of truth: the server-side
+// validator in /api/merchant/[id]/payment-methods + the modal's per-type
+// validators (validateBank, validateCash, ...).
 
 interface MerchantPaymentMethod {
   id: string;
@@ -180,10 +192,15 @@ export const ConfigPanel = memo(function ConfigPanel({
 
   // Merchant payment methods (replaces the static Bank/Cash buttons).
   const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
+  // showAddPm now toggles the dedicated PaymentMethodModal (bottom of file)
+  // instead of an inline 2-input form. The modal renders type-specific fields
+  // (bank → IBAN/account/SWIFT, cash → location, mobile → provider/phone,
+  // crypto → wallet, card → cardholder/last4) and writes through the same
+  // POST /api/merchant/{id}/payment-methods endpoint, so server validation
+  // and the resulting row shape are unchanged. The previous inline form +
+  // its handler (`newPm`/`handleAddPaymentMethod`) is removed; modal owns it.
   const [showAddPm, setShowAddPm] = useState(false);
   const [showPmDropdown, setShowPmDropdown] = useState(false);
-  const [newPm, setNewPm] = useState<{ type: 'bank' | 'cash' | 'card' | 'mobile' | 'crypto'; name: string; details: string }>({ type: 'bank', name: '', details: '' });
-  const [savingPm, setSavingPm] = useState(false);
 
   // The `me` alias is resolved server-side from auth.actorId. We do NOT
   // depend on the `merchantId` prop here — that prop hydrates from
@@ -209,50 +226,6 @@ export const ConfigPanel = memo(function ConfigPanel({
     fetchPaymentMethods();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const [pmError, setPmError] = useState<string | null>(null);
-  const handleAddPaymentMethod = async () => {
-    // No `merchantId` guard — the server resolves `me` from the auth token.
-    const name = newPm.name.trim();
-    const details = newPm.details.trim();
-    // Mirror server rules so a bad input fails here with a visible message
-    // instead of a silent 400 from the API.
-    if (!PM_NAME_RE.test(name)) {
-      setPmError("Name must be 2–60 chars (letters, digits, basic punctuation).");
-      return;
-    }
-    if (details.length > 100) {
-      setPmError("Details must be at most 100 characters.");
-      return;
-    }
-    setPmError(null);
-    setSavingPm(true);
-    try {
-      const res = await fetchWithAuth(`/api/merchant/me/payment-methods`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: newPm.type,
-          name,
-          details,
-          is_default: paymentMethods.length === 0,
-        }),
-      });
-      if (res.ok) {
-        await fetchPaymentMethods();
-        setShowAddPm(false);
-        setNewPm({ type: 'bank', name: '', details: '' });
-      } else {
-        const json = await res.json().catch(() => null);
-        setPmError(json?.details?.[0] || json?.error || json?.errors?.[0] || "Failed to save. Check the fields and try again.");
-      }
-    } catch (err) {
-      console.error("Failed to add payment method:", err);
-      setPmError("Network error — try again.");
-    } finally {
-      setSavingPm(false);
-    }
-  };
   const [currentRate, setCurrentRate] = useState<number>(3.67);
   const [priorityFee, setPriorityFee] = useState<number>(0);
   const [showPriorityInput, setShowPriorityInput] = useState(false);
@@ -464,63 +437,21 @@ export const ConfigPanel = memo(function ConfigPanel({
             );
           })()}
 
-          {/* Inline add-payment-method form */}
-          {showAddPm && (
-            <div className="mt-2 p-2.5 rounded-lg border border-foreground/[0.08] bg-foreground/[0.02] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-foreground/60 font-mono uppercase tracking-wider">
-                  Add Payment Method
-                </span>
-                <button
-                  onClick={() => { setShowAddPm(false); setNewPm({ type: 'bank', name: '', details: '' }); }}
-                  className="p-0.5 rounded hover:bg-foreground/[0.06] text-foreground/40"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-              <div className="flex gap-1">
-                {(['bank', 'cash', 'card', 'mobile', 'crypto'] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setNewPm({ ...newPm, type: t })}
-                    className={`flex-1 py-1 rounded text-[9px] font-bold uppercase border ${
-                      newPm.type === t
-                        ? 'bg-primary/15 text-primary border-primary/30'
-                        : 'bg-foreground/[0.02] text-foreground/40 border-foreground/[0.06]'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="text"
-                value={newPm.name}
-                maxLength={60}
-                onChange={(e) => { setPmError(null); setNewPm({ ...newPm, name: e.target.value }); }}
-                placeholder="Name (e.g. Emirates NBD)"
-                className="w-full px-2 py-1.5 text-[11px] bg-foreground/[0.03] border border-foreground/[0.08] rounded text-foreground placeholder:text-foreground/20 outline-none focus:border-primary/30"
-              />
-              <input
-                type="text"
-                value={newPm.details}
-                maxLength={100}
-                onChange={(e) => { setPmError(null); setNewPm({ ...newPm, details: e.target.value.slice(0, 100) }); }}
-                placeholder="Details (account/IBAN/UPI — optional)"
-                className="w-full px-2 py-1.5 text-[11px] bg-foreground/[0.03] border border-foreground/[0.08] rounded text-foreground placeholder:text-foreground/20 outline-none focus:border-primary/30"
-              />
-              {pmError && (
-                <p className="text-[10px] text-[var(--color-error)] leading-snug">{pmError}</p>
-              )}
-              <button
-                onClick={handleAddPaymentMethod}
-                disabled={!newPm.name.trim() || savingPm}
-                className="w-full py-1.5 rounded text-[11px] font-bold bg-primary text-background hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-              >
-                {savingPm ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                Save
-              </button>
-            </div>
+          {/* Add-payment-method modal — replaces the previous inline 2-input
+              form. Same modal merchant-settings uses, so the form fields
+              adapt per-type (bank → IBAN/account/SWIFT, cash → location,
+              mobile → provider/phone, crypto → wallet, card → cardholder/last4).
+              On close we refresh the dropdown so a newly-added method is
+              immediately selectable in the trade form. */}
+          {showAddPm && merchantId && (
+            <PaymentMethodModal
+              isOpen={showAddPm}
+              merchantId={merchantId}
+              onClose={() => {
+                setShowAddPm(false);
+                fetchPaymentMethods();
+              }}
+            />
           )}
         </div>
 

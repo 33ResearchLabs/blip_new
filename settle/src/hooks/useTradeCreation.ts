@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { newSubmitId, txAnchoredKey } from '@/lib/api/idempotencyKeys';
 
 interface UseTradeCreationParams {
   solanaWallet: any;
@@ -51,6 +52,12 @@ export function useTradeCreation({
 }: UseTradeCreationParams) {
   const merchantId = useMerchantStore(s => s.merchantId);
   const setOrders = useMerchantStore(s => s.setOrders);
+
+  // Per-submission idempotency key for the BUY merchant order create flow
+  // (no on-chain anchor at create-time). Held across retries within a single
+  // click; reset on success. SELL flow uses a tx-anchored key derived from
+  // the on-chain escrow signature, so no ref is needed there.
+  const buySubmitIdRef = useRef<string | null>(null);
 
   const handleCreateTrade = useCallback(async () => {
     if (!merchantId) return;
@@ -106,8 +113,10 @@ export function useTradeCreation({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            // Required by core-api /v1/merchant/orders.
-            "Idempotency-Key": generateIdempotencyKey(),
+            // Required by core-api /v1/merchant/orders. Anchor on the on-chain
+            // escrow signature so a network-retried POST collapses on the
+            // backend instead of double-creating the order.
+            "Idempotency-Key": txAnchoredKey(escrowResult.txHash, "create_merchant_sell_order"),
           },
           body: JSON.stringify({
             merchant_id: merchantId, type: openTradeForm.tradeType,
@@ -171,12 +180,15 @@ export function useTradeCreation({
     setIsCreatingTrade(true);
     setCreateTradeError(null);
     try {
+      // Stable per-submission key — see buySubmitIdRef declaration above.
+      if (!buySubmitIdRef.current) buySubmitIdRef.current = newSubmitId();
+
       const res = await fetchWithAuth("/api/merchant/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           // Required by core-api /v1/merchant/orders.
-          "Idempotency-Key": generateIdempotencyKey(),
+          "Idempotency-Key": buySubmitIdRef.current,
         },
         body: JSON.stringify({
           merchant_id: merchantId, type: openTradeForm.tradeType,
@@ -192,6 +204,8 @@ export function useTradeCreation({
         return;
       }
       if (data.data) {
+        // Order committed — release the per-submission key.
+        buySubmitIdRef.current = null;
         const newOrder = mapDbOrderToUI(data.data, merchantId);
         setOrders((prev: Order[]) => [newOrder, ...prev.filter((o: Order) => o.id !== newOrder.id)]);
       }

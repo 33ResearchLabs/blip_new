@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { newSubmitId, orderActionKey, txAnchoredKey } from '@/lib/api/idempotencyKeys';
 import { isValidSolanaAddress } from '@/lib/validation/solana';
 import { showConfirm } from '@/context/ModalContext';
 
@@ -62,6 +63,12 @@ export function useOrderActions({
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [isCreatingTrade, setIsCreatingTrade] = useState(false);
   const [createTradeError, setCreateTradeError] = useState<string | null>(null);
+
+  // Per-submission idempotency key for the BUY merchant order create flow.
+  // No on-chain anchor exists yet (BUY = no escrow at create), so we hold a
+  // submit-scoped UUID across retries within a single click attempt and
+  // reset on success. See lib/api/idempotencyKeys.ts for the rationale.
+  const directBuySubmitIdRef = useRef<string | null>(null);
 
   // ═══════════════════════════════════════════════════════════════════
   // ACCEPT ORDER
@@ -160,7 +167,7 @@ export function useOrderActions({
         // Idempotency-Key. CLAIM doesn't need one but the header is harmless.
         const acceptHeaders: Record<string, string> = { "Content-Type": "application/json" };
         if (acceptAction === 'SEND_PAYMENT') {
-          acceptHeaders['Idempotency-Key'] = generateIdempotencyKey();
+          acceptHeaders['Idempotency-Key'] = orderActionKey(order.id, 'SEND_PAYMENT');
         }
         acceptRes = await fetchWithAuth(`/api/orders/${order.id}/action`, {
           method: "POST",
@@ -422,7 +429,7 @@ export function useOrderActions({
 
       const res = await fetchWithAuth(`/api/orders/${order.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": generateIdempotencyKey() },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": orderActionKey(order.id, 'patch_payment_sent') },
         body: JSON.stringify(proceedBody),
       });
 
@@ -507,7 +514,7 @@ export function useOrderActions({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": generateIdempotencyKey(),
+          "Idempotency-Key": orderActionKey(order.id, 'SEND_PAYMENT'),
         },
         body: JSON.stringify(actionBody),
       });
@@ -543,7 +550,7 @@ export function useOrderActions({
     try {
       const res = await fetchWithAuth(`/api/orders/${order.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": generateIdempotencyKey() },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": orderActionKey(order.id, 'patch_completed') },
         body: JSON.stringify({
           status: "completed",
           actor_type: "merchant",
@@ -578,7 +585,7 @@ export function useOrderActions({
     try {
       const res = await fetchWithAuth(`/api/orders/${orderId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": generateIdempotencyKey() },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": orderActionKey(orderId, 'patch_completed') },
         body: JSON.stringify({
           status: "completed",
           actor_type: "merchant",
@@ -745,7 +752,7 @@ export function useOrderActions({
                         method: 'PATCH',
                         headers: {
                           'Content-Type': 'application/json',
-                          'Idempotency-Key': generateIdempotencyKey(),
+                          'Idempotency-Key': txAnchoredKey(onChainReleaseTxHash, 'release_escrow_sync'),
                         },
                         body: JSON.stringify({
                           tx_hash: onChainReleaseTxHash,
@@ -801,11 +808,13 @@ export function useOrderActions({
 
             // Sync release with backend (escrow endpoint accepts payment_sent directly).
             // Release is a financial transition — Idempotency-Key required.
+            // Anchor to the on-chain release signature so a network-retried
+            // PATCH collapses on the backend instead of re-running release.
             const response = await fetchWithAuth(`/api/orders/${orderId}/escrow`, {
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',
-                'Idempotency-Key': generateIdempotencyKey(),
+                'Idempotency-Key': txAnchoredKey(releaseTxHash, 'release_escrow'),
               },
               body: JSON.stringify({
                 tx_hash: releaseTxHash,
@@ -923,6 +932,12 @@ export function useOrderActions({
 
       } else {
         // BUY order flow: Create directly
+        // Stable per-submission key. A retry within the same click attempt
+        // (network blip, strict-mode double-effect) presents the SAME key
+        // and collapses on the backend's idempotency_log; reset on success
+        // so the next deliberate "Place order" click mints a fresh key.
+        if (!directBuySubmitIdRef.current) directBuySubmitIdRef.current = newSubmitId();
+
         const res = await fetchWithAuth("/api/merchant/orders", {
           method: "POST",
           headers: {
@@ -930,7 +945,7 @@ export function useOrderActions({
             // Required by core-api /v1/merchant/orders. Without this header
             // the order create returns 400 with "Idempotency-Key header is
             // required for merchant order creation."
-            "Idempotency-Key": generateIdempotencyKey(),
+            "Idempotency-Key": directBuySubmitIdRef.current,
           },
           body: JSON.stringify({
             merchant_id: merchantId,
@@ -950,6 +965,8 @@ export function useOrderActions({
         }
 
         if (data.data) {
+          // Order committed — release the per-submission key.
+          directBuySubmitIdRef.current = null;
           const newOrder = mapDbOrderToUI(data.data, merchantId);
           setOrders((prev: Order[]) => [newOrder, ...prev]);
           playSound('trade_complete');

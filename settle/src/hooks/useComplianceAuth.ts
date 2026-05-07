@@ -159,7 +159,11 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
     let cancelled = false;
     (async () => {
       try {
-        const meRes = await fetch('/api/auth/me', {
+        // fetchWithAuth (not raw fetch) so a transient 401 silently
+        // refreshes via blip_refresh_token before we treat the user as
+        // logged-out. Same root cause + fix as the merchant wallet/dashboard
+        // auto-logout flicker.
+        const meRes = await fetchWithAuth('/api/auth/me', {
           method: 'GET',
           credentials: 'include',
         });

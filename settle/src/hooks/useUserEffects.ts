@@ -6,7 +6,8 @@ import { mapDbStatusToUI, mapDbOrderToUI } from "@/components/user/screens/helpe
 import { usePusher } from "@/context/PusherContext";
 import { useRealtimeChat } from "@/hooks/useRealtimeChat";
 import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { orderActionKey } from '@/lib/api/idempotencyKeys';
 import { getUserChannel } from "@/lib/pusher/channels";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
 import { emitChatToast } from "@/lib/chat/chatToastBus";
@@ -699,7 +700,11 @@ export function useUserEffects({
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',
-                'Idempotency-Key': generateIdempotencyKey(),
+                // The sentinel is informational only and may be reused across
+                // unrecoverable orders, so anchor on (order, mark-resolved)
+                // to keep the key per-order-stable across retries of THIS
+                // mark-resolved attempt.
+                'Idempotency-Key': orderActionKey(order.id, 'mark_unrecoverable_resolved'),
               },
               body: JSON.stringify({
                 status: 'cancelled',

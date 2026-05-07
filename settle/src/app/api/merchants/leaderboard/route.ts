@@ -3,6 +3,20 @@ import { query } from '@/lib/db';
 
 export async function GET() {
   try {
+    // Volume + trade counts are computed directly from the orders table
+    // rather than read from the denormalized merchants.total_volume /
+    // total_trades columns. Those columns have known issues:
+    //   1. The notificationListener trigger increments them with
+    //      `order.fiat_amount` (mixed currency units — INR/AED/USD), then
+    //      the leaderboard renders the result as USDT. Ratios off by ~99x
+    //      for INR corridors, ~3.67x for AED corridors.
+    //   2. M2M trades only credit the seller (merchant_id), never the buyer
+    //      (buyer_merchant_id), under-counting any merchant who buys.
+    //   3. Existing rows are already corrupted and need a backfill we
+    //      haven't shipped yet.
+    // Computing on the fly fixes all three at once and is correct by
+    // construction. Volume is in crypto_amount (USDT) and includes both
+    // sides of M2M trades.
     const merchants = await query<{
       id: string;
       display_name: string;
@@ -19,16 +33,35 @@ export async function GET() {
         m.id,
         m.display_name,
         m.username,
-        m.total_trades,
-        m.total_volume,
+        COALESCE(stats.completed_count, 0)::int AS total_trades,
+        COALESCE(stats.completed_volume, 0)::text AS total_volume,
         m.rating,
         m.rating_count,
         m.is_online,
         m.avg_response_time_mins,
-        COALESCE((SELECT COUNT(*) FROM orders o WHERE o.merchant_id = m.id AND o.status = 'completed'), 0)::int as completed_count
+        COALESCE(stats.completed_count, 0)::int AS completed_count
       FROM merchants m
+      LEFT JOIN (
+        SELECT
+          mid AS merchant_id,
+          COUNT(*) AS completed_count,
+          SUM(crypto_amount) AS completed_volume
+        FROM (
+          -- Each order contributes once per merchant participant: once for
+          -- the seller (merchant_id) and, when present, once for the buyer
+          -- merchant in an M2M trade (buyer_merchant_id).
+          SELECT merchant_id AS mid, crypto_amount FROM orders
+            WHERE status = 'completed' AND merchant_id IS NOT NULL
+          UNION ALL
+          SELECT buyer_merchant_id AS mid, crypto_amount FROM orders
+            WHERE status = 'completed' AND buyer_merchant_id IS NOT NULL
+        ) participated
+        GROUP BY mid
+      ) stats ON stats.merchant_id = m.id
       WHERE m.status = 'active'
-      ORDER BY m.total_volume DESC, m.total_trades DESC, m.rating DESC
+      ORDER BY COALESCE(stats.completed_volume, 0) DESC,
+               COALESCE(stats.completed_count, 0) DESC,
+               m.rating DESC
       LIMIT 20
     `);
 
