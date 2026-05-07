@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
@@ -143,6 +144,7 @@ export const ProfileScreen = ({
   setLoginForm,
   maxW,
 }: ProfileScreenProps) => {
+  const router = useRouter();
   // Local "selected" state for the PaymentMethodSelector — in profile context
   // there's no trade to attach a method to, so this is purely a visual hint
   // for which method is currently shown as the trigger card.
@@ -365,6 +367,22 @@ export const ProfileScreen = ({
                   Disconnect
                 </motion.button>
               </div>
+
+              {/* Embedded-wallet management — Send / Export key / Backup / Lock
+                  / Delete. Mirrors the merchant wallet page, adapted for users.
+                  Only surfaced when the embedded-wallet flag is on so the
+                  external-wallet flow (Phantom / etc.) doesn't get an empty
+                  manage screen. */}
+              {IS_EMBEDDED_WALLET && (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => router.push('/user/wallet')}
+                  className="w-full mt-2 py-2.5 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-raised border border-border-subtle text-[11px] font-bold text-text-secondary tracking-[0.08em] uppercase"
+                >
+                  Manage Wallet
+                  <ChevronRight size={13} className="text-text-tertiary" />
+                </motion.button>
+              )}
             </>
           )}
 

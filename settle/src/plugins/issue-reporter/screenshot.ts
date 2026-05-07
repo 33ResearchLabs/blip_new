@@ -249,6 +249,16 @@ export async function captureReportScreenshot(): Promise<CaptureResult> {
     const targetPixelRatio = Math.min(1.5, window.devicePixelRatio || 1);
     const h2iOptions = {
       cacheBust: true,
+      // Skip inlining external stylesheets / web fonts. html-to-image walks
+      // every <link rel="stylesheet"> and <font-face src=...> and tries to
+      // fetch them so the captured image is pixel-perfect. From localhost
+      // those fetches are CORS-blocked for any cross-origin CSS (Google
+      // Fonts, CDNs, etc.) and the library logs a noisy red console error
+      // before throwing. The screenshot still renders fine using whatever
+      // the browser already has cached/loaded — system font fallbacks are
+      // visually equivalent for a bug-report screenshot. This setting
+      // prevents the error logging entirely.
+      skipFonts: true,
       pixelRatio: targetPixelRatio,
       width: scrollWidth,
       height: scrollHeight,

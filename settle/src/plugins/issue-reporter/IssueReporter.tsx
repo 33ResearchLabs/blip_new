@@ -637,16 +637,15 @@ export function IssueReporter({
           aria-label={resolvedTriggerLabel}
           data-issue-reporter-trigger
         >
+          {/* Floating button is now icon-only on every screen size. The
+              text label was removed so the trigger looks consistent across
+              desktop and mobile, and matches the icon-only button in the
+              merchant navbar. The label is still available via `title` and
+              `aria-label` for tooltip and screen-reader users. */}
           {reporter.capturingShot ? (
-            <>
-              <Loader2 size={14} className="animate-spin" />
-              <span className="hidden sm:inline">Capturing…</span>
-            </>
+            <Loader2 size={14} className="animate-spin" />
           ) : (
-            <>
-              <Bug size={14} />
-              <span className="hidden sm:inline">{resolvedTriggerLabel}</span>
-            </>
+            <Bug size={14} />
           )}
         </button>
       )}

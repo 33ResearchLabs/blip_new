@@ -18,7 +18,9 @@ import {
   X,
   Bell,
   BarChart3,
+  Bug,
 } from "lucide-react";
+import { openIssueReporter } from "@/plugins/issue-reporter/IssueReporter";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 
 const CORRIDOR_OPTIONS = [
@@ -241,6 +243,19 @@ export function MerchantNavbar({
                 <div className="w-px h-6 bg-foreground/[0.06] mx-0.5" />
               )}
 
+              {/* Report Issue — icon-only trigger that opens the same modal
+                  as the floating bug button. Always visible in the navbar
+                  so merchants always have a one-click path to file a bug
+                  without needing to scroll/find the floating button. */}
+              <button
+                onClick={() => openIssueReporter()}
+                className="p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors text-foreground/50 hover:text-foreground/80"
+                title="Report Issue (Ctrl+Shift+I)"
+                aria-label="Report an issue"
+              >
+                <Bug className="w-4 h-4" />
+              </button>
+
               <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => setMenuOpen((prev) => !prev)}
@@ -384,6 +399,16 @@ export function MerchantNavbar({
                   )}
                 </button>
               )}
+              {/* Report Issue — same trigger as desktop, icon-only, always
+                  visible. Sized slightly larger so it matches the bell. */}
+              <button
+                onClick={() => openIssueReporter()}
+                className="p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors"
+                title="Report Issue"
+                aria-label="Report an issue"
+              >
+                <Bug className="w-5 h-5 text-foreground/50" />
+              </button>
               <button
                 onClick={() => setDrawerOpen(true)}
                 className="p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors"
