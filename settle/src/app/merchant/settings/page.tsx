@@ -904,40 +904,68 @@ export default function MerchantSettingsPage({
                   Account Information
                 </p>
 
-                {/* Username */}
+                {/* Username — read-only. The merchant API has no PATCH for
+                    username (set at signup, immutable for trade history
+                    integrity). Pencil affordance was removed because it
+                    pointed to the Profile tab which only edits display_name
+                    / business_name, leaving the user clicking nothing. */}
                 <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
                   <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
                     <User className="w-4 h-4 text-white/60" />
                   </div>
                   <p className="flex-1 text-[13px] text-white/60">Username</p>
-                  <p className="text-[13px] text-white font-medium">
+                  <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">
                     {merchant?.username || "—"}
                   </p>
-                  <button
-                    aria-label="Edit username"
-                    onClick={() => setActiveTab("profile")}
-                    className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
+                  {merchant?.username ? (
+                    <button
+                      aria-label="Copy username"
+                      onClick={() =>
+                        handleCopyField(merchant.username, "username")
+                      }
+                      className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
+                    >
+                      {copiedField === "username" ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  ) : (
+                    <span className="w-7" />
+                  )}
                 </div>
 
-                {/* Email */}
+                {/* Email — also read-only via this UI. Email change requires
+                    a verification round-trip that doesn't exist server-side
+                    yet, so we render the value with a copy affordance only.
+                    When/if email-change ships, swap Copy back for an inline
+                    editor + verification flow. */}
                 <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
                   <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
                     <Mail className="w-4 h-4 text-white/60" />
                   </div>
                   <p className="flex-1 text-[13px] text-white/60">Email</p>
-                  <p className="text-[13px] text-white font-medium">
+                  <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">
                     {merchant?.email || "Not set"}
                   </p>
-                  <button
-                    aria-label="Edit email"
-                    onClick={() => setActiveTab("profile")}
-                    className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
+                  {merchant?.email ? (
+                    <button
+                      aria-label="Copy email"
+                      onClick={() =>
+                        handleCopyField(merchant.email, "email")
+                      }
+                      className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
+                    >
+                      {copiedField === "email" ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  ) : (
+                    <span className="w-7" />
+                  )}
                 </div>
 
                 {/* Merchant ID */}
