@@ -20,6 +20,14 @@ import {
   RefreshCw,
   ExternalLink,
   Send,
+  ArrowLeftRight,
+  ShoppingCart,
+  MoreHorizontal,
+  Plus,
+  ArrowDownRight,
+  ArrowUpRight,
+  XCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsOverlay";
@@ -110,6 +118,28 @@ export default function WalletPage({
   // through the smaller address card. Mirrors the Send modal pattern so the
   // four-button row reads as a balanced quad (Send / Receive / Refresh / Export).
   const [showReceiveModal, setShowReceiveModal] = useState(false);
+
+  // Balance privacy toggle — eye icon next to "Total Balance" lets the user
+  // mask the number when sharing their screen. Pure UI state, no persistence
+  // (re-shows on next visit by design).
+  const [hideBalance, setHideBalance] = useState(false);
+
+  // Recent transaction history — surfaces the latest 5 wallet-ledger entries
+  // directly on the wallet page so the merchant doesn't have to dig into the
+  // Settings → Wallet Ledger tab to see what just happened. Shape mirrors
+  // what the Settings Ledger uses; we only render a subset of fields here.
+  type RecentLedgerEntry = {
+    id: string;
+    entry_type: string;
+    amount: number;
+    description: string | null;
+    related_order_id: string | null;
+    order_number: string | null;
+    counterparty_name: string | null;
+    created_at: string;
+  };
+  const [recentTxs, setRecentTxs] = useState<RecentLedgerEntry[]>([]);
+  const [recentTxsLoading, setRecentTxsLoading] = useState(false);
 
   // Network Status polling — block height + RPC latency. Hits the same RPC the
   // wallet connection uses so the values reflect what THIS client sees, not a
@@ -261,6 +291,37 @@ export default function WalletPage({
     };
   }, [view]);
 
+  // ── Recent transactions fetch ─────────────────────────────────────────
+  // Pulls the last 5 wallet-ledger entries from the same backend route the
+  // Settings → Wallet Ledger tab uses. Re-fetches whenever the wallet view
+  // mounts or the merchantInfo id changes, plus once after every successful
+  // balance refresh (handleRefresh below) so a fresh send/receive shows up
+  // without forcing a full page reload.
+  const fetchRecentTxs = useCallback(async () => {
+    const id = merchantInfo?.id;
+    if (!id) return;
+    setRecentTxsLoading(true);
+    try {
+      const res = await fetchWithAuth(
+        `/api/merchant/wallet-ledger?merchant_id=${id}&limit=5&offset=0`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data?.entries)) {
+          setRecentTxs(data.data.entries);
+        }
+      }
+    } catch {
+      // Non-fatal — section just stays empty if the API is down.
+    } finally {
+      setRecentTxsLoading(false);
+    }
+  }, [merchantInfo?.id]);
+
+  useEffect(() => {
+    if (view === "main") fetchRecentTxs();
+  }, [view, fetchRecentTxs]);
+
   // ---- Handlers ----
 
   const handleCreate = async () => {
@@ -368,7 +429,12 @@ export default function WalletPage({
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await solanaWallet.refreshBalances();
+      // Refresh both balances AND the recent-transactions strip so a fresh
+      // send/receive doesn't sit invisible behind a stale list.
+      await Promise.allSettled([
+        solanaWallet.refreshBalances(),
+        fetchRecentTxs(),
+      ]);
     } catch {}
     setIsRefreshing(false);
   };
@@ -1041,12 +1107,25 @@ export default function WalletPage({
                   </div>
 
                   <div className="text-center mb-3">
-                    <div className="text-[10px] text-white/40 font-mono mb-1">
+                    <div className="flex items-center justify-center gap-1.5 text-[10px] text-white/40 font-mono mb-1">
                       Total Balance
+                      <button
+                        onClick={() => setHideBalance((v) => !v)}
+                        title={hideBalance ? "Show balance" : "Hide balance"}
+                        className="p-0.5 rounded hover:bg-white/[0.06] transition-colors"
+                      >
+                        {hideBalance ? (
+                          <EyeOff className="w-3 h-3 text-white/40" />
+                        ) : (
+                          <Eye className="w-3 h-3 text-white/40" />
+                        )}
+                      </button>
                     </div>
                     <div className="flex items-baseline justify-center gap-1.5 mb-0.5">
                       <span className="text-3xl font-bold text-white font-mono tabular-nums leading-none">
-                        {solanaWallet.usdtBalance !== null
+                        {hideBalance
+                          ? "••••••"
+                          : solanaWallet.usdtBalance !== null
                           ? solanaWallet.usdtBalance.toLocaleString(undefined, {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
@@ -1056,7 +1135,9 @@ export default function WalletPage({
                       <span className="text-sm text-white/50 font-mono">USDT</span>
                     </div>
                     <div className="text-[10px] text-white/30 font-mono">
-                      ≈ ${solanaWallet.usdtBalance !== null
+                      ≈ ${hideBalance
+                        ? "••••"
+                        : solanaWallet.usdtBalance !== null
                         ? solanaWallet.usdtBalance.toLocaleString(undefined, {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
@@ -1113,7 +1194,16 @@ export default function WalletPage({
                   </div>
                 </div>
 
-                <div className={`grid ${MOCK_MODE ? "grid-cols-3" : "grid-cols-4"} gap-2`}>
+                {/* 6-button action row matching the wallet UI mock:
+                    Send / Receive / Swap / Buy / Export Key / More.
+                    Swap and Buy are intentionally non-functional placeholders
+                    — those features aren't wired up yet, but the icons need
+                    to be present in the row for layout parity. They show a
+                    "Coming Soon" alert on click so the click isn't silent.
+                    "More" toggles between Refresh and a future menu — for
+                    now it triggers Refresh so we don't lose that capability.
+                */}
+                <div className={`grid ${MOCK_MODE ? "grid-cols-5" : "grid-cols-6"} gap-2`}>
                   <button
                     onClick={() => {
                       setSendError("");
@@ -1135,14 +1225,22 @@ export default function WalletPage({
                     <span className="text-[11px] text-white/60 font-mono">Receive</span>
                   </button>
                   <button
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1 disabled:opacity-50"
+                    onClick={() =>
+                      showAlert("Coming Soon", "Token swap will be available soon.", "info")
+                    }
+                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
                   >
-                    <RefreshCw
-                      className={`w-4 h-4 text-white/70 ${isRefreshing ? "animate-spin" : ""}`}
-                    />
-                    <span className="text-[11px] text-white/60 font-mono">Refresh</span>
+                    <ArrowLeftRight className="w-4 h-4 text-white/70" />
+                    <span className="text-[11px] text-white/60 font-mono">Swap</span>
+                  </button>
+                  <button
+                    onClick={() =>
+                      showAlert("Coming Soon", "Buy crypto with fiat will be available soon.", "info")
+                    }
+                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
+                  >
+                    <ShoppingCart className="w-4 h-4 text-white/70" />
+                    <span className="text-[11px] text-white/60 font-mono">Buy</span>
                   </button>
                   {!MOCK_MODE && (
                     <button
@@ -1155,6 +1253,21 @@ export default function WalletPage({
                       </span>
                     </button>
                   )}
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    title="Refresh balances"
+                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1 disabled:opacity-50"
+                  >
+                    {isRefreshing ? (
+                      <RefreshCw className="w-4 h-4 text-white/70 animate-spin" />
+                    ) : (
+                      <MoreHorizontal className="w-4 h-4 text-white/70" />
+                    )}
+                    <span className="text-[11px] text-white/60 font-mono">
+                      {isRefreshing ? "..." : "More"}
+                    </span>
+                  </button>
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl">
@@ -1239,6 +1352,159 @@ export default function WalletPage({
                     </div>
                     <span className="text-white/30">›</span>
                   </button>
+                </div>
+
+                {/* Transaction History — last 5 wallet-ledger entries.
+                    Same data source as Settings → Wallet Ledger; this strip
+                    is the at-a-glance view, with "View all" jumping into
+                    the full filterable list in Settings. */}
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl">
+                  <div className="px-3 py-2 flex items-center justify-between border-b border-white/[0.06]">
+                    <span className="text-[12px] font-bold text-white">
+                      Transaction History
+                    </span>
+                    <button
+                      onClick={() => router.push("/merchant/settings?tab=ledger")}
+                      className="px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[10px] text-white/50 hover:text-white/80 font-mono transition-colors"
+                    >
+                      View all
+                    </button>
+                  </div>
+
+                  {/* Column headers */}
+                  <div className="px-3 py-1.5 grid grid-cols-[100px_88px_1fr_110px_90px_28px] gap-2 border-b border-white/[0.04]">
+                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Type</span>
+                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Status</span>
+                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">From / To</span>
+                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider text-right">Amount</span>
+                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider text-right">Time</span>
+                    <span />
+                  </div>
+
+                  {recentTxsLoading && recentTxs.length === 0 ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="w-4 h-4 text-white/30 animate-spin" />
+                    </div>
+                  ) : recentTxs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-2">
+                      <div className="w-9 h-9 rounded-full bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+                        <ArrowDownRight className="w-4 h-4 text-white/20" />
+                      </div>
+                      <p className="text-[11px] text-white/40">No transactions yet</p>
+                    </div>
+                  ) : (
+                    recentTxs.map((tx) => {
+                      const amt = Number(tx.amount) || 0;
+                      const isIncoming = amt >= 0;
+                      const isFailed =
+                        tx.entry_type === "ESCROW_REFUND" ||
+                        tx.entry_type === "ADJUSTMENT" &&
+                          (tx.description || "").toLowerCase().includes("fail");
+                      // Pretty type label — "Send" for outflows, "Receive"
+                      // for inflows, "Swap" for synthetic conversions, fall
+                      // back to the raw entry_type prettified for anything
+                      // exotic (corridor fee, deposit, etc).
+                      const typeLabel =
+                        tx.entry_type === "SYNTHETIC_CONVERSION"
+                          ? "Swap"
+                          : isIncoming
+                            ? "Receive"
+                            : "Send";
+                      const TypeIcon =
+                        typeLabel === "Swap"
+                          ? ArrowLeftRight
+                          : isIncoming
+                            ? ArrowDownRight
+                            : ArrowUpRight;
+                      const cpRaw = tx.counterparty_name || tx.order_number || "—";
+                      const cpDisplay =
+                        cpRaw.length > 18 ? `${cpRaw.slice(0, 8)}…${cpRaw.slice(-6)}` : cpRaw;
+                      const cpLabel = isIncoming ? "From:" : "To:";
+                      // Relative time string: "2m ago" / "1h ago" / "3d ago"
+                      const ts = new Date(tx.created_at).getTime();
+                      const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+                      const rel =
+                        diffSec < 60
+                          ? "now"
+                          : diffSec < 3600
+                            ? `${Math.floor(diffSec / 60)}m ago`
+                            : diffSec < 86400
+                              ? `${Math.floor(diffSec / 3600)}h ago`
+                              : `${Math.floor(diffSec / 86400)}d ago`;
+                      return (
+                        <div
+                          key={tx.id}
+                          className="px-3 py-2 grid grid-cols-[100px_88px_1fr_110px_90px_28px] gap-2 items-center border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors"
+                        >
+                          {/* Type */}
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <TypeIcon
+                              className={`w-3.5 h-3.5 shrink-0 ${
+                                typeLabel === "Swap"
+                                  ? "text-blue-400"
+                                  : isIncoming
+                                    ? "text-emerald-400"
+                                    : "text-red-400"
+                              }`}
+                            />
+                            <span className="text-[12px] text-white truncate">{typeLabel}</span>
+                          </div>
+
+                          {/* Status */}
+                          <div>
+                            {isFailed ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                                <XCircle className="w-2.5 h-2.5" />
+                                Failed
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <CheckCircle2 className="w-2.5 h-2.5" />
+                                Confirmed
+                              </span>
+                            )}
+                          </div>
+
+                          {/* From / To */}
+                          <div className="min-w-0">
+                            <p className="text-[11px] text-white font-mono truncate">{cpDisplay}</p>
+                            <p className="text-[9px] text-white/30 font-mono">{cpLabel}</p>
+                          </div>
+
+                          {/* Amount */}
+                          <div className="text-right">
+                            <p
+                              className={`text-[12px] font-bold font-mono tabular-nums ${
+                                isIncoming ? "text-emerald-400" : "text-red-400"
+                              }`}
+                            >
+                              {isIncoming ? "+" : ""}
+                              {amt.toFixed(2)} USDT
+                            </p>
+                          </div>
+
+                          {/* Time */}
+                          <div className="text-right">
+                            <p className="text-[11px] text-white/40 font-mono">{rel}</p>
+                          </div>
+
+                          {/* Action menu placeholder — clicking jumps to the
+                              related order if there is one, otherwise no-op. */}
+                          <button
+                            onClick={() => {
+                              if (tx.related_order_id) {
+                                router.push(`/merchant?order=${tx.related_order_id}`);
+                              }
+                            }}
+                            className="p-1 rounded hover:bg-white/[0.06] text-white/30 hover:text-white/70 transition-colors"
+                            title={tx.related_order_id ? "Open related order" : "No related order"}
+                          >
+                            <MoreHorizontal className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 
@@ -1375,6 +1641,76 @@ export default function WalletPage({
                     </button>
                   </div>
                 )}
+
+                {/* Quick Actions — convenience shortcuts that don't fit
+                    elsewhere. Each row reuses an existing handler:
+                      - View on Solscan: opens explorer in a new tab
+                      - Copy Address: same handler the wallet hero uses
+                      - Disconnect Wallet: locks the embedded wallet (the
+                        merchant can re-unlock from setup view) */}
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden">
+                  <div className="px-3 py-2 border-b border-white/[0.06]">
+                    <span className="text-[12px] font-bold text-white">Quick Actions</span>
+                  </div>
+
+                  {address && (
+                    <a
+                      href={explorerUrl("address", address)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04]"
+                    >
+                      <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                        <ExternalLink className="w-3.5 h-3.5 text-white/60" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[12px] text-white font-mono">View on Solscan</div>
+                        <div className="text-[10px] text-white/40 font-mono">
+                          View wallet on Solscan
+                        </div>
+                      </div>
+                      <span className="text-white/30 text-sm">↗</span>
+                    </a>
+                  )}
+
+                  <button
+                    onClick={handleCopyAddress}
+                    className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04]"
+                  >
+                    <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                      {copied ? (
+                        <Check className="w-3.5 h-3.5 text-green-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-white/60" />
+                      )}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="text-[12px] text-white font-mono">Copy Address</div>
+                      <div className="text-[10px] text-white/40 font-mono">
+                        Copy wallet address
+                      </div>
+                    </div>
+                    <span className="text-white/30 text-sm">›</span>
+                  </button>
+
+                  {!MOCK_MODE && (
+                    <button
+                      onClick={() => embeddedWallet?.lockWallet()}
+                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors"
+                    >
+                      <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                        <ArrowUpFromLine className="w-3.5 h-3.5 text-white/60" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[12px] text-white font-mono">Disconnect Wallet</div>
+                        <div className="text-[10px] text-white/40 font-mono">
+                          Lock and disconnect
+                        </div>
+                      </div>
+                      <span className="text-white/30 text-sm">›</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
