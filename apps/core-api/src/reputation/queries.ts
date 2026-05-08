@@ -6,6 +6,50 @@
 import { query as dbQuery } from 'settlement-core';
 import { TradeRecord } from './types';
 
+// reputation_scores.badges schema drift: the migration declared TEXT[]
+// but production drifted to JSONB at some point, so the worker's array
+// binding was being mis-parsed as JSON ('{"fast_trader"}' is a Postgres
+// text-array literal, not valid JSON). Detect the actual column type
+// once at first use and cache the right binding format. Re-runs cheap
+// after that — pure in-memory return.
+type BadgesColumnFormat = 'array' | 'json';
+let badgesFormat: BadgesColumnFormat | null = null;
+let badgesFormatProbe: Promise<BadgesColumnFormat> | null = null;
+
+async function detectBadgesFormat(): Promise<BadgesColumnFormat> {
+  if (badgesFormat) return badgesFormat;
+  if (badgesFormatProbe) return badgesFormatProbe;
+  badgesFormatProbe = (async (): Promise<BadgesColumnFormat> => {
+    try {
+      const rows = await dbQuery<{ data_type: string }>(
+        `SELECT data_type FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'reputation_scores'
+            AND column_name = 'badges'`
+      );
+      const dt = rows[0]?.data_type;
+      // 'ARRAY' is what information_schema reports for text[].
+      // 'json' / 'jsonb' both need the JSON-string binding.
+      const fmt: BadgesColumnFormat = dt === 'json' || dt === 'jsonb' ? 'json' : 'array';
+      badgesFormat = fmt;
+      return fmt;
+    } catch {
+      // If the probe fails (DB unreachable, table missing) fall back to
+      // 'array' — that matches the original migration intent and won't
+      // make things worse than the silent failures we already had.
+      badgesFormat = 'array';
+      return 'array';
+    } finally {
+      badgesFormatProbe = null;
+    }
+  })();
+  return badgesFormatProbe;
+}
+
+function bindBadges(badges: string[], fmt: BadgesColumnFormat): string | string[] {
+  return fmt === 'json' ? JSON.stringify(badges) : badges;
+}
+
 // ============================================
 // RESOLVE ENTITY
 // ============================================
@@ -158,13 +202,15 @@ export async function persistReputationScore(entityId: string, entityType: 'merc
   const breakdownKeys = Object.keys(result.breakdown);
   const scores = breakdownKeys.map(k => Math.round(result.breakdown[k].raw));
 
-  // Upsert reputation_scores
+  // Upsert reputation_scores. badges is bound based on the actual
+  // column type (text[] vs jsonb) — see detectBadgesFormat.
+  const fmt = await detectBadgesFormat();
   await dbQuery(
     `INSERT INTO reputation_scores (entity_id, entity_type, total_score, review_score, execution_score, volume_score, consistency_score, trust_score, tier, badges, calculated_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
      ON CONFLICT (entity_id, entity_type)
      DO UPDATE SET total_score=$3, review_score=$4, execution_score=$5, volume_score=$6, consistency_score=$7, trust_score=$8, tier=$9, badges=$10, calculated_at=NOW(), updated_at=NOW()`,
-    [entityId, entityType, Math.round(result.total_score), scores[0] || 0, scores[1] || 0, scores[2] || 0, scores[3] || 0, scores[4] || 0, result.tier, result.badges]
+    [entityId, entityType, Math.round(result.total_score), scores[0] || 0, scores[1] || 0, scores[2] || 0, scores[3] || 0, scores[4] || 0, result.tier, bindBadges(result.badges, fmt)]
   );
 
   // History snapshot
