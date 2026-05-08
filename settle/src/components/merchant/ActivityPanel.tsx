@@ -5,6 +5,7 @@ import { CheckCircle2, History, Star, XCircle, AlertTriangle, ChevronUp, Chevron
 import { motion } from 'framer-motion';
 import { TransactionsTab } from './TransactionsTab';
 import { FilterDropdown, type FilterOption } from '@/components/user/screens/ui/FilterDropdown';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 
 type ActivityTab = 'transactions' | 'completed' | 'failed' | 'open' | 'disputed';
 
@@ -261,7 +262,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                       className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-foreground/[0.03] transition-colors cursor-pointer"
                       onClick={() => onSelectOrder?.(order.id)}
                     >
-                      <div className="text-sm shrink-0">{order.emoji}</div>
+                      <UserAvatar seed={order.user} src={order.user_avatar} size={22} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[11px] font-medium text-foreground/70 truncate">{order.user}</span>
@@ -348,7 +349,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                     >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
-                          <div className="text-sm">{order.emoji}</div>
+                          <UserAvatar seed={order.user} src={order.user_avatar} size={22} />
                           <span className="text-xs font-medium text-foreground/70">{order.user}</span>
                         </div>
                         <span className={`flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border ${
@@ -408,7 +409,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <div className="text-sm">{order.emoji}</div>
+                        <UserAvatar seed={order.user} src={order.user_avatar} size={22} />
                         <span className="text-xs font-medium text-foreground/70">{order.user}</span>
                       </div>
                       <span className="flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/20">
@@ -466,7 +467,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                       {/* Header: user + status */}
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
-                          <div className="text-sm">{order.emoji}</div>
+                          <UserAvatar seed={order.user} src={order.user_avatar} size={22} />
                           <span className="text-xs font-medium text-foreground/70 truncate">{order.user}</span>
                           {order.orderType && (
                             <span className={`text-[9px] font-bold font-mono uppercase ${
