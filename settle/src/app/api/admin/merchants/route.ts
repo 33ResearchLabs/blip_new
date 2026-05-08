@@ -225,8 +225,13 @@ export async function GET(request: NextRequest) {
         COALESCE(m.auto_accept_enabled, false) as auto_accept_enabled,
         COALESCE(m.balance, 0)::text as balance,
         COALESCE(m.sinr_balance, 0)::text as sinr_balance,
-        m.last_seen_at::text,
-        m.created_at::text,
+        -- last_seen_at and created_at are stored as timestamp WITHOUT
+        -- time zone. ::text drops any tz hint, so the admin frontend
+        -- new Date(value) interprets the string as local time (IST),
+        -- making fresh timestamps appear ~5.5 hours older than reality.
+        -- Format as ISO 8601 with explicit Z so the parser treats UTC.
+        to_char(m.last_seen_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS last_seen_at,
+        to_char(m.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
         m.has_ops_access,
         COALESCE(m.has_compliance_access, false) as has_compliance_access,
         COALESCE(rp.risk_score, 0)::text as risk_score,
