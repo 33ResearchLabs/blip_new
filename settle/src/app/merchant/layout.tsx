@@ -41,7 +41,11 @@ export default function MerchantLayout({
   return (
     <MerchantErrorBoundary>
       {children}
-      <IssueReporter />
+      {/* Floating trigger hidden — the navbar bug icon (MerchantNavbar)
+          owns the entry point on merchant pages, so the floating amber
+          button is just duplicate visual noise. The reporter modal stays
+          mounted; the navbar opens it via openIssueReporter(). */}
+      <IssueReporter hideTrigger />
     </MerchantErrorBoundary>
   );
 }
