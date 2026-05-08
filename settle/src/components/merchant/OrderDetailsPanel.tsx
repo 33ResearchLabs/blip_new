@@ -1805,6 +1805,10 @@ export function OrderDetailsPanel({
                     onOpenDispute?.(order.id);
                     onClose();
                     break;
+                  case "requestCancel":
+                    onRequestCancel?.(order.id);
+                    onClose();
+                    break;
                   case "cancelOrderWithoutEscrow":
                   case "openCancelModal":
                     onCancelOrder?.(order.id);
@@ -1837,7 +1841,7 @@ export function OrderDetailsPanel({
                 'acceptOrder', 'signToClaimOrder', 'signAndProceed',
               ]);
               const CANCEL_HANDLERS = new Set([
-                'cancelOrderWithoutEscrow', 'openCancelModal',
+                'cancelOrderWithoutEscrow', 'openCancelModal', 'requestCancel',
               ]);
               const isHandlerMatch = (a: string | null | undefined, b: string | undefined) => {
                 if (!a || !b) return false;
