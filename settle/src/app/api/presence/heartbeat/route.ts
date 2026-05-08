@@ -100,6 +100,21 @@ export async function POST(request: NextRequest) {
       [actorType, actorId, isOnline, `hb-${Date.now()}`]
     ).catch(() => {});
 
+    // Touch merchants.last_seen_at on every heartbeat so the admin
+    // Compliance / Access Control table reflects real activity, not
+    // just last login. Without this, last_seen_at only moves when the
+    // merchant validates their session (/api/auth/merchant), so a
+    // merchant who logged in 3 days ago but is actively trading shows
+    // "3 days ago." Piggybacking on the 30s heartbeat keeps the column
+    // at most ~30s stale at zero extra request cost. Fire-and-forget;
+    // a failed write here must never break the presence response.
+    if (actorType === 'merchant') {
+      query(
+        `UPDATE merchants SET is_online = $1, last_seen_at = NOW() WHERE id = $2`,
+        [isOnline, actorId]
+      ).catch(() => {});
+    }
+
     return successResponse({ ok: true, actorType, actorId, isOnline });
   } catch (error) {
     console.error('Presence heartbeat error:', error);
