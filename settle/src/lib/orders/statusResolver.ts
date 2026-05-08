@@ -593,10 +593,22 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
           result.nextStepText =
             "Your USDT is locked. Waiting for a counterparty.";
         }
-        result.secondaryAction = {
-          label: "Cancel & Refund",
-          handler: "openCancelModal",
-        };
+        // Seller can't unilaterally refund a Locked escrow with a buyer
+        // attached (program rejects with BuyerPayWindowActive until the
+        // pay window expires). The recovery path is dispute → arbiter
+        // resolution. Only expose Cancel & Refund when there's no buyer
+        // yet (still Funded, no counterparty bound).
+        if (hasBuyer) {
+          result.secondaryAction = {
+            label: "Open Dispute",
+            handler: "openDisputeModal",
+          };
+        } else {
+          result.secondaryAction = {
+            label: "Cancel & Refund",
+            handler: "openCancelModal",
+          };
+        }
       } else if (myRole === "buyer") {
         // Escrow is locked by seller, I need to send fiat
         result.primaryAction = {
