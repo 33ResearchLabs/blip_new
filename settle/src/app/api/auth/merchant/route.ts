@@ -665,25 +665,36 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Email/Password Login
+    // Email-or-Username / Password Login
     if (action === 'login') {
-      const { email, password } = body;
+      const { password } = body;
+      // Accept `identifier` (email or username) or legacy `email` field for backward compat.
+      const rawIdentifier: string | undefined = body.identifier ?? body.email;
 
-      if (!email || !password) {
+      if (!rawIdentifier || !password) {
         return NextResponse.json(
-          { success: false, error: 'Email and password are required' },
+          { success: false, error: 'Email or username and password are required' },
           { status: 400 }
         );
       }
 
-      const normalizedEmail = email.trim().toLowerCase();
+      const trimmedIdentifier = String(rawIdentifier).trim();
+      const isEmail = trimmedIdentifier.includes('@');
+      // Usernames are validated to [a-zA-Z0-9_] (no @), so the @ check unambiguously
+      // separates the two paths — email-shaped strings can never be a valid username.
+      // Username lookup is case-sensitive to match the unique constraint and stay on
+      // the existing `idx_merchants_username` btree index.
+      const lookupValue = isEmail ? trimmedIdentifier.toLowerCase() : trimmedIdentifier;
 
-      // Find merchant by email
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled, COALESCE(email_verified, true) as email_verified
-         FROM merchants
-         WHERE email = $1 AND status = 'active'`,
-        [normalizedEmail]
+        isEmail
+          ? `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled, COALESCE(email_verified, true) as email_verified
+             FROM merchants
+             WHERE email = $1 AND status = 'active'`
+          : `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled, COALESCE(email_verified, true) as email_verified
+             FROM merchants
+             WHERE username = $1 AND status = 'active'`,
+        [lookupValue]
       );
 
       if (rows.length === 0) {

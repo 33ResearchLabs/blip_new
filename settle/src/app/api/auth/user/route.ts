@@ -282,16 +282,22 @@ export async function POST(request: NextRequest) {
       return setUnRes;
     }
 
-    // Login with username/password
+    // Login with username-or-email + password
     if (action === 'login') {
-      if (!username || !password) {
+      // Accept `identifier` (preferred — email or username) or legacy `username`.
+      // `username` (rawUsername.trim()) is already populated above for backward
+      // compat with existing clients.
+      const rawIdentifier: string | undefined =
+        (typeof body.identifier === 'string' && body.identifier.trim()) || username;
+
+      if (!rawIdentifier || !password) {
         return NextResponse.json(
-          { success: false, error: 'Username and password are required' },
+          { success: false, error: 'Username or email and password are required' },
           { status: 400 }
         );
       }
 
-      const user = await authenticateUser(username, password);
+      const user = await authenticateUser(rawIdentifier, password);
       if (!user) {
         return NextResponse.json(
           { success: false, error: 'Invalid username or password' },

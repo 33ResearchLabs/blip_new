@@ -30,6 +30,7 @@ import {
   Lock,
   Trophy,
   BookOpen,
+  AtSign,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -904,14 +905,36 @@ export default function MerchantSettingsPage({
                   Account Information
                 </p>
 
-                {/* Username — read-only. The merchant API has no PATCH for
-                    username (set at signup, immutable for trade history
-                    integrity). Pencil affordance was removed because it
-                    pointed to the Profile tab which only edits display_name
-                    / business_name, leaving the user clicking nothing. */}
+                {/* Display Name — the public-facing name shown in chat,
+                    order cards, and merchant lists. Editable, but the
+                    editor lives on the Profile tab; the pencil here jumps
+                    there instead of duplicating the form. Falls back to
+                    the live `displayName` state in case the merchant
+                    just edited it on the Profile tab and merchant store
+                    hasn't refreshed yet. */}
                 <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
                   <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
                     <User className="w-4 h-4 text-white/60" />
+                  </div>
+                  <p className="flex-1 text-[13px] text-white/60">Display Name</p>
+                  <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">
+                    {merchant?.display_name || displayName || "—"}
+                  </p>
+                  <button
+                    aria-label="Edit display name"
+                    onClick={() => setActiveTab("profile")}
+                    className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Username — read-only. The merchant API has no PATCH for
+                    username (set at signup, immutable for trade history
+                    integrity). No edit affordance for the same reason. */}
+                <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
+                  <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                    <AtSign className="w-4 h-4 text-white/60" />
                   </div>
                   <p className="flex-1 text-[13px] text-white/60">Username</p>
                   <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">

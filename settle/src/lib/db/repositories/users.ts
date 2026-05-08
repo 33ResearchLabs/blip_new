@@ -55,6 +55,12 @@ export async function getUserByUsername(username: string): Promise<User | null> 
   return queryOne<User>('SELECT * FROM users WHERE username = $1', [username]);
 }
 
+export async function getUserByEmail(email: string): Promise<User | null> {
+  // Returns full user including password_hash for auth verification.
+  // Stored emails are lowercased on insert; the unique index is on LOWER(email).
+  return queryOne<User>('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+}
+
 export async function checkUsernameAvailable(username: string): Promise<boolean> {
   // Check both users and merchants tables to ensure username uniqueness across platform
   const userResult = await queryOne<{ count: string | number }>(
@@ -133,10 +139,16 @@ export async function createUser(
 
 
 export async function authenticateUser(
-  username: string,
+  identifier: string,
   password: string
 ): Promise<Omit<User, 'password_hash'> | null> {
-  const user = await getUserByUsername(username.trim());
+  // `identifier` may be a username (legacy callers) or an email — disambiguated
+  // by the presence of an `@`. Usernames are validated to [a-zA-Z0-9_], so an
+  // email-shaped string can never collide with a valid username.
+  const trimmed = identifier.trim();
+  const user = trimmed.includes('@')
+    ? await getUserByEmail(trimmed)
+    : await getUserByUsername(trimmed);
   if (!user || !user.password_hash) return null;
 
   const { valid, needsRehash } = verifyPassword(password, user.password_hash);

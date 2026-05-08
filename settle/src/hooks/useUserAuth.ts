@@ -185,18 +185,23 @@ export function useUserAuth({
 
   const handleUserLogin = useCallback(async () => {
     if (!loginForm.username || !loginForm.password) {
-      setLoginError('Username and password are required');
+      setLoginError('Username or email and password are required');
       return;
     }
     setIsLoggingIn(true);
     setLoginError("");
 
     try {
+      // `loginForm.username` may hold a username or an email — server disambiguates
+      // by the presence of `@`. Backward-compat: still send `username` so older
+      // server builds keep working; new server prefers `identifier`.
+      const identifier = loginForm.username.trim();
       const res = await fetchWithAuth('/api/auth/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: loginForm.username.trim(),
+          identifier,
+          username: identifier,
           password: loginForm.password,
           action: 'login',
         }),

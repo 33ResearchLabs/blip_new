@@ -249,10 +249,11 @@ export function LoginScreen({
               {/* ─── SIGN IN FORM ─── */}
               {authTab === "signin" && (
                 <div className="space-y-3.5">
-                  <FieldEmail
-                    label="Email Address"
+                  <FieldText
+                    label="Email or Username"
                     value={loginForm.email}
-                    placeholder="merchant@email.com"
+                    placeholder="merchant@email.com or username"
+                    maxLength={254}
                     onChange={(v) => {
                       setLoginForm((p) => ({ ...p, email: v }));
                       if (rememberMe) {

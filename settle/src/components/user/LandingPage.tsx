@@ -129,7 +129,9 @@ export function LandingPage({
             )}
 
             <div>
-              <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">Username</label>
+              <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">
+                {authMode === 'register' ? 'Username' : 'Username or Email'}
+              </label>
               <input
                 type="text"
                 value={loginForm.username}
@@ -138,10 +140,10 @@ export function LandingPage({
                   setLoginForm({ ...loginForm, username: e.target.value.trim() });
                   setTouched(t => ({ ...t, username: true }));
                 }}
-                placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'Your username'}
+                placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'Username or you@email.com'}
                 autoCapitalize="none"
                 autoCorrect="off"
-                maxLength={20}
+                maxLength={authMode === 'register' ? 20 : 254}
                 onKeyDown={e => e.key === 'Enter' && submit()}
                 className={`w-full rounded-xl px-4 py-3 text-sm font-medium outline-none bg-surface-hover border ${
                   usernameError ? 'border-error' : 'border-border-subtle'

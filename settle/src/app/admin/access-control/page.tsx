@@ -175,10 +175,10 @@ export default function AccessControlPage() {
 
   // ── Data ──
 
-  const fetchMerchants = useCallback(async () => {
+  const fetchMerchants = useCallback(async (silent: boolean = false) => {
     const token = adminTokenRef.current;
     if (!token) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await fetchWithAuth(
         "/api/admin/merchants?sort=volume&limit=200",
@@ -188,12 +188,37 @@ export default function AccessControlPage() {
     } catch (err) {
       console.error("Failed to fetch merchants:", err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
+  // Initial load + 30s background refresh so "Last Active" reflects
+  // the current heartbeat (merchants ping /api/presence/heartbeat every
+  // 30s, which touches merchants.last_seen_at). Without this, admin sees
+  // a snapshot from when the page was opened — e.g. "8 hours ago" on a
+  // merchant who is actively logged in. Refresh is paused while the tab
+  // is hidden and fires immediately when it returns to visible.
   useEffect(() => {
-    if (isAuthenticated) fetchMerchants();
+    if (!isAuthenticated) return;
+    fetchMerchants();
+
+    let cancelled = false;
+    const REFRESH_MS = 30_000;
+    const tick = () => {
+      if (!cancelled && document.visibilityState === "visible") {
+        fetchMerchants(true);
+      }
+    };
+    const interval = setInterval(tick, REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchMerchants(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [isAuthenticated, fetchMerchants]);
 
   const toggleAccess = async (merchantId: string, current: boolean) => {

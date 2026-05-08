@@ -142,11 +142,14 @@ export function useDashboardAuth({
     setLoginError("");
 
     try {
+      // `loginForm.email` holds the user's input — may be an email or a username.
+      // Backend lowercases emails server-side; usernames are case-insensitive there too,
+      // so we just trim here and let the server disambiguate.
       const res = await fetchWithAuth('/api/auth/merchant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: loginForm.email.trim().toLowerCase(),
+          identifier: loginForm.email.trim(),
           password: loginForm.password,
           action: 'login',
         }),
@@ -173,9 +176,9 @@ export function useDashboardAuth({
           setLoginError('EMAIL_NOT_VERIFIED');
           setUnverifiedMerchantId(data.merchantId || null);
         } else if (res.status === 401) {
-          setLoginError('Incorrect email or password. Please try again.');
+          setLoginError('Incorrect email/username or password. Please try again.');
         } else if (res.status === 404) {
-          setLoginError('No account found with this email. Please create an account first.');
+          setLoginError('No account found with this email or username. Please create an account first.');
         } else {
           setLoginError(data.error || 'Login failed');
         }
