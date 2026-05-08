@@ -250,7 +250,18 @@ export async function getMerchantOrders(
              END,
              'username', u.username,
              'rating', u.rating,
-             'total_trades', u.total_trades
+             'total_trades', u.total_trades,
+             -- Avatar follows the same placeholder-user logic: if the
+             -- "user" row is a synthetic M2M shell, surface the actual
+             -- counterparty merchant's picture instead.
+             'avatar_url', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN
+                 CASE
+                   WHEN o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != o.merchant_id THEN COALESCE(bm.avatar_url, m.avatar_url)
+                   ELSE m.avatar_url
+                 END
+               ELSE u.avatar_url
+             END
            ) as user,
            json_build_object(
              'payment_method', mo.payment_method,
@@ -371,14 +382,23 @@ export async function getAllPendingOrdersForMerchant(
              'username', u.username,
              'rating', u.rating,
              'total_trades', u.total_trades,
-             'wallet_address', u.wallet_address
+             'wallet_address', u.wallet_address,
+             'avatar_url', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN
+                 CASE
+                   WHEN o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != o.merchant_id THEN COALESCE(bm.avatar_url, m.avatar_url)
+                   ELSE m.avatar_url
+                 END
+               ELSE u.avatar_url
+             END
            ) as user,
            json_build_object(
              'id', m.id,
              'display_name', m.display_name,
              'username', m.username,
              'rating', m.rating,
-             'wallet_address', m.wallet_address
+             'wallet_address', m.wallet_address,
+             'avatar_url', m.avatar_url
            ) as merchant,
            json_build_object(
              'payment_method', mo.payment_method,
