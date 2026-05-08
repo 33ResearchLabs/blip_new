@@ -119,6 +119,13 @@ function resolveAcceptorActor(order: OrphanedOrder): string | null {
  * don't race the async happy path.
  */
 async function findOrphanedOrders(): Promise<OrphanedOrder[]> {
+  // The grace-period filter previously referenced `o.updated_at`, but that
+  // column doesn't exist on the orders table — production was logging
+  // `column o.updated_at does not exist` on every poll. Use the latest
+  // state-change timestamp instead. Each status transition (accept,
+  // escrow, payment-sent, complete) writes its own column, and earlier
+  // ones stay set, so COALESCE-in-reverse-chronological order yields the
+  // most recent meaningful update for the four RECEIPT_ELIGIBLE_STATUSES.
   return query<OrphanedOrder>(
     `SELECT o.id, o.order_number, o.type, o.payment_method,
             o.crypto_amount, o.crypto_currency, o.fiat_amount, o.fiat_currency, o.rate,
@@ -132,8 +139,9 @@ async function findOrphanedOrders(): Promise<OrphanedOrder[]> {
       WHERE r.id IS NULL
         AND o.status::text = ANY($1::text[])
         AND o.merchant_id IS NOT NULL
-        AND o.updated_at < NOW() - ($2 || ' seconds')::interval
-      ORDER BY o.updated_at ASC
+        AND COALESCE(o.completed_at, o.payment_sent_at, o.escrowed_at, o.accepted_at, o.created_at)
+            < NOW() - ($2 || ' seconds')::interval
+      ORDER BY COALESCE(o.completed_at, o.payment_sent_at, o.escrowed_at, o.accepted_at, o.created_at) ASC
       LIMIT $3`,
     [RECEIPT_ELIGIBLE_STATUSES, String(GRACE_PERIOD_SEC), BATCH_SIZE],
   );
