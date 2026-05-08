@@ -2,6 +2,7 @@ import { query, queryOne } from '../index';
 import { User, UserBankAccount } from '../../types/database';
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
+import { defaultAvatarUrl } from '@/lib/avatars';
 
 // Password hashing — PBKDF2 with 100k iterations (OWASP minimum for SHA-512)
 const PBKDF2_ITERATIONS = 100_000;
@@ -107,10 +108,13 @@ export async function createUser(
   // false — preserves wallet-only signups without forcing email verification.
   const emailVerified = data.email_verified ?? true;
   try {
+    // Seed deterministic default avatar from the most stable identifier
+    // available so the same user keeps the same picture across sessions.
+    const avatarSeed = data.username?.trim() || email || walletAddress;
     const result = await queryOne<User>(
       `
-      INSERT INTO users (username, password_hash, wallet_address, name, balance, email, email_verified)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO users (username, password_hash, wallet_address, name, balance, email, email_verified, avatar_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
       `,
       [
@@ -121,6 +125,7 @@ export async function createUser(
         initialBalance,
         email,
         emailVerified,
+        defaultAvatarUrl(avatarSeed),
       ]
     );
 
