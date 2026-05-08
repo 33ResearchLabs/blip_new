@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Repeat,
 } from "lucide-react";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 interface CompletedOrdersPanelProps {
   orders: any[];
@@ -144,13 +145,12 @@ function TransactionCard({
       onClick={onClick}
       className="group w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-foreground/[0.04] transition-colors active:scale-[0.99]"
     >
-      {/* Icon */}
-      <div
-        className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${isBuy ? "bg-emerald-500/10" : isSell ? "bg-red-500/10" : "bg-foreground/[0.05]"}`}
-      >
-        <Icon
-          className={`w-3.5 h-3.5 ${isBuy ? "text-emerald-400" : isSell ? "text-red-400" : "text-foreground/50"}`}
-        />
+      {/* User avatar — buy/sell signal moves to the BUY/SELL tag below */}
+      <UserAvatar seed={order.user} src={(order as any).user_avatar} size={28} />
+      {/* Direction badge tucked beneath the avatar via negative margin so the
+          row keeps the same height. Kept tiny for at-a-glance buy/sell scan. */}
+      <div className="sr-only" aria-hidden>
+        <Icon className={`${isBuy ? "text-emerald-400" : isSell ? "text-red-400" : "text-foreground/50"}`} />
       </div>
 
       {/* Middle: name + order + time */}
