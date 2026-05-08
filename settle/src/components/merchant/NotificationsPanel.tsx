@@ -28,18 +28,16 @@ interface GroupedNotification {
   ids: string[];
 }
 
-// Type → visual treatment map. Keeps the JSX clean and consistent.
-const TYPE_STYLES: Record<
-  string,
-  { bg: string; ring: string; icon: string }
-> = {
-  escrow:   { bg: 'bg-primary/[0.12]',     ring: 'ring-primary/25',     icon: 'text-primary' },
-  payment:  { bg: 'bg-blue-500/[0.12]',    ring: 'ring-blue-500/25',    icon: 'text-blue-400' },
-  complete: { bg: 'bg-emerald-500/[0.12]', ring: 'ring-emerald-500/25', icon: 'text-emerald-400' },
-  message:  { bg: 'bg-purple-500/[0.12]',  ring: 'ring-purple-500/25',  icon: 'text-purple-400' },
-  dispute:  { bg: 'bg-red-500/[0.12]',     ring: 'ring-red-500/25',     icon: 'text-red-400' },
-  order:    { bg: 'bg-foreground/[0.06]',  ring: 'ring-foreground/15',  icon: 'text-foreground/60' },
-  system:   { bg: 'bg-foreground/[0.06]',  ring: 'ring-foreground/15',  icon: 'text-foreground/50' },
+// Type → icon color. The circular badge background was dropped so the
+// icon stands on its own — pure color carries the meaning.
+const TYPE_STYLES: Record<string, { icon: string }> = {
+  escrow:   { icon: 'text-primary' },
+  payment:  { icon: 'text-blue-400' },
+  complete: { icon: 'text-emerald-400' },
+  message:  { icon: 'text-purple-400' },
+  dispute:  { icon: 'text-red-400' },
+  order:    { icon: 'text-foreground/70' },
+  system:   { icon: 'text-foreground/55' },
 };
 
 function getStyle(type: string) {
@@ -198,16 +196,16 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                     <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-primary/80 to-primary/30 rounded-r" />
                   )}
 
-                  <div className="flex items-start gap-2.5">
-                    {/* Type icon — circular badge with subtle ring */}
-                    <div className={`relative w-8 h-8 rounded-full flex items-center justify-center shrink-0 ring-1 ${style.bg} ${style.ring}`}>
-                      {notif.type === 'order' && <ShoppingBag className={`w-3.5 h-3.5 ${style.icon}`} strokeWidth={2.2} />}
-                      {notif.type === 'escrow' && <Shield className={`w-3.5 h-3.5 ${style.icon}`} strokeWidth={2.2} />}
-                      {notif.type === 'payment' && <DollarSign className={`w-3.5 h-3.5 ${style.icon}`} strokeWidth={2.2} />}
-                      {notif.type === 'dispute' && <AlertTriangle className={`w-3.5 h-3.5 ${style.icon}`} strokeWidth={2.2} />}
-                      {notif.type === 'complete' && <CheckCircle2 className={`w-3.5 h-3.5 ${style.icon}`} strokeWidth={2.2} />}
-                      {notif.type === 'message' && <MessageCircle className={`w-3.5 h-3.5 ${style.icon}`} strokeWidth={2.2} />}
-                      {notif.type === 'system' && <Bell className={`w-3.5 h-3.5 ${style.icon}`} strokeWidth={2.2} />}
+                  <div className="flex items-start gap-3">
+                    {/* Type icon — no badge, just a crisp colored glyph in front */}
+                    <div className="relative w-5 h-5 flex items-center justify-center shrink-0 mt-[1px]">
+                      {notif.type === 'order' && <ShoppingBag className={`w-5 h-5 ${style.icon}`} strokeWidth={2.4} />}
+                      {notif.type === 'escrow' && <Shield className={`w-5 h-5 ${style.icon}`} strokeWidth={2.4} />}
+                      {notif.type === 'payment' && <DollarSign className={`w-5 h-5 ${style.icon}`} strokeWidth={2.4} />}
+                      {notif.type === 'dispute' && <AlertTriangle className={`w-5 h-5 ${style.icon}`} strokeWidth={2.4} />}
+                      {notif.type === 'complete' && <CheckCircle2 className={`w-5 h-5 ${style.icon}`} strokeWidth={2.4} />}
+                      {notif.type === 'message' && <MessageCircle className={`w-5 h-5 ${style.icon}`} strokeWidth={2.4} />}
+                      {notif.type === 'system' && <Bell className={`w-5 h-5 ${style.icon}`} strokeWidth={2.4} />}
 
                       {/* Group count badge — shows UNREAD count, not total.
                           Without this the badge keeps growing forever as old

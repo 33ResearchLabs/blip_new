@@ -10,6 +10,7 @@ import { validateUsername } from '@/lib/validation/username';
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
+import { defaultAvatarUrl } from '@/lib/avatars';
 
 // Password hashing — PBKDF2 with 100k iterations (OWASP minimum for SHA-512)
 const PBKDF2_ITERATIONS = 100_000;
@@ -391,10 +392,11 @@ export async function POST(request: NextRequest) {
             email,
             status,
             is_online,
-            balance
-          ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6)
+            balance,
+            avatar_url
+          ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6, $7)
           RETURNING id, username, display_name, business_name, wallet_address, rating, total_trades`,
-          [wallet_address, username, username, username, `${username}@merchant.blip.money`, merchantBalance]
+          [wallet_address, username, username, username, `${username}@merchant.blip.money`, merchantBalance, defaultAvatarUrl(username)]
         );
       } catch (insertErr: any) {
         if (insertErr?.code === '23505') {
@@ -978,10 +980,11 @@ export async function POST(request: NextRequest) {
           status,
           is_online,
           balance,
-          email_verified
-        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6, false)
+          email_verified,
+          avatar_url
+        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6, false, $7)
         RETURNING id, username, display_name, business_name, wallet_address, email, rating, total_trades`,
-        [normalizedEmail, passwordHash, username, normalizedBusinessName, normalizedBusinessName, regBalance]
+        [normalizedEmail, passwordHash, username, normalizedBusinessName, normalizedBusinessName, regBalance, defaultAvatarUrl(username || normalizedEmail)]
       );
 
       const merchant = result[0] as {
