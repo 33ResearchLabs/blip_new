@@ -25,7 +25,6 @@ import {
   TRADER_CUT_CONFIG,
 } from "@/lib/orders/mappers";
 import { useNotifications } from "@/hooks/useNotifications";
-import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { useOrderFetching } from "@/hooks/useOrderFetching";
 import { useDashboardAuth } from "@/hooks/useDashboardAuth";
 import { useEscrowOperations } from "@/hooks/useEscrowOperations";
@@ -230,8 +229,9 @@ export default function MerchantDashboard() {
   const { notifications, addNotification, markNotificationRead, markAllNotificationsRead } =
     useNotifications(merchantId, isLoggedIn);
 
-  // Send presence heartbeat so other parties see this merchant as online
-  usePresenceHeartbeat(!!merchantId && isLoggedIn);
+  // Presence heartbeat is mounted at the merchant layout level
+  // (MerchantPresenceHeartbeat) so it fires across every merchant
+  // route, not only the dashboard.
 
   const escrow = useEscrowOperations({
     solanaWallet,

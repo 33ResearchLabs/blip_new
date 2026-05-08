@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { MerchantErrorBoundary } from "./error-boundary";
 import { IssueReporter } from "@/components/IssueReporter";
+import { MerchantPresenceHeartbeat } from "@/components/merchant/MerchantPresenceHeartbeat";
 
 export const metadata: Metadata = {
   title: "Blip Money Merchant",
@@ -40,6 +41,12 @@ export default function MerchantLayout({
 }) {
   return (
     <MerchantErrorBoundary>
+      {/* Mount the presence heartbeat at the layout level so every
+          merchant route (dashboard, wallet, settings, my-issues, …)
+          keeps last_seen_at fresh. Previously only /merchant fired
+          heartbeats, so a merchant sitting on a sub-page looked
+          permanently offline in the admin Compliance table. */}
+      <MerchantPresenceHeartbeat />
       {children}
       {/* Floating trigger hidden — the navbar bug icon (MerchantNavbar)
           owns the entry point on merchant pages, so the floating amber
