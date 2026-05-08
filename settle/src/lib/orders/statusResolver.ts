@@ -396,6 +396,7 @@ export type OrderActionHandler =
   | "cancelOrder"
   | "cancelOrderWithoutEscrow"
   | "openCancelModal"
+  | "requestCancel"
   | "openDisputeModal"
   | "viewDetails"
   | "none";
@@ -593,15 +594,16 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
           result.nextStepText =
             "Your USDT is locked. Waiting for a counterparty.";
         }
-        // Seller can't unilaterally refund a Locked escrow with a buyer
-        // attached (program rejects with BuyerPayWindowActive until the
-        // pay window expires). The recovery path is dispute → arbiter
-        // resolution. Only expose Cancel & Refund when there's no buyer
-        // yet (still Funded, no counterparty bound).
+        // Locked escrow with a buyer attached: the on-chain program
+        // requires BOTH signatures to cancel (cancel_trade_mutual), so
+        // the seller's path is "Request Cancellation" — buyer is then
+        // prompted to approve. (If buyer is unresponsive, the seller
+        // can escalate to a dispute from the order details panel.)
+        // Funded state with no buyer bound → seller can refund directly.
         if (hasBuyer) {
           result.secondaryAction = {
-            label: "Open Dispute",
-            handler: "openDisputeModal",
+            label: "Request Cancellation",
+            handler: "requestCancel",
           };
         } else {
           result.secondaryAction = {
