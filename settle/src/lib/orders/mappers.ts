@@ -85,6 +85,13 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
           ? (dbOrder.merchant?.display_name || 'M')
           : (dbOrder.buyer_merchant?.display_name || 'M'))
       : userName),
+    // Counterparty avatar — same picking logic as `user` above so the
+    // image matches the displayed name.
+    user_avatar: isM2M
+      ? (merchantId && dbOrder.buyer_merchant_id === merchantId
+          ? ((dbOrder.merchant as any)?.avatar_url || null)
+          : ((dbOrder.buyer_merchant as any)?.avatar_url || null))
+      : ((dbOrder.user as any)?.avatar_url || null),
     amount: cryptoAmount,
     fromCurrency: (dbOrder as any).crypto_currency || "USDT",
     toCurrency: (dbOrder as any).fiat_currency || "AED",

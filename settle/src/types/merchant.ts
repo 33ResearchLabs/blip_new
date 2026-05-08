@@ -103,6 +103,8 @@ export interface Order {
   id: string;
   user: string;
   emoji: string;
+  /** Counterparty avatar URL (DiceBear default or user-uploaded). */
+  user_avatar?: string | null;
   amount: number;
   fromCurrency: string;
   toCurrency: string;
