@@ -108,11 +108,33 @@ export async function POST(request: NextRequest) {
     // "3 days ago." Piggybacking on the 30s heartbeat keeps the column
     // at most ~30s stale at zero extra request cost. Fire-and-forget;
     // a failed write here must never break the presence response.
+    //
+    // TEMPORARY: emit success/failure logs while we diagnose why
+    // production admin's "Last Active" wasn't moving. Earlier the
+    // .catch(() => {}) swallowed every failure mode (bad row, type
+    // mismatch, connection drop) — making it impossible to tell from
+    // the route logs whether the UPDATE actually ran. Once production
+    // is confirmed working, we can drop this back to the silent catch.
     if (actorType === 'merchant') {
       query(
-        `UPDATE merchants SET is_online = $1, last_seen_at = NOW() WHERE id = $2`,
+        `UPDATE merchants SET is_online = $1, last_seen_at = NOW() WHERE id = $2 RETURNING id, last_seen_at`,
         [isOnline, actorId]
-      ).catch(() => {});
+      )
+        .then((rows) => {
+          console.log('[heartbeat] merchants.last_seen_at update', {
+            actorId,
+            isOnline,
+            affected: Array.isArray(rows) ? rows.length : null,
+            row: Array.isArray(rows) && rows[0] ? rows[0] : null,
+          });
+        })
+        .catch((err) => {
+          console.error('[heartbeat] merchants.last_seen_at UPDATE failed', {
+            actorId,
+            isOnline,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
     }
 
     return successResponse({ ok: true, actorType, actorId, isOnline });
