@@ -141,20 +141,39 @@ export function useEscrowOperations({
       return;
     }
 
-    let orderToUse = order;
-    try {
-      const res = await fetchWithAuth(`/api/orders/${order.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          orderToUse = mapDbOrderToUI(data.data, merchantId);
-        }
-      }
-    } catch (err) {
-      console.error('[Escrow] Error fetching fresh order:', err);
-    }
+    // Open the modal instantly with the cached order so the click feels
+    // responsive — the previous awaited /api/orders/:id fetch held the
+    // modal closed for the full request RTT (often 500ms–2s on a slow
+    // network) which is exactly the lag the merchant was reporting.
+    //
+    // Refresh in the background and dispatch SET_ORDER once fresh data
+    // arrives. The cached order from the merchant store is normally
+    // already current (Pusher events + polling keep it fresh); this
+    // refetch is defensive — it picks up edge cases like a counterparty
+    // wallet connected seconds before the click. If the user clicks
+    // "Lock Escrow" inside the modal before the refresh completes,
+    // executeLockEscrow's own pre-flight validation surfaces any
+    // stale-data issue (missing acceptor wallet, status drift) with the
+    // same error UX as before.
+    dispatch({ type: 'OPEN', op: 'lock', order });
 
-    dispatch({ type: 'OPEN', op: 'lock', order: orderToUse });
+    const targetOrderId = order.id;
+    fetchWithAuth(`/api/orders/${order.id}`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data?.success && data?.data) {
+          const fresh = mapDbOrderToUI(data.data, merchantId);
+          // Guard against a stale fetch resolving after the user closed
+          // the modal or opened a different order — SET_ORDER unconditionally
+          // would overwrite unrelated state.
+          if (fresh.id === targetOrderId) {
+            dispatch({ type: 'SET_ORDER', op: 'lock', order: fresh });
+          }
+        }
+      })
+      .catch(err => {
+        console.error('[Escrow] Background order refresh failed:', err);
+      });
   }, [merchantId, solanaWallet.connected, addNotification, setShowWalletModal]);
 
   const executeLockEscrow = useCallback(async () => {
@@ -483,6 +502,66 @@ export function useEscrowOperations({
       return;
     }
 
+    // Mirrors the openEscrowModal speed-up: open the modal instantly using
+    // the cached order so the click feels responsive, then refresh in the
+    // background. Validation that previously blocked the modal open is
+    // split into two layers:
+    //
+    //  1. Cheap client-side guards on the cached order — terminal-status
+    //     check (already completed/cancelled/expired) AND a confirmation
+    //     that escrow is locked client-side. Both fields are reliable in
+    //     the merchantStore cache (kept fresh by Pusher + polling).
+    //  2. A background refetch then reconciles the modal with fresh data;
+    //     if the order moved to a terminal state since the cache, the
+    //     modal is closed with a notification. The on-click executeRelease
+    //     also runs a server-side validate-release pre-flight, so the
+    //     escrow_debited_entity_id check is preserved at the actual
+    //     release moment.
+    //
+    // Rare cold-cache fallback (no escrow tx in cache): keep the original
+    // blocking fetch so we don't show a release modal for an order that
+    // never had escrow locked.
+
+    const cachedStatus = order.dbOrder?.status || order.status;
+    if (cachedStatus === 'completed' || cachedStatus === 'cancelled' || cachedStatus === 'expired') {
+      addNotification('system', `Order already ${cachedStatus}.`, order.id);
+      fetchOrders();
+      return;
+    }
+
+    const hasCachedEscrow = !!(order.escrowTxHash || order.dbOrder?.escrow_tx_hash);
+
+    if (hasCachedEscrow) {
+      dispatch({ type: 'OPEN', op: 'release', order });
+
+      const targetOrderId = order.id;
+      fetchWithAuth(`/api/orders/${order.id}`)
+        .then(res => (res.ok ? res.json() : null))
+        .then(data => {
+          if (data?.success && data?.data) {
+            const freshOrder = mapDbOrderToUI(data.data, merchantId);
+            if (freshOrder.id !== targetOrderId) return;
+            // Order transitioned out from under us — close the modal and
+            // surface the same UX as the original blocking path.
+            if (freshOrder.status === 'completed' || freshOrder.status === 'cancelled' || freshOrder.status === 'expired') {
+              dispatch({ type: 'CLOSE', op: 'release' });
+              addNotification('system', `Order already ${freshOrder.status}. Refreshing...`, order.id);
+              setOrders((prev: Order[]) => prev.map((o: Order) => o.id === order.id ? freshOrder : o));
+              fetchOrders();
+              return;
+            }
+            dispatch({ type: 'SET_ORDER', op: 'release', order: freshOrder });
+          }
+        })
+        .catch(err => {
+          console.error('[Release] Background order refresh failed:', err);
+        });
+      return;
+    }
+
+    // Cold cache fallback — keep the previous blocking behavior so we
+    // don't open a release modal on an order whose escrow_debited_entity_id
+    // can only be confirmed from the server.
     try {
       const res = await fetchWithAuth(`/api/orders/${order.id}`);
       if (res.ok) {
@@ -496,7 +575,6 @@ export function useEscrowOperations({
             return;
           }
 
-          // Pre-flight escrow check: verify escrow is locked before showing release modal
           if (!data.data.escrow_debited_entity_id && !data.data.escrow_tx_hash) {
             addNotification('system', 'Please lock escrow before releasing funds. The escrow step has not been completed.', order.id);
             playSound('error');
@@ -511,14 +589,8 @@ export function useEscrowOperations({
       console.error('[Release] Error fetching fresh order:', err);
     }
 
-    if (order.status === 'completed' || order.status === 'cancelled' || order.status === 'expired') {
-      addNotification('system', `Order already ${order.status}.`, order.id);
-      fetchOrders();
-      return;
-    }
-
     dispatch({ type: 'OPEN', op: 'release', order });
-  }, [merchantId, solanaWallet.connected, addNotification, playSound, setShowWalletModal, fetchOrders]);
+  }, [merchantId, solanaWallet.connected, addNotification, playSound, setShowWalletModal, fetchOrders, setOrders]);
 
   const executeRelease = useCallback(async () => {
     if (!merchantId || !releaseOrder) return;

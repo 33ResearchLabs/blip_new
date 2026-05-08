@@ -441,13 +441,46 @@ export function OrderDetailsPanel({
   };
 
   if (isLoading) {
+    // Render the panel chrome (same outer wrapper as the loaded state) with
+    // shimmer skeleton blocks where the order data will go. The previous
+    // full-screen-spinner overlay made the panel feel like it never opened
+    // — the merchant clicked an order and stared at a black screen for
+    // 500ms–2s. Showing the framed skeleton gives instant "the modal is
+    // open, content is loading" feedback. Close button is wired so users
+    // can bail out if they realize they didn't want to open it.
     return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center"
-        style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(16px)" }}
-      >
-        <div className="bg-card-solid border border-white/[0.08] rounded-2xl p-8">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="fixed inset-0 z-50" onClick={onClose}>
+        <div className="absolute inset-0 backdrop-blur-sm" />
+        <div className="relative h-full flex items-center justify-center p-4">
+          <div
+            className="bg-card-solid rounded-2xl w-full max-w-sm max-h-[75vh] overflow-y-auto border border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header skeleton */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/[0.02]">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-24 bg-white/10 rounded animate-pulse" />
+                  <div className="h-5 w-16 bg-white/5 rounded-full animate-pulse" />
+                </div>
+                <div className="h-3 w-32 bg-white/5 rounded mt-1.5 animate-pulse" />
+              </div>
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="p-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+              >
+                <X className="w-4 h-4 text-white/60" />
+              </button>
+            </div>
+            {/* Body skeletons matching the section layout */}
+            <div className="p-4 space-y-3">
+              <div className="h-20 bg-white/[0.03] rounded-xl border border-white/[0.06] animate-pulse" />
+              <div className="h-16 bg-white/[0.03] rounded-xl border border-white/[0.06] animate-pulse" />
+              <div className="h-24 bg-white/[0.03] rounded-xl border border-white/[0.06] animate-pulse" />
+              <div className="h-16 bg-white/[0.03] rounded-xl border border-white/[0.06] animate-pulse" />
+            </div>
+          </div>
         </div>
       </div>
     );
