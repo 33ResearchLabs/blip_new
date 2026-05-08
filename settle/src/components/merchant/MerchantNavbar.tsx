@@ -48,6 +48,10 @@ interface MerchantNavbarProps {
   onOpenWallet?: () => void;
   onNavLinkClick?: () => void;
   notificationCount?: number;
+  // Subset of `notificationCount` representing action-required urgent items.
+  // When > 0 the bell badge switches to red + pulse so the merchant's eye
+  // is drawn even after the toast auto-dismisses or is missed.
+  urgentNotificationCount?: number;
   onOpenNotifications?: () => void;
   // When provided, the mobile navbar shows a back arrow that calls this.
   // Used by overlay screens (wallet, settings) where there is no real route to "back" to.
@@ -75,6 +79,7 @@ export function MerchantNavbar({
   onOpenWallet,
   onNavLinkClick,
   notificationCount = 0,
+  urgentNotificationCount = 0,
   onOpenNotifications,
   onBack,
   activeCorridor,
@@ -398,12 +403,28 @@ export function MerchantNavbar({
                 <button
                   onClick={onOpenNotifications}
                   className="relative p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors"
+                  aria-label={
+                    urgentNotificationCount > 0
+                      ? `Notifications — ${urgentNotificationCount} require action`
+                      : "Notifications"
+                  }
                 >
-                  <Bell className="w-5 h-5 text-foreground/50" />
+                  <Bell
+                    className={`w-5 h-5 ${urgentNotificationCount > 0 ? 'text-red-400' : 'text-foreground/50'}`}
+                  />
                   {notificationCount > 0 && (
-                    <span className="absolute top-1 right-1 w-4 h-4 bg-primary rounded-full text-[9px] font-bold flex items-center justify-center text-white">
-                      {notificationCount > 9 ? "9+" : notificationCount}
-                    </span>
+                    <>
+                      <span
+                        className={`absolute top-1 right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center text-white ${
+                          urgentNotificationCount > 0 ? 'bg-red-500' : 'bg-primary'
+                        }`}
+                      >
+                        {notificationCount > 9 ? "9+" : notificationCount}
+                      </span>
+                      {urgentNotificationCount > 0 && (
+                        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 animate-ping opacity-60 pointer-events-none" />
+                      )}
+                    </>
                   )}
                 </button>
               )}

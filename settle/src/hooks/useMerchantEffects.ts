@@ -6,6 +6,13 @@ import { usePusher } from "@/context/PusherContext";
 import { useWebSocketChatContextOptional } from "@/context/WebSocketChatContext";
 import type { Order, DbOrder } from "@/types/merchant";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import {
+  flashTabTitle,
+  restoreTabTitle,
+  showOSNotification,
+  requestNotificationPermission,
+  notificationPermission,
+} from '@/lib/notifications/attention';
 
 interface UseMerchantEffectsParams {
   isMockMode: boolean;
@@ -337,6 +344,11 @@ export function useMerchantEffects({
   // just noise.
   const WARNING_THRESHOLDS_SEC = [30 * 60, 10 * 60, 2 * 60];
   const warnedRef = useRef<Map<string, Set<number>>>(new Map());
+
+  // Tracks unacknowledged urgent warnings so the tab title and OS
+  // notifications keep grabbing attention until the merchant returns.
+  // Cleared on visibilitychange/focus or when no urgent orders remain.
+  const urgentUnreadRef = useRef<number>(0);
   useEffect(() => {
     if (!orders.length) return;
     const ACTIVE = new Set(['accepted', 'escrowed', 'payment_pending']);
@@ -347,6 +359,27 @@ export function useMerchantEffects({
       for (const order of orders) {
         const dbStatus = (order.dbOrder?.status || order.status) as string;
         if (!ACTIVE.has(dbStatus)) continue;
+
+        // Skip orders this merchant has no stake in. The merchant store can
+        // hold marketplace/broadcast orders that other merchants accepted —
+        // expiry warnings on those are pure noise for non-stakeholders and
+        // were the cause of the "warning shows for every merchant even if
+        // they didn't accept" bug. Backend-enriched orders carry
+        // `my_role` / `is_my_order`; for the rare order shape that lacks
+        // both, fall back to checking merchant_id / buyer_merchant_id.
+        const db = order.dbOrder;
+        const isMine =
+          (db?.is_my_order ?? false) ||
+          db?.my_role === 'buyer' ||
+          db?.my_role === 'seller' ||
+          (
+            db?.is_my_order === undefined &&
+            db?.my_role === undefined &&
+            merchantId != null &&
+            (db?.merchant_id === merchantId || db?.buyer_merchant_id === merchantId)
+          );
+        if (!isMine) continue;
+
         liveOrderIds.add(order.id);
         const expiresAt = order.dbOrder?.expires_at;
         if (!expiresAt) continue;
@@ -370,9 +403,39 @@ export function useMerchantEffects({
           const msg = urgent
             ? `${amt} expires in ~${mins} min — act now to avoid auto-cancel.`
             : `${amt} expires in ~${mins} min. Take action soon.`;
-          try { toast?.showWarning?.(msg); } catch {}
+          try {
+            // Urgent warnings stick until the merchant clicks them so a
+            // brief look-away can't lose the warning. Non-urgent keep the
+            // existing 7s auto-dismiss to avoid pile-up.
+            if (urgent && toast?.showUrgentWarning) {
+              toast.showUrgentWarning(msg, { title: 'Order Expiring', orderId: order.id });
+            } else {
+              toast?.showWarning?.(msg);
+            }
+          } catch {}
           try { playSound(urgent ? 'error' : 'notification'); } catch {}
           addNotification('system', msg, order.id);
+
+          // Tab-title flash + OS notification only for urgent. These layers
+          // grab attention when the in-app toast can't (tab in background,
+          // browser minimized). All side effects are guarded inside the
+          // helpers — failures don't propagate to the in-app path.
+          if (urgent) {
+            urgentUnreadRef.current += 1;
+            try {
+              flashTabTitle(urgentUnreadRef.current, `${amt} expiring`);
+            } catch {}
+            try {
+              // Lazy permission ask — only when there's an actual need.
+              if (notificationPermission() === 'default') {
+                void requestNotificationPermission();
+              }
+              showOSNotification('Blip — Action Required', {
+                body: msg,
+                tag: `urgent-${order.id}`,
+              });
+            } catch {}
+          }
         }
       }
 
@@ -386,7 +449,29 @@ export function useMerchantEffects({
     checkNow();
     const id = setInterval(checkNow, 30_000);
     return () => clearInterval(id);
-  }, [orders, toast, playSound, addNotification]);
+  }, [orders, merchantId, toast, playSound, addNotification]);
+
+  // Restore the original tab title once the merchant returns to the tab,
+  // and reset the urgent counter so future warnings start at 1 again.
+  useEffect(() => {
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        urgentUnreadRef.current = 0;
+        try { restoreTabTitle(); } catch {}
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisible);
+      window.addEventListener('focus', onVisible);
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisible);
+        window.removeEventListener('focus', onVisible);
+      }
+      try { restoreTabTitle(); } catch {}
+    };
+  }, []);
 
   // Scroll to bottom when messages change
   useEffect(() => {

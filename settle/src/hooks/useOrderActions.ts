@@ -8,6 +8,8 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { newSubmitId, orderActionKey, txAnchoredKey } from '@/lib/api/idempotencyKeys';
 import { isValidSolanaAddress } from '@/lib/validation/solana';
 import { showConfirm } from '@/context/ModalContext';
+import { formatFiat } from '@/lib/format';
+import { getCachedPrice, ensurePriceFresh } from '@/lib/price/clientPriceCache';
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -623,7 +625,6 @@ export function useOrderActions({
     // Safety: show confirmation dialog before proceeding.
     // Use the order's actual fiat currency (toCurrency) — the previous hardcoded
     // 'AED' was wrong for INR/USD/etc. corridors.
-    const { formatFiat } = await import('@/lib/format');
     const fiatCcy = order.toCurrency || order.dbOrder?.fiat_currency || '';
     const fiatAmountFormatted = order.total
       ? formatFiat(order.total, fiatCcy)
@@ -908,23 +909,16 @@ export function useOrderActions({
         // merchant who clicked Lock Escrow saw "FIAT VALUE: AED 66.06" — the
         // EscrowLockModal reads `escrowOrder.toCurrency` directly, so the
         // wrong currency rendered no matter which corridor was selected.
-        // Now: currency tracks the pair, and the rate is fetched live with a
-        // safe fallback so the total still renders if /api/prices is down.
+        // Currency tracks the pair, and the rate comes from a 30s client
+        // cache (clientPriceCache) — synchronous read so the modal opens
+        // instantly. A background refresh fires when stale so the next
+        // click sees fresh data; the hardcoded fallback only applies on a
+        // cold cache, which matches the previous "API failed" branch (the
+        // DB order uses the backend's authoritative rate either way).
         const fiatCurrency = pair === 'usdt_inr' ? 'INR' : 'AED';
-        let liveRate = pair === 'usdt_inr' ? 92 : 3.67;
-        try {
-          const priceRes = await fetchWithAuth(
-            `/api/prices/current?pair=${pair}`,
-          );
-          const priceJson = await priceRes.json();
-          if (priceJson?.success && priceJson.data?.price) {
-            liveRate = Number(priceJson.data.price) || liveRate;
-          }
-        } catch {
-          // Keep fallback — modal will show approximate value rather than
-          // failing the whole flow. The DB order created later will use the
-          // backend's authoritative rate, so this is just for display.
-        }
+        const fallbackRate = pair === 'usdt_inr' ? 92 : 3.67;
+        const liveRate = getCachedPrice(pair) ?? fallbackRate;
+        ensurePriceFresh(pair);
 
         // Create temporary order for escrow modal — counterparty is TBD
         const tempOrder: Order = {

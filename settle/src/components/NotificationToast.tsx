@@ -58,6 +58,10 @@ const MAX_VISIBLE = 4;
 
 interface NotificationToastContainerProps {
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+  // Optional offset class for top positions, used by pages that have a
+  // sticky topbar so toasts don't overlap nav buttons. Pages without a
+  // sticky topbar should leave this unset to preserve existing behavior.
+  topOffsetClass?: string;
 }
 
 let addToastGlobal: ((toast: Omit<Toast, 'id' | 'timestamp'>) => void) | null = null;
@@ -68,7 +72,7 @@ export function showToast(toast: Omit<Toast, 'id' | 'timestamp'>) {
   }
 }
 
-export function NotificationToastContainer({ position = 'top-right' }: NotificationToastContainerProps) {
+export function NotificationToastContainer({ position = 'top-right', topOffsetClass }: NotificationToastContainerProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
@@ -120,9 +124,10 @@ export function NotificationToastContainer({ position = 'top-right' }: Notificat
     };
   }, []);
 
+  const topClass = topOffsetClass ?? 'top-3';
   const positionClasses = {
-    'top-right': 'top-3 right-3',
-    'top-left': 'top-3 left-3',
+    'top-right': `${topClass} right-3`,
+    'top-left': `${topClass} left-3`,
     'bottom-right': 'bottom-3 right-3',
     'bottom-left': 'bottom-3 left-3',
   };
@@ -217,6 +222,23 @@ export function useToast() {
     }, [show]),
     showWarning: useCallback((message: string) => {
       show({ type: 'warning', title: 'Warning', message, duration: 7000 });
+    }, [show]),
+    // Sticky variant for action-required warnings — does not auto-dismiss
+    // so the merchant can't miss it by looking away. Caller may pass a
+    // title override and an optional action button (e.g. "View order").
+    showUrgentWarning: useCallback((
+      message: string,
+      opts?: { title?: string; actionLabel?: string; onAction?: () => void; orderId?: string },
+    ) => {
+      show({
+        type: 'warning',
+        title: opts?.title || 'Action Required',
+        message,
+        duration: 0,
+        actionLabel: opts?.actionLabel,
+        onAction: opts?.onAction,
+        orderId: opts?.orderId,
+      });
     }, [show]),
     showExtensionRequest: useCallback((from: string, minutes: number) => {
       show({ type: 'system', title: 'Extension Requested', message: `${from} requested ${minutes} more minutes`, duration: 10000 });
