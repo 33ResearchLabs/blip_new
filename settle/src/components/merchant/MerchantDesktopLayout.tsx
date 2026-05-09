@@ -278,30 +278,38 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 cancellingOrderId={cancellingOrderId}
               />
             </div>
-            {/* Completed merged into Activity. Activity now also shows
-                completed orders alongside transactions, so the dedicated
-                CompletedOrdersPanel slot was redundant. */}
-            {activityCollapsed && inProgressCollapsed && (
+            {/* Activity panel.
+                On wide screens it lives under Leaderboard in the
+                rightmost column. On narrow viewports there's no
+                separate column, so it stays here below InProgress. */}
+            {!isWideScreen && (
+              <>
+                {activityCollapsed && inProgressCollapsed && (
+                  <div className="flex-1" />
+                )}
+                <div className={`flex flex-col min-h-0 ${activityCollapsed ? '' : 'flex-1'}`}>
+                  <ActivityPanel
+                    merchantId={merchantId}
+                    completedOrders={completedOrders}
+                    cancelledOrders={cancelledOrders}
+                    ongoingOrders={ongoingOrders}
+                    pendingOrders={pendingOrders}
+                    onRateOrder={(order) =>
+                      setRatingModalData({
+                        orderId: order.id,
+                        counterpartyName: order.user || "User",
+                        counterpartyType: order.isM2M ? "merchant" : "user",
+                      })
+                    }
+                    onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+                    onCollapseChange={setActivityCollapsed}
+                  />
+                </div>
+              </>
+            )}
+            {isWideScreen && inProgressCollapsed && (
               <div className="flex-1" />
             )}
-            <div className={`flex flex-col min-h-0 ${activityCollapsed ? '' : 'flex-1'}`}>
-              <ActivityPanel
-                merchantId={merchantId}
-                completedOrders={completedOrders}
-                cancelledOrders={cancelledOrders}
-                ongoingOrders={ongoingOrders}
-                pendingOrders={pendingOrders}
-                onRateOrder={(order) =>
-                  setRatingModalData({
-                    orderId: order.id,
-                    counterpartyName: order.user || "User",
-                    counterpartyType: order.isM2M ? "merchant" : "user",
-                  })
-                }
-                onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
-                onCollapseChange={setActivityCollapsed}
-              />
-            </div>
           </div>
         </Panel>
         {isWideScreen && (
@@ -325,11 +333,30 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                     onCollapseChange={setLeaderboardCollapsed}
                   />
                 </div>
-                {/* Activity now lives in the center-right panel
-                    (alongside InProgress) instead of being duplicated
-                    here. The wide-screen rightmost slot is Leaderboard
-                    only. */}
-                {leaderboardCollapsed && <div className="flex-1" />}
+                {/* Activity sits under Leaderboard on wide screens so
+                    the merchant has both at-a-glance: ranking on top,
+                    historical activity below. */}
+                {activityCollapsed && leaderboardCollapsed && (
+                  <div className="flex-1" />
+                )}
+                <div className={`flex flex-col transition-all duration-200 ${activityCollapsed ? "" : "flex-1 min-h-0"}`}>
+                  <ActivityPanel
+                    merchantId={merchantId}
+                    completedOrders={completedOrders}
+                    cancelledOrders={cancelledOrders}
+                    ongoingOrders={ongoingOrders}
+                    pendingOrders={pendingOrders}
+                    onRateOrder={(order) =>
+                      setRatingModalData({
+                        orderId: order.id,
+                        counterpartyName: order.user || "User",
+                        counterpartyType: order.isM2M ? "merchant" : "user",
+                      })
+                    }
+                    onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+                    onCollapseChange={setActivityCollapsed}
+                  />
+                </div>
               </div>
             </Panel>
           </>
