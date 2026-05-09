@@ -202,11 +202,14 @@ export interface MerchantInfo {
 
 export interface Notification {
   id: string;
-  type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system' | 'message';
+  type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system' | 'message' | 'warning';
   message: string;
   timestamp: number;
   read: boolean;
   orderId?: string;
+  /** High-priority warnings (e.g. trade-expiry) keep their toast visible until dismissed */
+  sticky?: boolean;
+  priority?: 'high' | 'normal';
 }
 
 export interface OrderConversation {

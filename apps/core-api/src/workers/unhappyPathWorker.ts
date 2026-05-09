@@ -1,19 +1,25 @@
 /**
  * Unhappy Path Worker (Core API)
  *
- * Runs on a polling loop and handles three escalation tiers:
+ * Runs on a polling loop and handles four escalation tiers:
  *
- * 1. INACTIVITY WARNING (15 min)
+ * 1. EXPIRY WARNING (≤ 5 min before expires_at)
+ *    - Non-terminal order, expires within 5 minutes, no warning yet
+ *    - Sends scoped notification: "Only 5 minutes remaining to complete this trade."
+ *    - Targeted to buyer + seller (+ M2M buyer-merchant) ONLY — never broadcast
+ *    - Sets expiry_warning_sent_at (idempotent, version-guarded)
+ *
+ * 2. INACTIVITY WARNING (15 min)
  *    - Order is post-acceptance but no activity for 15 min
  *    - Sends notification: "Complete this order or cancel"
  *    - Sets inactivity_warned_at
  *
- * 2. INACTIVITY ESCALATION (1 hr)
+ * 3. INACTIVITY ESCALATION (1 hr)
  *    - Order is post-acceptance, no activity for 1 hr
  *    - If escrow exists → move to disputed (protects funds)
  *    - If no escrow → auto-cancel
  *
- * 3. DISPUTE AUTO-RESOLVE (24 hr)
+ * 4. DISPUTE AUTO-RESOLVE (24 hr)
  *    - Order has been disputed for 24 hours with no resolution
  *    - Auto-refund crypto to whoever funded the escrow
  *    - Order → cancelled
@@ -24,6 +30,7 @@ import { config } from 'dotenv';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { broadcastOrderEvent } from '../ws/broadcast';
+import { pusherNotifyExpiryWarning } from '../pusher';
 
 config({ path: '../../settle/.env.local' });
 config({ path: '../../settle/.env' });
@@ -40,6 +47,7 @@ const MAX_BACKOFF_MS = 60000;
 let totalWarnings = 0;
 let totalEscalations = 0;
 let totalDisputeAutoResolves = 0;
+let totalExpiryWarnings = 0;
 
 // ────────────────────────────────────────────────
 // 1. INACTIVITY WARNING (15 min no activity)
@@ -121,6 +129,129 @@ async function processInactivityWarnings(): Promise<number> {
       });
     } catch (err) {
       logger.error('[UnhappyPath] Error sending inactivity warning', {
+        orderId: order.id, error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return rows.length;
+}
+
+// ────────────────────────────────────────────────
+// 1b. EXPIRY WARNING (5 min before expires_at)
+//
+// Fires once per trade, scoped to ONLY the buyer + seller (and the M2M
+// buyer-merchant when applicable). Never broadcast to all merchants.
+// `expiry_warning_sent_at` + order_version guards make this idempotent.
+// ────────────────────────────────────────────────
+async function processExpiryWarnings(): Promise<number> {
+  const rows = await query<{
+    id: string; order_number: string; status: string; order_version: number;
+    user_id: string; merchant_id: string | null; buyer_merchant_id: string | null;
+    expires_at: Date;
+  }>(
+    `SELECT id, order_number, status, order_version, user_id, merchant_id, buyer_merchant_id, expires_at
+     FROM orders
+     WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed', 'payment_sent', 'payment_confirmed', 'releasing')
+       AND payment_sent_at IS NULL
+       AND expires_at IS NOT NULL
+       AND expires_at > NOW()
+       AND expires_at <= NOW() + INTERVAL '5 minutes'
+       AND expiry_warning_sent_at IS NULL
+     ORDER BY expires_at ASC
+     LIMIT $1
+     FOR UPDATE SKIP LOCKED`,
+    [BATCH_SIZE]
+  );
+
+  for (const order of rows) {
+    try {
+      // Mark warned with version guard — protects against double-fire under
+      // overlapping worker ticks.
+      const warnResult = await query(
+        `UPDATE orders SET expiry_warning_sent_at = NOW(), order_version = order_version + 1
+         WHERE id = $1 AND order_version = $2 AND expiry_warning_sent_at IS NULL
+         RETURNING id`,
+        [order.id, order.order_version]
+      );
+      if (warnResult.length === 0) {
+        logger.warn('[UnhappyPath] Skipped expiry warning (concurrent update)', { orderId: order.id });
+        continue;
+      }
+
+      const secondsRemaining = Math.max(
+        0,
+        Math.floor((new Date(order.expires_at).getTime() - Date.now()) / 1000)
+      );
+      const expiresAtIso = new Date(order.expires_at).toISOString();
+
+      // Persist for compliance / replay — and so a participant who reconnects
+      // shortly after can fetch the warning from notification history.
+      await query(
+        `INSERT INTO notification_outbox (order_id, event_type, payload, status)
+         VALUES ($1, 'EXPIRY_WARNING', $2, 'pending')`,
+        [
+          order.id,
+          JSON.stringify({
+            orderId: order.id,
+            userId: order.user_id,
+            merchantId: order.merchant_id,
+            buyerMerchantId: order.buyer_merchant_id,
+            status: order.status,
+            expiresAt: expiresAtIso,
+            secondsRemaining,
+            priority: 'high',
+            sticky: true,
+            message: 'Only 5 minutes remaining to complete this trade.',
+            updatedAt: new Date().toISOString(),
+          }),
+        ]
+      );
+
+      // Audit trail
+      await query(
+        `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, metadata)
+         VALUES ($1, 'expiry_warning', 'system', NULL, $2)`,
+        [order.id, JSON.stringify({ expiresAt: expiresAtIso, secondsRemaining })]
+      );
+
+      // Scoped WS broadcast — broadcast.ts only forwards to userId/merchantId/
+      // buyerMerchantId, and EXPIRY_WARNING is in PARTICIPANT_ONLY_EVENTS
+      // so it can't leak to the global merchant pool.
+      broadcastOrderEvent({
+        event_type: 'EXPIRY_WARNING',
+        order_id: order.id,
+        status: order.status,
+        minimal_status: normalizeStatus(order.status as any),
+        order_version: 0,
+        userId: order.user_id,
+        merchantId: order.merchant_id ?? undefined,
+        buyerMerchantId: order.buyer_merchant_id ?? undefined,
+        expires_at: expiresAtIso,
+        seconds_remaining: secondsRemaining,
+      });
+
+      // Scoped Pusher emit — only per-order + per-participant channels.
+      pusherNotifyExpiryWarning({
+        orderId: order.id,
+        userId: order.user_id,
+        merchantId: order.merchant_id,
+        buyerMerchantId: order.buyer_merchant_id,
+        status: order.status,
+        minimal_status: normalizeStatus(order.status as any),
+        expiresAt: expiresAtIso,
+        secondsRemaining,
+      });
+
+      totalExpiryWarnings++;
+      logger.info('[UnhappyPath] Expiry warning sent', {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        status: order.status,
+        secondsRemaining,
+      });
+    } catch (err) {
+      logger.error('[UnhappyPath] Error sending expiry warning', {
         orderId: order.id, error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -458,12 +589,13 @@ async function processDisputeAutoResolves(): Promise<number> {
 // ────────────────────────────────────────────────
 async function processBatch(): Promise<void> {
   try {
+    const expiryWarnings = await processExpiryWarnings();
     const warnings = await processInactivityWarnings();
     const escalations = await processInactivityEscalations();
     const autoResolves = await processDisputeAutoResolves();
 
     consecutiveErrors = 0;
-    writeHeartbeat(warnings + escalations + autoResolves);
+    writeHeartbeat(expiryWarnings + warnings + escalations + autoResolves);
   } catch (error) {
     consecutiveErrors++;
     const backoff = Math.min(POLL_INTERVAL_MS * Math.pow(2, consecutiveErrors), MAX_BACKOFF_MS);
@@ -483,6 +615,7 @@ function writeHeartbeat(batchSize: number): void {
       totalWarnings,
       totalEscalations,
       totalDisputeAutoResolves,
+      totalExpiryWarnings,
       lastBatchSize: batchSize,
     }));
   } catch { /* non-critical */ }

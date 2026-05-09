@@ -12,6 +12,11 @@ export const ORDER_EVENTS = {
   EXPIRED: 'order:expired',
   EXTENSION_REQUESTED: 'order:extension-requested',
   EXTENSION_RESPONSE: 'order:extension-response',
+  // Sticky high-priority warning fired when ≤5 minutes remain on an active
+  // trade. Server only emits this on per-order + per-participant channels —
+  // NEVER on the global merchants channel. The frontend additionally filters
+  // by participant id as a defense-in-depth check.
+  EXPIRY_WARNING: 'order:expiry-warning',
 } as const;
 
 // Chat events

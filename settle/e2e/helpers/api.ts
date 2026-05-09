@@ -9,7 +9,10 @@ const CORE_API_URL = process.env.CORE_API_URL || 'http://localhost:4010';
 const SETTLE_URL = process.env.SETTLE_URL || 'http://localhost:3000';
 
 function headers(): Record<string, string> {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  const h: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Origin: SETTLE_URL,
+  };
   const secret = process.env.CORE_API_SECRET;
   if (secret) h['x-core-api-secret'] = secret;
   return h;

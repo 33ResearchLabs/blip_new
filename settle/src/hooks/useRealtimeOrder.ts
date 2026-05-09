@@ -54,6 +54,16 @@ interface ExtensionResponseData {
   newStatus?: string;
 }
 
+interface ExpiryWarningPayload {
+  orderId: string;
+  status: string;
+  expiresAt: string;
+  secondsRemaining: number;
+  priority?: 'high' | 'normal';
+  sticky?: boolean;
+  message?: string;
+}
+
 interface UseRealtimeOrderOptions {
   // Initial order data (optional, will fetch if not provided)
   initialData?: OrderData | null;
@@ -63,6 +73,9 @@ interface UseRealtimeOrderOptions {
   onExtensionRequested?: (data: ExtensionRequestData) => void;
   // Callback when an extension request is responded to
   onExtensionResponse?: (data: ExtensionResponseData) => void;
+  // Callback when ≤5 minutes remain before this trade expires.
+  // Bound on the per-order channel — only participants are ever in this room.
+  onExpiryWarning?: (data: ExpiryWarningPayload) => void;
   // Enable polling fallback when Pusher is unavailable (default: true)
   enablePolling?: boolean;
 }
@@ -79,7 +92,7 @@ export function useRealtimeOrder(
   orderId: string | null,
   options: UseRealtimeOrderOptions = {}
 ): UseRealtimeOrderReturn {
-  const { initialData, onStatusChange, onExtensionRequested, onExtensionResponse, enablePolling = true } = options;
+  const { initialData, onStatusChange, onExtensionRequested, onExtensionResponse, onExpiryWarning, enablePolling = true } = options;
 
   const [order, setOrder] = useState<OrderData | null>(initialData || null);
   const [isLoading, setIsLoading] = useState(!initialData);
@@ -88,11 +101,13 @@ export function useRealtimeOrder(
   const pusher = usePusherOptional();
   const previousStatusRef = useRef<string | null>(null);
   const onStatusChangeRef = useRef(onStatusChange);
+  const onExpiryWarningRef = useRef(onExpiryWarning);
 
-  // Keep ref in sync with prop
+  // Keep refs in sync with props
   useEffect(() => {
     onStatusChangeRef.current = onStatusChange;
-  }, [onStatusChange]);
+    onExpiryWarningRef.current = onExpiryWarning;
+  }, [onStatusChange, onExpiryWarning]);
 
   // Fetch order data from API
   const fetchOrder = useCallback(async (silent = false) => {
@@ -243,16 +258,28 @@ export function useRealtimeOrder(
       }
     };
 
+    // Handle 5-min expiry warning. Only ever delivered on per-order +
+    // per-participant channels by the server; we still scope by orderId
+    // here as a defense-in-depth filter so a stray event for a different
+    // trade can't surface a toast.
+    const handleExpiryWarning = (rawData: unknown) => {
+      const data = rawData as ExpiryWarningPayload;
+      if (data.orderId !== orderId) return;
+      onExpiryWarningRef.current?.(data);
+    };
+
     channel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdate);
     channel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
     channel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
     channel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+    channel.bind(ORDER_EVENTS.EXPIRY_WARNING, handleExpiryWarning);
 
     return () => {
       channel.unbind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdate);
       channel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
       channel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
       channel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+      channel.unbind(ORDER_EVENTS.EXPIRY_WARNING, handleExpiryWarning);
       pusher.unsubscribe(channelName);
     };
   }, [orderId, pusher]);

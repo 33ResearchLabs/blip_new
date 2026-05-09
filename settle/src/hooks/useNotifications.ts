@@ -21,11 +21,27 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
     });
   }, []);
 
+  // Drop sticky warnings (e.g. 5-min expiry) for a trade once it has settled.
+  // Call from status-change handlers when a trade hits completed / cancelled /
+  // expired / disputed so the warning toast doesn't linger after the work is
+  // done.
+  const dismissStickyForOrder = useCallback((orderId: string) => {
+    setNotifications(prev => {
+      if (!prev.some(n => n.orderId === orderId && n.sticky)) return prev;
+      return prev.filter(n => !(n.orderId === orderId && n.sticky));
+    });
+  }, []);
+
   // Batched notification helper — coalesces rapid-fire events into one state update
   const notifQueueRef = useRef<Notification[]>([]);
   const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const addNotification = useCallback((type: Notification['type'], message: string, orderId?: string) => {
+  const addNotification = useCallback((
+    type: Notification['type'],
+    message: string,
+    orderId?: string,
+    opts?: { sticky?: boolean; priority?: 'high' | 'normal' },
+  ) => {
     notifQueueRef.current.push({
       id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       type,
@@ -33,6 +49,8 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
       timestamp: Date.now(),
       read: false,
       orderId,
+      sticky: opts?.sticky,
+      priority: opts?.priority,
     });
     if (!notifTimerRef.current) {
       notifTimerRef.current = setTimeout(() => {
@@ -141,5 +159,6 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
     addNotification,
     markNotificationRead,
     markAllNotificationsRead,
+    dismissStickyForOrder,
   };
 }

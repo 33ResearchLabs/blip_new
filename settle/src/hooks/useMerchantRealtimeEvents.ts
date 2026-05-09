@@ -9,10 +9,12 @@ interface UseMerchantRealtimeEventsParams {
   refetchSingleOrder: (orderId: string) => Promise<void>;
   debouncedFetchConversations: () => void;
   refreshBalance: () => void;
-  addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string, opts?: { sticky?: boolean; priority?: 'high' | 'normal' }) => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   toast: any;
   setExtensionRequests: (fn: (prev: Map<string, any>) => Map<string, any>) => void;
+  /** Clears any sticky warnings (e.g. expiry warning) when the trade settles */
+  dismissStickyForOrder?: (orderId: string) => void;
 }
 
 export function useMerchantRealtimeEvents({
@@ -24,6 +26,7 @@ export function useMerchantRealtimeEvents({
   playSound,
   toast,
   setExtensionRequests,
+  dismissStickyForOrder,
 }: UseMerchantRealtimeEventsParams) {
   const merchantId = useMerchantStore(s => s.merchantId);
   const orders = useMerchantStore(s => s.orders);
@@ -65,6 +68,15 @@ export function useMerchantRealtimeEvents({
       const amt = matchedOrder ? `${matchedOrder.amount.toLocaleString()} USDT` : '';
       const usr = matchedOrder?.user || '';
       const desc = amt ? (usr ? `${amt} · ${usr}` : amt) : '';
+
+      // Settled / advanced past the warning window — clear any sticky
+      // expiry warning toast still on screen for this trade.
+      if (
+        dismissStickyForOrder &&
+        ['completed', 'cancelled', 'expired', 'disputed', 'payment_sent', 'payment_confirmed'].includes(newStatus)
+      ) {
+        dismissStickyForOrder(orderId);
+      }
 
       if (newStatus === 'payment_sent') {
         addNotification('payment', desc ? `Payment marked sent · ${desc}` : 'Payment sent for order', orderId);
@@ -135,6 +147,41 @@ export function useMerchantRealtimeEvents({
     },
     onPriceUpdate: (data) => {
       window.dispatchEvent(new CustomEvent("corridor-price-update", { detail: data }));
+    },
+    onExpiryWarning: (data) => {
+      // Defense-in-depth: only surface the warning if this merchant is
+      // actually a participant in the trade. The server already restricts
+      // the event to per-participant channels, but we re-check here so a
+      // misconfigured channel binding can't leak to the merchant pool.
+      const matchedOrder = orders.find(o => o.id === data.orderId);
+      if (!matchedOrder) return;
+      const isParticipant =
+        matchedOrder.orderMerchantId === merchantId ||
+        matchedOrder.buyerMerchantId === merchantId;
+      if (!isParticipant) return;
+
+      const amt = matchedOrder.amount ? `${matchedOrder.amount.toLocaleString()} USDT` : '';
+      const msg = data.message || 'Only 5 minutes remaining to complete this trade.';
+      const desc = amt ? `${msg} (${amt})` : msg;
+      addNotification('warning', desc, data.orderId, { sticky: true, priority: 'high' });
+      playSound('error');
+      // Sticky high-priority warning toast — must remain visible until the
+      // user dismisses it or the trade transitions out of an active state.
+      // The toast layer will keep the latest sticky warning per order in
+      // the foreground; status-change handlers above clear it on
+      // completed / cancelled / expired.
+      if (typeof toast.showWarning === 'function') {
+        toast.showWarning(desc, { sticky: true, priority: 'high', orderId: data.orderId });
+      } else if (typeof toast.show === 'function') {
+        toast.show({
+          type: 'warning',
+          title: '5 Minutes Remaining',
+          message: desc,
+          sticky: true,
+          priority: 'high',
+          orderId: data.orderId,
+        });
+      }
     },
     onNotification: (data) => {
       if (data.type === 'compliance_message') {

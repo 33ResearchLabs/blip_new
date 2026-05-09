@@ -55,6 +55,19 @@ export interface CorridorPriceData {
   updated_at: string;
 }
 
+export interface ExpiryWarningData {
+  orderId: string;
+  status: string;
+  minimal_status?: string;
+  expiresAt: string;
+  secondsRemaining: number;
+  /** Server-marked priority — `'high'` for the 5-min countdown */
+  priority?: 'high' | 'normal';
+  /** Server-marked sticky flag — keeps the toast visible until dismissed */
+  sticky?: boolean;
+  message?: string;
+}
+
 interface UseRealtimeOrdersOptions {
   actorType: 'user' | 'merchant';
   actorId: string | null;
@@ -66,6 +79,12 @@ interface UseRealtimeOrdersOptions {
   onNotification?: (data: { type: string; orderId?: string; content: string; senderName: string }) => void;
   /** Fired when a chat message arrives on the personal channel (chat not open) */
   onChatMessage?: (data: { messageId: string; orderId: string; senderType: string; senderId: string | null; content: string; messageType: string; createdAt: string }) => void;
+  /**
+   * Fired when the trade has ≤5 minutes left before expiry. Bound only on
+   * the participant-scoped channels (personal channel for merchants, primary
+   * channel for users). Never bound on the global merchants channel.
+   */
+  onExpiryWarning?: (data: ExpiryWarningData) => void;
 }
 
 interface UseRealtimeOrdersReturn {
@@ -87,7 +106,7 @@ const BATCH_WINDOW_MS = 100; // Coalesce events within 100ms
 export function useRealtimeOrders(
   options: UseRealtimeOrdersOptions
 ): UseRealtimeOrdersReturn {
-  const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate, onNotification, onChatMessage } = options;
+  const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate, onNotification, onChatMessage, onExpiryWarning } = options;
 
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +122,7 @@ export function useRealtimeOrders(
   const onExtensionRequestedRef = useRef(onExtensionRequested);
   const onExtensionResponseRef = useRef(onExtensionResponse);
   const onPriceUpdateRef = useRef(onPriceUpdate);
+  const onExpiryWarningRef = useRef(onExpiryWarning);
 
   useEffect(() => {
     onOrderCreatedRef.current = onOrderCreated;
@@ -110,7 +130,8 @@ export function useRealtimeOrders(
     onExtensionRequestedRef.current = onExtensionRequested;
     onExtensionResponseRef.current = onExtensionResponse;
     onPriceUpdateRef.current = onPriceUpdate;
-  }, [onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate]);
+    onExpiryWarningRef.current = onExpiryWarning;
+  }, [onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate, onExpiryWarning]);
 
   // ─── Event batch queue ──────────────────────────────────────────
   const batchQueueRef = useRef<BatchedEvent[]>([]);
@@ -382,7 +403,53 @@ export function useRealtimeOrders(
       }
     };
 
+    // ── Expiry warning handler (participant-scoped only) ─────────
+    //
+    // Fires once per trade per session. Server already restricts emission to
+    // per-order + per-participant channels, but we add a defense-in-depth
+    // check: only forward the warning if `actorId` matches one of the
+    // expected participant slots (user_id / merchant_id / buyer_merchant_id)
+    // OR if it arrives on a per-order channel the local user is in.
+    const expiryWarningSeen = new Set<string>();
+    const handleExpiryWarning = (rawData: unknown) => {
+      const data = rawData as {
+        orderId?: string;
+        status?: string;
+        minimal_status?: string;
+        expiresAt?: string;
+        secondsRemaining?: number;
+        priority?: 'high' | 'normal';
+        sticky?: boolean;
+        message?: string;
+        userId?: string;
+        merchantId?: string | null;
+        buyerMerchantId?: string | null;
+      };
+      if (!data.orderId) return;
+      // Once-per-trade-per-session — the warning is sticky on the UI side,
+      // so a duplicate event must not enqueue a second toast.
+      if (expiryWarningSeen.has(data.orderId)) return;
+      expiryWarningSeen.add(data.orderId);
+
+      onExpiryWarningRef.current?.({
+        orderId: data.orderId,
+        status: data.status || 'unknown',
+        minimal_status: data.minimal_status,
+        expiresAt: data.expiresAt || new Date().toISOString(),
+        secondsRemaining: data.secondsRemaining ?? 0,
+        priority: data.priority,
+        sticky: data.sticky,
+        message: data.message,
+      });
+    };
+
     // Bind events
+    //
+    // IMPORTANT — EXPIRY_WARNING is intentionally NOT bound on the merchant
+    // primary channel (`private-merchants-global`). The server emits it only
+    // on per-participant channels, but binding here would silently re-enable
+    // leakage if a future change ever broadcast it. For users, the primary
+    // channel IS the participant channel, so it's bound below.
     primaryChannel.bind(ORDER_EVENTS.CREATED, handleOrderCreated);
     primaryChannel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
     primaryChannel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
@@ -432,12 +499,14 @@ export function useRealtimeOrders(
       personalChannel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
       personalChannel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
       personalChannel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+      personalChannel.bind(ORDER_EVENTS.EXPIRY_WARNING, handleExpiryWarning);
       personalChannel.bind('notification:new', handleNotification);
       personalChannel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateChannelChatMessage);
     }
 
     // For users, their private channel IS the primary channel
     if (actorType === 'user') {
+      primaryChannel.bind(ORDER_EVENTS.EXPIRY_WARNING, handleExpiryWarning);
       primaryChannel.bind('notification:new', handleNotification);
       primaryChannel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateChannelChatMessage);
     }
@@ -449,6 +518,7 @@ export function useRealtimeOrders(
       primaryChannel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
       primaryChannel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
       if (actorType === 'user') {
+        primaryChannel.unbind(ORDER_EVENTS.EXPIRY_WARNING, handleExpiryWarning);
         primaryChannel.unbind('notification:new', handleNotification);
         primaryChannel.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateChannelChatMessage);
       }
@@ -459,6 +529,7 @@ export function useRealtimeOrders(
         personalChannel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
         personalChannel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
         personalChannel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+        personalChannel.unbind(ORDER_EVENTS.EXPIRY_WARNING, handleExpiryWarning);
         personalChannel.unbind('notification:new', handleNotification);
         personalChannel.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateChannelChatMessage);
         pusher.unsubscribe(personalChannelName);

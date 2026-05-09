@@ -226,7 +226,7 @@ export default function MerchantDashboard() {
     setShowUsernameModal,
   });
 
-  const { notifications, addNotification, markNotificationRead, markAllNotificationsRead } =
+  const { notifications, addNotification, markNotificationRead, markAllNotificationsRead, dismissStickyForOrder } =
     useNotifications(merchantId, isLoggedIn);
 
   // Presence heartbeat is mounted at the merchant layout level
@@ -520,6 +520,7 @@ export default function MerchantDashboard() {
     playSound,
     toast,
     setExtensionRequests,
+    dismissStickyForOrder,
   });
 
   // Rating submit handler (stable callback for MerchantModals)

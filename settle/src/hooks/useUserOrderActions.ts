@@ -821,7 +821,10 @@ export function useUserOrderActions({
         `/api/orders/${activeOrder.id}/cancel-request`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": orderActionKey(activeOrder.id, 'cancel_request'),
+          },
           body: JSON.stringify({
             actor_type: "user",
             actor_id: userId,
@@ -921,7 +924,10 @@ export function useUserOrderActions({
         `/api/orders/${activeOrder.id}/cancel-request`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": orderActionKey(activeOrder.id, 'cancel_respond'),
+          },
           body: JSON.stringify({
             actor_type: "user",
             actor_id: userId,

@@ -266,7 +266,10 @@ export function useDisputeHandlers({
     try {
       const res = await fetchWithAuth(`/api/orders/${orderId}/cancel-request`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': orderActionKey(orderId, 'cancel_request'),
+        },
         body: JSON.stringify({
           actor_type: 'merchant',
           actor_id: merchantId,
@@ -296,7 +299,10 @@ export function useDisputeHandlers({
     try {
       const res = await fetchWithAuth(`/api/orders/${orderId}/cancel-request`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': orderActionKey(orderId, 'cancel_respond'),
+        },
         body: JSON.stringify({
           actor_type: 'merchant',
           actor_id: merchantId,

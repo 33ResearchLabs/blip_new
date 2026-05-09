@@ -23,6 +23,7 @@ export const ORDER_EVENTS = {
   CREATED: 'order:created',
   STATUS_UPDATED: 'order:status-updated',
   CANCELLED: 'order:cancelled',
+  EXPIRY_WARNING: 'order:expiry-warning',
 } as const;
 
 // ── Pusher-like interface for mock fallback ─────────────────────
@@ -249,5 +250,48 @@ export function pusherNotifyOrderCreated(payload: OrderStatusPayload): void {
     order_version: payload.order_version,
     createdAt: payload.updatedAt,
     data: payload.data,
+  });
+}
+
+// ── Public: order expiry warning (5 min before expires_at) ──────
+//
+// Warning notifications must reach ONLY the trade participants — buyer,
+// seller, and (for M2M) the buyer-merchant. Never `private-merchants-global`,
+// otherwise the toast leaks to every connected merchant.
+export interface ExpiryWarningPayload {
+  orderId: string;
+  userId: string;
+  merchantId: string | null;
+  buyerMerchantId?: string | null;
+  status: string;
+  minimal_status: string;
+  expiresAt: string;
+  secondsRemaining: number;
+}
+
+export function pusherNotifyExpiryWarning(payload: ExpiryWarningPayload): void {
+  // Per-order channel + each participant's private channel only.
+  const channels = [
+    getOrderChannel(payload.orderId),
+    getUserChannel(payload.userId),
+  ];
+  if (payload.merchantId) {
+    channels.push(getMerchantChannel(payload.merchantId));
+  }
+  if (payload.buyerMerchantId && payload.buyerMerchantId !== payload.merchantId) {
+    channels.push(getMerchantChannel(payload.buyerMerchantId));
+  }
+
+  triggerEvent(channels, ORDER_EVENTS.EXPIRY_WARNING, {
+    orderId: payload.orderId,
+    status: payload.status,
+    minimal_status: payload.minimal_status,
+    expiresAt: payload.expiresAt,
+    secondsRemaining: payload.secondsRemaining,
+    priority: 'high',
+    sticky: true,
+    message: 'Only 5 minutes remaining to complete this trade.',
+  }).catch((err) => {
+    logger.error('[Pusher] pusherNotifyExpiryWarning failed', { orderId: payload.orderId, error: String(err) });
   });
 }

@@ -130,7 +130,19 @@ export interface BroadcastPayload {
   previousStatus?: string;
   premium_bps_current?: number;
   max_reached?: boolean;
+  // Optional fields used by EXPIRY_WARNING — passed through to clients so
+  // the toast can show the remaining countdown without an extra fetch.
+  expires_at?: string;
+  seconds_remaining?: number;
 }
+
+// Events that participants alone should receive — never the global
+// merchants pool. Listed explicitly so a future contributor can't silently
+// add a participant-only event to the `broadcastToAll` set below.
+const PARTICIPANT_ONLY_EVENTS = new Set([
+  'INACTIVITY_WARNING',
+  'EXPIRY_WARNING',
+]);
 
 /**
  * Broadcast an order event to relevant subscribers.
@@ -151,6 +163,8 @@ export function broadcastOrderEvent(payload: BroadcastPayload): void {
     previousStatus: payload.previousStatus,
     buyer_merchant_id: payload.buyerMerchantId,
     merchant_id: payload.merchantId,
+    expires_at: payload.expires_at,
+    seconds_remaining: payload.seconds_remaining,
   });
 
   const targets = new Set<WebSocket>();
@@ -168,9 +182,14 @@ export function broadcastOrderEvent(payload: BroadcastPayload): void {
     actorIndex.get(`merchant:${payload.buyerMerchantId}`)?.forEach((ws) => targets.add(ws));
   }
 
-  // For create/accept/cancel/expire: broadcast to ALL merchants
+  // For create/accept/cancel/expire: broadcast to ALL merchants. Participant-only
+  // events (e.g. EXPIRY_WARNING, INACTIVITY_WARNING) are excluded by construction
+  // — they must never leak to non-involved merchants.
   const broadcastToAll = ['ORDER_CREATED', 'ORDER_ACCEPTED', 'ORDER_CANCELLED', 'ORDER_EXPIRED'];
-  if (broadcastToAll.includes(payload.event_type)) {
+  if (
+    broadcastToAll.includes(payload.event_type) &&
+    !PARTICIPANT_ONLY_EVENTS.has(payload.event_type)
+  ) {
     for (const [key, wsSet] of actorIndex) {
       if (key.startsWith('merchant:')) {
         wsSet.forEach((ws) => targets.add(ws));
