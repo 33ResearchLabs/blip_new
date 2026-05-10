@@ -282,34 +282,35 @@ export function useUserOrderActions({
         activeOrder.escrowTradeId &&
         activeOrder.escrowCreatorWallet
       ) {
-        // Re-fetch the order from the server before releasing escrow.
-        // The cached `activeOrder` can lag behind the merchant's accept
-        // by tens of seconds (Pusher delivery, network blip, page warm).
-        // Without a fresh read we'd refuse to release because the
-        // merchant wallet wasn't yet in the local snapshot.
+        // Pick the merchant wallet from cache; only re-fetch from server
+        // if cache is missing it (stale snapshot from before the merchant
+        // accepted). Skipping the GET on the happy path keeps us under
+        // the /api/orders rate limit during burst trading.
+        const SOLANA_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
         let merchantWallet: string | undefined =
           activeOrder.acceptorWalletAddress ||
           activeOrder.merchant.walletAddress;
-        try {
-          const refreshRes = await fetchWithAuth(`/api/orders/${activeOrder.id}`);
-          if (refreshRes.ok) {
-            const refreshData = await refreshRes.json();
-            const fresh = refreshData?.data ?? refreshData;
-            const acceptor: string | undefined = fresh?.acceptor_wallet_address;
-            const merchantWalletFromJoin: string | undefined =
-              fresh?.merchant?.wallet_address;
-            const candidate = acceptor || merchantWalletFromJoin;
-            if (candidate && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(candidate)) {
-              merchantWallet = candidate;
+        if (!merchantWallet || !SOLANA_ADDR_RE.test(merchantWallet)) {
+          try {
+            const refreshRes = await fetchWithAuth(`/api/orders/${activeOrder.id}`);
+            if (refreshRes.ok) {
+              const refreshData = await refreshRes.json();
+              const fresh = refreshData?.data ?? refreshData;
+              const acceptor: string | undefined = fresh?.acceptor_wallet_address;
+              const merchantWalletFromJoin: string | undefined =
+                fresh?.merchant?.wallet_address;
+              const candidate = acceptor || merchantWalletFromJoin;
+              if (candidate && SOLANA_ADDR_RE.test(candidate)) {
+                merchantWallet = candidate;
+              }
             }
+          } catch (refreshErr) {
+            console.warn("[Release] Order refresh failed, using cached wallet", refreshErr);
           }
-        } catch (refreshErr) {
-          console.warn("[Release] Order refresh failed, using cached wallet", refreshErr);
         }
 
         const isValidSolanaAddress =
-          !!merchantWallet &&
-          /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
+          !!merchantWallet && SOLANA_ADDR_RE.test(merchantWallet);
 
         if (!solanaWallet.connected) {
           showAlert(
