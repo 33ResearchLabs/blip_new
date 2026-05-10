@@ -487,40 +487,72 @@ export function useUserTradeCreation({
 
       setEscrowTxStatus('recording');
 
-      const orderRes = await fetchWithAuth('/api/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Anchor the key to the on-chain escrow signature. The signature
-          // is the natural unique identifier for THIS sell order — a retry
-          // (network blip after escrow lock, page reload before order
-          // commit) presents the SAME key and collapses on the backend
-          // instead of creating a second order against the same locked
-          // escrow.
-          'Idempotency-Key': txAnchoredKey(escrowResult.txHash, 'create_sell_order'),
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          crypto_amount: amountNum,
-          type: 'sell',
-          payment_method: paymentMethod,
-          preference: tradePreference,
-          pair: selectedPair,
-          // CRITICAL: Include escrow_tx_hash so backend creates order as 'escrowed' (escrow-first model)
-          escrow_tx_hash: escrowResult.txHash,
-          escrow_trade_pda: escrowResult.tradePda,
-          escrow_pda: escrowResult.escrowPda,
-          escrow_trade_id: escrowResult.tradeId,
-          escrow_creator_wallet: solanaWallet.walletAddress,
-          user_bank_account: selectedBankDetails ? JSON.stringify(selectedBankDetails) : undefined,
-          payment_method_id: selectedPaymentMethod?.id,
-        }),
-      });
-      const orderData = await orderRes.json();
+      // Build the order-creation payload once so the original call and any
+      // later orphan-recovery retry use byte-identical input. The body lives
+      // in localStorage under a tx-hash key so a browser crash, network drop,
+      // or backend 5xx between "escrow funded on-chain" and "order written
+      // to DB" can self-heal on the next app load.
+      const orderPayload = {
+        user_id: userId,
+        crypto_amount: amountNum,
+        type: 'sell' as const,
+        payment_method: paymentMethod,
+        preference: tradePreference,
+        pair: selectedPair,
+        // CRITICAL: Include escrow_tx_hash so backend creates order as 'escrowed' (escrow-first model)
+        escrow_tx_hash: escrowResult.txHash,
+        escrow_trade_pda: escrowResult.tradePda,
+        escrow_pda: escrowResult.escrowPda,
+        escrow_trade_id: escrowResult.tradeId,
+        escrow_creator_wallet: solanaWallet.walletAddress,
+        user_bank_account: selectedBankDetails ? JSON.stringify(selectedBankDetails) : undefined,
+        payment_method_id: selectedPaymentMethod?.id,
+      };
+      const idempotencyKey = txAnchoredKey(escrowResult.txHash, 'create_sell_order');
+      const orphanKey = `blip_orphan_sell_${escrowResult.txHash}`;
 
-      if (!orderRes.ok || !orderData.success) {
-        if (orderData.details?.includes('User not found')) {
-          setEscrowError(`Session expired. Your funds are safe - TX: ${escrowResult.txHash}. Please reconnect wallet and contact support.`);
+      // Persist BEFORE the network call. If anything below throws or the
+      // browser tab dies, the orphan-recovery hook will retry on next mount.
+      try {
+        localStorage.setItem(orphanKey, JSON.stringify({
+          payload: orderPayload,
+          idempotencyKey,
+          timestamp: Date.now(),
+        }));
+      } catch {}
+
+      // Retry up to 3× with backoff (1s, 3s) — idempotent because of the
+      // tx-anchored key. Transient 5xx / network blips no longer strand
+      // on-chain escrow.
+      let orderRes: Response | null = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let orderData: any = null;
+      let lastNetErr: unknown = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          orderRes = await fetchWithAuth('/api/orders', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              // Anchor the key to the on-chain escrow signature so retries
+              // collapse server-side instead of duplicating orders.
+              'Idempotency-Key': idempotencyKey,
+            },
+            body: JSON.stringify(orderPayload),
+          });
+          orderData = await orderRes.json();
+          if (orderRes.ok && orderData?.success) break;
+          // Don't burn retries on hard validation errors (4xx); only 5xx is worth retrying.
+          if (orderRes.status >= 400 && orderRes.status < 500) break;
+        } catch (e) {
+          lastNetErr = e;
+        }
+        if (attempt < 2) await new Promise((r) => setTimeout(r, attempt === 0 ? 1000 : 3000));
+      }
+
+      if (!orderRes || !orderRes.ok || !orderData?.success) {
+        if (orderData?.details?.includes('User not found')) {
+          setEscrowError(`Session expired. Your funds are safe — TX: ${escrowResult.txHash}. Reconnect wallet; the order will be created automatically.`);
           setEscrowTxStatus('error');
           localStorage.removeItem('blip_user');
           localStorage.removeItem('blip_wallet');
@@ -528,11 +560,18 @@ export function useUserTradeCreation({
           setIsLoading(false);
           return;
         }
-        setEscrowError(`Order creation failed after funds were locked. TX: ${escrowResult.txHash}. Please contact support.`);
+        setEscrowError(
+          `Order sync pending. Funds are locked on-chain (TX: ${escrowResult.txHash.slice(0, 8)}…). ` +
+            `We'll auto-recover on next reload.${lastNetErr ? '' : ''}`,
+        );
         setEscrowTxStatus('error');
         setIsLoading(false);
+        // Leave orphanKey in localStorage — recovery hook will retry.
         return;
       }
+
+      // Success — clear orphan record.
+      try { localStorage.removeItem(orphanKey); } catch {}
 
       // Step 2: Record escrow on the newly created order
       const escrowRes = await fetchWithAuth(`/api/orders/${orderData.data.id}/escrow`, {
