@@ -271,8 +271,10 @@ export function useMerchantEffects({
     didRecoveryScanRef.current = true;
 
     try {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('blip_unrecorded_escrow_'));
-      for (const key of keys) {
+      // Pass 1: orders that exist in DB but their escrow record didn't make it
+      // (key = blip_unrecorded_escrow_<orderId>). Existing recovery flow.
+      const escrowKeys = Object.keys(localStorage).filter(k => k.startsWith('blip_unrecorded_escrow_'));
+      for (const key of escrowKeys) {
         const data = JSON.parse(localStorage.getItem(key) || '{}');
         if (!data.orderId || !data.txHash) { localStorage.removeItem(key); continue; }
         if (Date.now() - (data.timestamp || 0) > 86400000) { localStorage.removeItem(key); continue; }
@@ -296,6 +298,40 @@ export function useMerchantEffects({
         }).then(res => {
           if (res.ok) {
             console.log(`[EscrowRecovery] Successfully recorded escrow for ${data.orderId}`);
+            localStorage.removeItem(key);
+          }
+        }).catch(() => {});
+      }
+
+      // Pass 2: merchant SELL orders whose initial create-order POST failed
+      // after the on-chain escrow already funded. No DB row exists yet —
+      // we're holding the full request body in localStorage and need to
+      // create the order from scratch (idempotent via the saved key).
+      const orphanKeys = Object.keys(localStorage).filter(k => k.startsWith('blip_orphan_merchant_sell_'));
+      for (const key of orphanKeys) {
+        let record: { payload?: Record<string, unknown>; idempotencyKey?: string; timestamp?: number } | null = null;
+        try { record = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
+        if (!record || !record.payload || !record.idempotencyKey) { localStorage.removeItem(key); continue; }
+        // 7-day TTL — beyond that the on-chain escrow should be emergency-refunded.
+        if (Date.now() - (record.timestamp || 0) > 7 * 86400000) { localStorage.removeItem(key); continue; }
+        // Only retry if the saved merchant_id matches the active session.
+        if ((record.payload as { merchant_id?: string }).merchant_id !== merchantId) continue;
+
+        console.log('[EscrowRecovery] Retrying orphan merchant sell order', {
+          tx: (record.payload as { escrow_tx_hash?: string }).escrow_tx_hash,
+        });
+        fetchWithAuth('/api/merchant/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': record.idempotencyKey,
+          },
+          body: JSON.stringify(record.payload),
+        }).then(async (res) => {
+          if (!res.ok) return;
+          const body = await res.json().catch(() => null);
+          if (body?.success) {
+            console.log('[EscrowRecovery] Merchant sell order recovered', { orderId: body?.data?.id });
             localStorage.removeItem(key);
           }
         }).catch(() => {});
