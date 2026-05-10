@@ -207,6 +207,23 @@ export async function POST(request: NextRequest) {
         ]);
       }
 
+      // SELL orders MUST carry receive-side payment details — without them
+      // the matched merchant has no destination to send fiat. The mobile UI
+      // already gates this on the trade page (Add payment method link),
+      // but server-side enforcement keeps any other client (API tests,
+      // third-party tools) from creating an unfulfillable order.
+      const hasPaymentMethodRef = !!verifiedPaymentMethodId;
+      const hasInlineBank = !!user_bank_account && (
+        typeof user_bank_account === 'string'
+          ? user_bank_account.trim().length > 0
+          : Object.keys(user_bank_account as Record<string, unknown>).length > 0
+      );
+      if (!hasPaymentMethodRef && !hasInlineBank) {
+        return validationErrorResponse([
+          'SELL orders require receive-side payment details. Provide payment_method_id (preferred) or user_bank_account.',
+        ]);
+      }
+
       // Fetch authoritative rate AND fee_bps in parallel. Both are snapshotted
       // into the order so the UI can render deterministic payouts at every phase.
       let sellRate: number | null = null;
