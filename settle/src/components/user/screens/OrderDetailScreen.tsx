@@ -2353,6 +2353,30 @@ export const OrderDetailScreen = ({
               Request Cancellation
             </button>
           )}
+
+        {/* Cancel button for SELL orders waiting for a merchant (step 1).
+            These have on-chain escrow locked by the user but no merchant
+            assigned yet, so cancellation is unilateral — the user is alone
+            and can pull their offer + refund themselves. Without this
+            button, escrowed sell offers with no merchant claim had no UI
+            cancel path and would only auto-cancel via cron expiry. */}
+        {activeOrder.step === 1 &&
+          activeOrder.type === "sell" &&
+          activeOrder.dbStatus === "escrowed" &&
+          !activeOrder.cancelRequest && (
+            <button
+              onClick={() => requestCancelOrder("Cancelled by seller — offer withdrawn")}
+              disabled={isRequestingCancel}
+              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning ${AMBER_CARD}`}
+            >
+              {isRequestingCancel ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <X className="w-4 h-4" />
+              )}
+              Cancel & Refund
+            </button>
+          )}
         {activeOrder.step >= 2 &&
           activeOrder.step < 4 &&
           activeOrder.status !== "disputed" && (
