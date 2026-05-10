@@ -22,6 +22,7 @@ import { useUserTradeCreation } from "@/hooks/useUserTradeCreation";
 import { useUserOrderActions } from "@/hooks/useUserOrderActions";
 import { useUserEffects } from "@/hooks/useUserEffects";
 import { useSolanaWalletSafe } from "@/hooks/useSolanaWalletSafe";
+import { useOrphanedEscrowRecovery } from "@/hooks/useOrphanedEscrowRecovery";
 import { IssueReporter } from "@/components/IssueReporter";
 
 import type { Screen } from "@/components/user/screens/types";
@@ -277,6 +278,17 @@ export default function Home() {
 
   // Send presence heartbeat so other parties (merchants) see this user as online
   usePresenceHeartbeat(!!auth.userId);
+
+  // Heal any on-chain sell escrows whose POST /api/orders failed in a
+  // previous session. The hook reads `blip_orphan_sell_<txHash>` localStorage
+  // entries written by useUserTradeCreation, retries the original POST with
+  // the same idempotency key, and clears the entry on success.
+  useOrphanedEscrowRecovery({
+    userId: auth.userId,
+    onRecovered: () => {
+      if (auth.userId) fetchOrders(auth.userId);
+    },
+  });
 
   // Trade creation
   const tradeCreation = useUserTradeCreation({
