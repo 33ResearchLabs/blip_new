@@ -962,13 +962,12 @@ export const HomeScreen = ({
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 380, damping: 36 }}
-              className="fixed left-0 right-0 bottom-0 z-50"
+              className="fixed left-0 right-0 bottom-0 z-50 px-3"
               style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 12px) + 16px)' }}
             >
               <div
                 className="max-w-[440px] mx-auto"
                 style={{
-                  margin: '0 12px',
                   padding: '18px 20px 22px',
                   borderRadius: 28,
                   background: 'rgba(20,24,32,0.92)',
