@@ -550,6 +550,7 @@ export default function Home() {
         {screen === "escrow" && (
           <Panel k="escrow" anim={slide}>
             <EscrowLockScreen
+              screen={screen}
               setScreen={setScreen}
               amount={tradeCreation.amount}
               fiatAmount={fiatAmount}
