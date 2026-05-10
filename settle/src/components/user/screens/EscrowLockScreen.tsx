@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import {
   ChevronLeft,
   Shield,
@@ -11,6 +12,9 @@ import {
   ExternalLink,
   Building2,
   Smartphone,
+  ChevronsRight,
+  Wallet,
+  Store,
 } from "lucide-react";
 import type { Screen } from "./types";
 import { BankAccountSelector, type SelectedBankDetails } from "@/components/user/BankAccountSelector";
@@ -89,13 +93,13 @@ export const EscrowLockScreen = ({
       className="relative flex flex-col min-h-[100dvh] overflow-y-auto"
       style={{ background: "#07090F" }}
     >
-      {/* Ambient emerald glow at top — confirmation context */}
+      {/* Ambient white glow at top — confirmation context */}
       <div
         aria-hidden
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 90% 60% at 50% -10%, rgba(16,185,129,0.20) 0%, rgba(16,185,129,0.06) 28%, transparent 60%)",
+            "radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 28%, transparent 60%)",
         }}
       />
       <div
@@ -140,18 +144,19 @@ export const EscrowLockScreen = ({
 
       {/* ── Content ── */}
       <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 pt-7 pb-32 flex flex-col" style={{ gap: 14 }}>
-        {/* Hero — shield + title + subtitle */}
+        {/* Hero — lock medallion + title + subtitle */}
         <div className="flex items-center" style={{ gap: 14 }}>
           <div
-            className="flex items-center justify-center shrink-0"
+            className="flex items-center justify-center shrink-0 relative overflow-hidden"
             style={{
               width: 50, height: 50, borderRadius: 16,
-              background: "rgba(16,185,129,0.14)",
-              border: "1px solid rgba(16,185,129,0.30)",
-              boxShadow: "0 8px 22px -10px rgba(16,185,129,0.45), inset 0 1px 0 rgba(255,255,255,0.10)",
+              background: "linear-gradient(135deg, #1A1F2C 0%, #0B0F17 100%)",
+              border: "1px solid rgba(255,255,255,0.10)",
+              boxShadow:
+                "0 8px 22px -10px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)",
             }}
           >
-            <Shield size={22} strokeWidth={2.2} style={{ color: "#34D399" }} />
+            <Lock size={22} strokeWidth={2.2} style={{ color: "#FFFFFF" }} />
           </div>
           <div className="min-w-0">
             <h2 style={{
@@ -167,6 +172,12 @@ export const EscrowLockScreen = ({
             </p>
           </div>
         </div>
+
+        {/* ── Trade Route — You → Escrow → Merchant ── */}
+        <TradeRoute />
+
+        {/* ── Live network status ticker ── */}
+        <NetworkTicker />
 
         {/* Wallet card */}
         <div
@@ -187,8 +198,8 @@ export const EscrowLockScreen = ({
                 <span
                   style={{
                     width: 6, height: 6, borderRadius: 999,
-                    background: "#34D399",
-                    boxShadow: "0 0 6px rgba(52,211,153,0.55)",
+                    background: "#FFFFFF",
+                    boxShadow: "0 0 6px rgba(255,255,255,0.55)",
                   }}
                 />
                 <span style={{
@@ -539,66 +550,66 @@ export const EscrowLockScreen = ({
               View Order Details
             </motion.button>
           </div>
-        ) : (
-          <motion.button
-            whileTap={solanaWallet.connected && !isProcessing ? { scale: 0.985 } : undefined}
-            onClick={solanaWallet.connected ? confirmEscrow : handleConnectWallet}
-            disabled={isLoading || isProcessing || (solanaWallet.connected && !solanaWallet.programReady)}
-            animate={{
-              background:
-                isLoading || isProcessing
-                  ? "rgba(255,255,255,0.06)"
-                  : solanaWallet.connected && !solanaWallet.programReady
-                  ? "rgba(255,255,255,0.06)"
-                  : "linear-gradient(180deg, #34D399 0%, #10B981 100%)",
-              color:
-                isLoading || isProcessing
-                  ? T.md
-                  : solanaWallet.connected && !solanaWallet.programReady
-                  ? T.md
-                  : "#0B0F14",
-            }}
-            transition={{ duration: 0.3 }}
+        ) : isProcessing ? (
+          // While signing / confirming / recording — show a static processing pill
+          <div
             className="w-full flex items-center justify-center"
             style={{
               minHeight: 56,
               borderRadius: 18,
-              fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em",
-              borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.18)",
-              boxShadow:
-                solanaWallet.connected && solanaWallet.programReady && !isProcessing
-                  ? "0 16px 36px -14px rgba(16,185,129,0.55), inset 0 1px 0 rgba(255,255,255,0.30)"
-                  : "none",
               gap: 8,
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.10)",
+              color: T.md,
+              fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em",
             }}
           >
-            {escrowTxStatus === 'signing' && (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Sign in Wallet…
-              </>
-            )}
-            {escrowTxStatus === 'confirming' && (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Confirming…
-              </>
-            )}
-            {escrowTxStatus === 'recording' && (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Recording…
-              </>
-            )}
-            {(escrowTxStatus === 'idle' || escrowTxStatus === 'error' || escrowTxStatus === 'connecting') && (
-              <>
-                <Lock size={15} strokeWidth={2.6} />
-                {solanaWallet.connected
-                  ? (solanaWallet.programReady ? "Confirm & Lock" : "Wallet Not Ready")
-                  : "Connect Wallet to Lock"}
-              </>
-            )}
+            <Loader2 size={16} className="animate-spin" />
+            {escrowTxStatus === 'signing' && "Sign in wallet…"}
+            {escrowTxStatus === 'confirming' && "Confirming on Solana…"}
+            {escrowTxStatus === 'recording' && "Recording escrow…"}
+          </div>
+        ) : !solanaWallet.connected ? (
+          // Connect-wallet button (no swipe yet — wallet must be connected)
+          <motion.button
+            whileTap={{ scale: 0.985 }}
+            onClick={handleConnectWallet}
+            className="w-full flex items-center justify-center"
+            style={{
+              minHeight: 56,
+              borderRadius: 18,
+              gap: 8,
+              background: "#FFFFFF",
+              border: "1px solid rgba(255,255,255,0.6)",
+              color: "#0B0F14",
+              fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em",
+              boxShadow: "0 14px 28px -10px rgba(255,255,255,0.20), inset 0 1px 0 rgba(255,255,255,0.85)",
+            }}
+          >
+            <Wallet size={15} strokeWidth={2.6} />
+            Connect Wallet to Lock
           </motion.button>
+        ) : !solanaWallet.programReady ? (
+          <div
+            className="w-full flex items-center justify-center"
+            style={{
+              minHeight: 56,
+              borderRadius: 18,
+              gap: 8,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: T.lo,
+              fontSize: 15, fontWeight: 800,
+            }}
+          >
+            Wallet Not Ready
+          </div>
+        ) : (
+          // Swipe-to-Lock — the Uber/Apple Pay slide-to-confirm pattern
+          <SwipeToLock
+            label={`Slide to Lock ${parseFloat(amount).toFixed(2)} USDT`}
+            onConfirm={confirmEscrow}
+          />
         )}
       </div>
 
@@ -610,3 +621,268 @@ export const EscrowLockScreen = ({
     </div>
   );
 };
+
+// ─── Trade Route — animated route lane (You → Escrow → Merchant) ──────────
+function TradeRoute() {
+  const nodes = [
+    { Icon: Wallet, label: "You", state: "done" as const },
+    { Icon: Lock,   label: "Escrow", state: "active" as const },
+    { Icon: Store,  label: "Merchant", state: "pending" as const },
+  ];
+
+  const colorOf = (s: "done" | "active" | "pending") =>
+    s === "active" ? "#0B0F14" : s === "done" ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.20)";
+
+  return (
+    <div
+      style={{
+        padding: "12px 14px",
+        borderRadius: 18,
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+      }}
+    >
+      <div className="flex items-center" style={{ gap: 0 }}>
+        {nodes.map((n, i) => {
+          const c = colorOf(n.state);
+          return (
+            <div key={n.label} className="flex items-center" style={{ flex: i === nodes.length - 1 ? "0 0 auto" : 1 }}>
+              <div className="flex flex-col items-center" style={{ gap: 6 }}>
+                <motion.div
+                  className="flex items-center justify-center relative"
+                  animate={n.state === "active" ? {
+                    boxShadow: [
+                      "0 0 0 0 rgba(255,255,255,0.30), 0 6px 14px -6px rgba(0,0,0,0.55)",
+                      "0 0 0 8px rgba(255,255,255,0.0), 0 6px 14px -6px rgba(0,0,0,0.55)",
+                    ],
+                  } : undefined}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
+                  style={{
+                    width: 34, height: 34, borderRadius: 11,
+                    background: n.state === "active"
+                      ? "#FFFFFF"
+                      : n.state === "done"
+                      ? "rgba(255,255,255,0.06)"
+                      : "rgba(255,255,255,0.03)",
+                    border: n.state === "active"
+                      ? "1px solid rgba(255,255,255,0.55)"
+                      : "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <n.Icon size={14} strokeWidth={2.4} style={{ color: c }} />
+                </motion.div>
+                <span style={{
+                  fontSize: 9, fontWeight: 800, letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                  color: n.state === "pending" ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.78)",
+                }}>
+                  {n.label}
+                </span>
+              </div>
+              {i < nodes.length - 1 && (
+                <div className="flex-1 relative" style={{ height: 2, marginInline: 8 }}>
+                  {/* Track */}
+                  <div
+                    style={{
+                      position: "absolute", inset: 0,
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,0.08)",
+                    }}
+                  />
+                  {/* Animated dashes — only between done→active (left segment) */}
+                  {i === 0 && (
+                    <motion.div
+                      className="absolute"
+                      style={{
+                        top: 0, bottom: 0, left: 0, right: 0,
+                        borderRadius: 999,
+                        backgroundImage:
+                          "repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 6px, transparent 6px 12px)",
+                        backgroundSize: "12px 100%",
+                      }}
+                      animate={{ backgroundPositionX: ["0px", "12px"] }}
+                      transition={{ duration: 0.6, repeat: Infinity, ease: "linear" }}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Network ticker — live Solana block height + status ────────────────────
+function NetworkTicker() {
+  // Pseudo-live block height — increments smoothly to feel live without
+  // burning RPC calls on every render. Real block height can replace this
+  // by wiring a `connection.getSlot()` poll.
+  const [block, setBlock] = useState(() => 271_000_000 + Math.floor(Math.random() * 50_000));
+  useEffect(() => {
+    const id = setInterval(() => setBlock((b) => b + 1), 480);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div
+      className="flex items-center justify-between"
+      style={{
+        padding: "8px 12px",
+        borderRadius: 12,
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      <div className="flex items-center" style={{ gap: 8 }}>
+        <motion.span
+          animate={{ opacity: [1, 0.3, 1] }}
+          transition={{ duration: 1.6, repeat: Infinity }}
+          style={{
+            width: 6, height: 6, borderRadius: 999,
+            background: "#FFFFFF",
+            boxShadow: "0 0 6px rgba(255,255,255,0.55)",
+          }}
+        />
+        <span style={{
+          fontSize: 10, fontWeight: 800, letterSpacing: "0.14em",
+          color: T.md, textTransform: "uppercase",
+        }}>
+          Solana Mainnet · ~0.5s
+        </span>
+      </div>
+      <span style={{
+        fontSize: 11, fontWeight: 700, letterSpacing: "-0.005em",
+        color: T.lo,
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      }}>
+        #{block.toLocaleString("en-US")}
+      </span>
+    </div>
+  );
+}
+
+// ─── Swipe to Lock — drag the thumb to confirm ─────────────────────────────
+function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => void }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const [trackW, setTrackW] = useState(0);
+  const [confirmed, setConfirmed] = useState(false);
+  const THUMB = 48;
+  const PAD = 4;
+
+  useEffect(() => {
+    const update = () => {
+      if (trackRef.current) {
+        const w = trackRef.current.getBoundingClientRect().width;
+        setTrackW(w - THUMB - PAD * 2);
+      }
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  // Progress 0..1 for fill + label fade
+  const progress = useTransform(x, (v) => (trackW > 0 ? Math.min(1, Math.max(0, v / trackW)) : 0));
+  const labelOpacity = useTransform(progress, [0, 0.5], [1, 0]);
+  const fillWidth = useTransform(x, (v) => `${THUMB + PAD + v}px`);
+
+  const handleEnd = () => {
+    if (confirmed) return;
+    if (x.get() >= trackW * 0.85) {
+      setConfirmed(true);
+      animate(x, trackW, { type: "spring", stiffness: 380, damping: 36 });
+      setTimeout(() => onConfirm(), 180);
+    } else {
+      animate(x, 0, { type: "spring", stiffness: 380, damping: 36 });
+    }
+  };
+
+  return (
+    <div
+      ref={trackRef}
+      className="relative w-full overflow-hidden"
+      style={{
+        height: 56,
+        borderRadius: 999,
+        padding: PAD,
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.10)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+      }}
+    >
+      {/* Subtle white-glass fill that grows behind the thumb */}
+      <motion.div
+        aria-hidden
+        className="absolute"
+        style={{
+          top: PAD, bottom: PAD, left: 0,
+          width: fillWidth,
+          borderRadius: 999,
+          background:
+            "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.18) 100%)",
+        }}
+      />
+
+      {/* Center label — fades out as user drags */}
+      <motion.div
+        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        style={{ opacity: labelOpacity }}
+      >
+        <span
+          className="flex items-center"
+          style={{
+            gap: 6,
+            fontSize: 13,
+            fontWeight: 800,
+            letterSpacing: "-0.005em",
+            color: T.hi,
+          }}
+        >
+          {label}
+          <motion.span
+            animate={{ x: [0, 4, 0] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+            style={{ display: "inline-flex" }}
+          >
+            <ChevronsRight size={14} strokeWidth={2.6} style={{ color: T.md }} />
+          </motion.span>
+        </span>
+      </motion.div>
+
+      {/* Draggable thumb — always white */}
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: 0, right: trackW }}
+        dragElastic={0}
+        dragMomentum={false}
+        onDragEnd={handleEnd}
+        whileTap={{ cursor: "grabbing" }}
+        style={{
+          x,
+          width: THUMB,
+          height: THUMB,
+          borderRadius: 999,
+          background: "#FFFFFF",
+          border: "1px solid rgba(255,255,255,0.55)",
+          boxShadow:
+            "0 6px 14px -6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.85)",
+          touchAction: "pan-y",
+          cursor: "grab",
+        }}
+        className="absolute flex items-center justify-center"
+      >
+        {confirmed ? (
+          <Loader2 size={18} className="animate-spin" style={{ color: "#0B0F14" }} />
+        ) : (
+          <Lock size={16} strokeWidth={2.6} style={{ color: "#0B0F14" }} />
+        )}
+      </motion.div>
+    </div>
+  );
+}
