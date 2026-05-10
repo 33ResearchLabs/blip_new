@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import {
   ChevronLeft,
   ArrowUpRight,
@@ -9,8 +9,8 @@ import {
   Building2,
   Banknote,
   Loader2,
-  TrendingUp,
-  TrendingDown,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import type {
   Screen,
@@ -23,15 +23,9 @@ import {
   type PaymentMethodItem,
 } from "../PaymentMethodSelector";
 import { BottomNav } from "./BottomNav";
-import { FilterDropdown } from "./ui/FilterDropdown";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
-import {
-  formatCrypto,
-  formatFiat,
-  formatRate,
-  formatPercentage,
-} from "@/lib/format";
+import { formatCrypto, formatFiat, formatPercentage } from "@/lib/format";
 
 type RatePair = "usdt_aed" | "usdt_inr";
 
@@ -41,10 +35,6 @@ interface PriceData {
   mode: string;
   currency: string;
 }
-
-const CARD = "bg-surface-card border border-border-subtle";
-const SECTION_LABEL =
-  "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
 
 export interface TradeCreationScreenProps {
   screen: Screen;
@@ -70,10 +60,9 @@ export interface TradeCreationScreenProps {
   setCurrentRate?: (rate: number) => void;
 }
 
-// ─── Mini sparkline for the rate card ─────────────────────────────────────
-const RATE_OFFSETS = [
-  -0.012, -0.006, 0.003, -0.009, 0.008, 0.014, 0.011, 0.019, 0.016, 0.024,
-];
+// iOS 26 spring physics — snappy
+const SPRING = { type: "spring" as const, stiffness: 420, damping: 32, mass: 0.8 };
+const SOFT_SPRING = { type: "spring" as const, stiffness: 260, damping: 30 };
 
 function formatAmountInput(value: string): string {
   if (!value) return value;
@@ -82,59 +71,14 @@ function formatAmountInput(value: string): string {
   return decPart !== undefined ? `${withCommas}.${decPart}` : withCommas;
 }
 
-function RateSparkline({
-  rate,
-  positive,
-}: {
-  rate: number;
-  positive: boolean;
-}) {
-  const data = RATE_OFFSETS.map((o) => rate + o);
-  const w = 120,
-    h = 36;
-  const min = Math.min(...data),
-    max = Math.max(...data),
-    rng = max - min || 0.01;
-  const pts = data.map((v, i) => ({
-    x: (i / (data.length - 1)) * w,
-    y: h - 4 - ((v - min) / rng) * (h - 8),
-  }));
-  let line = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-  for (let i = 1; i < pts.length; i++) {
-    const cp = (pts[i - 1].x + pts[i].x) / 2;
-    line += ` C${cp.toFixed(1)},${pts[i - 1].y.toFixed(1)} ${cp.toFixed(1)},${pts[i].y.toFixed(1)} ${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)}`;
-  }
-  const area = `${line} L${w},${h} L0,${h} Z`;
-  // SVG attributes can't take Tailwind classes — use the CSS variable directly
-  // so the color flips with the theme.
-  const color = positive ? "var(--color-success)" : "var(--color-error)";
+const QUICK_AMOUNTS = ["100", "500", "1000", "5000"];
 
-  return (
-    <svg
-      width={w}
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      preserveAspectRatio="none"
-    >
-      <defs>
-        <linearGradient id="rs-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.18" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#rs-fill)" />
-      <path
-        d={line}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity="0.8"
-      />
-    </svg>
-  );
-}
+const T = {
+  hi: "rgba(255,255,255,0.96)",
+  md: "rgba(255,255,255,0.55)",
+  lo: "rgba(255,255,255,0.32)",
+  xl: "rgba(255,255,255,0.16)",
+};
 
 export const TradeCreationScreen = ({
   screen,
@@ -159,10 +103,11 @@ export const TradeCreationScreen = ({
   onPairChange,
   setCurrentRate,
 }: TradeCreationScreenProps) => {
-  const ratePositive = true;
   const hasAmount = !!amount && parseFloat(amount) > 0;
+  const isBuy = tradeType === "buy";
+  const accent = isBuy ? "#34D399" : "#F87171";
+  const accentDeep = isBuy ? "#10B981" : "#EF4444";
 
-  // ── AED / INR display toggle ──
   const [ratePair, setRatePairLocal] = useState<RatePair>(
     selectedPair || "usdt_inr",
   );
@@ -172,9 +117,46 @@ export const TradeCreationScreen = ({
   };
   const [rateData, setRateData] = useState<PriceData | null>(null);
   const [rateLoading, setRateLoading] = useState(true);
+  const [pairOpen, setPairOpen] = useState(false);
+
+  // ── Saved bank accounts (for BUY mode bank-transfer selection) ──
+  type SavedBank = {
+    id: string;
+    bank?: string;
+    bank_name?: string;
+    name?: string;
+    account_name?: string;
+    iban?: string;
+    is_default?: boolean;
+    isDefault?: boolean;
+  };
+  const [savedBanks, setSavedBanks] = useState<SavedBank[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    fetchWithAuth(`/api/users/${userId}/bank-accounts`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        const list: SavedBank[] = j?.data || j?.banks || j || [];
+        if (!Array.isArray(list)) return;
+        setSavedBanks(list);
+        if (list.length > 0 && !selectedBankId) {
+          const def = list.find((b) => b.is_default || b.isDefault) || list[0];
+          setSelectedBankId(def.id);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+
   useEffect(() => {
     let cancelled = false;
-    // Clear previous pair's value immediately so it can't flash through.
     setRateData(null);
     setRateLoading(true);
     fetchWithAuth(`/api/prices/current?pair=${ratePair}`)
@@ -185,11 +167,9 @@ export const TradeCreationScreen = ({
           setRateData(j.data as PriceData);
           if ((j.data as PriceData).price)
             setCurrentRate?.((j.data as PriceData).price);
-        } else setRateData(null);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setRateData(null);
-      })
+      .catch(() => {})
       .finally(() => {
         if (!cancelled) setRateLoading(false);
       });
@@ -200,337 +180,573 @@ export const TradeCreationScreen = ({
 
   const displayRate = rateData?.price ?? null;
   const rateCurrency = ratePair === "usdt_aed" ? "AED" : "INR";
-  const rateSymbol = ratePair === "usdt_inr" ? "₹" : "\u062F.\u0625";
-  const rateDecimals = 2;
+  const rateSymbol = ratePair === "usdt_inr" ? "₹" : "د.إ";
+  const fiatValue =
+    hasAmount && displayRate !== null
+      ? formatCrypto(parseFloat(amount) * displayRate)
+      : "0.00";
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="relative px-5 pt-10 pb-2 flex items-start gap-2 z-30 shrink-0">
-        {/* <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setScreen("home")}
-          className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle"
-        >
-          <ChevronLeft
-            size={20}
-            strokeWidth={2}
-            className="text-text-secondary"
-          />
-        </motion.button> */}
-        <div className="flex-1 min-w-0">
-          {/* Top row: small label + corridor selector */}
-          <div className="flex items-center justify-between gap-2 mb-0.5">
-            <p className="text-[22px] font-extrabold tracking-[-0.03em] text-text-primary truncate">
-            Trade USDT
-          </p>
-            <FilterDropdown
-              className="shrink-0"
-              value={ratePair}
-              onChange={(p) => setRatePair(p)}
-              ariaLabel="Select corridor"
-              align="right"
-              options={
-                [
-                  { key: "usdt_aed", label: "AED" },
-                  { key: "usdt_inr", label: "INR" },
-                ] as const
-              }
+    <div
+      className="relative flex flex-col min-h-[100dvh] overflow-y-auto"
+      style={{ background: "#07090F" }}
+    >
+      {/* ── Ambient color glow that follows Buy / Sell ── */}
+      <motion.div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        initial={false}
+        animate={{
+          background: isBuy
+            ? "radial-gradient(ellipse 90% 60% at 50% -10%, rgba(16,185,129,0.28) 0%, rgba(16,185,129,0.10) 28%, transparent 60%)"
+            : "radial-gradient(ellipse 90% 60% at 50% -10%, rgba(239,68,68,0.26) 0%, rgba(239,68,68,0.10) 28%, transparent 60%)",
+        }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.025) 1px, transparent 0)",
+          backgroundSize: "26px 26px",
+        }}
+      />
+
+      {/* ── Header ── */}
+      <header className="relative z-10 max-w-[440px] mx-auto w-full px-5 pt-5">
+        <div className="flex items-center justify-between">
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={() => setScreen("home")}
+            className="flex items-center justify-center"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 13,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+            }}
+          >
+            <ChevronLeft
+              size={18}
+              strokeWidth={2.2}
+              style={{ color: T.hi }}
             />
+          </motion.button>
+
+          {/* Corridor selector — animated dropdown */}
+          <div className="relative">
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setPairOpen((v) => !v)}
+              className="flex items-center"
+              style={{
+                gap: 6,
+                padding: "8px 12px",
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: "0.08em",
+                  color: T.hi,
+                }}
+              >
+                {rateCurrency}
+              </span>
+              <motion.span
+                animate={{ rotate: pairOpen ? 180 : 0 }}
+                transition={SPRING}
+                style={{ display: "inline-flex" }}
+              >
+                <ChevronDown size={11} strokeWidth={2.4} style={{ color: T.md }} />
+              </motion.span>
+            </motion.button>
+            <AnimatePresence>
+              {pairOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={SPRING}
+                  className="absolute right-0 mt-2 z-30"
+                  style={{
+                    minWidth: 110,
+                    padding: 4,
+                    borderRadius: 14,
+                    background: "rgba(20,24,32,0.85)",
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    backdropFilter: "blur(20px)",
+                    WebkitBackdropFilter: "blur(20px)",
+                    boxShadow:
+                      "0 18px 32px -16px rgba(0,0,0,0.55), 0 4px 10px -4px rgba(0,0,0,0.30)",
+                  }}
+                >
+                  {(["usdt_aed", "usdt_inr"] as const).map((p) => {
+                    const label = p === "usdt_aed" ? "AED" : "INR";
+                    const on = p === ratePair;
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => {
+                          setRatePair(p);
+                          setPairOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between"
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: 10,
+                          background: on
+                            ? "rgba(255,255,255,0.08)"
+                            : "transparent",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: T.hi,
+                          }}
+                        >
+                          {label}
+                        </span>
+                        {on && (
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: 999,
+                              background: accent,
+                              boxShadow: `0 0 6px ${accent}`,
+                            }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-          {/* Big title — full width, no competing element */}
-          {/* <p className="text-[22px] font-extrabold tracking-[-0.03em] text-text-primary truncate">
-            Trade USDT
-          </p> */}
         </div>
       </header>
 
-      {/* ── Scrollable body ─────────────────────────────────────────────── */}
-      <div className="flex-1 px-5 pb-28 z-10 flex flex-col gap-2 overflow-y-auto no-scrollbar">
-        {/* ── Buy / Sell — big cards ───────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3 shrink-0">
+      {/* ── Hero amount stack ── */}
+      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 flex flex-col items-center justify-start pt-10">
+        {/* Animated You Buy / You Sell label */}
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={tradeType}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.25 }}
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: "0.26em",
+              textTransform: "uppercase",
+              color: T.lo,
+              marginBottom: 14,
+            }}
+          >
+            {isBuy ? "You're Buying" : "You're Selling"}
+          </motion.p>
+        </AnimatePresence>
+
+        {/* Giant amount with USDT trailing — auto-shrinks to fit */}
+        {(() => {
+          const formatted = formatAmountInput(amount);
+          const len = formatted.length || 1;
+          // SF Mono char width ≈ 0.60 × fontSize. Step down as the number grows
+          // so the row never overflows the column width.
+          const fontSize =
+            len <= 4 ? 76 :
+            len <= 6 ? 64 :
+            len <= 8 ? 52 :
+            len <= 10 ? 42 :
+            len <= 12 ? 34 : 28;
+          const inputWidth = Math.max(48, Math.ceil(len * fontSize * 0.60));
+          const symbolSize = Math.max(12, Math.round(fontSize * 0.24));
+          return (
+            <div
+              className="flex items-baseline justify-center w-full"
+              style={{ gap: 10, maxWidth: "100%" }}
+            >
+              <input
+                type="text"
+                inputMode="decimal"
+                maxLength={18}
+                value={formatted}
+                onChange={(e) =>
+                  setAmount(
+                    clampDecimal(
+                      e.target.value.replace(/,/g, ""),
+                      DECIMAL_PRESETS.amount,
+                    ),
+                  )
+                }
+                placeholder="0"
+                className="bg-transparent border-0 outline-none text-center"
+                style={{
+                  fontSize,
+                  fontWeight: 800,
+                  letterSpacing: "-0.05em",
+                  lineHeight: 1,
+                  color: hasAmount ? T.hi : T.xl,
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  width: `${inputWidth}px`,
+                  maxWidth: "100%",
+                  caretColor: accent,
+                  padding: 0,
+                  transition: "font-size 180ms cubic-bezier(0.22,1,0.36,1)",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: symbolSize,
+                  fontWeight: 800,
+                  letterSpacing: "0.12em",
+                  color: T.lo,
+                  transition: "font-size 180ms cubic-bezier(0.22,1,0.36,1)",
+                  flexShrink: 0,
+                }}
+              >
+                USDT
+              </span>
+            </div>
+          );
+        })()}
+
+        {/* Animated conversion ticker */}
+        <div style={{ marginTop: 10, minHeight: 22 }}>
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={`${fiatValue}-${rateCurrency}`}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.22 }}
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: T.md,
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, monospace",
+              }}
+            >
+              {rateLoading ? (
+                <span className="inline-flex items-center" style={{ gap: 6 }}>
+                  <Loader2 size={12} className="animate-spin" />
+                  Loading…
+                </span>
+              ) : (
+                <>≈ {rateSymbol}{fiatValue} {rateCurrency}</>
+              )}
+            </motion.p>
+          </AnimatePresence>
+        </div>
+
+        {/* Quick-amount chips with spring snap */}
+        <div className="flex items-center" style={{ gap: 8, marginTop: 22 }}>
+          {QUICK_AMOUNTS.map((v) => (
+            <motion.button
+              key={v}
+              whileTap={{ scale: 0.88 }}
+              onClick={() =>
+                setAmount(clampDecimal(v, DECIMAL_PRESETS.amount))
+              }
+              style={{
+                padding: "6px 12px",
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: "-0.005em",
+                  color: T.md,
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, monospace",
+                }}
+              >
+                {parseFloat(v) >= 1000
+                  ? `${parseFloat(v) / 1000}K`
+                  : v}
+              </span>
+            </motion.button>
+          ))}
+          {solanaWallet.connected &&
+            solanaWallet.usdtBalance !== null &&
+            solanaWallet.usdtBalance > 0 && (
+              <motion.button
+                whileTap={{ scale: 0.88 }}
+                onClick={() =>
+                  setAmount(
+                    clampDecimal(
+                      String(solanaWallet.usdtBalance),
+                      DECIMAL_PRESETS.amount,
+                    ),
+                  )
+                }
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  background: "#FFFFFF",
+                  border: "1px solid rgba(255,255,255,0.6)",
+                  boxShadow:
+                    "0 6px 14px -6px rgba(255,255,255,0.30), inset 0 1px 0 rgba(255,255,255,0.85)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: "0.10em",
+                    color: "#0B0F14",
+                  }}
+                >
+                  MAX
+                </span>
+              </motion.button>
+            )}
+        </div>
+
+        {/* Buy/Sell — active = white tile with colored outline (Buy green, Sell red) */}
+        <div className="grid grid-cols-2 w-full" style={{ gap: 10, marginTop: 28 }}>
           {(
             [
               {
                 type: "buy" as const,
-                label: "Buy USDT",
-                sub: `Pay ${ratePair === "usdt_inr" ? "INR" : "AED"}, Get USDT`,
+                label: "Buy",
                 Icon: ArrowDownLeft,
-                activeClass: "border-[1.5px] border-success",
-                dotClass: "bg-success",
-                iconBgOn: "bg-success/15",
-                iconOn: "text-success",
+                color: "#10B981", // emerald-500 — slightly darker for legibility on white
+                borderOn: "#10B981",
+                glow: "0 10px 24px -10px rgba(16,185,129,0.55), 0 0 0 3px rgba(16,185,129,0.12)",
               },
               {
                 type: "sell" as const,
-                label: "Sell USDT",
-                sub: `Send USDT, Get ${ratePair === "usdt_inr" ? "INR" : "AED"}`,
+                label: "Sell",
                 Icon: ArrowUpRight,
-                activeClass: "border-[1.5px] border-error",
-                dotClass: "bg-error",
-                iconBgOn: "bg-error/15",
-                iconOn: "text-error",
+                color: "#EF4444", // red-500
+                borderOn: "#EF4444",
+                glow: "0 10px 24px -10px rgba(239,68,68,0.50), 0 0 0 3px rgba(239,68,68,0.12)",
               },
             ] as const
-          ).map(
-            ({
-              type,
-              label,
-              sub,
-              Icon,
-              activeClass,
-              dotClass,
-              iconBgOn,
-              iconOn,
-            }) => {
-              const on = tradeType === type;
-              return (
-                <motion.button
-                  key={type}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => setTradeType(type)}
-                  className={`flex items-center justify-between rounded-[20px] py-3 px-3.5 bg-surface-card ${
-                    on ? activeClass : "border border-border-subtle"
-                  }`}
+          ).map((opt) => {
+            const on = tradeType === opt.type;
+            return (
+              <motion.button
+                key={opt.type}
+                onClick={() => setTradeType(opt.type)}
+                whileTap={{ scale: 0.97 }}
+                animate={{
+                  background: on
+                    ? "#FFFFFF"
+                    : "rgba(255,255,255,0.04)",
+                  borderColor: on ? opt.borderOn : "rgba(255,255,255,0.08)",
+                  boxShadow: on ? opt.glow : "none",
+                }}
+                transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                className="relative flex items-center justify-center"
+                style={{
+                  padding: "12px 0",
+                  borderRadius: 16,
+                  borderWidth: on ? 1.5 : 1,
+                  borderStyle: "solid",
+                  backdropFilter: on ? undefined : "blur(14px)",
+                  WebkitBackdropFilter: on ? undefined : "blur(14px)",
+                  gap: 8,
+                }}
+              >
+                <motion.span
+                  animate={{ color: on ? opt.color : T.lo }}
+                  transition={{ duration: 0.25 }}
+                  style={{ display: "inline-flex" }}
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-8 h-8 rounded-[10px] flex items-center justify-center ${
-                        on ? iconBgOn : "bg-surface-active"
-                      }`}
-                    >
-                      <Icon
-                        size={18}
-                        strokeWidth={2.5}
-                        className={on ? iconOn : "text-text-tertiary"}
-                      />
-                    </div>
-                    <div className="flex flex-col text-left">
-                      <p className="text-[16px] font-bold text-text-primary">
-                        {label}
-                      </p>
-                      <p className="text-[10px] font-medium text-text-tertiary">
-                        {sub}
-                      </p>
-                    </div>
-                  </div>
-                  {on && <div className={`w-2 h-2 rounded-full ${dotClass}`} />}
-                </motion.button>
-              );
-            },
-          )}
+                  <opt.Icon size={16} strokeWidth={2.6} />
+                </motion.span>
+                <motion.span
+                  animate={{ color: on ? "#0B0F14" : T.md }}
+                  transition={{ duration: 0.25 }}
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    letterSpacing: "-0.005em",
+                  }}
+                >
+                  {opt.label}
+                </motion.span>
+              </motion.button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Bottom liquid-glass sheet ── */}
+      <motion.div
+        initial={{ y: 30, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ ...SOFT_SPRING, delay: 0.1 }}
+        className="relative z-10 max-w-[440px] mx-auto w-full"
+        style={{
+          marginTop: 24,
+          padding: "18px 18px calc(env(safe-area-inset-bottom, 12px) + 90px)",
+          borderTopLeftRadius: 32,
+          borderTopRightRadius: 32,
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          backdropFilter: "blur(28px) saturate(1.4)",
+          WebkitBackdropFilter: "blur(28px) saturate(1.4)",
+          boxShadow:
+            "0 -16px 36px -16px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
+        }}
+      >
+        {/* Pulled-handle pip */}
+        <div className="flex justify-center mb-3">
+          <span
+            style={{
+              width: 36,
+              height: 4,
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.14)",
+            }}
+          />
         </div>
 
-        {/* ── Market Rate Card ─────────────────────────────────────────── */}
-        {/* <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className={`w-full rounded-[18px] shrink-0 overflow-hidden ${CARD}`}
-        >
-          <div className="flex items-center justify-between px-4 pt-3 pb-2">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-[5px]">
-                <p className={SECTION_LABEL}>
-                  {rateData?.mode === "MANUAL" ? "Rate" : "Live Rate"}{" "}
-                  {"\u00B7"} USDT / {rateCurrency}
-                </p>
-              </div>
-              <div className="flex items-baseline gap-2 min-h-[32px]">
-                {rateLoading || displayRate === null ? (
-                  <span className="flex items-center gap-2 text-text-tertiary">
-                    <Loader2 size={18} className="animate-spin" />
-                    <span className="text-[13px] font-semibold">Loading…</span>
-                  </span>
-                ) : (
-                  <>
-                    <span className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-[1.1]">
-                      {rateSymbol}
-                      {formatRate(displayRate)}
-                    </span>
-                    <span className="text-[13px] font-semibold text-text-tertiary">
-                      {rateCurrency}
-                    </span>
-                  </>
-                )}
-              </div>
-              <div className="flex items-center gap-1 mt-1">
-                {ratePositive ? (
-                  <TrendingUp size={11} className="text-success" />
-                ) : (
-                  <TrendingDown size={11} className="text-error" />
-                )}
-                <span
-                  className={`text-[11px] font-bold ${ratePositive ? "text-success" : "text-error"}`}
-                >
-                  {ratePositive ? "+0.24%" : "-0.18%"} today
-                </span>
-              </div>
-            </div>
-            <div className="shrink-0 opacity-90">
-              <RateSparkline
-                rate={displayRate ?? (ratePair === "usdt_aed" ? 3.672 : 92.5)}
-                positive={ratePositive}
-              />
-            </div>
-          </div>
-          <div className="flex items-center justify-between px-5 py-2.5 border-t border-border-subtle bg-surface-hover">
-            <span className="text-[10px] font-semibold text-text-tertiary tracking-[0.08em]">
-              7D LOW {ratePair === "usdt_aed" ? "3.651" : "92.10"}
-            </span>
-            <div className="flex-1 mx-4 h-1 rounded-full bg-border-medium overflow-hidden">
-              <div className="h-1 rounded-full w-[68%] bg-text-primary/40" />
-            </div>
-            <span className="text-[10px] font-semibold text-text-tertiary tracking-[0.08em]">
-              HIGH {ratePair === "usdt_aed" ? "3.694" : "93.50"}
-            </span>
-          </div>
-        </motion.div> */}
-
-        
-
-        {/* ── Amount input ──────────────────────────────────────────────── */}
-       
-        <div
-          className={`w-full rounded-[28px] mb-1 flex flex-col items-center py-2 px-3 ${CARD}`}
-        >
-          <p className="text-[10px] font-bold tracking-[0.28em] text-text-tertiary uppercase mb-2">
-            {tradeType === "buy" ? "You Pay (USDT)" : "You Sell (USDT)"}
-          </p>
-
-          <div className="flex items-baseline justify-center gap-1.5">
-            <input
-              type="text"
-              inputMode="decimal"
-              maxLength={18}
-              value={formatAmountInput(amount)}
-              onChange={(e) =>
-                setAmount(
-                  clampDecimal(
-                    e.target.value.replace(/,/g, ""),
-                    DECIMAL_PRESETS.amount,
-                  ),
-                )
-              }
-              placeholder="0"
-              className={`text-[52px] font-extrabold tracking-[-0.06em] leading-none bg-transparent border-0 outline-none text-right max-w-64 ${
-                hasAmount ? "text-text-primary" : "text-text-quaternary"
-              }`}
-              style={{
-                width: `${Math.max(38, (formatAmountInput(amount).length || 1) * 30)}px`,
-              }}
-            />
-            <span className="text-[20px] font-bold text-text-tertiary tracking-[-0.01em]">
-              USDT
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 mt-1 min-h-[28px]">
-            {hasAmount && (rateLoading || displayRate === null) ? (
-              <span className="flex items-center gap-2 text-text-tertiary">
-                <Loader2 size={14} className="animate-spin" />
-                <span className="text-[13px] font-semibold">Loading…</span>
-              </span>
-            ) : (
-              <>
-                <span
-                  className={`text-[24px] font-bold tracking-[-0.02em] ${
-                    hasAmount ? "text-text-secondary" : "text-text-quaternary"
-                  }`}
-                >
-                  {rateSymbol}{" "}
-                  {hasAmount && displayRate !== null
-                    ? formatCrypto(parseFloat(amount) * displayRate)
-                    : "0.00"}
-                </span>
-                <span className="text-[13px] font-semibold text-text-tertiary">
-                  {rateCurrency}
-                </span>
-              </>
-            )}
-          </div>
-
-          {solanaWallet.connected && (
-            <div className="mt-2 flex items-center gap-2">
-              <div className="px-3 py-1 rounded-full bg-surface-hover border border-border-subtle">
-                <span className="text-[11px] font-bold text-text-tertiary tracking-[0.08em]">
-                  BAL{" "}
-                  {solanaWallet.usdtBalance !== null
-                    ? formatCrypto(solanaWallet.usdtBalance)
-                    : "\u2014"}{" "}
-                  USDT
-                </span>
-              </div>
-              {solanaWallet.usdtBalance !== null &&
-                solanaWallet.usdtBalance > 0 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAmount(
-                        clampDecimal(
-                          String(solanaWallet.usdtBalance),
-                          DECIMAL_PRESETS.amount,
-                        ),
-                      )
-                    }
-                    className="px-3 py-1 rounded-full bg-accent text-accent-text text-[11px] font-extrabold tracking-[0.08em] hover:opacity-90 active:scale-95 transition"
-                  >
-                    MAX
-                  </button>
-                )}
-            </div>
-          )}
-
-          {/* Fee breakdown — appears when amount entered */}
+        {/* Fee row — only when amount entered */}
+        <AnimatePresence>
           {hasAmount && (
             <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-4 mt-2 pt-2 w-full border-t border-border-subtle"
+              key="fees"
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: "auto", marginBottom: 14 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              transition={SPRING}
+              style={{ overflow: "hidden" }}
             >
-              <div className="flex-1 text-center">
-                <p className="text-[9px] font-bold tracking-[0.18em] text-text-tertiary uppercase mb-[3px]">
-                  Fee
-                </p>
-                <p className="text-[15px] font-extrabold text-text-secondary">
-                  {formatPercentage(currentFees.totalFee * 100)}
-                </p>
-              </div>
-              <div className="w-px h-7 bg-border-medium" />
-              <div className="flex-1 text-center">
-                <p className="text-[9px] font-bold tracking-[0.18em] text-text-tertiary uppercase mb-[3px]">
-                  Trader Earns
-                </p>
-                <p className="text-[15px] font-extrabold text-text-secondary">
-                  {formatPercentage(currentFees.traderCut * 100)}
-                </p>
-              </div>
-              <div className="w-px h-7 bg-border-medium" />
-              <div className="flex-1 text-center">
-                <p className="text-[9px] font-bold tracking-[0.18em] text-text-tertiary uppercase mb-[3px]">
-                  You Get
-                </p>
-                <p className="text-[15px] font-extrabold text-text-primary">
-                  {tradeType === "buy"
-                    ? `${formatCrypto(parseFloat(amount || "0"))} USDT`
-                    : formatFiat(parseFloat(fiatAmount || "0"), rateCurrency)}
-                </p>
+              <div
+                className="flex items-center"
+                style={{
+                  padding: "11px 14px",
+                  borderRadius: 14,
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  gap: 12,
+                }}
+              >
+                {[
+                  {
+                    label: "Fee",
+                    value: formatPercentage(currentFees.totalFee * 100),
+                  },
+                  {
+                    label: "Earns",
+                    value: formatPercentage(currentFees.traderCut * 100),
+                  },
+                  {
+                    label: "You Get",
+                    value: isBuy
+                      ? `${formatCrypto(parseFloat(amount || "0"))} USDT`
+                      : formatFiat(
+                          parseFloat(fiatAmount || "0"),
+                          rateCurrency,
+                        ),
+                  },
+                ].map((row, i, arr) => (
+                  <div key={row.label} className="flex-1 text-center flex items-center" style={{ gap: 12 }}>
+                    <div className="flex-1 text-center">
+                      <p
+                        style={{
+                          fontSize: 8.5,
+                          fontWeight: 800,
+                          letterSpacing: "0.18em",
+                          color: T.lo,
+                          textTransform: "uppercase",
+                          marginBottom: 3,
+                        }}
+                      >
+                        {row.label}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color: i === arr.length - 1 ? T.hi : T.md,
+                          fontFamily:
+                            "ui-monospace, SFMono-Regular, Menlo, monospace",
+                        }}
+                      >
+                        {row.value}
+                      </p>
+                    </div>
+                    {i < arr.length - 1 && (
+                      <span
+                        style={{
+                          width: 1,
+                          height: 26,
+                          background: "rgba(255,255,255,0.10)",
+                        }}
+                      />
+                    )}
+                  </div>
+                ))}
               </div>
             </motion.div>
           )}
+        </AnimatePresence>
+
+        {/* Payment method header — label + inline "Add payment method" link */}
+        <div className="flex items-center justify-between mb-2">
+          <p
+            style={{
+              fontSize: 9,
+              fontWeight: 800,
+              letterSpacing: "0.22em",
+              color: T.lo,
+              textTransform: "uppercase",
+            }}
+          >
+            {isBuy ? "Pay With" : "Receive To"}
+          </p>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={() => setScreen("profile")}
+            className="flex items-center"
+            style={{ gap: 4 }}
+          >
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "-0.005em",
+                color: T.md,
+              }}
+            >
+              Add payment method
+            </span>
+            <ArrowUpRight size={11} strokeWidth={2.4} style={{ color: T.lo }} />
+          </motion.button>
         </div>
 
-        {/* ── Payment Method ─────────────────────────────────────────────
-            BUY mode  → simple Bank / Cash type toggle (user pays the merchant)
-            SELL mode → PaymentMethodSelector below (user picks a specific
-                        receiving account, which already covers bank/cash/upi).
-            We render only ONE of these to avoid the duplicate-section issue. */}
-        {tradeType === "buy" ? (
-          <div className="mb-1">
-            <p className="text-[10px] font-bold tracking-[0.28em] text-text-tertiary uppercase mb-2">
-              Pay via
-            </p>
-            <div className="grid grid-cols-2 gap-3">
+        {isBuy ? (
+          <>
+            <div className="grid grid-cols-2 gap-2 mb-3">
               {(
                 [
                   {
@@ -542,7 +758,7 @@ export const TradeCreationScreen = ({
                   {
                     method: "cash" as const,
                     label: "Cash",
-                    sub: "Meet in person",
+                    sub: "In-person",
                     Icon: Banknote,
                   },
                 ] as const
@@ -551,35 +767,183 @@ export const TradeCreationScreen = ({
                 return (
                   <motion.button
                     key={method}
-                    whileTap={{ scale: 0.96 }}
+                    whileTap={{ scale: 0.97 }}
                     onClick={() => setPaymentMethod(method)}
-                    className={`flex items-center justify-between rounded-[16px] py-2.5 px-3 bg-surface-card ${
-                      on
-                        ? "border-[1.5px] border-text-secondary shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
-                        : "border border-border-subtle"
-                    }`}
+                    className="flex items-center"
+                    style={{
+                      padding: "11px 12px",
+                      borderRadius: 14,
+                      gap: 10,
+                      background: on
+                        ? "rgba(255,255,255,0.08)"
+                        : "rgba(255,255,255,0.03)",
+                      border: on
+                        ? "1px solid rgba(255,255,255,0.32)"
+                        : "1px solid rgba(255,255,255,0.06)",
+                    }}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-[10px] flex items-center justify-center bg-surface-active">
-                        <Icon size={16} className="text-text-secondary" />
-                      </div>
-                      <div className="flex flex-col">
-                        <p className="text-[14px] font-bold text-text-primary">
-                          {label}
-                        </p>
-                        <p className="text-[10px] font-medium text-text-tertiary">
-                          {sub}
-                        </p>
-                      </div>
+                    <div
+                      className="flex items-center justify-center shrink-0"
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 9,
+                        background: on
+                          ? "#FFFFFF"
+                          : "rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <Icon
+                        size={14}
+                        strokeWidth={2.4}
+                        style={{ color: on ? "#0B0F14" : T.md }}
+                      />
                     </div>
-                    {on && <div className="w-2 h-2 rounded-full bg-accent" />}
+                    <div className="flex flex-col text-left min-w-0">
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                          letterSpacing: "-0.005em",
+                          color: T.hi,
+                        }}
+                      >
+                        {label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9.5,
+                          fontWeight: 600,
+                          color: T.lo,
+                          marginTop: 1,
+                        }}
+                      >
+                        {sub}
+                      </span>
+                    </div>
                   </motion.button>
                 );
               })}
             </div>
-          </div>
+
+            {/* Saved bank accounts — only when Bank Transfer is the active method */}
+            <AnimatePresence initial={false}>
+              {paymentMethod === "bank" && savedBanks.length > 0 && (
+                <motion.div
+                  key="saved-banks"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  style={{ overflow: "hidden", marginBottom: 16 }}
+                >
+                  <div className="flex flex-col" style={{ gap: 6, paddingTop: 4 }}>
+                    {savedBanks.map((b) => {
+                      const on = selectedBankId === b.id;
+                      const bankName = b.bank_name || b.bank || "Bank";
+                      const acctName = b.account_name || b.name || "";
+                      const last4 = (b.iban || "").slice(-4);
+                      const initial = bankName.charAt(0).toUpperCase();
+                      return (
+                        <motion.button
+                          key={b.id}
+                          whileTap={{ scale: 0.985 }}
+                          onClick={() => setSelectedBankId(b.id)}
+                          className="flex items-center"
+                          style={{
+                            gap: 12,
+                            padding: "10px 12px",
+                            borderRadius: 14,
+                            background: on
+                              ? "rgba(255,255,255,0.08)"
+                              : "rgba(255,255,255,0.03)",
+                            border: on
+                              ? "1px solid rgba(255,255,255,0.28)"
+                              : "1px solid rgba(255,255,255,0.06)",
+                          }}
+                        >
+                          <div
+                            className="flex items-center justify-center shrink-0"
+                            style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: 10,
+                              background: "rgba(255,255,255,0.06)",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                            }}
+                          >
+                            <span style={{ fontSize: 12, fontWeight: 800, color: T.hi }}>
+                              {initial}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0 text-left">
+                            <div className="flex items-center" style={{ gap: 6 }}>
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  letterSpacing: "-0.005em",
+                                  color: T.hi,
+                                }}
+                              >
+                                {bankName}
+                              </span>
+                              {(b.is_default || b.isDefault) && (
+                                <span
+                                  style={{
+                                    fontSize: 8,
+                                    fontWeight: 800,
+                                    letterSpacing: "0.10em",
+                                    textTransform: "uppercase",
+                                    color: T.lo,
+                                    padding: "1px 5px",
+                                    borderRadius: 999,
+                                    background: "rgba(255,255,255,0.06)",
+                                    border: "1px solid rgba(255,255,255,0.08)",
+                                  }}
+                                >
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: T.lo,
+                                fontFamily:
+                                  "ui-monospace, SFMono-Regular, Menlo, monospace",
+                                marginTop: 1,
+                                display: "block",
+                              }}
+                            >
+                              {acctName}
+                              {last4 ? ` · •••${last4}` : ""}
+                            </span>
+                          </div>
+                          {on && (
+                            <div
+                              className="flex items-center justify-center shrink-0"
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: 999,
+                                background: "#FFFFFF",
+                              }}
+                            >
+                              <Check size={12} strokeWidth={2.8} style={{ color: "#0B0F14" }} />
+                            </div>
+                          )}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
         ) : (
-          <div className="mb-3">
+          <div className="mb-4">
             <PaymentMethodSelector
               userId={userId}
               selectedId={selectedPaymentMethodId}
@@ -588,122 +952,138 @@ export const TradeCreationScreen = ({
           </div>
         )}
 
-        {/* ── Priority ─────────────────────────────────────────────────── */}
-        <div className="mb-3">
-          <p className="text-[10px] font-bold tracking-[0.28em] text-text-tertiary uppercase mb-3">
-            Priority
-          </p>
-          <div className="flex gap-2.5">
+        {/* Priority — sliding segmented */}
+        <p
+          style={{
+            fontSize: 9,
+            fontWeight: 800,
+            letterSpacing: "0.22em",
+            color: T.lo,
+            textTransform: "uppercase",
+            marginBottom: 8,
+          }}
+        >
+          Priority
+        </p>
+        <LayoutGroup>
+          <div
+            className="relative grid grid-cols-3 mb-5"
+            style={{
+              gap: 4,
+              padding: 4,
+              borderRadius: 16,
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.06)",
+            }}
+          >
             {(
               [
-                // Speed indicators reuse the semantic palette: warning = fastest/most expensive,
-                // info = balanced, success = cheapest. Inline-style strings reference the CSS
-                // variables so the colors flip with the active theme.
-                {
-                  key: "fast" as const,
-                  label: "Fastest",
-                  sub: "~2 min",
-                  fee: "2.9%",
-                  barHex: "var(--color-warning)",
-                },
-                {
-                  key: "best" as const,
-                  label: "Best Rate",
-                  sub: "~8 min",
-                  fee: "2.5%",
-                  barHex: "var(--color-info)",
-                },
-                {
-                  key: "cheap" as const,
-                  label: "Cheapest",
-                  sub: "~15 min",
-                  fee: "1.5%",
-                  barHex: "var(--color-success)",
-                },
+                { key: "fast" as const, label: "Fastest", fee: "2.9%", color: "#FBBF24" },
+                { key: "best" as const, label: "Best Rate", fee: "2.5%", color: "#60A5FA" },
+                { key: "cheap" as const, label: "Cheapest", fee: "1.5%", color: "#34D399" },
               ] as const
-            ).map(({ key, label, sub, fee, barHex }) => {
+            ).map(({ key, label, fee, color }) => {
               const on = tradePreference === key;
               return (
                 <motion.button
                   key={key}
-                  whileTap={{ scale: 0.96 }}
                   onClick={() => setTradePreference(key)}
-                  className={`flex-1 rounded-[16px] py-2.5 px-3 bg-surface-card ${
-                    on ? "border-[1.5px]" : "border border-border-subtle"
-                  }`}
-                  style={
-                    on
-                      ? {
-                          borderColor: barHex,
-                          boxShadow: `0 2px 10px ${barHex}22`,
-                        }
-                      : undefined
-                  }
+                  whileTap={{ scale: 0.97 }}
+                  className="relative flex flex-col items-center justify-center"
+                  style={{ padding: "9px 4px", borderRadius: 12 }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col items-start leading-tight">
-                      <p className="text-[12px] font-bold text-text-primary">
-                        {label}
-                      </p>
-                      {/* <p className="text-[10px] font-medium text-text-tertiary">
-                        {sub}
-                      </p> */}
-                    </div>
-                    <div
-                      className="flex items-center justify-center h-5 px-1 "
+                  {on && (
+                    <motion.span
+                      layoutId="prio-pill"
+                      className="absolute inset-0"
                       style={{
-                        background: `${barHex}15`,
-                        // borderColor: `${barHex}40`,
+                        borderRadius: 12,
+                        background: `${color}1A`,
+                        border: `1px solid ${color}55`,
+                        boxShadow: `0 6px 14px -8px ${color}88`,
                       }}
-                    >
-                      <span
-                        className="text-[11px] font-semibold leading-none"
-                        style={{ color: barHex }}
-                      >
-                        {fee}
-                      </span>
-                    </div>
-                  </div>
+                      transition={SPRING}
+                    />
+                  )}
+                  <span
+                    className="relative"
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: "-0.005em",
+                      color: on ? T.hi : T.md,
+                    }}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    className="relative"
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: on ? color : T.lo,
+                      marginTop: 2,
+                      fontFamily:
+                        "ui-monospace, SFMono-Regular, Menlo, monospace",
+                    }}
+                  >
+                    {fee}
+                  </span>
                 </motion.button>
               );
             })}
           </div>
-        </div>
+        </LayoutGroup>
 
-        {/* ── CTA ─────────────────────────────────────────────────────────── */}
+        {/* CTA — Buy/Sell action, in flow after Priority */}
         <motion.button
-          whileTap={{ scale: 0.97 }}
           onClick={startTrade}
           disabled={!hasAmount || isLoading || !userId}
-          className={`w-full flex items-center justify-center gap-2 shrink-0 min-h-14 rounded-[14px] text-[16px] font-bold tracking-[-0.01em] ${
-            hasAmount && !isLoading
-              ? "bg-accent text-accent-text border border-border-strong shadow-[0_4px_16px_rgba(0,0,0,0.2)]"
-              : "bg-surface-card text-text-quaternary border border-border-subtle"
-          }`}
+          whileTap={hasAmount ? { scale: 0.985 } : undefined}
+          animate={{
+            background:
+              hasAmount && !isLoading
+                ? `linear-gradient(180deg, ${accent} 0%, ${accentDeep} 100%)`
+                : "rgba(255,255,255,0.05)",
+            color: hasAmount && !isLoading ? "#0B0F14" : T.md,
+            borderColor:
+              hasAmount && !isLoading
+                ? "rgba(255,255,255,0.30)"
+                : "rgba(255,255,255,0.08)",
+            boxShadow:
+              hasAmount && !isLoading
+                ? `0 16px 36px -14px ${accentDeep}AA, 0 6px 14px -6px ${accentDeep}55, inset 0 1px 0 rgba(255,255,255,0.30)`
+                : "none",
+          }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full flex items-center justify-center"
+          style={{
+            gap: 8,
+            minHeight: 56,
+            borderRadius: 18,
+            borderWidth: 1,
+            borderStyle: "solid",
+            fontSize: 15,
+            fontWeight: 800,
+            letterSpacing: "-0.01em",
+          }}
         >
           {isLoading ? (
-            <Loader2 size={16} className="animate-spin" />
+            <Loader2 size={18} className="animate-spin" />
           ) : hasAmount ? (
             <>
-              {tradeType === "buy" ? "Receive" : "Send"} {amount} USDT
-              <ArrowUpRight size={16} strokeWidth={2} />
+              {isBuy ? (
+                <ArrowDownLeft size={16} strokeWidth={2.6} />
+              ) : (
+                <ArrowUpRight size={16} strokeWidth={2.6} />
+              )}
+              {isBuy ? "Buy" : "Sell"} {amount} USDT
             </>
           ) : (
             "Enter Amount"
           )}
         </motion.button>
-
-        {/* ── Large order link ──────────────────────────────────────────── */}
-        {/* <button
-          onClick={() => setScreen("create-offer")}
-          className="w-full mt-1 py-2 text-center text-[13px] font-semibold text-text-tertiary"
-        >
-          Large amount?{" "}
-          <span className="text-text-secondary font-bold">
-            Create a custom offer {"\u2192"}
-          </span>
-        </button> */}
-      </div>
+      </motion.div>
 
       <BottomNav
         screen={screen}
