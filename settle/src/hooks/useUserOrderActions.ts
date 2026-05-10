@@ -282,11 +282,33 @@ export function useUserOrderActions({
         activeOrder.escrowTradeId &&
         activeOrder.escrowCreatorWallet
       ) {
-        const merchantWallet =
+        // Re-fetch the order from the server before releasing escrow.
+        // The cached `activeOrder` can lag behind the merchant's accept
+        // by tens of seconds (Pusher delivery, network blip, page warm).
+        // Without a fresh read we'd refuse to release because the
+        // merchant wallet wasn't yet in the local snapshot.
+        let merchantWallet: string | undefined =
           activeOrder.acceptorWalletAddress ||
           activeOrder.merchant.walletAddress;
+        try {
+          const refreshRes = await fetchWithAuth(`/api/orders/${activeOrder.id}`);
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            const fresh = refreshData?.data ?? refreshData;
+            const acceptor: string | undefined = fresh?.acceptor_wallet_address;
+            const merchantWalletFromJoin: string | undefined =
+              fresh?.merchant?.wallet_address;
+            const candidate = acceptor || merchantWalletFromJoin;
+            if (candidate && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(candidate)) {
+              merchantWallet = candidate;
+            }
+          }
+        } catch (refreshErr) {
+          console.warn("[Release] Order refresh failed, using cached wallet", refreshErr);
+        }
+
         const isValidSolanaAddress =
-          merchantWallet &&
+          !!merchantWallet &&
           /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
 
         if (!solanaWallet.connected) {
@@ -303,6 +325,7 @@ export function useUserOrderActions({
           console.error("[Release] Invalid/missing merchant wallet:", {
             acceptorWallet: activeOrder.acceptorWalletAddress,
             merchantProfileWallet: activeOrder.merchant.walletAddress,
+            refetched: merchantWallet,
           });
           showAlert(
             "Invalid Wallet",
