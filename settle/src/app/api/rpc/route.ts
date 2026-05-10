@@ -87,8 +87,14 @@ function getUpstreamUrl(): string | null {
   return null;
 }
 
-/** RPC: 120/min per IP. Wallet flows make small bursts; humans wait between. */
-const RPC_RATE_LIMIT = { maxRequests: 120, windowSeconds: 60 };
+/** RPC: 600/min per IP. A single sell-flow release burns ~70 calls
+ *  (latest blockhash + simulate + send + 30 s of getSignatureStatuses
+ *  polling at 500 ms cadence + token-account/PDA reads). At 120/min the
+ *  proxy 429'd legitimate flows mid-broadcast on mainnet, leaving
+ *  signed transactions stranded in the wallet adapter. Keep the cap
+ *  above realistic worst-case + headroom for two concurrent users
+ *  behind the same IP. */
+const RPC_RATE_LIMIT = { maxRequests: 600, windowSeconds: 60 };
 
 interface JsonRpcRequest {
   jsonrpc?: string;
