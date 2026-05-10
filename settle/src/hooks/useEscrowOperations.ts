@@ -334,49 +334,80 @@ export function useEscrowOperations({
 
       if (pendingSellOrder && isTempOrder) {
         playSound('trade_complete');
-        try {
-          const res = await fetchWithAuth("/api/merchant/orders", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              // Required by core-api /v1/merchant/orders. Anchor the key to
-              // the on-chain escrow signature so a retry of THIS order
-              // creation (network blip, page reload mid-request) collapses
-              // server-side instead of double-creating the order.
-              "Idempotency-Key": txAnchoredKey(escrowResult.txHash, "create_merchant_sell_order"),
-            },
-            body: JSON.stringify({
-              merchant_id: pendingSellOrder.merchantId,
-              type: pendingSellOrder.tradeType,
-              crypto_amount: pendingSellOrder.cryptoAmount,
-              payment_method: pendingSellOrder.paymentMethod,
-              merchant_payment_method_id: pendingSellOrder.paymentMethodId,
-              spread_preference: pendingSellOrder.spreadPreference,
-              priority_fee: pendingSellOrder.priorityFee || 0,
-              matched_offer_id: pendingSellOrder.matchedOfferId,
-              pair: pendingSellOrder.pair || 'usdt_aed',
-              escrow_tx_hash: escrowResult.txHash,
-              escrow_trade_id: escrowResult.tradeId,
-              escrow_trade_pda: escrowResult.tradePda,
-              escrow_pda: escrowResult.escrowPda,
-              escrow_creator_wallet: solanaWallet.walletAddress,
-            }),
-          });
+        const orderPayload = {
+          merchant_id: pendingSellOrder.merchantId,
+          type: pendingSellOrder.tradeType,
+          crypto_amount: pendingSellOrder.cryptoAmount,
+          payment_method: pendingSellOrder.paymentMethod,
+          merchant_payment_method_id: pendingSellOrder.paymentMethodId,
+          spread_preference: pendingSellOrder.spreadPreference,
+          priority_fee: pendingSellOrder.priorityFee || 0,
+          matched_offer_id: pendingSellOrder.matchedOfferId,
+          pair: pendingSellOrder.pair || 'usdt_aed',
+          escrow_tx_hash: escrowResult.txHash,
+          escrow_trade_id: escrowResult.tradeId,
+          escrow_trade_pda: escrowResult.tradePda,
+          escrow_pda: escrowResult.escrowPda,
+          escrow_creator_wallet: solanaWallet.walletAddress,
+        };
+        const idempotencyKey = txAnchoredKey(escrowResult.txHash, "create_merchant_sell_order");
+        const orphanKey = `blip_orphan_merchant_sell_${escrowResult.txHash}`;
 
-          const data = await res.json();
-          if (res.ok && data.success && data.data) {
-            const newOrder = mapDbOrderToUI(data.data, merchantId);
-            setOrders((prev: Order[]) => [newOrder, ...prev]);
-            addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDT locked in escrow`, data.data.id);
-            delete (window as any).__pendingSellOrder;
-            dispatch({ type: 'CLOSE', op: 'lock' });
-          } else {
-            const errorMsg = data.error || data.validation_errors?.[0] || 'Unknown error';
-            addNotification('system', `Escrow locked but order creation failed: ${errorMsg}`, escrowOrder.id);
+        // Persist BEFORE the network call so a tab kill / browser crash
+        // / 5xx between "escrow funded on-chain" and "order written to
+        // DB" can self-heal on next mount via useMerchantEffects.
+        try {
+          localStorage.setItem(orphanKey, JSON.stringify({
+            payload: orderPayload,
+            idempotencyKey,
+            timestamp: Date.now(),
+          }));
+        } catch {}
+
+        // Retry up to 3× on 5xx / network. Idempotency key collapses
+        // duplicates server-side. 4xx errors break out — they're
+        // validation problems no retry will fix.
+        let res: Response | null = null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let data: any = null;
+        let lastNetErr: unknown = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            res = await fetchWithAuth("/api/merchant/orders", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Idempotency-Key": idempotencyKey,
+              },
+              body: JSON.stringify(orderPayload),
+            });
+            data = await res.json().catch(() => null);
+            if (res.ok && data?.success) break;
+            if (res.status >= 400 && res.status < 500) break; // hard validation, no retry
+          } catch (e) {
+            lastNetErr = e;
           }
-        } catch (createError) {
-          const errorMsg = createError instanceof Error ? createError.message : 'Network error';
-          addNotification('system', `Escrow locked but order creation failed: ${errorMsg}`, escrowOrder.id);
+          if (attempt < 2) await new Promise((r) => setTimeout(r, attempt === 0 ? 1000 : 3000));
+        }
+
+        if (res && res.ok && data?.success && data?.data) {
+          try { localStorage.removeItem(orphanKey); } catch {}
+          const newOrder = mapDbOrderToUI(data.data, merchantId);
+          setOrders((prev: Order[]) => [newOrder, ...prev]);
+          addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDT locked in escrow`, data.data.id);
+          delete (window as any).__pendingSellOrder;
+          dispatch({ type: 'CLOSE', op: 'lock' });
+        } else {
+          const errorMsg = data?.error
+            || data?.validation_errors?.[0]
+            || (lastNetErr instanceof Error ? lastNetErr.message : 'Network error');
+          addNotification(
+            'system',
+            `Escrow locked on-chain (TX ${escrowResult.txHash.slice(0, 8)}…). Order sync pending — auto-recovers on next reload. ${errorMsg}`,
+            escrowOrder.id,
+          );
+          // Leave orphanKey in localStorage; the merchant recovery hook
+          // (added to useMerchantEffects) retries it on every mount.
         }
         refreshBalance();
       } else {
