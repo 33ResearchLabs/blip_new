@@ -564,23 +564,12 @@ export default function AdminUsersPage() {
                         </span>
                       </div>
 
-                      {/* Rating. When ratingCount === 0 the DB-default 5.0
-                          is meaningless filler — render an em-dash + dim the
-                          star so unrated users don't look like 5★ champions. */}
+                      {/* Rating */}
                       <div className="flex items-center gap-1">
-                        {u.ratingCount > 0 ? (
-                          <>
-                            <Star className="w-3 h-3 text-[var(--color-warning)] fill-[var(--color-warning)]" />
-                            <span className="text-[11px] font-medium text-foreground/80 tabular-nums">
-                              {formatCrypto(u.rating, { decimals: 1 })}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Star className="w-3 h-3 text-foreground/20" />
-                            <span className="text-[11px] font-medium text-foreground/30 tabular-nums">—</span>
-                          </>
-                        )}
+                        <Star className="w-3 h-3 text-[var(--color-warning)] fill-[var(--color-warning)]" />
+                        <span className="text-[11px] font-medium text-foreground/80 tabular-nums">
+                          {u.rating > 0 ? formatCrypto(u.rating, { decimals: 1 }) : "5.0"}
+                        </span>
                         <span className="text-[9px] text-foreground/35 font-mono tabular-nums">({formatCount(u.ratingCount)})</span>
                       </div>
 
