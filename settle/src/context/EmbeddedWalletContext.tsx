@@ -66,8 +66,10 @@ import {
   reencryptIfStale,
   recordUnlockFailure,
   clearUnlockFailures,
+  versionRequiresHelper,
   MAX_UNLOCK_FAILURES,
 } from '@/lib/wallet/embeddedWallet';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { createKeypairWalletAdapter } from '@/lib/wallet/keypairWalletAdapter';
 import { confirmHttp } from '@/lib/solana/confirmHttp';
 import idlRaw from '@/lib/solana/v2/idl.json';
@@ -327,42 +329,70 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     })();
   }, [walletState, keypair]);
 
+  // Fetch the per-actor unlock helper from the server (Step 3 hardening).
+  // Returns null if the endpoint is unreachable or auth fails. Caller
+  // decides whether that's fatal: required for v3 decrypt, optional for
+  // v1/v2 unlock, optional for an opportunistic v→v3 upgrade.
+  const fetchUnlockHelper = useCallback(async (): Promise<string | null> => {
+    try {
+      const res = await fetchWithAuth('/api/wallet/unlock-helper', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const helper = data?.data?.unlock_helper;
+      return typeof helper === 'string' && helper.length > 0 ? helper : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Unlock wallet — operates on the current actor's blob only.
   //
-  // Three behaviors layered into this path:
+  // Four layered behaviors:
   //
-  //   1. **Opportunistic KDF upgrade.** Existing mainnet wallets were
-  //      encrypted at PBKDF2 100k (v1). The first time they unlock under
-  //      this build we re-encrypt at 600k (v2) under the same password —
-  //      no re-password prompt, no UX change for the user.
+  //   1. **Server-side helper for v3 blobs.** v3 wallets are encrypted
+  //      with `password + helper` where the helper is a per-actor server
+  //      secret. We fetch it before decrypting; without it, v3 fails fast
+  //      rather than burning a failed-attempt counter slot.
   //
-  //   2. **Failed-attempt counter.** Every wrong password increments a
-  //      per-actor counter. After MAX_UNLOCK_FAILURES consecutive
-  //      failures, the local encrypted blob is wiped — the user must
-  //      then recover via their exported private key (Export Key UI is
-  //      mandatory at creation). Funds are NEVER at risk: the keypair
-  //      still exists on-chain; only the device cache is removed.
+  //   2. **Opportunistic version upgrade.** v1/v2 blobs that decrypt
+  //      successfully are silently re-encrypted at v3 (600k + helper)
+  //      using the same password. No re-password prompt. If helper fetch
+  //      failed, the upgrade is skipped and the original blob remains.
   //
-  //   3. **Counter resets on success.** Reaching the threshold doesn't
-  //      lock the user out permanently — re-importing their key starts
-  //      fresh.
+  //   3. **Failed-attempt counter.** Wrong password increments a per-actor
+  //      counter. At MAX_UNLOCK_FAILURES the local blob is wiped. Funds
+  //      are NEVER at risk — keypair still exists on-chain; user recovers
+  //      via the private key they exported at setup.
+  //
+  //   4. **Counter resets on success.**
   const unlockWallet = useCallback(async (password: string): Promise<boolean> => {
     if (!actorId) return false;
     const encrypted = loadEncryptedWallet(actorId);
     if (!encrypted) return false;
 
+    // Fetch helper before any decrypt attempt. Always fetch — v1/v2 will
+    // ignore it; v3 needs it. Single roundtrip per unlock attempt.
+    const helper = await fetchUnlockHelper();
+
+    // v3 with no helper → fail fast (don't burn a counter slot trying to
+    // decrypt with the password alone; that would always fail).
+    if (versionRequiresHelper(encrypted.version) && !helper) {
+      return false;
+    }
+
     try {
-      const kp = await decryptWallet(encrypted, password.trim());
+      const kp = await decryptWallet(encrypted, password.trim(), helper);
 
       // Success: reset failure counter immediately so a previous near-miss
       // doesn't trigger a wipe on the NEXT wrong attempt.
       clearUnlockFailures(actorId);
 
-      // Best-effort upgrade to the current blob version. Same password,
-      // same keypair bytes — only the at-rest iteration count changes.
-      // If the re-encrypt fails for any reason, the original blob is
-      // still valid and we'll retry on the next unlock.
-      const upgraded = await reencryptIfStale(encrypted, password.trim(), kp);
+      // Best-effort upgrade to current blob version. Skipped if the
+      // target version requires a helper and we don't have one.
+      const upgraded = await reencryptIfStale(encrypted, password.trim(), kp, helper);
       if (upgraded) saveEncryptedWallet(actorId, upgraded);
 
       setKeypair(kp);
@@ -386,7 +416,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
       }
       return false;
     }
-  }, [actorId]);
+  }, [actorId, fetchUnlockHelper]);
 
   // Lock wallet (clear keypair from memory + session, keep encrypted blob).
   const lockWallet = useCallback(() => {
