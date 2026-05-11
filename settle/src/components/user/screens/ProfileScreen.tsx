@@ -636,6 +636,11 @@ export const ProfileScreen = ({
             setResolvedDisputes([]);
             setLoginError('');
             setLoginForm({ username: '', password: '', email: '' });
+            // Drop the wallet context's actor binding so the next account
+            // on this device starts at 'initializing' rather than reusing
+            // the previous user's in-memory keypair / session blob.
+            const ew = (solanaWallet as any)?.embeddedWallet;
+            if (ew?.setActorId) ew.setActorId(null);
             if (solanaWallet.disconnect) {
               solanaWallet.disconnect();
             }

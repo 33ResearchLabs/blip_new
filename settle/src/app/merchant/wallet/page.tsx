@@ -72,6 +72,8 @@ export default function WalletPage({
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
     | {
         state: "initializing" | "none" | "locked" | "unlocked";
+        actorId: string | null;
+        setActorId: (id: string | null) => void;
         unlockWallet: (password: string) => Promise<boolean>;
         lockWallet: () => void;
         deleteWallet: () => void;
@@ -208,6 +210,14 @@ export default function WalletPage({
     };
     restoreSession();
   }, [router]);
+
+  // Hand the wallet context our actor id so its storage probe targets the
+  // right per-merchant slot (and runs the one-time legacy migration). Until
+  // this fires the context stays in 'initializing'.
+  useEffect(() => {
+    if (!embeddedWallet) return;
+    embeddedWallet.setActorId(merchantInfo?.id ?? null);
+  }, [embeddedWallet, merchantInfo?.id]);
 
   // Determine view based on wallet state
   useEffect(() => {
@@ -350,8 +360,12 @@ export default function WalletPage({
 
     setSetupLoading(true);
     try {
+      if (!merchantInfo?.id) {
+        setSetupError("Session not ready yet — try again in a second");
+        return;
+      }
       const { keypair, encrypted } = await generateWallet(password);
-      saveEncryptedWallet(encrypted);
+      saveEncryptedWallet(merchantInfo.id, encrypted);
       setPendingKeypair(keypair);
     } catch (err: any) {
       setSetupError(err.message || "Failed to create wallet");
@@ -373,11 +387,15 @@ export default function WalletPage({
 
     setSetupLoading(true);
     try {
+      if (!merchantInfo?.id) {
+        setSetupError("Session not ready yet — try again in a second");
+        return;
+      }
       const { keypair, encrypted } = await importWallet(
         privateKeyInput.trim(),
         password,
       );
-      saveEncryptedWallet(encrypted);
+      saveEncryptedWallet(merchantInfo.id, encrypted);
       embeddedWallet?.setKeypairAndUnlock(keypair);
     } catch (err: any) {
       setSetupError(err.message || "Invalid private key");
@@ -521,7 +539,8 @@ export default function WalletPage({
         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
         // Sign with embedded wallet keypair
-        const encrypted = loadEncryptedWallet();
+        if (!merchantInfo?.id) throw new Error("Session not ready");
+        const encrypted = loadEncryptedWallet(merchantInfo.id);
         if (!encrypted) throw new Error("Wallet not found");
         const pw = prompt("Enter wallet password to sign transaction");
         if (!pw) {
@@ -587,7 +606,8 @@ export default function WalletPage({
         tx.feePayer = senderPubkey;
         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-        const encrypted = loadEncryptedWallet();
+        if (!merchantInfo?.id) throw new Error("Session not ready");
+        const encrypted = loadEncryptedWallet(merchantInfo.id);
         if (!encrypted) throw new Error("Wallet not found");
         const pw = prompt("Enter wallet password to sign transaction");
         if (!pw) {
@@ -630,7 +650,11 @@ export default function WalletPage({
       setExportError("Enter your wallet password");
       return;
     }
-    const encrypted = loadEncryptedWallet();
+    if (!merchantInfo?.id) {
+      setExportError("Session not ready — try again in a moment");
+      return;
+    }
+    const encrypted = loadEncryptedWallet(merchantInfo.id);
     if (!encrypted) {
       setShowExportModal(false);
       showAlert("Error", "No wallet found", "error");

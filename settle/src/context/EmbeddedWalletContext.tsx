@@ -61,6 +61,7 @@ import {
   saveSessionKeypair,
   loadSessionKeypair,
   clearSessionKeypair,
+  migrateLegacyWallet,
 } from '@/lib/wallet/embeddedWallet';
 import { createKeypairWalletAdapter } from '@/lib/wallet/keypairWalletAdapter';
 import { confirmHttp } from '@/lib/solana/confirmHttp';
@@ -112,6 +113,11 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
   const [program, setProgram] = useState<Program | null>(null);
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<number | null>(null);
+  // Current actor (user.id or merchant.id) — null until the surrounding
+  // auth flow tells us who's logged in. Wallet state stays 'initializing'
+  // while this is null so we never flash an "Unlock" prompt for the
+  // wrong account on a shared device.
+  const [actorId, setActorIdState] = useState<string | null>(null);
 
   // Explicit wsEndpoint stops web3.js from auto-deriving ws://<origin>/api/rpc
   // (which is not a websocket server) and emitting "ws error: undefined" on
@@ -125,19 +131,55 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
 
   const connection = connectionRef.current;
 
-  // Check sessionStorage first (survives refresh), then localStorage
+  // Probe wallet state every time the actor changes.
+  //
+  //   - actorId === null  → 'initializing' (we don't know who they are yet)
+  //   - actorId !== null  → run one-time legacy migration into the per-actor
+  //                          slot, then probe session/locked/none for THIS
+  //                          actor's blob.
+  //
+  // Previously this probe ran once at mount with no actor context, which is
+  // exactly why a fresh signup on a device that once held User A's wallet
+  // saw "Unlock Wallet" — the device-wide single key was hit. Per-actor
+  // namespacing fixes that.
   useEffect(() => {
-    const sessionKp = loadSessionKeypair();
-    if (sessionKp && hasEncryptedWallet()) {
+    if (!actorId) {
+      setWalletState('initializing');
+      return;
+    }
+    // One-time migration: copy legacy `blip_embedded_wallet` (no actor
+    // suffix) into this actor's slot. Idempotent — safe on every mount.
+    migrateLegacyWallet(actorId);
+
+    const sessionKp = loadSessionKeypair(actorId);
+    if (sessionKp && hasEncryptedWallet(actorId)) {
       // Restore unlocked state from session — no password needed
       setKeypair(sessionKp);
       setWalletState('unlocked');
       lastActivityRef.current = Date.now();
-    } else if (hasEncryptedWallet()) {
+    } else if (hasEncryptedWallet(actorId)) {
       setWalletState('locked');
     } else {
       setWalletState('none');
     }
+  }, [actorId]);
+
+  // Public setter: auth flows call wallet.embeddedWallet.setActorId(id)
+  // after a successful login or wallet.embeddedWallet.setActorId(null)
+  // on logout. Treating null specifically clears the in-memory keypair so
+  // the next account on this device starts in 'initializing', not 'unlocked
+  // with the previous user's keypair still in memory'.
+  const setActorId = useCallback((id: string | null) => {
+    setActorIdState((prev) => {
+      if (prev === id) return prev;
+      if (id === null) {
+        setKeypair(null);
+        setProgram(null);
+        setSolBalance(null);
+        setUsdtBalance(null);
+      }
+      return id;
+    });
   }, []);
 
   // Build program when keypair is available
@@ -280,9 +322,10 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     })();
   }, [walletState, keypair]);
 
-  // Unlock wallet
+  // Unlock wallet — operates on the current actor's blob only.
   const unlockWallet = useCallback(async (password: string): Promise<boolean> => {
-    const encrypted = loadEncryptedWallet();
+    if (!actorId) return false;
+    const encrypted = loadEncryptedWallet(actorId);
     if (!encrypted) return false;
 
     try {
@@ -290,38 +333,43 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
       setKeypair(kp);
       setWalletState('unlocked');
       lastActivityRef.current = Date.now();
-      saveSessionKeypair(kp);
+      saveSessionKeypair(actorId, kp);
       return true;
     } catch {
       return false;
     }
-  }, []);
+  }, [actorId]);
 
-  // Lock wallet (clear keypair from memory + session)
+  // Lock wallet (clear keypair from memory + session, keep encrypted blob).
   const lockWallet = useCallback(() => {
     setKeypair(null);
     setProgram(null);
     setSolBalance(null);
     setUsdtBalance(null);
-    clearSessionKeypair();
-    setWalletState(hasEncryptedWallet() ? 'locked' : 'none');
-  }, []);
+    if (actorId) {
+      clearSessionKeypair(actorId);
+      setWalletState(hasEncryptedWallet(actorId) ? 'locked' : 'none');
+    } else {
+      setWalletState('initializing');
+    }
+  }, [actorId]);
 
-  // Delete wallet entirely
+  // Delete wallet entirely (removes the encrypted blob too).
   const deleteWallet = useCallback(() => {
-    clearSessionKeypair();
+    if (!actorId) return;
+    clearSessionKeypair(actorId);
     lockWallet();
-    clearEncryptedWallet();
+    clearEncryptedWallet(actorId);
     setWalletState('none');
-  }, [lockWallet]);
+  }, [actorId, lockWallet]);
 
-  // Set keypair directly (used by setup flow after generate/import)
+  // Set keypair directly (used by setup flow after generate/import).
   const setKeypairAndUnlock = useCallback((kp: Keypair) => {
     setKeypair(kp);
     setWalletState('unlocked');
     lastActivityRef.current = Date.now();
-    saveSessionKeypair(kp);
-  }, []);
+    if (actorId) saveSessionKeypair(actorId, kp);
+  }, [actorId]);
 
   // ---- Transaction helper ----
   const signAndSend = useCallback(async (transaction: Transaction): Promise<string> => {
@@ -668,6 +716,8 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     // Embedded-wallet-specific extensions
     embeddedWallet: {
       state: walletState,
+      actorId,
+      setActorId,
       unlockWallet,
       lockWallet,
       deleteWallet,
