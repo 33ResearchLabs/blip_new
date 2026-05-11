@@ -7,6 +7,24 @@
 
 import { Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
+import * as bip39 from 'bip39';
+import { derivePath } from 'ed25519-hd-key';
+
+// BIP39 mnemonic + HD derivation for Solana (Step 4 of wallet hardening).
+//
+// Standard Solana derivation path matches Phantom / Solflare / Sollet, so a
+// mnemonic exported from this wallet can be imported into any of them and
+// produce the same public key. 12 words = 128 bits of entropy — the industry
+// default. We could offer 24-word (256 bits) as an option later; for the
+// MVP we ship one consistent format.
+const SOLANA_DERIVATION_PATH = "m/44'/501'/0'/0'";
+const MNEMONIC_WORD_COUNT = 12;
+const MNEMONIC_ENTROPY_BITS = 128; // 12 words = 128 bits
+const MNEMONIC_STORAGE_KEY_PREFIX = 'blip_embedded_mnemonic';
+
+function mnemonicStorageKey(actorId: string): string {
+  return `${MNEMONIC_STORAGE_KEY_PREFIX}:${actorId}`;
+}
 
 // Storage is namespaced by actor (user.id / merchant.id) so multiple
 // accounts on the same browser don't bleed into each other. Previously
@@ -175,7 +193,68 @@ export interface EncryptedWallet {
   version: number;
 }
 
-/** Generate a new Solana keypair and encrypt it.
+// ---- BIP39 mnemonic helpers (Step 4) ----
+
+/** Generate a fresh BIP39 mnemonic phrase (12 words). The same phrase
+ *  can be imported into Phantom / Solflare / Sollet under the standard
+ *  Solana derivation path and will yield the same public key. */
+export function generateMnemonic(): string {
+  return bip39.generateMnemonic(MNEMONIC_ENTROPY_BITS);
+}
+
+/** Whether the given input is a valid BIP39 mnemonic phrase. Used by
+ *  the import flow to distinguish between mnemonic input and base58
+ *  private-key input. */
+export function isValidMnemonic(phrase: string): boolean {
+  const trimmed = phrase.trim().split(/\s+/).join(' ');
+  const wordCount = trimmed.split(' ').length;
+  // BIP39 standard: 12, 15, 18, 21, or 24 words.
+  if (![12, 15, 18, 21, 24].includes(wordCount)) return false;
+  return bip39.validateMnemonic(trimmed);
+}
+
+/** Derive a Solana Keypair from a BIP39 mnemonic using the standard
+ *  Phantom-compatible derivation path m/44'/501'/0'/0'. Returns the
+ *  same keypair every call for the same mnemonic. */
+export function mnemonicToKeypair(phrase: string): Keypair {
+  const seed = bip39.mnemonicToSeedSync(phrase.trim());
+  const { key } = derivePath(SOLANA_DERIVATION_PATH, Buffer.from(seed).toString('hex'));
+  return Keypair.fromSeed(key);
+}
+
+/** Generate a new mnemonic-derived wallet and encrypt both the secret
+ *  key and the mnemonic itself. The mnemonic ciphertext is stored
+ *  separately (caller passes the returned `encryptedMnemonic` to
+ *  saveEncryptedMnemonic). This gives the user a recoverable backup
+ *  via the standard 12-word phrase — losing the device but having the
+ *  phrase = funds recoverable in any Solana wallet.
+ *
+ *  Backward compat: regular `generateWallet` (random keypair, no
+ *  mnemonic) still works and is used for code paths that don't yet
+ *  support mnemonic backup. */
+export async function generateMnemonicWallet(
+  password: string,
+  unlockHelper?: string | null,
+): Promise<{
+  keypair: Keypair;
+  mnemonic: string;
+  encrypted: EncryptedWallet;
+  encryptedMnemonic: EncryptedWallet;
+}> {
+  const mnemonic = generateMnemonic();
+  const keypair = mnemonicToKeypair(mnemonic);
+  const encrypted = await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58(), unlockHelper);
+  // Encrypt the mnemonic under the same KDF as the secret key, but use a
+  // fresh IV (and a separate ciphertext) so the two blobs are independent
+  // — losing one doesn't reveal the other.
+  const mnemonicBytes = new TextEncoder().encode(mnemonic);
+  const encryptedMnemonic = await encryptSecretKey(mnemonicBytes, password, keypair.publicKey.toBase58(), unlockHelper);
+  return { keypair, mnemonic, encrypted, encryptedMnemonic };
+}
+
+/** Generate a new Solana keypair and encrypt it (random keypair, no mnemonic).
+ *  Retained for callers that don't (yet) surface mnemonic backup. New code
+ *  should prefer generateMnemonicWallet so users get a recoverable phrase.
  *  @param unlockHelper - REQUIRED when the current blob version requires
  *    one (v3+). Throws if missing. Callers fetch from /api/wallet/unlock-helper. */
 export async function generateWallet(
@@ -187,14 +266,35 @@ export async function generateWallet(
   return { keypair, encrypted };
 }
 
-/** Import a wallet from base58 private key and encrypt it.
- *  See generateWallet for unlockHelper semantics. */
+/** Import a wallet from EITHER a BIP39 mnemonic phrase OR a base58 private
+ *  key. The function auto-detects the input format (word-count + BIP39 word-
+ *  list check → mnemonic; else → base58). When a mnemonic is supplied we
+ *  also return the encrypted-mnemonic blob so the caller can persist it
+ *  and offer recovery later. */
 export async function importWallet(
-  base58PrivateKey: string,
+  secretInput: string,
   password: string,
   unlockHelper?: string | null,
-): Promise<{ keypair: Keypair; encrypted: EncryptedWallet }> {
-  const secretKey = bs58.decode(base58PrivateKey);
+): Promise<{
+  keypair: Keypair;
+  encrypted: EncryptedWallet;
+  // Present only when the input was a mnemonic. Base58-imported wallets
+  // have no mnemonic to store.
+  mnemonic?: string;
+  encryptedMnemonic?: EncryptedWallet;
+}> {
+  const trimmed = secretInput.trim();
+
+  if (isValidMnemonic(trimmed)) {
+    const keypair = mnemonicToKeypair(trimmed);
+    const encrypted = await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58(), unlockHelper);
+    const mnemonicBytes = new TextEncoder().encode(trimmed);
+    const encryptedMnemonic = await encryptSecretKey(mnemonicBytes, password, keypair.publicKey.toBase58(), unlockHelper);
+    return { keypair, encrypted, mnemonic: trimmed, encryptedMnemonic };
+  }
+
+  // Fall back to base58 private-key path (legacy import — no mnemonic).
+  const secretKey = bs58.decode(trimmed);
   const keypair = Keypair.fromSecretKey(secretKey);
   const encrypted = await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58(), unlockHelper);
   return { keypair, encrypted };
@@ -307,6 +407,75 @@ export function loadSessionKeypair(actorId: string): Keypair | null {
 /** Clear session keypair for the given actor. */
 export function clearSessionKeypair(actorId: string): void {
   localStorage.removeItem(sessionKey(actorId));
+}
+
+// ---- BIP39 mnemonic storage (Step 4) ----
+//
+// Mnemonic ciphertext lives in a separate localStorage entry from the
+// wallet itself so the wallet blob format is unchanged (no migration
+// needed for v1/v2/v3 blobs). Loss of either blob doesn't compromise
+// the other: an attacker who gets the mnemonic blob still needs the
+// password (+ server helper for v3) to decrypt it.
+//
+// Recoverability story: if the device is lost / browser data wiped /
+// password forgotten, the user can import the 12-word phrase into ANY
+// Solana wallet (Phantom, Solflare, etc.) under the standard
+// m/44'/501'/0'/0' path and regain access to their funds. The mnemonic
+// blob in localStorage is just a UX convenience for "show recovery
+// phrase" — the phrase the user wrote down on paper at creation is the
+// real backup.
+
+export function saveEncryptedMnemonic(actorId: string, encrypted: EncryptedWallet): void {
+  localStorage.setItem(mnemonicStorageKey(actorId), JSON.stringify(encrypted));
+}
+
+export function loadEncryptedMnemonic(actorId: string): EncryptedWallet | null {
+  const raw = localStorage.getItem(mnemonicStorageKey(actorId));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as EncryptedWallet;
+  } catch {
+    return null;
+  }
+}
+
+export function hasEncryptedMnemonic(actorId: string): boolean {
+  return localStorage.getItem(mnemonicStorageKey(actorId)) !== null;
+}
+
+export function clearEncryptedMnemonic(actorId: string): void {
+  localStorage.removeItem(mnemonicStorageKey(actorId));
+}
+
+/** Decrypt a previously-saved mnemonic. Same crypto path as decryptWallet
+ *  but returns the plaintext mnemonic phrase instead of a Keypair. Used by
+ *  the "Show Recovery Phrase" UI — requires the user to re-enter their
+ *  password (and fetches the server helper for v3 blobs). */
+export async function decryptMnemonic(
+  encrypted: EncryptedWallet,
+  password: string,
+  unlockHelper?: string | null,
+): Promise<string> {
+  const salt = Uint8Array.from(atob(encrypted.salt), c => c.charCodeAt(0));
+  const iv = Uint8Array.from(atob(encrypted.iv), c => c.charCodeAt(0));
+  const ciphertext = Uint8Array.from(atob(encrypted.encryptedKey), c => c.charCodeAt(0));
+  const effectiveSecret = versionRequiresHelper(encrypted.version)
+    ? passwordWithHelper(password, unlockHelper ?? null)
+    : password;
+
+  if (hasSubtleCrypto) {
+    const key = await deriveKey(effectiveSecret, salt, iterationsForVersion(encrypted.version));
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv as BufferSource },
+      key,
+      ciphertext as BufferSource
+    );
+    return new TextDecoder().decode(new Uint8Array(decrypted));
+  } else {
+    const keyBytes = await hashPasswordFallback(effectiveSecret, salt);
+    const decrypted = xorBytes(ciphertext, keyBytes);
+    return new TextDecoder().decode(decrypted);
+  }
 }
 
 // ---- Failed-unlock counter ----
