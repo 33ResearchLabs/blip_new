@@ -72,6 +72,12 @@ export function UserWelcomePage({ onGetStarted, onSignIn }: UserWelcomePageProps
     }
   };
 
+  const scrollToChooser = () => {
+    if (typeof window === "undefined") return;
+    const el = document.getElementById("role-chooser");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div className="flex-1 w-full mx-auto flex flex-col text-text-primary overflow-y-auto relative" style={{ background: "var(--color-bg-primary, #060606)" }}>
       {/* Global ambient glows */}
@@ -101,13 +107,13 @@ export function UserWelcomePage({ onGetStarted, onSignIn }: UserWelcomePageProps
           </div>
           <div className="flex items-center gap-1 md:gap-2">
             <button
-              onClick={onSignIn}
+              onClick={scrollToChooser}
               className="px-3 md:px-4 py-2 rounded-lg text-[13px] font-semibold text-text-secondary hover:text-text-primary hover:bg-white/5 transition-all"
             >
               Sign In
             </button>
             <button
-              onClick={onGetStarted}
+              onClick={scrollToChooser}
               className="px-3 md:px-5 py-2 rounded-lg text-[13px] font-bold bg-white text-black hover:bg-neutral-200 transition-all flex items-center gap-1.5"
             >
               Get Started
@@ -178,7 +184,7 @@ export function UserWelcomePage({ onGetStarted, onSignIn }: UserWelcomePageProps
         </motion.section>
 
         {/* ─── ROLE CHOOSER (PRIMARY CTA) ─────────────────── */}
-        <section className="pb-16 md:pb-24">
+        <section id="role-chooser" className="pb-16 md:pb-24 scroll-mt-24">
           <div className="text-center mb-6 md:mb-8">
             <p className="text-[11px] font-bold tracking-[0.22em] uppercase text-text-tertiary mb-2">
               Choose how you want to use Blip
