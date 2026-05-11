@@ -81,14 +81,14 @@ export function LandingPage({
   }
 
   return (
-    <div className="flex-1 w-full max-w-[440px] mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden">
+    <div className="flex-1 w-full mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden">
       {/* Ambient background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] h-[300px] bg-warning/[0.05] rounded-full blur-[120px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] md:w-[700px] h-[300px] md:h-[500px] bg-warning/[0.05] rounded-full blur-[120px]" />
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-10 relative z-10">
-        <div className="w-full">
+        <div className="w-full max-w-[440px]">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2.5 mb-4">
               <Zap className="w-7 h-7 text-text-primary fill-current" />
