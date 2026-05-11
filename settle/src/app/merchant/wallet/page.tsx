@@ -47,6 +47,7 @@ import {
   loadEncryptedWallet,
   clearEncryptedWallet,
   hasEncryptedWallet,
+  validatePasswordStrength,
 } from "@/lib/wallet/embeddedWallet";
 import { Keypair } from "@solana/web3.js";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
@@ -349,8 +350,11 @@ export default function WalletPage({
 
   const handleCreate = async () => {
     setSetupError("");
-    if (password.length < 6) {
-      setSetupError("Password must be at least 6 characters");
+    // Strength check enforced at creation only — never at unlock — so
+    // existing mainnet merchants with legacy passwords aren't locked out.
+    const strength = validatePasswordStrength(password);
+    if (!strength.ok) {
+      setSetupError(strength.reason || "Password is too weak");
       return;
     }
     if (password !== confirmPassword) {
@@ -376,8 +380,11 @@ export default function WalletPage({
 
   const handleImport = async () => {
     setSetupError("");
-    if (password.length < 6) {
-      setSetupError("Password must be at least 6 characters");
+    // Import re-encrypts under a new password — same rules as Create so
+    // import isn't a back-door around the strength gate.
+    const strength = validatePasswordStrength(password);
+    if (!strength.ok) {
+      setSetupError(strength.reason || "Password is too weak");
       return;
     }
     if (!privateKeyInput.trim()) {

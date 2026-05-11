@@ -55,6 +55,7 @@ import {
 } from '@/lib/solana/v2';
 import {
   loadEncryptedWallet,
+  saveEncryptedWallet,
   decryptWallet,
   clearEncryptedWallet,
   hasEncryptedWallet,
@@ -62,6 +63,10 @@ import {
   loadSessionKeypair,
   clearSessionKeypair,
   migrateLegacyWallet,
+  reencryptIfStale,
+  recordUnlockFailure,
+  clearUnlockFailures,
+  MAX_UNLOCK_FAILURES,
 } from '@/lib/wallet/embeddedWallet';
 import { createKeypairWalletAdapter } from '@/lib/wallet/keypairWalletAdapter';
 import { confirmHttp } from '@/lib/solana/confirmHttp';
@@ -323,6 +328,24 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
   }, [walletState, keypair]);
 
   // Unlock wallet — operates on the current actor's blob only.
+  //
+  // Three behaviors layered into this path:
+  //
+  //   1. **Opportunistic KDF upgrade.** Existing mainnet wallets were
+  //      encrypted at PBKDF2 100k (v1). The first time they unlock under
+  //      this build we re-encrypt at 600k (v2) under the same password —
+  //      no re-password prompt, no UX change for the user.
+  //
+  //   2. **Failed-attempt counter.** Every wrong password increments a
+  //      per-actor counter. After MAX_UNLOCK_FAILURES consecutive
+  //      failures, the local encrypted blob is wiped — the user must
+  //      then recover via their exported private key (Export Key UI is
+  //      mandatory at creation). Funds are NEVER at risk: the keypair
+  //      still exists on-chain; only the device cache is removed.
+  //
+  //   3. **Counter resets on success.** Reaching the threshold doesn't
+  //      lock the user out permanently — re-importing their key starts
+  //      fresh.
   const unlockWallet = useCallback(async (password: string): Promise<boolean> => {
     if (!actorId) return false;
     const encrypted = loadEncryptedWallet(actorId);
@@ -330,12 +353,37 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
 
     try {
       const kp = await decryptWallet(encrypted, password.trim());
+
+      // Success: reset failure counter immediately so a previous near-miss
+      // doesn't trigger a wipe on the NEXT wrong attempt.
+      clearUnlockFailures(actorId);
+
+      // Best-effort upgrade to the current blob version. Same password,
+      // same keypair bytes — only the at-rest iteration count changes.
+      // If the re-encrypt fails for any reason, the original blob is
+      // still valid and we'll retry on the next unlock.
+      const upgraded = await reencryptIfStale(encrypted, password.trim(), kp);
+      if (upgraded) saveEncryptedWallet(actorId, upgraded);
+
       setKeypair(kp);
       setWalletState('unlocked');
       lastActivityRef.current = Date.now();
       saveSessionKeypair(actorId, kp);
       return true;
     } catch {
+      const failures = recordUnlockFailure(actorId);
+      if (failures >= MAX_UNLOCK_FAILURES) {
+        // Threshold reached — wipe local cache. Next mount sees 'none'
+        // and the UI flips to the Create/Import wallet screen.
+        clearEncryptedWallet(actorId);
+        clearSessionKeypair(actorId);
+        clearUnlockFailures(actorId);
+        setKeypair(null);
+        setProgram(null);
+        setSolBalance(null);
+        setUsdtBalance(null);
+        setWalletState('none');
+      }
       return false;
     }
   }, [actorId]);
