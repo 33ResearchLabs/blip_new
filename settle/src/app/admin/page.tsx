@@ -218,9 +218,6 @@ export default function AdminConsolePage() {
   const [orderSearch, setOrderSearch] = useState("");
   const [orderSort, setOrderSort] = useState<string>("newest");
   const [activeTab, setActiveTab] = useState<"orders" | "dashboard" | "analytics">("dashboard");
-  // Lifted from AdminDashboard so the RANGE pills can render inline with the
-  // global Live / last-refresh / refresh-button toolbar (one merged row).
-  const [dashboardTimeframe, setDashboardTimeframe] = useState<string>("24h");
 
   const adminTokenRef = useRef<string | null>(null);
   adminTokenRef.current = adminToken;
@@ -473,73 +470,34 @@ export default function AdminConsolePage() {
   return (
     <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
 
-      {/* Header (logo + nav + logout) lives in src/app/admin/layout.tsx so it
-          persists across tab clicks. This in-body toolbar carries the
-          page-level controls — RANGE pills, Live indicator, last-refresh
-          stamp, and refresh button all on a single row.
-          The AdminDashboard used to render its own second row containing the
-          RANGE pills + a duplicate last-refresh / refresh button; that row
-          has been removed and the pills lifted up here so the dashboard
-          opens with one merged toolbar instead of two stacked rows. */}
-      <div className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-border bg-card/30">
-        {/* Left: RANGE pills (dashboard tab only). Empty placeholder on other
-            tabs so the right cluster stays anchored to the right edge. */}
-        <div className="flex items-center gap-2 min-w-0">
-          {activeTab === "dashboard" && (
+      {/* Header (logo + nav + logout) now lives in src/app/admin/layout.tsx
+          so it persists across tab clicks instead of re-mounting per page.
+          Page-specific controls (live indicator, refresh, lastRefresh)
+          stay below in an in-body toolbar — same behavior, just no longer
+          sitting in a sticky chrome that re-renders every navigation. */}
+      <div className="flex items-center justify-end gap-2 px-4 py-1.5 border-b border-border bg-card/30">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
+          <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
+          <span className="text-[9px] font-mono font-bold text-foreground/40 uppercase tracking-wider">Live</span>
+          {stats && (
             <>
-              <span className="text-[10px] font-mono text-foreground/30 uppercase tracking-wider">
-                Range
-              </span>
-              <div className="flex gap-0.5 bg-card rounded-md p-0.5 border border-border">
-                {[
-                  { key: "1h", label: "1h" },
-                  { key: "24h", label: "24h" },
-                  { key: "7d", label: "7d" },
-                  { key: "1month", label: "30d" },
-                  { key: "all", label: "All" },
-                ].map((tf) => (
-                  <button
-                    key={tf.key}
-                    onClick={() => setDashboardTimeframe(tf.key)}
-                    className={`px-2 py-1 text-[10px] font-mono font-bold rounded transition-colors ${
-                      dashboardTimeframe === tf.key
-                        ? "bg-primary/10 text-primary border border-primary/20"
-                        : "text-foreground/30 hover:text-foreground/60"
-                    }`}
-                  >
-                    {tf.label}
-                  </button>
-                ))}
-              </div>
+              <span className="text-foreground/[0.08]">|</span>
+              <span className="text-[9px] font-mono text-foreground/30">{stats.txPerMinute?.toFixed(1)}/min</span>
             </>
           )}
         </div>
 
-        {/* Right: Live / per-minute / last-refresh / refresh button */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
-            <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
-            <span className="text-[9px] font-mono font-bold text-foreground/40 uppercase tracking-wider">Live</span>
-            {stats && (
-              <>
-                <span className="text-foreground/[0.08]">|</span>
-                <span className="text-[9px] font-mono text-foreground/30">{stats.txPerMinute?.toFixed(1)}/min</span>
-              </>
-            )}
-          </div>
+        <span className="text-[9px] font-mono text-foreground/20 tabular-nums">
+          {mounted ? lastRefresh.toLocaleTimeString() : "--:--:--"}
+        </span>
 
-          <span className="text-[9px] font-mono text-foreground/20 tabular-nums">
-            {mounted ? lastRefresh.toLocaleTimeString() : "--:--:--"}
-          </span>
-
-          <button
-            onClick={fetchData}
-            disabled={isRefreshing}
-            className="p-2 rounded-lg transition-all bg-card hover:bg-accent-subtle border border-border"
-          >
-            <RefreshCw className={`w-[18px] h-[18px] text-foreground/40 ${isRefreshing ? "animate-spin" : ""}`} />
-          </button>
-        </div>
+        <button
+          onClick={fetchData}
+          disabled={isRefreshing}
+          className="p-2 rounded-lg transition-all bg-card hover:bg-accent-subtle border border-border"
+        >
+          <RefreshCw className={`w-[18px] h-[18px] text-foreground/40 ${isRefreshing ? "animate-spin" : ""}`} />
+        </button>
       </div>
 
       {/* ===== DASHBOARD TAB ===== */}
@@ -547,10 +505,7 @@ export default function AdminConsolePage() {
        *  its own internal scroll regions (e.g. the All Orders list). */}
       {activeTab === "dashboard" && adminToken && (
         <div className="flex-1 min-h-0 overflow-hidden">
-          <AdminDashboard
-            adminToken={adminToken}
-            timeframe={dashboardTimeframe}
-          />
+          <AdminDashboard adminToken={adminToken} />
         </div>
       )}
 
