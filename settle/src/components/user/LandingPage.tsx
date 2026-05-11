@@ -89,20 +89,21 @@ export function LandingPage({
 
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-10 relative z-10">
         <div className="w-full max-w-[440px]">
-          {/* Top bar: home link + role switch */}
-          <div className="flex items-center justify-between mb-6">
+          {/* Top bar: home link + role switch — proper visible buttons */}
+          <div className="flex items-center justify-between mb-6 gap-2">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-text-tertiary hover:text-text-primary transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
               Home
             </Link>
             <Link
               href="/merchant/login"
-              className="text-[11px] font-semibold text-text-tertiary hover:text-text-primary transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
             >
-              Are you a merchant? →
+              Are you a merchant?
+              <span aria-hidden>→</span>
             </Link>
           </div>
 
