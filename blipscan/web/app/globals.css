@@ -2,45 +2,245 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================
+   BLIP — Premium Monochrome (Apple-inspired)
+   Black & white base. Color only for meaning.
+   ========================================== */
+
 @layer base {
-  /* Light mode (default) */
+  /* Dark (default) — near-black layered surfaces */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 220 13% 13%;
-    --primary: 24 94% 53%;
+    --background: 0 0% 2.4%;          /* #060606 */
+    --foreground: 0 0% 100%;
+    --primary: 0 0% 100%;             /* White CTA, Apple style */
+    --primary-foreground: 0 0% 2.4%;
+    --secondary: 0 0% 4.7%;           /* #0c0c0c */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 7.5%;               /* #131313 */
+    --muted-foreground: 0 0% 50%;     /* white @ 50% */
+    --border: 0 0% 12%;               /* subtle hairline on near-black */
+    --card: 0 0% 4.7%;                /* #0c0c0c */
+    --card-hover: 0 0% 7.5%;          /* #131313 */
+    --radius: 0.875rem;
+  }
+
+  /* Light — Etherscan/Solscan-inspired: cool gray base, crisp white cards,
+     real shadows, blue link accent */
+  .light {
+    --background: 214 32% 96.5%;      /* #F1F4F8 — Solscan cool gray */
+    --foreground: 222 24% 12%;        /* #18202E — deep ink */
+    --primary: 217 91% 45%;           /* #1463E6 — Etherscan blue */
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 13% 13%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
-    --border: 220 13% 91%;
+    --secondary: 214 28% 92%;
+    --secondary-foreground: 222 24% 12%;
+    --muted: 214 28% 92%;
+    --muted-foreground: 220 13% 38%;  /* #525C6B */
+    --border: 215 20% 85%;            /* #CFD6DF — crisper than before */
     --card: 0 0% 100%;
-    --card-hover: 220 14% 98%;
-    --radius: 0.5rem;
+    --card-hover: 214 32% 98%;
+    --radius: 0.875rem;
   }
 
-  /* Dark mode */
-  .dark {
-    --background: 0 0% 3%;
-    --foreground: 0 0% 98%;
-    --primary: 24 94% 53%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 7%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 55%;
-    --border: 0 0% 14%;
-    --card: 0 0% 5%;
-    --card-hover: 0 0% 8%;
-    --radius: 0.5rem;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
+  * { border-color: hsl(var(--border)); }
+  html, body { background: hsl(var(--background)); min-height: 100dvh; }
   body {
-    @apply bg-background text-foreground antialiased;
+    color: hsl(var(--foreground));
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+      'Helvetica Neue', Inter, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    letter-spacing: -0.005em;
   }
 }
+
+@layer utilities {
+  /* Glass card — neutral, ultra-subtle */
+  .glass {
+    background: hsl(var(--foreground) / 0.03);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid hsl(var(--foreground) / 0.06);
+  }
+  .light .glass {
+    background: hsl(var(--foreground) / 0.02);
+    border-color: hsl(var(--foreground) / 0.07);
+  }
+
+  .hairline { border-color: hsl(var(--foreground) / 0.06); }
+  .hairline-strong { border-color: hsl(var(--foreground) / 0.12); }
+
+  /* Ambient hero — vivid aurora over the dark band */
+  .ambient-bg {
+    position: relative;
+    background:
+      radial-gradient(50% 70% at 15% 100%, hsl(258 90% 60% / 0.28), transparent 60%),
+      radial-gradient(45% 60% at 85% 0%,   hsl(199 95% 55% / 0.22), transparent 60%),
+      radial-gradient(40% 60% at 50% 50%,  hsl(330 90% 60% / 0.12), transparent 60%),
+      hsl(var(--background));
+  }
+  .ambient-bg::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(hsl(0 0% 100% / 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(0 0% 100% / 0.025) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(60% 60% at 50% 30%, black, transparent 80%);
+    -webkit-mask-image: radial-gradient(60% 60% at 50% 30%, black, transparent 80%);
+    pointer-events: none;
+  }
+
+  /* Premium gradient text — white shimmer */
+  .text-shimmer {
+    background-image: linear-gradient(135deg,
+      hsl(var(--foreground) / 1) 0%,
+      hsl(var(--foreground) / 0.55) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Caption — uppercase tracking like Apple labels */
+  .text-caption {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  /* Live dot — gentle breathing */
+  @keyframes breathe { 0%,100% { opacity: 0.5 } 50% { opacity: 1 } }
+  .breathe { animation: breathe 2.2s ease-in-out infinite; }
+
+  /* Row flash — when a trade updates via SSE */
+  @keyframes rowFlash {
+    0%   { background-color: hsl(var(--foreground) / 0.12); }
+    100% { background-color: transparent; }
+  }
+  .row-flash > td { animation: rowFlash 1.6s ease-out; }
+
+  /* Hover lift */
+  .hover-lift { transition: transform .2s cubic-bezier(.4,0,.2,1), border-color .2s, background-color .2s; }
+  .hover-lift:hover { transform: translateY(-1px); }
+
+  /* Scrollbar */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+/* ==========================================
+   LIGHT MODE — remap white-based utilities to ink so the
+   monochrome design language still reads on a warm-white base,
+   and refine the ambient hero so it doesn't look flat.
+   ========================================== */
+
+/* ── Solscan-style: dark header + dark hero band, then light body ── */
+
+/* Dark band: header + hero share a deep navy background */
+.light header.sticky,
+.light .ambient-bg {
+  background: hsl(222 32% 9%) !important;     /* #10141F — Solscan navy */
+  color: hsl(0 0% 100%);
+  border-bottom-color: hsl(0 0% 100% / 0.06) !important;
+}
+
+/* Light-mode hero: same vivid aurora over the navy band */
+.light .ambient-bg {
+  background:
+    radial-gradient(50% 70% at 15% 100%, hsl(258 90% 60% / 0.32), transparent 60%),
+    radial-gradient(45% 60% at 85% 0%,   hsl(199 95% 55% / 0.26), transparent 60%),
+    radial-gradient(40% 60% at 50% 50%,  hsl(330 90% 60% / 0.14), transparent 60%),
+    hsl(222 32% 9%) !important;
+}
+
+/* Force all text inside the dark band to read white-on-dark, undoing the
+   light-mode remaps that would otherwise turn it into invisible ink-on-dark */
+.light header.sticky .text-foreground,
+.light .ambient-bg .text-foreground,
+.light header.sticky [class*="text-foreground/"],
+.light .ambient-bg [class*="text-foreground/"] { color: hsl(0 0% 100%) !important; }
+.light header.sticky [class*="text-foreground/4"],
+.light .ambient-bg [class*="text-foreground/4"] { color: hsl(0 0% 100% / 0.55) !important; }
+.light header.sticky [class*="text-foreground/5"],
+.light .ambient-bg [class*="text-foreground/5"] { color: hsl(0 0% 100% / 0.6) !important; }
+.light header.sticky [class*="text-foreground/6"],
+.light .ambient-bg [class*="text-foreground/6"] { color: hsl(0 0% 100% / 0.7) !important; }
+
+/* Re-enable white/N opacities INSIDE the dark band (the global light remap
+   converts them to ink — undo it here so chips/inputs stay readable on navy) */
+.light header.sticky [class*="bg-white/"],
+.light .ambient-bg [class*="bg-white/"] { background-color: hsl(0 0% 100% / 0.06) !important; }
+.light header.sticky [class*="border-white/"],
+.light .ambient-bg [class*="border-white/"] { border-color: hsl(0 0% 100% / 0.1) !important; }
+
+/* Logo tile inside the dark band: white square with dark glyph */
+.light header.sticky .bg-white { background: hsl(0 0% 100%) !important; color: hsl(222 32% 9%) !important; }
+
+/* Shimmer headline reads as crisp white on the dark hero */
+.light .ambient-bg .text-shimmer {
+  background-image: linear-gradient(135deg, hsl(0 0% 100%), hsl(0 0% 100% / 0.7));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Light body (below the dark band) ── */
+
+/* Glass = pure white card with real Solscan-style shadow + crisp border */
+.light .glass {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  box-shadow:
+    0 1px 2px hsl(222 30% 10% / 0.04),
+    0 4px 12px -4px hsl(222 30% 10% / 0.04);
+}
+
+/* Stat grid: 1px gaps render as crisp dividers, cells become solid white */
+.light .glass.gap-px { background: hsl(var(--border)); border-color: hsl(var(--border)); }
+.light .glass.gap-px > div { background: hsl(var(--card)) !important; }
+.light .glass.gap-px > div:hover { background: hsl(var(--card-hover)) !important; }
+
+/* Headline shimmer — full ink with a hint of fade so it has depth, not flatness */
+.light .text-shimmer {
+  background-image: linear-gradient(135deg,
+    hsl(var(--foreground)) 0%,
+    hsl(var(--foreground) / 0.7) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Address & signature mono text: blue accent on hover, like Etherscan */
+.light a.font-mono:hover,
+.light a:hover .font-mono { color: hsl(var(--primary)) !important; text-decoration: underline; }
+
+/* Crisper table header in light: cool gray fill */
+.light thead tr { background: hsl(214 28% 96%) !important; }
+
+/* Remap bg-white/[0.0N] → ink @ low opacity */
+.light [class*="bg-white/\\[0.015"] { background-color: hsl(220 18% 9% / 0.025) !important; }
+.light [class*="bg-white/\\[0.02"]  { background-color: hsl(220 18% 9% / 0.03) !important; }
+.light [class*="bg-white/\\[0.025"] { background-color: hsl(220 18% 9% / 0.035) !important; }
+.light [class*="bg-white/\\[0.04"]  { background-color: hsl(220 18% 9% / 0.05) !important; }
+.light [class*="bg-white/\\[0.06"]  { background-color: hsl(220 18% 9% / 0.07) !important; }
+
+/* Hover variants */
+.light .hover\:bg-white\/\[0\.02\]:hover  { background-color: hsl(220 18% 9% / 0.035) !important; }
+.light .hover\:bg-white\/\[0\.025\]:hover { background-color: hsl(220 18% 9% / 0.04) !important; }
+.light .hover\:bg-white\/\[0\.04\]:hover  { background-color: hsl(220 18% 9% / 0.06) !important; }
+.light .hover\:bg-white\/\[0\.06\]:hover  { background-color: hsl(220 18% 9% / 0.08) !important; }
+
+/* Remap border-white/[0.0N] → ink hairlines */
+.light [class*="border-white/\\[0.05"] { border-color: hsl(220 18% 9% / 0.08) !important; }
+.light [class*="border-white/\\[0.06"] { border-color: hsl(220 18% 9% / 0.09) !important; }
+.light [class*="border-white/\\[0.08"] { border-color: hsl(220 18% 9% / 0.12) !important; }
+.light [class*="border-white/\\[0.16"] { border-color: hsl(220 18% 9% / 0.22) !important; }
+.light [class*="border-white/\\[0.18"] { border-color: hsl(220 18% 9% / 0.26) !important; }
+
+/* Logo tile flips ink-on-light */
+.light .bg-white.text-black { background-color: hsl(var(--foreground)) !important; color: hsl(var(--background)) !important; }
+
+/* Active toggle pill — foreground swap stays correct (dark-on-light) */
+.light .bg-foreground { color: hsl(var(--background)) !important; }
+

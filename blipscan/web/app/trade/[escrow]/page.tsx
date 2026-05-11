@@ -61,19 +61,19 @@ interface LifecycleEvent {
 }
 
 function ThemeToggle() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   useEffect(() => {
-    setDark(document.documentElement.classList.contains('dark'));
+    setDark(!document.documentElement.classList.contains('light'));
   }, []);
   const toggle = () => {
     const next = !dark;
     setDark(next);
-    document.documentElement.classList.toggle('dark', next);
+    document.documentElement.classList.toggle('light', !next);
     localStorage.setItem('blipscan-theme', next ? 'dark' : 'light');
   };
   return (
-    <button onClick={toggle} className="p-2 rounded-lg hover:bg-secondary transition-colors" title="Toggle theme">
-      {dark ? <Sun size={16} className="text-foreground" /> : <Moon size={16} className="text-foreground" />}
+    <button onClick={toggle} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors" title="Toggle theme">
+      {dark ? <Sun size={15} className="text-foreground/60" /> : <Moon size={15} className="text-foreground/60" />}
     </button>
   );
 }
@@ -94,7 +94,7 @@ function CopyButton({ text }: { text: string }) {
 
 function Row({ label, children, mono = false }: { label: string; children: React.ReactNode; mono?: boolean }) {
   return (
-    <div className="flex items-start py-2.5 border-b border-border/50 last:border-0">
+    <div className="flex items-start py-2.5 border-b border-white/[0.05] last:border-0">
       <span className="text-xs text-muted-foreground w-40 shrink-0 pt-0.5">{label}</span>
       <span className={`text-sm text-foreground flex-1 min-w-0 ${mono ? 'font-mono' : ''}`}>{children}</span>
     </div>
@@ -376,25 +376,24 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
   return (
     <div className="min-h-screen bg-background">
       {/* Navbar */}
-      <nav className="border-b border-border bg-card">
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-background/70 border-b border-white/[0.06]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-white font-bold text-xs">B</span>
+            <Link href="/" className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-white text-black flex items-center justify-center">
+                <span className="font-bold text-xs">B</span>
               </div>
-              <span className="font-semibold text-foreground text-sm">BlipScan</span>
+              <span className="text-[15px] font-semibold tracking-tight text-foreground">BlipScan</span>
             </Link>
-            <div className="hidden sm:flex items-center gap-4 text-xs">
-              <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">Trades</Link>
-            </div>
+            <nav className="hidden md:flex items-center gap-1 text-[13px]">
+              <Link href="/" className="px-3 py-1.5 rounded-full text-foreground/50 hover:text-foreground hover:bg-white/[0.04] transition-colors">Trades</Link>
+            </nav>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${isMainnet() ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400'}`}>{networkLabel()}</span>
             <ThemeToggle />
           </div>
         </div>
-      </nav>
+      </header>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Breadcrumb */}
@@ -426,22 +425,22 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <div className="p-3 rounded-lg bg-card border border-border">
+          <div className="p-3 rounded-2xl glass">
             <p className="text-xs text-muted-foreground mb-1">Amount</p>
             <p className="text-lg font-semibold text-foreground">${formatAmount(trade.amount)}</p>
             <p className="text-[10px] text-muted-foreground font-mono">{parseInt(trade.amount).toLocaleString()} lamports</p>
           </div>
-          <div className="p-3 rounded-lg bg-card border border-border">
+          <div className="p-3 rounded-2xl glass">
             <p className="text-xs text-muted-foreground mb-1">Fee</p>
             <p className="text-lg font-semibold text-foreground">{trade.fee_bps > 0 ? `${(trade.fee_bps / 100).toFixed(2)}%` : '0%'}</p>
             <p className="text-[10px] text-muted-foreground">{trade.fee_bps > 0 ? `$${feeAmount.toFixed(2)} (${trade.fee_bps} bps)` : 'No fee'}</p>
           </div>
-          <div className="p-3 rounded-lg bg-card border border-border">
+          <div className="p-3 rounded-2xl glass">
             <p className="text-xs text-muted-foreground mb-1">Net Payout</p>
             <p className="text-lg font-semibold text-foreground">${netAmount.toFixed(2)}</p>
             <p className="text-[10px] text-muted-foreground">After fee deduction</p>
           </div>
-          <div className="p-3 rounded-lg bg-card border border-border">
+          <div className="p-3 rounded-2xl glass">
             <p className="text-xs text-muted-foreground mb-1">Total Time</p>
             <p className="text-lg font-semibold text-foreground">{formatDuration(totalTime)}</p>
             <p className="text-[10px] text-muted-foreground">{totalTime !== null ? 'Create → Release' : 'In progress'}</p>
@@ -491,7 +490,7 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
 
         {/* Details section */}
         <div className="rounded-lg border border-border bg-card mb-4">
-          <div className="px-4 py-3 border-b border-border">
+          <div className="px-4 py-3 border-b border-white/[0.06]">
             <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">Details</h2>
           </div>
           <div className="px-4">
@@ -514,7 +513,7 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
 
         {/* Participants section */}
         <div className="rounded-lg border border-border bg-card mb-4">
-          <div className="px-4 py-3 border-b border-border">
+          <div className="px-4 py-3 border-b border-white/[0.06]">
             <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">Participants</h2>
           </div>
           <div className="px-4">
@@ -543,14 +542,14 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
 
         {/* ALL Transactions section — the main event */}
         <div className="rounded-lg border border-border bg-card mb-4">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
             <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">Transactions</h2>
             <span className="text-[10px] text-muted-foreground">{transactions.length || tradeSigs.length} total</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border bg-secondary/30">
+                <tr className="border-b border-white/[0.06] bg-white/[0.015]">
                   <th className="text-left px-4 py-2.5 text-muted-foreground font-medium w-8">#</th>
                   <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Instruction</th>
                   <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Signature</th>
@@ -563,7 +562,7 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
                 {/* First, show tx from unified transactions table */}
                 {transactions.length > 0 ? (
                   transactions.map((tx, idx) => (
-                    <tr key={tx.signature} className="border-b border-border/50 last:border-0 hover:bg-card-hover transition-colors">
+                    <tr key={tx.signature} className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.025] transition-colors">
                       <td className="px-4 py-3 text-muted-foreground">{idx + 1}</td>
                       <td className="px-4 py-3">
                         <span className={`font-medium ${instructionColor(tx.instruction_type)}`}>
@@ -594,7 +593,7 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
                 ) : (
                   /* Fallback: show signatures from trade record */
                   tradeSigs.map((sig, idx) => (
-                    <tr key={sig.signature} className="border-b border-border/50 last:border-0 hover:bg-card-hover transition-colors">
+                    <tr key={sig.signature} className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.025] transition-colors">
                       <td className="px-4 py-3 text-muted-foreground">{idx + 1}</td>
                       <td className="px-4 py-3">
                         <span className={`font-medium ${instructionColor(sig.type)}`}>
@@ -638,13 +637,13 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
         {/* V1 Event Timeline (only for V1 trades with events) */}
         {events.length > 0 && (
           <div className="rounded-lg border border-border bg-card mb-4">
-            <div className="px-4 py-3 border-b border-border">
+            <div className="px-4 py-3 border-b border-white/[0.06]">
               <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">Event Log</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-border bg-secondary/30">
+                  <tr className="border-b border-white/[0.06] bg-white/[0.015]">
                     <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Event</th>
                     <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Signature</th>
                     <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Slot</th>
@@ -654,7 +653,7 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
                 </thead>
                 <tbody>
                   {events.map((event) => (
-                    <tr key={event.id} className="border-b border-border/50 last:border-0 hover:bg-card-hover transition-colors">
+                    <tr key={event.id} className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.025] transition-colors">
                       <td className="px-4 py-2.5 font-medium capitalize text-foreground">{event.event_type}</td>
                       <td className="px-4 py-2.5 font-mono text-foreground">
                         <div className="flex items-center gap-1.5">
@@ -680,7 +679,7 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
 
         {/* Timestamps section */}
         <div className="rounded-lg border border-border bg-card">
-          <div className="px-4 py-3 border-b border-border">
+          <div className="px-4 py-3 border-b border-white/[0.06]">
             <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">Timestamps</h2>
           </div>
           <div className="px-4">

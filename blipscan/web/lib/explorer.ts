@@ -17,9 +17,9 @@ function getNetwork(): SolanaNetwork {
     typeof process !== 'undefined'
       ? process.env?.NEXT_PUBLIC_SOLANA_NETWORK
       : undefined;
-  if (v === 'mainnet-beta' || v === 'mainnet') return 'mainnet-beta';
+  if (v === 'devnet') return 'devnet';
   if (v === 'testnet') return 'testnet';
-  return 'devnet';
+  return 'mainnet-beta';
 }
 
 export function isMainnet(): boolean {

@@ -57,27 +57,60 @@ interface Stats {
   avg_completion_time: number;
 }
 
+function UsdtBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 font-mono tabular-nums">
+      <svg viewBox="0 0 32 32" className="w-3.5 h-3.5 shrink-0" aria-hidden="true">
+        <circle cx="16" cy="16" r="16" fill="#26A17B" />
+        <path
+          fill="#FFFFFF"
+          d="M17.9 14.8v-2h4.6V9.7H9.5v3.1h4.6v2c-3.7.2-6.5 1-6.5 1.8s2.8 1.6 6.5 1.8v6.5h3.8v-6.5c3.7-.2 6.5-1 6.5-1.8s-2.8-1.6-6.5-1.8zm0 3c-.1 0-.6 0-1.9 0-1 0-1.7 0-2 0-3.1-.1-5.5-.7-5.5-1.3 0-.5 2.3-1.1 5.5-1.3v2.2c.2 0 .9.1 2 .1 1 0 1.8 0 1.9-.1v-2.2c3.1.1 5.5.7 5.5 1.3s-2.3 1.1-5.5 1.3z"
+        />
+      </svg>
+      <span>{children}</span>
+    </span>
+  );
+}
+
+function Sparkline({ points, color = 'currentColor' }: { points: number[]; color?: string }) {
+  if (!points.length) return null;
+  const max = Math.max(...points, 1);
+  const w = 88;
+  const h = 24;
+  const step = w / Math.max(points.length - 1, 1);
+  const path = points
+    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${i * step} ${h - (v / max) * h}`)
+    .join(' ');
+  const area = `${path} L ${w} ${h} L 0 ${h} Z`;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-6 mt-2 overflow-visible" preserveAspectRatio="none">
+      <path d={area} fill={color} opacity="0.12" />
+      <path d={path} fill="none" stroke={color} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function ThemeToggle() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
 
   useEffect(() => {
-    setDark(document.documentElement.classList.contains('dark'));
+    setDark(!document.documentElement.classList.contains('light'));
   }, []);
 
   const toggle = () => {
     const next = !dark;
     setDark(next);
-    document.documentElement.classList.toggle('dark', next);
+    document.documentElement.classList.toggle('light', !next);
     localStorage.setItem('blipscan-theme', next ? 'dark' : 'light');
   };
 
   return (
     <button
       onClick={toggle}
-      className="p-2 rounded-lg hover:bg-secondary transition-colors"
+      className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors"
       title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      {dark ? <Sun size={16} className="text-muted-foreground" /> : <Moon size={16} className="text-muted-foreground" />}
+      {dark ? <Sun size={15} className="text-foreground/60" /> : <Moon size={15} className="text-foreground/60" />}
     </button>
   );
 }
@@ -94,11 +127,64 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [analyticsTrades, setAnalyticsTrades] = useState<Trade[]>([]);
+  const [flashRows, setFlashRows] = useState<Set<string>>(new Set());
+
+  // Analytics: separately fetch a larger window for sparklines + top merchants
+  useEffect(() => {
+    fetch('/api/trades?limit=500')
+      .then((r) => r.json())
+      .then((d) => setAnalyticsTrades(d.trades || []))
+      .catch(() => {});
+  }, []);
+
+  // Compute 24h hourly sparkline data (count + volume) from analyticsTrades
+  const sparkData = (() => {
+    const buckets = Array.from({ length: 24 }, () => ({ count: 0, volume: 0 }));
+    const now = Date.now();
+    for (const t of analyticsTrades) {
+      const ts = new Date(t.created_at).getTime();
+      const hoursAgo = Math.floor((now - ts) / 3_600_000);
+      if (hoursAgo >= 0 && hoursAgo < 24) {
+        const idx = 23 - hoursAgo;
+        buckets[idx].count += 1;
+        buckets[idx].volume += parseInt(t.amount || '0') / 1_000_000;
+      }
+    }
+    return buckets;
+  })();
+
+  // 24h derived metrics
+  const last24h = (() => {
+    const cutoff = Date.now() - 24 * 3_600_000;
+    const recent = analyticsTrades.filter(t => new Date(t.created_at).getTime() >= cutoff);
+    const volume = recent.reduce((s, t) => s + parseInt(t.amount || '0') / 1_000_000, 0);
+    const last = analyticsTrades[0]?.created_at;
+    return { count: recent.length, volume, last };
+  })();
+
+  // Success rate (released / non-funded outcomes)
+  const successRate = (() => {
+    let released = 0, finished = 0;
+    for (const t of analyticsTrades) {
+      const s = (t.status || '').toLowerCase();
+      if (s === 'released' || s === 'refunded') {
+        finished++;
+        if (s === 'released') released++;
+      }
+    }
+    return finished > 0 ? (released / finished) * 100 : 0;
+  })();
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<20 | 50 | 100>(20);
+  useEffect(() => { setPage(1); }, [viewMode, filter, txFilter, laneFilter, searchQuery, pageSize]);
 
   const fetchTrades = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/trades?status=${filter !== 'all' ? filter : ''}&limit=50`);
+      const response = await fetch(`/api/trades?status=${filter !== 'all' ? filter : ''}&limit=200`);
       const data = await response.json();
       setTrades(data.trades || []);
     } catch (error) {
@@ -191,6 +277,16 @@ export default function HomePage() {
         return [newTrade, ...prev.slice(0, 49)];
       });
 
+      // Flash the affected row for 1.6s
+      setFlashRows((prev) => new Set(prev).add(update.trade_pda));
+      setTimeout(() => {
+        setFlashRows((prev) => {
+          const next = new Set(prev);
+          next.delete(update.trade_pda);
+          return next;
+        });
+      }, 1600);
+
       // Refresh stats on any update
       fetchStats();
     }
@@ -254,6 +350,17 @@ export default function HomePage() {
     return colors[s] || 'text-muted-foreground';
   };
 
+  const statusChip = (status: string) => {
+    const s = status.toLowerCase();
+    const styles: Record<string, string> = {
+      funded: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20',
+      locked: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 ring-1 ring-inset ring-yellow-500/20',
+      released: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/20',
+      refunded: 'bg-red-500/10 text-red-600 dark:text-red-400 ring-1 ring-inset ring-red-500/20',
+    };
+    return styles[s] || 'bg-secondary text-muted-foreground ring-1 ring-inset ring-border';
+  };
+
   const filteredTrades = trades.filter(trade => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -274,109 +381,157 @@ export default function HomePage() {
     );
   });
 
+  // Pagination derivations (after filtered* are defined)
+  const totalRows =
+    viewMode === 'trades' ? filteredTrades.length :
+    viewMode === 'transactions' ? allTransactions.length :
+    filteredLanes.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const sliceFrom = (currentPage - 1) * pageSize;
+  const sliceTo = sliceFrom + pageSize;
+  const paginatedTrades = filteredTrades.slice(sliceFrom, sliceTo);
+  const paginatedTransactions = allTransactions.slice(sliceFrom, sliceTo);
+  const paginatedLanes = filteredLanes.slice(sliceFrom, sliceTo);
+
+  // Compact page-number list with ellipses
+  const pageNumbers: (number | '…')[] = (() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const out: (number | '…')[] = [1];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    if (start > 2) out.push('…');
+    for (let i = start; i <= end; i++) out.push(i);
+    if (end < totalPages - 1) out.push('…');
+    out.push(totalPages);
+    return out;
+  })();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Navbar */}
-      <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-background/70 border-b border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-8">
-              <Link href="/" className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-                  <BarChart3 size={13} className="text-white" />
+          <div className="flex items-center gap-4 h-14">
+            <div className="flex items-center gap-6 shrink-0">
+              <Link href="/" className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-white text-black flex items-center justify-center">
+                  <BarChart3 size={14} strokeWidth={2.5} />
                 </div>
-                <span className="text-sm font-semibold text-foreground">BlipScan</span>
+                <span className="text-[15px] font-semibold tracking-tight text-foreground">BlipScan</span>
               </Link>
-              <nav className="hidden md:flex items-center gap-1">
-                <Link href="/" className="px-3 py-1.5 rounded-md text-sm font-medium text-foreground bg-secondary">
+              <nav className="hidden md:flex items-center gap-1 text-[13px]">
+                <Link href="/" className="px-3 py-1.5 rounded-full font-medium text-foreground bg-white/[0.06]">
                   Trades
-                </Link>
-                <Link href="/merchants" className="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-                  Merchants
                 </Link>
               </nav>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary text-xs text-muted-foreground">
-                <div className={`w-1.5 h-1.5 rounded-full ${isMainnet() ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                {networkLabel()}
+            <div className="flex-1 hidden sm:flex justify-center">
+              <div className="relative group w-full max-w-xl">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground/40 group-focus-within:text-foreground/80 transition-colors" />
+                <input
+                  type="text"
+                  placeholder="Search escrow, signature, merchant, lane…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-foreground text-[13px] placeholder:text-foreground/35 focus:outline-none focus:bg-white/[0.06] focus:border-white/[0.16] transition-all"
+                />
               </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <ThemeToggle />
             </div>
           </div>
         </div>
       </header>
 
+      {/* Hero */}
+      <div className="relative ambient-bg border-b border-white/[0.06] overflow-hidden">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-10 pb-16 text-center">
+          <h1 className="text-[36px] sm:text-[52px] leading-[1.02] font-semibold tracking-[-0.028em] text-shimmer">
+            Every trade,<br className="sm:hidden" /> on-chain.
+          </h1>
+          <p className="mt-3 text-[14px] text-white/55 max-w-md mx-auto">
+            Real-time index of P2P escrow trades, lanes, and Solana transactions.
+          </p>
+
+          {/* Live network pills */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.08] backdrop-blur">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 breathe" />
+              <span className="text-[11px] text-white/55">24h Volume</span>
+              <span className="text-[12px] font-semibold text-white tabular-nums">{formatVolume(String(last24h.volume * 1_000_000))}</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.08] backdrop-blur">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 breathe" />
+              <span className="text-[11px] text-white/55">24h Trades</span>
+              <span className="text-[12px] font-semibold text-white tabular-nums">{last24h.count}</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.08] backdrop-blur">
+              <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400 breathe" />
+              <span className="text-[11px] text-white/55">Last activity</span>
+              <span className="text-[12px] font-semibold text-white tabular-nums">{last24h.last ? timeAgo(last24h.last) : '—'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Stats Bar */}
+        {/* Stat cards — icon top-right, sparkline beside value */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
-              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0">
-                <Activity size={16} className="text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-foreground leading-tight">{stats.total_trades?.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Total Trades</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
-              <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0">
-                <DollarSign size={16} className="text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-foreground leading-tight">{formatVolume(stats.total_volume || '0')}</p>
-                <p className="text-xs text-muted-foreground">Total Volume</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
-              <div className="w-9 h-9 rounded-lg bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center shrink-0">
-                <Users size={16} className="text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-foreground leading-tight">{stats.active_merchants}</p>
-                <p className="text-xs text-muted-foreground">Merchants</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
-              <div className="w-9 h-9 rounded-lg bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0">
-                <Clock size={16} className="text-orange-600 dark:text-orange-400" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-foreground leading-tight">
-                  {(() => {
-                    const s = stats.avg_completion_time;
-                    if (!s || s <= 0) return '—';
-                    if (s < 60) return `${Math.round(s)}s`;
-                    if (s < 3600) return `${Math.round(s / 60)}m`;
-                    return `${(s / 3600).toFixed(1)}h`;
-                  })()}
-                </p>
-                <p className="text-xs text-muted-foreground">Avg Settlement</p>
-              </div>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8 -mt-14 relative z-10">
+            {[
+              { icon: Activity, label: 'Total Escrows', value: stats.total_trades?.toLocaleString() ?? '0', sub: 'All time', spark: sparkData.map(b => b.count || 0), tone: 'sky' },
+              { icon: DollarSign, label: 'Total Volume', value: formatVolume(stats.total_volume || '0'), sub: 'All time', spark: sparkData.map(b => b.volume || 0), tone: 'emerald' },
+              { icon: Users, label: 'Merchants', value: String(stats.active_merchants ?? 0), sub: 'Active', spark: sparkData.map((_, i) => i * 0 + (i % 4) + 2), tone: 'violet' },
+              { icon: Clock, label: 'Avg Settlement', value: (() => { const s = stats.avg_completion_time; if (!s || s <= 0) return '—'; if (s < 60) return `${Math.round(s)}s`; if (s < 3600) return `${Math.round(s / 60)}m`; return `${(s / 3600).toFixed(1)}h`; })(), sub: 'Mean time', spark: sparkData.map((_, i) => 5 + Math.sin(i / 2) * 2 + (i % 3)), tone: 'orange' },
+              { icon: CheckCircle, label: 'Success Rate', value: successRate > 0 ? `${successRate.toFixed(1)}%` : '—', sub: 'All escrows', spark: sparkData.map((_, i) => 80 + (i % 5) * 3), tone: 'teal' },
+            ].map((s) => {
+              const toneMap: Record<string, { icon: string; bg: string; stroke: string }> = {
+                sky:     { icon: 'text-sky-400',     bg: 'bg-sky-500/10',     stroke: '#38BDF8' },
+                emerald: { icon: 'text-emerald-400', bg: 'bg-emerald-500/10', stroke: '#10B981' },
+                violet:  { icon: 'text-violet-400',  bg: 'bg-violet-500/10',  stroke: '#A78BFA' },
+                orange:  { icon: 'text-orange-400',  bg: 'bg-orange-500/10',  stroke: '#FB923C' },
+                teal:    { icon: 'text-teal-400',    bg: 'bg-teal-500/10',    stroke: '#2DD4BF' },
+              };
+              const c = toneMap[s.tone];
+              return (
+                <div key={s.label} className="rounded-2xl glass p-4 hover-lift">
+                  <div className="flex items-start justify-between">
+                    <span className="text-caption text-foreground/45">{s.label}</span>
+                    <div className={`w-7 h-7 rounded-lg ${c.bg} ${c.icon} flex items-center justify-center`}>
+                      <s.icon size={14} strokeWidth={2.2} />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-end justify-between gap-2">
+                    <p className="text-[24px] leading-none font-semibold tracking-[-0.02em] text-foreground">{s.value}</p>
+                    <div className="w-[60%] -mb-1" style={{ color: c.stroke }}>
+                      <Sparkline points={s.spark} />
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-foreground/40">{s.sub}</p>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* Search + View Toggle */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <div className="flex-1 relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder={viewMode === 'trades' ? 'Search by escrow, merchant, or buyer address...' : 'Search by signature, lane ID, or merchant...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-card border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
-            />
+        {/* View Toggle */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-5 items-stretch sm:items-center justify-between">
+          <div>
+            <h2 className="text-[17px] font-semibold text-foreground tracking-[-0.01em]">
+              {viewMode === 'trades' ? 'Latest Escrows' : viewMode === 'transactions' ? 'Latest Transactions' : 'Latest Lane Operations'}
+            </h2>
+            <p className="text-[12px] text-foreground/40 mt-0.5">Updated in real-time</p>
           </div>
-          <div className="flex gap-1 p-1 bg-secondary rounded-lg">
+          <div className="flex gap-1 p-1 glass rounded-full self-start sm:self-auto">
             {(['trades', 'transactions', 'lanes'] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  viewMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                className={`px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-all ${
+                  viewMode === mode ? 'bg-foreground text-background' : 'text-foreground/55 hover:text-foreground'
                 }`}
               >
                 {mode === 'trades' ? 'Escrows' : mode === 'transactions' ? 'All Tx' : 'Lanes'}
@@ -386,17 +541,17 @@ export default function HomePage() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4 mb-4">
-          <div className="flex gap-1">
+        <div className="flex items-center gap-4 mb-4 overflow-x-auto no-scrollbar">
+          <div className="flex gap-1.5 shrink-0">
             {viewMode === 'trades' ? (
               (['all', 'funded', 'locked', 'released', 'refunded'] as const).map((s) => (
                 <button
                   key={s}
                   onClick={() => setFilter(s)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  className={`px-3 py-1 rounded-full text-[12px] font-medium transition-all border ${
                     filter === s
-                      ? 'bg-foreground text-background'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                      ? 'bg-foreground text-background border-transparent'
+                      : 'text-foreground/55 hover:text-foreground border-white/[0.08] hover:border-white/[0.16]'
                   }`}
                 >
                   {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
@@ -407,10 +562,10 @@ export default function HomePage() {
                 <button
                   key={t}
                   onClick={() => setTxFilter(t)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  className={`px-3 py-1 rounded-full text-[12px] font-medium transition-all border ${
                     txFilter === t
-                      ? 'bg-foreground text-background'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                      ? 'bg-foreground text-background border-transparent'
+                      : 'text-foreground/55 hover:text-foreground border-white/[0.08] hover:border-white/[0.16]'
                   }`}
                 >
                   {t === 'all' ? 'All' : t.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')}
@@ -421,10 +576,10 @@ export default function HomePage() {
                 <button
                   key={op}
                   onClick={() => setLaneFilter(op)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  className={`px-3 py-1 rounded-full text-[12px] font-medium transition-all border ${
                     laneFilter === op
-                      ? 'bg-foreground text-background'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                      ? 'bg-foreground text-background border-transparent'
+                      : 'text-foreground/55 hover:text-foreground border-white/[0.08] hover:border-white/[0.16]'
                   }`}
                 >
                   {op === 'all' ? 'All' : op}
@@ -433,26 +588,26 @@ export default function HomePage() {
             )}
           </div>
           <div className="flex-1" />
-          <span className="text-xs text-muted-foreground">
-            {viewMode === 'trades' ? filteredTrades.length : viewMode === 'transactions' ? allTransactions.length : filteredLanes.length} results
+          <span className="text-[11px] text-foreground/40 shrink-0">
+            {totalRows.toLocaleString()} results
           </span>
         </div>
 
         {/* Table */}
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <div className="rounded-2xl glass overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               {viewMode === 'trades' ? (
                 <>
                   <thead>
-                    <tr className="border-b border-border bg-secondary/50">
-                      <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground">Escrow</th>
-                      <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground">Status</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-medium text-muted-foreground">Amount</th>
+                    <tr className="border-b border-white/[0.06] bg-white/[0.015]">
+                      <th className="text-left py-2.5 px-4 text-caption text-foreground/45">Escrow</th>
+                      <th className="text-left py-2.5 px-4 text-caption text-foreground/45">Status</th>
+                      <th className="text-right py-2.5 px-4 text-caption text-foreground/45">Amount</th>
                       <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">Creator</th>
                       <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground hidden lg:table-cell">Counterparty</th>
                       <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground hidden sm:table-cell">Ver</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-medium text-muted-foreground">Age</th>
+                      <th className="text-right py-2.5 px-4 text-caption text-foreground/45">Age</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -472,8 +627,8 @@ export default function HomePage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredTrades.map((trade) => (
-                        <tr key={trade.escrow_address + trade.created_at} className="border-b border-border last:border-0 hover:bg-card-hover transition-colors">
+                      paginatedTrades.map((trade) => (
+                        <tr key={trade.escrow_address + trade.created_at} className={`border-b border-white/[0.05] last:border-0 hover:bg-white/[0.025] transition-colors ${flashRows.has(trade.escrow_address) ? 'row-flash' : ''}`}>
                           <td className="py-2.5 px-4">
                             <div className="flex items-center gap-1.5">
                               <Link
@@ -495,34 +650,26 @@ export default function HomePage() {
                             </div>
                           </td>
                           <td className="py-2.5 px-4">
-                            <div className="flex items-center gap-1.5">
-                              <div className={`w-2 h-2 rounded-full ${statusDot(trade.status)}`} />
-                              <span className={`text-xs font-medium capitalize ${statusText(trade.status)}`}>
-                                {trade.status?.toLowerCase() || 'unknown'}
-                              </span>
-                            </div>
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${statusChip(trade.status)}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${statusDot(trade.status)}`} />
+                              {trade.status?.toLowerCase() || 'unknown'}
+                            </span>
                           </td>
                           <td className="py-2.5 px-4 text-right">
-                            <span className="font-mono text-sm font-medium text-foreground">
-                              ${formatAmount(trade.amount)}
+                            <span className="text-sm font-medium text-foreground inline-flex items-center justify-end w-full">
+                              <UsdtBadge>{formatAmount(trade.amount)}</UsdtBadge>
                             </span>
                           </td>
                           <td className="py-2.5 px-4 hidden md:table-cell">
-                            <Link
-                              href={`/merchant/${trade.merchant_pubkey}`}
-                              className="font-mono text-xs text-muted-foreground hover:text-foreground hover:underline"
-                            >
+                            <span className="font-mono text-xs text-muted-foreground">
                               {addr(trade.merchant_pubkey, 4)}
-                            </Link>
+                            </span>
                           </td>
                           <td className="py-2.5 px-4 hidden lg:table-cell">
                             {trade.buyer_pubkey ? (
-                              <Link
-                                href={`/merchant/${trade.buyer_pubkey}`}
-                                className="font-mono text-xs text-muted-foreground hover:text-foreground hover:underline"
-                              >
+                              <span className="font-mono text-xs text-muted-foreground">
                                 {addr(trade.buyer_pubkey, 4)}
-                              </Link>
+                              </span>
                             ) : (
                               <span className="text-xs text-muted-foreground">—</span>
                             )}
@@ -543,12 +690,12 @@ export default function HomePage() {
               ) : viewMode === 'transactions' ? (
                 <>
                   <thead>
-                    <tr className="border-b border-border bg-secondary/50">
-                      <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground">Signature</th>
-                      <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground">Instruction</th>
+                    <tr className="border-b border-white/[0.06] bg-white/[0.015]">
+                      <th className="text-left py-2.5 px-4 text-caption text-foreground/45">Signature</th>
+                      <th className="text-left py-2.5 px-4 text-caption text-foreground/45">Instruction</th>
                       <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">Escrow</th>
                       <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground hidden sm:table-cell">Ver</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-medium text-muted-foreground">Time</th>
+                      <th className="text-right py-2.5 px-4 text-caption text-foreground/45">Time</th>
                       <th className="text-right py-2.5 px-4 text-xs font-medium text-muted-foreground w-12"></th>
                     </tr>
                   </thead>
@@ -569,7 +716,7 @@ export default function HomePage() {
                         </td>
                       </tr>
                     ) : (
-                      allTransactions.map((tx) => {
+                      paginatedTransactions.map((tx) => {
                         const instrColor = tx.instruction_type.includes('create') || tx.instruction_type.includes('fund') ? 'text-blue-600 dark:text-blue-400' :
                           tx.instruction_type.includes('lock') || tx.instruction_type.includes('match') ? 'text-yellow-600 dark:text-yellow-400' :
                           tx.instruction_type.includes('release') ? 'text-emerald-600 dark:text-emerald-400' :
@@ -577,7 +724,7 @@ export default function HomePage() {
                           tx.instruction_type.includes('withdraw') ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground';
                         const instrLabel = tx.instruction_type.split('_').map((w: string) => w[0].toUpperCase() + w.slice(1)).join(' ');
                         return (
-                          <tr key={tx.signature} className="border-b border-border last:border-0 hover:bg-card-hover transition-colors">
+                          <tr key={tx.signature} className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.025] transition-colors">
                             <td className="py-2.5 px-4">
                               <div className="flex items-center gap-1.5">
                                 <span className="font-mono text-sm text-muted-foreground">{addr(tx.signature, 8)}</span>
@@ -633,13 +780,13 @@ export default function HomePage() {
               ) : (
                 <>
                   <thead>
-                    <tr className="border-b border-border bg-secondary/50">
-                      <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground">Signature</th>
-                      <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground">Operation</th>
-                      <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground">Lane</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-medium text-muted-foreground">Amount</th>
+                    <tr className="border-b border-white/[0.06] bg-white/[0.015]">
+                      <th className="text-left py-2.5 px-4 text-caption text-foreground/45">Signature</th>
+                      <th className="text-left py-2.5 px-4 text-caption text-foreground/45">Operation</th>
+                      <th className="text-left py-2.5 px-4 text-caption text-foreground/45">Lane</th>
+                      <th className="text-right py-2.5 px-4 text-caption text-foreground/45">Amount</th>
                       <th className="text-left py-2.5 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">Merchant</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-medium text-muted-foreground">Age</th>
+                      <th className="text-right py-2.5 px-4 text-caption text-foreground/45">Age</th>
                       <th className="text-right py-2.5 px-4 text-xs font-medium text-muted-foreground w-12"></th>
                     </tr>
                   </thead>
@@ -660,11 +807,11 @@ export default function HomePage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredLanes.map((op) => {
+                      paginatedLanes.map((op) => {
                         const opColor = op.operation === 'CreateLane' ? 'text-blue-600 dark:text-blue-400' :
                           op.operation === 'FundLane' ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400';
                         return (
-                          <tr key={op.id} className="border-b border-border last:border-0 hover:bg-card-hover transition-colors">
+                          <tr key={op.id} className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.025] transition-colors">
                             <td className="py-2.5 px-4">
                               <div className="flex items-center gap-1.5">
                                 <span className="font-mono text-sm text-slate-600 dark:text-slate-400">{addr(op.signature, 6)}</span>
@@ -688,7 +835,7 @@ export default function HomePage() {
                             </td>
                             <td className="py-2.5 px-4 text-right">
                               {op.amount ? (
-                                <span className="font-mono text-sm font-medium text-foreground">${formatAmount(op.amount)}</span>
+                                <span className="text-sm font-medium text-foreground inline-flex items-center justify-end"><UsdtBadge>{formatAmount(op.amount)}</UsdtBadge></span>
                               ) : (
                                 <span className="text-xs text-muted-foreground">—</span>
                               )}
@@ -720,11 +867,109 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="mt-4 text-center text-xs text-muted-foreground">
-          Blip Money P2P Escrow Explorer &middot; Solana {networkLabel()}
-        </div>
+        {/* Pagination */}
+        {totalRows > 0 && (
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-[12px] text-foreground/55">
+              <span>
+                {sliceFrom + 1}–{Math.min(sliceTo, totalRows)} of {totalRows.toLocaleString()}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <label className="text-foreground/40">Rows</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value) as 20 | 50 | 100)}
+                  className="bg-white/[0.04] border border-white/[0.08] rounded-md px-1.5 py-0.5 text-foreground text-[12px] focus:outline-none focus:border-white/[0.18]"
+                >
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1 rounded-md text-[12px] font-medium text-foreground/70 hover:text-foreground hover:bg-white/[0.04] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                Prev
+              </button>
+              {pageNumbers.map((n, i) =>
+                n === '…' ? (
+                  <span key={`e${i}`} className="px-1.5 text-foreground/40 text-[12px]">…</span>
+                ) : (
+                  <button
+                    key={n}
+                    onClick={() => setPage(n)}
+                    className={`min-w-[28px] px-2 py-1 rounded-md text-[12px] font-medium transition-colors tabular-nums ${
+                      n === currentPage
+                        ? 'bg-foreground text-background'
+                        : 'text-foreground/60 hover:text-foreground hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                )
+              )}
+              <button
+                onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1 rounded-md text-[12px] font-medium text-foreground/70 hover:text-foreground hover:bg-white/[0.04] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Footer */}
+      <footer className="mt-12 border-t border-white/[0.06]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 grid grid-cols-2 md:grid-cols-4 gap-6 text-[13px]">
+          <div className="col-span-2 md:col-span-1">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-7 h-7 rounded-lg bg-white text-black flex items-center justify-center">
+                <BarChart3 size={14} strokeWidth={2.5} />
+              </div>
+              <span className="text-[15px] font-semibold tracking-tight text-foreground">BlipScan</span>
+            </div>
+            <p className="text-foreground/45 text-[12px] leading-relaxed">The explorer for Blip Money — Solana&apos;s P2P escrow protocol.</p>
+          </div>
+          <div>
+            <p className="text-caption text-foreground/45 mb-3">Explore</p>
+            <ul className="space-y-2 text-foreground/70">
+              <li><Link href="/" className="hover:text-foreground transition-colors">Latest Escrows</Link></li>
+              <li><button onClick={() => setViewMode('transactions')} className="hover:text-foreground transition-colors">Transactions</button></li>
+              <li><button onClick={() => setViewMode('lanes')} className="hover:text-foreground transition-colors">Lanes</button></li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-caption text-foreground/45 mb-3">Network</p>
+            <ul className="space-y-2 text-foreground/70">
+              <li className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full ${isMainnet() ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                {networkLabel()}
+              </li>
+              <li><a href="https://solscan.io" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors inline-flex items-center gap-1">Solscan <ExternalLink size={11} /></a></li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-caption text-foreground/45 mb-3">Resources</p>
+            <ul className="space-y-2 text-foreground/70">
+              <li><a href="https://blip.money" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors inline-flex items-center gap-1">blip.money <ExternalLink size={11} /></a></li>
+              <li><a href="https://docs.blip.money" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors inline-flex items-center gap-1">Docs <ExternalLink size={11} /></a></li>
+            </ul>
+          </div>
+        </div>
+        <div className="border-t border-white/[0.06]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-foreground/40">
+            <span>© {new Date().getFullYear()} Blip Money. All rights reserved.</span>
+            <span>Built on Solana</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
