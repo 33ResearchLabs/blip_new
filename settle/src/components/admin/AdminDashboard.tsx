@@ -13,7 +13,6 @@ import {
   Lock,
   Percent,
   Radio,
-  RefreshCw,
   Search,
   ShoppingCart,
   Star,
@@ -116,14 +115,6 @@ interface AnalyticsResponse {
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
-
-const TIMEFRAMES: { key: string; label: string }[] = [
-  { key: "1h", label: "1h" },
-  { key: "24h", label: "24h" },
-  { key: "7d", label: "7d" },
-  { key: "1month", label: "30d" },
-  { key: "all", label: "All" },
-];
 
 const STATUS_COLORS = {
   Completed: "#10b981",
@@ -1650,10 +1641,12 @@ function ActiveOrdersPanel({
 
 interface AdminDashboardProps {
   adminToken: string;
+  // Lifted to admin/page.tsx so the RANGE pills can render inline with the
+  // global Live / refresh toolbar (one merged row instead of two).
+  timeframe: string;
 }
 
-export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
-  const [timeframe, setTimeframe] = useState<string>("24h");
+export default function AdminDashboard({ adminToken, timeframe }: AdminDashboardProps) {
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1880,45 +1873,11 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
 
   return (
     <div className="flex flex-col h-full gap-2 p-2 overflow-hidden">
-      {/* ─── Filter bar ─────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-foreground/30 uppercase tracking-wider">
-            Range
-          </span>
-          <div className="flex gap-0.5 bg-card rounded-md p-0.5 border border-section-divider">
-            {TIMEFRAMES.map((tf) => (
-              <button
-                key={tf.key}
-                onClick={() => setTimeframe(tf.key)}
-                className={`px-2 py-1 text-[10px] font-mono font-bold rounded transition-colors ${
-                  timeframe === tf.key
-                    ? "bg-primary/10 text-primary border border-primary/20"
-                    : "text-foreground/30 hover:text-foreground/60"
-                }`}
-              >
-                {tf.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] font-mono text-foreground/25">
-            Last refresh{" "}
-            {lastRefresh.toLocaleTimeString("en-US", { hour12: false })}
-          </span>
-          <button
-            onClick={fetchData}
-            disabled={isLoading}
-            className="p-1.5 rounded-md bg-card hover:bg-accent-subtle border border-section-divider transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw
-              className={`w-3.5 h-3.5 text-foreground/50 ${isLoading ? "animate-spin" : ""}`}
-            />
-          </button>
-        </div>
-      </div>
+      {/* Internal filter bar removed — RANGE pills, Live indicator,
+       *  last-refresh stamp and refresh button all share the single toolbar
+       *  in src/app/admin/page.tsx. This row previously duplicated the
+       *  timestamp + refresh button rendered above by the page-level
+       *  toolbar, producing two stacked rows for one set of controls. */}
 
       {/* ─── KPI row (5-card mockup: Treasury Balance / Fee Rate / Escrow / Fees / Volume) ─── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 shrink-0">
