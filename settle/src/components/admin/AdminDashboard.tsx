@@ -53,6 +53,16 @@ import {
 
 interface AnalyticsResponse {
   timeframe: string;
+  // Previous-period totals — same-length window ending where the current
+  // window begins. Used to compute accurate "vs prior period" KPI deltas.
+  // Optional so a stale-cached older API response doesn't crash the client.
+  previous?: {
+    volume: number;
+    fiatVolume: number;
+    orderCount: number;
+    revenue: number;
+    fees: number;
+  };
   volume: {
     total: number;
     totalFiat: number;
@@ -64,7 +74,12 @@ interface AnalyticsResponse {
   orders: {
     total: number;
     completed: number;
+    // `cancelled` is the legacy combined bucket (cancelled OR expired). The
+    // server still populates it for back-compat, but UI now prefers the split
+    // `cancelledOnly` + `expired` fields below.
     cancelled: number;
+    cancelledOnly?: number;
+    expired?: number;
     disputed: number;
     pending: number;
     active: number;
@@ -491,11 +506,18 @@ function OrderBreakdown({ orders }: { orders: AnalyticsResponse["orders"] }) {
       orders.total - orders.completed - orders.cancelled - orders.disputed,
     );
   const active = orders.active ?? 0;
+  // Prefer the split counts so this matches the chip strip. When the older
+  // API is in front (no split fields), fall back: assume everything in the
+  // legacy combined `cancelled` bucket is truly cancelled (no expired row),
+  // matching pre-fix display.
+  const cancelledOnly = orders.cancelledOnly ?? orders.cancelled;
+  const expired = orders.expired ?? 0;
   const rows: { label: string; value: number; color: string }[] = [
     { label: "Pending", value: pending, color: "#f59e0b" },
     { label: "Active", value: active, color: "#329dff" },
     { label: "Completed", value: orders.completed, color: "#10b981" },
-    { label: "Cancelled", value: orders.cancelled, color: "#ef4444" },
+    { label: "Cancelled", value: cancelledOnly, color: "#ef4444" },
+    { label: "Expired", value: expired, color: "#94a3b8" },
     { label: "Disputed", value: orders.disputed, color: "#fb7185" },
   ];
 
@@ -547,6 +569,10 @@ function StatusDonut({ orders }: { orders: AnalyticsResponse["orders"] }) {
     0,
     orders.total - orders.completed - orders.cancelled - orders.disputed,
   );
+  // Match the chip strip: cancelled and expired are distinct slices. Falls
+  // back to the legacy combined bucket if older API responses are in flight.
+  const cancelledOnly = orders.cancelledOnly ?? orders.cancelled;
+  const expired = orders.expired ?? 0;
   const data = [
     {
       name: "Completed",
@@ -560,9 +586,10 @@ function StatusDonut({ orders }: { orders: AnalyticsResponse["orders"] }) {
     },
     {
       name: "Cancelled",
-      value: orders.cancelled,
+      value: cancelledOnly,
       color: STATUS_COLORS.Cancelled,
     },
+    { name: "Expired", value: expired, color: "#94a3b8" },
     { name: "Disputed", value: orders.disputed, color: STATUS_COLORS.Disputed },
   ].filter((d) => d.value > 0);
   const total = data.reduce((s, d) => s + d.value, 0);
@@ -1279,7 +1306,11 @@ const ALL_ORDERS_TABS: {
     statusFilter: "accepted,escrowed,payment_sent",
   },
   { key: "completed", label: "Completed", statusFilter: "completed" },
-  { key: "cancelled", label: "Cancelled", statusFilter: "cancelled,expired" },
+  // Cancelled = user/merchant initiated. Expired = auto-timeout. Previously
+  // these were lumped into a single "Cancelled" chip that lied about why
+  // failed orders failed. Server exposes both fields explicitly.
+  { key: "cancelled", label: "Cancelled", statusFilter: "cancelled" },
+  { key: "expired", label: "Expired", statusFilter: "expired" },
   { key: "disputed", label: "Disputed", statusFilter: "disputed" },
 ];
 
@@ -1379,12 +1410,20 @@ function AllOrdersPanel({
   // returned by /api/admin/analytics — using them directly avoids the prior
   // bug where pending was hardcoded to 0 and active was derived by
   // subtraction (which silently undercounted).
+  // Prefer the server's split counts (`cancelledOnly` / `expired`) when present.
+  // Fall back to the legacy combined `cancelled` count on the cancelled chip
+  // only when the new fields aren't returned (older API response), so a stale
+  // response doesn't accidentally show zero for everything.
   const tabCounts: Record<string, number> = {
     all: orderCounts.total,
     pending: orderCounts.pending,
     active: orderCounts.active,
     completed: orderCounts.completed,
-    cancelled: orderCounts.cancelled,
+    cancelled:
+      orderCounts.cancelledOnly !== undefined
+        ? orderCounts.cancelledOnly
+        : orderCounts.cancelled,
+    expired: orderCounts.expired ?? 0,
     disputed: orderCounts.disputed,
   };
 
@@ -1714,35 +1753,68 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
   const completionPct = data.orders.successRate;
   const subtitle = `Updated ${formatTimeAgo(lastRefresh.toISOString())}`;
 
-  // Delta-vs-prior-period for the KPI strip. We compare the second half of
-  // the trend window (most-recent N/2 buckets) against the first half. Not a
-  // strict "yesterday" delta — that requires a server-side previous-period
-  // query — but it's a useful momentum indicator until that lands.
-  const trend = data.volume.trend ?? [];
-  const half = Math.floor(trend.length / 2);
-  const sumVolume = (rows: typeof trend) =>
-    rows.reduce((acc, r) => acc + (r.volume || 0), 0);
-  const sumCount = (rows: typeof trend) =>
-    rows.reduce((acc, r) => acc + (r.count || 0), 0);
+  // Delta-vs-prior-period for the KPI strip.
+  //
+  // Source of truth is `data.previous` (server-computed totals for the
+  // same-length window immediately before the current one). When that block
+  // is absent (older API response or transient miss), we fall back to the
+  // legacy half-window momentum trick so the UI degrades gracefully rather
+  // than showing "—" everywhere. The fallback is known to invert direction
+  // for some windows — the server-supplied path is the correct one.
   function pctChange(prev: number, curr: number): number | null {
     if (!Number.isFinite(prev) || prev <= 0) return null;
     return ((curr - prev) / prev) * 100;
   }
-  const volumeFirstHalf = sumVolume(trend.slice(0, half));
-  const volumeSecondHalf = sumVolume(trend.slice(half));
-  const countFirstHalf = sumCount(trend.slice(0, half));
-  const countSecondHalf = sumCount(trend.slice(half));
-  const volumeDelta = pctChange(volumeFirstHalf, volumeSecondHalf);
-  const ordersDelta = pctChange(countFirstHalf, countSecondHalf);
-  // Revenue/fees scale with volume so we use the same momentum signal as a
-  // proxy until the API returns explicit previous-period totals.
-  const revenueDelta = volumeDelta;
-  const feesDelta = volumeDelta;
-  // Escrow is a point-in-time stock, not a flow — we don't have a sensible
-  // delta from a single snapshot. Render "—" until the API exposes prior
-  // escrow snapshots.
+
+  let volumeDelta: number | null;
+  let revenueDelta: number | null;
+  let feesDelta: number | null;
+  let ordersDelta: number | null;
+
+  if (data.previous) {
+    volumeDelta = pctChange(data.previous.volume, data.volume.total);
+    revenueDelta = pctChange(data.previous.revenue, data.revenue.total);
+    feesDelta = pctChange(data.previous.fees, data.revenue.fees);
+    ordersDelta = pctChange(
+      data.previous.orderCount,
+      data.volume.orderCount,
+    );
+  } else {
+    const trend = data.volume.trend ?? [];
+    const half = Math.floor(trend.length / 2);
+    const sumVolume = (rows: typeof trend) =>
+      rows.reduce((acc, r) => acc + (r.volume || 0), 0);
+    const sumCount = (rows: typeof trend) =>
+      rows.reduce((acc, r) => acc + (r.count || 0), 0);
+    volumeDelta = pctChange(sumVolume(trend.slice(0, half)), sumVolume(trend.slice(half)));
+    ordersDelta = pctChange(sumCount(trend.slice(0, half)), sumCount(trend.slice(half)));
+    revenueDelta = volumeDelta;
+    feesDelta = volumeDelta;
+  }
+
+  // Escrow is a point-in-time stock, not a flow — there is no sensible
+  // "vs prior period" delta. Balance is the same. Both render as "current".
   const escrowDelta: number | null = null;
   const balanceDelta: number | null = null;
+
+  // Label that honestly describes which window we're comparing against.
+  // The previous code labelled every delta "vs yesterday" regardless of
+  // the active timeframe (e.g. "vs yesterday" on a 7d view), which is
+  // misleading. Derive from the selected timeframe.
+  const deltaLabel =
+    timeframe === "24h"
+      ? "vs yesterday"
+      : timeframe === "1h"
+        ? "vs prior hour"
+        : timeframe === "7d"
+          ? "vs prior week"
+          : timeframe === "1month"
+            ? "vs prior month"
+            : timeframe === "1m" || timeframe === "5m" || timeframe === "15m" || timeframe === "30m"
+              ? "vs prior window"
+              : timeframe === "all"
+                ? "trend"
+                : "vs prior period";
   void ordersDelta; // reserved for the All Orders strip in phase 4
 
   return (
@@ -1801,6 +1873,7 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
               : undefined
           }
           delta={balanceDelta}
+          deltaLabel="current"
         />
         <KpiCard
           label="Revenue"
@@ -1808,6 +1881,7 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
           icon={TrendingUp}
           accent="success"
           delta={revenueDelta}
+          deltaLabel={deltaLabel}
         />
         <KpiCard
           label="Escrow"
@@ -1815,6 +1889,7 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
           icon={Lock}
           accent="primary"
           delta={escrowDelta}
+          deltaLabel="current"
         />
         <KpiCard
           label="Fees"
@@ -1822,6 +1897,7 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
           icon={Percent}
           accent="success"
           delta={feesDelta}
+          deltaLabel={deltaLabel}
         />
         <KpiCard
           label="24H Volume"
@@ -1830,6 +1906,7 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
           accent="primary"
           hint={`${formatCount(data.volume.orderCount)} orders`}
           delta={volumeDelta}
+          deltaLabel={deltaLabel}
         />
       </div>
 

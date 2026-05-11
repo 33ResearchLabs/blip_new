@@ -28,26 +28,27 @@ export async function GET(request: NextRequest) {
           SELECT creator_pubkey as merchant FROM v2_trades
         ) combined
       `),
-      // Average settlement time = create → release (full lifecycle).
-      // For trades not yet released, fall back to locked_at so the metric
-      // doesn't go to 0 if every trade is in-flight.
+      // Average settlement time = create → release (full lifecycle ONLY).
+      // Previously this query also included `locked` trades using
+      // `COALESCE(released_at, locked_at)` as a stand-in end-time. That makes
+      // the metric mean "average time-to-lock-or-release" rather than
+      // "average settlement" — understating settlement when many trades are
+      // in-flight. We now only average over fully-settled trades. If no trades
+      // have settled yet, NULL → UI shows "—" (handled by `|| '0'` below),
+      // which is more honest than a misleading number.
       pool.query(`
         SELECT AVG(seconds) as avg_seconds FROM (
-          SELECT EXTRACT(EPOCH FROM (
-            COALESCE(released_at, locked_at) - created_at
-          )) as seconds
+          SELECT EXTRACT(EPOCH FROM (released_at - created_at)) as seconds
           FROM trades
-          WHERE state IN ('Released', 'Locked')
+          WHERE state = 'Released'
             AND created_at IS NOT NULL
-            AND COALESCE(released_at, locked_at) IS NOT NULL
+            AND released_at IS NOT NULL
           UNION ALL
-          SELECT EXTRACT(EPOCH FROM (
-            COALESCE(released_at, locked_at) - created_at
-          )) as seconds
+          SELECT EXTRACT(EPOCH FROM (released_at - created_at)) as seconds
           FROM v2_trades
-          WHERE status IN ('released', 'locked')
+          WHERE status = 'released'
             AND created_at IS NOT NULL
-            AND COALESCE(released_at, locked_at) IS NOT NULL
+            AND released_at IS NOT NULL
         ) combined
       `),
     ]);

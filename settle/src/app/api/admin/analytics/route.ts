@@ -52,6 +52,36 @@ export async function GET(request: NextRequest) {
         AND created_at > NOW() - INTERVAL '${interval}'
     `);
 
+    // Previous-period totals: same-length window ending where the current window begins.
+    // Drives the dashboard's "vs prior period" KPI deltas — replaces the client-side
+    // "split current window in halves" trick which inverted direction (e.g. reported
+    // +3.5% when volume was actually down 20% over the prior 24h).
+    const previous = await queryOne<{
+      prev_volume: string;
+      prev_fiat_volume: string;
+      prev_order_count: string;
+      prev_revenue: string;
+      prev_fees: string;
+    }>(`
+      SELECT
+        COALESCE(SUM(crypto_amount), 0)::numeric(14,2)::text AS prev_volume,
+        COALESCE(SUM(fiat_amount), 0)::numeric(14,2)::text AS prev_fiat_volume,
+        COUNT(*)::text AS prev_order_count,
+        COALESCE(SUM(
+          CASE WHEN protocol_fee_amount IS NOT NULL AND protocol_fee_amount > 0
+            THEN protocol_fee_amount
+            ELSE crypto_amount * COALESCE(protocol_fee_percentage, 2.50) / 100
+          END
+        ), 0)::numeric(14,4)::text AS prev_revenue,
+        COALESCE(SUM(
+          crypto_amount * COALESCE(protocol_fee_percentage, 2.50) / 100
+        ), 0)::numeric(14,4)::text AS prev_fees
+      FROM orders
+      WHERE status = 'completed'
+        AND created_at > NOW() - (INTERVAL '${interval}') * 2
+        AND created_at <= NOW() - INTERVAL '${interval}'
+    `);
+
     // Volume trend chart
     const volumeTrend = await query<{ bucket: string; volume: string; count: string }>(`
       SELECT
@@ -104,11 +134,16 @@ export async function GET(request: NextRequest) {
         AND created_at > NOW() - INTERVAL '${interval}'
     `);
 
-    // Orders analytics
+    // Orders analytics.
+    // NOTE: `cancelled` keeps its legacy semantics (cancelled OR expired) for
+    // backward compatibility with any cached client. New fields `cancelled_only`
+    // and `expired` are exposed separately so the UI can render honest chips.
     const ordersAnalytics = await queryOne<{
       total_orders: string;
       completed: string;
       cancelled: string;
+      cancelled_only: string;
+      expired: string;
       disputed: string;
       pending: string;
       active: string;
@@ -119,6 +154,8 @@ export async function GET(request: NextRequest) {
         COUNT(*)::text AS total_orders,
         COUNT(*) FILTER (WHERE status = 'completed')::text AS completed,
         COUNT(*) FILTER (WHERE status IN ('cancelled', 'expired'))::text AS cancelled,
+        COUNT(*) FILTER (WHERE status = 'cancelled')::text AS cancelled_only,
+        COUNT(*) FILTER (WHERE status = 'expired')::text AS expired,
         COUNT(*) FILTER (WHERE status = 'disputed')::text AS disputed,
         -- Pending = orders waiting for a counterparty (no acceptance yet)
         COUNT(*) FILTER (WHERE status = 'pending')::text AS pending,
@@ -133,34 +170,59 @@ export async function GET(request: NextRequest) {
       WHERE created_at > NOW() - INTERVAL '${interval}'
     `);
 
-    // User activity
+    // User activity — counts merchants on BOTH sides of the order so M2M
+    // acceptors (buyer_merchant_id) aren't invisible to the "active merchants"
+    // metric.
     const userActivity = await queryOne<{
       new_users: string;
       active_merchants: string;
     }>(`
       SELECT
         (SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '${interval}')::text AS new_users,
-        (SELECT COUNT(DISTINCT m.id) FROM merchants m
-         JOIN orders o ON o.merchant_id = m.id
-         WHERE o.created_at > NOW() - INTERVAL '${interval}')::text AS active_merchants
+        (SELECT COUNT(DISTINCT mid) FROM (
+           SELECT merchant_id AS mid FROM orders
+           WHERE created_at > NOW() - INTERVAL '${interval}'
+             AND merchant_id IS NOT NULL
+           UNION
+           SELECT buyer_merchant_id FROM orders
+           WHERE created_at > NOW() - INTERVAL '${interval}'
+             AND buyer_merchant_id IS NOT NULL
+         ) sides)::text AS active_merchants
     `);
 
-    // Top traders
+    // Top traders — credit BOTH sides of an M2M trade.
+    // Previously joined only on merchant_id (seller), which hid the buyer-side
+    // merchant's volume entirely and could flip the ranking. We now UNION ALL
+    // both sides so a trade that involves two merchants contributes the same
+    // crypto_amount to each side's total — matches "who actually traded".
+    // (Sum of top-trader volumes can exceed total_volume — that's expected for
+    // a participation metric, not a volume-of-record metric.)
     const topTraders = await query<{
       name: string;
       volume: string;
       trades: string;
     }>(`
+      WITH merchant_sides AS (
+        SELECT merchant_id AS mid, crypto_amount
+        FROM orders
+        WHERE status = 'completed'
+          AND created_at > NOW() - INTERVAL '${interval}'
+          AND merchant_id IS NOT NULL
+        UNION ALL
+        SELECT buyer_merchant_id AS mid, crypto_amount
+        FROM orders
+        WHERE status = 'completed'
+          AND created_at > NOW() - INTERVAL '${interval}'
+          AND buyer_merchant_id IS NOT NULL
+      )
       SELECT
         m.business_name AS name,
-        COALESCE(SUM(o.crypto_amount), 0)::numeric(14,2)::text AS volume,
+        COALESCE(SUM(ms.crypto_amount), 0)::numeric(14,2)::text AS volume,
         COUNT(*)::text AS trades
-      FROM merchants m
-      JOIN orders o ON o.merchant_id = m.id
-      WHERE o.status = 'completed'
-        AND o.created_at > NOW() - INTERVAL '${interval}'
+      FROM merchant_sides ms
+      JOIN merchants m ON m.id = ms.mid
       GROUP BY m.id, m.business_name
-      ORDER BY SUM(o.crypto_amount) DESC
+      ORDER BY SUM(ms.crypto_amount) DESC
       LIMIT 5
     `);
 
@@ -218,6 +280,16 @@ export async function GET(request: NextRequest) {
 
     const response = {
       timeframe,
+      // Previous-period totals (same-length window immediately before the
+      // current one). Drives client-side delta computation — replaces the
+      // half-window momentum trick that inverted direction.
+      previous: {
+        volume: parseFloat(previous?.prev_volume || '0'),
+        fiatVolume: parseFloat(previous?.prev_fiat_volume || '0'),
+        orderCount: parseInt(previous?.prev_order_count || '0'),
+        revenue: parseFloat(previous?.prev_revenue || '0'),
+        fees: parseFloat(previous?.prev_fees || '0'),
+      },
       volume: {
         total: parseFloat(volume?.total_volume || '0'),
         totalFiat: parseFloat(volume?.total_fiat_volume || '0'),
@@ -241,7 +313,12 @@ export async function GET(request: NextRequest) {
       orders: {
         total: totalOrders,
         completed: completedCount,
+        // `cancelled` is the legacy combined bucket (cancelled OR expired)
+        // — kept for backward compatibility. Prefer `cancelledOnly` + `expired`
+        // for honest UI labelling.
         cancelled: cancelledCount,
+        cancelledOnly: parseInt(ordersAnalytics?.cancelled_only || '0'),
+        expired: parseInt(ordersAnalytics?.expired || '0'),
         disputed: parseInt(ordersAnalytics?.disputed || '0'),
         pending: parseInt(ordersAnalytics?.pending || '0'),
         active: parseInt(ordersAnalytics?.active || '0'),
