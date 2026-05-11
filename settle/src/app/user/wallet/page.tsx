@@ -717,7 +717,7 @@ export default function UserWalletPage() {
                           maxLength={100}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Min 6 characters"
+                          placeholder="Min 12 characters"
                           className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
                                      text-sm text-white font-mono placeholder:text-white/20
                                      focus:outline-none focus:border-primary/50 transition-colors"
@@ -821,7 +821,7 @@ export default function UserWalletPage() {
                         maxLength={100}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Min 6 characters"
+                        placeholder="Min 12 characters"
                         className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
                                    text-sm text-white font-mono placeholder:text-white/20
                                    focus:outline-none focus:border-primary/50 transition-colors"

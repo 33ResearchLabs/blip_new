@@ -315,7 +315,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                   maxLength={100}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min 6 characters"
+                  placeholder="Min 12 characters"
                   style={{ ...inputStyle, paddingRight: 40 }}
                 />
                 <button
@@ -400,7 +400,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                 maxLength={100}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Min 6 characters"
+                placeholder="Min 12 characters"
                 style={inputStyle}
               />
             </div>
