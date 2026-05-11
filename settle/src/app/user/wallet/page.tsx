@@ -46,6 +46,7 @@ import {
   exportPrivateKey,
   saveEncryptedWallet,
   loadEncryptedWallet,
+  validatePasswordStrength,
 } from "@/lib/wallet/embeddedWallet";
 import { Keypair } from "@solana/web3.js";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
@@ -204,8 +205,12 @@ export default function UserWalletPage() {
 
   const handleCreate = async () => {
     setSetupError("");
-    if (password.length < 6) {
-      setSetupError("Password must be at least 6 characters");
+    // Strength check enforced at creation only — never at unlock — so
+    // existing mainnet users with shorter legacy passwords aren't
+    // locked out.
+    const strength = validatePasswordStrength(password);
+    if (!strength.ok) {
+      setSetupError(strength.reason || "Password is too weak");
       return;
     }
     if (password !== confirmPassword) {
@@ -219,7 +224,15 @@ export default function UserWalletPage() {
         setSetupError("Session not ready yet — try again in a second");
         return;
       }
-      const { keypair, encrypted } = await generateWallet(password);
+      // Step 3 hardening: helper is mandatory for the current (v3) blob.
+      const helperRes = await fetchWithAuth("/api/wallet/unlock-helper");
+      const helperJson = await helperRes.json().catch(() => null);
+      const unlockHelper: string | null = helperJson?.data?.unlock_helper ?? null;
+      if (!unlockHelper) {
+        setSetupError("Could not reach the server. Check your connection and try again.");
+        return;
+      }
+      const { keypair, encrypted } = await generateWallet(password, unlockHelper);
       saveEncryptedWallet(userId, encrypted);
       setPendingKeypair(keypair);
     } catch (err: any) {
@@ -231,8 +244,11 @@ export default function UserWalletPage() {
 
   const handleImport = async () => {
     setSetupError("");
-    if (password.length < 6) {
-      setSetupError("Password must be at least 6 characters");
+    // Import re-encrypts under a new password, so apply the same rules
+    // — otherwise import would be a back-door around strength checks.
+    const strength = validatePasswordStrength(password);
+    if (!strength.ok) {
+      setSetupError(strength.reason || "Password is too weak");
       return;
     }
     if (!privateKeyInput.trim()) {
@@ -246,9 +262,18 @@ export default function UserWalletPage() {
         setSetupError("Session not ready yet — try again in a second");
         return;
       }
+      // Import also re-encrypts at v3 (helper-mixed), same reason as Create.
+      const helperRes = await fetchWithAuth("/api/wallet/unlock-helper");
+      const helperJson = await helperRes.json().catch(() => null);
+      const unlockHelper: string | null = helperJson?.data?.unlock_helper ?? null;
+      if (!unlockHelper) {
+        setSetupError("Could not reach the server. Check your connection and try again.");
+        return;
+      }
       const { keypair, encrypted } = await importWallet(
         privateKeyInput.trim(),
         password,
+        unlockHelper,
       );
       saveEncryptedWallet(userId, encrypted);
       embeddedWallet?.setKeypairAndUnlock(keypair);
@@ -393,7 +418,11 @@ export default function UserWalletPage() {
           setIsSending(false);
           return;
         }
-        const kp = await decryptWallet(encrypted, pw.trim());
+        // v3 blobs need the server helper; v1/v2 ignore it. Always fetch.
+        const sendHelperRes = await fetchWithAuth("/api/wallet/unlock-helper");
+        const sendHelperJson = await sendHelperRes.json().catch(() => null);
+        const sendHelper: string | null = sendHelperJson?.data?.unlock_helper ?? null;
+        const kp = await decryptWallet(encrypted, pw.trim(), sendHelper);
         tx.sign(kp);
 
         const sig = await connection.sendRawTransaction(tx.serialize());
@@ -452,7 +481,11 @@ export default function UserWalletPage() {
           setIsSending(false);
           return;
         }
-        const kp = await decryptWallet(encrypted, pw.trim());
+        // v3 blobs need the server helper; v1/v2 ignore it. Always fetch.
+        const sendHelperRes = await fetchWithAuth("/api/wallet/unlock-helper");
+        const sendHelperJson = await sendHelperRes.json().catch(() => null);
+        const sendHelper: string | null = sendHelperJson?.data?.unlock_helper ?? null;
+        const kp = await decryptWallet(encrypted, pw.trim(), sendHelper);
         tx.sign(kp);
 
         const sig = await connection.sendRawTransaction(tx.serialize());
@@ -484,7 +517,11 @@ export default function UserWalletPage() {
       return;
     }
 
-    decryptWallet(encrypted, pw.trim())
+    // v3 blobs need the server helper; v1/v2 ignore it. Always fetch.
+    fetchWithAuth("/api/wallet/unlock-helper")
+      .then((r) => r.json().catch(() => null))
+      .then((d): string | null => d?.data?.unlock_helper ?? null)
+      .then((helper) => decryptWallet(encrypted, pw.trim(), helper))
       .then((kp) => {
         const key = exportPrivateKey(kp);
         const blob = new Blob(

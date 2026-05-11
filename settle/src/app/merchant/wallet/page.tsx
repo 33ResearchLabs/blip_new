@@ -47,6 +47,7 @@ import {
   loadEncryptedWallet,
   clearEncryptedWallet,
   hasEncryptedWallet,
+  validatePasswordStrength,
 } from "@/lib/wallet/embeddedWallet";
 import { Keypair } from "@solana/web3.js";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
@@ -349,8 +350,11 @@ export default function WalletPage({
 
   const handleCreate = async () => {
     setSetupError("");
-    if (password.length < 6) {
-      setSetupError("Password must be at least 6 characters");
+    // Strength check enforced at creation only — never at unlock — so
+    // existing mainnet merchants with legacy passwords aren't locked out.
+    const strength = validatePasswordStrength(password);
+    if (!strength.ok) {
+      setSetupError(strength.reason || "Password is too weak");
       return;
     }
     if (password !== confirmPassword) {
@@ -364,7 +368,15 @@ export default function WalletPage({
         setSetupError("Session not ready yet — try again in a second");
         return;
       }
-      const { keypair, encrypted } = await generateWallet(password);
+      // Step 3 hardening: helper is mandatory for v3 wallets.
+      const helperRes = await fetchWithAuth("/api/wallet/unlock-helper");
+      const helperJson = await helperRes.json().catch(() => null);
+      const unlockHelper: string | null = helperJson?.data?.unlock_helper ?? null;
+      if (!unlockHelper) {
+        setSetupError("Could not reach the server. Check your connection and try again.");
+        return;
+      }
+      const { keypair, encrypted } = await generateWallet(password, unlockHelper);
       saveEncryptedWallet(merchantInfo.id, encrypted);
       setPendingKeypair(keypair);
     } catch (err: any) {
@@ -376,8 +388,11 @@ export default function WalletPage({
 
   const handleImport = async () => {
     setSetupError("");
-    if (password.length < 6) {
-      setSetupError("Password must be at least 6 characters");
+    // Import re-encrypts under a new password — same rules as Create so
+    // import isn't a back-door around the strength gate.
+    const strength = validatePasswordStrength(password);
+    if (!strength.ok) {
+      setSetupError(strength.reason || "Password is too weak");
       return;
     }
     if (!privateKeyInput.trim()) {
@@ -391,9 +406,17 @@ export default function WalletPage({
         setSetupError("Session not ready yet — try again in a second");
         return;
       }
+      const helperRes = await fetchWithAuth("/api/wallet/unlock-helper");
+      const helperJson = await helperRes.json().catch(() => null);
+      const unlockHelper: string | null = helperJson?.data?.unlock_helper ?? null;
+      if (!unlockHelper) {
+        setSetupError("Could not reach the server. Check your connection and try again.");
+        return;
+      }
       const { keypair, encrypted } = await importWallet(
         privateKeyInput.trim(),
         password,
+        unlockHelper,
       );
       saveEncryptedWallet(merchantInfo.id, encrypted);
       embeddedWallet?.setKeypairAndUnlock(keypair);
@@ -547,7 +570,10 @@ export default function WalletPage({
           setIsSending(false);
           return;
         }
-        const kp = await decryptWallet(encrypted, pw.trim());
+        const sendHelperRes = await fetchWithAuth("/api/wallet/unlock-helper");
+        const sendHelperJson = await sendHelperRes.json().catch(() => null);
+        const sendHelper: string | null = sendHelperJson?.data?.unlock_helper ?? null;
+        const kp = await decryptWallet(encrypted, pw.trim(), sendHelper);
         tx.sign(kp);
 
         const sig = await connection.sendRawTransaction(tx.serialize());
@@ -614,7 +640,10 @@ export default function WalletPage({
           setIsSending(false);
           return;
         }
-        const kp = await decryptWallet(encrypted, pw.trim());
+        const sendHelperRes = await fetchWithAuth("/api/wallet/unlock-helper");
+        const sendHelperJson = await sendHelperRes.json().catch(() => null);
+        const sendHelper: string | null = sendHelperJson?.data?.unlock_helper ?? null;
+        const kp = await decryptWallet(encrypted, pw.trim(), sendHelper);
         tx.sign(kp);
 
         const sig = await connection.sendRawTransaction(tx.serialize());
@@ -662,7 +691,10 @@ export default function WalletPage({
     }
     setExportLoading(true);
     try {
-      const kp = await decryptWallet(encrypted, exportPassword.trim());
+      const exportHelperRes = await fetchWithAuth("/api/wallet/unlock-helper");
+      const exportHelperJson = await exportHelperRes.json().catch(() => null);
+      const exportHelper: string | null = exportHelperJson?.data?.unlock_helper ?? null;
+      const kp = await decryptWallet(encrypted, exportPassword.trim(), exportHelper);
       const key = exportPrivateKey(kp);
       const blob = new Blob(
         [

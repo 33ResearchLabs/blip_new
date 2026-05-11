@@ -2,10 +2,33 @@
 
 import { useState } from 'react';
 import { Loader2, Key, Download, Eye, EyeOff, Copy, Check, AlertTriangle } from 'lucide-react';
-import { generateWallet, importWallet, saveEncryptedWallet, exportPrivateKey } from '@/lib/wallet/embeddedWallet';
+import {
+  generateWallet,
+  importWallet,
+  saveEncryptedWallet,
+  exportPrivateKey,
+  validatePasswordStrength,
+} from '@/lib/wallet/embeddedWallet';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
 import { colors } from "@/lib/design/theme";
+
+// Fetch the per-actor unlock helper from the server. Required when
+// creating a new wallet at the current v3 blob version (Step 3 of
+// wallet hardening). Returns null on any failure — caller treats null
+// as "couldn't reach server, surface a retry-able error".
+async function fetchUnlockHelper(): Promise<string | null> {
+  try {
+    const res = await fetchWithAuth('/api/wallet/unlock-helper');
+    if (!res.ok) return null;
+    const data = await res.json();
+    const helper = data?.data?.unlock_helper;
+    return typeof helper === 'string' && helper.length > 0 ? helper : null;
+  } catch {
+    return null;
+  }
+}
 
 interface EmbeddedWalletSetupProps {
   // Actor that this wallet belongs to (user.id or merchant.id). Required so
@@ -36,13 +59,23 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
   const handleCreate = async () => {
     setError('');
-    if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
+    // Strength check enforced at creation time only. Existing wallets
+    // (which may have been created under the old 6-char minimum) are
+    // unaffected — unlock path never validates strength.
+    const strength = validatePasswordStrength(password.trim());
+    if (!strength.ok) { setError(strength.reason || 'Password is too weak'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
     setIsLoading(true);
     try {
-      const { keypair, encrypted } = await generateWallet(password.trim());
+      // Step 3: helper is mandatory for new (v3) wallets.
+      const unlockHelper = await fetchUnlockHelper();
+      if (!unlockHelper) {
+        setError('Could not reach the server. Check your connection and try again.');
+        return;
+      }
+      const { keypair, encrypted } = await generateWallet(password.trim(), unlockHelper);
       saveEncryptedWallet(actorId, encrypted);
       setCreatedKeypair(keypair);
       setBackupKey(exportPrivateKey(keypair));
@@ -55,13 +88,21 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
   const handleImport = async () => {
     setError('');
-    if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
+    // Import re-encrypts with a new password, so apply the same strength
+    // rules — otherwise importing would be a back-door around them.
+    const strength = validatePasswordStrength(password.trim());
+    if (!strength.ok) { setError(strength.reason || 'Password is too weak'); return; }
     if (!privateKeyInput.trim()) { setError('Paste your private key'); return; }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
     setIsLoading(true);
     try {
-      const { keypair, encrypted } = await importWallet(privateKeyInput.trim(), password.trim());
+      const unlockHelper = await fetchUnlockHelper();
+      if (!unlockHelper) {
+        setError('Could not reach the server. Check your connection and try again.');
+        return;
+      }
+      const { keypair, encrypted } = await importWallet(privateKeyInput.trim(), password.trim(), unlockHelper);
       saveEncryptedWallet(actorId, encrypted);
       onWalletCreated(keypair);
     } catch (err: any) {

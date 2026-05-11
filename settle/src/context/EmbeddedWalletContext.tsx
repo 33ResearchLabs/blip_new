@@ -55,6 +55,7 @@ import {
 } from '@/lib/solana/v2';
 import {
   loadEncryptedWallet,
+  saveEncryptedWallet,
   decryptWallet,
   clearEncryptedWallet,
   hasEncryptedWallet,
@@ -62,7 +63,13 @@ import {
   loadSessionKeypair,
   clearSessionKeypair,
   migrateLegacyWallet,
+  reencryptIfStale,
+  recordUnlockFailure,
+  clearUnlockFailures,
+  versionRequiresHelper,
+  MAX_UNLOCK_FAILURES,
 } from '@/lib/wallet/embeddedWallet';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { createKeypairWalletAdapter } from '@/lib/wallet/keypairWalletAdapter';
 import { confirmHttp } from '@/lib/solana/confirmHttp';
 import idlRaw from '@/lib/solana/v2/idl.json';
@@ -322,23 +329,94 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     })();
   }, [walletState, keypair]);
 
+  // Fetch the per-actor unlock helper from the server (Step 3 hardening).
+  // Returns null if the endpoint is unreachable or auth fails. Caller
+  // decides whether that's fatal: required for v3 decrypt, optional for
+  // v1/v2 unlock, optional for an opportunistic v→v3 upgrade.
+  const fetchUnlockHelper = useCallback(async (): Promise<string | null> => {
+    try {
+      const res = await fetchWithAuth('/api/wallet/unlock-helper', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const helper = data?.data?.unlock_helper;
+      return typeof helper === 'string' && helper.length > 0 ? helper : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Unlock wallet — operates on the current actor's blob only.
+  //
+  // Four layered behaviors:
+  //
+  //   1. **Server-side helper for v3 blobs.** v3 wallets are encrypted
+  //      with `password + helper` where the helper is a per-actor server
+  //      secret. We fetch it before decrypting; without it, v3 fails fast
+  //      rather than burning a failed-attempt counter slot.
+  //
+  //   2. **Opportunistic version upgrade.** v1/v2 blobs that decrypt
+  //      successfully are silently re-encrypted at v3 (600k + helper)
+  //      using the same password. No re-password prompt. If helper fetch
+  //      failed, the upgrade is skipped and the original blob remains.
+  //
+  //   3. **Failed-attempt counter.** Wrong password increments a per-actor
+  //      counter. At MAX_UNLOCK_FAILURES the local blob is wiped. Funds
+  //      are NEVER at risk — keypair still exists on-chain; user recovers
+  //      via the private key they exported at setup.
+  //
+  //   4. **Counter resets on success.**
   const unlockWallet = useCallback(async (password: string): Promise<boolean> => {
     if (!actorId) return false;
     const encrypted = loadEncryptedWallet(actorId);
     if (!encrypted) return false;
 
+    // Fetch helper before any decrypt attempt. Always fetch — v1/v2 will
+    // ignore it; v3 needs it. Single roundtrip per unlock attempt.
+    const helper = await fetchUnlockHelper();
+
+    // v3 with no helper → fail fast (don't burn a counter slot trying to
+    // decrypt with the password alone; that would always fail).
+    if (versionRequiresHelper(encrypted.version) && !helper) {
+      return false;
+    }
+
     try {
-      const kp = await decryptWallet(encrypted, password.trim());
+      const kp = await decryptWallet(encrypted, password.trim(), helper);
+
+      // Success: reset failure counter immediately so a previous near-miss
+      // doesn't trigger a wipe on the NEXT wrong attempt.
+      clearUnlockFailures(actorId);
+
+      // Best-effort upgrade to current blob version. Skipped if the
+      // target version requires a helper and we don't have one.
+      const upgraded = await reencryptIfStale(encrypted, password.trim(), kp, helper);
+      if (upgraded) saveEncryptedWallet(actorId, upgraded);
+
       setKeypair(kp);
       setWalletState('unlocked');
       lastActivityRef.current = Date.now();
       saveSessionKeypair(actorId, kp);
       return true;
     } catch {
+      const failures = recordUnlockFailure(actorId);
+      if (failures >= MAX_UNLOCK_FAILURES) {
+        // Threshold reached — wipe local cache. Next mount sees 'none'
+        // and the UI flips to the Create/Import wallet screen.
+        clearEncryptedWallet(actorId);
+        clearSessionKeypair(actorId);
+        clearUnlockFailures(actorId);
+        setKeypair(null);
+        setProgram(null);
+        setSolBalance(null);
+        setUsdtBalance(null);
+        setWalletState('none');
+      }
       return false;
     }
-  }, [actorId]);
+  }, [actorId, fetchUnlockHelper]);
 
   // Lock wallet (clear keypair from memory + session, keep encrypted blob).
   const lockWallet = useCallback(() => {
