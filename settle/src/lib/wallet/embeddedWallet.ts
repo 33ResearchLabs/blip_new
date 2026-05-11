@@ -23,26 +23,58 @@ const FAILURES_KEY_PREFIX = 'blip_unlock_failures';
 const LEGACY_STORAGE_KEY = 'blip_embedded_wallet';
 const LEGACY_SESSION_KEY = 'blip_wallet_session';
 
-// PBKDF2 iteration counts per blob version.
+// Blob version → (iterations, requires server-side unlock helper).
 //
-//   v1 = 100,000  — legacy. Existing mainnet wallets were encrypted at this
-//                   count. We MUST keep decryption working for them.
-//   v2 = 600,000  — current. OWASP 2023 minimum for PBKDF2-SHA256. New
-//                   wallets are written at this count, and v1 blobs are
-//                   silently re-encrypted to v2 on next successful unlock.
+//   v1 = 100k PBKDF2, no helper.        — legacy mainnet wallets.
+//   v2 = 600k PBKDF2, no helper.        — Step 2 hardening.
+//   v3 = 600k PBKDF2, helper required.  — Step 3: per-actor server secret
+//                                          mixed into the password. An
+//                                          attacker with only the offline
+//                                          blob CANNOT brute-force; the
+//                                          server helper is needed too.
 //
-// Caller never picks the iteration count — the version field on the
-// EncryptedWallet record fully determines it. Updating these values is a
-// breaking change for already-encrypted blobs; add a new version row
-// instead.
-const CURRENT_BLOB_VERSION = 2;
-const ITERATIONS_BY_VERSION: Record<number, number> = {
-  1: 100_000,
-  2: 600_000,
+// Caller never picks the iteration count or version target — the version
+// field on the EncryptedWallet fully determines decrypt behavior, and
+// encrypt always uses the CURRENT_BLOB_VERSION.
+const CURRENT_BLOB_VERSION = 3;
+
+interface VersionParams {
+  iterations: number;
+  requiresHelper: boolean;
+}
+
+const VERSION_PARAMS: Record<number, VersionParams> = {
+  1: { iterations: 100_000, requiresHelper: false },
+  2: { iterations: 600_000, requiresHelper: false },
+  3: { iterations: 600_000, requiresHelper: true },
 };
 
+function paramsForVersion(version: number): VersionParams {
+  return VERSION_PARAMS[version] ?? VERSION_PARAMS[1];
+}
+
 function iterationsForVersion(version: number): number {
-  return ITERATIONS_BY_VERSION[version] ?? ITERATIONS_BY_VERSION[1];
+  return paramsForVersion(version).iterations;
+}
+
+/** Whether a given blob version needs a server-fetched unlock helper to
+ *  decrypt. Used by the context to decide whether to fetch the helper
+ *  before attempting decrypt. */
+export function versionRequiresHelper(version: number): boolean {
+  return paramsForVersion(version).requiresHelper;
+}
+
+/** Whether the CURRENT build's new wallets need a helper. Used by
+ *  creation flows to decide whether to fetch the helper before generate. */
+export function currentVersionRequiresHelper(): boolean {
+  return paramsForVersion(CURRENT_BLOB_VERSION).requiresHelper;
+}
+
+/** Combine password + helper into the byte string fed to PBKDF2. Space
+ *  separator (not in any base64-helper alphabet) prevents collisions
+ *  between e.g. ("ab", "cd") and ("abcd", null). */
+function passwordWithHelper(password: string, helper: string | null | undefined): string {
+  return helper ? `${password} ${helper}` : password;
 }
 
 // Failed-unlock counter threshold. After this many consecutive wrong
@@ -143,31 +175,52 @@ export interface EncryptedWallet {
   version: number;
 }
 
-/** Generate a new Solana keypair and encrypt it */
-export async function generateWallet(password: string): Promise<{ keypair: Keypair; encrypted: EncryptedWallet }> {
+/** Generate a new Solana keypair and encrypt it.
+ *  @param unlockHelper - REQUIRED when the current blob version requires
+ *    one (v3+). Throws if missing. Callers fetch from /api/wallet/unlock-helper. */
+export async function generateWallet(
+  password: string,
+  unlockHelper?: string | null,
+): Promise<{ keypair: Keypair; encrypted: EncryptedWallet }> {
   const keypair = Keypair.generate();
-  const encrypted = await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58());
+  const encrypted = await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58(), unlockHelper);
   return { keypair, encrypted };
 }
 
-/** Import a wallet from base58 private key and encrypt it */
-export async function importWallet(base58PrivateKey: string, password: string): Promise<{ keypair: Keypair; encrypted: EncryptedWallet }> {
+/** Import a wallet from base58 private key and encrypt it.
+ *  See generateWallet for unlockHelper semantics. */
+export async function importWallet(
+  base58PrivateKey: string,
+  password: string,
+  unlockHelper?: string | null,
+): Promise<{ keypair: Keypair; encrypted: EncryptedWallet }> {
   const secretKey = bs58.decode(base58PrivateKey);
   const keypair = Keypair.fromSecretKey(secretKey);
-  const encrypted = await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58());
+  const encrypted = await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58(), unlockHelper);
   return { keypair, encrypted };
 }
 
-/** Decrypt an encrypted wallet with password. Uses the iteration count
- *  recorded on the blob so legacy v1 (100k) wallets still unlock after
- *  the v2 (600k) bump. */
-export async function decryptWallet(encrypted: EncryptedWallet, password: string): Promise<Keypair> {
+/** Decrypt an encrypted wallet with password (+ helper for v3 blobs).
+ *  Uses the iteration count and helper-requirement recorded on the blob,
+ *  so v1 (100k, no helper) / v2 (600k, no helper) / v3 (600k, helper)
+ *  all unlock under their original parameters.
+ *
+ *  Callers MUST fetch `unlockHelper` from /api/wallet/unlock-helper when
+ *  the blob is v3 (use `versionRequiresHelper(encrypted.version)`). */
+export async function decryptWallet(
+  encrypted: EncryptedWallet,
+  password: string,
+  unlockHelper?: string | null,
+): Promise<Keypair> {
   const salt = Uint8Array.from(atob(encrypted.salt), c => c.charCodeAt(0));
   const iv = Uint8Array.from(atob(encrypted.iv), c => c.charCodeAt(0));
   const ciphertext = Uint8Array.from(atob(encrypted.encryptedKey), c => c.charCodeAt(0));
+  const effectiveSecret = versionRequiresHelper(encrypted.version)
+    ? passwordWithHelper(password, unlockHelper ?? null)
+    : password;
 
   if (hasSubtleCrypto) {
-    const key = await deriveKey(password, salt, iterationsForVersion(encrypted.version));
+    const key = await deriveKey(effectiveSecret, salt, iterationsForVersion(encrypted.version));
     const decrypted = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: iv as BufferSource },
       key,
@@ -175,28 +228,30 @@ export async function decryptWallet(encrypted: EncryptedWallet, password: string
     );
     return Keypair.fromSecretKey(new Uint8Array(decrypted));
   } else {
-    // Fallback: XOR decrypt
-    const keyBytes = await hashPasswordFallback(password, salt);
+    const keyBytes = await hashPasswordFallback(effectiveSecret, salt);
     const decrypted = xorBytes(ciphertext, keyBytes);
     return Keypair.fromSecretKey(decrypted);
   }
 }
 
 /** Re-encrypt a successfully-decrypted wallet at the CURRENT blob version.
- *  Used by the unlock path to silently upgrade older v1 (100k iteration)
- *  blobs to v2 (600k) without surfacing a re-password prompt. Returns the
- *  new encrypted blob if an upgrade was performed, or null if the blob is
- *  already at current version. */
+ *  Used by the unlock path to silently upgrade older blobs (v1/v2 → v3)
+ *  without surfacing a re-password prompt.
+ *
+ *  Returns null if the blob is already at current version, OR if the
+ *  upgrade target requires a helper the caller couldn't supply. When null
+ *  is returned the original blob is untouched and remains valid. */
 export async function reencryptIfStale(
   encrypted: EncryptedWallet,
   password: string,
   keypair: Keypair,
+  unlockHelper?: string | null,
 ): Promise<EncryptedWallet | null> {
   if (encrypted.version >= CURRENT_BLOB_VERSION) return null;
+  if (currentVersionRequiresHelper() && !unlockHelper) return null;
   try {
-    return await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58());
+    return await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58(), unlockHelper);
   } catch {
-    // Best-effort. Original blob is still valid; we'll retry on next unlock.
     return null;
   }
 }
@@ -368,17 +423,26 @@ async function deriveKey(password: string, salt: Uint8Array, iterations: number)
   );
 }
 
-async function encryptSecretKey(secretKey: Uint8Array, password: string, publicKey: string): Promise<EncryptedWallet> {
+async function encryptSecretKey(
+  secretKey: Uint8Array,
+  password: string,
+  publicKey: string,
+  unlockHelper?: string | null,
+): Promise<EncryptedWallet> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  // Current blob version dictates whether a helper is required. If the
+  // caller didn't supply one, throw — we never silently downgrade.
+  if (currentVersionRequiresHelper() && !unlockHelper) {
+    throw new Error('Wallet unlock helper is required but was not provided');
+  }
+  const effectiveSecret = passwordWithHelper(password, unlockHelper);
 
   let ciphertext: Uint8Array;
 
   if (hasSubtleCrypto) {
-    // Encrypt at the CURRENT blob version's iteration count. Older v1
-    // blobs (encrypted at 100k) remain decryptable; new writes always
-    // use the current count.
-    const key = await deriveKey(password, salt, iterationsForVersion(CURRENT_BLOB_VERSION));
+    const key = await deriveKey(effectiveSecret, salt, iterationsForVersion(CURRENT_BLOB_VERSION));
     const encrypted = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: iv as BufferSource },
       key,
@@ -386,8 +450,7 @@ async function encryptSecretKey(secretKey: Uint8Array, password: string, publicK
     );
     ciphertext = new Uint8Array(encrypted);
   } else {
-    // Fallback: XOR encrypt
-    const keyBytes = await hashPasswordFallback(password, salt);
+    const keyBytes = await hashPasswordFallback(effectiveSecret, salt);
     ciphertext = xorBytes(secretKey, keyBytes);
   }
 

@@ -612,6 +612,20 @@ CREATE INDEX IF NOT EXISTS idx_price_ticks_created
   ON price_ticks (created_at);
 
 -- ============================================================================
+-- Migration 120: Per-actor wallet unlock helper (Step 3 of wallet hardening)
+-- ============================================================================
+-- Per-user/merchant random secret mixed into the embedded-wallet KDF so an
+-- attacker with only the offline localStorage blob cannot brute-force the
+-- wallet. Helper is never returned outside the authenticated, rate-limited
+-- GET /api/wallet/unlock-helper endpoint.
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS wallet_unlock_helper TEXT;
+
+ALTER TABLE merchants
+  ADD COLUMN IF NOT EXISTS wallet_unlock_helper TEXT;
+
+-- ============================================================================
 -- Verification Query
 -- ============================================================================
 -- SELECT tablename FROM pg_tables WHERE tablename IN ('security_alerts', 'price_ticks');
