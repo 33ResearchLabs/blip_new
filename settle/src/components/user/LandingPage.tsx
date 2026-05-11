@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Zap, Loader2, Eye, EyeOff, Mail } from "lucide-react";
+import { Zap, Loader2, Eye, EyeOff, Mail, ChevronLeft, User } from "lucide-react";
 import Link from "next/link";
 import { UserWelcomePage } from "./UserWelcomePage";
 import {
@@ -89,6 +89,23 @@ export function LandingPage({
 
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-10 relative z-10">
         <div className="w-full max-w-[440px]">
+          {/* Top bar: home link + role switch */}
+          <div className="flex items-center justify-between mb-6">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-text-tertiary hover:text-text-primary transition-colors"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              Home
+            </Link>
+            <Link
+              href="/merchant/login"
+              className="text-[11px] font-semibold text-text-tertiary hover:text-text-primary transition-colors"
+            >
+              Are you a merchant? →
+            </Link>
+          </div>
+
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2.5 mb-4">
               <Zap className="w-7 h-7 text-text-primary fill-current" />
@@ -97,8 +114,24 @@ export function LandingPage({
                 <span className="italic text-text-primary/90">money</span>
               </span>
             </div>
-            <h1 className="text-xl font-bold mb-2 text-text-primary">Welcome</h1>
-            <p className="text-sm text-text-secondary">P2P trading, powered by crypto</p>
+
+            {/* USER PORTAL pill — mirrors the MERCHANT PORTAL pill on /merchant/login
+                so visitors immediately know which login they landed on. */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-border-medium bg-surface-card mb-3">
+              <User className="w-3 h-3 text-text-secondary" />
+              <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-text-secondary">
+                User Portal
+              </span>
+            </div>
+
+            <h1 className="text-2xl font-bold mb-1.5 text-text-primary tracking-tight">
+              {authMode === 'login' ? 'Sign in to your account' : 'Create your user account'}
+            </h1>
+            <p className="text-[13px] text-text-secondary">
+              {authMode === 'login'
+                ? 'Trade USDT with verified merchants — escrow-protected.'
+                : 'Buy and sell crypto with verified merchants in minutes.'}
+            </p>
           </div>
 
           {/* Tabs */}
@@ -249,9 +282,6 @@ export function LandingPage({
 
           <div className="mt-8 text-center space-y-2">
             <p className="text-[10px] text-text-tertiary font-mono">Blip Money v1.0</p>
-            <div className="flex items-center justify-center gap-3 text-[10px] text-text-tertiary">
-              <Link href="/merchant" className="hover:text-text-primary transition-colors">Merchant Portal</Link>
-            </div>
           </div>
         </div>
       </div>
