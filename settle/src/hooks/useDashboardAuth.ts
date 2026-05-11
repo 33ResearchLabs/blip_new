@@ -342,6 +342,10 @@ export function useDashboardAuth({
     // In-memory store: drop the access-token mirror and identity. The
     // durable copies live in the cookies (cleared above) and the DB.
     setSessionToken(null);
+    // Drop the wallet context's actor binding so the next merchant on this
+    // device doesn't inherit this merchant's in-memory keypair / session.
+    const ew = (solanaWallet as any)?.embeddedWallet;
+    if (ew?.setActorId) ew.setActorId(null);
     if (solanaWallet.disconnect) {
       solanaWallet.disconnect();
     }

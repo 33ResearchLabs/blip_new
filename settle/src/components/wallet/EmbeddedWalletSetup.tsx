@@ -8,11 +8,18 @@ import { Keypair } from '@solana/web3.js';
 import { colors } from "@/lib/design/theme";
 
 interface EmbeddedWalletSetupProps {
+  // Actor that this wallet belongs to (user.id or merchant.id). Required so
+  // the encrypted blob lands in the right per-actor localStorage slot —
+  // device-wide storage was the bug that let User B see User A's unlock
+  // prompt. Parents pass the id from their own auth probe; if it's not
+  // ready yet, this component shows an error rather than writing to a
+  // wrong-or-legacy slot.
+  actorId: string | null;
   onWalletCreated: (keypair: Keypair) => void;
   onClose?: () => void;
 }
 
-export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWalletSetupProps) {
+export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: EmbeddedWalletSetupProps) {
   const [tab, setTab] = useState<'create' | 'import'>('create');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -31,11 +38,12 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
     setError('');
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
     setIsLoading(true);
     try {
       const { keypair, encrypted } = await generateWallet(password.trim());
-      saveEncryptedWallet(encrypted);
+      saveEncryptedWallet(actorId, encrypted);
       setCreatedKeypair(keypair);
       setBackupKey(exportPrivateKey(keypair));
     } catch (err: any) {
@@ -49,11 +57,12 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
     setError('');
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
     if (!privateKeyInput.trim()) { setError('Paste your private key'); return; }
+    if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
     setIsLoading(true);
     try {
       const { keypair, encrypted } = await importWallet(privateKeyInput.trim(), password.trim());
-      saveEncryptedWallet(encrypted);
+      saveEncryptedWallet(actorId, encrypted);
       onWalletCreated(keypair);
     } catch (err: any) {
       setError(err.message || 'Invalid private key or encryption failed');

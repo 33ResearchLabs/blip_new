@@ -92,6 +92,8 @@ export default function Home() {
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
     | {
         state: "none" | "locked" | "unlocked";
+        actorId: string | null;
+        setActorId: (id: string | null) => void;
         unlockWallet: (password: string) => Promise<boolean>;
         lockWallet: () => void;
         deleteWallet: () => void;
@@ -278,6 +280,15 @@ export default function Home() {
 
   // Send presence heartbeat so other parties (merchants) see this user as online
   usePresenceHeartbeat(!!auth.userId);
+
+  // Hand the wallet context the current user id so its storage probe targets
+  // the right per-user slot. Without this, a fresh signup on a device that
+  // once held another user's wallet would inherit the old "Unlock Wallet"
+  // prompt for a blob they can't decrypt.
+  useEffect(() => {
+    if (!embeddedWallet) return;
+    embeddedWallet.setActorId(auth.userId ?? null);
+  }, [embeddedWallet, auth.userId]);
 
   // Heal any on-chain sell escrows whose POST /api/orders failed in a
   // previous session. The hook reads `blip_orphan_sell_<txHash>` localStorage

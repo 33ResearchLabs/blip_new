@@ -8,9 +8,28 @@
 import { Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
 
-const STORAGE_KEY = 'blip_embedded_wallet';
-const SESSION_KEY = 'blip_wallet_session';
+// Storage is namespaced by actor (user.id / merchant.id) so multiple
+// accounts on the same browser don't bleed into each other. Previously
+// a single device-wide key meant signing up as User B on a device that
+// once held User A's wallet showed an "Unlock Wallet" prompt for a blob
+// User B has no password for.
+//
+// LEGACY_* are the pre-namespacing keys. `migrateLegacyWallet(actorId)`
+// renames them into the per-actor slot the first time we see a known
+// actor on a device with old data. Migration is one-way and idempotent.
+const STORAGE_KEY_PREFIX = 'blip_embedded_wallet';
+const SESSION_KEY_PREFIX = 'blip_wallet_session';
+const LEGACY_STORAGE_KEY = 'blip_embedded_wallet';
+const LEGACY_SESSION_KEY = 'blip_wallet_session';
 const PBKDF2_ITERATIONS = 100_000;
+
+function storageKey(actorId: string): string {
+  return `${STORAGE_KEY_PREFIX}:${actorId}`;
+}
+
+function sessionKey(actorId: string): string {
+  return `${SESSION_KEY_PREFIX}:${actorId}`;
+}
 
 // Check if Web Crypto API is available (requires HTTPS or localhost)
 const hasSubtleCrypto = typeof globalThis !== 'undefined'
@@ -67,14 +86,14 @@ export function exportPrivateKey(keypair: Keypair): string {
   return bs58.encode(keypair.secretKey);
 }
 
-/** Save encrypted wallet to localStorage */
-export function saveEncryptedWallet(encrypted: EncryptedWallet): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(encrypted));
+/** Save encrypted wallet to localStorage under the given actor's slot. */
+export function saveEncryptedWallet(actorId: string, encrypted: EncryptedWallet): void {
+  localStorage.setItem(storageKey(actorId), JSON.stringify(encrypted));
 }
 
-/** Load encrypted wallet from localStorage */
-export function loadEncryptedWallet(): EncryptedWallet | null {
-  const raw = localStorage.getItem(STORAGE_KEY);
+/** Load encrypted wallet for the given actor, or null if none exists. */
+export function loadEncryptedWallet(actorId: string): EncryptedWallet | null {
+  const raw = localStorage.getItem(storageKey(actorId));
   if (!raw) return null;
   try {
     return JSON.parse(raw) as EncryptedWallet;
@@ -83,36 +102,96 @@ export function loadEncryptedWallet(): EncryptedWallet | null {
   }
 }
 
-/** Clear encrypted wallet from localStorage */
-export function clearEncryptedWallet(): void {
-  localStorage.removeItem(STORAGE_KEY);
+/** Clear encrypted wallet for the given actor. */
+export function clearEncryptedWallet(actorId: string): void {
+  localStorage.removeItem(storageKey(actorId));
 }
 
-/** Check if an encrypted wallet exists */
-export function hasEncryptedWallet(): boolean {
-  return localStorage.getItem(STORAGE_KEY) !== null;
+/** Whether an encrypted wallet exists for the given actor. */
+export function hasEncryptedWallet(actorId: string): boolean {
+  return localStorage.getItem(storageKey(actorId)) !== null;
 }
 
-/** Save decrypted keypair to sessionStorage (persists until tab close) */
-export function saveSessionKeypair(keypair: Keypair): void {
-  localStorage.setItem(SESSION_KEY, bs58.encode(keypair.secretKey));
+/** Save decrypted keypair to localStorage under the given actor's session slot. */
+export function saveSessionKeypair(actorId: string, keypair: Keypair): void {
+  localStorage.setItem(sessionKey(actorId), bs58.encode(keypair.secretKey));
 }
 
-/** Load decrypted keypair from sessionStorage */
-export function loadSessionKeypair(): Keypair | null {
-  const raw = localStorage.getItem(SESSION_KEY);
+/** Load decrypted keypair for the given actor, or null if no live session. */
+export function loadSessionKeypair(actorId: string): Keypair | null {
+  const raw = localStorage.getItem(sessionKey(actorId));
   if (!raw) return null;
   try {
     return Keypair.fromSecretKey(bs58.decode(raw));
   } catch {
-    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(sessionKey(actorId));
     return null;
   }
 }
 
-/** Clear session keypair */
-export function clearSessionKeypair(): void {
-  localStorage.removeItem(SESSION_KEY);
+/** Clear session keypair for the given actor. */
+export function clearSessionKeypair(actorId: string): void {
+  localStorage.removeItem(sessionKey(actorId));
+}
+
+/**
+ * One-time migration: if a legacy (non-namespaced) wallet exists on this
+ * device AND the given actor doesn't already have a per-actor blob, copy
+ * the legacy blob into the actor's slot and delete the legacy entries.
+ *
+ * Ordering matters for crash-safety:
+ *   1. Read legacy
+ *   2. Write to new slot
+ *   3. Verify the new slot reads back the same value
+ *   4. Delete the legacy slot
+ *
+ * If the tab is killed between (3) and (4) the device ends up with both
+ * keys present — the next mount picks the per-actor key (correct) and
+ * the migration re-runs, deleting the legacy on retry. Never ends up with
+ * neither key present, so funds are never orphaned.
+ *
+ * Returns whether a migration was performed (useful for telemetry / tests).
+ */
+export function migrateLegacyWallet(actorId: string): boolean {
+  const legacyWallet = localStorage.getItem(LEGACY_STORAGE_KEY);
+  const legacySession = localStorage.getItem(LEGACY_SESSION_KEY);
+
+  // Nothing to migrate.
+  if (!legacyWallet && !legacySession) return false;
+
+  // Don't clobber an existing per-actor wallet — that's almost certainly
+  // the correct one for this user. Just delete the legacy leftovers so
+  // a stray prompt can't fire for a future user on this device.
+  const newSlotKey = storageKey(actorId);
+  const newSlotSession = sessionKey(actorId);
+  const alreadyMigrated = localStorage.getItem(newSlotKey) !== null;
+
+  if (alreadyMigrated) {
+    if (legacyWallet) localStorage.removeItem(LEGACY_STORAGE_KEY);
+    if (legacySession) localStorage.removeItem(LEGACY_SESSION_KEY);
+    return false;
+  }
+
+  if (legacyWallet) {
+    localStorage.setItem(newSlotKey, legacyWallet);
+    // Verify the copy landed before deleting the source.
+    if (localStorage.getItem(newSlotKey) === legacyWallet) {
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } else {
+      // Storage anomaly (quota? eviction?). Leave legacy intact so the
+      // user can still unlock; we'll retry on next mount.
+      return false;
+    }
+  }
+
+  if (legacySession) {
+    localStorage.setItem(newSlotSession, legacySession);
+    if (localStorage.getItem(newSlotSession) === legacySession) {
+      localStorage.removeItem(LEGACY_SESSION_KEY);
+    }
+  }
+
+  return true;
 }
 
 // ---- Internal helpers: Web Crypto (preferred) ----

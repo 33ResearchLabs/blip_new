@@ -22,6 +22,8 @@ interface UserModalsProps {
   setShowWalletSetup: (show: boolean) => void;
   embeddedWallet: {
     state: 'none' | 'locked' | 'unlocked';
+    actorId: string | null;
+    setActorId: (id: string | null) => void;
     unlockWallet: (password: string) => Promise<boolean>;
     lockWallet: () => void;
     deleteWallet: () => void;
@@ -93,6 +95,7 @@ export function UserModals({
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden bg-surface-base border border-border-subtle">
             <EmbeddedWalletSetup
+              actorId={embeddedWallet.actorId}
               onWalletCreated={(kp) => {
                 embeddedWallet.setKeypairAndUnlock(kp);
                 setShowWalletSetup(false);

@@ -68,6 +68,8 @@ export default function UserWalletPage() {
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
     | {
         state: "initializing" | "none" | "locked" | "unlocked";
+        actorId: string | null;
+        setActorId: (id: string | null) => void;
         unlockWallet: (password: string) => Promise<boolean>;
         lockWallet: () => void;
         deleteWallet: () => void;
@@ -76,6 +78,10 @@ export default function UserWalletPage() {
     | undefined;
 
   const [, setUserInfo] = useState<UserInfo | null>(null);
+  // Captured from /api/auth/me — gates per-actor wallet storage. Stays null
+  // until session restore completes; the wallet UI shows its loading state
+  // for that brief window rather than flashing a wrong-account prompt.
+  const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<WalletView>("loading");
 
@@ -134,6 +140,7 @@ export default function UserWalletPage() {
           data?.data?.user?.id
         ) {
           setUserInfo(data.data.user);
+          setUserId(data.data.user.id);
           setIsLoading(false);
           return;
         }
@@ -146,6 +153,15 @@ export default function UserWalletPage() {
     };
     restoreSession();
   }, [router]);
+
+  // Hand the wallet context our actor id so its storage probe targets the
+  // right per-user slot (and runs the one-time legacy migration). Until
+  // this fires the context stays in 'initializing' and the UI shows a
+  // loading state instead of a stale Unlock prompt for someone else.
+  useEffect(() => {
+    if (!embeddedWallet) return;
+    embeddedWallet.setActorId(userId);
+  }, [embeddedWallet, userId]);
 
   // Determine view based on wallet state
   useEffect(() => {
@@ -199,8 +215,12 @@ export default function UserWalletPage() {
 
     setSetupLoading(true);
     try {
+      if (!userId) {
+        setSetupError("Session not ready yet — try again in a second");
+        return;
+      }
       const { keypair, encrypted } = await generateWallet(password);
-      saveEncryptedWallet(encrypted);
+      saveEncryptedWallet(userId, encrypted);
       setPendingKeypair(keypair);
     } catch (err: any) {
       setSetupError(err.message || "Failed to create wallet");
@@ -222,11 +242,15 @@ export default function UserWalletPage() {
 
     setSetupLoading(true);
     try {
+      if (!userId) {
+        setSetupError("Session not ready yet — try again in a second");
+        return;
+      }
       const { keypair, encrypted } = await importWallet(
         privateKeyInput.trim(),
         password,
       );
-      saveEncryptedWallet(encrypted);
+      saveEncryptedWallet(userId, encrypted);
       embeddedWallet?.setKeypairAndUnlock(keypair);
     } catch (err: any) {
       setSetupError(err.message || "Invalid private key");
@@ -361,7 +385,8 @@ export default function UserWalletPage() {
         tx.feePayer = senderPubkey;
         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-        const encrypted = loadEncryptedWallet();
+        if (!userId) throw new Error("Session not ready");
+        const encrypted = loadEncryptedWallet(userId);
         if (!encrypted) throw new Error("Wallet not found");
         const pw = prompt("Enter wallet password to sign transaction");
         if (!pw) {
@@ -419,7 +444,8 @@ export default function UserWalletPage() {
         tx.feePayer = senderPubkey;
         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-        const encrypted = loadEncryptedWallet();
+        if (!userId) throw new Error("Session not ready");
+        const encrypted = loadEncryptedWallet(userId);
         if (!encrypted) throw new Error("Wallet not found");
         const pw = prompt("Enter wallet password to sign transaction");
         if (!pw) {
@@ -445,10 +471,14 @@ export default function UserWalletPage() {
   };
 
   const handleExportKey = () => {
+    if (!userId) {
+      showAlert("Error", "Session not ready — try again in a moment", "error");
+      return;
+    }
     const pw = prompt("Enter your wallet password to export the private key");
     if (!pw) return;
 
-    const encrypted = loadEncryptedWallet();
+    const encrypted = loadEncryptedWallet(userId);
     if (!encrypted) {
       showAlert("Error", "No wallet found", "error");
       return;

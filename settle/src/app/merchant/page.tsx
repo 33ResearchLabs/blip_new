@@ -157,6 +157,8 @@ export default function MerchantDashboard() {
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
     | {
         state: "initializing" | "none" | "locked" | "unlocked";
+        actorId: string | null;
+        setActorId: (id: string | null) => void;
         unlockWallet: (password: string) => Promise<boolean>;
         lockWallet: () => void;
         deleteWallet: () => void;
@@ -228,6 +230,15 @@ export default function MerchantDashboard() {
 
   const { notifications, addNotification, markNotificationRead, markAllNotificationsRead, dismissStickyForOrder } =
     useNotifications(merchantId, isLoggedIn);
+
+  // Hand the wallet context the current merchant id so its storage probe
+  // targets the right per-merchant slot. Without this, a new merchant on a
+  // device that once held another merchant's wallet would inherit the old
+  // "Unlock Wallet" prompt for a blob they can't decrypt.
+  useEffect(() => {
+    if (!embeddedWallet) return;
+    embeddedWallet.setActorId(merchantId ?? null);
+  }, [embeddedWallet, merchantId]);
 
   // Presence heartbeat is mounted at the merchant layout level
   // (MerchantPresenceHeartbeat) so it fires across every merchant
