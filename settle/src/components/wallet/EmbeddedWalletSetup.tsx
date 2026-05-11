@@ -2,7 +2,13 @@
 
 import { useState } from 'react';
 import { Loader2, Key, Download, Eye, EyeOff, Copy, Check, AlertTriangle } from 'lucide-react';
-import { generateWallet, importWallet, saveEncryptedWallet, exportPrivateKey } from '@/lib/wallet/embeddedWallet';
+import {
+  generateWallet,
+  importWallet,
+  saveEncryptedWallet,
+  exportPrivateKey,
+  validatePasswordStrength,
+} from '@/lib/wallet/embeddedWallet';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
 import { colors } from "@/lib/design/theme";
@@ -36,7 +42,11 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
   const handleCreate = async () => {
     setError('');
-    if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
+    // Strength check enforced at creation time only. Existing wallets
+    // (which may have been created under the old 6-char minimum) are
+    // unaffected — unlock path never validates strength.
+    const strength = validatePasswordStrength(password.trim());
+    if (!strength.ok) { setError(strength.reason || 'Password is too weak'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
@@ -55,7 +65,10 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
   const handleImport = async () => {
     setError('');
-    if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
+    // Import re-encrypts with a new password, so apply the same strength
+    // rules — otherwise importing would be a back-door around them.
+    const strength = validatePasswordStrength(password.trim());
+    if (!strength.ok) { setError(strength.reason || 'Password is too weak'); return; }
     if (!privateKeyInput.trim()) { setError('Paste your private key'); return; }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
