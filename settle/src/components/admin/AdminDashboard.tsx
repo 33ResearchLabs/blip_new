@@ -1873,6 +1873,10 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
                       ? "30M"
                       : timeframe.toUpperCase();
   void ordersDelta; // reserved for the All Orders strip in phase 4
+  void revenueDelta; // computed for parity with previous-period block; the
+  // Revenue KPI card was replaced with an effective-rate card that doesn't
+  // surface a windowed delta, so this is held for future re-use without
+  // tripping the unused-local check.
 
   return (
     <div className="flex flex-col h-full gap-2 p-2 overflow-hidden">
@@ -1916,10 +1920,10 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
         </div>
       </div>
 
-      {/* ─── KPI row (5-card mockup: Platform Balance / Revenue / Escrow / Fees / 24H Volume) ─── */}
+      {/* ─── KPI row (5-card mockup: Treasury Balance / Fee Rate / Escrow / Fees / Volume) ─── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 shrink-0">
         <KpiCard
-          label="Platform Balance"
+          label="Treasury Balance"
           value={platformBalance ? compactCrypto(platformBalance.balance) : "—"}
           unit={platformBalance?.currency ?? "USDT"}
           icon={Wallet}
@@ -1932,13 +1936,35 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
           delta={balanceDelta}
           deltaLabel="current"
         />
+        {/*
+         * Fee Rate — effective fee percentage for the selected window
+         * (revenue.fees / volume.total × 100).
+         *
+         * Previously this slot showed a "Revenue" card whose value was
+         * algebraically identical to the Fees card: settle's `protocol_fee_amount`
+         * is always set to exactly `crypto_amount × protocol_fee_percentage/100`,
+         * so SUM(protocol_fee_amount) == SUM(crypto_amount × fee_pct/100). Two
+         * cards rendering the same number with different labels was a UX bug.
+         * Repurposing the slot as the effective rate gives operators something
+         * Fees on its own can't show — whether the fee tiering is being used
+         * (rate drifts from the default 2.50% when discounted lanes apply).
+         */}
         <KpiCard
-          label="Revenue"
-          value={compactCrypto(data.revenue.total)}
+          label="Fee Rate"
+          value={
+            data.volume.total > 0
+              ? formatPercentage((data.revenue.fees / data.volume.total) * 100)
+              : "—"
+          }
           icon={TrendingUp}
           accent="success"
-          delta={revenueDelta}
-          deltaLabel={deltaLabel}
+          hint={
+            data.volume.total > 0
+              ? `${compactCrypto(data.revenue.fees)} on ${compactCrypto(data.volume.total)}`
+              : "no volume in window"
+          }
+          delta={null}
+          deltaLabel="effective"
         />
         <KpiCard
           label="Escrow"
