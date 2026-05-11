@@ -9,9 +9,26 @@ import {
   exportPrivateKey,
   validatePasswordStrength,
 } from '@/lib/wallet/embeddedWallet';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
 import { colors } from "@/lib/design/theme";
+
+// Fetch the per-actor unlock helper from the server. Required when
+// creating a new wallet at the current v3 blob version (Step 3 of
+// wallet hardening). Returns null on any failure — caller treats null
+// as "couldn't reach server, surface a retry-able error".
+async function fetchUnlockHelper(): Promise<string | null> {
+  try {
+    const res = await fetchWithAuth('/api/wallet/unlock-helper');
+    if (!res.ok) return null;
+    const data = await res.json();
+    const helper = data?.data?.unlock_helper;
+    return typeof helper === 'string' && helper.length > 0 ? helper : null;
+  } catch {
+    return null;
+  }
+}
 
 interface EmbeddedWalletSetupProps {
   // Actor that this wallet belongs to (user.id or merchant.id). Required so
@@ -52,7 +69,13 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
     setIsLoading(true);
     try {
-      const { keypair, encrypted } = await generateWallet(password.trim());
+      // Step 3: helper is mandatory for new (v3) wallets.
+      const unlockHelper = await fetchUnlockHelper();
+      if (!unlockHelper) {
+        setError('Could not reach the server. Check your connection and try again.');
+        return;
+      }
+      const { keypair, encrypted } = await generateWallet(password.trim(), unlockHelper);
       saveEncryptedWallet(actorId, encrypted);
       setCreatedKeypair(keypair);
       setBackupKey(exportPrivateKey(keypair));
@@ -74,7 +97,12 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
     setIsLoading(true);
     try {
-      const { keypair, encrypted } = await importWallet(privateKeyInput.trim(), password.trim());
+      const unlockHelper = await fetchUnlockHelper();
+      if (!unlockHelper) {
+        setError('Could not reach the server. Check your connection and try again.');
+        return;
+      }
+      const { keypair, encrypted } = await importWallet(privateKeyInput.trim(), password.trim(), unlockHelper);
       saveEncryptedWallet(actorId, encrypted);
       onWalletCreated(keypair);
     } catch (err: any) {
