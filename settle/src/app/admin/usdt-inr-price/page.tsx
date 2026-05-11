@@ -9,7 +9,6 @@ import {
   WifiOff,
   Database,
   Globe,
-  Zap,
   Clock,
   ToggleLeft,
   ToggleRight,
@@ -350,98 +349,32 @@ export default function UsdtPricePage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="h-[50px] flex items-center px-4 gap-3">
-          <div className="flex items-center shrink-0">
-            <Link href="/admin" className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-foreground fill-foreground" />
-              <span className="text-[17px] leading-none whitespace-nowrap hidden lg:block">
-                <span className="font-bold text-foreground">Blip</span>{" "}
-                <span className="italic text-foreground/90">money</span>
-              </span>
-            </Link>
+      {/* Persistent nav lives in src/app/admin/layout.tsx. Price-specific
+          source/connection indicators + refresh button stay inline. */}
+      <div className="flex items-center justify-end gap-2 px-4 py-1.5 border-b border-border bg-card/30">
+        {priceData && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card border border-border text-[10px] text-foreground/60">
+            <SourceIcon className="w-3 h-3" />
+            {sourceLabel[priceData.source]}
           </div>
-
-          <div className="flex items-center gap-2 mx-auto">
-            <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
-              <Link
-                href="/admin"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Console
-              </Link>
-              <Link
-                href="/admin/live"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Live Feed
-              </Link>
-              <Link
-                href="/admin/access-control"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Access Control
-              </Link>
-              <Link
-                href="/admin/accounts"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Accounts
-              </Link>
-              <Link
-                href="/admin/disputes"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Disputes
-              </Link>
-              <Link
-                href="/admin/monitor"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Monitor
-              </Link>
-              <Link
-                href="/admin/observability"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Observability
-              </Link>
-              <Link
-                href="/admin/usdt-inr-price"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors"
-              >
-                Price
-              </Link>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {priceData && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card border border-border text-[10px] text-foreground/60">
-                <SourceIcon className="w-3 h-3" />
-                {sourceLabel[priceData.source]}
-              </div>
-            )}
-            <div className="flex items-center gap-1.5 text-xs">
-              {error ? (
-                <WifiOff className="w-3.5 h-3.5 text-red-400" />
-              ) : (
-                <Wifi className="w-3.5 h-3.5 text-green-400" />
-              )}
-            </div>
-            <button
-              onClick={() => fetchPrice()}
-              disabled={isRefreshing}
-              className="p-2 hover:bg-card rounded-lg transition-colors disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
-              />
-            </button>
-          </div>
+        )}
+        <div className="flex items-center gap-1.5 text-xs">
+          {error ? (
+            <WifiOff className="w-3.5 h-3.5 text-red-400" />
+          ) : (
+            <Wifi className="w-3.5 h-3.5 text-green-400" />
+          )}
         </div>
-      </header>
+        <button
+          onClick={() => fetchPrice()}
+          disabled={isRefreshing}
+          className="p-2 hover:bg-card rounded-lg transition-colors disabled:opacity-50"
+        >
+          <RefreshCw
+            className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+          />
+        </button>
+      </div>
 
       {/* ===== CONTENT ===== */}
       <div className="p-6 max-w-6xl mx-auto space-y-5">
