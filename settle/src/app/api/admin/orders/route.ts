@@ -46,6 +46,16 @@ export async function GET(request: NextRequest) {
       '1month': '30 days',
     };
     const interval = timeframe ? TIMEFRAME_INTERVAL[timeframe] : undefined;
+    // Optional has_escrow filter ('true' / 'false'). Used by the dashboard's
+    // Cancelled / Refunded chip split — cancelled+escrow=true is what we call
+    // "refunded" (on-chain refund happened); cancelled+escrow=false is a clean
+    // cancel with no money moved. Missing / unknown → no additional filter,
+    // so existing callers are unaffected.
+    const hasEscrowParam = searchParams.get('has_escrow');
+    const hasEscrow =
+      hasEscrowParam === 'true' ? true :
+      hasEscrowParam === 'false' ? false :
+      null;
 
     let whereClause = '';
     const params: (string | number)[] = [];
@@ -69,6 +79,11 @@ export async function GET(request: NextRequest) {
       // user-supplied — so it's safe to inline here. (Postgres' INTERVAL
       // takes a literal, not a parameter.)
       whereClause += `${connector} o.created_at >= NOW() - INTERVAL '${interval}'`;
+    }
+
+    if (hasEscrow !== null) {
+      const connector = whereClause ? ' AND' : 'WHERE';
+      whereClause += `${connector} o.escrow_tx_hash IS ${hasEscrow ? 'NOT NULL' : 'NULL'}`;
     }
 
     params.push(limit);

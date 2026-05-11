@@ -136,13 +136,24 @@ export async function GET(request: NextRequest) {
 
     // Orders analytics.
     // NOTE: `cancelled` keeps its legacy semantics (cancelled OR expired) for
-    // backward compatibility with any cached client. New fields `cancelled_only`
-    // and `expired` are exposed separately so the UI can render honest chips.
+    // backward compatibility with any cached client. New fields `cancelled_only`,
+    // `cancelled_clean`, `refunded`, and `expired` are exposed separately so the
+    // UI can render honest chips.
+    //
+    //   cancelled_only  = status='cancelled'                    (= clean + refunded)
+    //   cancelled_clean = cancelled BUT escrow was never locked  (no on-chain refund)
+    //   refunded        = cancelled AND escrow was locked        (on-chain refund occurred)
+    //
+    // Settle's `orders` enum has no `refunded` value — refunds are absorbed into
+    // `cancelled`. Splitting on `escrow_tx_hash IS NOT NULL` is the cleanest way
+    // to surface refund activity without inventing a new status.
     const ordersAnalytics = await queryOne<{
       total_orders: string;
       completed: string;
       cancelled: string;
       cancelled_only: string;
+      cancelled_clean: string;
+      refunded: string;
       expired: string;
       disputed: string;
       pending: string;
@@ -155,6 +166,8 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE status = 'completed')::text AS completed,
         COUNT(*) FILTER (WHERE status IN ('cancelled', 'expired'))::text AS cancelled,
         COUNT(*) FILTER (WHERE status = 'cancelled')::text AS cancelled_only,
+        COUNT(*) FILTER (WHERE status = 'cancelled' AND escrow_tx_hash IS NULL)::text AS cancelled_clean,
+        COUNT(*) FILTER (WHERE status = 'cancelled' AND escrow_tx_hash IS NOT NULL)::text AS refunded,
         COUNT(*) FILTER (WHERE status = 'expired')::text AS expired,
         COUNT(*) FILTER (WHERE status = 'disputed')::text AS disputed,
         -- Pending = orders waiting for a counterparty (no acceptance yet)
@@ -315,9 +328,12 @@ export async function GET(request: NextRequest) {
         completed: completedCount,
         // `cancelled` is the legacy combined bucket (cancelled OR expired)
         // — kept for backward compatibility. Prefer `cancelledOnly` + `expired`
-        // for honest UI labelling.
+        // for honest UI labelling, and `cancelledClean` + `refunded` to
+        // distinguish on-chain refunds from pure cancellations.
         cancelled: cancelledCount,
         cancelledOnly: parseInt(ordersAnalytics?.cancelled_only || '0'),
+        cancelledClean: parseInt(ordersAnalytics?.cancelled_clean || '0'),
+        refunded: parseInt(ordersAnalytics?.refunded || '0'),
         expired: parseInt(ordersAnalytics?.expired || '0'),
         disputed: parseInt(ordersAnalytics?.disputed || '0'),
         pending: parseInt(ordersAnalytics?.pending || '0'),
