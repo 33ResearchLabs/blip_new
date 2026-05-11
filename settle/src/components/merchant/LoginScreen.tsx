@@ -175,9 +175,9 @@ export function LoginScreen({
           orange. Background stays pure black; the brand accent lives only on
           the CTA, links, and form badges where it actually signals action. */}
 
-      <div className="relative grid lg:grid-cols-1 h-full">
-        {/* ─────────── LEFT PANEL — marketing ─────────── */}
-        {/* <LeftPanel mode={authTab} /> */}
+      <div className="relative grid lg:grid-cols-2 h-full">
+        {/* ─────────── LEFT PANEL — marketing (desktop only) ─────────── */}
+        <LeftPanel mode={authTab} />
 
         {/* ─────────── RIGHT PANEL — form ─────────── */}
         <div className="flex items-center justify-center px-6 py-6 lg:px-10 xl:px-14 h-full overflow-y-auto lg:overflow-hidden">
@@ -185,11 +185,19 @@ export function LoginScreen({
             {/* glow halo behind card */}
             <div className="pointer-events-none absolute -inset-4  rounded-3xl blur-2xl" />
             <div className="relative bg-[#0C0C0E]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-7 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)]">
-              {/* MERCHANT PORTAL pill */}
-              <div className="inline-flex items-center px-3 py-1 rounded-full  border border-white/15 mb-3">
-                <span className="text-[10px] font-semibold tracking-[0.18em] text-white/70">
-                  MERCHANT PORTAL
-                </span>
+              {/* MERCHANT PORTAL pill + user switch */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="inline-flex items-center px-3 py-1 rounded-full border border-white/15">
+                  <span className="text-[10px] font-semibold tracking-[0.18em] text-white/70">
+                    MERCHANT PORTAL
+                  </span>
+                </div>
+                <Link
+                  href="/"
+                  className="text-[11px] font-semibold text-white/50 hover:text-white transition-colors"
+                >
+                  Not a merchant? →
+                </Link>
               </div>
 
               {authTab === "signin" ? (
