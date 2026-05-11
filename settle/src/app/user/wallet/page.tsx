@@ -40,12 +40,16 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { DEVNET_RPC, DEVNET_WS_ENDPOINT } from "@/lib/solana/v2/config";
 import { confirmHttp } from "@/lib/solana/confirmHttp";
 import {
-  generateWallet,
+  generateMnemonicWallet,
   importWallet,
   decryptWallet,
+  decryptMnemonic,
   exportPrivateKey,
   saveEncryptedWallet,
   loadEncryptedWallet,
+  saveEncryptedMnemonic,
+  loadEncryptedMnemonic,
+  hasEncryptedMnemonic,
   validatePasswordStrength,
 } from "@/lib/wallet/embeddedWallet";
 import { Keypair } from "@solana/web3.js";
@@ -116,6 +120,10 @@ export default function UserWalletPage() {
 
   // Backup state (after creation)
   const [pendingKeypair, setPendingKeypair] = useState<Keypair | null>(null);
+  // BIP39 phrase shown to the user on the backup screen after Create (and
+  // after a successful mnemonic-Import). Null for legacy base58-imported
+  // wallets which have no mnemonic.
+  const [pendingMnemonic, setPendingMnemonic] = useState<string | null>(null);
   const [backupDownloaded, setBackupDownloaded] = useState(false);
 
   // Restore user session via cookie-authed /api/auth/me. Survives hard
@@ -232,9 +240,18 @@ export default function UserWalletPage() {
         setSetupError("Could not reach the server. Check your connection and try again.");
         return;
       }
-      const { keypair, encrypted } = await generateWallet(password, unlockHelper);
+      // Step 4: generate a BIP39-mnemonic-derived wallet. The mnemonic is
+      // displayed during the backup screen (see existing setPendingKeypair
+      // flow) AND saved encrypted so the user can re-display it later via
+      // "Show Recovery Phrase". Funds remain recoverable in any Solana
+      // wallet (Phantom, Solflare, Sollet) under the standard derivation
+      // path even if this app's localStorage is wiped.
+      const { keypair, mnemonic, encrypted, encryptedMnemonic } =
+        await generateMnemonicWallet(password, unlockHelper);
       saveEncryptedWallet(userId, encrypted);
+      saveEncryptedMnemonic(userId, encryptedMnemonic);
       setPendingKeypair(keypair);
+      setPendingMnemonic(mnemonic);
     } catch (err: any) {
       setSetupError(err.message || "Failed to create wallet");
     } finally {
@@ -252,7 +269,7 @@ export default function UserWalletPage() {
       return;
     }
     if (!privateKeyInput.trim()) {
-      setSetupError("Paste your private key");
+      setSetupError("Paste your private key or 12-word recovery phrase");
       return;
     }
 
@@ -270,12 +287,19 @@ export default function UserWalletPage() {
         setSetupError("Could not reach the server. Check your connection and try again.");
         return;
       }
-      const { keypair, encrypted } = await importWallet(
+      // importWallet auto-detects mnemonic vs base58 input. When a
+      // mnemonic was supplied, encryptedMnemonic is non-null and we
+      // persist it so the user can recover the phrase later via
+      // "Show Recovery Phrase".
+      const { keypair, encrypted, encryptedMnemonic } = await importWallet(
         privateKeyInput.trim(),
         password,
         unlockHelper,
       );
       saveEncryptedWallet(userId, encrypted);
+      if (encryptedMnemonic) {
+        saveEncryptedMnemonic(userId, encryptedMnemonic);
+      }
       embeddedWallet?.setKeypairAndUnlock(keypair);
     } catch (err: any) {
       setSetupError(err.message || "Invalid private key");
@@ -287,9 +311,16 @@ export default function UserWalletPage() {
   const handleDownloadBackup = () => {
     if (!pendingKeypair) return;
     const key = exportPrivateKey(pendingKeypair);
+    // Include the 12-word recovery phrase in the backup file when present.
+    // The phrase is the user's primary recovery material (works in any
+    // Solana wallet under m/44'/501'/0'/0'); the private key is the
+    // fallback for wallets that don't support BIP39 import.
+    const mnemonicBlock = pendingMnemonic
+      ? `Recovery Phrase (12 words):\n${pendingMnemonic}\n\nThis phrase recovers your wallet in ANY Solana wallet (Phantom, Solflare, etc.) under the standard derivation path m/44'/501'/0'/0'.\n\n`
+      : "";
     const blob = new Blob(
       [
-        `Blip Money — Wallet Backup\n\nPublic Key: ${pendingKeypair.publicKey.toBase58()}\nPrivate Key: ${key}\n\nKeep this file safe. Anyone with the private key can access your funds.\nGenerated: ${new Date().toISOString()}\n`,
+        `Blip Money — Wallet Backup\n\nPublic Key: ${pendingKeypair.publicKey.toBase58()}\n\n${mnemonicBlock}Private Key: ${key}\n\nKeep this file safe. Anyone with the recovery phrase or private key can access your funds.\nGenerated: ${new Date().toISOString()}\n`,
       ],
       { type: "text/plain" },
     );
@@ -306,6 +337,7 @@ export default function UserWalletPage() {
     if (pendingKeypair && embeddedWallet) {
       embeddedWallet.setKeypairAndUnlock(pendingKeypair);
       setPendingKeypair(null);
+      setPendingMnemonic(null);
       setBackupDownloaded(false);
       setPassword("");
       setConfirmPassword("");
@@ -758,16 +790,19 @@ export default function UserWalletPage() {
                     />
                     <div>
                       <label htmlFor="wallet-import-key" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                        Private Key (Base58)
+                        Recovery Phrase or Private Key
                       </label>
                       <textarea
                         id="wallet-import-key"
                         name="wallet-import-key"
                         autoComplete="off"
-                        maxLength={128}
+                        // 12-word phrases are ~120 chars; 24-word ~220. Allow
+                        // enough room for either, plus base58 private keys
+                        // (~88 chars), with headroom for spaces and tolerance.
+                        maxLength={300}
                         value={privateKeyInput}
                         onChange={(e) => setPrivateKeyInput(e.target.value)}
-                        placeholder="Paste your base58 private key..."
+                        placeholder="Paste your 12-word recovery phrase OR base58 private key..."
                         rows={3}
                         className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
                                    text-sm text-white font-mono placeholder:text-white/20 resize-none
@@ -847,6 +882,35 @@ export default function UserWalletPage() {
                     {pendingKeypair.publicKey.toBase58()}
                   </div>
                 </div>
+
+                {/* Recovery phrase — only shown for mnemonic-derived wallets
+                    (new Create flow). Legacy base58-imported wallets have
+                    no mnemonic and skip this block entirely. */}
+                {pendingMnemonic && (
+                  <div className="p-3 bg-yellow-500/[0.04] border border-yellow-500/[0.15] rounded-xl">
+                    <div className="text-[10px] text-yellow-400/70 font-mono uppercase mb-2 flex items-center gap-1.5">
+                      <Key className="w-3 h-3" /> Recovery Phrase (write down)
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {pendingMnemonic.split(/\s+/).map((word, i) => (
+                        <div
+                          key={i}
+                          className="px-2 py-1.5 bg-black/30 border border-white/[0.06] rounded text-[11px] font-mono text-white/80 flex items-center gap-1.5"
+                        >
+                          <span className="text-white/30 text-[9px] w-3 text-right">
+                            {i + 1}
+                          </span>
+                          <span>{word}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[9px] text-yellow-400/50 font-mono mt-2 leading-relaxed">
+                      These 12 words recover your wallet in any Solana wallet
+                      (Phantom, Solflare, etc.). Write them down OFFLINE.
+                      Anyone with this phrase controls your funds.
+                    </p>
+                  </div>
+                )}
 
                 <button
                   onClick={handleDownloadBackup}

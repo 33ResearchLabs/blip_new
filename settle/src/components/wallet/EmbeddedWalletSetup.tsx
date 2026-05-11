@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { Loader2, Key, Download, Eye, EyeOff, Copy, Check, AlertTriangle } from 'lucide-react';
 import {
-  generateWallet,
+  generateMnemonicWallet,
   importWallet,
   saveEncryptedWallet,
+  saveEncryptedMnemonic,
   exportPrivateKey,
   validatePasswordStrength,
 } from '@/lib/wallet/embeddedWallet';
@@ -51,9 +52,12 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // After creation — show backup key
+  // After creation — show backup key + recovery phrase
   const [createdKeypair, setCreatedKeypair] = useState<Keypair | null>(null);
   const [backupKey, setBackupKey] = useState('');
+  // BIP39 mnemonic to show alongside the base58 backup key. Null on
+  // legacy base58-import paths (no mnemonic to show).
+  const [backupMnemonic, setBackupMnemonic] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [backupConfirmed, setBackupConfirmed] = useState(false);
 
@@ -69,16 +73,21 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
     setIsLoading(true);
     try {
-      // Step 3: helper is mandatory for new (v3) wallets.
+      // Step 3: helper is mandatory for new (v3+) wallets.
       const unlockHelper = await fetchUnlockHelper();
       if (!unlockHelper) {
         setError('Could not reach the server. Check your connection and try again.');
         return;
       }
-      const { keypair, encrypted } = await generateWallet(password.trim(), unlockHelper);
+      // Step 4: mnemonic-derived wallet — recoverable in any Solana wallet
+      // via the 12-word phrase shown on the next screen.
+      const { keypair, mnemonic, encrypted, encryptedMnemonic } =
+        await generateMnemonicWallet(password.trim(), unlockHelper);
       saveEncryptedWallet(actorId, encrypted);
+      saveEncryptedMnemonic(actorId, encryptedMnemonic);
       setCreatedKeypair(keypair);
       setBackupKey(exportPrivateKey(keypair));
+      setBackupMnemonic(mnemonic);
     } catch (err: any) {
       setError(err.message || 'Failed to create wallet');
     } finally {
@@ -92,7 +101,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
     // rules — otherwise importing would be a back-door around them.
     const strength = validatePasswordStrength(password.trim());
     if (!strength.ok) { setError(strength.reason || 'Password is too weak'); return; }
-    if (!privateKeyInput.trim()) { setError('Paste your private key'); return; }
+    if (!privateKeyInput.trim()) { setError('Paste your recovery phrase or private key'); return; }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
     setIsLoading(true);
@@ -102,11 +111,21 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
         setError('Could not reach the server. Check your connection and try again.');
         return;
       }
-      const { keypair, encrypted } = await importWallet(privateKeyInput.trim(), password.trim(), unlockHelper);
+      // importWallet auto-detects mnemonic vs base58. Persist the
+      // encrypted mnemonic when present so the user can recover the
+      // phrase later via "Show Recovery Phrase".
+      const { keypair, encrypted, encryptedMnemonic } = await importWallet(
+        privateKeyInput.trim(),
+        password.trim(),
+        unlockHelper,
+      );
       saveEncryptedWallet(actorId, encrypted);
+      if (encryptedMnemonic) {
+        saveEncryptedMnemonic(actorId, encryptedMnemonic);
+      }
       onWalletCreated(keypair);
     } catch (err: any) {
-      setError(err.message || 'Invalid private key or encryption failed');
+      setError(err.message || 'Invalid private key / recovery phrase or encryption failed');
     } finally {
       setIsLoading(false);
     }
@@ -140,27 +159,57 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
         <div className="rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>Backup Your Key</h2>
+            <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>Backup Your Wallet</h2>
           </div>
 
           <p className="text-sm font-mono" style={{ color: colors.text.secondary }}>
-            Save this private key somewhere safe. If you forget your password,
-            this is the only way to recover your wallet.
+            Write your 12-word recovery phrase down on paper. If you forget your
+            password or lose this device, the phrase is how you recover the wallet
+            in any Solana wallet (Phantom, Solflare, etc.).
           </p>
 
-          <div className="relative">
-            <div className="p-3 rounded-lg font-mono text-xs break-all select-all"
-              style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}`, color: colors.text.secondary }}>
-              {backupKey}
+          {/* Recovery phrase — only present for mnemonic-derived wallets
+              (new Create path). Legacy base58-import path leaves it null. */}
+          {backupMnemonic && (
+            <div className="p-3 rounded-lg" style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
+              <div className="text-[10px] font-mono uppercase mb-2 flex items-center gap-1.5" style={{ color: colors.text.tertiary }}>
+                <Key className="w-3 h-3" /> Recovery Phrase (12 words)
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {backupMnemonic.split(/\s+/).map((word, i) => (
+                  <div
+                    key={i}
+                    className="px-2 py-1.5 rounded text-[11px] font-mono flex items-center gap-1.5"
+                    style={{ background: colors.bg.primary, border: `1px solid ${colors.border.subtle}`, color: colors.text.primary }}
+                  >
+                    <span className="text-[9px] w-3 text-right" style={{ color: colors.text.tertiary }}>{i + 1}</span>
+                    <span>{word}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <button
-              onClick={handleCopyKey}
-              className="absolute top-2 right-2 p-1.5 rounded-md transition-colors"
-              style={{ background: colors.surface.active }}
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" style={{ color: colors.text.tertiary }} />}
-            </button>
-          </div>
+          )}
+
+          {/* Base58 private key — fallback backup material. Useful for users
+              who already use a wallet that doesn't support BIP39 import. */}
+          <details className="rounded-lg" style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
+            <summary className="px-3 py-2 text-[11px] font-mono cursor-pointer select-none" style={{ color: colors.text.tertiary }}>
+              Also show base58 private key (advanced)
+            </summary>
+            <div className="relative px-3 pb-3">
+              <div className="p-3 rounded-lg font-mono text-xs break-all select-all"
+                style={{ background: colors.bg.primary, border: `1px solid ${colors.border.subtle}`, color: colors.text.secondary }}>
+                {backupKey}
+              </div>
+              <button
+                onClick={handleCopyKey}
+                className="absolute top-5 right-5 p-1.5 rounded-md transition-colors"
+                style={{ background: colors.surface.active }}
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" style={{ color: colors.text.tertiary }} />}
+              </button>
+            </div>
+          </details>
 
           <div className="p-3 rounded-lg" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
             <div className="text-[10px] font-mono uppercase mb-1" style={{ color: colors.text.tertiary }}>Public Address</div>
@@ -334,7 +383,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                 maxLength={128}
                 value={privateKeyInput}
                 onChange={(e) => setPrivateKeyInput(e.target.value)}
-                placeholder="Paste your base58 private key..."
+                placeholder="Paste your 12-word recovery phrase OR base58 private key..."
                 rows={3}
                 className="resize-none"
                 style={{ ...inputStyle, padding: '10px 14px' }}
