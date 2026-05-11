@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Crown,
   Star,
-  Bell,
   Users,
   Activity,
   CheckCircle,
@@ -323,26 +322,11 @@ export default function MerchantsPage() {
   return (
     <div className="hidden md:flex md:flex-col h-screen overflow-hidden bg-background">
 
-      {/* Persistent nav lives in src/app/admin/layout.tsx. Merchant-page
-          summary + notifications + admin badge stay inline. */}
-      <div className="flex items-center justify-end gap-2 px-4 py-1.5 border-b border-border bg-card/30 shrink-0">
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border">
-          <Crown className="w-3.5 h-3.5 text-foreground/40" />
-          <span className="text-[11px] font-medium text-foreground/70 tabular-nums">{formatCount(summary?.totalMerchants ?? total)} merchants</span>
-        </div>
-        <button className="relative p-2 rounded-lg bg-card border border-border hover:bg-accent-subtle transition-colors" aria-label="Notifications">
-          <Bell className="w-[18px] h-[18px] text-foreground/50" />
-          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[var(--color-error)] text-[8px] font-bold text-foreground flex items-center justify-center tabular-nums">12</span>
-        </button>
-        <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-card border border-border">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-[11px] font-bold text-foreground shrink-0">A</div>
-          <div className="hidden xl:flex flex-col leading-tight">
-            <span className="text-[11px] font-medium text-foreground/80">Admin User</span>
-            <span className="text-[8px] font-mono text-foreground/40 uppercase tracking-wider">Super Admin</span>
-          </div>
-          <ChevronDown className="w-3 h-3 text-foreground/30 hidden xl:block" />
-        </div>
-      </div>
+      {/* The previous toolbar row (merchant-count chip + notification bell +
+          admin badge) was removed — the count is already in the "Total
+          Merchants" summary card, the bell had no notification system wired
+          to it, and the identity chip duplicated the persistent header in
+          admin/layout.tsx. Kept in sync with users/page.tsx. */}
 
       {/* ===== CONTENT ===== */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">

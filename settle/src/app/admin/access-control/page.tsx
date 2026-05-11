@@ -396,18 +396,19 @@ export default function AccessControlPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Persistent nav lives in src/app/admin/layout.tsx. Access-control
-          summary stays inline. */}
-      <div className="flex items-center justify-end gap-2 px-4 py-1.5 border-b border-border bg-card/30">
-        <div className="text-[11px] text-foreground/30 font-mono tabular-nums">
+      {/* The dedicated "granted" toolbar row was redundant — it carried a
+          single read-only count and ate ~30px of vertical real estate. Moved
+          the chip inline with the page header so the heading and the count
+          render on the same row. Persistent nav still lives in
+          src/app/admin/layout.tsx. */}
+      <div className="w-full px-8 pt-7 pb-3 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">{tabLabel}</h1>
+          <p className="text-[12px] text-foreground/40 mt-1">{tabSubtitle}</p>
+        </div>
+        <div className="text-[11px] text-foreground/30 font-mono tabular-nums whitespace-nowrap mt-2">
           {formatCount(grantedCount)} granted
         </div>
-      </div>
-
-      {/* Page header */}
-      <div className="w-full px-8 pt-7 pb-3">
-        <h1 className="text-2xl font-bold text-foreground">{tabLabel}</h1>
-        <p className="text-[12px] text-foreground/40 mt-1">{tabSubtitle}</p>
       </div>
 
       {/* Tab pills */}
