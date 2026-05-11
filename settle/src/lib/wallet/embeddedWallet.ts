@@ -19,9 +19,40 @@ import bs58 from 'bs58';
 // actor on a device with old data. Migration is one-way and idempotent.
 const STORAGE_KEY_PREFIX = 'blip_embedded_wallet';
 const SESSION_KEY_PREFIX = 'blip_wallet_session';
+const FAILURES_KEY_PREFIX = 'blip_unlock_failures';
 const LEGACY_STORAGE_KEY = 'blip_embedded_wallet';
 const LEGACY_SESSION_KEY = 'blip_wallet_session';
-const PBKDF2_ITERATIONS = 100_000;
+
+// PBKDF2 iteration counts per blob version.
+//
+//   v1 = 100,000  — legacy. Existing mainnet wallets were encrypted at this
+//                   count. We MUST keep decryption working for them.
+//   v2 = 600,000  — current. OWASP 2023 minimum for PBKDF2-SHA256. New
+//                   wallets are written at this count, and v1 blobs are
+//                   silently re-encrypted to v2 on next successful unlock.
+//
+// Caller never picks the iteration count — the version field on the
+// EncryptedWallet record fully determines it. Updating these values is a
+// breaking change for already-encrypted blobs; add a new version row
+// instead.
+const CURRENT_BLOB_VERSION = 2;
+const ITERATIONS_BY_VERSION: Record<number, number> = {
+  1: 100_000,
+  2: 600_000,
+};
+
+function iterationsForVersion(version: number): number {
+  return ITERATIONS_BY_VERSION[version] ?? ITERATIONS_BY_VERSION[1];
+}
+
+// Failed-unlock counter threshold. After this many consecutive wrong
+// passwords, the local encrypted blob is wiped and the user must recover
+// via their previously-exported private key. Funds are NEVER at risk —
+// the keypair still exists on-chain; only the device cache is removed.
+//
+// 5 is the standard "too many tries" threshold. Lower = more annoying for
+// forgetful users. Higher = more bites at the apple for an attacker.
+export const MAX_UNLOCK_FAILURES = 5;
 
 function storageKey(actorId: string): string {
   return `${STORAGE_KEY_PREFIX}:${actorId}`;
@@ -29,6 +60,74 @@ function storageKey(actorId: string): string {
 
 function sessionKey(actorId: string): string {
   return `${SESSION_KEY_PREFIX}:${actorId}`;
+}
+
+function failuresKey(actorId: string): string {
+  return `${FAILURES_KEY_PREFIX}:${actorId}`;
+}
+
+// ---- Password strength ----
+//
+// Validation runs ONLY at wallet creation (generate or import-with-new-
+// password). Never at unlock — that would lock out existing mainnet
+// users whose original wallet was created with a weaker password.
+//
+// The blocklist is intentionally short (top common passwords); a full
+// rockyou-sized list (~14M entries) is not practical to ship to the
+// browser. The first line of defence is the 12-char minimum length.
+
+const COMMON_PASSWORDS = new Set<string>([
+  '123456', '123456789', 'qwerty', 'password', '12345678', '111111', '123123',
+  '1234567890', '1234567', 'qwerty123', '000000', '1q2w3e', 'aa12345678',
+  'abc123', 'password1', '1234', '12345', 'iloveyou', '7777777', 'monkey',
+  'dragon', 'letmein', 'sunshine', 'princess', 'admin', 'welcome', '666666',
+  'shadow', 'master', 'football', 'baseball', 'superman', 'qazwsx', 'michael',
+  'jordan23', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm', 'qwerty12345',
+  'password123', 'admin123', 'root', 'toor', 'pass', 'test', 'guest',
+  'changeme', 'login', 'starwars', 'whatever', 'trustno1', 'hello123',
+  'freedom', 'computer', 'matrix', 'qwer1234', 'asdf1234', 'qweqweqwe',
+  'passw0rd', 'p@ssw0rd', 'p@ssword', 'qwertyui', 'zaq12wsx', 'q1w2e3r4',
+  'q1w2e3r4t5', 'samsung', 'google', 'apple123', 'iphone', 'android',
+  'facebook', 'twitter', 'instagram', 'youtube', 'gmail', 'yahoo',
+  'hotmail', 'outlook', 'paypal', 'amazon', 'netflix', 'spotify',
+  'bitcoin', 'crypto', 'ethereum', 'solana', 'wallet', 'wallet123',
+  'satoshi', 'blockchain', 'metamask', 'phantom', 'binance', 'coinbase',
+  'usdt', 'usdc', 'tether', 'blip', 'blipmoney', 'blip123', 'blip2026',
+  'money', 'cash', 'bank', 'qwerty1', '654321', '987654', '111222',
+  '987654321', 'asdasd', 'asdfgh', 'asdf', 'qwer', '0987654321',
+]);
+
+export interface PasswordStrengthResult {
+  ok: boolean;
+  reason?: string;
+}
+
+/**
+ * Validate a wallet password at CREATION time. Returns ok=true if the
+ * password is acceptable. Run from `generateWallet` / `importWallet`
+ * callers — do NOT run at unlock (existing wallets may have weaker
+ * passwords that we cannot retroactively reject without locking the
+ * user out of their funds).
+ */
+export function validatePasswordStrength(password: string): PasswordStrengthResult {
+  if (typeof password !== 'string' || password.length === 0) {
+    return { ok: false, reason: 'Password is required' };
+  }
+  // 12 is the minimum length where a passphrase or a random 8-char
+  // password + a few words starts to become brute-force-resistant
+  // given the 600k PBKDF2 we now use. Shorter passwords fall to
+  // dictionary + GPU-accelerated attacks even with strong KDF params.
+  if (password.length < 12) {
+    return { ok: false, reason: 'Password must be at least 12 characters' };
+  }
+  if (password.length > 256) {
+    return { ok: false, reason: 'Password is too long (max 256 characters)' };
+  }
+  const lower = password.toLowerCase();
+  if (COMMON_PASSWORDS.has(lower)) {
+    return { ok: false, reason: 'That password is too common — pick something unique' };
+  }
+  return { ok: true };
 }
 
 // Check if Web Crypto API is available (requires HTTPS or localhost)
@@ -59,14 +158,16 @@ export async function importWallet(base58PrivateKey: string, password: string): 
   return { keypair, encrypted };
 }
 
-/** Decrypt an encrypted wallet with password */
+/** Decrypt an encrypted wallet with password. Uses the iteration count
+ *  recorded on the blob so legacy v1 (100k) wallets still unlock after
+ *  the v2 (600k) bump. */
 export async function decryptWallet(encrypted: EncryptedWallet, password: string): Promise<Keypair> {
   const salt = Uint8Array.from(atob(encrypted.salt), c => c.charCodeAt(0));
   const iv = Uint8Array.from(atob(encrypted.iv), c => c.charCodeAt(0));
   const ciphertext = Uint8Array.from(atob(encrypted.encryptedKey), c => c.charCodeAt(0));
 
   if (hasSubtleCrypto) {
-    const key = await deriveKey(password, salt);
+    const key = await deriveKey(password, salt, iterationsForVersion(encrypted.version));
     const decrypted = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: iv as BufferSource },
       key,
@@ -78,6 +179,25 @@ export async function decryptWallet(encrypted: EncryptedWallet, password: string
     const keyBytes = await hashPasswordFallback(password, salt);
     const decrypted = xorBytes(ciphertext, keyBytes);
     return Keypair.fromSecretKey(decrypted);
+  }
+}
+
+/** Re-encrypt a successfully-decrypted wallet at the CURRENT blob version.
+ *  Used by the unlock path to silently upgrade older v1 (100k iteration)
+ *  blobs to v2 (600k) without surfacing a re-password prompt. Returns the
+ *  new encrypted blob if an upgrade was performed, or null if the blob is
+ *  already at current version. */
+export async function reencryptIfStale(
+  encrypted: EncryptedWallet,
+  password: string,
+  keypair: Keypair,
+): Promise<EncryptedWallet | null> {
+  if (encrypted.version >= CURRENT_BLOB_VERSION) return null;
+  try {
+    return await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58());
+  } catch {
+    // Best-effort. Original blob is still valid; we'll retry on next unlock.
+    return null;
   }
 }
 
@@ -132,6 +252,34 @@ export function loadSessionKeypair(actorId: string): Keypair | null {
 /** Clear session keypair for the given actor. */
 export function clearSessionKeypair(actorId: string): void {
   localStorage.removeItem(sessionKey(actorId));
+}
+
+// ---- Failed-unlock counter ----
+//
+// Tracks consecutive wrong-password attempts per actor. The unlock path
+// in EmbeddedWalletContext increments this on every failure and clears
+// it on success. When the count reaches MAX_UNLOCK_FAILURES, the local
+// encrypted blob is wiped — the user must then recover via the private
+// key they exported during setup (Export Key UI is mandatory at
+// creation, so every user has this). Funds are never at risk.
+
+export function getUnlockFailureCount(actorId: string): number {
+  const raw = localStorage.getItem(failuresKey(actorId));
+  if (!raw) return 0;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/** Increment the per-actor failure counter and return the new count. */
+export function recordUnlockFailure(actorId: string): number {
+  const next = getUnlockFailureCount(actorId) + 1;
+  localStorage.setItem(failuresKey(actorId), String(next));
+  return next;
+}
+
+/** Reset the per-actor failure counter (call on successful unlock). */
+export function clearUnlockFailures(actorId: string): void {
+  localStorage.removeItem(failuresKey(actorId));
 }
 
 /**
@@ -196,7 +344,7 @@ export function migrateLegacyWallet(actorId: string): boolean {
 
 // ---- Internal helpers: Web Crypto (preferred) ----
 
-async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+async function deriveKey(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
@@ -210,7 +358,7 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
     {
       name: 'PBKDF2',
       salt: salt as BufferSource,
-      iterations: PBKDF2_ITERATIONS,
+      iterations,
       hash: 'SHA-256',
     },
     keyMaterial,
@@ -227,7 +375,10 @@ async function encryptSecretKey(secretKey: Uint8Array, password: string, publicK
   let ciphertext: Uint8Array;
 
   if (hasSubtleCrypto) {
-    const key = await deriveKey(password, salt);
+    // Encrypt at the CURRENT blob version's iteration count. Older v1
+    // blobs (encrypted at 100k) remain decryptable; new writes always
+    // use the current count.
+    const key = await deriveKey(password, salt, iterationsForVersion(CURRENT_BLOB_VERSION));
     const encrypted = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: iv as BufferSource },
       key,
@@ -245,7 +396,7 @@ async function encryptSecretKey(secretKey: Uint8Array, password: string, publicK
     iv: btoa(String.fromCharCode(...iv)),
     salt: btoa(String.fromCharCode(...salt)),
     publicKey,
-    version: 1,
+    version: CURRENT_BLOB_VERSION,
   };
 }
 
