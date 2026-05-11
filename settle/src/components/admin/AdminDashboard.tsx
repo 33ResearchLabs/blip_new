@@ -76,9 +76,14 @@ interface AnalyticsResponse {
     completed: number;
     // `cancelled` is the legacy combined bucket (cancelled OR expired). The
     // server still populates it for back-compat, but UI now prefers the split
-    // `cancelledOnly` + `expired` fields below.
+    // `cancelledClean` + `refunded` + `expired` fields below.
+    //   cancelledOnly  = status='cancelled' (= cancelledClean + refunded)
+    //   cancelledClean = cancelled with no escrow ever locked (no on-chain refund)
+    //   refunded       = cancelled with escrow that had to be refunded on-chain
     cancelled: number;
     cancelledOnly?: number;
+    cancelledClean?: number;
+    refunded?: number;
     expired?: number;
     disputed: number;
     pending: number;
@@ -508,15 +513,18 @@ function OrderBreakdown({ orders }: { orders: AnalyticsResponse["orders"] }) {
   const active = orders.active ?? 0;
   // Prefer the split counts so this matches the chip strip. When the older
   // API is in front (no split fields), fall back: assume everything in the
-  // legacy combined `cancelled` bucket is truly cancelled (no expired row),
-  // matching pre-fix display.
-  const cancelledOnly = orders.cancelledOnly ?? orders.cancelled;
+  // legacy combined `cancelled` bucket is truly cancelled (no expired row,
+  // no refunded row), matching pre-fix display.
+  const cancelledClean =
+    orders.cancelledClean ?? orders.cancelledOnly ?? orders.cancelled;
+  const refunded = orders.refunded ?? 0;
   const expired = orders.expired ?? 0;
   const rows: { label: string; value: number; color: string }[] = [
     { label: "Pending", value: pending, color: "#f59e0b" },
     { label: "Active", value: active, color: "#329dff" },
     { label: "Completed", value: orders.completed, color: "#10b981" },
-    { label: "Cancelled", value: cancelledOnly, color: "#ef4444" },
+    { label: "Cancelled", value: cancelledClean, color: "#ef4444" },
+    { label: "Refunded", value: refunded, color: "#f97316" },
     { label: "Expired", value: expired, color: "#94a3b8" },
     { label: "Disputed", value: orders.disputed, color: "#fb7185" },
   ];
@@ -569,9 +577,12 @@ function StatusDonut({ orders }: { orders: AnalyticsResponse["orders"] }) {
     0,
     orders.total - orders.completed - orders.cancelled - orders.disputed,
   );
-  // Match the chip strip: cancelled and expired are distinct slices. Falls
-  // back to the legacy combined bucket if older API responses are in flight.
-  const cancelledOnly = orders.cancelledOnly ?? orders.cancelled;
+  // Match the chip strip: cancelled (clean), refunded, expired are distinct
+  // slices. Falls back to the legacy combined bucket if older API responses
+  // are in flight.
+  const cancelledClean =
+    orders.cancelledClean ?? orders.cancelledOnly ?? orders.cancelled;
+  const refunded = orders.refunded ?? 0;
   const expired = orders.expired ?? 0;
   const data = [
     {
@@ -586,9 +597,10 @@ function StatusDonut({ orders }: { orders: AnalyticsResponse["orders"] }) {
     },
     {
       name: "Cancelled",
-      value: cancelledOnly,
+      value: cancelledClean,
       color: STATUS_COLORS.Cancelled,
     },
+    { name: "Refunded", value: refunded, color: "#f97316" },
     { name: "Expired", value: expired, color: "#94a3b8" },
     { name: "Disputed", value: orders.disputed, color: STATUS_COLORS.Disputed },
   ].filter((d) => d.value > 0);
@@ -1297,6 +1309,10 @@ const ALL_ORDERS_TABS: {
   key: string;
   label: string;
   statusFilter: string | null;
+  // Optional escrow-locked filter. `true` = only orders that had escrow
+  // locked at some point (= on-chain refund occurred for cancelled status).
+  // `false` = only orders that never had escrow locked. Missing = no filter.
+  hasEscrow?: boolean;
 }[] = [
   { key: "all", label: "All", statusFilter: null },
   { key: "pending", label: "Pending", statusFilter: "pending" },
@@ -1306,10 +1322,14 @@ const ALL_ORDERS_TABS: {
     statusFilter: "accepted,escrowed,payment_sent",
   },
   { key: "completed", label: "Completed", statusFilter: "completed" },
-  // Cancelled = user/merchant initiated. Expired = auto-timeout. Previously
-  // these were lumped into a single "Cancelled" chip that lied about why
-  // failed orders failed. Server exposes both fields explicitly.
-  { key: "cancelled", label: "Cancelled", statusFilter: "cancelled" },
+  // Cancelled split into three distinct chips so operators can see what
+  // actually happened to each order:
+  //   Cancelled = cancelled BEFORE escrow was locked (no money moved)
+  //   Refunded  = cancelled AFTER escrow was locked (refund went on-chain)
+  //   Expired   = auto-timeout (no human action)
+  // Previously all of these were lumped into a single "Cancelled" chip.
+  { key: "cancelled", label: "Cancelled", statusFilter: "cancelled", hasEscrow: false },
+  { key: "refunded", label: "Refunded", statusFilter: "cancelled", hasEscrow: true },
   { key: "expired", label: "Expired", statusFilter: "expired" },
   { key: "disputed", label: "Disputed", statusFilter: "disputed" },
 ];
@@ -1385,6 +1405,9 @@ function AllOrdersPanel({
         ALL_ORDERS_TABS.find((t) => t.key === tab) ?? ALL_ORDERS_TABS[0];
       const qs = new URLSearchParams({ limit: "100" });
       if (tabDef.statusFilter) qs.set("status", tabDef.statusFilter);
+      if (tabDef.hasEscrow !== undefined) {
+        qs.set("has_escrow", tabDef.hasEscrow ? "true" : "false");
+      }
       // "all" means no time filter — match server behavior.
       if (timeframe && timeframe !== "all") qs.set("timeframe", timeframe);
       const url = `/api/admin/orders?${qs.toString()}`;
@@ -1410,19 +1433,28 @@ function AllOrdersPanel({
   // returned by /api/admin/analytics — using them directly avoids the prior
   // bug where pending was hardcoded to 0 and active was derived by
   // subtraction (which silently undercounted).
-  // Prefer the server's split counts (`cancelledOnly` / `expired`) when present.
-  // Fall back to the legacy combined `cancelled` count on the cancelled chip
-  // only when the new fields aren't returned (older API response), so a stale
-  // response doesn't accidentally show zero for everything.
+  // Prefer the server's split counts when present. Each chip falls back to a
+  // legacy field if the newer one isn't there (older API response in flight),
+  // so a stale response degrades to the previous behavior rather than zeroing
+  // everything out.
+  //
+  //   "Cancelled" chip → cancelledClean (no escrow locked); falls back to
+  //                      cancelledOnly, then the legacy combined `cancelled`.
+  //   "Refunded"  chip → refunded (cancelled with escrow); falls back to 0
+  //                      when the API hasn't been redeployed.
+  const cancelledChipCount =
+    orderCounts.cancelledClean !== undefined
+      ? orderCounts.cancelledClean
+      : orderCounts.cancelledOnly !== undefined
+        ? orderCounts.cancelledOnly
+        : orderCounts.cancelled;
   const tabCounts: Record<string, number> = {
     all: orderCounts.total,
     pending: orderCounts.pending,
     active: orderCounts.active,
     completed: orderCounts.completed,
-    cancelled:
-      orderCounts.cancelledOnly !== undefined
-        ? orderCounts.cancelledOnly
-        : orderCounts.cancelled,
+    cancelled: cancelledChipCount,
+    refunded: orderCounts.refunded ?? 0,
     expired: orderCounts.expired ?? 0,
     disputed: orderCounts.disputed,
   };
@@ -1815,6 +1847,31 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
               : timeframe === "all"
                 ? "trend"
                 : "vs prior period";
+
+  // Short window label for KPI / chart titles — must match what's actually
+  // being displayed so the card title can't lie about the data window.
+  // Previously the Volume KPI and Activity chart were both hardcoded to "24H"
+  // regardless of which range pill was active.
+  const windowSuffix =
+    timeframe === "1h"
+      ? "1H"
+      : timeframe === "24h"
+        ? "24H"
+        : timeframe === "7d"
+          ? "7D"
+          : timeframe === "1month"
+            ? "30D"
+            : timeframe === "all"
+              ? "All"
+              : timeframe === "1m"
+                ? "1M"
+                : timeframe === "5m"
+                  ? "5M"
+                  : timeframe === "15m"
+                    ? "15M"
+                    : timeframe === "30m"
+                      ? "30M"
+                      : timeframe.toUpperCase();
   void ordersDelta; // reserved for the All Orders strip in phase 4
 
   return (
@@ -1900,7 +1957,7 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
           deltaLabel={deltaLabel}
         />
         <KpiCard
-          label="24H Volume"
+          label={`${windowSuffix} Volume`}
           value={compactCrypto(data.volume.total)}
           icon={DollarSign}
           accent="primary"
@@ -1970,10 +2027,12 @@ export default function AdminDashboard({ adminToken }: AdminDashboardProps) {
             </div>
           </div>
 
-          {/* Bottom: 24H Activity chart — only spans the left half. Height
-           *  kept compact so the rail above it has room on shorter viewports. */}
+          {/* Bottom: Activity chart — only spans the left half. Height
+           *  kept compact so the rail above it has room on shorter viewports.
+           *  Title tracks the active range pill (previously hardcoded "24H"
+           *  even when 7d / 30d / all was selected). */}
           <ChartCard
-            title="24H Activity"
+            title={`${windowSuffix} Activity`}
             subtitle={`Hourly buckets · ${timeframe} window`}
             className="h-[140px] shrink-0"
           >
