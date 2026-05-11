@@ -11,14 +11,12 @@ import {
   RefreshCw,
   Search,
   ArrowRight,
-  LogOut,
   Radio,
   Filter,
   XCircle,
   Lock,
   TrendingUp,
 } from "lucide-react";
-import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
 
@@ -223,6 +221,8 @@ export default function MonitorPage() {
         localStorage.setItem("blip_admin", JSON.stringify(data.data.admin));
         setAdminToken(ADMIN_COOKIE_SENTINEL);
         setIsAuthenticated(true);
+        // Tell admin/layout.tsx to re-probe so its persistent nav appears.
+        window.dispatchEvent(new CustomEvent("admin:auth-changed"));
       } else {
         setLoginError(data.error || "Login failed");
       }
@@ -231,13 +231,6 @@ export default function MonitorPage() {
     } finally {
       setIsLoggingIn(false);
     }
-  };
-
-  const handleLogout = async () => {
-    try { await fetchWithAuth("/api/auth/admin/logout", { method: "POST" }); } catch { /* ignore */ }
-    localStorage.removeItem("blip_admin");
-    setAdminToken(null);
-    setIsAuthenticated(false);
   };
 
   // ── Data Fetching ────────────────────────────────────────────────────
@@ -367,49 +360,26 @@ export default function MonitorPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* ── Header ── */}
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="max-w-[1600px] mx-auto px-4 h-12 flex items-center justify-between">
-          {/* Left: Logo */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Radio size={14} className="text-[var(--color-success)] animate-pulse" />
-            <span className="text-sm font-bold">Admin</span>
-            {autoRefresh && (
-              <span className="text-[10px] text-foreground/30 font-mono">
-                {isRefreshing ? "syncing…" : `${formatTimeAgo(lastRefresh.toISOString())} ago`}
-              </span>
-            )}
-          </div>
-
-          {/* Center: Nav pills */}
-          <div className="flex items-center gap-2 mx-auto">
-            <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
-              <Link href="/admin" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Console</Link>
-              <Link href="/admin/live" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Live Feed</Link>              <Link href="/admin/access-control" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Access Control</Link>
-              <Link href="/admin/accounts" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Accounts</Link>
-              <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Disputes</Link>
-              <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors">Monitor</Link>
-              <Link href="/admin/observability" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Observability</Link>
-              <Link href="/admin/usdt-inr-price" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Price</Link>
-            </nav>
-          </div>
-
-          {/* Right: Controls */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`px-2 py-1 rounded text-[10px] font-mono ${autoRefresh ? "bg-[var(--color-success)]/10 text-[var(--color-success)]" : "bg-card text-foreground/40"}`}
-            >
-              {autoRefresh ? "LIVE" : "PAUSED"}
-            </button>
-            <button onClick={fetchData} className="p-1 text-foreground/30 hover:text-foreground">
-              <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
-            </button>
-            <button onClick={handleLogout} className="p-1 text-foreground/30 hover:text-foreground">
-              <LogOut size={14} />
-            </button>
-          </div>
+      {/* Persistent nav lives in src/app/admin/layout.tsx. Monitor-specific
+          controls (LIVE/PAUSED toggle, refresh, sync indicator) stay below. */}
+      <div className="flex items-center justify-end gap-2 max-w-[1600px] mx-auto px-4 py-1.5 border-b border-border bg-card/30">
+        <div className="flex items-center gap-2 mr-auto">
+          <Radio size={14} className="text-[var(--color-success)] animate-pulse" />
+          {autoRefresh && (
+            <span className="text-[10px] text-foreground/30 font-mono">
+              {isRefreshing ? "syncing…" : `${formatTimeAgo(lastRefresh.toISOString())} ago`}
+            </span>
+          )}
         </div>
+        <button
+          onClick={() => setAutoRefresh(!autoRefresh)}
+          className={`px-2 py-1 rounded text-[10px] font-mono ${autoRefresh ? "bg-[var(--color-success)]/10 text-[var(--color-success)]" : "bg-card text-foreground/40"}`}
+        >
+          {autoRefresh ? "LIVE" : "PAUSED"}
+        </button>
+        <button onClick={fetchData} className="p-1 text-foreground/30 hover:text-foreground">
+          <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+        </button>
       </div>
 
       <div className="max-w-[1600px] mx-auto px-4 py-4 space-y-4">

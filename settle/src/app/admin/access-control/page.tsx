@@ -16,7 +16,6 @@ import {
   ChevronDown,
   Check,
 } from "lucide-react";
-import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
@@ -163,6 +162,8 @@ export default function AccessControlPage() {
         localStorage.setItem("blip_admin", JSON.stringify(data.data.admin));
         setAdminToken(ADMIN_COOKIE_SENTINEL);
         setIsAuthenticated(true);
+        // Tell admin/layout.tsx to re-probe so its persistent nav appears.
+        window.dispatchEvent(new CustomEvent("admin:auth-changed"));
       } else {
         setAdminLoginError(data.error || "Login failed");
       }
@@ -395,77 +396,13 @@ export default function AccessControlPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="h-[50px] flex items-center px-4 gap-3">
-          <div className="flex items-center shrink-0">
-            <Link href="/admin" className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-foreground fill-foreground" />
-              <span className="text-[17px] leading-none whitespace-nowrap hidden lg:block">
-                <span className="font-bold text-foreground">Blip</span>{" "}
-                <span className="italic text-foreground/90">money</span>
-              </span>
-            </Link>
-          </div>
-          <div className="flex items-center gap-2 mx-auto">
-            <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
-              <Link
-                href="/admin"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Console
-              </Link>
-              <Link
-                href="/admin/live"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Live Feed
-              </Link>
-              <Link
-                href="/admin/access-control"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors"
-              >
-                Access Control
-              </Link>
-              <Link
-                href="/admin/accounts"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Accounts
-              </Link>
-              <Link
-                href="/admin/disputes"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Disputes
-              </Link>
-              <Link
-                href="/admin/monitor"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Monitor
-              </Link>
-              <Link
-                href="/admin/observability"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Observability
-              </Link>
-              <Link
-                href="/admin/usdt-inr-price"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Price
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="text-[11px] text-foreground/30 font-mono tabular-nums">
-              {formatCount(grantedCount)} granted
-            </div>
-          </div>
+      {/* Persistent nav lives in src/app/admin/layout.tsx. Access-control
+          summary stays inline. */}
+      <div className="flex items-center justify-end gap-2 px-4 py-1.5 border-b border-border bg-card/30">
+        <div className="text-[11px] text-foreground/30 font-mono tabular-nums">
+          {formatCount(grantedCount)} granted
         </div>
-      </header>
+      </div>
 
       {/* Page header */}
       <div className="w-full px-8 pt-7 pb-3">

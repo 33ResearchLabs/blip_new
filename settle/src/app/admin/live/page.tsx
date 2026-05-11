@@ -291,62 +291,28 @@ export default function LiveDashboardPage() {
         <div className="absolute bottom-[-10%] right-[20%] w-[400px] h-[300px] bg-primary/[0.01] rounded-full blur-[120px]" />
       </div>
 
-      {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="h-[50px] flex items-center px-4 gap-3">
-          {/* Logo */}
-          <div className="flex items-center shrink-0">
-            <Link href="/admin" className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-foreground fill-foreground" />
-              <span className="text-[17px] leading-none whitespace-nowrap hidden lg:block">
-                <span className="font-bold text-foreground">Blip</span>{" "}
-                <span className="italic text-foreground/90">money</span>
-              </span>
-            </Link>
-          </div>
-
-          {/* Center: Nav pills */}
-          <div className="flex items-center gap-2 mx-auto">
-            <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
-              <Link href="/admin" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">
-                Console
-              </Link>
-              <Link href="/admin/live" className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors">
-                Live Feed
-              </Link>
-              <Link href="/admin/access-control" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">
-                Access Control
-              </Link>
-              <Link href="/admin/accounts" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Accounts</Link>
-              <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Disputes</Link>
-              <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Monitor</Link>
-              <Link href="/admin/observability" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Observability</Link>
-              <Link href="/admin/usdt-inr-price" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Price</Link>
-            </nav>
-          </div>
-
-          {/* Right: Live stats */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="flex items-center gap-1.5">
-              <Gauge className="w-3 h-3 text-primary/40" />
-              <span className="text-[10px] font-mono text-primary/70 tabular-nums">{formatCrypto(stats?.txPerMinute ?? 0)}/min</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Activity className="w-3 h-3 text-foreground/20" />
-              <span className="text-[10px] font-mono text-foreground/30 tabular-nums">{formatCount(activeOrders.length)} active</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Lock className="w-3 h-3 text-foreground/20" />
-              <span className="text-[10px] font-mono text-foreground/30 tabular-nums">${formatCrypto(stats?.escrowLocked ?? 0, { decimals: 0 })}</span>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
-              <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
-              <span className="text-[9px] font-mono font-bold text-foreground/40 uppercase tracking-wider">Live</span>
-            </div>
-            <span className="text-[9px] font-mono text-foreground/20">{mounted ? lastUpdate.toLocaleTimeString() : "--:--:--"}</span>
-          </div>
+      {/* Persistent nav lives in src/app/admin/layout.tsx. Page-specific
+          live stats (tx/min, active count, escrow locked, last-update)
+          stay in an in-body strip. */}
+      <div className="flex items-center justify-end gap-3 px-4 py-1.5 border-b border-border bg-card/30">
+        <div className="flex items-center gap-1.5">
+          <Gauge className="w-3 h-3 text-primary/40" />
+          <span className="text-[10px] font-mono text-primary/70 tabular-nums">{formatCrypto(stats?.txPerMinute ?? 0)}/min</span>
         </div>
-      </header>
+        <div className="flex items-center gap-1.5">
+          <Activity className="w-3 h-3 text-foreground/20" />
+          <span className="text-[10px] font-mono text-foreground/30 tabular-nums">{formatCount(activeOrders.length)} active</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Lock className="w-3 h-3 text-foreground/20" />
+          <span className="text-[10px] font-mono text-foreground/30 tabular-nums">${formatCrypto(stats?.escrowLocked ?? 0, { decimals: 0 })}</span>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
+          <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
+          <span className="text-[9px] font-mono font-bold text-foreground/40 uppercase tracking-wider">Live</span>
+        </div>
+        <span className="text-[9px] font-mono text-foreground/20">{mounted ? lastUpdate.toLocaleTimeString() : "--:--:--"}</span>
+      </div>
 
       {/* Main content */}
       <div className="relative z-10 p-3 h-[calc(100vh-50px)] flex flex-col gap-3 overflow-hidden">

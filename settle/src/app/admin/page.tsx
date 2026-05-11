@@ -22,10 +22,8 @@ import {
   Search,
   ArrowRight,
   Wallet,
-  LogOut,
   Radio,
 } from "lucide-react";
-import Link from "next/link";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
@@ -267,6 +265,9 @@ export default function AdminConsolePage() {
         localStorage.setItem("blip_admin", JSON.stringify(data.data.admin));
         setAdminToken(ADMIN_COOKIE_SENTINEL);
         setIsAuthenticated(true);
+        // Tell admin/layout.tsx to re-probe so its persistent nav appears
+        // without forcing a hard page reload.
+        window.dispatchEvent(new CustomEvent("admin:auth-changed"));
       } else {
         setAdminLoginError(data.error || "Login failed");
       }
@@ -275,17 +276,6 @@ export default function AdminConsolePage() {
     } finally {
       setIsAdminLoggingIn(false);
     }
-  };
-
-  const handleAdminLogout = async () => {
-    try {
-      // Best-effort: clears the cookie + revokes the jti server-side.
-      // Network failure here doesn't block the local logout.
-      await fetchWithAuth("/api/auth/admin/logout", { method: "POST" });
-    } catch { /* ignore */ }
-    localStorage.removeItem("blip_admin");
-    setAdminToken(null);
-    setIsAuthenticated(false);
   };
 
   const fetchData = useCallback(async () => {
@@ -480,86 +470,35 @@ export default function AdminConsolePage() {
   return (
     <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
 
-      {/* ===== HEADER — matches merchant dashboard ===== */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="h-[50px] flex items-center px-4 gap-3">
-          {/* Logo — same as merchant */}
-          <div className="flex items-center shrink-0">
-            <Link href="/admin" className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-foreground fill-foreground" />
-              <span className="text-[17px] leading-none whitespace-nowrap hidden lg:block">
-                <span className="font-bold text-foreground">Blip</span>{" "}
-                <span className="italic text-foreground/90">money</span>
-              </span>
-            </Link>
-          </div>
-
-          {/* Center: Nav pills */}
-          <div className="flex items-center gap-2 mx-auto">
-            <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
-              <Link
-                href="/admin"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors"
-              >
-                Console
-              </Link>
-              <Link
-                href="/admin/live"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors"
-              >
-                Live Feed
-              </Link>
-              <Link
-                href="/admin/access-control"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors"
-              >
-                Access Control
-              </Link>
-              <Link href="/admin/accounts" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Accounts</Link>
-              <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Disputes</Link>
-              <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Monitor</Link>
-              <Link href="/admin/observability" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Observability</Link>
-              <Link href="/admin/usdt-inr-price" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Price</Link>
-            </nav>
-          </div>
-
-          {/* Right: Live badge + actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
-              <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
-              <span className="text-[9px] font-mono font-bold text-foreground/40 uppercase tracking-wider">Live</span>
-              {stats && (
-                <>
-                  <span className="text-foreground/[0.08]">|</span>
-                  <span className="text-[9px] font-mono text-foreground/30">{stats.txPerMinute?.toFixed(1)}/min</span>
-                </>
-              )}
-            </div>
-
-            <span className="text-[9px] font-mono text-foreground/20 tabular-nums">
-              {mounted ? lastRefresh.toLocaleTimeString() : "--:--:--"}
-            </span>
-
-            <button
-              onClick={fetchData}
-              disabled={isRefreshing}
-              className="p-2 rounded-lg transition-all bg-card hover:bg-accent-subtle border border-border"
-            >
-              <RefreshCw className={`w-[18px] h-[18px] text-foreground/40 ${isRefreshing ? "animate-spin" : ""}`} />
-            </button>
-
-            <div className="w-px h-6 bg-border mx-0.5" />
-
-            <button
-              onClick={handleAdminLogout}
-              className="p-2 rounded-lg hover:bg-[var(--color-error)]/10 transition-colors"
-              title="Logout"
-            >
-              <LogOut className="w-[18px] h-[18px] text-foreground/40" />
-            </button>
-          </div>
+      {/* Header (logo + nav + logout) now lives in src/app/admin/layout.tsx
+          so it persists across tab clicks instead of re-mounting per page.
+          Page-specific controls (live indicator, refresh, lastRefresh)
+          stay below in an in-body toolbar — same behavior, just no longer
+          sitting in a sticky chrome that re-renders every navigation. */}
+      <div className="flex items-center justify-end gap-2 px-4 py-1.5 border-b border-border bg-card/30">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
+          <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
+          <span className="text-[9px] font-mono font-bold text-foreground/40 uppercase tracking-wider">Live</span>
+          {stats && (
+            <>
+              <span className="text-foreground/[0.08]">|</span>
+              <span className="text-[9px] font-mono text-foreground/30">{stats.txPerMinute?.toFixed(1)}/min</span>
+            </>
+          )}
         </div>
-      </header>
+
+        <span className="text-[9px] font-mono text-foreground/20 tabular-nums">
+          {mounted ? lastRefresh.toLocaleTimeString() : "--:--:--"}
+        </span>
+
+        <button
+          onClick={fetchData}
+          disabled={isRefreshing}
+          className="p-2 rounded-lg transition-all bg-card hover:bg-accent-subtle border border-border"
+        >
+          <RefreshCw className={`w-[18px] h-[18px] text-foreground/40 ${isRefreshing ? "animate-spin" : ""}`} />
+        </button>
+      </div>
 
       {/* ===== DASHBOARD TAB ===== */}
       {/* Dashboard fits the viewport — no page scroll. The dashboard owns

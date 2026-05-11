@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Users,
   Star,
-  LogOut,
   Bell,
   Activity,
   CheckCircle,
@@ -26,7 +25,6 @@ import {
   Flame,
   Sparkles,
 } from "lucide-react";
-import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
 import {
@@ -187,15 +185,11 @@ export default function AdminUsersPage() {
       if (data.success && data.data?.admin) {
         localStorage.setItem("blip_admin", JSON.stringify(data.data.admin));
         setAdminToken(ADMIN_COOKIE_SENTINEL); setIsAuthenticated(true);
+        // Tell admin/layout.tsx to re-probe so its persistent nav appears.
+        window.dispatchEvent(new CustomEvent("admin:auth-changed"));
       } else { setAdminLoginError(data.error || "Login failed"); }
     } catch { setAdminLoginError("Connection failed"); }
     finally { setIsAdminLoggingIn(false); }
-  };
-
-  const handleAdminLogout = async () => {
-    try { await fetchWithAuth("/api/auth/admin/logout", { method: "POST" }); } catch { /* ignore */ }
-    localStorage.removeItem("blip_admin");
-    setAdminToken(null); setIsAuthenticated(false);
   };
 
   // ── Data ──
@@ -306,52 +300,26 @@ export default function AdminUsersPage() {
   return (
     <div className="hidden md:flex md:flex-col h-screen overflow-hidden bg-background">
 
-      {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border shrink-0">
-        <div className="h-[50px] flex items-center px-4 gap-3">
-          <div className="flex items-center shrink-0">
-            <Link href="/admin" className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-foreground fill-foreground" />
-              <span className="text-[17px] leading-none whitespace-nowrap hidden lg:block">
-                <span className="font-bold text-foreground">Blip</span>{" "}<span className="italic text-foreground/90">money</span>
-              </span>
-            </Link>
-          </div>
-          <div className="flex items-center gap-2 mx-auto">
-            <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
-              <Link href="/admin" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Console</Link>
-              <Link href="/admin/live" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Live Feed</Link>
-              <Link href="/admin/access-control" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Access Control</Link>
-              <Link href="/admin/accounts" className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors">Accounts</Link>
-              <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Disputes</Link>
-              <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Monitor</Link>
-              <Link href="/admin/observability" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Observability</Link>
-              <Link href="/admin/usdt-inr-price" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Price</Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border">
-              <Users className="w-3.5 h-3.5 text-foreground/40" />
-              <span className="text-[11px] font-medium text-foreground/70 tabular-nums">{formatCount(summary?.totalUsers ?? total)} users</span>
-            </div>
-            <button className="relative p-2 rounded-lg bg-card border border-border hover:bg-accent-subtle transition-colors" aria-label="Notifications">
-              <Bell className="w-[18px] h-[18px] text-foreground/50" />
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[var(--color-error)] text-[8px] font-bold text-foreground flex items-center justify-center tabular-nums">12</span>
-            </button>
-            <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-card border border-border">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-[11px] font-bold text-foreground shrink-0">A</div>
-              <div className="hidden xl:flex flex-col leading-tight">
-                <span className="text-[11px] font-medium text-foreground/80">Admin User</span>
-                <span className="text-[8px] font-mono text-foreground/40 uppercase tracking-wider">Super Admin</span>
-              </div>
-              <ChevronDown className="w-3 h-3 text-foreground/30 hidden xl:block" />
-            </div>
-            <button onClick={handleAdminLogout} className="p-2 rounded-lg hover:bg-[var(--color-error)]/10 transition-colors" title="Logout">
-              <LogOut className="w-[18px] h-[18px] text-foreground/40" />
-            </button>
-          </div>
+      {/* Persistent nav lives in src/app/admin/layout.tsx. User-page
+          summary + notifications + admin badge stay inline. */}
+      <div className="flex items-center justify-end gap-2 px-4 py-1.5 border-b border-border bg-card/30 shrink-0">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border">
+          <Users className="w-3.5 h-3.5 text-foreground/40" />
+          <span className="text-[11px] font-medium text-foreground/70 tabular-nums">{formatCount(summary?.totalUsers ?? total)} users</span>
         </div>
-      </header>
+        <button className="relative p-2 rounded-lg bg-card border border-border hover:bg-accent-subtle transition-colors" aria-label="Notifications">
+          <Bell className="w-[18px] h-[18px] text-foreground/50" />
+          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[var(--color-error)] text-[8px] font-bold text-foreground flex items-center justify-center tabular-nums">12</span>
+        </button>
+        <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-card border border-border">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-[11px] font-bold text-foreground shrink-0">A</div>
+          <div className="hidden xl:flex flex-col leading-tight">
+            <span className="text-[11px] font-medium text-foreground/80">Admin User</span>
+            <span className="text-[8px] font-mono text-foreground/40 uppercase tracking-wider">Super Admin</span>
+          </div>
+          <ChevronDown className="w-3 h-3 text-foreground/30 hidden xl:block" />
+        </div>
+      </div>
 
       {/* ===== CONTENT ===== */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
