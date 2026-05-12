@@ -87,13 +87,13 @@ export default function MerchantLoginPage() {
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="mb-6 sm:mb-10 shrink-0"
+              className="mb-4 sm:mb-10 shrink-0"
             >
               <div className="text-center mb-1">
                 <p className="text-[10px] font-semibold tracking-[0.3em] uppercase text-text-tertiary mb-2">
                   {isSignIn ? "Welcome back" : "Get started"}
                 </p>
-                <h1 className="text-[32px] font-bold text-text-primary tracking-[-0.03em] leading-[1.05]">
+                <h1 className="text-[26px] sm:text-[32px] font-bold text-text-primary tracking-[-0.03em] leading-[1.05]">
                   {isSignIn ? (
                     <>Login <span className="text-text-tertiary font-light">as</span> Merchant</>
                   ) : (
@@ -123,7 +123,7 @@ export default function MerchantLoginPage() {
               </button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl p-5 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
+            <div className="flex-1 min-h-0 rounded-2xl p-4 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
               {auth.loginError && (
                 <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
                   {auth.loginError}

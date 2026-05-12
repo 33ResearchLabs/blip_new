@@ -267,23 +267,64 @@ export function LandingPage({
 
           <div className="flex-1 flex flex-col pt-6 sm:pt-[50px] pb-1 min-h-0">
           <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="mb-6 sm:mb-10 shrink-0"
+            initial={{ opacity: 0, y: -8, filter: "blur(8px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            className="mb-4 sm:mb-8 shrink-0"
           >
-            {/* Big number-style hero, like the "0.00 USDT" on home */}
-            <div className="text-center mb-1">
-              <p className="text-[10px] font-semibold tracking-[0.3em] uppercase text-text-tertiary mb-2">
-                {authMode === 'login' ? 'Welcome back' : 'Get started'}
-              </p>
-              <h1 className="text-[32px] font-bold text-text-primary tracking-[-0.03em] leading-[1.05]">
-                {authMode === 'login' ? (
-                  <>Login <span className="text-text-tertiary font-light">as</span> User</>
-                ) : (
-                  <>Create <span className="text-text-tertiary font-light">an</span> Account</>
-                )}
-              </h1>
+            {/* Glass hero card — matches welcome chooser aesthetic */}
+            <div
+              className="relative rounded-[22px] p-[1.5px] overflow-hidden"
+              style={{
+                background:
+                  "linear-gradient(140deg, rgba(255,255,255,0.35), rgba(255,255,255,0.08) 40%, rgba(255,255,255,0.25) 100%)",
+              }}
+            >
+              <div
+                className="relative rounded-[21px] px-5 py-5 sm:px-7 sm:py-6 backdrop-blur-2xl overflow-hidden"
+                style={{
+                  background:
+                    "linear-gradient(160deg, rgba(28,28,32,0.92), rgba(18,18,22,0.85) 60%)",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.12), 0 30px 60px -20px rgba(0,0,0,0.6)",
+                }}
+              >
+                {/* Corner glow */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -right-8 -top-8 w-32 h-32 rounded-full"
+                  style={{
+                    background:
+                      "radial-gradient(circle, rgba(168,247,98,0.35), transparent 70%)",
+                    filter: "blur(10px)",
+                  }}
+                />
+                <div className="relative flex items-center gap-3">
+                  <div
+                    className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+                    style={{
+                      background:
+                        "linear-gradient(140deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04))",
+                      boxShadow:
+                        "inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.2)",
+                    }}
+                  >
+                    <User className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold tracking-[0.3em] uppercase text-white/40 mb-1">
+                      {authMode === 'login' ? 'Welcome back' : 'Get started'}
+                    </p>
+                    <h1 className="text-[22px] sm:text-[26px] font-semibold text-white tracking-[-0.03em] leading-[1.05]">
+                      {authMode === 'login' ? (
+                        <>Login <span className="text-white/50 font-light">as</span> User</>
+                      ) : (
+                        <>Create <span className="text-white/50 font-light">an</span> Account</>
+                      )}
+                    </h1>
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
 
@@ -307,7 +348,7 @@ export function LandingPage({
             </button>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl p-5 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
+          <div className="flex-1 min-h-0 rounded-2xl p-4 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
             {loginError && (
               <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
                 {loginError}

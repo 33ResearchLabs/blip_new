@@ -58,17 +58,12 @@ export function InstallPWAButton() {
     };
   }, []);
 
-  if (installed) return null;
+  // Only render when an installable prompt is actually queued. This keeps
+  // the UI honest — no button, no misleading alert on browsers that don't
+  // support the API (iOS Safari, Firefox).
+  if (installed || !deferred) return null;
 
   const trigger = async () => {
-    if (!deferred) {
-      // No native prompt available (e.g. iOS Safari, Firefox).
-      // Show a short hint instead.
-      alert(
-        "To install: on iOS, tap the share button in Safari and choose “Add to Home Screen.” On Android Chrome, open the browser menu and choose “Install app.”"
-      );
-      return;
-    }
     await deferred.prompt();
     await deferred.userChoice;
     setDeferred(null);
@@ -78,10 +73,10 @@ export function InstallPWAButton() {
     <button
       type="button"
       onClick={trigger}
-      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
+      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#0B0F14] bg-white hover:bg-white/90 shadow-[0_8px_24px_-10px_rgba(255,255,255,0.4)] transition-all"
     >
       <Download className="w-3.5 h-3.5" />
-      Install App
+      Install
     </button>
   );
 }

@@ -75,13 +75,19 @@ const themeScript = `
   })();
 `;
 
-// Service worker DISABLED - just cleanup, no registration
+// Service worker cleanup — unregister any stale workers EXCEPT the
+// install-only worker used to make the app PWA-installable.
 const swScript = `
   (async function() {
     try {
       if ('serviceWorker' in navigator) {
         var regs = await navigator.serviceWorker.getRegistrations();
-        for (var i = 0; i < regs.length; i++) { await regs[i].unregister(); }
+        for (var i = 0; i < regs.length; i++) {
+          var url = regs[i].active && regs[i].active.scriptURL || '';
+          if (url.indexOf('sw-install.js') === -1) {
+            await regs[i].unregister();
+          }
+        }
       }
       if ('caches' in window) {
         var keys = await caches.keys();
