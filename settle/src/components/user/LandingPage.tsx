@@ -65,10 +65,10 @@ export function LandingPage({
   if (showWelcome) {
     return (
       <div
-        className="relative flex-1 w-full min-h-dvh flex flex-col items-center justify-center px-6 overflow-hidden text-text-primary"
+        className="relative flex-1 w-full min-h-dvh flex flex-col items-center justify-center px-6 overflow-hidden text-white"
         style={{
           background:
-            "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(120,119,198,0.18), transparent 60%), radial-gradient(ellipse 60% 50% at 100% 100%, rgba(56,189,248,0.14), transparent 60%), radial-gradient(ellipse 60% 50% at 0% 100%, rgba(168,247,98,0.12), transparent 60%), var(--user-frame)",
+            "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(120,119,198,0.18), transparent 60%), radial-gradient(ellipse 60% 50% at 100% 100%, rgba(56,189,248,0.14), transparent 60%), radial-gradient(ellipse 60% 50% at 0% 100%, rgba(168,247,98,0.12), transparent 60%), #0B0F14",
         }}
       >
         {/* Conic mesh gradient */}
@@ -101,9 +101,9 @@ export function LandingPage({
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           className="relative z-10 flex items-center gap-2.5 mb-2"
         >
-          <Zap className="w-7 h-7 text-text-primary fill-current drop-shadow-[0_0_12px_rgba(168,247,98,0.5)]" />
-          <span className="text-[24px] leading-none font-semibold tracking-[-0.02em]">
-            Blip <span className="italic font-light text-text-primary/80">money</span>
+          <Zap className="w-7 h-7 text-white fill-current drop-shadow-[0_0_12px_rgba(168,247,98,0.5)]" />
+          <span className="text-[24px] leading-none font-semibold tracking-[-0.02em] text-white">
+            Blip <span className="italic font-light text-white/80">money</span>
           </span>
         </motion.div>
 
@@ -111,7 +111,7 @@ export function LandingPage({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.25, duration: 0.6 }}
-          className="relative z-10 text-[11px] font-medium tracking-[0.3em] uppercase text-text-tertiary mb-12"
+          className="relative z-10 text-[11px] font-medium tracking-[0.3em] uppercase text-white/40 mb-12"
         >
           Choose your portal
         </motion.p>
@@ -192,25 +192,25 @@ export function LandingPage({
                             "inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.2)",
                         }}
                       >
-                        <Icon className="w-5 h-5 text-text-primary" />
+                        <Icon className="w-5 h-5 text-white" />
                       </div>
                       <motion.div
                         className="w-9 h-9 rounded-full flex items-center justify-center border border-border-subtle bg-white/[0.04]"
                         whileHover={{ rotate: -45 }}
                         transition={{ type: "spring", stiffness: 260, damping: 16 }}
                       >
-                        <ArrowRight className="w-4 h-4 text-text-primary" />
+                        <ArrowRight className="w-4 h-4 text-white" />
                       </motion.div>
                     </div>
 
                     <div className="relative mt-10">
-                      <p className="text-[10px] font-medium tracking-[0.25em] uppercase text-text-tertiary mb-1.5">
+                      <p className="text-[10px] font-medium tracking-[0.25em] uppercase text-white/40 mb-1.5">
                         Continue as
                       </p>
-                      <p className="text-[28px] font-semibold leading-none tracking-[-0.03em] text-text-primary">
+                      <p className="text-[28px] font-semibold leading-none tracking-[-0.03em] text-white">
                         {label}
                       </p>
-                      <p className="text-[13px] mt-2 text-text-secondary font-light">
+                      <p className="text-[13px] mt-2 text-white/55 font-light">
                         {sub}
                       </p>
                     </div>
@@ -225,7 +225,7 @@ export function LandingPage({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7, duration: 0.6 }}
-          className="relative z-10 mt-14 text-[10px] font-mono tracking-[0.2em] text-text-tertiary/70 flex items-center gap-3"
+          className="relative z-10 mt-14 text-[10px] font-mono tracking-[0.2em] text-white/40 flex items-center gap-3"
         >
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
           ESCROW-PROTECTED · ON-CHAIN SETTLEMENT
