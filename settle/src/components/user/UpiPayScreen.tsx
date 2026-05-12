@@ -87,12 +87,18 @@ export interface UpiPayConfirm {
 interface Props {
   onClose: () => void;
   currentRate: number | null;
+  /** User's spendable USDT balance. `null` = still loading. */
+  usdtBalance: number | null;
   onConfirm: (data: UpiPayConfirm) => void;
 }
 
 const UPI_BASE = process.env.NEXT_PUBLIC_UPI_PAY_BASE_URL || "";
 
-export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
+export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: Props) {
+  // Hard gate: no balance → can't pay. Block before camera even opens so
+  // we never produce an on-chain order the escrow flow would reject anyway.
+  const balanceReady = usdtBalance !== null;
+  const hasBalance = balanceReady && usdtBalance > 0;
   const [stage, setStage] = useState<"scanning" | "entering">("scanning");
   const [parsed, setParsed] = useState<ParsedUpi | null>(null);
   const [amount, setAmount] = useState("");
@@ -123,6 +129,9 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
   // ── Camera lifecycle ──────────────────────────────────────────────────
   useEffect(() => {
     if (stage !== "scanning") return;
+    // No balance → don't even start the camera. The UI below shows the
+    // "fund your wallet" state in this case.
+    if (!hasBalance) return;
     let cancelled = false;
 
     const stop = () => {
@@ -201,7 +210,7 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
       cancelled = true;
       stop();
     };
-  }, [stage, acceptRaw]);
+  }, [stage, acceptRaw, hasBalance]);
 
   // ── Image upload fallback ────────────────────────────────────────────
   const onUploadFile = async (file: File) => {
@@ -234,6 +243,14 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
       return;
     }
     const cryptoUsdt = Math.ceil((amt / currentRate) * 10000) / 10000;
+    // Hard balance gate — also enforced again inside confirmEscrow, but
+    // failing fast here avoids a confusing escrow-screen detour.
+    if (usdtBalance !== null && cryptoUsdt > usdtBalance) {
+      setErrorMsg(
+        `Need ${cryptoUsdt.toFixed(4)} USDT. You have ${usdtBalance.toFixed(4)}.`,
+      );
+      return;
+    }
     if (UPI_BASE) {
       void fetch(`${UPI_BASE}/api/requests`, {
         method: "POST",
@@ -275,8 +292,44 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
       </div>
 
       <AnimatePresence mode="wait">
+        {/* ── BALANCE GATE ─────────────────────────────────────────── */}
+        {stage === "scanning" && !hasBalance && (
+          <motion.div
+            key="no-balance"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex-1 flex flex-col items-center justify-center px-6 gap-4 text-center"
+          >
+            {!balanceReady ? (
+              <>
+                <Loader2 className="w-7 h-7 animate-spin text-text-tertiary" />
+                <p className="text-[12px] tracking-[0.2em] uppercase text-text-tertiary">
+                  Checking your balance…
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="w-14 h-14 rounded-full bg-warning/15 flex items-center justify-center">
+                  <AlertCircle className="w-7 h-7 text-warning" />
+                </div>
+                <p className="text-[22px] font-bold tracking-[-0.02em]">No USDT to pay with</p>
+                <p className="text-[12px] text-text-tertiary max-w-[280px]">
+                  Your wallet has 0 USDT. Top up first, then come back here to scan & pay.
+                </p>
+                <button
+                  onClick={onClose}
+                  className="mt-2 px-5 py-2.5 rounded-xl bg-accent text-accent-text text-sm font-bold"
+                >
+                  Got it
+                </button>
+              </>
+            )}
+          </motion.div>
+        )}
+
         {/* ── SCANNING ──────────────────────────────────────────────── */}
-        {stage === "scanning" && (
+        {stage === "scanning" && hasBalance && (
           <motion.div
             key="scan"
             initial={{ opacity: 0 }}
@@ -426,11 +479,18 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
                 />
               </div>
               <p className="mt-3 text-[10px] tracking-[0.25em] uppercase text-text-tertiary">INR</p>
-              {amount && currentRate && currentRate > 0 && (
-                <p className="mt-2 text-[11px] text-text-tertiary">
-                  Locks ≈ {(Number(amount) / currentRate).toFixed(4)} USDT @ ₹{currentRate.toFixed(2)}
-                </p>
-              )}
+              {amount && currentRate && currentRate > 0 && (() => {
+                const need = Number(amount) / currentRate;
+                const over = usdtBalance !== null && need > usdtBalance;
+                return (
+                  <p className={`mt-2 text-[11px] ${over ? "text-error" : "text-text-tertiary"}`}>
+                    Locks ≈ {need.toFixed(4)} USDT @ ₹{currentRate.toFixed(2)}
+                    {usdtBalance !== null && (
+                      <> · Balance {usdtBalance.toFixed(4)} USDT</>
+                    )}
+                  </p>
+                );
+              })()}
             </div>
 
             <div className="mb-3">
@@ -453,18 +513,30 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
               </div>
             )}
 
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={submit}
-              disabled={!amount || Number(amount) <= 0}
-              className={`w-full py-3.5 rounded-xl text-sm font-bold tracking-[-0.01em] transition-colors ${
-                !amount || Number(amount) <= 0
-                  ? "bg-surface-card text-text-tertiary cursor-not-allowed"
-                  : "bg-accent text-accent-text"
-              }`}
-            >
-              Lock USDT & Pay ₹{formattedAmount || "0"}
-            </motion.button>
+            {(() => {
+              const amt = Number(amount);
+              const need =
+                currentRate && currentRate > 0 ? amt / currentRate : Infinity;
+              const overBalance =
+                usdtBalance !== null && need > usdtBalance;
+              const disabled = !amount || amt <= 0 || overBalance;
+              return (
+                <motion.button
+                  whileTap={disabled ? undefined : { scale: 0.98 }}
+                  onClick={submit}
+                  disabled={disabled}
+                  className={`w-full py-3.5 rounded-xl text-sm font-bold tracking-[-0.01em] transition-colors ${
+                    disabled
+                      ? "bg-surface-card text-text-tertiary cursor-not-allowed"
+                      : "bg-accent text-accent-text"
+                  }`}
+                >
+                  {overBalance
+                    ? "Insufficient USDT"
+                    : `Lock USDT & Pay ₹${formattedAmount || "0"}`}
+                </motion.button>
+              );
+            })()}
           </motion.div>
         )}
       </AnimatePresence>

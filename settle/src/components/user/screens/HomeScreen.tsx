@@ -961,6 +961,7 @@ export const HomeScreen = ({
         <UpiPayScreen
           onClose={() => setShowUpiPay(false)}
           currentRate={currentRate}
+          usdtBalance={IS_MOCK_MODE ? (userBalance ?? null) : solanaWallet.usdtBalance}
           onConfirm={(data) => {
             setShowUpiPay(false);
             onUpiPayConfirm?.(data);
