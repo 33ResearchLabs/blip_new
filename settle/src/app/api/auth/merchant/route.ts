@@ -5,7 +5,7 @@ import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rat
 import { requireTokenAuth } from '@/lib/middleware/auth';
 import { updateMerchantOnlineStatus, serializeMerchant } from '@/lib/db/repositories/merchants';
 import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS, ACCESS_TOKEN_COOKIE, ACCESS_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
-import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
+import { createSession, getSessionIdFromRefreshCookie, revokeAllSessionsExcept } from '@/lib/auth/sessions';
 import { validateUsername } from '@/lib/validation/username';
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
@@ -894,6 +894,23 @@ export async function POST(request: NextRequest) {
       );
 
       console.log('[API] Merchant password changed:', merchant_id);
+
+      // Revoke every OTHER active session for this merchant. The current
+      // session (auth.sessionId, when present) is preserved so the
+      // merchant stays logged in on the device that just confirmed their
+      // current password and chose the new one. Every other device is
+      // forced to re-authenticate — closes the window where a stolen
+      // refresh cookie keeps working for 7 days after a password change.
+      //
+      // Failure here doesn't roll back the password update (the password
+      // is already changed in the DB and the new value is what the user
+      // chose). Worst case: revocation runs late, briefly leaving stale
+      // sessions valid until they hit the next session-cache miss.
+      try {
+        await revokeAllSessionsExcept(merchant_id, 'merchant', auth.sessionId);
+      } catch (revokeError) {
+        console.error('[merchant change_password] session revocation failed (password was changed)', revokeError);
+      }
 
       return NextResponse.json({
         success: true,
