@@ -65,7 +65,7 @@ export function LandingPage({
   if (showWelcome) {
     return (
       <div
-        className="relative flex-1 w-full min-h-dvh flex flex-col items-center justify-center px-6 overflow-hidden text-white"
+        className="relative flex-1 w-full h-dvh flex flex-col items-center justify-center px-6 py-10 sm:py-16 overflow-hidden text-white"
         style={{
           background:
             "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(120,119,198,0.18), transparent 60%), radial-gradient(ellipse 60% 50% at 100% 100%, rgba(56,189,248,0.14), transparent 60%), radial-gradient(ellipse 60% 50% at 0% 100%, rgba(168,247,98,0.12), transparent 60%), #0B0F14",
@@ -111,7 +111,7 @@ export function LandingPage({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.25, duration: 0.6 }}
-          className="relative z-10 text-[11px] font-medium tracking-[0.3em] uppercase text-white/40 mb-12"
+          className="relative z-10 text-[11px] font-medium tracking-[0.3em] uppercase text-white/40 mb-8 sm:mb-12"
         >
           Choose your portal
         </motion.p>
@@ -163,7 +163,7 @@ export function LandingPage({
                   />
 
                   <div
-                    className="relative rounded-[21px] p-7 backdrop-blur-2xl"
+                    className="relative rounded-[21px] p-5 sm:p-7 backdrop-blur-2xl"
                     style={{
                       background:
                         "linear-gradient(160deg, rgba(28,28,32,0.92), rgba(18,18,22,0.85) 60%)",
@@ -203,14 +203,14 @@ export function LandingPage({
                       </motion.div>
                     </div>
 
-                    <div className="relative mt-10">
+                    <div className="relative mt-6 sm:mt-10">
                       <p className="text-[10px] font-medium tracking-[0.25em] uppercase text-white/40 mb-1.5">
                         Continue as
                       </p>
-                      <p className="text-[28px] font-semibold leading-none tracking-[-0.03em] text-white">
+                      <p className="text-[24px] sm:text-[28px] font-semibold leading-none tracking-[-0.03em] text-white">
                         {label}
                       </p>
-                      <p className="text-[13px] mt-2 text-white/55 font-light">
+                      <p className="text-[12px] sm:text-[13px] mt-2 text-white/55 font-light">
                         {sub}
                       </p>
                     </div>
@@ -225,7 +225,7 @@ export function LandingPage({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7, duration: 0.6 }}
-          className="relative z-10 mt-14 text-[10px] font-mono tracking-[0.2em] text-white/40 flex items-center gap-3"
+          className="relative z-10 mt-8 sm:mt-14 text-[10px] font-mono tracking-[0.2em] text-white/40 flex items-center gap-3"
         >
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
           ESCROW-PROTECTED · ON-CHAIN SETTLEMENT
