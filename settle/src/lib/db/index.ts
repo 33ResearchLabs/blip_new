@@ -26,7 +26,9 @@ const CONNECTION_TIMEOUT_MS = parseInt(
 const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
-      ssl: isProduction ? { rejectUnauthorized: false } : false,
+      // Railway (and most managed Postgres) require SSL on the public proxy.
+      // Enable SSL whenever a DATABASE_URL is supplied, regardless of NODE_ENV.
+      ssl: { rejectUnauthorized: false },
       max: parseInt(process.env.DB_POOL_MAX || defaultPoolMax),
       idleTimeoutMillis: isProduction ? 10000 : 30000,
       connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,

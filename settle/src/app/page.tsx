@@ -536,6 +536,28 @@ export default function Home() {
               userBalance={auth.userBalance}
               maxW={maxW}
               notificationCount={notifications.filter((n) => !n.read).length}
+              onUpiPayConfirm={(data) => {
+                // Prefill the trade state with the scanned UPI payment as a
+                // SELL order, then route to the escrow screen where the
+                // existing on-chain lock code runs.
+                tradeCreation.setTradeType('sell');
+                tradeCreation.setAmount(String(data.cryptoUsdt));
+                // Stash merchant info so downstream screens / order POST can
+                // include the UPI VPA + payee in the payment_method payload.
+                try {
+                  sessionStorage.setItem(
+                    'blip_pending_upi_payment',
+                    JSON.stringify({
+                      vpa: data.vpa,
+                      payeeName: data.payeeName,
+                      fiatInr: data.fiatInr,
+                      note: data.note,
+                      at: Date.now(),
+                    }),
+                  );
+                } catch { /* sessionStorage may be blocked — non-fatal */ }
+                setScreen('escrow');
+              }}
             />
           </Panel>
         )}

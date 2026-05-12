@@ -1933,18 +1933,19 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, []);
 
-  // Don't render wallet provider until client-side
-  if (!isClient) {
-    return <>{children}</>;
-  }
-
   // Explicit wsEndpoint stops web3.js from auto-deriving a bogus
   // ws://<origin>/api/rpc URL (which is not a websocket server) and emitting
   // "ws error: undefined" on every confirmTransaction subscription.
+  // NOTE: must be declared BEFORE any conditional return to obey rules-of-hooks.
   const connectionConfig = useMemo(
     () => ({ commitment: 'confirmed' as const, wsEndpoint: DEVNET_WS_ENDPOINT }),
     [],
   );
+
+  // Don't render wallet provider until client-side
+  if (!isClient) {
+    return <>{children}</>;
+  }
 
   return (
     <ConnectionProvider endpoint={endpoint} config={connectionConfig}>

@@ -8,6 +8,7 @@ import {
   ArrowDownLeft,
   Zap,
   QrCode,
+  Download,
   Activity,
   ChevronRight,
   Copy,
@@ -18,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import * as QRCode from "qrcode";
+import { UpiPayScreen } from "@/components/user/UpiPayScreen";
 import { openIssueReporter } from "@/components/IssueReporter";
 import { useState as useStateHook, useEffect } from "react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
@@ -42,6 +44,18 @@ export interface HomeScreenProps {
   screen: Screen;
   setScreen: (s: Screen) => void;
   setTradeType: (t: "buy" | "sell") => void;
+  /**
+   * Called when user completes a UPI QR scan + amount entry. Parent should
+   * prefill trade state (type=sell, amount in USDT, payment method = UPI
+   * with the scanned VPA) and route to the escrow-lock screen.
+   */
+  onUpiPayConfirm?: (data: {
+    vpa: string;
+    payeeName: string;
+    fiatInr: number;
+    cryptoUsdt: number;
+    note: string;
+  }) => void;
   setActiveOrderId: (id: string) => void;
   setPendingTradeData: (data: { amount: string; fiatAmount: string; type: "buy" | "sell"; paymentMethod: "bank" | "cash" } | null) => void;
   setShowWalletModal: (v: boolean) => void;
@@ -130,7 +144,7 @@ function WalletBalanceSection({
   displayBalance, isWalletReady,
   solanaWallet, embeddedWallet, completedOrders, currentRate, selectedPair,
   setShowWalletModal, setShowWalletSetup, setShowWalletUnlock,
-  setTradeType, setScreen, onDeposit,
+  setTradeType, setScreen, onDeposit, onPay,
 }: {
   displayBalance: number | null;
   isWalletReady: boolean;
@@ -145,6 +159,7 @@ function WalletBalanceSection({
   setTradeType: (t: 'buy' | 'sell') => void;
   setScreen: (s: Screen) => void;
   onDeposit: () => void;
+  onPay: () => void;
 }) {
   // Currency label tracks the active corridor (defaults to INR — see useUserTradeCreation).
   const fiatLabel = selectedPair === 'usdt_aed' ? 'AED' : 'INR';
@@ -321,10 +336,10 @@ function WalletBalanceSection({
         style={{ marginTop: 30 }}
       >
         {([
+          { label: 'Pay',      Icon: QrCode,        primary: false, comingSoon: false, fn: onPay },
           { label: 'Buy',      Icon: ArrowDownLeft, primary: true,  comingSoon: false, fn: () => { setTradeType('buy');  setScreen('trade'); } },
           { label: 'Sell',     Icon: ArrowUpRight,  primary: true,  comingSoon: false, fn: () => { setTradeType('sell'); setScreen('trade'); } },
-          { label: 'Activity', Icon: Activity,      primary: false, comingSoon: false, fn: () => setScreen('orders') },
-          { label: 'Deposit',  Icon: QrCode,        primary: false, comingSoon: false, fn: onDeposit },
+          { label: 'Deposit',  Icon: Download,      primary: false, comingSoon: false, fn: onDeposit },
         ] as const).map(({ label, Icon, primary, comingSoon, fn }) => (
           <motion.button key={label} whileTap={{ scale: 0.93 }} onClick={fn}
             className="relative flex flex-col items-center justify-center gap-1.5 cursor-pointer"
@@ -519,6 +534,7 @@ export const HomeScreen = ({
   userBalance,
   maxW,
   notificationCount = 0,
+  onUpiPayConfirm,
 }: HomeScreenProps) => {
   const displayBalance = IS_MOCK_MODE ? (userBalance ?? 0) : solanaWallet.usdtBalance;
   const isWalletReady = IS_MOCK_MODE ? (userBalance !== undefined && userBalance !== null) : solanaWallet.connected;
@@ -535,6 +551,7 @@ export const HomeScreen = ({
   const [cardH, setCardH] = useStateHook<number | null>(null);
   // ── Deposit / Receive modal ──
   const [showDeposit, setShowDeposit] = useStateHook(false);
+  const [showUpiPay, setShowUpiPay] = useStateHook(false);
   const [qrDataUrl, setQrDataUrl] = useStateHook<string | null>(null);
   const [depositCopied, setDepositCopied] = useStateHook(false);
   useEffect(() => {
@@ -743,6 +760,7 @@ export const HomeScreen = ({
             setTradeType={setTradeType}
             setScreen={setScreen}
             onDeposit={() => setShowDeposit(true)}
+            onPay={() => setShowUpiPay(true)}
           />
 
           {/* ── Circle (trading partners) — lives inside the dark hero ── */}
@@ -937,6 +955,18 @@ export const HomeScreen = ({
 
       {/* ── Bottom nav ── */}
       <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} chatUnreadCount={unreadCount} />
+
+      {/* ── UPI Pay (QR scan → amount → hand off to escrow flow) ── */}
+      {showUpiPay && (
+        <UpiPayScreen
+          onClose={() => setShowUpiPay(false)}
+          currentRate={currentRate}
+          onConfirm={(data) => {
+            setShowUpiPay(false);
+            onUpiPayConfirm?.(data);
+          }}
+        />
+      )}
 
       {/* ── Deposit / Receive — Apple-style bottom sheet with QR ── */}
       <AnimatePresence>

@@ -93,7 +93,15 @@ export interface WalletModalProps {
   showMobileOptions?: boolean;
 }
 
-export default function WalletModal({
+export default function WalletModal(props: WalletModalProps) {
+  // In MOCK_MODE the Solana WalletProvider is not mounted (MockWalletProvider
+  // replaces it), so calling useWallet() would throw "no WalletContext".
+  // Gate the inner component behind this check so its hooks never run.
+  if (MOCK_MODE) return null;
+  return <WalletModalInner {...props} />;
+}
+
+function WalletModalInner({
   isOpen,
   onClose,
   onConnected,
