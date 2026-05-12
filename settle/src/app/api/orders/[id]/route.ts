@@ -160,8 +160,22 @@ export async function PATCH(
       actor_id,
       reason,
       acceptor_wallet_address,
+      acceptor_wallet_signature,
       refund_tx_hash,
     } = parseResult.data;
+
+    // ACCEPT hardening: signature mandatory.
+    // Mirrors the action route's guard for ACCEPT/CLAIM. Forces a fresh
+    // wallet signature at the click so a stale frontend snapshot can't
+    // commit a wallet the merchant no longer controls. Verified below via
+    // assertWalletOwnership Option B.
+    if (status === 'accepted') {
+      if (!acceptor_wallet_address || !acceptor_wallet_signature) {
+        return validationErrorResponse([
+          'acceptor_wallet_address and acceptor_wallet_signature are required for accept',
+        ]);
+      }
+    }
 
     // Single auth call: pick the strength based on status (matches the
     // action route's pattern). Eliminates 2 redundant session/blacklist checks.
@@ -183,6 +197,26 @@ export async function PATCH(
       );
     }
     // No header-based actor swap — the JWT IS the merchant identity.
+
+    // Verify the accept-time signature binds to the wallet the merchant
+    // is committing to right now (Option B in assertWalletOwnership).
+    // The mandatory-field check above ensures both are present for
+    // status='accepted'; here we cryptographically verify.
+    if (status === 'accepted' && acceptor_wallet_address && acceptor_wallet_signature) {
+      const { assertWalletOwnership } = await import('@/lib/auth/walletOwnership');
+      const ownership = await assertWalletOwnership({
+        auth,
+        walletAddress: acceptor_wallet_address,
+        orderId: id,
+        signature: acceptor_wallet_signature,
+        signatureAction: 'Claim',
+      });
+      if (!ownership.ok) {
+        return forbiddenResponse(
+          `acceptor_wallet_address ownership not verified: ${ownership.reason ?? 'unknown'}`
+        );
+      }
+    }
 
     // ── (formerly) Acquire row-level lock for claim/financial actions ──
     // The previous SELECT FOR UPDATE outside a transaction was a NO-OP:

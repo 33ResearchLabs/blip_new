@@ -115,6 +115,26 @@ export function useOrderActions({
       }
     }
 
+    // ── Wallet-binding signature ──
+    // Sign a binding message with the CURRENT wallet at the moment of accept.
+    // Backend requires this (Option B) — eliminates the closure-stale-value
+    // and silent-link-fail bugs where the frozen `acceptor_wallet_address` on
+    // the order could end up as a stale/wrong wallet.
+    // Binding format must match buildOrderBindingMessage('Claim', ...).
+    let acceptorSignatureB64: string | null = null;
+    try {
+      const walletAddr = solanaWallet.walletAddress;
+      const bindingMsg = `Claim order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
+      const sigBytes = await solanaWallet.signMessage(new TextEncoder().encode(bindingMsg));
+      acceptorSignatureB64 = Buffer.from(sigBytes).toString('base64');
+    } catch (sigErr) {
+      console.error('[Merchant] Accept signature failed:', sigErr);
+      addNotification('system', 'Failed to sign accept binding — wallet rejected or locked. Please retry.', order.id);
+      playSound('error');
+      setAcceptingOrderId(null);
+      return;
+    }
+
     try {
       // If escrow is already funded by seller, call acceptTrade on-chain first
       if (hasOnChainEscrow) {
@@ -164,6 +184,7 @@ export function useOrderActions({
         };
         if (isValidSolanaAddress(solanaWallet.walletAddress)) {
           actionBody.acceptor_wallet_address = solanaWallet.walletAddress;
+          actionBody.acceptor_wallet_signature = acceptorSignatureB64;
         }
         // SEND_PAYMENT is a financial transition — backend rejects without
         // Idempotency-Key. CLAIM doesn't need one but the header is harmless.
@@ -185,6 +206,7 @@ export function useOrderActions({
         };
         if (isValidSolanaAddress(solanaWallet.walletAddress)) {
           requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
+          requestBody.acceptor_wallet_signature = acceptorSignatureB64;
         }
         acceptRes = await fetchWithAuth(`/api/orders/${order.id}`, {
           method: "PATCH",

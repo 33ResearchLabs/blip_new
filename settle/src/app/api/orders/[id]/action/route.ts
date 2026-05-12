@@ -165,6 +165,20 @@ export async function POST(
       }
     }
 
+    // 6a. ACCEPT/CLAIM hardening: signature mandatory.
+    // The wallet recorded at accept becomes the on-chain payout recipient;
+    // an attacker with a stale frontend snapshot, a silent link_wallet
+    // failure, or a hijacked session could otherwise commit a wallet the
+    // user no longer controls. Forcing a fresh signature at the click
+    // proves the wallet's keypair is present right now.
+    if (action === 'ACCEPT' || action === 'CLAIM') {
+      if (!acceptor_wallet_address || !acceptor_wallet_signature) {
+        return validationErrorResponse([
+          'acceptor_wallet_address and acceptor_wallet_signature are required for ACCEPT/CLAIM',
+        ]);
+      }
+    }
+
     // 6b. Wallet-injection guard.
     //
     // Any action that supplies `acceptor_wallet_address` causes that wallet
