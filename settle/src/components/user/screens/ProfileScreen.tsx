@@ -24,6 +24,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
+import { AppLockSettingsCard } from "@/components/app-lock/AppLockSettingsCard";
 import type { Screen, Order, BankAccount } from "./types";
 import { networkLabel } from "@/lib/solana/networkLabel";
 import type { MutableRefObject } from "react";
@@ -401,6 +402,14 @@ export const ProfileScreen = ({
               <Wallet size={16} className="text-accent-text" /> Connect Wallet
             </motion.button>
           )}
+        </div>
+
+        {/* App Lock — 4-digit PIN + optional biometric for app entry,
+            background re-lock, and inactivity timeout. Independent of
+            wallet password and user auth tokens. */}
+        <p className={`${SECTION_LABEL} block mb-2`}>App Lock</p>
+        <div className="mb-3">
+          <AppLockSettingsCard userId={userId} />
         </div>
 
         {/* Payment Methods — supports bank, UPI, cash, and other types.

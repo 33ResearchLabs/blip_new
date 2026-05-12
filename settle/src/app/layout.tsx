@@ -18,8 +18,10 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { PusherProvider } from "@/context/PusherContext";
 import { WebSocketChatProvider } from "@/context/WebSocketChatContext";
 import { ModalProvider } from "@/context/ModalContext";
+import { AppLockProvider } from "@/context/AppLockContext";
 import ClientWalletProvider from "@/components/ClientWalletProvider";
 import ErrorTrackingBoot from "@/components/ErrorTrackingBoot";
+import { AppLockOverlay } from "@/components/app-lock/AppLockOverlay";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -131,7 +133,15 @@ export default async function RootLayout({
               <WebSocketChatProvider>
                 <ModalProvider>
                   <AppProvider>
-                    {children}
+                    {/* AppLockProvider sits innermost so it can read auth
+                        state and render its lock overlay on top of the
+                        app content via AppLockOverlay. The overlay is a
+                        sibling of {children} so route changes never
+                        unmount it. */}
+                    <AppLockProvider>
+                      {children}
+                      <AppLockOverlay />
+                    </AppLockProvider>
                   </AppProvider>
                 </ModalProvider>
               </WebSocketChatProvider>
