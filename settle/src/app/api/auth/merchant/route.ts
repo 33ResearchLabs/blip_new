@@ -263,9 +263,17 @@ export async function POST(request: NextRequest) {
         trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'login' }).catch(() => {});
         checkDeviceChangeFrequency(merchant.id, 'merchant').catch(() => {});
 
-        // 2FA gate: if enabled, return pendingToken instead of real tokens
+        // 2FA gate: if enabled, return pendingToken instead of real tokens.
+        // Refuse issuance when the actor is OTP-rate-limited so attackers
+        // can't stockpile tokens during a lockout. See verify-login.
         if (merchant.totp_enabled) {
-          const { createPendingLoginToken } = await import('@/lib/auth/totp');
+          const { createPendingLoginToken, isRateLimited } = await import('@/lib/auth/totp');
+          if (await isRateLimited(merchant.id, 'merchant')) {
+            return NextResponse.json(
+              { success: false, error: 'Too many attempts. Please wait 15 minutes.' },
+              { status: 429 }
+            );
+          }
           const pendingToken = await createPendingLoginToken(merchant.id, 'merchant');
           return NextResponse.json({
             success: true,
@@ -766,9 +774,16 @@ export async function POST(request: NextRequest) {
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'login' }).catch(() => {});
       checkDeviceChangeFrequency(merchant.id, 'merchant').catch(() => {});
 
-      // 2FA gate: if enabled, return pendingToken instead of real tokens
+      // 2FA gate: if enabled, return pendingToken instead of real tokens.
+      // Refuse issuance when the actor is OTP-rate-limited (see verify-login).
       if (merchant.totp_enabled) {
-        const { createPendingLoginToken } = await import('@/lib/auth/totp');
+        const { createPendingLoginToken, isRateLimited } = await import('@/lib/auth/totp');
+        if (await isRateLimited(merchant.id, 'merchant')) {
+          return NextResponse.json(
+            { success: false, error: 'Too many attempts. Please wait 15 minutes.' },
+            { status: 429 }
+          );
+        }
         const pendingToken = await createPendingLoginToken(merchant.id, 'merchant');
         return NextResponse.json({
           success: true,
