@@ -13,13 +13,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { readFileSync } from 'fs';
-import { requireAuth } from '@/lib/middleware/auth';
+import { requireAuth, OPS_COOKIE_NAME, verifyOpsToken } from '@/lib/middleware/auth';
 import { getMerchantId } from '@/lib/middleware/merchantIdentity';
 
 export const dynamic = 'force-dynamic';
 
 async function hasOpsAccess(request: NextRequest): Promise<boolean> {
-  // Path 1: Admin secret (header only — never accept secrets via query params)
+  // Path 1a: httpOnly ops session cookie (new, JS-unreadable). The cookie
+  // is issued by /api/auth/ops/unlock after the operator types the shared
+  // secret once; subsequent /api/ops calls ride on this signed cookie
+  // instead of replaying the raw secret on every request.
+  const opsCookie = request.cookies.get(OPS_COOKIE_NAME)?.value;
+  if (opsCookie && verifyOpsToken(opsCookie)) {
+    return true;
+  }
+
+  // Path 1b: Admin secret header (legacy / curl-friendly path — kept so
+  // CLI scripts and any docs using `x-admin-secret` keep working through
+  // the migration). Header only — never accept secrets via query params.
   const secret = request.headers.get('x-admin-secret');
   if (process.env.ADMIN_SECRET && secret === process.env.ADMIN_SECRET) {
     return true;

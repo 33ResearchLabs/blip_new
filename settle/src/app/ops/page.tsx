@@ -25,9 +25,9 @@ export default function OpsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [blocked, setBlocked] = useState(false);
-  const [adminSecret, setAdminSecret] = useState('');
   const [needsAuth, setNeedsAuth] = useState(false);
   const [secretInput, setSecretInput] = useState('');
+  const [unlockError, setUnlockError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
 
@@ -57,27 +57,25 @@ export default function OpsPage() {
   // If a merchant is logged in and on the ops page, they have access — show navbar
   const isMerchant = !!merchantInfo?.id;
 
-  // Restore admin secret from sessionStorage
-  useEffect(() => {
-    const saved = sessionStorage.getItem('ops_admin_secret');
-    if (saved) setAdminSecret(saved);
-  }, []);
-
+  // Ops auth: the operator unlocks once via POST /api/auth/ops/unlock,
+  // which sets an httpOnly `blip_ops_session` cookie. That cookie travels
+  // automatically on subsequent /api/ops calls — there is no JS-readable
+  // secret to attach. Merchants with has_ops_access continue to authenticate
+  // via their normal session (also cookie-borne).
   const fetchData = useCallback(async (currentTab: Tab, orderId?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const secret = sessionStorage.getItem('ops_admin_secret') || '';
       const params = new URLSearchParams({ tab: currentTab });
       if (currentTab === 'search' && orderId) {
         params.set('order_id', orderId);
       }
-      // fetchWithAuth injects x-merchant-id automatically if merchant is logged in.
-      // Also send admin secret header if available (admin flow).
-      const headers: Record<string, string> = {};
-      if (secret) headers['x-admin-secret'] = secret;
-      const res = await fetchWithAuth(`/api/ops?${params}`, { headers });
+      const res = await fetchWithAuth(`/api/ops?${params}`);
       if (res.status === 404) {
+        // Cookie missing/expired OR caller has no merchant ops access.
+        // Prompt for the secret again — submitting it goes to the
+        // dedicated /api/auth/ops/unlock endpoint, NOT to this one.
+        setSecretInput('');
         setNeedsAuth(true);
         setBlocked(true);
         return;
@@ -92,6 +90,33 @@ export default function OpsPage() {
       setLoading(false);
     }
   }, []);
+
+  // Exchange the typed secret for an httpOnly session cookie. The raw
+  // secret only crosses the wire on this single POST; on success the
+  // server sets `blip_ops_session` (httpOnly + Strict) and we refetch.
+  const submitOpsSecret = useCallback(async () => {
+    if (!secretInput) return;
+    setUnlockError(null);
+    try {
+      const res = await fetch('/api/auth/ops/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: secretInput }),
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        setUnlockError(errBody?.error || `Unlock failed (${res.status})`);
+        return;
+      }
+      setSecretInput('');
+      setBlocked(false);
+      setNeedsAuth(false);
+      fetchData(tab);
+    } catch {
+      setUnlockError('Connection failed');
+    }
+  }, [secretInput, tab, fetchData]);
 
   useEffect(() => {
     if (tab !== 'search') fetchData(tab);
@@ -112,29 +137,19 @@ export default function OpsPage() {
           <input
             type="password"
             value={secretInput}
-            onChange={(e) => setSecretInput(e.target.value)}
+            onChange={(e) => { setSecretInput(e.target.value); setUnlockError(null); }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && secretInput) {
-                sessionStorage.setItem('ops_admin_secret', secretInput);
-                setAdminSecret(secretInput);
-                setBlocked(false);
-                setNeedsAuth(false);
-                fetchData(tab);
-              }
+              if (e.key === 'Enter' && secretInput) submitOpsSecret();
             }}
             placeholder="Admin secret"
             className="w-full px-3 py-2 bg-card border border-border rounded-lg text-sm text-foreground font-mono placeholder:text-muted focus:outline-none focus:border-primary/50"
             autoFocus
           />
+          {unlockError && (
+            <p className="text-sm text-red-400 font-mono">{unlockError}</p>
+          )}
           <button
-            onClick={() => {
-              if (!secretInput) return;
-              sessionStorage.setItem('ops_admin_secret', secretInput);
-              setAdminSecret(secretInput);
-              setBlocked(false);
-              setNeedsAuth(false);
-              fetchData(tab);
-            }}
+            onClick={submitOpsSecret}
             className="w-full py-2 bg-primary text-background font-bold font-mono rounded-lg hover:bg-primary/80"
           >
             Unlock
