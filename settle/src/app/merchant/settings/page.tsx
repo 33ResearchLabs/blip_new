@@ -40,6 +40,7 @@ import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { WalletLedger } from "@/components/merchant/WalletLedger";
 import { PaymentMethodModal, PaymentMethodInlineForm } from "@/components/merchant/PaymentMethodModal";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { useTheme, THEMES, type Theme } from "@/context/ThemeContext";
 import {
   Building2,
@@ -569,6 +570,10 @@ export default function MerchantSettingsPage({
     } catch {
       /* store not hydrated */
     }
+    // Sweep auth/identity keys + any unlocked wallet session material
+    // before the redirect. The merchant's encrypted blob stays in place
+    // for re-unlock on next login.
+    clearAuthStorageOnLogout();
     window.location.href = "/merchant";
   };
 

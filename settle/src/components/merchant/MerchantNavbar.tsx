@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { openIssueReporter } from "@/plugins/issue-reporter/IssueReporter";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
+import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 
 const CORRIDOR_OPTIONS = [
   { key: "USDT_AED", label: "🇦🇪 USDT / AED" },
@@ -119,8 +120,10 @@ export function MerchantNavbar({
     if (onLogout) {
       onLogout();
     } else {
-      localStorage.removeItem("blip_merchant");
-      localStorage.removeItem("merchant_info");
+      // Centralized sweep — drops `blip_merchant`, `merchant_info`, and
+      // any unlocked wallet session material across actors. UX prefs
+      // (theme, remember-me, notif settings) are preserved.
+      clearAuthStorageOnLogout();
       window.location.href = "/merchant";
     }
   };

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useMerchantStore } from '@/stores/merchantStore';
+import { clearAuthStorageOnLogout } from '@/lib/auth/logoutCleanup';
 
 interface ComplianceMember {
   id: string;
@@ -215,10 +216,12 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
 
   // Logout — clear in-memory state. Real cookie invalidation happens via
   // /api/auth/logout in the page-level logout handlers; this hook just
-  // wipes the local UI state.
+  // wipes the local UI state and runs the shared storage sweep so
+  // residual identity keys don't survive across compliance sessions.
   const handleLogout = () => {
     setMember(null);
     setIsLoggedIn(false);
+    clearAuthStorageOnLogout();
   };
 
   return {
