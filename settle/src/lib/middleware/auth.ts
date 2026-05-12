@@ -150,6 +150,69 @@ export function adminCookieOptions(maxAgeSeconds: number): {
   };
 }
 
+// ── Ops session ─────────────────────────────────────────────────────────
+//
+// The `/ops` debug page (localhost-only — production renders 404) used to
+// keep the shared admin secret in `sessionStorage` so JS could replay it
+// as `x-admin-secret`. That made the secret readable from any same-origin
+// script, browser extension, or DevTools. The migration here moves the
+// secret into an httpOnly cookie carrying a short-lived HMAC token; the
+// raw secret only crosses the wire once during `/api/auth/ops/unlock`
+// and is never persisted in JS-accessible storage.
+//
+// Token format is a stripped-down variant of the admin token: base64 of
+// `ops:<ts>:<hmac>`. No username, no jti — there is no "ops user", just a
+// proof-of-secret for the duration of the dev session.
+
+export const OPS_COOKIE_NAME = 'blip_ops_session';
+export const OPS_TOKEN_TTL_SECONDS = 8 * 60 * 60; // 8 hours
+
+/** Generate a signed ops session token. Caller must have already
+ *  validated the raw shared secret against ADMIN_SECRET. */
+export function generateOpsToken(): string {
+  const ts = Math.floor(Date.now() / 1000);
+  const sig = createHmac('sha256', getAdminSecret()).update(`ops:${ts}`).digest('hex');
+  return Buffer.from(`ops:${ts}:${sig}`).toString('base64');
+}
+
+/** Verify a previously-issued ops token. Returns true iff the signature
+ *  is valid AND the token has not aged past OPS_TOKEN_TTL_SECONDS. */
+export function verifyOpsToken(token: string): boolean {
+  try {
+    const decoded = Buffer.from(token, 'base64').toString();
+    const parts = decoded.split(':');
+    if (parts.length !== 3 || parts[0] !== 'ops') return false;
+    const tsStr = parts[1];
+    const sig = parts[2];
+    const ts = parseInt(tsStr, 10);
+    if (!Number.isFinite(ts)) return false;
+    if (Math.floor(Date.now() / 1000) - ts > OPS_TOKEN_TTL_SECONDS) return false;
+    const expected = createHmac('sha256', getAdminSecret()).update(`ops:${ts}`).digest('hex');
+    if (sig.length !== expected.length) return false;
+    return timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+/** Same shape as adminCookieOptions — Path=/ so the cookie reaches every
+ *  ops endpoint we may add later; httpOnly so JS cannot read or write it. */
+export function opsCookieOptions(maxAgeSeconds: number): {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: 'strict';
+  path: '/';
+  maxAge: number;
+} {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+    maxAge: maxAgeSeconds,
+  };
+}
+
 /**
  * Require admin authentication on a route.
  * Returns null if auth passes, or a 4xx/503 response if it fails.

@@ -167,6 +167,13 @@ function hasActorIdentity(request: NextRequest): boolean {
   // middleware doesn't 401-bounce the request before requireAuth runs.
   if (request.cookies.get('blip_access_token')?.value) return true;
 
+  // Ops session cookie — issued by /api/auth/ops/unlock after the operator
+  // proves knowledge of ADMIN_SECRET. Carries no actor identity per se but
+  // grants /api/ops access; the route handler's hasOpsAccess() verifies the
+  // HMAC. Without this gate the cookie would be set successfully but the
+  // edge would still 401-bounce every /api/ops request.
+  if (request.cookies.get('blip_ops_session')?.value) return true;
+
   // Headers (legacy / non-browser clients)
   if (request.headers.get('x-user-id')) return true;
   if (request.headers.get('x-merchant-id')) return true;
