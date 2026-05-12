@@ -38,6 +38,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Zap, LogOut } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 
 const NAV_ITEMS: { href: string; label: string; exact?: boolean }[] = [
   { href: "/admin", label: "Console", exact: true },
@@ -91,7 +92,9 @@ export default function AdminLayout({
     } catch {
       /* ignore */
     }
-    localStorage.removeItem("blip_admin");
+    // Sweep all auth/identity keys (admin token + any residual user/
+    // merchant state from a prior dual-login on the same device).
+    clearAuthStorageOnLogout();
     setIsAuthed(false);
     window.dispatchEvent(new CustomEvent("admin:auth-changed"));
   }, []);

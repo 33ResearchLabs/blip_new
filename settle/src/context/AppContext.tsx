@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import api from '@/lib/api/client';
+import { clearAuthStorageOnLogout } from '@/lib/auth/logoutCleanup';
 import type { User, Order, OrderWithRelations, MerchantOfferWithMerchant, UserBankAccount } from '@/lib/types/database';
 
 // Types for context
@@ -99,7 +100,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Disconnect wallet
   const disconnectWallet = useCallback(() => {
-    localStorage.removeItem('walletAddress');
+    // Centralized sweep — drops every auth/identity key AND any unlocked
+    // wallet secrets across namespaced actors, while preserving the
+    // encrypted-at-rest blob the same user will re-unlock on next login.
+    clearAuthStorageOnLogout();
     setState(s => ({
       ...s,
       user: null,

@@ -78,6 +78,12 @@ export default function OpsPage() {
       if (secret) headers['x-admin-secret'] = secret;
       const res = await fetchWithAuth(`/api/ops?${params}`, { headers });
       if (res.status === 404) {
+        // Wipe the stale/rejected secret so it isn't replayed on the
+        // next request — and so closing the tab isn't the only way to
+        // remove a bad value once the API has refused it.
+        try { sessionStorage.removeItem('ops_admin_secret'); } catch { /* ignore */ }
+        setAdminSecret('');
+        setSecretInput('');
         setNeedsAuth(true);
         setBlocked(true);
         return;
