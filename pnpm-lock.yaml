@@ -246,6 +246,9 @@ importers:
       ioredis:
         specifier: ^5.10.1
         version: 5.10.1
+      jsqr:
+        specifier: ^1.4.0
+        version: 1.4.0
       konva:
         specifier: ^9.3.16
         version: 9.3.22

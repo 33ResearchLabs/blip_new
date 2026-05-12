@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Scanner, type IDetectedBarcode } from "@yudiel/react-qr-scanner";
-import { ChevronLeft, Loader2, Check, AlertCircle } from "lucide-react";
+import jsQR from "jsqr";
+import { ChevronLeft, Loader2, Check, AlertCircle, ImagePlus } from "lucide-react";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 
+// ── UPI URL parsing ────────────────────────────────────────────────────────
 interface ParsedUpi {
   pa: string;
   pn: string;
@@ -32,8 +33,49 @@ function parseUpiUrl(raw: string): ParsedUpi | null {
   }
 }
 
-const UPI_BASE = process.env.NEXT_PUBLIC_UPI_PAY_BASE_URL || "";
+// ── QR decoder: native BarcodeDetector → jsQR fallback with size tiering ──
+// Mirrors the prototype's create.html logic. The multi-size jsQR retry catches
+// QRs that fail at the source resolution because of moiré / aliasing.
+type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => {
+  detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
+};
 
+async function decodeQr(
+  source: HTMLVideoElement | HTMLImageElement,
+  width: number,
+  height: number,
+): Promise<string | null> {
+  // 1. Native BarcodeDetector (Chrome Android, Safari 17+, Edge).
+  const w = window as unknown as { BarcodeDetector?: BarcodeDetectorCtor };
+  if (typeof w.BarcodeDetector === "function") {
+    try {
+      const det = new w.BarcodeDetector({ formats: ["qr_code"] });
+      const codes = await det.detect(source);
+      if (codes && codes.length > 0 && codes[0].rawValue) return codes[0].rawValue;
+    } catch {
+      /* fall through to jsQR */
+    }
+  }
+  // 2. jsQR with multi-resolution retry.
+  for (const target of [width, 1024, 600, 400]) {
+    const scale = target < width ? target / width : 1;
+    const sw = Math.round(width * scale);
+    const sh = Math.round(height * scale);
+    if (sw < 50 || sh < 50) continue;
+    const canvas = document.createElement("canvas");
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) continue;
+    ctx.drawImage(source, 0, 0, sw, sh);
+    const data = ctx.getImageData(0, 0, sw, sh);
+    const r = jsQR(data.data, sw, sh, { inversionAttempts: "attemptBoth" });
+    if (r && r.data) return r.data;
+  }
+  return null;
+}
+
+// ── Component ──────────────────────────────────────────────────────────────
 export interface UpiPayConfirm {
   vpa: string;
   payeeName: string;
@@ -44,36 +86,143 @@ export interface UpiPayConfirm {
 
 interface Props {
   onClose: () => void;
-  /** USDT→INR rate. If null, scanner cannot compute the USDT side and submit is disabled. */
   currentRate: number | null;
-  /** Fires when user confirms. Parent should prefill trade state + jump to escrow lock. */
   onConfirm: (data: UpiPayConfirm) => void;
 }
 
+const UPI_BASE = process.env.NEXT_PUBLIC_UPI_PAY_BASE_URL || "";
+
 export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
-  const [stage, setStage] = useState<"scanning" | "entering" | "submitting" | "done" | "error">(
-    "scanning",
-  );
+  const [stage, setStage] = useState<"scanning" | "entering">("scanning");
   const [parsed, setParsed] = useState<ParsedUpi | null>(null);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [manualUrl, setManualUrl] = useState<string>("");
+  const [cameraOn, setCameraOn] = useState(false);
 
-  const onScan = useCallback((codes: IDetectedBarcode[]) => {
-    const first = codes[0]?.rawValue;
-    if (!first) return;
-    const p = parseUpiUrl(first);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const acceptRaw = useCallback((raw: string): boolean => {
+    const p = parseUpiUrl(raw);
     if (!p) {
-      setErrorMsg("Not a UPI QR. Try again.");
-      return;
+      setErrorMsg(`Not a UPI QR. Got: ${raw.slice(0, 60)}${raw.length > 60 ? "…" : ""}`);
+      return false;
     }
+    setErrorMsg("");
     setParsed(p);
     setAmount(p.am || "");
     setNote(p.tn || "");
     setStage("entering");
+    return true;
   }, []);
 
-  const submit = async () => {
+  // ── Camera lifecycle ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (stage !== "scanning") return;
+    let cancelled = false;
+
+    const stop = () => {
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      setCameraOn(false);
+    };
+
+    (async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setErrorMsg("Camera not available in this browser.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (!video) return;
+        video.srcObject = stream;
+        // playsInline required for iOS; muted required for autoplay
+        await video.play().catch(() => { /* user-gesture issues handled below */ });
+        setCameraOn(true);
+
+        let busy = false;
+        const tick = async () => {
+          if (cancelled || !streamRef.current) return;
+          const v = videoRef.current;
+          if (
+            !busy &&
+            v &&
+            v.readyState === v.HAVE_ENOUGH_DATA &&
+            v.videoWidth > 0
+          ) {
+            busy = true;
+            try {
+              const raw = await decodeQr(v, v.videoWidth, v.videoHeight);
+              if (raw) {
+                if (acceptRaw(raw)) {
+                  stop();
+                  return;
+                }
+              }
+            } catch {
+              /* ignore decode errors per-frame */
+            }
+            busy = false;
+          }
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/Permission|NotAllowed/i.test(msg)) {
+          setErrorMsg("Camera permission denied. Allow in site settings or use the paste / upload fallback below.");
+        } else if (/NotFound|Overconstrained/i.test(msg)) {
+          setErrorMsg("No back camera found. Use the paste / upload fallback.");
+        } else {
+          setErrorMsg(`Camera error: ${msg}`);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [stage, acceptRaw]);
+
+  // ── Image upload fallback ────────────────────────────────────────────
+  const onUploadFile = async (file: File) => {
+    setErrorMsg("");
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("image_load_failed"));
+    });
+    const raw = await decodeQr(img, img.naturalWidth, img.naturalHeight);
+    URL.revokeObjectURL(img.src);
+    if (!raw) {
+      setErrorMsg("Couldn't read a QR from that image.");
+      return;
+    }
+    acceptRaw(raw);
+  };
+
+  // ── Submit confirmed payment ──────────────────────────────────────────
+  const submit = () => {
     if (!parsed) return;
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
@@ -84,25 +233,12 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
       setErrorMsg("Live USDT/INR rate unavailable. Wait a moment and retry.");
       return;
     }
-    // ₹X ÷ rate(INR per USDT) = USDT amount needed to lock in escrow.
-    // 4dp rounding keeps the on-chain amount within USDT's 6-decimal mint.
     const cryptoUsdt = Math.ceil((amt / currentRate) * 10000) / 10000;
-
-    setStage("submitting");
-    setErrorMsg("");
-    // Fire-and-forget: record the request in the prototype inbox too, so the
-    // merchant side has visibility. Failure here does NOT block the on-chain
-    // sell order — the real settlement is the Blip escrow flow.
     if (UPI_BASE) {
       void fetch(`${UPI_BASE}/api/requests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pa: parsed.pa,
-          pn: parsed.pn,
-          am: amt,
-          tn: note,
-        }),
+        body: JSON.stringify({ pa: parsed.pa, pn: parsed.pn, am: amt, tn: note }),
       }).catch(() => { /* non-fatal */ });
     }
     onConfirm({
@@ -133,53 +269,97 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
           Back
         </button>
         <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-text-tertiary">
-          {stage === "scanning" ? "Scan to Pay" : stage === "done" ? "Sent" : "Pay via UPI"}
+          {stage === "scanning" ? "Scan to Pay" : "Pay via UPI"}
         </p>
         <div className="w-[64px]" />
       </div>
 
       <AnimatePresence mode="wait">
-        {/* ── SCANNING ─────────────────────────────────────────────── */}
+        {/* ── SCANNING ──────────────────────────────────────────────── */}
         {stage === "scanning" && (
           <motion.div
             key="scan"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex-1 flex flex-col items-center justify-center px-5 pb-6"
+            className="flex-1 flex flex-col items-center px-5 pb-6 overflow-y-auto"
           >
-            <div className="relative w-full max-w-[360px] aspect-square rounded-3xl overflow-hidden bg-black border border-border-medium shadow-2xl">
-              <Scanner
-                onScan={onScan}
-                onError={(err) => {
-                  const msg = err instanceof Error ? err.message : String(err);
-                  setErrorMsg(msg);
+            <div className="mt-1 relative w-full max-w-[360px] aspect-square rounded-3xl overflow-hidden bg-black border border-border-medium shadow-2xl">
+              <video
+                ref={videoRef}
+                playsInline
+                muted
+                autoPlay
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  background: "#000",
                 }}
-                constraints={{ facingMode: "environment" }}
-                styles={{
-                  container: { width: "100%", height: "100%" },
-                  video: { width: "100%", height: "100%", objectFit: "cover" },
-                }}
-                components={{ finder: false }}
               />
-              {/* viewfinder */}
+              {!cameraOn && (
+                <div className="absolute inset-0 flex items-center justify-center text-white/60 text-[12px]">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                </div>
+              )}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div className="w-2/3 h-2/3 border-2 border-white/70 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
               </div>
             </div>
-            <p className="mt-6 text-[12px] text-text-tertiary text-center max-w-[300px]">
+
+            <p className="mt-4 text-[12px] text-text-tertiary text-center max-w-[300px]">
               Align the merchant&apos;s UPI QR inside the frame
             </p>
+
             {errorMsg && (
-              <div className="mt-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] bg-error-dim border border-error-border text-error">
-                <AlertCircle className="w-3.5 h-3.5" />
-                {errorMsg}
+              <div className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] bg-error-dim border border-error-border text-error max-w-[360px]">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span className="break-words">{errorMsg}</span>
               </div>
             )}
+
+            {/* Upload image fallback */}
+            <div className="mt-4 w-full max-w-[360px]">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onUploadFile(f);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-semibold bg-surface-card hover:bg-surface-hover border border-border-medium text-text-primary"
+              >
+                <ImagePlus className="w-4 h-4" />
+                Upload QR image
+              </button>
+            </div>
+
+            {/* Manual paste fallback */}
+            <div className="mt-3 w-full max-w-[360px] flex gap-2">
+              <input
+                type="text"
+                value={manualUrl}
+                onChange={(e) => setManualUrl(e.target.value)}
+                placeholder="paste upi://pay?pa=...&am=..."
+                className="flex-1 rounded-xl px-3 py-2 text-[12px] outline-none bg-surface-hover border border-border-subtle text-text-primary placeholder:text-text-tertiary font-mono"
+              />
+              <button
+                onClick={() => manualUrl && acceptRaw(manualUrl.trim())}
+                className="px-3 py-2 rounded-xl text-[12px] font-bold bg-surface-card hover:bg-surface-hover border border-border-medium text-text-primary"
+              >
+                Use
+              </button>
+            </div>
           </motion.div>
         )}
 
-        {/* ── ENTERING AMOUNT ─────────────────────────────────────── */}
+        {/* ── ENTERING ──────────────────────────────────────────────── */}
         {stage === "entering" && parsed && (
           <motion.div
             key="enter"
@@ -188,7 +368,6 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
             exit={{ opacity: 0, y: -12 }}
             className="flex-1 flex flex-col px-5 pb-6 min-h-0"
           >
-            {/* Merchant card */}
             <div className="mt-2 rounded-2xl p-4 bg-surface-card border border-border-subtle">
               <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-text-tertiary mb-1">
                 Paying
@@ -201,7 +380,6 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
               )}
             </div>
 
-            {/* Giant amount input — matches TradeCreationScreen aesthetic */}
             <div className="flex-1 flex flex-col items-center justify-center">
               <p
                 className="text-text-tertiary mb-3"
@@ -255,7 +433,6 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
               )}
             </div>
 
-            {/* Note */}
             <div className="mb-3">
               <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">
                 Note (optional)
@@ -288,62 +465,6 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
             >
               Lock USDT & Pay ₹{formattedAmount || "0"}
             </motion.button>
-          </motion.div>
-        )}
-
-        {/* ── SUBMITTING ──────────────────────────────────────────── */}
-        {stage === "submitting" && (
-          <motion.div
-            key="sub"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex-1 flex flex-col items-center justify-center gap-3"
-          >
-            <Loader2 className="w-8 h-8 animate-spin text-text-tertiary" />
-            <p className="text-[12px] text-text-tertiary tracking-[0.2em] uppercase">Sending…</p>
-          </motion.div>
-        )}
-
-        {/* ── DONE ────────────────────────────────────────────────── */}
-        {stage === "done" && (
-          <motion.div
-            key="done"
-            initial={{ opacity: 0, scale: 0.92 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex-1 flex flex-col items-center justify-center gap-4 px-6"
-          >
-            <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center">
-              <Check className="w-8 h-8 text-accent" />
-            </div>
-            <p className="text-[22px] font-bold tracking-[-0.02em]">Request created</p>
-            <p className="text-[12px] text-text-tertiary text-center max-w-[280px]">
-              The payment request is in the merchant inbox. Status will update once it&apos;s confirmed.
-            </p>
-            <button
-              onClick={onClose}
-              className="mt-3 px-5 py-2.5 rounded-xl bg-accent text-accent-text text-sm font-bold"
-            >
-              Done
-            </button>
-          </motion.div>
-        )}
-
-        {/* ── ERROR ───────────────────────────────────────────────── */}
-        {stage === "error" && (
-          <motion.div
-            key="err"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex-1 flex flex-col items-center justify-center gap-3 px-6"
-          >
-            <AlertCircle className="w-8 h-8 text-error" />
-            <p className="text-sm text-error text-center">{errorMsg}</p>
-            <button
-              onClick={() => setStage("entering")}
-              className="mt-2 px-5 py-2.5 rounded-xl bg-surface-card border border-border-medium text-sm font-bold"
-            >
-              Try again
-            </button>
           </motion.div>
         )}
       </AnimatePresence>

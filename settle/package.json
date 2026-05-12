@@ -49,6 +49,7 @@
     "html2canvas": "^1.4.1",
     "html2canvas-pro": "^1.5.8",
     "ioredis": "^5.10.1",
+    "jsqr": "^1.4.0",
     "konva": "^9.3.16",
     "lucide-react": "^0.562.0",
     "next": "16.1.5",
