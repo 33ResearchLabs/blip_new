@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import type { Screen, Order, BankAccount } from "@/components/user/screens/types";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useMerchantStore } from '@/stores/merchantStore';
+import { clearAuthStorageOnLogout } from '@/lib/auth/logoutCleanup';
 import {
   validateUserUsername,
   validateUserEmail,
@@ -326,13 +327,16 @@ export function useUserAuth({
             }
           }
           console.log('[Session] User session invalid, clearing...');
-          localStorage.removeItem('blip_user');
-          localStorage.removeItem('blip_wallet');
+          // The server has already told us the session is gone — run the
+          // shared logout sweep so we drop EVERY auth/identity key + any
+          // unlocked wallet session material in one place, not just the
+          // two we used to remove. Otherwise the next account on this
+          // device could see stale walletAddress / blip_wallet_session:*.
+          clearAuthStorageOnLogout();
         }
       } catch (err) {
         console.error('[Session] Failed to restore session:', err);
-        localStorage.removeItem('blip_user');
-        localStorage.removeItem('blip_wallet');
+        clearAuthStorageOnLogout();
       }
 
       setScreen('welcome');
