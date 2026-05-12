@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Zap, Loader2, Eye, EyeOff, Mail, ChevronLeft, User, Store, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { InstallPWAButton } from "@/components/InstallPWAButton";
 import {
   validateUserUsername,
   validateUserEmail,
@@ -235,16 +236,16 @@ export function LandingPage({
   }
 
   return (
-    <div className="flex-1 w-full mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden">
+    <div className="w-full mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden h-dvh">
       {/* Ambient background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] md:w-[700px] h-[300px] md:h-[500px] bg-warning/[0.05] rounded-full blur-[120px]" />
       </div>
 
-      <div className="flex min-h-dvh flex-col items-center px-5 py-5 relative z-10">
+      <div className="flex h-full flex-col items-center px-5 py-4 relative z-10">
         <div className="w-full max-w-[440px] flex-1 flex flex-col self-stretch mx-auto">
           {/* Top bar: home link + role switch — proper visible buttons */}
-          <div className="flex items-center justify-between mb-3 gap-2">
+          <div className="flex items-center justify-between mb-3 gap-2 shrink-0">
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
@@ -252,21 +253,24 @@ export function LandingPage({
               <ChevronLeft className="w-3.5 h-3.5" />
               Home
             </Link>
-            <Link
-              href="/merchant/login"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
-            >
-              Are you a merchant?
-              <span aria-hidden>→</span>
-            </Link>
+            <div className="flex items-center gap-2">
+              <InstallPWAButton />
+              <Link
+                href="/merchant/login"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
+              >
+                Merchant
+                <span aria-hidden>→</span>
+              </Link>
+            </div>
           </div>
 
-          <div className="flex-1 flex flex-col pt-[50px] pb-2">
+          <div className="flex-1 flex flex-col pt-6 sm:pt-[50px] pb-1 min-h-0">
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="mb-10"
+            className="mb-6 sm:mb-10 shrink-0"
           >
             {/* Big number-style hero, like the "0.00 USDT" on home */}
             <div className="text-center mb-1">
@@ -303,7 +307,7 @@ export function LandingPage({
             </button>
           </div>
 
-          <div className="flex-1 rounded-2xl p-6 flex flex-col gap-4 bg-surface-card border border-border-subtle shadow-2xl">
+          <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl p-5 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
             {loginError && (
               <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
                 {loginError}

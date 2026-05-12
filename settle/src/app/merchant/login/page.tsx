@@ -56,13 +56,13 @@ export default function MerchantLoginPage() {
         !auth.registerForm.confirmPassword);
 
   return (
-    <div className="flex-1 w-full mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden min-h-dvh">
+    <div className="w-full mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden h-dvh">
       {/* Ambient background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] md:w-[700px] h-[300px] md:h-[500px] bg-warning/[0.05] rounded-full blur-[120px]" />
       </div>
 
-      <div className="flex min-h-dvh flex-col items-center px-5 py-5 relative z-10">
+      <div className="flex h-full flex-col items-center px-5 py-4 relative z-10">
         <div className="w-full max-w-[440px] flex-1 flex flex-col self-stretch mx-auto">
           {/* Top bar */}
           <div className="flex items-center justify-between mb-3 gap-2">
@@ -82,12 +82,12 @@ export default function MerchantLoginPage() {
             </Link>
           </div>
 
-          <div className="flex-1 flex flex-col pt-[50px] pb-2">
+          <div className="flex-1 flex flex-col pt-6 sm:pt-[50px] pb-1 min-h-0">
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="mb-10"
+              className="mb-6 sm:mb-10 shrink-0"
             >
               <div className="text-center mb-1">
                 <p className="text-[10px] font-semibold tracking-[0.3em] uppercase text-text-tertiary mb-2">
@@ -123,7 +123,7 @@ export default function MerchantLoginPage() {
               </button>
             </div>
 
-            <div className="flex-1 rounded-2xl p-6 flex flex-col gap-4 bg-surface-card border border-border-subtle shadow-2xl">
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl p-5 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
               {auth.loginError && (
                 <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
                   {auth.loginError}
