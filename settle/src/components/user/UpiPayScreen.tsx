@@ -160,7 +160,7 @@ export function UpiPayScreen({ onClose, currentRate, onConfirm }: Props) {
                   container: { width: "100%", height: "100%" },
                   video: { width: "100%", height: "100%", objectFit: "cover" },
                 }}
-                components={{ finder: false, audio: false }}
+                components={{ finder: false }}
               />
               {/* viewfinder */}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
