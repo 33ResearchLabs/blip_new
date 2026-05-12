@@ -478,13 +478,21 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     } catch (err) {
       console.error('[SolanaWallet] Failed to create program:', err);
       if (err instanceof Error) {
+        // Stack omitted in production to keep prod DevTools console quiet —
+        // same rationale as the server-side logger redaction (H7). Errors
+        // still report name + message so users/devs can identify the class
+        // of failure without exposing wallet internals.
         console.error('[SolanaWallet] Error details:', {
           name: err.name,
           message: err.message,
-          stack: err.stack?.split('\n').slice(0, 5).join('\n'),
+          ...(process.env.NODE_ENV !== 'production'
+            ? { stack: err.stack?.split('\n').slice(0, 5).join('\n') }
+            : {}),
         });
       }
-      console.error('[SolanaWallet] Full error object:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[SolanaWallet] Full error object:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+      }
       setProgram(null);
     }
   }, [connection, anchorWallet, wallet, programVersion]);

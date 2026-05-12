@@ -559,10 +559,15 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const err = error as Error;
     logger.api.error('POST', '/api/merchant/orders', err);
+    // Stack is intentionally omitted in production — it leaks internal
+    // paths/module names. Sentry still receives the full trace via
+    // logger.api.error → server config. Same shape as orders/route.ts.
     console.error('[API] Error creating merchant order:', {
       name: err.name,
       message: err.message,
-      stack: err.stack?.split('\n').slice(0, 5).join('\n'),
+      ...(process.env.NODE_ENV !== 'production'
+        ? { stack: err.stack?.split('\n').slice(0, 5).join('\n') }
+        : {}),
     });
     return errorResponse('An error occurred while processing your order');
   }
