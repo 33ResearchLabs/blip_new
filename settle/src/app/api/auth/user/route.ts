@@ -318,6 +318,25 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Email verification gate — mirrors the merchant flow at
+      // api/auth/merchant/route.ts. We deliberately gate ONLY when the
+      // account actually has an email on file: wallet-only users (who
+      // signed up via signature without ever providing an email) have
+      // nothing to verify and must not be blocked here.
+      //
+      // `email` and `email_verified` are columns on the users table but
+      // are not part of the typed User interface — `SELECT *` brings
+      // them through anyway, so we cast at the read site.
+      const userRow = user as typeof user & { email?: string | null; email_verified?: boolean };
+      if (userRow.email && userRow.email_verified === false) {
+        return NextResponse.json({
+          success: false,
+          error: 'Please verify your email before logging in. Check your inbox for a verification link.',
+          code: 'EMAIL_NOT_VERIFIED',
+          userId: user.id,
+        }, { status: 403 });
+      }
+
       console.log('[API] User login successful:', user.id, user.username);
 
       // Fire-and-forget: device + IP tracking

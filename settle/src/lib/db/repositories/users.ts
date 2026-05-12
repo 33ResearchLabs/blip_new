@@ -104,9 +104,20 @@ export async function createUser(
   // Normalise email so the unique LOWER(email) index can do its job and
   // forgot-password lookups don't need to re-lower-case at query time.
   const email = data.email?.trim().toLowerCase() || null;
-  // Default to true (legacy behavior) unless the caller explicitly passed
-  // false — preserves wallet-only signups without forcing email verification.
-  const emailVerified = data.email_verified ?? true;
+  // Email verification default:
+  //   - Wallet-only signups (email is null) — value is moot, the login
+  //     gate at api/auth/user/route.ts only triggers when an email is
+  //     present. Default to false so the row is consistent with "no
+  //     verified email on file".
+  //   - Email/password signups — register path explicitly passes false
+  //     so the verify-link must be clicked before login is allowed.
+  //   - Any future caller passing an email without setting this flag —
+  //     default to false (safer: requires explicit verification rather
+  //     than silently trusting the email).
+  // The old default of `true` was a foot-gun: it meant a future caller
+  // could create a user with an unverified email and accidentally
+  // bypass the gate.
+  const emailVerified = data.email_verified ?? false;
   try {
     // Seed deterministic default avatar from the most stable identifier
     // available so the same user keeps the same picture across sessions.
