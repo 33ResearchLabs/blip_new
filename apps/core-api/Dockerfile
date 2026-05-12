@@ -1,7 +1,13 @@
 # ── Core-API (Fastify backend + workers) ────────────────────────────
 # Multi-stage build with pnpm workspace support
-
-FROM node:22-alpine AS base
+#
+# Base image pinned by digest (multi-arch index). Keeps builds
+# reproducible, lets the layer cache survive across Docker Hub tag
+# mutations, and reduces exposure to upstream registry outages on
+# warm builds. Kept in lockstep with the settle Dockerfile so both
+# services pull the same Node version. Bump both together when
+# refreshing.
+FROM node:22-alpine@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f AS base
 RUN apk add --no-cache python3 make g++ linux-headers eudev-dev
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app

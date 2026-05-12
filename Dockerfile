@@ -1,7 +1,17 @@
 # ── Settle (Next.js frontend + API routes) ──────────────────────────
 # Multi-stage build with pnpm workspace support
-
-FROM node:22-alpine AS base
+#
+# Base image pinned by digest (multi-arch index) so:
+#   1. Builds are reproducible — `node:22-alpine` is a moving tag that
+#      Docker Hub reassigns when the upstream image is rebuilt.
+#   2. Layer caches in build hosts (Railway, etc.) key by digest, so a
+#      warm build never re-pulls the base from Docker Hub — directly
+#      reduces exposure to Docker Hub auth/registry outages.
+#   3. Supply-chain hygiene — no risk of a future tag retag swapping
+#      out the base image under us.
+# Bump procedure: see scripts/refresh-base-digest.md (or just run
+# `docker pull node:22-alpine && docker images --digests`).
+FROM node:22-alpine@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f AS base
 RUN apk add --no-cache python3 make g++ linux-headers eudev-dev
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
@@ -49,7 +59,9 @@ ENV NEXT_PUBLIC_ENABLE_APP_TOUR=$NEXT_PUBLIC_ENABLE_APP_TOUR
 RUN pnpm -C settle build
 
 # ── Production image ────────────────────────────────────────────────
-FROM node:22-alpine AS runner
+# Same digest as the `base` stage above — Docker reuses the already-
+# pulled layers, so this is effectively free in the layer cache.
+FROM node:22-alpine@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/node_modules/ node_modules/
