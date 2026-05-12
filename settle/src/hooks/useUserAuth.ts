@@ -50,6 +50,11 @@ export function useUserAuth({
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  // Carries the user id from a 403 EMAIL_NOT_VERIFIED response so the
+  // UI can offer a "Resend verification email" affordance without
+  // having to re-submit the password to identify the account.
+  const [unverifiedUserId, setUnverifiedUserId] = useState<string | null>(null);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
 
   // Solana wallet state
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -221,17 +226,50 @@ export function useUserAuth({
         fetchOrders(user.id);
         fetchBankAccounts(user.id);
         fetchResolvedDisputes(user.id);
+        setUnverifiedUserId(null);
         setScreen('home');
+      } else if (data.code === 'EMAIL_NOT_VERIFIED') {
+        // Same pattern useDashboardAuth uses on the merchant side: surface
+        // the sentinel string as the error and stash the user id so the
+        // login screen can render a "Resend verification email" button.
+        setLoginError('EMAIL_NOT_VERIFIED');
+        setUnverifiedUserId(data.userId || null);
       } else {
         setLoginError(data.error || 'Login failed');
+        setUnverifiedUserId(null);
       }
     } catch (err) {
       console.error('Login error:', err);
       setLoginError('Connection failed');
+      setUnverifiedUserId(null);
     } finally {
       setIsLoggingIn(false);
     }
   }, [loginForm, setScreen, fetchOrders, fetchBankAccounts, fetchResolvedDisputes]);
+
+  // Re-issue the verification email when the login screen surfaces
+  // EMAIL_NOT_VERIFIED. Best-effort fire-and-forget shape mirroring the
+  // merchant flow — the server always returns success to prevent
+  // account-existence enumeration via this endpoint.
+  const handleResendVerification = useCallback(async () => {
+    const targetId = unverifiedUserId;
+    const targetEmail = loginForm.email?.trim();
+    if (!targetId && !targetEmail) return;
+    setIsResendingVerification(true);
+    try {
+      await fetchWithAuth('/api/auth/user/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          targetId ? { userId: targetId } : { email: targetEmail }
+        ),
+      });
+    } catch (err) {
+      console.error('Resend verification error:', err);
+    } finally {
+      setIsResendingVerification(false);
+    }
+  }, [unverifiedUserId, loginForm.email]);
 
   const handleUserRegister = useCallback(async () => {
     const email = loginForm.email?.trim() ?? '';
@@ -359,6 +397,12 @@ export function useUserAuth({
     authMode, setAuthMode,
     loginError, setLoginError,
     isLoggingIn,
+    // EMAIL_NOT_VERIFIED surface — login screen consumes these to show
+    // a "Resend verification email" affordance when the user hits the
+    // verification gate. unverifiedUserId is null in the happy path.
+    unverifiedUserId,
+    isResendingVerification,
+    handleResendVerification,
     showWalletModal, setShowWalletModal,
     showUsernameModal, setShowUsernameModal,
     walletUsername, setWalletUsername,
