@@ -116,11 +116,24 @@ export async function POST(request: NextRequest) {
         checkDeviceChangeFrequency(user.id, 'user').catch(() => {});
       }
 
-      // 2FA gate: if enabled and not a new user, return pendingToken
+      // 2FA gate: if enabled and not a new user, return pendingToken.
+      //
+      // Pre-check the per-actor OTP rate limit BEFORE issuing a fresh
+      // pendingToken. Without this, an attacker who has the primary
+      // credential can keep hitting this endpoint during their lockout
+      // and stockpile pendingTokens to drain as the window slides. The
+      // verify-login endpoint blocks the code attempts anyway, but the
+      // token stockpile thrashes the DB and obscures abuse signal.
       if (!isNewUser) {
-        const { getTotpStatus: getWalletTotpStatus, createPendingLoginToken: createWalletPendingToken } = await import('@/lib/auth/totp');
+        const { getTotpStatus: getWalletTotpStatus, createPendingLoginToken: createWalletPendingToken, isRateLimited: walletIsRateLimited } = await import('@/lib/auth/totp');
         const walletTotpStatus = await getWalletTotpStatus(user.id, 'user');
         if (walletTotpStatus.enabled) {
+          if (await walletIsRateLimited(user.id, 'user')) {
+            return NextResponse.json(
+              { success: false, error: 'Too many attempts. Please wait 15 minutes.' },
+              { status: 429 }
+            );
+          }
           const pendingToken = await createWalletPendingToken(user.id, 'user');
           return NextResponse.json({
             success: true,
@@ -311,10 +324,19 @@ export async function POST(request: NextRequest) {
       trackRequest(request, { entityId: user.id, entityType: 'user', action: 'login' }).catch(() => {});
       checkDeviceChangeFrequency(user.id, 'user').catch(() => {});
 
-      // 2FA gate: if enabled, return pendingToken instead of real tokens
-      const { getTotpStatus, createPendingLoginToken } = await import('@/lib/auth/totp');
+      // 2FA gate: if enabled, return pendingToken instead of real tokens.
+      // Refuse issuance when the actor is currently OTP-rate-limited so an
+      // attacker with the primary password cannot stockpile tokens during
+      // a lockout window. See verify-login route for the matching guard.
+      const { getTotpStatus, createPendingLoginToken, isRateLimited } = await import('@/lib/auth/totp');
       const totpStatus = await getTotpStatus(user.id, 'user');
       if (totpStatus.enabled) {
+        if (await isRateLimited(user.id, 'user')) {
+          return NextResponse.json(
+            { success: false, error: 'Too many attempts. Please wait 15 minutes.' },
+            { status: 429 }
+          );
+        }
         const pendingToken = await createPendingLoginToken(user.id, 'user');
         return NextResponse.json({
           success: true,
