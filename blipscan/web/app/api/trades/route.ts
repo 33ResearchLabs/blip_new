@@ -26,16 +26,21 @@ export async function GET(request: NextRequest) {
         mint as mint_address,
         amount::text,
         0 as fee_bps,
-        state as status,
+        LOWER(state) as status,
         created_at,
         locked_at,
+        released_at,
         created_slot,
         locked_slot,
         released_slot,
         'v1' as protocol_version
       FROM trades WHERE protocol_version = 'v1'`;
       if (status) {
-        query += ' AND state = $1';
+        // V1 indexer writes `state` in title-case ("Funded"/"Locked"/etc.)
+        // but the filter chips send lowercase. Compare case-insensitively
+        // so the filter actually returns V1 trades instead of silently
+        // dropping them.
+        query += ' AND LOWER(state) = LOWER($1)';
         params.push(status);
       }
     } else if (version === 'v2') {
@@ -53,6 +58,7 @@ export async function GET(request: NextRequest) {
         status,
         created_at,
         locked_at,
+        released_at,
         created_slot,
         locked_slot,
         released_slot,
@@ -60,7 +66,7 @@ export async function GET(request: NextRequest) {
         lane_id
       FROM v2_trades`;
       if (status) {
-        query += ' WHERE status = $1';
+        query += ' WHERE LOWER(status) = LOWER($1)';
         params.push(status);
       }
     } else {
@@ -77,9 +83,10 @@ export async function GET(request: NextRequest) {
             mint as mint_address,
             amount::text,
             0 as fee_bps,
-            state as status,
+            LOWER(state) as status,
             created_at,
             locked_at,
+            released_at,
             created_slot::text,
             locked_slot::text,
             released_slot::text,
@@ -100,6 +107,7 @@ export async function GET(request: NextRequest) {
             status,
             created_at,
             locked_at,
+            released_at,
             created_slot::text,
             locked_slot::text,
             released_slot::text,
@@ -108,7 +116,9 @@ export async function GET(request: NextRequest) {
           FROM v2_trades
         ) combined`;
       if (status) {
-        query += ' WHERE status = $1';
+        // Inner subqueries already lowercase V1 state; V2 stores lowercase.
+        // Belt-and-braces LOWER() on $1 keeps this resilient to upstream case drift.
+        query += ' WHERE status = LOWER($1)';
         params.push(status);
       }
     }

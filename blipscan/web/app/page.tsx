@@ -138,28 +138,58 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
-  // Compute 24h hourly sparkline data (count + volume) from analyticsTrades
+  // Compute 24h hourly sparkline data from analyticsTrades. Each bucket
+  // is an hour bucketed by `created_at`. We carry the per-hour set of
+  // merchants and the per-hour released/refunded outcomes so the
+  // Merchants and Success Rate cards can show REAL sparklines rather
+  // than the synthetic decoration that used to sit there. Avg Settlement
+  // would require `released_at - created_at` per trade, and V1 trades
+  // don't store `released_at` — so that card intentionally renders no
+  // sparkline (better blank than fake).
   const sparkData = (() => {
-    const buckets = Array.from({ length: 24 }, () => ({ count: 0, volume: 0 }));
+    const buckets = Array.from({ length: 24 }, () => ({
+      count: 0,
+      volume: 0,
+      merchants: new Set<string>(),
+      released: 0,
+      refunded: 0,
+    }));
     const now = Date.now();
     for (const t of analyticsTrades) {
       const ts = new Date(t.created_at).getTime();
       const hoursAgo = Math.floor((now - ts) / 3_600_000);
-      if (hoursAgo >= 0 && hoursAgo < 24) {
-        const idx = 23 - hoursAgo;
-        buckets[idx].count += 1;
-        buckets[idx].volume += parseInt(t.amount || '0') / 1_000_000;
-      }
+      if (hoursAgo < 0 || hoursAgo >= 24) continue;
+      const idx = 23 - hoursAgo;
+      const b = buckets[idx];
+      b.count += 1;
+      b.volume += parseInt(t.amount || '0') / 1_000_000;
+      if (t.merchant_pubkey) b.merchants.add(t.merchant_pubkey);
+      const s = (t.status || '').toLowerCase();
+      if (s === 'released') b.released += 1;
+      else if (s === 'refunded') b.refunded += 1;
     }
     return buckets;
   })();
 
-  // 24h derived metrics
+  // 24h derived metrics. `last` is the latest activity timestamp across
+  // ALL recorded events on a trade — create / lock / release. Previously
+  // we used `analyticsTrades[0]?.created_at`, which always picked the
+  // most-recently-CREATED trade and ignored locks/releases on older
+  // trades, so the "Last activity" pill could lag reality by hours when
+  // the system was busy settling existing escrows.
   const last24h = (() => {
     const cutoff = Date.now() - 24 * 3_600_000;
     const recent = analyticsTrades.filter(t => new Date(t.created_at).getTime() >= cutoff);
     const volume = recent.reduce((s, t) => s + parseInt(t.amount || '0') / 1_000_000, 0);
-    const last = analyticsTrades[0]?.created_at;
+    let lastMs = 0;
+    for (const t of analyticsTrades) {
+      for (const ts of [t.created_at, t.locked_at, t.released_at]) {
+        if (!ts) continue;
+        const ms = new Date(ts).getTime();
+        if (ms > lastMs) lastMs = ms;
+      }
+    }
+    const last = lastMs > 0 ? new Date(lastMs).toISOString() : null;
     return { count: recent.length, volume, last };
   })();
 
@@ -484,9 +514,19 @@ export default function HomePage() {
             {[
               { icon: Activity, label: 'Total Escrows', value: stats.total_trades?.toLocaleString() ?? '0', sub: 'All time', spark: sparkData.map(b => b.count || 0), tone: 'sky' },
               { icon: DollarSign, label: 'Total Volume', value: formatVolume(stats.total_volume || '0'), sub: 'All time', spark: sparkData.map(b => b.volume || 0), tone: 'emerald' },
-              { icon: Users, label: 'Merchants', value: String(stats.active_merchants ?? 0), sub: 'Active', spark: sparkData.map((_, i) => i * 0 + (i % 4) + 2), tone: 'violet' },
-              { icon: Clock, label: 'Avg Settlement', value: (() => { const s = stats.avg_completion_time; if (!s || s <= 0) return '—'; if (s < 60) return `${Math.round(s)}s`; if (s < 3600) return `${Math.round(s / 60)}m`; return `${(s / 3600).toFixed(1)}h`; })(), sub: 'Mean time', spark: sparkData.map((_, i) => 5 + Math.sin(i / 2) * 2 + (i % 3)), tone: 'orange' },
-              { icon: CheckCircle, label: 'Success Rate', value: successRate > 0 ? `${successRate.toFixed(1)}%` : '—', sub: 'All escrows', spark: sparkData.map((_, i) => 80 + (i % 5) * 3), tone: 'teal' },
+              // Real hourly unique-merchant count over the last 24h —
+              // approximates "how many distinct merchants were active each hour".
+              { icon: Users, label: 'Merchants', value: String(stats.active_merchants ?? 0), sub: 'Active', spark: sparkData.map(b => b.merchants.size), tone: 'violet' },
+              // No sparkline — accurate per-hour avg-settlement requires
+              // `released_at` on every trade, which the V1 indexer doesn't
+              // populate. Showing a fake curve here would lie about the
+              // metric.
+              { icon: Clock, label: 'Avg Settlement', value: (() => { const s = stats.avg_completion_time; if (!s || s <= 0) return '—'; if (s < 60) return `${Math.round(s)}s`; if (s < 3600) return `${Math.round(s / 60)}m`; return `${(s / 3600).toFixed(1)}h`; })(), sub: 'Mean time', spark: [], tone: 'orange' },
+              // Real per-hour success rate: released / (released + refunded)
+              // within each created-at hour bucket. Returns 0 for buckets
+              // with no terminal outcomes — those render as flat baseline,
+              // not a misleading 80%+ synthetic plateau.
+              { icon: CheckCircle, label: 'Success Rate', value: successRate > 0 ? `${successRate.toFixed(1)}%` : '—', sub: 'All escrows', spark: sparkData.map(b => { const fin = b.released + b.refunded; return fin > 0 ? (b.released / fin) * 100 : 0; }), tone: 'teal' },
             ].map((s) => {
               const toneMap: Record<string, { icon: string; bg: string; stroke: string }> = {
                 sky:     { icon: 'text-sky-400',     bg: 'bg-sky-500/10',     stroke: '#38BDF8' },
