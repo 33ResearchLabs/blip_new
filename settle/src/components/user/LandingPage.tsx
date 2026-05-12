@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, type PanInfo } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { Zap, Loader2, Eye, EyeOff, Mail, ChevronLeft, User, Store, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { InstallPWAButton } from "@/components/InstallPWAButton";
@@ -31,7 +32,16 @@ export function LandingPage({
   handleUserLogin, handleUserRegister, isLoggingIn, loginError, setLoginError,
   skipWelcome = false,
 }: LandingPageProps) {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+
+  // Left-swipe → merchant login (Tinder-style horizontal pan).
+  // Threshold: 80px drag OR fast flick (velocity < -400).
+  const onSwipeEnd = (_: unknown, info: PanInfo) => {
+    if (info.offset.x < -80 || info.velocity.x < -400) {
+      router.push("/merchant/login?tab=signin");
+    }
+  };
   // Setter unused — navigation to the form happens via /login URL, not state toggle.
   const [showWelcome] = useState(!skipWelcome);
   // Track which fields the user has interacted with so we don't surface
@@ -236,11 +246,29 @@ export function LandingPage({
   }
 
   return (
-    <div className="w-full mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden h-dvh">
+    <motion.div
+      className="w-full mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden h-dvh touch-pan-y"
+      drag="x"
+      dragDirectionLock
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={{ left: 0.35, right: 0 }}
+      onPanEnd={onSwipeEnd}
+    >
       {/* Ambient background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] md:w-[700px] h-[300px] md:h-[500px] bg-warning/[0.05] rounded-full blur-[120px]" />
       </div>
+
+      {/* Swipe hint — only on first interaction-less render */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 z-20 text-[10px] font-mono tracking-[0.2em] text-text-tertiary/60 rotate-90 origin-right"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0.7, 0.7, 0] }}
+        transition={{ duration: 4, delay: 1.5, times: [0, 0.15, 0.85, 1] }}
+      >
+        ← SWIPE FOR MERCHANT
+      </motion.div>
 
       <div className="flex h-full flex-col items-center px-5 py-4 relative z-10">
         <div className="w-full max-w-[440px] flex-1 flex flex-col self-stretch mx-auto">
@@ -517,6 +545,6 @@ export function LandingPage({
 
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
