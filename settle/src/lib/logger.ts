@@ -40,7 +40,18 @@ function shouldLog(level: LogLevel): boolean {
 
 function formatEntry(entry: LogEntry): string {
   if (process.env.NODE_ENV === 'production') {
-    // JSON format for production (easier to parse)
+    // JSON format for production (easier to parse).
+    //
+    // Stack traces are intentionally stripped from the production console
+    // sink: they leak internal file paths, module names, and library
+    // versions to anyone with access to log aggregation. Sentry still
+    // receives the full stack via its own transport (sentry.server.config.ts),
+    // so on-call debuggability is unchanged — only the redundant, less
+    // access-controlled copy is removed.
+    if (entry.error?.stack) {
+      const { stack: _stack, ...errorWithoutStack } = entry.error;
+      return JSON.stringify({ ...entry, error: errorWithoutStack });
+    }
     return JSON.stringify(entry);
   }
 

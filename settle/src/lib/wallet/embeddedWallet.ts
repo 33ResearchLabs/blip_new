@@ -2,7 +2,11 @@
  * Embedded Wallet Crypto Service
  * Non-custodial keypair management with AES-GCM encryption
  * Keys never leave the browser — encrypted at rest in localStorage
- * Falls back to simple XOR encryption when crypto.subtle unavailable (non-HTTPS)
+ *
+ * Requires Web Crypto API (`crypto.subtle`), which is available on every
+ * HTTPS origin and on http://localhost. Any other context (plain-HTTP on
+ * a non-localhost host) is refused: we will not silently downgrade to a
+ * weaker cipher just to make the wallet "work" on an insecure transport.
  */
 
 import { Keypair } from '@solana/web3.js';
@@ -180,10 +184,25 @@ export function validatePasswordStrength(password: string): PasswordStrengthResu
   return { ok: true };
 }
 
-// Check if Web Crypto API is available (requires HTTPS or localhost)
+// Check if Web Crypto API is available (requires HTTPS or localhost).
+// All real wallet operations refuse to proceed without it — see
+// requireSubtleCrypto() below.
 const hasSubtleCrypto = typeof globalThis !== 'undefined'
   && typeof globalThis.crypto !== 'undefined'
   && typeof globalThis.crypto.subtle !== 'undefined';
+
+/** Thrown when a wallet crypto operation is attempted on an insecure
+ *  origin (plain-HTTP non-localhost). Surfaced to the user as a clear
+ *  "HTTPS required" message rather than a silent crypto downgrade. */
+function requireSubtleCrypto(): void {
+  if (!hasSubtleCrypto) {
+    throw new Error(
+      'Wallet crypto unavailable: this page must be served over HTTPS ' +
+      '(or localhost). Insecure-origin fallbacks have been removed to ' +
+      'prevent weakening the wallet encryption.'
+    );
+  }
+}
 
 export interface EncryptedWallet {
   encryptedKey: string; // base64
@@ -319,19 +338,14 @@ export async function decryptWallet(
     ? passwordWithHelper(password, unlockHelper ?? null)
     : password;
 
-  if (hasSubtleCrypto) {
-    const key = await deriveKey(effectiveSecret, salt, iterationsForVersion(encrypted.version));
-    const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as BufferSource },
-      key,
-      ciphertext as BufferSource
-    );
-    return Keypair.fromSecretKey(new Uint8Array(decrypted));
-  } else {
-    const keyBytes = await hashPasswordFallback(effectiveSecret, salt);
-    const decrypted = xorBytes(ciphertext, keyBytes);
-    return Keypair.fromSecretKey(decrypted);
-  }
+  requireSubtleCrypto();
+  const key = await deriveKey(effectiveSecret, salt, iterationsForVersion(encrypted.version));
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv as BufferSource },
+    key,
+    ciphertext as BufferSource
+  );
+  return Keypair.fromSecretKey(new Uint8Array(decrypted));
 }
 
 /** Re-encrypt a successfully-decrypted wallet at the CURRENT blob version.
@@ -463,19 +477,14 @@ export async function decryptMnemonic(
     ? passwordWithHelper(password, unlockHelper ?? null)
     : password;
 
-  if (hasSubtleCrypto) {
-    const key = await deriveKey(effectiveSecret, salt, iterationsForVersion(encrypted.version));
-    const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as BufferSource },
-      key,
-      ciphertext as BufferSource
-    );
-    return new TextDecoder().decode(new Uint8Array(decrypted));
-  } else {
-    const keyBytes = await hashPasswordFallback(effectiveSecret, salt);
-    const decrypted = xorBytes(ciphertext, keyBytes);
-    return new TextDecoder().decode(decrypted);
-  }
+  requireSubtleCrypto();
+  const key = await deriveKey(effectiveSecret, salt, iterationsForVersion(encrypted.version));
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv as BufferSource },
+    key,
+    ciphertext as BufferSource
+  );
+  return new TextDecoder().decode(new Uint8Array(decrypted));
 }
 
 // ---- Failed-unlock counter ----
@@ -608,20 +617,14 @@ async function encryptSecretKey(
   }
   const effectiveSecret = passwordWithHelper(password, unlockHelper);
 
-  let ciphertext: Uint8Array;
-
-  if (hasSubtleCrypto) {
-    const key = await deriveKey(effectiveSecret, salt, iterationsForVersion(CURRENT_BLOB_VERSION));
-    const encrypted = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: iv as BufferSource },
-      key,
-      secretKey as BufferSource
-    );
-    ciphertext = new Uint8Array(encrypted);
-  } else {
-    const keyBytes = await hashPasswordFallback(effectiveSecret, salt);
-    ciphertext = xorBytes(secretKey, keyBytes);
-  }
+  requireSubtleCrypto();
+  const key = await deriveKey(effectiveSecret, salt, iterationsForVersion(CURRENT_BLOB_VERSION));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv as BufferSource },
+    key,
+    secretKey as BufferSource
+  );
+  const ciphertext = new Uint8Array(encrypted);
 
   return {
     encryptedKey: btoa(String.fromCharCode(...ciphertext)),
@@ -632,31 +635,4 @@ async function encryptSecretKey(
   };
 }
 
-// ---- Fallback: simple XOR with SHA-256 key derivation (for non-HTTPS dev) ----
-
-async function hashPasswordFallback(password: string, salt: Uint8Array): Promise<Uint8Array> {
-  // Use SHA-256 via a simple iterative hash (no crypto.subtle needed)
-  const encoder = new TextEncoder();
-  const input = new Uint8Array([...encoder.encode(password), ...salt]);
-
-  // Simple hash: repeated XOR folding (NOT secure for production — dev only)
-  const hash = new Uint8Array(64); // 64 bytes to cover Solana secret key length
-  for (let i = 0; i < input.length; i++) {
-    hash[i % 64] ^= input[i];
-  }
-  // Multiple rounds of mixing
-  for (let round = 0; round < 1000; round++) {
-    for (let i = 0; i < 64; i++) {
-      hash[i] = (hash[i] ^ hash[(i + 1) % 64]) + (round & 0xff) & 0xff;
-    }
-  }
-  return hash;
-}
-
-function xorBytes(data: Uint8Array, key: Uint8Array): Uint8Array {
-  const result = new Uint8Array(data.length);
-  for (let i = 0; i < data.length; i++) {
-    result[i] = data[i] ^ key[i % key.length];
-  }
-  return result;
-}
+// Insecure-origin XOR fallback helpers were removed; see requireSubtleCrypto().
