@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { clearAuthStorageOnLogout } from '@/lib/auth/logoutCleanup';
 
 interface UseDashboardAuthParams {
   isMockMode: boolean;
@@ -338,6 +339,11 @@ export function useDashboardAuth({
       );
       keysToRemove.forEach(k => localStorage.removeItem(k));
     } catch { /* ignore */ }
+
+    // Centralized sweep of auth/identity keys + unlocked wallet sessions.
+    // Layered on top of the ephemeral-key clear above so this dashboard
+    // logout converges with every other logout site in the app.
+    clearAuthStorageOnLogout();
 
     // In-memory store: drop the access-token mirror and identity. The
     // durable copies live in the cookies (cleared above) and the DB.

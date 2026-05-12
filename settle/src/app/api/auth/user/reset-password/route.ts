@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
+import { revokeAllSessions } from '@/lib/auth/sessions';
 import crypto from 'crypto';
 
 // Must match the iteration count + format used by the rest of the user auth
@@ -99,6 +100,21 @@ export async function POST(request: NextRequest) {
     } catch (txError) {
       await query('ROLLBACK');
       throw txError;
+    }
+
+    // Revoke every active session for this user. A password reset is the
+    // canonical "I think my account is compromised" signal — letting an
+    // old refresh cookie (7-day lifetime) keep authenticating after the
+    // password is replaced would defeat the reset. Done OUTSIDE the
+    // transaction above because session-table writes are independent of
+    // the password update; if revocation fails the password is still
+    // changed (the request returns success and the user can log in with
+    // the new password — slightly worse than ideal but never worse than
+    // before this change).
+    try {
+      await revokeAllSessions(userId, 'user');
+    } catch (revokeError) {
+      console.error('[user reset-password] session revocation failed (password was changed)', revokeError);
     }
 
     return NextResponse.json({

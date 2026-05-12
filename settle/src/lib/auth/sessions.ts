@@ -185,6 +185,36 @@ export async function revokeAllSessions(entityId: string, entityType: string): P
 }
 
 /**
+ * Revoke every session for an entity EXCEPT the one currently making
+ * the request. Used by password-change so the user stays logged in on
+ * the device that just authenticated and chose the new password while
+ * every other device is forced to re-authenticate.
+ *
+ * `exceptSessionId` may be `null` / `undefined` for legacy (v1) tokens
+ * that don't carry a sessionId — in which case this behaves identically
+ * to revokeAllSessions (every session is revoked, including the current
+ * one, and the caller must re-log on this device). Acceptable trade-off
+ * because v1 tokens are being phased out.
+ */
+export async function revokeAllSessionsExcept(
+  entityId: string,
+  entityType: string,
+  exceptSessionId: string | null | undefined,
+): Promise<number> {
+  if (!exceptSessionId) return revokeAllSessions(entityId, entityType);
+  const result = await query(
+    `UPDATE sessions
+       SET is_revoked = true, revoked_at = NOW()
+     WHERE entity_id = $1 AND entity_type = $2 AND is_revoked = false AND id <> $3
+     RETURNING id`,
+    [entityId, entityType, exceptSessionId]
+  );
+  // Clear entire cache — many sessions for this entity are now invalid
+  invalidateAllSessionCaches();
+  return result.length;
+}
+
+/**
  * Get all active sessions for an entity (active devices)
  */
 export async function getActiveSessions(entityId: string, entityType: string): Promise<Session[]> {

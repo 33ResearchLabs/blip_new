@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
+import { revokeAllSessions } from '@/lib/auth/sessions';
 import crypto from 'crypto';
 
 // PBKDF2 config — must match merchant auth route
@@ -88,6 +89,19 @@ export async function POST(request: NextRequest) {
     } catch (txError) {
       await query('ROLLBACK');
       throw txError;
+    }
+
+    // Revoke every active session for this merchant. A password reset is
+    // the canonical "I think my account is compromised" signal — letting
+    // an old refresh cookie (7-day lifetime) keep authenticating after the
+    // password is replaced would defeat the reset. Done outside the
+    // transaction because session-table writes are independent; if
+    // revocation fails the password is still changed and the merchant
+    // can log in with the new password.
+    try {
+      await revokeAllSessions(merchantId, 'merchant');
+    } catch (revokeError) {
+      console.error('[merchant reset-password] session revocation failed (password was changed)', revokeError);
     }
 
     return NextResponse.json({

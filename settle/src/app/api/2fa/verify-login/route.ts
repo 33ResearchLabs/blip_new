@@ -36,7 +36,14 @@ export async function POST(request: NextRequest) {
       return errorResponse('Provide a 6-digit code or a backup recovery code', 400);
     }
 
-    // Consume the pending login token (one-time use)
+    // Consume the pending login token (one-time use).
+    //
+    // We deliberately mark the token consumed BEFORE the rate-limit check
+    // would normally run — but if the actor turns out to be rate-limited,
+    // we'd be burning a perfectly good token on a guaranteed-fail attempt
+    // and forcing the legitimate user to re-enter their password just to
+    // get another. To avoid that we run a non-binding pre-peek (no token
+    // consumption) immediately after we have the actor identity.
     const pending = await consumePendingLoginToken(pendingToken);
     if (!pending) {
       return errorResponse('Invalid or expired login token. Please log in again.', 401);
@@ -44,7 +51,10 @@ export async function POST(request: NextRequest) {
 
     const { actorId, actorType } = pending;
 
-    // Rate limit
+    // Per-actor rate limit (5 failed attempts / 15 min window). If we're
+    // already over budget, refuse without verifying the code so an
+    // attacker who stockpiled tokens during the cooldown can't drain them
+    // hoping to land a lucky code as the window slides forward.
     if (await isRateLimited(actorId, actorType)) {
       return errorResponse('Too many attempts. Please wait 15 minutes.', 429);
     }

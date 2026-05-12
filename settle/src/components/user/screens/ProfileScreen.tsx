@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
 import { AppLockSettingsCard } from "@/components/app-lock/AppLockSettingsCard";
@@ -629,8 +630,10 @@ export const ProfileScreen = ({
         <motion.button whileTap={{ scale: 0.97 }}
           onClick={() => {
             console.log('[User] Signing out...');
-            localStorage.removeItem('blip_user');
-            localStorage.removeItem('blip_wallet');
+            // Sweep all auth/identity state + any unlocked wallet session
+            // material. Encrypted blobs stay in place so the same user can
+            // re-unlock on next login.
+            clearAuthStorageOnLogout();
             isAuthenticatingRef.current = false;
             lastAuthenticatedWalletRef.current = null;
             authAttemptedForWalletRef.current = null;
