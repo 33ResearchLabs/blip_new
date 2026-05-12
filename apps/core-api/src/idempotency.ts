@@ -71,16 +71,33 @@ export function getIdempotencyKey(request: FastifyRequest): string | null {
 }
 
 /**
- * Extract actor_id from the request — checks body, query, and headers.
- * Returns 'anonymous' as fallback (still scoped per-action).
+ * Extract actor_id from the request for idempotency scoping.
+ *
+ * Source order is deliberate: the HMAC-verified `x-actor-id` header
+ * (validated by the auth hook in hooks/auth.ts) is the only channel
+ * an external caller cannot forge independently of the body. Body and
+ * query fallbacks remain for callers that pre-date the signed-header
+ * flow, but they are NEVER preferred over a present header.
+ *
+ * Why this matters: prior versions used `body.actor_id` first, which
+ * meant a caller could send a body whose actor_id pointed at another
+ * principal and either (a) read another principal's cached idempotent
+ * response or (b) cause a victim's later retry to be falsely deduped
+ * against the attacker's earlier execution.
+ *
+ * Returns 'anonymous' when no actor identity is supplied at all (still
+ * scoped per-action so different actions cannot collide).
  */
 function extractActorId(request: FastifyRequest): string {
+  const headerActor = request.headers['x-actor-id'];
+  if (typeof headerActor === 'string' && headerActor.length > 0) {
+    return headerActor;
+  }
   const body = request.body as Record<string, unknown> | undefined;
   const query = request.query as Record<string, unknown> | undefined;
   return (
     (body?.actor_id as string) ||
     (query?.actor_id as string) ||
-    (request.headers['x-actor-id'] as string) ||
     'anonymous'
   );
 }

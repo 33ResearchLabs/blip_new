@@ -406,10 +406,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(idempResult.data, { status: idempResult.statusCode });
   } catch (error) {
     const err = error as Error;
+    // Stack is intentionally omitted in production — it leaks internal
+    // paths/module names. Sentry still receives the full trace via
+    // logger.api.error → server config.
     console.error('[API] POST /api/orders error:', {
       name: err.name,
       message: err.message,
-      stack: err.stack,
+      ...(process.env.NODE_ENV !== 'production' ? { stack: err.stack } : {}),
     });
     logger.api.error('POST', '/api/orders', err);
 

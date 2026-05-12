@@ -6,9 +6,14 @@
  * The plugin (under @/plugins/issue-reporter) is host-agnostic. This
  * file is the only place that wires Blip-specific concerns into it:
  *   - merchant store for the `authed` gate (logged-in OR has merchant id)
- *   - localStorage tokens for `getAuthToken`
  *   - /api/issues/create as the endpoint
  *   - branded footer copy
+ *
+ * Auth: the `/api/issues/create` route reads the access token from the
+ * httpOnly `blip_access_token` cookie (see lib/middleware/auth.ts), which
+ * is automatically attached on same-origin fetches. We deliberately do
+ * NOT read tokens from localStorage here — that path is JS-readable and
+ * would re-introduce an XSS-exfiltration vector.
  *
  * Consumers should import <IssueReporter /> from THIS file, not from
  * the plugin directly. That way every Blip surface gets the same
@@ -52,7 +57,6 @@ export function IssueReporter(props: AdapterProps) {
     () => ({
       endpoint: '/api/issues/create',
       authed: isLoggedIn || !!merchantId,
-      getAuthToken: getBlipAuthToken,
       footerText: 'Your feedback helps us improve Blip.money',
     }),
     [isLoggedIn, merchantId],
@@ -63,22 +67,4 @@ export function IssueReporter(props: AdapterProps) {
       <PluginIssueReporter {...props} />
     </IssueReporterProvider>
   );
-}
-
-/**
- * Reads the Blip session/access token from the same localStorage
- * keys the rest of the app uses. Kept Blip-specific so the plugin
- * stays portable.
- */
-function getBlipAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return (
-      window.localStorage.getItem('blip_access_token') ||
-      window.localStorage.getItem('blip_merchant_token') ||
-      null
-    );
-  } catch {
-    return null;
-  }
 }
