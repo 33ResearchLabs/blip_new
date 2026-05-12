@@ -428,7 +428,10 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
           <div className="p-3 rounded-2xl glass">
             <p className="text-xs text-muted-foreground mb-1">Amount</p>
             <p className="text-lg font-semibold text-foreground">${formatAmount(trade.amount)}</p>
-            <p className="text-[10px] text-muted-foreground font-mono">{parseInt(trade.amount).toLocaleString()} lamports</p>
+            {/* "lamports" was wrong here — that's the SOL native unit.
+                The escrow holds an SPL token (USDT). The raw value is
+                the token's base-unit count, not lamports. */}
+            <p className="text-[10px] text-muted-foreground font-mono">{parseInt(trade.amount).toLocaleString()} base units</p>
           </div>
           <div className="p-3 rounded-2xl glass">
             <p className="text-xs text-muted-foreground mb-1">Fee</p>
