@@ -172,9 +172,6 @@ export default function MerchantSettingsPage({
   const [displayName, setDisplayName] = useState<string>(
     (merchantInfo as any)?.display_name || "",
   );
-  const [businessName, setBusinessName] = useState<string>(
-    (merchantInfo as any)?.business_name || "",
-  );
   const [bio, setBio] = useState<string>((merchantInfo as any)?.bio || "");
   const [phone, setPhone] = useState<string>(
     (merchantInfo as any)?.phone || "",
@@ -356,7 +353,6 @@ export default function MerchantSettingsPage({
         if (data.success) {
           setMerchant(data.data);
           setDisplayName(data.data.display_name || "");
-          setBusinessName(data.data.business_name || "");
           setBio(data.data.bio || "");
           setPhone(data.data.phone || "");
           setSelectedAvatar(data.data.avatar_url || null);
@@ -414,10 +410,14 @@ export default function MerchantSettingsPage({
 
     try {
       const updates: any = {};
-      if (displayName !== (merchant?.display_name || ""))
+      if (displayName !== (merchant?.display_name || "")) {
         updates.display_name = displayName;
-      if (businessName !== (merchant?.business_name || ""))
-        updates.business_name = businessName;
+        // Keep business_name in lockstep with display_name. The settings UI
+        // no longer exposes a separate Business Name input — both columns
+        // represent "the merchant's name" and drift between them was the
+        // root cause of confusing UIs ("why are these two the same?").
+        updates.business_name = displayName;
+      }
       if (bio !== (merchant?.bio || "")) updates.bio = bio;
       if (phone !== (merchant?.phone || "")) updates.phone = phone;
       if (selectedAvatar && selectedAvatar !== merchant?.avatar_url)
@@ -720,12 +720,12 @@ export default function MerchantSettingsPage({
         onBack={onClose ?? (() => router.push("/merchant"))}
       />
 
-      {/* Full-bleed layout. Previous wrapper used `max-w-5xl mx-auto` which
-          capped the page at ~1024px and pushed unused space at both edges on
-          a desktop monitor. The settings UI is sidebar + content, both of
-          which look better as wide panes — sidebar gets a fixed 240px column,
-          content gets the rest with a comfortable 32px gutter. */}
-      <div className="w-full flex flex-col md:flex-row min-h-[calc(100vh-50px)]">
+      {/* Constrained layout — capped at 1080px and centered to match the
+          wallet "main" view's max-w-[1080px]. Prior version was full-bleed
+          which felt sparse next to the wallet page sitting at a tighter
+          width. Sidebar still gets its fixed 240px column; the rest goes
+          to content. */}
+      <div className="w-full max-w-[1080px] mx-auto flex flex-col md:flex-row min-h-[calc(100vh-50px)]">
         {/* Sidebar Tabs — sticky on desktop so it stays visible while the
             content area scrolls. Anchored at top-[50px] (the height of the
             MerchantNavbar) and capped at the viewport so very long sidebars
@@ -895,7 +895,14 @@ export default function MerchantSettingsPage({
                 </div>
               </div>
 
-              {/* Display Name & Business */}
+              {/* Display Name + Bio.
+                  Business Name field was removed because at register
+                  business_name and display_name are populated with the same
+                  Full Name input, and the merchant edits "their name" once —
+                  showing two inputs for the same concept was confusing.
+                  business_name is kept in sync server-side on save (see
+                  handleSaveProfile) so any downstream queries that read
+                  business_name stay current. */}
               <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-4">
                 <div>
                   <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-2 block">
@@ -907,20 +914,6 @@ export default function MerchantSettingsPage({
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Your display name"
                     maxLength={50}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-2 block">
-                    Business Name
-                  </label>
-                  <input
-                    type="text"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="Your business name (optional)"
-                    maxLength={100}
                     className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
                 </div>
@@ -1204,7 +1197,7 @@ export default function MerchantSettingsPage({
                 </div>
 
                 {/* Wallet */}
-                <div className="flex items-center gap-4 py-3">
+                <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
                   <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
                     <Wallet className="w-4 h-4 text-white/60" />
                   </div>
@@ -1229,6 +1222,26 @@ export default function MerchantSettingsPage({
                   ) : (
                     <span className="w-7" />
                   )}
+                </div>
+
+                {/* Joined — surfaces created_at right here in the Account
+                    Information section. Previously this lived as a
+                    separate tile in the Status grid below, which made it
+                    easy to miss. Single source of truth now. */}
+                <div className="flex items-center gap-4 py-3">
+                  <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                    <Calendar className="w-4 h-4 text-white/60" />
+                  </div>
+                  <p className="flex-1 text-[13px] text-white/60">Joined</p>
+                  <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">
+                    {merchant?.created_at
+                      ? new Date(merchant.created_at).toLocaleDateString(
+                          undefined,
+                          { month: "short", day: "numeric", year: "numeric" },
+                        )
+                      : "—"}
+                  </p>
+                  <span className="w-7" />
                 </div>
               </div>
 
@@ -1310,25 +1323,8 @@ export default function MerchantSettingsPage({
                     )}
                   </div>
 
-                  {/* Joined */}
-                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                      <Calendar className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider mb-0.5">
-                        Joined
-                      </p>
-                      <p className="text-lg font-bold text-white leading-none">
-                        {merchant?.created_at
-                          ? new Date(merchant.created_at).toLocaleDateString(
-                              undefined,
-                              { month: "short", day: "numeric", year: "numeric" },
-                            )
-                          : "—"}
-                      </p>
-                    </div>
-                  </div>
+                  {/* Joined tile removed — moved up to Account
+                      Information section so it's not duplicated. */}
                 </div>
               </div>
             </div>
