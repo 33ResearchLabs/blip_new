@@ -211,7 +211,7 @@ export function LoginScreen({
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <InstallPWAButton />
+                  <InstallPWAButton app="merchant" />
                   <Link
                     href="/"
                     className="text-[11px] font-semibold text-white/50 hover:text-white transition-colors"
@@ -828,7 +828,11 @@ function FieldEmail({
         <Label icon={<MailIcon />}>{label}</Label>
       </div>
       <input
-        type="email"
+        type="text"
+        autoComplete="username"
+        inputMode="email"
+        autoCapitalize="none"
+        autoCorrect="off"
         value={value}
         maxLength={254}
         onChange={(e) => onChange(e.target.value)}

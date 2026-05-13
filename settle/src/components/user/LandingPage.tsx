@@ -336,7 +336,7 @@ export function LandingPage({
           transition={{ delay: 0.6, duration: 0.6 }}
           className="relative z-10 mt-8 sm:mt-12"
         >
-          <InstallPWAButton />
+          <InstallPWAButton app="user" />
         </motion.div>
 
         <motion.p
@@ -392,7 +392,7 @@ export function LandingPage({
               <span className="hidden sm:inline">Home</span>
             </Link>
             <div className="flex items-center gap-2">
-              <InstallPWAButton />
+              <InstallPWAButton app="user" />
               {!hideMerchantLinks && (
                 <Link
                   href="/merchant/login"
