@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, X, Share2, Plus, MoreVertical, ExternalLink } from "lucide-react";
+import { Download, X, Share2, Plus, MoreVertical } from "lucide-react";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -32,7 +32,6 @@ export function InstallPWAButton({ app = "user" }: Props) {
   const [platform, setPlatform] = useState<"ios" | "android" | "desktop">("desktop");
 
   const appName = app === "merchant" ? "Blip Money Merchant" : "Blip Money";
-  const correctPath = app === "merchant" ? "/merchant/login" : "/login";
 
   useEffect(() => {
     const standalone =
@@ -74,27 +73,7 @@ export function InstallPWAButton({ app = "user" }: Props) {
 
   if (installed) return null;
 
-  // Which manifest is the current page linking? Used in the sheet so the
-  // user can confirm they're about to install the right app before tapping
-  // through the browser's install action.
-  const linkedManifest =
-    typeof document !== "undefined"
-      ? (document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null)?.href || null
-      : null;
-  const linkedAppKind: "user" | "merchant" | null = linkedManifest?.includes("merchant")
-    ? "merchant"
-    : linkedManifest
-      ? "user"
-      : null;
-  const onWrongPage = linkedAppKind && linkedAppKind !== app;
-
   const onTap = async () => {
-    if (onWrongPage) {
-      // Native prompt is bound to the linked manifest — wrong app for this
-      // button. Show the sheet, which guides the user to the right page.
-      setShowSheet(true);
-      return;
-    }
     if (deferred) {
       try {
         await deferred.prompt();
@@ -154,73 +133,56 @@ export function InstallPWAButton({ app = "user" }: Props) {
                   Add to your home screen — opens in one tap.
                 </p>
 
-                {onWrongPage && (
-                  <div className="mt-4 rounded-2xl p-3 bg-white/[0.06] border border-white/10">
-                    <p className="text-[12px] text-white/75">
-                      To install <b>{appName}</b>, open its page first:
-                    </p>
-                    <a
-                      href={correctPath}
-                      className="mt-2 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white text-[#0B0F14] text-[12px] font-bold"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Open {appName}
-                    </a>
-                  </div>
-                )}
-
-                {!onWrongPage && (
-                  <div className="mt-5 space-y-3">
-                    {platform === "ios" && (
-                      <>
-                        <Step
-                          n={1}
-                          icon={<Share2 className="w-4 h-4" />}
-                          title="Tap the Share button"
-                          sub="Square with arrow at the bottom of Safari."
-                        />
-                        <Step
-                          n={2}
-                          icon={<Plus className="w-4 h-4" />}
-                          title='Tap "Add to Home Screen"'
-                          sub={`Confirm "${appName}", then tap Add.`}
-                        />
-                      </>
-                    )}
-                    {platform === "android" && (
-                      <>
-                        <Step
-                          n={1}
-                          icon={<MoreVertical className="w-4 h-4" />}
-                          title="Open the browser menu (⋮)"
-                          sub="Top-right corner of Chrome / Firefox / Edge."
-                        />
-                        <Step
-                          n={2}
-                          icon={<Download className="w-4 h-4" />}
-                          title='Tap "Install app" or "Add to Home screen"'
-                          sub={`The "${appName}" icon will appear on your home screen.`}
-                        />
-                      </>
-                    )}
-                    {platform === "desktop" && (
-                      <>
-                        <Step
-                          n={1}
-                          icon={<Download className="w-4 h-4" />}
-                          title="Look for the install icon in the address bar"
-                          sub="Chrome / Edge: ⊕ icon. Click and confirm."
-                        />
-                        <Step
-                          n={2}
-                          icon={<MoreVertical className="w-4 h-4" />}
-                          title={`Or open menu → "Install ${appName}"`}
-                          sub="Three-dot menu, top-right corner."
-                        />
-                      </>
-                    )}
-                  </div>
-                )}
+                <div className="mt-5 space-y-3">
+                  {platform === "ios" && (
+                    <>
+                      <Step
+                        n={1}
+                        icon={<Share2 className="w-4 h-4" />}
+                        title="Tap the Share button"
+                        sub="Square with arrow at the bottom of Safari."
+                      />
+                      <Step
+                        n={2}
+                        icon={<Plus className="w-4 h-4" />}
+                        title='Tap "Add to Home Screen"'
+                        sub={`Confirm "${appName}", then tap Add.`}
+                      />
+                    </>
+                  )}
+                  {platform === "android" && (
+                    <>
+                      <Step
+                        n={1}
+                        icon={<MoreVertical className="w-4 h-4" />}
+                        title="Open the browser menu (⋮)"
+                        sub="Top-right corner of Chrome / Firefox / Edge."
+                      />
+                      <Step
+                        n={2}
+                        icon={<Download className="w-4 h-4" />}
+                        title='Tap "Install app" or "Add to Home screen"'
+                        sub={`The "${appName}" icon will appear on your home screen.`}
+                      />
+                    </>
+                  )}
+                  {platform === "desktop" && (
+                    <>
+                      <Step
+                        n={1}
+                        icon={<Download className="w-4 h-4" />}
+                        title="Look for the install icon in the address bar"
+                        sub="Chrome / Edge: ⊕ icon. Click and confirm."
+                      />
+                      <Step
+                        n={2}
+                        icon={<MoreVertical className="w-4 h-4" />}
+                        title={`Or open menu → "Install ${appName}"`}
+                        sub="Three-dot menu, top-right corner."
+                      />
+                    </>
+                  )}
+                </div>
 
                 <button
                   onClick={() => setShowSheet(false)}
