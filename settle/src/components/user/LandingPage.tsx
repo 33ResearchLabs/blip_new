@@ -61,6 +61,48 @@ export function LandingPage({
   const hideMerchantLinks = pwa.standalone && pwa.app === "user";
   const [showPassword, setShowPassword] = useState(false);
 
+  // ── Remember me ────────────────────────────────────────────────────────
+  // Persists the entered username/email locally so users don't have to
+  // retype it on every visit. Mirrors the merchant-side pattern. Default
+  // is unchecked for SSR-stable markup; the saved preference + value
+  // hydrate in the effect below.
+  const [rememberMe, setRememberMe] = useState(false);
+  useEffect(() => {
+    try {
+      const flag = window.localStorage.getItem("blip:user:rememberMe") === "true";
+      if (!flag) return;
+      setRememberMe(true);
+      const saved = window.localStorage.getItem("blip:user:rememberedUsername") || "";
+      if (saved && !loginForm.username) {
+        setLoginForm({ ...loginForm, username: saved });
+      }
+    } catch {
+      // localStorage unavailable; ignore.
+    }
+    // Run once on mount; we intentionally don't react to subsequent
+    // username edits so we don't keep re-applying the saved value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const toggleRememberMe = (checked: boolean) => {
+    setRememberMe(checked);
+    try {
+      if (checked) {
+        window.localStorage.setItem("blip:user:rememberMe", "true");
+        if (loginForm.username) {
+          window.localStorage.setItem(
+            "blip:user:rememberedUsername",
+            loginForm.username.trim(),
+          );
+        }
+      } else {
+        window.localStorage.removeItem("blip:user:rememberMe");
+        window.localStorage.removeItem("blip:user:rememberedUsername");
+      }
+    } catch {
+      // Ignore storage failures; in-memory state still updates.
+    }
+  };
+
   // Left-swipe → merchant login (Tinder-style horizontal pan). No-op inside
   // the User PWA — merchant routes are blocked there.
   const onSwipeEnd = (_: unknown, info: PanInfo) => {
@@ -74,7 +116,20 @@ export function LandingPage({
   // Track which fields the user has interacted with so we don't surface
   // "required" errors before they've even started typing.
   const [touched, setTouched] = useState<{ username?: boolean; email?: boolean; password?: boolean }>({});
-  const submit = () => authMode === 'login' ? handleUserLogin() : handleUserRegister();
+  const submit = () => {
+    // On login submission, refresh the remembered username so future
+    // visits prefill the most recently used handle. No-op when the
+    // checkbox is off (any previous value was already cleared on toggle).
+    if (authMode === 'login' && rememberMe && loginForm.username) {
+      try {
+        window.localStorage.setItem(
+          'blip:user:rememberedUsername',
+          loginForm.username.trim(),
+        );
+      } catch { /* ignore */ }
+    }
+    return authMode === 'login' ? handleUserLogin() : handleUserRegister();
+  };
 
   // Per-field validity — only computed for register so login stays simple
   // (login just needs a non-empty username + password and trusts the server).
@@ -700,6 +755,31 @@ export function LandingPage({
                 <p className="mt-1.5 text-[11px] text-error">{passwordError}</p>
               )}
             </div>
+
+            {/* Remember me — login tab only. Pre-fills the username on
+                future visits to this device. */}
+            {authMode === 'login' && (
+              <label className="flex items-center gap-2 cursor-pointer select-none -mt-1">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => toggleRememberMe(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <span
+                  className={`w-4 h-4 rounded-md inline-flex items-center justify-center border transition-colors ${
+                    rememberMe
+                      ? 'bg-accent border-accent'
+                      : 'border-border-medium bg-surface-card'
+                  }`}
+                >
+                  {rememberMe && <Check className="w-3 h-3 text-accent-text" strokeWidth={3} />}
+                </span>
+                <span className="text-[12px] font-medium text-text-secondary">
+                  Remember me
+                </span>
+              </label>
+            )}
 
             <motion.button
               whileTap={{ scale: 0.98 }}
