@@ -31,6 +31,7 @@ import {
   Trophy,
   BookOpen,
   AtSign,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -184,6 +185,103 @@ export default function MerchantSettingsPage({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState("");
+
+  // First-time username editor (Account tab). Visible only when the
+  // merchant doesn't yet have a username — once set it falls back to
+  // the read-only display. Uses PATCH /api/merchant/username (token-
+  // auth, no wallet signature required) with the same live-availability
+  // check the onboarding modal had.
+  const [usernameInput, setUsernameInput] = useState("");
+  const [usernameAvailability, setUsernameAvailability] = useState<
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "available" }
+    | { kind: "unavailable"; reason: string }
+  >({ kind: "idle" });
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const trimmed = usernameInput.trim();
+    if (trimmed.length === 0) {
+      setUsernameAvailability({ kind: "idle" });
+      return;
+    }
+    setUsernameAvailability({ kind: "checking" });
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetchWithAuth(
+          `/api/merchant/username?check=${encodeURIComponent(trimmed)}`,
+        );
+        if (cancelled) return;
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.success) {
+          setUsernameAvailability({
+            kind: "unavailable",
+            reason: json?.error || "Could not verify",
+          });
+          return;
+        }
+        if (json.data?.available) {
+          setUsernameAvailability({ kind: "available" });
+        } else {
+          setUsernameAvailability({
+            kind: "unavailable",
+            reason: json.data?.reason || "Username already taken",
+          });
+        }
+      } catch {
+        if (!cancelled)
+          setUsernameAvailability({
+            kind: "unavailable",
+            reason: "Network error",
+          });
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [usernameInput]);
+
+  const saveUsername = useCallback(async () => {
+    const trimmed = usernameInput.trim();
+    if (
+      usernameSaving ||
+      usernameAvailability.kind !== "available" ||
+      trimmed.length === 0
+    )
+      return;
+    setUsernameError(null);
+    setUsernameSaving(true);
+    try {
+      const res = await fetchWithAuth("/api/merchant/username", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: trimmed }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setUsernameError(
+          json?.error || json?.errors?.[0] || "Failed to save username",
+        );
+        return;
+      }
+      // Update both the local row state and the in-memory store so the
+      // dashboard reflects the new username without a refresh.
+      setMerchant((prev: any) => (prev ? { ...prev, username: trimmed } : prev));
+      setMerchantInfo((prev: any) =>
+        prev ? { ...prev, username: trimmed } : prev,
+      );
+      setUsernameInput("");
+      setUsernameAvailability({ kind: "idle" });
+    } catch {
+      setUsernameError("Network error — try again.");
+    } finally {
+      setUsernameSaving(false);
+    }
+  }, [usernameInput, usernameAvailability, usernameSaving, setMerchantInfo]);
 
   // Password change
   const [currentPassword, setCurrentPassword] = useState("");
@@ -934,18 +1032,23 @@ export default function MerchantSettingsPage({
                   </button>
                 </div>
 
-                {/* Username — read-only. The merchant API has no PATCH for
-                    username (set at signup, immutable for trade history
-                    integrity). No edit affordance for the same reason. */}
-                <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
-                  <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                    <AtSign className="w-4 h-4 text-white/60" />
-                  </div>
-                  <p className="flex-1 text-[13px] text-white/60">Username</p>
-                  <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">
-                    {merchant?.username || "—"}
-                  </p>
-                  {merchant?.username ? (
+                {/* Username — editable on first-set, read-only afterwards.
+                    PATCH /api/merchant/username writes the new value AND
+                    sets merchants.username_customized_at so the onboarding
+                    checklist's Profile Setup step ticks complete on the
+                    next status refresh. Once set, the row collapses back
+                    to the read-only display (we keep the historical
+                    "set once" UX — username changes after that are a
+                    support / wallet-signature flow). */}
+                {merchant?.username ? (
+                  <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
+                    <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                      <AtSign className="w-4 h-4 text-white/60" />
+                    </div>
+                    <p className="flex-1 text-[13px] text-white/60">Username</p>
+                    <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">
+                      {merchant.username}
+                    </p>
                     <button
                       aria-label="Copy username"
                       onClick={() =>
@@ -959,10 +1062,87 @@ export default function MerchantSettingsPage({
                         <Copy className="w-3.5 h-3.5" />
                       )}
                     </button>
-                  ) : (
-                    <span className="w-7" />
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="py-3 border-b border-white/[0.04]">
+                    <div className="flex items-center gap-4">
+                      <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                        <AtSign className="w-4 h-4 text-white/60" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] text-white/60 mb-1.5">
+                          Username
+                        </p>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={usernameInput}
+                            onChange={(e) => setUsernameInput(e.target.value)}
+                            placeholder="pick a username"
+                            maxLength={20}
+                            className={`w-full bg-black/40 border rounded-lg px-3 py-2 pr-9 text-[13px] text-white placeholder-white/30 focus:outline-none transition-colors ${
+                              usernameAvailability.kind === "available"
+                                ? "border-emerald-500/60"
+                                : usernameAvailability.kind === "unavailable"
+                                ? "border-red-500/60"
+                                : "border-white/10 focus:border-white/30"
+                            }`}
+                          />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                            {usernameAvailability.kind === "checking" && (
+                              <Loader2 className="w-3.5 h-3.5 text-white/40 animate-spin" />
+                            )}
+                            {usernameAvailability.kind === "available" && (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            )}
+                            {usernameAvailability.kind === "unavailable" && (
+                              <X className="w-3.5 h-3.5 text-red-400" />
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 mt-1.5 min-h-[16px]">
+                          <p
+                            className={`text-[11px] ${
+                              usernameAvailability.kind === "available"
+                                ? "text-emerald-400"
+                                : usernameAvailability.kind === "unavailable"
+                                ? "text-red-400"
+                                : "text-white/40"
+                            }`}
+                          >
+                            {usernameAvailability.kind === "available" &&
+                              "Available"}
+                            {usernameAvailability.kind === "unavailable" &&
+                              usernameAvailability.reason}
+                            {usernameAvailability.kind === "idle" &&
+                              "Letters, numbers and underscores. 3–20 chars."}
+                            {usernameAvailability.kind === "checking" &&
+                              "Checking…"}
+                          </p>
+                          {usernameError && (
+                            <p className="text-[11px] text-red-400">
+                              {usernameError}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void saveUsername()}
+                        disabled={
+                          usernameSaving ||
+                          usernameAvailability.kind !== "available"
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold rounded-lg bg-white text-black disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                      >
+                        {usernameSaving && (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        )}
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Email — also read-only via this UI. Email change requires
                     a verification round-trip that doesn't exist server-side
