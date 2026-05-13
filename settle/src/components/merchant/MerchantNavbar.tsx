@@ -23,6 +23,7 @@ import {
 import { openIssueReporter } from "@/plugins/issue-reporter/IssueReporter";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
+import { OnboardingSetupChip } from "@/components/merchant/OnboardingSetupChip";
 
 const CORRIDOR_OPTIONS = [
   { key: "USDT_AED", label: "🇦🇪 USDT / AED" },
@@ -259,6 +260,11 @@ export function MerchantNavbar({
                 <div className="w-px h-6 bg-foreground/[0.06] mx-0.5" />
               )}
 
+              {/* Onboarding-incomplete chip — feature-flagged glanceable
+                  reminder. Self-hides once completed_at fires. Clicking
+                  reopens the OnboardingOverlay via resume(). */}
+              <OnboardingSetupChip />
+
               {/* Report Issue — icon-only trigger that opens the same modal
                   as the floating bug button. Always visible in the navbar
                   so merchants always have a one-click path to file a bug
@@ -402,6 +408,10 @@ export function MerchantNavbar({
                   }))}
                 />
               )} */}
+              {/* Onboarding-incomplete chip — compact variant for the
+                  narrower mobile navbar. Sits left of the bell so the
+                  reminder is in the same visual zone as notifications. */}
+              <OnboardingSetupChip compact />
               {onOpenNotifications && (
                 <button
                   onClick={onOpenNotifications}
