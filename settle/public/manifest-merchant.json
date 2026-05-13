@@ -3,7 +3,7 @@
   "name": "Blip Money Merchant",
   "short_name": "Blip Merchant",
   "description": "Run a P2P desk on Blip Money",
-  "start_url": "/merchant/login",
+  "start_url": "/merchant/login?pwa=merchant",
   "scope": "/merchant",
   "display": "standalone",
   "background_color": "#000000",

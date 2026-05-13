@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { MerchantErrorBoundary } from "./error-boundary";
 import { IssueReporter } from "@/components/IssueReporter";
 import { MerchantPresenceHeartbeat } from "@/components/merchant/MerchantPresenceHeartbeat";
+import { PwaAppGuard } from "@/components/PwaAppGuard";
 
 export const metadata: Metadata = {
   title: "Blip Money Merchant",
@@ -47,6 +48,9 @@ export default function MerchantLayout({
           heartbeats, so a merchant sitting on a sub-page looked
           permanently offline in the admin Compliance table. */}
       <MerchantPresenceHeartbeat />
+      {/* Block the User PWA from accessing /merchant routes. No-ops in
+          regular browsers and in the Merchant PWA. */}
+      <PwaAppGuard expected="merchant" />
       {children}
       {/* Floating trigger hidden — the navbar bug icon (MerchantNavbar)
           owns the entry point on merchant pages, so the floating amber
