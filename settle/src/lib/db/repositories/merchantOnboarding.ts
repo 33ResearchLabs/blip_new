@@ -1,12 +1,14 @@
 /**
  * Merchant progressive onboarding state.
  *
- * Backs the 5-step setup checklist:
- *   1. username customized (merchants.username_customized_at IS NOT NULL)
- *   2. wallet connected    (merchants.wallet_address present)
- *   3. payment method added (merchant_payment_methods row exists)
- *   4. wallet funded       (merchants.balance > 0)
- *   5. first trade         (any non-cancelled order participated in)
+ * Backs the 5-step setup checklist. Only the first three steps are
+ * REQUIRED for completed_at to fire — the last two are visible-but-
+ * optional informational rows:
+ *   1. username customized (merchants.username_customized_at IS NOT NULL)  [required]
+ *   2. wallet connected    (merchants.wallet_address present)              [required]
+ *   3. payment method added (merchant_payment_methods row exists)          [required]
+ *   4. wallet funded       (merchants.balance > 0)                         [optional — BUY-trade-time guard]
+ *   5. first trade         (any non-cancelled order participated in)       [optional — milestone, prevents deadlock]
  *
  * The row is the source of truth for WHEN a step was first completed
  * (timestamps are stable once set). Step completion booleans are derived
@@ -154,19 +156,31 @@ export async function getOnboardingStatus(merchantId: string): Promise<Onboardin
     if (updatedRows.length > 0) updated = updatedRows[0];
   }
 
-  // Compute nextStep + completion. Step is "done" if its timestamp is set.
-  const doneFlags = [
+  // Compute nextStep + completion.
+  //
+  // ONLY the first three steps are required for completed_at:
+  //   1. username, 2. wallet, 3. payment method
+  //
+  // Steps 4 (fund wallet) and 5 (first trade) remain visible in the UI
+  // but are advisory — funding is BUY-only and already gated per-action
+  // by useOnboardingGuard, and first-trade is a milestone that would
+  // otherwise deadlock against the trade-participation gate (you can't
+  // accept your first trade if completion blocks accepting trades).
+  //
+  // Their timestamps still record (sticky) when the conditions become
+  // true, so analytics keep the same granularity.
+  const requiredDoneFlags = [
     !!updated.username_set_at,
     !!updated.wallet_connected_at,
     !!updated.payment_method_at,
-    !!updated.wallet_funded_at,
-    !!updated.first_trade_at,
   ];
-  const firstIncomplete = doneFlags.findIndex((d) => !d);
-  const nextStep = (firstIncomplete === -1 ? 6 : firstIncomplete + 1) as 1 | 2 | 3 | 4 | 5 | 6;
+  const firstIncompleteRequired = requiredDoneFlags.findIndex((d) => !d);
+  const nextStep = (firstIncompleteRequired === -1
+    ? 6
+    : firstIncompleteRequired + 1) as 1 | 2 | 3 | 4 | 5 | 6;
 
-  // Auto-complete the onboarding when all five steps are done. Idempotent:
-  // only writes if completed_at is currently null.
+  // Auto-complete the onboarding when the required steps are done.
+  // Idempotent: only writes if completed_at is currently null.
   if (nextStep === 6 && !updated.completed_at) {
     const completedRows = await query<OnboardingRow>(
       `UPDATE merchant_onboarding

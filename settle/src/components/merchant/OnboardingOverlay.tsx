@@ -33,6 +33,8 @@ interface StepView {
   label: string;
   hint: string;
   done: boolean;
+  /** Optional steps are shown but don't gate completed_at on the server. */
+  optional?: boolean;
   cta: { label: string; onClick: () => void } | null;
 }
 
@@ -86,8 +88,9 @@ export function OnboardingOverlay({ onOpenPaymentMethods }: OnboardingOverlayPro
     {
       key: 'fund',
       label: 'Fund Wallet with USDT',
-      hint: 'Fund your wallet with USDT if you want to accept BUY trades.',
+      hint: 'Required only when you want to accept BUY trades.',
       done: conditions.walletFunded,
+      optional: true,
       cta: conditions.walletFunded
         ? null
         : { label: 'Fund', onClick: () => router.push('/merchant/wallet') },
@@ -95,14 +98,19 @@ export function OnboardingOverlay({ onOpenPaymentMethods }: OnboardingOverlayPro
     {
       key: 'trade',
       label: 'Accept First Trade',
-      hint: 'Accept your first trade to start using the platform.',
+      hint: 'Your first trade unlocks the rest of the platform — happens after setup.',
       done: conditions.hasTrade,
+      optional: true,
       cta: null,
     },
   ];
 
-  const doneCount = steps.filter((s) => s.done).length;
-  const totalCount = steps.length;
+  // Progress is computed against REQUIRED steps only (the three that
+  // actually drive completed_at). Optional rows still render — they
+  // just don't move the bar and don't block "x / y done".
+  const requiredSteps = steps.filter((s) => !s.optional);
+  const doneCount = requiredSteps.filter((s) => s.done).length;
+  const totalCount = requiredSteps.length;
   const percent = Math.round((doneCount / totalCount) * 100);
 
   return (
@@ -156,6 +164,11 @@ export function OnboardingOverlay({ onOpenPaymentMethods }: OnboardingOverlayPro
                     }`}
                   >
                     {step.label}
+                    {step.optional && (
+                      <span className="ml-2 text-[10px] font-mono uppercase tracking-wider text-white/40">
+                        Optional
+                      </span>
+                    )}
                   </span>
                   {step.cta && (
                     <button
