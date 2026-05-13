@@ -107,15 +107,20 @@ export function LandingPage({
     // Debounce typing so we don't spam the endpoint per keystroke. 350ms
     // is long enough that fast typing doesn't trigger N requests but
     // short enough that the indicator feels live.
+    //
+    // Uses the dedicated GET endpoint, NOT POST /api/auth/user with
+    // action=check_username: that path shares the brute-force login
+    // rate-limit bucket (10/min) in middleware and would silently 429
+    // after a few keystrokes. The dedicated endpoint sits under
+    // SEARCH_LIMIT (60/min) and is GET-only so it stays cache-friendly.
     let cancelled = false;
     setUsernameAvailability({ state: 'checking' });
     const t = setTimeout(async () => {
       try {
-        const res = await fetchWithAuth('/api/auth/user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'check_username', username: candidate }),
-        });
+        const res = await fetchWithAuth(
+          `/api/auth/user/username-availability?username=${encodeURIComponent(candidate)}`,
+          { method: 'GET' },
+        );
         if (cancelled) return;
         const data = await res.json();
         if (data?.success && typeof data.data?.available === 'boolean') {
