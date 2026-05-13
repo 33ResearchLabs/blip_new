@@ -55,19 +55,21 @@ export function OnboardingNotificationBridge({ addNotification }: Props) {
     if (firedRef.current) return;
     firedRef.current = true;
 
+    // Count REQUIRED steps only (3) — these are what actually decide
+    // completed_at and marketplace visibility. The two optional rows
+    // (fund + first trade) are visible in the overlay but don't gate
+    // anything, so they don't belong in the "X/Y done" reminder either.
     const doneCount = [
       status.conditions.usernameSet,
       status.conditions.walletConnected,
       status.conditions.hasPaymentMethod,
-      status.conditions.walletFunded,
-      status.conditions.hasTrade,
     ].filter(Boolean).length;
 
     // The sentinel orderId travels with the notification so the panel can
     // recognise it and dispatch the resume event when clicked.
     addNotification(
       'system',
-      `Setup incomplete — ${doneCount}/5 done. Finish to appear online to other traders.`,
+      `Setup incomplete — ${doneCount}/3 done. Finish to appear online to other traders.`,
       ONBOARDING_RESUME_NOTIFICATION_ID
     );
   }, [enabled, status, skipped, completed, addNotification]);
