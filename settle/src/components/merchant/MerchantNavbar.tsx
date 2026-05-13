@@ -255,15 +255,18 @@ export function MerchantNavbar({
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             {/* Desktop: rightActions + avatar dropdown */}
             <div className="hidden md:flex items-center gap-2">
+              {/* Onboarding-incomplete chip — feature-flagged glanceable
+                  reminder. Sits to the LEFT of the rightActions (history
+                  icon, connection indicator, etc.) so it sits at the
+                  start of the right-hand cluster. Self-hides once
+                  completed_at fires. Clicking reopens OnboardingOverlay
+                  via resume(). */}
+              <OnboardingSetupChip />
+
               {rightActions}
               {rightActions && (
                 <div className="w-px h-6 bg-foreground/[0.06] mx-0.5" />
               )}
-
-              {/* Onboarding-incomplete chip — feature-flagged glanceable
-                  reminder. Self-hides once completed_at fires. Clicking
-                  reopens the OnboardingOverlay via resume(). */}
-              <OnboardingSetupChip />
 
               {/* Report Issue — icon-only trigger that opens the same modal
                   as the floating bug button. Always visible in the navbar
