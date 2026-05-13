@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMerchantOffers, createOffer } from '@/lib/db/repositories/merchants';
+import { gateOnboardingComplete } from '@/lib/db/repositories/merchantOnboarding';
 import {
   createOfferSchema,
   uuidSchema,
@@ -91,6 +92,11 @@ export async function POST(request: NextRequest) {
     if (!merchantExists) {
       return validationErrorResponse(['Merchant not found']);
     }
+
+    // Onboarding gate: a merchant can't list M2M offers in the marketplace
+    // until first-time setup is complete.
+    const onboardingGate = await gateOnboardingComplete(authPost.actorType, authPost.actorId);
+    if (onboardingGate) return onboardingGate;
 
     const offer = await createOffer({
       merchant_id,

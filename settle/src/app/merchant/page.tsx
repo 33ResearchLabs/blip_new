@@ -45,6 +45,10 @@ import { MerchantTour } from "@/components/merchant/MerchantTour";
 import { useMerchantTour } from "@/hooks/useMerchantTour";
 import { MerchantMobileContent } from "@/components/merchant/MerchantMobileContent";
 import { MobilePriceTicker } from "@/components/merchant/MobilePriceTicker";
+import { OnboardingProvider } from "@/contexts/OnboardingContext";
+import { OnboardingTour } from "@/components/merchant/OnboardingTour";
+import { OnboardingOverlay } from "@/components/merchant/OnboardingOverlay";
+import { OnboardingNotificationBridge } from "@/components/merchant/OnboardingNotificationBridge";
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
@@ -819,6 +823,7 @@ export default function MerchantDashboard() {
   // Old contact-based derived state removed — now order-based
 
   return (
+    <OnboardingProvider merchantId={merchantId}>
     <div
       data-testid="merchant-dashboard"
       className="h-screen bg-background text-white flex flex-col overflow-hidden"
@@ -829,6 +834,14 @@ export default function MerchantDashboard() {
       {tour.enabled && (
         <MerchantTour run={tour.isRunning} onComplete={tour.completeTour} />
       )}
+      {/* Progressive setup — gated by NEXT_PUBLIC_ENABLE_MERCHANT_ONBOARDING.
+          Renders nothing when the flag is off or merchant is grandfathered/complete.
+            OnboardingOverlay            → blocking modal while setup is incomplete + not skipped
+            OnboardingNotificationBridge → dispatches a system notification when skipped, no UI
+            OnboardingTour               → react-joyride tooltips, still works as a guided layer */}
+      <OnboardingOverlay onOpenPaymentMethods={() => setShowPaymentMethods(true)} />
+      <OnboardingNotificationBridge addNotification={addNotification} />
+      <OnboardingTour />
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.02] rounded-full blur-[150px]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-white/[0.01] rounded-full blur-[200px]" />
@@ -862,6 +875,7 @@ export default function MerchantDashboard() {
               onClick={() => setShowPaymentMethods(true)}
               className="p-2 rounded-lg transition-all bg-white/[0.03] hover:bg-card border border-white/[0.05]"
               title="Payment Methods"
+              data-tour="add-payment-method"
             >
               <Plus className="w-[18px] h-[18px] text-white/40" />
             </motion.button>
@@ -1232,5 +1246,6 @@ export default function MerchantDashboard() {
         onMarkPaid={markUpiOrderPaid}
       />
     </div>
+    </OnboardingProvider>
   );
 }

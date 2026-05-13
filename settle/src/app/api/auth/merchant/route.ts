@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     // Check session validity
     if (action === 'check_session' && merchant_id) {
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(email_verified, true) as email_verified
          FROM merchants
          WHERE id = $1 AND status = 'active'`,
         [merchant_id]
@@ -85,7 +85,22 @@ export async function GET(request: NextRequest) {
         balance: number;
         has_ops_access: boolean;
           has_compliance_access: boolean;
+        email_verified: boolean;
       };
+
+      // Block unverified merchants from minting new tokens via check_session.
+      // Without this, register → check_session would hand out cookies for an
+      // account that hasn't completed email verification, defeating the
+      // cookie strip on the register response.
+      if (!merchant.email_verified) {
+        const blockedResponse = NextResponse.json({
+          success: true,
+          data: { valid: false, code: 'EMAIL_NOT_VERIFIED' },
+        });
+        blockedResponse.cookies.set(REFRESH_TOKEN_COOKIE, '', { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 });
+        blockedResponse.cookies.set(ACCESS_TOKEN_COOKIE, '', { ...ACCESS_COOKIE_OPTIONS, maxAge: 0 });
+        return blockedResponse;
+      }
 
       // Set merchant online when session is validated (critical for order matching!)
       await updateMerchantOnlineStatus(merchant.id, true);
@@ -924,7 +939,7 @@ export async function POST(request: NextRequest) {
 
       if (!email || !password || !business_name?.trim()) {
         return NextResponse.json(
-          { success: false, error: 'Email, password, and business name are required' },
+          { success: false, error: 'Email, password, and full name are required' },
           { status: 400 }
         );
       }
@@ -968,34 +983,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check if business name already taken
-      const existingBusiness = await query(
-        `SELECT id FROM merchants WHERE LOWER(business_name) = $1`,
-        [normalizedBusinessName.toLowerCase()]
-      );
+      // Full name (business_name) is allowed to duplicate — two merchants
+      // can legitimately share the same display name. Identity uniqueness
+      // is enforced at the email + username layer instead.
 
-      if (existingBusiness.length > 0) {
-        return NextResponse.json(
-          { success: false, error: 'Business name already taken' },
-          { status: 409 }
-        );
-      }
-
-      // Use business_name as username
-      const baseUsername = normalizedBusinessName.toLowerCase().replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20);
-      let username = baseUsername;
-      let counter = 1;
-
-      // Ensure unique username
-      while (true) {
-        const check = await query(
-          `SELECT id FROM merchants WHERE username = $1 UNION SELECT id FROM users WHERE username = $1`,
-          [username]
-        );
-        if (check.length === 0) break;
-        username = `${baseUsername}${counter}`;
-        counter++;
-      }
+      // Username intentionally left NULL on register. The merchant picks
+      // one during onboarding (step 1 of the setup tour) via PATCH
+      // /api/merchant/username. display_name = business_name still
+      // populates the UI labels in the meantime.
 
       // Hash password
       const passwordHash = hashPassword(password);
@@ -1006,7 +1001,6 @@ export async function POST(request: NextRequest) {
         `INSERT INTO merchants (
           email,
           password_hash,
-          username,
           business_name,
           display_name,
           status,
@@ -1014,9 +1008,9 @@ export async function POST(request: NextRequest) {
           balance,
           email_verified,
           avatar_url
-        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6, false, $7)
+        ) VALUES ($1, $2, $3, $4, 'active', true, $5, false, $6)
         RETURNING id, username, display_name, business_name, wallet_address, email, rating, total_trades`,
-        [normalizedEmail, passwordHash, username, normalizedBusinessName, normalizedBusinessName, regBalance, defaultAvatarUrl(username || normalizedEmail)]
+        [normalizedEmail, passwordHash, normalizedBusinessName, normalizedBusinessName, regBalance, defaultAvatarUrl(normalizedEmail)]
       );
 
       const merchant = result[0] as {
@@ -1058,7 +1052,10 @@ export async function POST(request: NextRequest) {
         console.error('[Register] Failed to create verification token:', emailErr);
       }
 
-      return NextResponse.json({
+      // Defense in depth: an unverified merchant must NOT be authenticated.
+      // Strip any pre-existing refresh/access cookies so a stale session from
+      // a prior account cannot grant dashboard access under the new identity.
+      const registerResponse = NextResponse.json({
         success: true,
         data: {
           merchant: { ...serializeMerchant(merchant), balance: regBalance },
@@ -1066,6 +1063,9 @@ export async function POST(request: NextRequest) {
           message: 'Account created! Please check your email to verify your account.',
         },
       });
+      registerResponse.cookies.set(REFRESH_TOKEN_COOKIE, '', { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 });
+      registerResponse.cookies.set(ACCESS_TOKEN_COOKIE, '', { ...ACCESS_COOKIE_OPTIONS, maxAge: 0 });
+      return registerResponse;
     }
 
     return NextResponse.json(

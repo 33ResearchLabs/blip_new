@@ -89,11 +89,17 @@ export async function getMerchantByWallet(walletAddress: string): Promise<Mercha
 }
 
 export async function getOnlineMerchants(): Promise<Merchant[]> {
+  // Hide merchants whose first-time onboarding isn't complete — they
+  // shouldn't appear as available trading partners until they've at
+  // least connected a wallet and set up payment methods. Grandfathered
+  // merchants from migration 121 have completed_at set, so they pass.
   return query<Merchant>(
-    `SELECT * FROM merchants
-     WHERE status = 'active' AND is_online = true
-     ORDER BY rating DESC, total_trades DESC
-     LIMIT 100`
+    `SELECT m.* FROM merchants m
+       JOIN merchant_onboarding mo ON mo.merchant_id = m.id
+                                  AND mo.completed_at IS NOT NULL
+      WHERE m.status = 'active' AND m.is_online = true
+      ORDER BY m.rating DESC, m.total_trades DESC
+      LIMIT 100`
   );
 }
 
