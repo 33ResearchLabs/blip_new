@@ -371,10 +371,13 @@ export function LandingPage({
           <div className="flex items-center justify-between mb-3 gap-2 shrink-0">
             <Link
               href="/"
+              aria-label="Home"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
-              Home
+              {/* Label hidden on phones — chevron alone is enough; reappears
+                  on sm+ where there's more room. */}
+              <span className="hidden sm:inline">Home</span>
             </Link>
             <div className="flex items-center gap-2">
               <InstallPWAButton />
