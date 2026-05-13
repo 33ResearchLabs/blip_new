@@ -33,7 +33,7 @@ export function MobileBottomNav({
     },
     {
       id: 'orders' as const,
-      label: 'Trade',
+      label: 'Active Trade',
       icon: Sparkles,
       activeColor: 'text-primary',
       badge: pendingCount,

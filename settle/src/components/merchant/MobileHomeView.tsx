@@ -320,7 +320,9 @@ export function MobileHomeView({
       {/* Quick Trade card removed — the floating + FAB at the bottom-right
           opens the full trade modal. */}
 
-      {/* ── Active Market ── */}
+      {/* ── Recent Activity ── (formerly "Active Market" — the label was
+          misleading because this section shows the merchant's own recent
+          orders, not the marketplace feed.) */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -331,7 +333,7 @@ export function MobileHomeView({
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">
-              Active Market
+              Recent Activity
             </span>
           </div>
           <div className="flex gap-2">
