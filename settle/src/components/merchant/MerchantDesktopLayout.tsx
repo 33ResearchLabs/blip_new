@@ -103,6 +103,9 @@ export interface MerchantDesktopLayoutProps {
   onClearUnread: (orderId: string) => void;
   onClearAllUnread?: () => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
+  /** Threaded to the OnboardingSetupCard inside NotificationsPanel. */
+  onOpenPaymentMethods?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(props: MerchantDesktopLayoutProps) {
@@ -129,6 +132,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     orderConversations, totalUnread, isLoadingConversations,
     activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread, onClearAllUnread,
     playSound,
+    onOpenPaymentMethods, onOpenSettings,
   } = props;
 
   // Real-time "locked in escrow" total — sums crypto amounts for ongoing
@@ -382,6 +386,8 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 if (order) handleOpenChat(order);
                 else setSelectedOrderId(orderId);
               }}
+              onOpenPaymentMethods={onOpenPaymentMethods}
+              onOpenSettings={onOpenSettings}
             />
             <div className="flex-1 flex flex-col min-h-0">
               {activeDisputeOrderId ? (

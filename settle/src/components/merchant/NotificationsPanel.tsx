@@ -13,12 +13,16 @@ import {
   Info,
 } from "lucide-react";
 import type { Notification } from "@/types/merchant";
+import { OnboardingSetupCard } from "@/components/merchant/OnboardingSetupCard";
 
 interface NotificationsPanelProps {
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onSelectOrder: (orderId: string) => void;
   onOpenChat?: (orderId: string) => void;
+  /** Handlers passed straight to the onboarding setup card. */
+  onOpenPaymentMethods?: () => void;
+  onOpenSettings?: () => void;
 }
 
 interface GroupedNotification {
@@ -57,6 +61,8 @@ export const NotificationsPanel = memo(function NotificationsPanel({
   onMarkRead,
   onSelectOrder,
   onOpenChat,
+  onOpenPaymentMethods,
+  onOpenSettings,
 }: NotificationsPanelProps) {
   const groupedNotifications = useMemo(() => {
     const groups: GroupedNotification[] = [];
@@ -158,6 +164,14 @@ export const NotificationsPanel = memo(function NotificationsPanel({
 
         {/* ── Notifications List ─────────────────────────── */}
         <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1.5">
+          {/* Onboarding checklist — sits at the top of the panel. Self-hides
+              when the flag is off, status is still loading, or completed_at
+              is set. Renders inside the same container as notifications so
+              the merchant has a single place to look. */}
+          <OnboardingSetupCard
+            onOpenPaymentMethods={onOpenPaymentMethods}
+            onOpenSettings={onOpenSettings}
+          />
           {notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-foreground/15">
               <div className="w-12 h-12 rounded-full bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center mb-3">

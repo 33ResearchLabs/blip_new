@@ -47,8 +47,6 @@ import { MerchantMobileContent } from "@/components/merchant/MerchantMobileConte
 import { MobilePriceTicker } from "@/components/merchant/MobilePriceTicker";
 import { OnboardingProvider } from "@/contexts/OnboardingContext";
 import { OnboardingTour } from "@/components/merchant/OnboardingTour";
-import { OnboardingOverlay } from "@/components/merchant/OnboardingOverlay";
-import { OnboardingNotificationBridge } from "@/components/merchant/OnboardingNotificationBridge";
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
@@ -835,12 +833,10 @@ export default function MerchantDashboard() {
         <MerchantTour run={tour.isRunning} onComplete={tour.completeTour} />
       )}
       {/* Progressive setup — gated by NEXT_PUBLIC_ENABLE_MERCHANT_ONBOARDING.
-          Renders nothing when the flag is off or merchant is grandfathered/complete.
-            OnboardingOverlay            → blocking modal while setup is incomplete + not skipped
-            OnboardingNotificationBridge → dispatches a system notification when skipped, no UI
-            OnboardingTour               → react-joyride tooltips, still works as a guided layer */}
-      <OnboardingOverlay onOpenPaymentMethods={() => setShowPaymentMethods(true)} />
-      <OnboardingNotificationBridge addNotification={addNotification} />
+          The setup checklist now lives inside NotificationsPanel as
+          OnboardingSetupCard. The blocking overlay + bridged notification
+          have been removed. The legacy MerchantTour tooltips still work
+          on the same data-tour anchors if NEXT_PUBLIC_ENABLE_APP_TOUR is on. */}
       <OnboardingTour />
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.02] rounded-full blur-[150px]" />
@@ -963,6 +959,8 @@ export default function MerchantDashboard() {
         onClearUnread={clearUnreadForOrder}
         onClearAllUnread={clearAllUnread}
         playSound={playSound}
+        onOpenPaymentMethods={() => setShowPaymentMethods(true)}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <MerchantMobileContent
