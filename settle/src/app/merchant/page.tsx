@@ -40,6 +40,7 @@ import { formatCrypto } from "@/lib/format";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { MerchantModals } from "@/components/merchant/MerchantModals";
 import { MerchantUpiPayModal } from "@/components/merchant/MerchantUpiPayModal";
+import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayout";
 import { MerchantTour } from "@/components/merchant/MerchantTour";
 import { useMerchantTour } from "@/hooks/useMerchantTour";
@@ -1243,6 +1244,8 @@ export default function MerchantDashboard() {
         onClose={() => setUpiPayOrder(null)}
         onMarkPaid={markUpiOrderPaid}
       />
+
+      <PushPermissionPrompt authed={!!merchantId} />
     </div>
     </OnboardingProvider>
   );

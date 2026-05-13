@@ -25,6 +25,7 @@ import { useSolanaWalletSafe } from "@/hooks/useSolanaWalletSafe";
 import { useOrphanedEscrowRecovery } from "@/hooks/useOrphanedEscrowRecovery";
 import { IssueReporter } from "@/components/IssueReporter";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
+import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 
 import type { Screen } from "@/components/user/screens/types";
 import { FEE_CONFIG } from "@/components/user/screens/helpers";
@@ -950,6 +951,8 @@ export default function Home() {
       {/* Issue reporter floating button removed per UX feedback — the
           inline bug icon in the header still routes to the same reporter
           via openIssueReporter() if needed. */}
+
+      <PushPermissionPrompt authed={!!auth.userId} />
 
       {/* Scratch-card reward — opens automatically when a sell order
           transitions to completed. After "Back to wallet", route to home. */}

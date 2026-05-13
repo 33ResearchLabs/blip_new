@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { MerchantWelcomePage } from "./MerchantWelcomePage";
+import { InstallPWAButton } from "@/components/InstallPWAButton";
 
 interface LoginScreenProps {
   authTab: "signin" | "create";
@@ -209,12 +210,15 @@ export function LoginScreen({
                     MERCHANT PORTAL
                   </span>
                 </div>
-                <Link
-                  href="/"
-                  className="text-[11px] font-semibold text-white/50 hover:text-white transition-colors"
-                >
-                  Not a merchant? →
-                </Link>
+                <div className="flex items-center gap-2">
+                  <InstallPWAButton />
+                  <Link
+                    href="/"
+                    className="text-[11px] font-semibold text-white/50 hover:text-white transition-colors"
+                  >
+                    Not a merchant? →
+                  </Link>
+                </div>
               </div>
 
               {pendingVerificationEmail ? (

@@ -1,8 +1,10 @@
 {
+  "id": "/",
   "name": "Blip Money",
   "short_name": "Blip",
   "description": "P2P settlement. Send crypto to anyone.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
