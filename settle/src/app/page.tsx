@@ -526,6 +526,12 @@ export default function Home() {
                 isLoggingIn={auth.isLoggingIn}
                 loginError={auth.loginError}
                 setLoginError={auth.setLoginError}
+                pendingVerificationEmail={auth.pendingVerificationEmail}
+                onClearPendingVerification={auth.clearPendingVerification}
+                onResendVerification={auth.handleResendVerification}
+                isResendingVerification={auth.isResendingVerification}
+                verificationSuccessNotice={auth.verificationSuccessNotice}
+                onDismissVerificationSuccess={auth.dismissVerificationSuccess}
                 skipWelcome={skipWelcome}
               />
             );

@@ -55,6 +55,15 @@ export function useUserAuth({
   // having to re-submit the password to identify the account.
   const [unverifiedUserId, setUnverifiedUserId] = useState<string | null>(null);
   const [isResendingVerification, setIsResendingVerification] = useState(false);
+  // Set after a successful registration response while the user has not
+  // yet clicked the verification link. The home screen refuses to mount
+  // until it's cleared; the LandingPage renders a "check your inbox"
+  // panel instead of the form so the user can't proceed without verifying.
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
+  // Surface a green "Email verified — sign in to continue" banner above the
+  // sign-in form once polling (or the manual "I've verified" button)
+  // detects the email is verified.
+  const [verificationSuccessNotice, setVerificationSuccessNotice] = useState(false);
 
   // Solana wallet state
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -301,6 +310,26 @@ export function useUserAuth({
       const data = await res.json();
 
       if (data.success && data.data.user) {
+        // Registration is NOT complete until the user clicks the
+        // verification link. The backend now returns
+        // requiresEmailVerification=true and does not issue auth cookies
+        // on this response — so flipping the user into the home screen
+        // here would put the UI in a "logged in" state with no real
+        // session, and every protected call would 401. Show a check-
+        // your-inbox panel instead, and capture the user id so polling
+        // (and the resend button) can target this account.
+        if (data.data.requiresEmailVerification) {
+          setPendingVerificationEmail(loginForm.email.trim().toLowerCase());
+          setUnverifiedUserId(data.data.user.id);
+          setLoginError('');
+          // Clear the password so it doesn't linger in memory while the
+          // user goes to check their inbox.
+          setLoginForm(p => ({ ...p, password: '' }));
+          return;
+        }
+        // Fallback path: backend chose not to require email verification
+        // for this account (e.g. an admin-provisioned bypass). Same as
+        // before — log them in.
         const user = data.data.user;
         setUserId(user.id);
         setUserWallet(user.wallet_address);
@@ -322,6 +351,91 @@ export function useUserAuth({
       setIsLoggingIn(false);
     }
   }, [loginForm, setScreen, fetchOrders, fetchBankAccounts, fetchResolvedDisputes]);
+
+  const clearPendingVerification = useCallback(() => {
+    setPendingVerificationEmail(null);
+    setUnverifiedUserId(null);
+    setLoginError('');
+  }, []);
+
+  const dismissVerificationSuccess = useCallback(() => {
+    setVerificationSuccessNotice(false);
+  }, []);
+
+  // Poll the backend while the "check your inbox" panel is shown so we can
+  // auto-advance the moment the user clicks the verification link —
+  // including when that click happens on a different device (phone, etc).
+  // Server-authoritative: there is no client-side trust, no localStorage,
+  // and no cross-tab signal. The endpoint returns only { verified: boolean }
+  // and is rate-limited so polling can't be weaponised.
+  //
+  // Cadence: every 4s for the first minute, then back off to every 12s.
+  // Stop polling after 15 minutes — link still works, user just has to
+  // hit "I've verified my email" manually. Also polls immediately on
+  // window focus so returning to this tab feels instant.
+  //
+  // Mirrors useDashboardAuth's polling effect — keep them in sync.
+  useEffect(() => {
+    if (!pendingVerificationEmail || !unverifiedUserId) return;
+    if (typeof window === 'undefined') return;
+
+    let cancelled = false;
+    const startedAt = Date.now();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const advanceOnVerified = () => {
+      if (cancelled) return;
+      // Pre-fill the sign-in identifier so the user only has to type
+      // their password. Identity is already confirmed server-side; this
+      // is purely a convenience.
+      setLoginForm(p => ({ ...p, username: p.email || p.username }));
+      setPendingVerificationEmail(null);
+      setUnverifiedUserId(null);
+      setAuthMode('login');
+      setVerificationSuccessNotice(true);
+    };
+
+    const checkOnce = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetchWithAuth(
+          `/api/auth/user/verification-status?userId=${encodeURIComponent(unverifiedUserId)}`,
+          { method: 'GET' },
+        );
+        if (cancelled) return;
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.success && data?.verified) {
+          advanceOnVerified();
+        }
+      } catch {
+        // Network blip — wait for next tick.
+      }
+    };
+
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > 15 * 60_000) return;
+      const delay = elapsed < 60_000 ? 4_000 : 12_000;
+      timer = setTimeout(async () => {
+        await checkOnce();
+        scheduleNext();
+      }, delay);
+    };
+
+    void checkOnce();
+    scheduleNext();
+
+    const onFocus = () => { void checkOnce(); };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [pendingVerificationEmail, unverifiedUserId]);
 
   // Initialize - restore session if available
   useEffect(() => {
@@ -403,6 +517,14 @@ export function useUserAuth({
     unverifiedUserId,
     isResendingVerification,
     handleResendVerification,
+    // Post-signup verification gate — set when registration succeeds but
+    // the user has not yet clicked the email link. LandingPage renders a
+    // "check your inbox" panel until the polling effect detects
+    // verification (or the user dismisses manually).
+    pendingVerificationEmail,
+    clearPendingVerification,
+    verificationSuccessNotice,
+    dismissVerificationSuccess,
     showWalletModal, setShowWalletModal,
     showUsernameModal, setShowUsernameModal,
     walletUsername, setWalletUsername,

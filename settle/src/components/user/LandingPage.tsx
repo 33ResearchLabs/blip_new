@@ -22,6 +22,20 @@ interface LandingPageProps {
   isLoggingIn: boolean;
   loginError: string;
   setLoginError: (e: string) => void;
+  /** Email a fresh registration just sent its verification link to. When
+   *  set, the form is replaced by a check-your-inbox panel — registration
+   *  is not considered complete until the user clicks the link. */
+  pendingVerificationEmail?: string | null;
+  /** Clear pendingVerificationEmail and return to the sign-in tab. */
+  onClearPendingVerification?: () => void;
+  /** Resend the verification email. Same handler used by the
+   *  EMAIL_NOT_VERIFIED login banner. */
+  onResendVerification?: () => void;
+  isResendingVerification?: boolean;
+  /** True once polling (or the manual "I've verified" button) detects the
+   *  email is verified. Renders a green banner above the sign-in form. */
+  verificationSuccessNotice?: boolean;
+  onDismissVerificationSuccess?: () => void;
   /** When true, skips the welcome page and goes straight to the login form.
    *  Used by the /login route. */
   skipWelcome?: boolean;
@@ -30,6 +44,12 @@ interface LandingPageProps {
 export function LandingPage({
   loginForm, setLoginForm, authMode, setAuthMode,
   handleUserLogin, handleUserRegister, isLoggingIn, loginError, setLoginError,
+  pendingVerificationEmail,
+  onClearPendingVerification,
+  onResendVerification,
+  isResendingVerification,
+  verificationSuccessNotice,
+  onDismissVerificationSuccess,
   skipWelcome = false,
 }: LandingPageProps) {
   const router = useRouter();
@@ -356,27 +376,116 @@ export function LandingPage({
             </div>
           </motion.div>
 
-          {/* Tabs */}
-          <div className="flex mb-4 bg-surface-card rounded-xl p-1">
-            <button
-              onClick={() => { setAuthMode('login'); setLoginError(''); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                authMode === 'login' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => { setAuthMode('register'); setLoginError(''); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                authMode === 'register' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+          {/* Tabs — hidden while the post-signup verification panel is
+              shown; switching tabs there would have no visible effect. */}
+          {!pendingVerificationEmail && (
+            <div className="flex mb-4 bg-surface-card rounded-xl p-1">
+              <button
+                onClick={() => { setAuthMode('login'); setLoginError(''); }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  authMode === 'login' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => { setAuthMode('register'); setLoginError(''); }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  authMode === 'register' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+          )}
 
           <div className="flex-1 min-h-0 rounded-2xl p-4 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
+            {/* Post-signup verification gate. Registration is NOT complete
+                until the user clicks the link in the email we just sent —
+                the form is replaced with a check-your-inbox panel so they
+                can't proceed without verifying. */}
+            {pendingVerificationEmail ? (
+              <>
+                <div className="rounded-xl p-4 flex gap-3 bg-success-dim border border-success-border">
+                  <div className="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-4 h-4 text-success" />
+                  </div>
+                  <div className="text-[13px] leading-relaxed text-text-primary">
+                    <p>
+                      We sent a verification link to{" "}
+                      <span className="font-semibold break-all">
+                        {pendingVerificationEmail}
+                      </span>
+                      .
+                    </p>
+                    <p className="mt-1 text-text-secondary">
+                      Click the link in that email to activate your account.
+                      Your registration is not complete until your email is
+                      verified.
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-[12px] text-text-tertiary">
+                  Already clicked the link? Tap the button below to sign in.
+                  This page also checks automatically every few seconds — if
+                  you verified on another device, it will advance on its own.
+                </p>
+
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    onClearPendingVerification?.();
+                    setAuthMode('login');
+                  }}
+                  className="w-full py-3 rounded-xl text-sm font-bold bg-accent text-accent-text"
+                >
+                  I&apos;ve verified my email — Sign in
+                </motion.button>
+
+                {onResendVerification && (
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={onResendVerification}
+                    disabled={isResendingVerification}
+                    className="w-full py-3 rounded-xl text-sm font-bold bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isResendingVerification ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Sending…
+                      </>
+                    ) : (
+                      'Resend verification email'
+                    )}
+                  </motion.button>
+                )}
+
+                <p className="text-[11px] text-text-tertiary text-center">
+                  Didn&apos;t get it? Check spam. Links expire after 24 hours.
+                </p>
+              </>
+            ) : (
+              <>
+            {/* Verification-success banner. Shown once polling (or the
+                "I've verified" button) detects the email is verified. */}
+            {authMode === 'login' && verificationSuccessNotice && (
+              <div className="rounded-xl p-3 flex items-start gap-2.5 bg-success-dim border border-success-border">
+                <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0" />
+                <div className="flex-1 text-sm text-text-primary">
+                  <span className="font-semibold text-success">Email verified.</span>{" "}
+                  <span className="text-text-secondary">Sign in below to continue.</span>
+                </div>
+                <button
+                  onClick={onDismissVerificationSuccess}
+                  aria-label="Dismiss"
+                  className="text-text-tertiary hover:text-text-primary text-lg leading-none px-1 -mt-0.5"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
             {loginError && (
               <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
                 {loginError}
@@ -508,6 +617,8 @@ export function LandingPage({
             >
               {authMode === 'login' ? 'Register' : 'Sign In'}
             </motion.button>
+            </>
+            )}
 
             <p className="text-center text-[11px] text-text-secondary">
               Connect your wallet after signing in to enable on-chain trading

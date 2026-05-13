@@ -504,39 +504,25 @@ export async function POST(request: NextRequest) {
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: user.id, entityType: 'user', action: 'signup' }).catch(() => {});
 
-      const regPayload = { actorId: user.id, actorType: 'user' as const };
-      const registerToken = generateSessionToken(regPayload);
-
-      let regSessionId: string | null = null;
-      let regRefreshToken: string | null = null;
-      try {
-        const sessionResult = await createSession(regPayload, request as any);
-        if (sessionResult) {
-          regSessionId = sessionResult.sessionId;
-          regRefreshToken = sessionResult.refreshToken;
-        }
-      } catch { /* session creation failed, proceed without sessionId */ }
-
-      const regAccessTk = generateAccessToken({ ...regPayload, ...(regSessionId && { sessionId: regSessionId }) });
-
-      const regRes = NextResponse.json({
+      // Registration is NOT complete until the merchant clicks the link in
+      // the verification email. Previously we issued real session cookies
+      // (refresh + access) on this response, which meant an unverified user
+      // had a working 7-day refresh token and could call every user-
+      // protected route until it expired. The login endpoint's
+      // EMAIL_NOT_VERIFIED 403 was effectively dead code because the user
+      // never needed to log in again. Now we return the same "needs
+      // verification" payload without any session material; the client
+      // shows a "check your inbox" panel and the user signs in normally
+      // after clicking the link.
+      return NextResponse.json({
         success: true,
         data: {
           user,
           needsWallet: true,
           requiresEmailVerification: true,
           message: 'Account created! Check your email to verify your account.',
-          ...(registerToken && { token: registerToken }),
-          ...(regAccessTk && { accessToken: regAccessTk }),
         },
       });
-      if (regRefreshToken) {
-        regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshToken, REFRESH_COOKIE_OPTIONS);
-      }
-      if (regAccessTk) {
-        regRes.cookies.set(ACCESS_TOKEN_COOKIE, regAccessTk, ACCESS_COOKIE_OPTIONS);
-      }
-      return regRes;
     }
 
     // Link wallet to existing user account
