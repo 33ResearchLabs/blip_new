@@ -315,7 +315,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                   maxLength={100}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min 12 characters"
+                  placeholder="4-6 digit PIN or 12+ char password"
                   style={{ ...inputStyle, paddingRight: 40 }}
                 />
                 <button
@@ -380,7 +380,10 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                 id="user-wallet-import-key"
                 name="user-wallet-import-key"
                 autoComplete="off"
-                maxLength={128}
+                // 24-word phrases can exceed 150 chars (e.g. all "abandon"
+                // → 24×8+23 = 215). Raise from 128 so longer recovery
+                // phrases aren't silently truncated.
+                maxLength={256}
                 value={privateKeyInput}
                 onChange={(e) => setPrivateKeyInput(e.target.value)}
                 placeholder="Paste your 12-word recovery phrase OR base58 private key..."
@@ -400,7 +403,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                 maxLength={100}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Min 12 characters"
+                placeholder="4-6 digit PIN or 12+ char password"
                 style={inputStyle}
               />
             </div>

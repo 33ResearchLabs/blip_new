@@ -235,7 +235,10 @@ export function generateMnemonic(): string {
  *  the import flow to distinguish between mnemonic input and base58
  *  private-key input. */
 export function isValidMnemonic(phrase: string): boolean {
-  const trimmed = phrase.trim().split(/\s+/).join(' ');
+  // Normalize: trim, collapse whitespace, lowercase. BIP39 word list is all
+  // lowercase, so users who paste "Apple banana …" from a backup card would
+  // otherwise fail validation. Phantom / Solflare also lowercase on import.
+  const trimmed = phrase.trim().split(/\s+/).join(' ').toLowerCase();
   const wordCount = trimmed.split(' ').length;
   // BIP39 standard: 12, 15, 18, 21, or 24 words.
   if (![12, 15, 18, 21, 24].includes(wordCount)) return false;
@@ -315,11 +318,16 @@ export async function importWallet(
   const trimmed = secretInput.trim();
 
   if (isValidMnemonic(trimmed)) {
-    const keypair = mnemonicToKeypair(trimmed);
+    // Normalize spacing + case so the derived seed matches the canonical
+    // phrase regardless of how the user typed it. BIP39 seed derivation is
+    // case-sensitive, so "Apple Banana" and "apple banana" produce
+    // different keypairs — only the lowercase form is canonical.
+    const canonical = trimmed.split(/\s+/).join(' ').toLowerCase();
+    const keypair = mnemonicToKeypair(canonical);
     const encrypted = await encryptSecretKey(keypair.secretKey, password, keypair.publicKey.toBase58(), unlockHelper);
-    const mnemonicBytes = new TextEncoder().encode(trimmed);
+    const mnemonicBytes = new TextEncoder().encode(canonical);
     const encryptedMnemonic = await encryptSecretKey(mnemonicBytes, password, keypair.publicKey.toBase58(), unlockHelper);
-    return { keypair, encrypted, mnemonic: trimmed, encryptedMnemonic };
+    return { keypair, encrypted, mnemonic: canonical, encryptedMnemonic };
   }
 
   // Fall back to base58 private-key path (legacy import — no mnemonic).
