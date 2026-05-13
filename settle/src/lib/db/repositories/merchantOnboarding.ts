@@ -68,8 +68,9 @@ async function computeConditions(merchantId: string): Promise<TruthConditions> {
     wallet_address: string | null;
     balance: number | string | null;
     username_customized_at: string | null;
+    bio: string | null;
   }>(
-    `SELECT wallet_address, balance, username_customized_at FROM merchants WHERE id = $1`,
+    `SELECT wallet_address, balance, username_customized_at, bio FROM merchants WHERE id = $1`,
     [merchantId]
   );
 
@@ -85,9 +86,20 @@ async function computeConditions(merchantId: string): Promise<TruthConditions> {
     };
   }
 
-  const usernameSet = !!merchantRow.username_customized_at;
+  // `usernameSet` is a legacy field name — it now gates on a non-empty
+  // bio. Rationale: merchants already log in with a username, so asking
+  // them to "set a username" in onboarding was redundant. business_name
+  // and display_name are NOT NULL at signup, so they can't act as the
+  // gate either. Bio is the only optional profile field that meaningfully
+  // signals "the merchant filled out their profile."
+  // (Rename to `profileSet` in a future pass — touches ~6 files.)
+  const usernameSet = !!(merchantRow.bio && merchantRow.bio.trim().length > 0);
   const walletConnected = !!(merchantRow.wallet_address && merchantRow.wallet_address.trim().length > 0);
-  const walletFunded = Number(merchantRow.balance ?? 0) > 0;
+  // Minimum funding threshold for onboarding step 4. Set above zero so
+  // a stray dust balance (e.g. a refund of a tiny fee) doesn't trip
+  // "Funded" without the merchant actually being able to back a trade.
+  const MIN_FUND_USDT = 10;
+  const walletFunded = Number(merchantRow.balance ?? 0) >= MIN_FUND_USDT;
 
   const pmRow = await queryOne<{ c: string | number }>(
     `SELECT COUNT(*)::int AS c FROM merchant_payment_methods

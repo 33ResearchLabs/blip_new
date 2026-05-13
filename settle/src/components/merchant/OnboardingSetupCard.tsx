@@ -87,7 +87,7 @@ export function OnboardingSetupCard({
     {
       key: 'profile',
       label: 'Profile Setup',
-      description: 'Set your merchant username and profile details.',
+      description: 'Add a short bio (and tweak your display name) so users know who they’re trading with.',
       done: conditions.usernameSet,
       doneLabel: 'Completed',
       cta: conditions.usernameSet
@@ -122,7 +122,7 @@ export function OnboardingSetupCard({
     {
       key: 'fund',
       label: 'Fund Wallet',
-      description: 'Deposit USDT to start accepting BUY orders.',
+      description: 'Deposit at least 10 USDT to start accepting BUY orders.',
       done: conditions.walletFunded,
       doneLabel: 'Funded',
       optional: true,

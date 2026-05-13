@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { copyToClipboard } from "@/lib/clipboard";
+import { useOnboarding } from "@/contexts/OnboardingContext";
 import {
   User,
   Shield,
@@ -188,7 +189,25 @@ export default function MerchantSettingsPage({
   // the read-only display. Uses PATCH /api/merchant/username (token-
   // auth, no wallet signature required) with the same live-availability
   // check the onboarding modal had.
+  // Onboarding signal — when usernameSet is false, we treat the username
+  // as "not yet claimed" even if merchants.username has an auto-generated
+  // value. Surfaces the editable form so the merchant can run the
+  // PATCH /api/merchant/username that flips username_customized_at.
+  const { status: onboardingStatus } = useOnboarding();
+  const usernameClaimed = onboardingStatus?.conditions?.usernameSet ?? false;
+
   const [usernameInput, setUsernameInput] = useState("");
+
+  // If the merchant already has an auto-generated username but hasn't
+  // claimed/customized it, prefill the input so they can just hit Set
+  // to flip username_customized_at (the onboarding gate). The form
+  // would otherwise look empty even though the displayed username is
+  // already valid — confusing UX.
+  useEffect(() => {
+    if (!usernameClaimed && merchant?.username && usernameInput === "") {
+      setUsernameInput(merchant.username);
+    }
+  }, [usernameClaimed, merchant?.username, usernameInput]);
   const [usernameAvailability, setUsernameAvailability] = useState<
     | { kind: "idle" }
     | { kind: "checking" }
@@ -906,13 +925,13 @@ export default function MerchantSettingsPage({
               <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-4">
                 <div>
                   <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-2 block">
-                    Display Name
+                    Username
                   </label>
                   <input
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Your display name"
+                    placeholder="Your username"
                     maxLength={50}
                     className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
@@ -1025,15 +1044,22 @@ export default function MerchantSettingsPage({
                   </button>
                 </div>
 
-                {/* Username — editable on first-set, read-only afterwards.
-                    PATCH /api/merchant/username writes the new value AND
-                    sets merchants.username_customized_at so the onboarding
+                {/* Username — editable until the merchant runs the
+                    customize-username flow (which flips
+                    merchants.username_customized_at). PATCH /api/merchant/username
+                    writes the new value AND sets that flag so the onboarding
                     checklist's Profile Setup step ticks complete on the
-                    next status refresh. Once set, the row collapses back
-                    to the read-only display (we keep the historical
-                    "set once" UX — username changes after that are a
-                    support / wallet-signature flow). */}
-                {merchant?.username ? (
+                    next status refresh. After the flag is set the row
+                    collapses back to the read-only display (we keep the
+                    historical "set once" UX — username changes after that
+                    are a support / wallet-signature flow).
+
+                    Important: an auto-generated `username` at signup is NOT
+                    the same as a customized one. Show the form whenever
+                    usernameClaimed (from onboarding status) is false, even
+                    if `merchant.username` already has a value — otherwise
+                    the merchant can never tick step 1 complete. */}
+                {merchant?.username && usernameClaimed ? (
                   <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
                     <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
                       <AtSign className="w-4 h-4 text-white/60" />

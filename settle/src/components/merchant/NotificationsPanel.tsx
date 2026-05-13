@@ -112,7 +112,9 @@ export const NotificationsPanel = memo(function NotificationsPanel({
   // Tab state — defaults to Notifications. Lives in component state
   // intentionally (no persistence) so the merchant lands on the same
   // tab they always start on; if they tap "Getting Started" it stays
-  // active for that mount only.
+  // active for that mount only. While onboarding still needs attention the
+  // initial tab is Getting Started — Notifications is hidden until setup
+  // completes, so defaulting there would render an empty body.
   const [activeTab, setActiveTab] = useState<PanelTab>("notifications");
 
   // Drives both the Getting Started tab's visibility AND its dot
@@ -122,10 +124,15 @@ export const NotificationsPanel = memo(function NotificationsPanel({
   // panel collapses to Notifications-only.
   //
   // Same predicate the OnboardingSetupCard uses for its own visibility.
-  const { enabled: onboardingEnabled, status: onboardingStatus } =
+  const { enabled: onboardingEnabled, status: onboardingStatus, loading: onboardingLoading } =
     useOnboarding();
   const onboardingNeedsAttention = (() => {
-    if (!onboardingEnabled || !onboardingStatus) return false;
+    if (!onboardingEnabled) return false;
+    // While the first fetch is in flight, status is null. Default to
+    // "needs attention" so the Notifications tab doesn't briefly flash
+    // before the status response arrives and the layout snaps. Once the
+    // fetch resolves, the real predicate below applies.
+    if (!onboardingStatus) return true;
     if (onboardingStatus.skipped_at) return false;
     const c = onboardingStatus.conditions;
     const allMet =
@@ -137,14 +144,17 @@ export const NotificationsPanel = memo(function NotificationsPanel({
     return !allMet;
   })();
 
-  // Snap back to Notifications if the Getting Started tab vanishes while
-  // it's the active selection (e.g. the auto-refresh polling sees that
-  // the merchant just accepted their first trade — predicate flips false,
-  // tab unmounts, but activeTab still says 'getting_started'). Without
-  // this the panel renders an empty tab body until the merchant clicks
-  // Notifications manually.
+  // Two snap-back behaviours, both driven by `onboardingNeedsAttention`:
+  //   1. When onboarding STILL needs attention, force the panel onto the
+  //      Getting Started tab — Notifications is hidden until setup is
+  //      done, so leaving it as 'notifications' would render nothing.
+  //   2. When onboarding is complete (or dismissed), snap back to
+  //      Notifications so the merchant doesn't see a now-empty tab body
+  //      until they click around.
   useEffect(() => {
-    if (!onboardingNeedsAttention && activeTab === "getting_started") {
+    if (onboardingNeedsAttention && activeTab !== "getting_started") {
+      setActiveTab("getting_started");
+    } else if (!onboardingNeedsAttention && activeTab === "getting_started") {
       setActiveTab("notifications");
     }
   }, [onboardingNeedsAttention, activeTab]);
@@ -155,26 +165,30 @@ export const NotificationsPanel = memo(function NotificationsPanel({
         {/* ── Tab Strip ──────────────────────────────────── */}
         <div className="flex items-center justify-between border-b border-section-divider px-1">
           <div className="flex">
-            <button
-              type="button"
-              onClick={() => setActiveTab("notifications")}
-              className={`relative flex items-center gap-1 px-2 py-2.5 text-[9px] font-bold font-mono uppercase whitespace-nowrap transition-colors ${
-                activeTab === "notifications"
-                  ? "text-foreground"
-                  : "text-foreground/40 hover:text-foreground/70"
-              }`}
-            >
-              <Bell className="w-3.5 h-3.5" />
-              Notifications
-              {unreadCount > 0 && (
-                <span className="text-[9px] bg-primary text-white font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center shadow-sm shadow-primary/20">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
-              {activeTab === "notifications" && (
-                <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
-              )}
-            </button>
+            {/* Notifications tab is hidden until onboarding completes —
+                first-time merchants only see Getting Started. */}
+            {!onboardingNeedsAttention && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("notifications")}
+                className={`relative flex items-center gap-1 px-2 py-2.5 text-[9px] font-bold font-mono uppercase whitespace-nowrap transition-colors ${
+                  activeTab === "notifications"
+                    ? "text-foreground"
+                    : "text-foreground/40 hover:text-foreground/70"
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5" />
+                Notifications
+                {unreadCount > 0 && (
+                  <span className="text-[9px] bg-primary text-white font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center shadow-sm shadow-primary/20">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+                {activeTab === "notifications" && (
+                  <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
+                )}
+              </button>
+            )}
             {/* Getting Started — only rendered while setup needs attention.
                 Once the merchant completes or dismisses onboarding the
                 tab disappears entirely; the panel becomes Notifications-

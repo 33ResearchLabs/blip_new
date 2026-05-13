@@ -1056,12 +1056,27 @@ export default function UserWalletPage() {
           {view === "main" && (
             <div className="space-y-4">
               <div className="bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/[0.06] rounded-2xl p-6 text-center">
-                <div className="flex items-center justify-center gap-1.5 mb-4">
-                  <div className="w-2 h-2 bg-green-500 rounded-full" />
-                  <span className="text-[10px] text-green-400 font-mono uppercase tracking-wider">
-                    Connected
-                  </span>
-                </div>
+                {(() => {
+                  // Show the *real* wallet state instead of a hardcoded
+                  // green dot. Distinguishes: keypair-loaded vs locked vs
+                  // address-present-but-balances-failing (RPC throttling).
+                  const hasAddress = !!solanaWallet.walletAddress;
+                  const balancesReady =
+                    solanaWallet.usdtBalance !== null || solanaWallet.solBalance !== null;
+                  const status = !hasAddress
+                    ? { dot: 'bg-amber-500', text: 'text-amber-400', label: 'Locked' }
+                    : balancesReady
+                      ? { dot: 'bg-green-500', text: 'text-green-400', label: 'Connected' }
+                      : { dot: 'bg-yellow-500', text: 'text-yellow-400', label: 'Connected · balances loading' };
+                  return (
+                    <div className="flex items-center justify-center gap-1.5 mb-4">
+                      <div className={`w-2 h-2 ${status.dot} rounded-full`} />
+                      <span className={`text-[10px] ${status.text} font-mono uppercase tracking-wider`}>
+                        {status.label}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 <div className="text-[10px] text-white/30 font-mono uppercase tracking-wider mb-1">
                   USDT Balance
