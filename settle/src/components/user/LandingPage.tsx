@@ -318,11 +318,20 @@ export function LandingPage({
           ))}
         </div>
 
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6, duration: 0.6 }}
+          className="relative z-10 mt-8 sm:mt-12"
+        >
+          <InstallPWAButton />
+        </motion.div>
+
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7, duration: 0.6 }}
-          className="relative z-10 mt-8 sm:mt-14 text-[10px] font-mono tracking-[0.2em] text-white/40 flex items-center gap-3"
+          className="relative z-10 mt-5 sm:mt-8 text-[10px] font-mono tracking-[0.2em] text-white/40 flex items-center gap-3"
         >
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
           ESCROW-PROTECTED · ON-CHAIN SETTLEMENT
