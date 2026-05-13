@@ -216,6 +216,10 @@ export default function MerchantDashboard() {
     unverifiedMerchantId,
     isResendingVerification,
     resendVerificationEmail,
+    pendingVerificationEmail,
+    clearPendingVerification,
+    verificationSuccessNotice,
+    dismissVerificationSuccess,
     pending2FA,
     totpCode,
     setTotpCode,
@@ -801,6 +805,13 @@ export default function MerchantDashboard() {
         onRegister={handleRegister}
         onResendVerification={resendVerificationEmail}
         isResendingVerification={isResendingVerification}
+        pendingVerificationEmail={pendingVerificationEmail}
+        onBackToSignIn={() => {
+          clearPendingVerification();
+          setAuthTab("signin");
+        }}
+        verificationSuccessNotice={verificationSuccessNotice}
+        onDismissVerificationSuccess={dismissVerificationSuccess}
       />
     );
   }
