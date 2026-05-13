@@ -51,9 +51,21 @@ export async function getUserByWallet(walletAddress: string): Promise<Omit<User,
   return sanitizeUser(user);
 }
 
+/**
+ * Looks up a user by username. Case-insensitive so login works regardless
+ * of how the user typed their handle — "Krishan1", "krishan1", "KRISHAN1"
+ * all resolve to the same row.
+ *
+ * Must mirror the uniqueness check in checkUsernameAvailable (which is
+ * already case-insensitive). Without this, a user registered as "Foo" got
+ * a 401 trying to log in as "foo".
+ */
 export async function getUserByUsername(username: string): Promise<User | null> {
   // Returns full user including password_hash for auth verification
-  return queryOne<User>('SELECT * FROM users WHERE username = $1', [username]);
+  return queryOne<User>(
+    'SELECT * FROM users WHERE LOWER(username) = LOWER($1)',
+    [username],
+  );
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
