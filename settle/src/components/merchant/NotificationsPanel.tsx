@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   Bell,
   Shield,
@@ -115,9 +115,13 @@ export const NotificationsPanel = memo(function NotificationsPanel({
   // active for that mount only.
   const [activeTab, setActiveTab] = useState<PanelTab>("notifications");
 
-  // Dot indicator on the Getting Started tab — fires while the setup
-  // card would render. Same visibility predicate as OnboardingSetupCard:
-  // enabled + status loaded + not skipped + not all conditions met.
+  // Drives both the Getting Started tab's visibility AND its dot
+  // indicator. The tab itself only renders while this is true — once
+  // setup is complete (all 5 truth conditions) or the merchant has
+  // dismissed the card (skipped_at), the entire tab vanishes and the
+  // panel collapses to Notifications-only.
+  //
+  // Same predicate the OnboardingSetupCard uses for its own visibility.
   const { enabled: onboardingEnabled, status: onboardingStatus } =
     useOnboarding();
   const onboardingNeedsAttention = (() => {
@@ -132,6 +136,18 @@ export const NotificationsPanel = memo(function NotificationsPanel({
       c.hasTrade;
     return !allMet;
   })();
+
+  // Snap back to Notifications if the Getting Started tab vanishes while
+  // it's the active selection (e.g. the auto-refresh polling sees that
+  // the merchant just accepted their first trade — predicate flips false,
+  // tab unmounts, but activeTab still says 'getting_started'). Without
+  // this the panel renders an empty tab body until the merchant clicks
+  // Notifications manually.
+  useEffect(() => {
+    if (!onboardingNeedsAttention && activeTab === "getting_started") {
+      setActiveTab("notifications");
+    }
+  }, [onboardingNeedsAttention, activeTab]);
 
   return (
     <div style={{ height: '50%' }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
@@ -159,24 +175,29 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                 <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("getting_started")}
-              className={`relative flex items-center gap-1 px-2 py-2.5 text-[9px] font-bold font-mono uppercase whitespace-nowrap transition-colors ${
-                activeTab === "getting_started"
-                  ? "text-foreground"
-                  : "text-foreground/40 hover:text-foreground/70"
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Getting Started
-              {onboardingNeedsAttention && (
+            {/* Getting Started — only rendered while setup needs attention.
+                Once the merchant completes or dismisses onboarding the
+                tab disappears entirely; the panel becomes Notifications-
+                only and the active tab snap-back effect above ensures
+                we don't end up displaying an empty tab body. */}
+            {onboardingNeedsAttention && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("getting_started")}
+                className={`relative flex items-center gap-1 px-2 py-2.5 text-[9px] font-bold font-mono uppercase whitespace-nowrap transition-colors ${
+                  activeTab === "getting_started"
+                    ? "text-foreground"
+                    : "text-foreground/40 hover:text-foreground/70"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Getting Started
                 <span className="w-1.5 h-1.5 rounded-full bg-[#ff8a4c]" />
-              )}
-              {activeTab === "getting_started" && (
-                <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
-              )}
-            </button>
+                {activeTab === "getting_started" && (
+                  <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
+                )}
+              </button>
+            )}
           </div>
 
           {/* Tab-specific right-rail actions */}
@@ -221,29 +242,12 @@ export const NotificationsPanel = memo(function NotificationsPanel({
         </div>
 
         {/* ── Getting Started Tab ─────────────────────────── */}
-        {activeTab === "getting_started" && (
+        {activeTab === "getting_started" && onboardingNeedsAttention && (
           <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1.5">
             <OnboardingSetupCard
               onOpenPaymentMethods={onOpenPaymentMethods}
               onOpenSettings={onOpenSettings}
             />
-            {/* Empty state — visible when the setup card has self-hidden
-                (completed or skipped). Reserved space for future
-                announcement / "what's new" entries to live alongside
-                the setup card under the same tab. */}
-            {!onboardingNeedsAttention && (
-              <div className="flex flex-col items-center justify-center h-full text-foreground/15 px-4 py-8">
-                <div className="w-12 h-12 rounded-full bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center mb-3">
-                  <Sparkles className="w-5 h-5 opacity-40" />
-                </div>
-                <p className="text-[11px] font-medium text-foreground/40">
-                  You&apos;re all set
-                </p>
-                <p className="text-[10px] text-foreground/25 mt-0.5 text-center">
-                  Platform updates and tips will appear here.
-                </p>
-              </div>
-            )}
           </div>
         )}
 
