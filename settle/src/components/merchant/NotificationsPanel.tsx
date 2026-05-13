@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import {
   Bell,
   Shield,
@@ -11,9 +11,13 @@ import {
   MessageCircle,
   Check,
   Info,
+  Sparkles,
 } from "lucide-react";
 import type { Notification } from "@/types/merchant";
 import { OnboardingSetupCard } from "@/components/merchant/OnboardingSetupCard";
+import { useOnboarding } from "@/contexts/OnboardingContext";
+
+type PanelTab = "notifications" | "getting_started";
 
 interface NotificationsPanelProps {
   notifications: Notification[];
@@ -105,73 +109,147 @@ export const NotificationsPanel = memo(function NotificationsPanel({
     unreadIds.forEach((id) => onMarkRead(id));
   };
 
+  // Tab state — defaults to Notifications. Lives in component state
+  // intentionally (no persistence) so the merchant lands on the same
+  // tab they always start on; if they tap "Getting Started" it stays
+  // active for that mount only.
+  const [activeTab, setActiveTab] = useState<PanelTab>("notifications");
+
+  // Dot indicator on the Getting Started tab — fires while the setup
+  // card would render. Same visibility predicate as OnboardingSetupCard:
+  // enabled + status loaded + not skipped + not all conditions met.
+  const { enabled: onboardingEnabled, status: onboardingStatus } =
+    useOnboarding();
+  const onboardingNeedsAttention = (() => {
+    if (!onboardingEnabled || !onboardingStatus) return false;
+    if (onboardingStatus.skipped_at) return false;
+    const c = onboardingStatus.conditions;
+    const allMet =
+      c.usernameSet &&
+      c.walletConnected &&
+      c.hasPaymentMethod &&
+      c.walletFunded &&
+      c.hasTrade;
+    return !allMet;
+  })();
+
   return (
     <div style={{ height: '50%' }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
       <div className="flex flex-col h-full min-h-0">
-        {/* ── Header ──────────────────────────────────────── */}
-        <div className="px-3 py-2 border-b border-section-divider">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Bell className="w-3.5 h-3.5 text-foreground/30" />
-              <h2 className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">
-                Notifications
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-1">
-              {/* Unread badge */}
+        {/* ── Tab Strip ──────────────────────────────────── */}
+        <div className="flex items-center justify-between border-b border-section-divider px-1">
+          <div className="flex">
+            <button
+              type="button"
+              onClick={() => setActiveTab("notifications")}
+              className={`relative flex items-center gap-1.5 px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider uppercase transition-colors ${
+                activeTab === "notifications"
+                  ? "text-foreground"
+                  : "text-foreground/40 hover:text-foreground/70"
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5" />
+              Notifications
               {unreadCount > 0 && (
-                <span className="text-[10px] bg-primary text-white font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[20px] text-center shadow-sm shadow-primary/20">
-                  {unreadCount > 99 ? '99+' : unreadCount}
+                <span className="text-[9px] bg-primary text-white font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center shadow-sm shadow-primary/20">
+                  {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
-
-              {/* Mark all read — only when unread > 0 */}
-              {unreadCount > 0 && (
-                <div className="group relative flex items-center">
-                  <button
-                    onClick={markAllRead}
-                    className="flex items-center gap-1 px-1.5 py-1 rounded text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors"
-                    title="Mark all notifications as read"
-                    aria-label="Mark all notifications as read"
-                  >
-                    <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-                    <span className="text-[9px] font-bold uppercase tracking-wider hidden sm:inline">
-                      Read
-                    </span>
-                  </button>
-                  <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-[180px] z-50 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="block rounded-lg bg-foreground text-background text-[10.5px] font-medium px-2.5 py-1.5 leading-snug shadow-xl shadow-black/40">
-                      Marks every notification as read. Items stay in the list — only the unread dot disappears.
-                    </span>
-                  </span>
-                </div>
+              {activeTab === "notifications" && (
+                <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("getting_started")}
+              className={`relative flex items-center gap-1.5 px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider uppercase transition-colors ${
+                activeTab === "getting_started"
+                  ? "text-foreground"
+                  : "text-foreground/40 hover:text-foreground/70"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Getting Started
+              {onboardingNeedsAttention && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#ff8a4c]" />
+              )}
+              {activeTab === "getting_started" && (
+                <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
+              )}
+            </button>
+          </div>
 
-              {/* Info hint */}
+          {/* Tab-specific right-rail actions */}
+          <div className="flex items-center gap-1 pr-2">
+            {activeTab === "notifications" && unreadCount > 0 && (
               <div className="group relative flex items-center">
-                <Info className="w-3 h-3 text-foreground/25 hover:text-foreground/50 cursor-help transition-colors" />
-                <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-[200px] z-50 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={markAllRead}
+                  className="flex items-center gap-1 px-1.5 py-1 rounded text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors"
+                  title="Mark all notifications as read"
+                  aria-label="Mark all notifications as read"
+                >
+                  <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  <span className="text-[9px] font-bold uppercase tracking-wider hidden sm:inline">
+                    Read
+                  </span>
+                </button>
+                <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-[180px] z-50 opacity-0 group-hover:opacity-100 transition-opacity">
                   <span className="block rounded-lg bg-foreground text-background text-[10.5px] font-medium px-2.5 py-1.5 leading-snug shadow-xl shadow-black/40">
-                    <span className="block font-bold mb-0.5">Notifications</span>
-                    Real-time alerts for orders, payments, escrow, disputes, and chats. Click any item to jump to the order.
+                    Marks every notification as read. Items stay in the list — only the unread dot disappears.
                   </span>
                 </span>
               </div>
+            )}
+
+            <div className="group relative flex items-center">
+              <Info className="w-3 h-3 text-foreground/25 hover:text-foreground/50 cursor-help transition-colors" />
+              <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-[220px] z-50 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="block rounded-lg bg-foreground text-background text-[10.5px] font-medium px-2.5 py-1.5 leading-snug shadow-xl shadow-black/40">
+                  <span className="block font-bold mb-0.5">
+                    {activeTab === "notifications"
+                      ? "Notifications"
+                      : "Getting Started"}
+                  </span>
+                  {activeTab === "notifications"
+                    ? "Real-time alerts for orders, payments, escrow, disputes, and chats. Click any item to jump to the order."
+                    : "Setup checklist and platform updates. Live until you're set up and live in the marketplace."}
+                </span>
+              </span>
             </div>
           </div>
         </div>
 
-        {/* ── Notifications List ─────────────────────────── */}
+        {/* ── Getting Started Tab ─────────────────────────── */}
+        {activeTab === "getting_started" && (
+          <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1.5">
+            <OnboardingSetupCard
+              onOpenPaymentMethods={onOpenPaymentMethods}
+              onOpenSettings={onOpenSettings}
+            />
+            {/* Empty state — visible when the setup card has self-hidden
+                (completed or skipped). Reserved space for future
+                announcement / "what's new" entries to live alongside
+                the setup card under the same tab. */}
+            {!onboardingNeedsAttention && (
+              <div className="flex flex-col items-center justify-center h-full text-foreground/15 px-4 py-8">
+                <div className="w-12 h-12 rounded-full bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center mb-3">
+                  <Sparkles className="w-5 h-5 opacity-40" />
+                </div>
+                <p className="text-[11px] font-medium text-foreground/40">
+                  You&apos;re all set
+                </p>
+                <p className="text-[10px] text-foreground/25 mt-0.5 text-center">
+                  Platform updates and tips will appear here.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Notifications Tab ───────────────────────────── */}
+        {activeTab === "notifications" && (
         <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1.5">
-          {/* Onboarding checklist — sits at the top of the panel. Self-hides
-              when the flag is off, status is still loading, or completed_at
-              is set. Renders inside the same container as notifications so
-              the merchant has a single place to look. */}
-          <OnboardingSetupCard
-            onOpenPaymentMethods={onOpenPaymentMethods}
-            onOpenSettings={onOpenSettings}
-          />
           {notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-foreground/15">
               <div className="w-12 h-12 rounded-full bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center mb-3">
@@ -271,6 +349,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
             })
           )}
         </div>
+        )}
       </div>
     </div>
   );
