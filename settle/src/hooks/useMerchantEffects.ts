@@ -6,6 +6,7 @@ import { usePusher } from "@/context/PusherContext";
 import { useWebSocketChatContextOptional } from "@/context/WebSocketChatContext";
 import type { Order, DbOrder } from "@/types/merchant";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { signLoginNonce } from '@/lib/auth/walletAuth';
 import {
   flashTabTitle,
   restoreTabTitle,
@@ -165,19 +166,45 @@ export function useMerchantEffects({
     }
   }, [isLoggedIn, fetchOrders]);
 
-  // Update merchant wallet address when connected
+  // Update merchant wallet address when connected.
+  //
+  // The PATCH /api/auth/merchant endpoint requires a wallet-ownership proof
+  // (signature + message + nonce) — anyone with a merchant token could
+  // otherwise claim any wallet address. We fetch a server nonce, ask the
+  // connected wallet to sign the canonical message, and send everything.
+  //
+  // The guarded ref keeps us from re-prompting the user to sign on every
+  // re-render that mentions the same wallet — only one signing attempt
+  // per (merchantId, walletAddress) pair per mount.
+  const walletLinkAttemptedRef = useRef<string | null>(null);
   useEffect(() => {
     const updateMerchantWallet = async () => {
       if (!merchantId || !solanaWallet.walletAddress) return;
       if (merchantInfo?.wallet_address === solanaWallet.walletAddress) return;
+      const attemptKey = `${merchantId}:${solanaWallet.walletAddress}`;
+      if (walletLinkAttemptedRef.current === attemptKey) return;
+      walletLinkAttemptedRef.current = attemptKey;
 
       try {
+        if (typeof solanaWallet.signMessage !== 'function') {
+          console.warn('[Merchant] Wallet does not expose signMessage — skipping auto-link.');
+          return;
+        }
+
+        const { nonce, message, signature } = await signLoginNonce(
+          solanaWallet.walletAddress,
+          solanaWallet.signMessage,
+        );
+
         const res = await fetchWithAuth('/api/auth/merchant', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             merchant_id: merchantId,
             wallet_address: solanaWallet.walletAddress,
+            signature,
+            message,
+            nonce,
           }),
         });
 
@@ -189,15 +216,19 @@ export function useMerchantEffects({
             setMerchantInfo((prev: any) => prev ? { ...prev, wallet_address: solanaWallet.walletAddress! } : prev);
           }
         } else {
+          // Reset the guard on failure so a manual retry (e.g. user rejected
+          // the signature prompt) can re-attempt on next state change.
+          walletLinkAttemptedRef.current = null;
           console.error('[Merchant] Failed to link wallet:', await res.text());
         }
       } catch (err) {
+        walletLinkAttemptedRef.current = null;
         console.error('[Merchant] Error linking wallet:', err);
       }
     };
 
     updateMerchantWallet();
-  }, [merchantId, solanaWallet.walletAddress, merchantInfo?.wallet_address]);
+  }, [merchantId, solanaWallet.walletAddress, solanaWallet.signMessage, merchantInfo?.wallet_address]);
 
   // Auto-fix: call acceptTrade on-chain for orders where I'm buyer but haven't joined escrow
   const acceptTradeFixRef = useRef(new Set<string>());

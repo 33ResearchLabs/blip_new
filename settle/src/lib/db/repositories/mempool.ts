@@ -378,10 +378,13 @@ export async function getMerchantQuote(
 export async function getActiveMerchantQuotes(
   corridorId: string = 'USDT_AED'
 ): Promise<MerchantQuote[]> {
+  // Onboarding-completed gate — see merchants.ts getOnlineMerchants.
   return query<MerchantQuote>(
-    `SELECT * FROM merchant_quotes
-     WHERE corridor_id = $1 AND is_online = TRUE
-     ORDER BY min_price_aed_per_usdt ASC`,
+    `SELECT mq.* FROM merchant_quotes mq
+     JOIN merchant_onboarding mo ON mo.merchant_id = mq.merchant_id
+                                AND mo.completed_at IS NOT NULL
+     WHERE mq.corridor_id = $1 AND mq.is_online = TRUE
+     ORDER BY mq.min_price_aed_per_usdt ASC`,
     [corridorId]
   );
 }

@@ -24,6 +24,7 @@ import { normalizeStatus as normalizeToMinimal } from "@/lib/orders/statusNormal
 import { enrichOrderResponse } from "@/lib/orders/enrichOrderResponse";
 import { auditLog } from "@/lib/auditLog";
 import { query as dbQuery } from "@/lib/db";
+import { gateOnboardingComplete } from "@/lib/db/repositories/merchantOnboarding";
 
 // Prevent Next.js from caching this route
 export const dynamic = "force-dynamic";
@@ -233,6 +234,16 @@ export async function PATCH(
     const isActualClaim = isClaimTransition;
     const prefetchedOrder = await getOrderWithRelations(id);
     __mark('prefetch_order');
+
+    // Onboarding gate: a merchant accepting/claiming an order counts as
+    // participating in a trade, so block until their setup is complete.
+    // Applied to claim transitions only — once a merchant is already
+    // assigned to an order, subsequent transitions (escrow lock, payment,
+    // confirm) should proceed even if onboarding state somehow regressed.
+    if (isClaimTransition) {
+      const onboardingGate = await gateOnboardingComplete(auth.actorType, auth.actorId);
+      if (onboardingGate) return onboardingGate;
+    }
 
     // Verify access to this order. For claim transitions, validate the order
     // is claimable instead of running the participant check (acceptor isn't

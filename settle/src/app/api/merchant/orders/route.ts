@@ -25,6 +25,7 @@ import { checkRateLimit, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { getIdempotencyKey } from '@/lib/idempotency';
 import { query } from '@/lib/db';
+import { gateOnboardingComplete } from '@/lib/db/repositories/merchantOnboarding';
 import { signPriceProof } from '@/lib/price/priceProof';
 import { getFinalPrice } from '@/lib/price/usdtInrPrice';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
@@ -242,6 +243,12 @@ export async function POST(request: NextRequest) {
       escrow_creator_wallet,
       expiry_minutes,
     } = parseResult.data;
+
+    // Onboarding gate: a merchant cannot place trades until their first-time
+    // setup is complete. Skipped onboardings are blocked too — the merchant
+    // must resume and finish before participating in trades.
+    const onboardingGate = await gateOnboardingComplete(auth.actorType, auth.actorId);
+    if (onboardingGate) return onboardingGate;
 
     // Verify the authenticated merchant matches the merchant_id in request
     if (auth.actorType === 'merchant' && auth.actorId !== merchant_id) {

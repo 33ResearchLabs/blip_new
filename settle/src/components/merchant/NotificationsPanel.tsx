@@ -178,6 +178,18 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                   onClick={() => {
                     group.ids.forEach((id) => onMarkRead(id));
                     if (notif.orderId) {
+                      // Sentinel orderIds (prefixed with __) are virtual
+                      // actions, not real orders. They dispatch a window
+                      // event that a feature-specific bridge listens for —
+                      // currently used by the onboarding flow to reopen its
+                      // overlay when the "Setup incomplete" notification
+                      // is tapped.
+                      if (notif.orderId.startsWith('__')) {
+                        if (notif.orderId === '__onboarding_resume__') {
+                          window.dispatchEvent(new Event('onboarding:resume-requested'));
+                        }
+                        return;
+                      }
                       if (notif.type === 'message' && onOpenChat) {
                         onOpenChat(notif.orderId);
                       } else {

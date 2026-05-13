@@ -90,6 +90,8 @@ export async function GET(request: NextRequest) {
         ) as merchant
       FROM merchant_offers o
       JOIN merchants m ON o.merchant_id = m.id
+      JOIN merchant_onboarding mo ON mo.merchant_id = m.id
+                                 AND mo.completed_at IS NOT NULL
       WHERE o.is_active = true
         AND m.status = 'active'
         AND m.is_online = true

@@ -44,9 +44,13 @@ export async function upsertProvider(
 }
 
 export async function getActiveProviders(): Promise<CorridorProvider[]> {
+  // Onboarding-completed gate — see merchants.ts getOnlineMerchants for
+  // the rationale. Grandfathered merchants pass via migration 121 backfill.
   return query<CorridorProvider>(
     `SELECT cp.* FROM corridor_providers cp
      JOIN merchants m ON cp.merchant_id = m.id
+     JOIN merchant_onboarding mo ON mo.merchant_id = m.id
+                                AND mo.completed_at IS NOT NULL
      WHERE cp.is_active = true AND m.is_online = true AND m.status = 'active'
      ORDER BY cp.fee_percentage ASC`
   );
@@ -68,6 +72,8 @@ export async function findBestProvider(
     `SELECT cp.*, m.rating as merchant_rating
      FROM corridor_providers cp
      JOIN merchants m ON cp.merchant_id = m.id
+     JOIN merchant_onboarding mo ON mo.merchant_id = m.id
+                                AND mo.completed_at IS NOT NULL
      WHERE cp.is_active = true
        AND m.is_online = true
        AND m.status = 'active'
@@ -94,6 +100,8 @@ export async function checkCorridorAvailability(
     `SELECT COUNT(*) as cnt, MIN(cp.fee_percentage) as min_fee
      FROM corridor_providers cp
      JOIN merchants m ON cp.merchant_id = m.id
+     JOIN merchant_onboarding mo ON mo.merchant_id = m.id
+                                AND mo.completed_at IS NOT NULL
      WHERE cp.is_active = true
        AND m.is_online = true
        AND m.status = 'active'
