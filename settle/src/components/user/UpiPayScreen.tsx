@@ -7,6 +7,8 @@ import { ChevronLeft, Loader2, Check, AlertCircle, ImagePlus } from "lucide-reac
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { PinSheet } from "@/components/user/PinSheet";
+import { UpiProcessingOverlay } from "@/components/user/UpiProcessingOverlay";
+import { useSolanaWallet } from "@/context/SolanaWalletContext";
 
 // ── UPI URL parsing ────────────────────────────────────────────────────────
 interface ParsedUpi {
@@ -110,6 +112,13 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   // escrow handoff.
   const [pinGate, setPinGate] = useState<"closed" | "verify" | "setup">("closed");
   const [hasPin, setHasPin] = useState<boolean | null>(null);
+  const [processing, setProcessing] = useState<null | "processing" | "success">(null);
+  // The merged PIN ↔ wallet secret. Lives only for the duration of the
+  // PIN-success → escrow handoff so we can unlock the embedded wallet
+  // automatically without a second prompt. Cleared immediately after.
+  const wallet = useSolanaWallet() as unknown as {
+    createOrUnlockWithPin?: (pin: string) => Promise<boolean>;
+  };
   useEffect(() => {
     let cancelled = false;
     fetchWithAuth("/api/user/pin")
@@ -522,7 +531,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
                 const over = usdtBalance !== null && need > usdtBalance;
                 return (
                   <p className={`mt-2 text-[11px] ${over ? "text-error" : "text-text-tertiary"}`}>
-                    Locks ≈ {need.toFixed(4)} USDT @ ₹{currentRate.toFixed(2)}
+                    ≈ {need.toFixed(4)} USDT @ ₹{currentRate.toFixed(2)}
                     {usdtBalance !== null && (
                       <> · Balance {usdtBalance.toFixed(4)} USDT</>
                     )}
@@ -570,8 +579,8 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
                   }`}
                 >
                   {overBalance
-                    ? "Insufficient USDT"
-                    : `Lock USDT & Pay ₹${formattedAmount || "0"}`}
+                    ? "Insufficient balance"
+                    : `Pay ₹${formattedAmount || "0"}`}
                 </motion.button>
               );
             })()}
@@ -579,7 +588,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
         )}
       </AnimatePresence>
 
-      {/* PIN gate — opens between "Lock USDT & Pay" tap and the escrow handoff. */}
+      {/* PIN gate — opens between Pay tap and the seamless processing flow. */}
       <PinSheet
         open={pinGate !== "closed"}
         mode={pinGate === "setup" ? "setup" : "verify"}
@@ -589,12 +598,31 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
             : undefined
         }
         onClose={() => setPinGate("closed")}
-        onSuccess={() => {
+        onSuccess={async (pin) => {
           setPinGate("closed");
-          // Refresh hasPin so subsequent payments use verify mode.
           setHasPin(true);
+          setProcessing("processing");
+          // Single-secret merge: use the same PIN to create or unlock the
+          // embedded wallet — so the user never sees a separate password
+          // prompt. Non-fatal on failure (older 12-char wallets still work
+          // through the legacy unlock screen further down the flow).
+          try {
+            if (wallet.createOrUnlockWithPin) {
+              await wallet.createOrUnlockWithPin(pin);
+            }
+          } catch { /* fall through to legacy unlock if needed */ }
+          // Hand off to the escrow flow. The Processing overlay stays up
+          // until the parent advances the screen.
           doSubmit();
         }}
+      />
+
+      {/* Seamless "Processing payment…" overlay between PIN and the next
+          screen. Stays up briefly; parent will unmount this whole screen
+          shortly after as it routes to the escrow handler. */}
+      <UpiProcessingOverlay
+        open={processing !== null}
+        stage={processing === "success" ? "success" : "processing"}
       />
     </div>
   );

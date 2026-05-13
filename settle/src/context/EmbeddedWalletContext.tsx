@@ -432,6 +432,40 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [actorId]);
 
+  // ── PIN-as-password merge ────────────────────────────────────────────
+  // Single secret for both the app PIN and the wallet — see comment in
+  // validatePasswordStrength. Creates the wallet on first use; unlocks
+  // an existing one otherwise. Safe to call repeatedly.
+  const createOrUnlockWithPin = useCallback(async (pin: string): Promise<boolean> => {
+    if (!actorId) return false;
+    if (!/^[0-9]{4,6}$/.test(pin)) return false;
+
+    // Wallet already exists → just unlock with PIN.
+    if (hasEncryptedWallet(actorId)) {
+      return unlockWallet(pin);
+    }
+
+    // No wallet yet → mint one with the PIN as password. Helper is
+    // required for v3+ blobs; bail with a clear failure if unreachable.
+    const helper = await fetchUnlockHelper();
+    if (!helper) return false;
+    try {
+      const { generateMnemonicWallet, saveEncryptedWallet, saveEncryptedMnemonic } =
+        await import('@/lib/wallet/embeddedWallet');
+      const { keypair, encrypted, encryptedMnemonic } =
+        await generateMnemonicWallet(pin, helper);
+      saveEncryptedWallet(actorId, encrypted);
+      saveEncryptedMnemonic(actorId, encryptedMnemonic);
+      setKeypair(keypair);
+      setWalletState('unlocked');
+      lastActivityRef.current = Date.now();
+      saveSessionKeypair(actorId, keypair);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [actorId, unlockWallet, fetchUnlockHelper]);
+
   // Delete wallet entirely (removes the encrypted blob too).
   const deleteWallet = useCallback(() => {
     if (!actorId) return;
@@ -801,6 +835,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
       actorId,
       setActorId,
       unlockWallet,
+      createOrUnlockWithPin,
       lockWallet,
       deleteWallet,
       setKeypairAndUnlock,

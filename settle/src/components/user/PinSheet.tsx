@@ -28,8 +28,10 @@ interface Props {
   /** Sub-headline (e.g. "Pay ₹500 to merchant@upi"). */
   subtitle?: string;
   onClose: () => void;
-  /** Resolves once verification (or setup) has succeeded server-side. */
-  onSuccess: () => void;
+  /** Resolves once verification (or setup) has succeeded server-side.
+   *  Receives the cleartext PIN so the caller can derive secondary
+   *  secrets (e.g. unlock the embedded wallet using the same PIN). */
+  onSuccess: (pin: string) => void;
 }
 
 const PIN_LEN_MIN = 4;
@@ -117,7 +119,7 @@ export function PinSheet({ open, mode, title, subtitle, onClose, onSuccess }: Pr
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data?.success) {
-        onSuccess();
+        onSuccess(pin);
         return;
       }
       setError(data?.error || "Incorrect PIN");
@@ -145,7 +147,7 @@ export function PinSheet({ open, mode, title, subtitle, onClose, onSuccess }: Pr
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data?.success) {
-        onSuccess();
+        onSuccess(pin);
         return;
       }
       setError(data?.error || "Failed to set PIN");
