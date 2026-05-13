@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Zap, Loader2, Eye, EyeOff, Mail, ChevronLeft, User, Store, ArrowRight, Check, X } from "lucide-react";
 import Link from "next/link";
 import { InstallPWAButton } from "@/components/InstallPWAButton";
+import { usePwaContext } from "@/hooks/usePwaContext";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import {
   validateUserUsername,
@@ -54,11 +55,16 @@ export function LandingPage({
   skipWelcome = false,
 }: LandingPageProps) {
   const router = useRouter();
+  // Hide merchant entry points when running as the User PWA — those routes
+  // are blocked by PwaAppGuard anyway, so the buttons would be dead.
+  const pwa = usePwaContext();
+  const hideMerchantLinks = pwa.standalone && pwa.app === "user";
   const [showPassword, setShowPassword] = useState(false);
 
-  // Left-swipe → merchant login (Tinder-style horizontal pan).
-  // Threshold: 80px drag OR fast flick (velocity < -400).
+  // Left-swipe → merchant login (Tinder-style horizontal pan). No-op inside
+  // the User PWA — merchant routes are blocked there.
   const onSwipeEnd = (_: unknown, info: PanInfo) => {
+    if (hideMerchantLinks) return;
     if (info.offset.x < -80 || info.velocity.x < -400) {
       router.push("/merchant/login?tab=signin");
     }
@@ -213,8 +219,8 @@ export function LandingPage({
           Choose your portal
         </motion.p>
 
-        <div className="relative z-10 w-full max-w-[720px] grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[
+        <div className={`relative z-10 w-full max-w-[720px] grid gap-4 ${hideMerchantLinks ? "grid-cols-1 max-w-[360px]" : "grid-cols-1 sm:grid-cols-2"}`}>
+          {([
             {
               href: "/login?tab=signin",
               label: "User",
@@ -223,15 +229,21 @@ export function LandingPage({
               glow: "rgba(168,247,98,0.55)",
               delay: 0.35,
             },
-            {
-              href: "/merchant/login?tab=signin",
-              label: "Merchant",
-              sub: "Run a P2P desk",
-              Icon: Store,
-              glow: "rgba(120,119,198,0.55)",
-              delay: 0.45,
-            },
-          ].map(({ href, label, sub, Icon, glow, delay }) => (
+            // Merchant tile is hidden inside the User PWA — that route is
+            // guarded by PwaAppGuard, so showing it would be a dead-end.
+            ...(hideMerchantLinks
+              ? []
+              : [
+                  {
+                    href: "/merchant/login?tab=signin",
+                    label: "Merchant",
+                    sub: "Run a P2P desk",
+                    Icon: Store,
+                    glow: "rgba(120,119,198,0.55)",
+                    delay: 0.45,
+                  },
+                ]),
+          ]).map(({ href, label, sub, Icon, glow, delay }) => (
             <motion.div
               key={label}
               initial={{ opacity: 0, y: 24, filter: "blur(10px)" }}
@@ -381,13 +393,15 @@ export function LandingPage({
             </Link>
             <div className="flex items-center gap-2">
               <InstallPWAButton />
-              <Link
-                href="/merchant/login"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
-              >
-                Merchant
-                <span aria-hidden>→</span>
-              </Link>
+              {!hideMerchantLinks && (
+                <Link
+                  href="/merchant/login"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
+                >
+                  Merchant
+                  <span aria-hidden>→</span>
+                </Link>
+              )}
             </div>
           </div>
 
@@ -720,33 +734,35 @@ export function LandingPage({
               Connect your wallet after signing in to enable on-chain trading
             </p>
 
-            <Link
-              href="/merchant/login?tab=register"
-              className="relative overflow-hidden flex items-center justify-between rounded-xl px-4 py-3 transition-all group bg-white text-[#0B0F14] shadow-[0_10px_30px_-10px_rgba(168,247,98,0.45)] hover:shadow-[0_14px_40px_-10px_rgba(168,247,98,0.6)]"
-              style={{
-                backgroundImage:
-                  "linear-gradient(120deg, #ffffff 0%, #f0fff4 55%, #e6fbe6 100%)",
-              }}
-            >
-              {/* corner glow */}
-              <span
-                aria-hidden
-                className="pointer-events-none absolute -right-6 -top-6 w-20 h-20 rounded-full"
-                style={{ background: "radial-gradient(circle, rgba(168,247,98,0.55), transparent 70%)" }}
-              />
-              <div className="relative">
-                <div className="inline-flex items-center gap-1.5 mb-1">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-emerald-700">For Merchants</span>
+            {!hideMerchantLinks && (
+              <Link
+                href="/merchant/login?tab=register"
+                className="relative overflow-hidden flex items-center justify-between rounded-xl px-4 py-3 transition-all group bg-white text-[#0B0F14] shadow-[0_10px_30px_-10px_rgba(168,247,98,0.45)] hover:shadow-[0_14px_40px_-10px_rgba(168,247,98,0.6)]"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(120deg, #ffffff 0%, #f0fff4 55%, #e6fbe6 100%)",
+                }}
+              >
+                {/* corner glow */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -right-6 -top-6 w-20 h-20 rounded-full"
+                  style={{ background: "radial-gradient(circle, rgba(168,247,98,0.55), transparent 70%)" }}
+                />
+                <div className="relative">
+                  <div className="inline-flex items-center gap-1.5 mb-1">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-emerald-700">For Merchants</span>
+                  </div>
+                  <p className="text-[13px] font-bold leading-tight">Run your own P2P desk</p>
+                  <p className="text-[10px] text-black/55 mt-0.5">Control spreads · earn on every trade</p>
                 </div>
-                <p className="text-[13px] font-bold leading-tight">Run your own P2P desk</p>
-                <p className="text-[10px] text-black/55 mt-0.5">Control spreads · earn on every trade</p>
-              </div>
-              <span className="relative shrink-0 ml-3 inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-full bg-[#0B0F14] text-white group-hover:translate-x-0.5 transition-transform">
-                Register
-                <span aria-hidden>→</span>
-              </span>
-            </Link>
+                <span className="relative shrink-0 ml-3 inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-full bg-[#0B0F14] text-white group-hover:translate-x-0.5 transition-transform">
+                  Register
+                  <span aria-hidden>→</span>
+                </span>
+              </Link>
+            )}
           </div>
           </div>
 
