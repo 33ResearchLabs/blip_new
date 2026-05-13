@@ -142,7 +142,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
             <button
               type="button"
               onClick={() => setActiveTab("notifications")}
-              className={`relative flex items-center gap-1.5 px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider uppercase transition-colors ${
+              className={`relative flex items-center gap-1 px-2 py-2.5 text-[9px] font-bold font-mono uppercase whitespace-nowrap transition-colors ${
                 activeTab === "notifications"
                   ? "text-foreground"
                   : "text-foreground/40 hover:text-foreground/70"
@@ -162,7 +162,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
             <button
               type="button"
               onClick={() => setActiveTab("getting_started")}
-              className={`relative flex items-center gap-1.5 px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider uppercase transition-colors ${
+              className={`relative flex items-center gap-1 px-2 py-2.5 text-[9px] font-bold font-mono uppercase whitespace-nowrap transition-colors ${
                 activeTab === "getting_started"
                   ? "text-foreground"
                   : "text-foreground/40 hover:text-foreground/70"
