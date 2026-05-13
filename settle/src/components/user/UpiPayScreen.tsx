@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import jsQR from "jsqr";
 import { ChevronLeft, Loader2, Check, AlertCircle, ImagePlus } from "lucide-react";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { PinSheet } from "@/components/user/PinSheet";
 
 // ── UPI URL parsing ────────────────────────────────────────────────────────
 interface ParsedUpi {
@@ -99,6 +101,23 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   // we never produce an on-chain order the escrow flow would reject anyway.
   const balanceReady = usdtBalance !== null;
   const hasBalance = balanceReady && usdtBalance > 0;
+
+  // PIN gating — required on every Pay action. Three states:
+  //   - unknown: still loading whether the user has set a PIN
+  //   - need_setup: open PinSheet in setup mode
+  //   - need_verify: open PinSheet in verify mode
+  // After successful verify, we call doSubmit() which proceeds to the
+  // escrow handoff.
+  const [pinGate, setPinGate] = useState<"closed" | "verify" | "setup">("closed");
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchWithAuth("/api/user/pin")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setHasPin(!!d?.data?.has_pin); })
+      .catch(() => { if (!cancelled) setHasPin(false); });
+    return () => { cancelled = true; };
+  }, []);
   const [stage, setStage] = useState<"scanning" | "entering">("scanning");
   const [parsed, setParsed] = useState<ParsedUpi | null>(null);
   const [amount, setAmount] = useState("");
@@ -231,26 +250,45 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   };
 
   // ── Submit confirmed payment ──────────────────────────────────────────
-  const submit = () => {
-    if (!parsed) return;
+  // Split submit() into the validation step (runs immediately on tap)
+  // and doSubmit() which actually fires the escrow handoff after the PIN
+  // sheet succeeds.
+  const validateBeforeSubmit = (): { amt: number; cryptoUsdt: number } | null => {
+    if (!parsed) return null;
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
       setErrorMsg("Enter a valid amount");
-      return;
+      return null;
     }
     if (!currentRate || currentRate <= 0) {
       setErrorMsg("Live USDT/INR rate unavailable. Wait a moment and retry.");
-      return;
+      return null;
     }
     const cryptoUsdt = Math.ceil((amt / currentRate) * 10000) / 10000;
-    // Hard balance gate — also enforced again inside confirmEscrow, but
-    // failing fast here avoids a confusing escrow-screen detour.
     if (usdtBalance !== null && cryptoUsdt > usdtBalance) {
-      setErrorMsg(
-        `Need ${cryptoUsdt.toFixed(4)} USDT. You have ${usdtBalance.toFixed(4)}.`,
-      );
-      return;
+      setErrorMsg(`Need ${cryptoUsdt.toFixed(4)} USDT. You have ${usdtBalance.toFixed(4)}.`);
+      return null;
     }
+    return { amt, cryptoUsdt };
+  };
+
+  const handlePayTap = () => {
+    const v = validateBeforeSubmit();
+    if (!v) return;
+    if (hasPin === false) {
+      setPinGate("setup");
+    } else {
+      setPinGate("verify");
+    }
+  };
+
+  const doSubmit = () => {
+    if (!parsed) return;
+    const amt = Number(amount);
+    // Re-validate just in case state changed while PIN sheet was open.
+    const v = validateBeforeSubmit();
+    if (!v) return;
+    const cryptoUsdt = v.cryptoUsdt;
     if (UPI_BASE) {
       void fetch(`${UPI_BASE}/api/requests`, {
         method: "POST",
@@ -523,7 +561,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
               return (
                 <motion.button
                   whileTap={disabled ? undefined : { scale: 0.98 }}
-                  onClick={submit}
+                  onClick={handlePayTap}
                   disabled={disabled}
                   className={`w-full py-3.5 rounded-xl text-sm font-bold tracking-[-0.01em] transition-colors ${
                     disabled
@@ -540,6 +578,24 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* PIN gate — opens between "Lock USDT & Pay" tap and the escrow handoff. */}
+      <PinSheet
+        open={pinGate !== "closed"}
+        mode={pinGate === "setup" ? "setup" : "verify"}
+        subtitle={
+          parsed && amount
+            ? `Pay ₹${Number(amount).toFixed(2)} to ${parsed.pn || parsed.pa}`
+            : undefined
+        }
+        onClose={() => setPinGate("closed")}
+        onSuccess={() => {
+          setPinGate("closed");
+          // Refresh hasPin so subsequent payments use verify mode.
+          setHasPin(true);
+          doSubmit();
+        }}
+      />
     </div>
   );
 }

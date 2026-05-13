@@ -116,6 +116,9 @@ export async function POST(request: NextRequest) {
       escrow_tx_hash,
       expected_rate,
       expected_fee_bps,
+      upi_vpa,
+      upi_payee_name,
+      upi_fiat_inr,
     } = parseResult.data;
 
     // Authorization: stricter token auth for order creation (financial
@@ -288,6 +291,10 @@ export async function POST(request: NextRequest) {
               escrow_trade_pda,
               escrow_pda,
               escrow_creator_wallet,
+              // UPI scan-to-pay metadata (sell-only; harmless when undefined)
+              upi_vpa,
+              upi_payee_name,
+              upi_fiat_inr,
               corridor_id: orderCorridorId,
               fiat_currency: orderFiatCurrency,
             },

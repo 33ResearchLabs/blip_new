@@ -39,6 +39,7 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { formatCrypto } from "@/lib/format";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { MerchantModals } from "@/components/merchant/MerchantModals";
+import { MerchantUpiPayModal } from "@/components/merchant/MerchantUpiPayModal";
 import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayout";
 import { MerchantTour } from "@/components/merchant/MerchantTour";
 import { useMerchantTour } from "@/hooks/useMerchantTour";
@@ -91,6 +92,11 @@ export default function MerchantDashboard() {
     counterpartyType: "user" | "merchant";
   } | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+
+  // UPI-pay popup state. Set when a sell order with upi_vpa is accepted
+  // (auto-open), or when the merchant explicitly reopens via the order card's
+  // "Pay via UPI" button after dismissing.
+  const [upiPayOrder, setUpiPayOrder] = useState<Order | null>(null);
   const [isMerchantOnline, setIsMerchantOnline] = useState(true);
   const [collapsed, setCollapsed] = useState({
     activity: false,
@@ -412,7 +418,7 @@ export default function MerchantDashboard() {
     setIsCreatingTrade,
     createTradeError,
     setCreateTradeError,
-    acceptOrder,
+    acceptOrder: rawAcceptOrder,
     acceptWithSaed,
     retryJoinEscrow,
     signToClaimOrder,
@@ -423,6 +429,40 @@ export default function MerchantDashboard() {
     confirmPayment,
     handleDirectOrderCreation: rawHandleDirectOrderCreation,
   } = orderActions;
+
+  // Wrap acceptOrder to auto-open the UPI-pay modal for sell orders that
+  // carry a scanned-VPA destination. Non-UPI orders are unaffected.
+  const acceptOrder = useCallback(
+    async (order: Order) => {
+      const result = await rawAcceptOrder(order);
+      // Order shape from PendingOrdersPanel sometimes uses snake_case keys
+      // (db rows) and sometimes camelCase (UI-mapped). Probe both.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const o = order as any;
+      const vpa: string | undefined = o.upi_vpa || o.upiVpa;
+      if (vpa) setUpiPayOrder(order);
+      return result;
+    },
+    [rawAcceptOrder],
+  );
+
+  // Any order card with a `upi_vpa` can reopen the modal after dismissal
+  // by dispatching this DOM event. Avoids plumbing a callback through 6
+  // layers of order-list components.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const order = (e as CustomEvent).detail as Order | null;
+      if (order) setUpiPayOrder(order);
+    };
+    window.addEventListener("blip:open-upi-pay", onOpen);
+    return () => window.removeEventListener("blip:open-upi-pay", onOpen);
+  }, []);
+
+  const markUpiOrderPaid = useCallback(async () => {
+    if (!upiPayOrder) return;
+    await markPaymentSent(upiPayOrder);
+    setUpiPayOrder(null);
+  }, [upiPayOrder, markPaymentSent]);
 
   const handleDirectOrderCreation = useCallback(
     (tradeType?: "buy" | "sell", priorityFee?: number, pair?: "usdt_aed" | "usdt_inr") => {
@@ -1170,6 +1210,15 @@ export default function MerchantDashboard() {
         open={showWallet}
         onClose={() => setShowWallet(false)}
         onOpenSettings={() => { setShowWallet(false); setShowSettings(true); }}
+      />
+
+      {/* UPI-pay modal: auto-opens for a sell order carrying upi_vpa, and
+          can be reopened later via the order card's "Pay via UPI" button. */}
+      <MerchantUpiPayModal
+        order={(upiPayOrder as unknown as { id: string }) ?? { id: "" }}
+        open={!!upiPayOrder}
+        onClose={() => setUpiPayOrder(null)}
+        onMarkPaid={markUpiOrderPaid}
       />
     </div>
   );

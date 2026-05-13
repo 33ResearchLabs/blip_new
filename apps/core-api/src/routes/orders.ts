@@ -812,6 +812,29 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           syncReceiptTransition(id, 'PAYMENT_SENT');
         } else if (s === 'completed') {
           syncReceiptTransition(id, 'COMPLETED');
+          // Grant scratch-card reward to the SELL user. 20-50 bps of
+          // crypto_amount, randomized. ON CONFLICT keeps this idempotent
+          // if the completion handler ever re-fires.
+          if (result.order.type === 'sell' && result.order.user_id) {
+            const order = result.order as { user_id: string; crypto_amount: string | number };
+            void (async () => {
+              try {
+                const bps = 20 + Math.floor(Math.random() * 31); // 20..50 inclusive
+                const cryptoAmt = Number(order.crypto_amount);
+                if (!Number.isFinite(cryptoAmt) || cryptoAmt <= 0) return;
+                const amount = +(cryptoAmt * bps / 10_000).toFixed(6);
+                if (amount <= 0) return;
+                await dbQuery(
+                  `INSERT INTO user_rewards (user_id, order_id, amount_usdt, reward_bps, reason)
+                   VALUES ($1, $2, $3, $4, 'sell_completed')
+                   ON CONFLICT (order_id) DO NOTHING`,
+                  [order.user_id, id, amount, bps],
+                );
+              } catch (e) {
+                fastify.log.warn({ err: e, id }, 'Reward grant failed (non-fatal)');
+              }
+            })();
+          }
         } else if (s === 'cancelled') {
           syncReceiptTransition(id, 'CANCELLED');
         } else if (s === 'expired') {

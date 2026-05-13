@@ -492,11 +492,24 @@ export function useUserTradeCreation({
       // in localStorage under a tx-hash key so a browser crash, network drop,
       // or backend 5xx between "escrow funded on-chain" and "order written
       // to DB" can self-heal on the next app load.
+      // UPI scan-to-pay metadata (set by UpiPayScreen → page.tsx before
+      // jumping to the escrow screen). Cleared after read so subsequent
+      // non-UPI trades don't carry stale values.
+      let upiMeta: { vpa: string; payeeName: string; fiatInr: number; note: string; at: number } | null = null;
+      try {
+        const raw = sessionStorage.getItem('blip_pending_upi_payment');
+        if (raw) {
+          upiMeta = JSON.parse(raw);
+          // 15-minute freshness window — match the default order expiry.
+          if (!upiMeta || Date.now() - (upiMeta.at || 0) > 15 * 60 * 1000) upiMeta = null;
+        }
+      } catch { upiMeta = null; }
+
       const orderPayload = {
         user_id: userId,
         crypto_amount: amountNum,
         type: 'sell' as const,
-        payment_method: paymentMethod,
+        payment_method: upiMeta ? 'upi' : paymentMethod,
         preference: tradePreference,
         pair: selectedPair,
         // CRITICAL: Include escrow_tx_hash so backend creates order as 'escrowed' (escrow-first model)
@@ -507,7 +520,13 @@ export function useUserTradeCreation({
         escrow_creator_wallet: solanaWallet.walletAddress,
         user_bank_account: selectedBankDetails ? JSON.stringify(selectedBankDetails) : undefined,
         payment_method_id: selectedPaymentMethod?.id,
+        // UPI scan-to-pay fields (sell-only; only present on UPI flow)
+        upi_vpa: upiMeta?.vpa,
+        upi_payee_name: upiMeta?.payeeName,
+        upi_fiat_inr: upiMeta?.fiatInr,
       };
+      // Don't clear sessionStorage yet — only after a successful POST below,
+      // so an orphan-recovery retry still has the same UPI metadata.
       const idempotencyKey = txAnchoredKey(escrowResult.txHash, 'create_sell_order');
       const orphanKey = `blip_orphan_sell_${escrowResult.txHash}`;
 
@@ -570,8 +589,10 @@ export function useUserTradeCreation({
         return;
       }
 
-      // Success — clear orphan record.
+      // Success — clear orphan record and UPI scan metadata (already
+      // persisted on the order row server-side at this point).
       try { localStorage.removeItem(orphanKey); } catch {}
+      try { sessionStorage.removeItem('blip_pending_upi_payment'); } catch {}
 
       // Step 2: Record escrow on the newly created order
       const escrowRes = await fetchWithAuth(`/api/orders/${orderData.data.id}/escrow`, {

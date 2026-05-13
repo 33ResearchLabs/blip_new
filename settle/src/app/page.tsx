@@ -24,6 +24,7 @@ import { useUserEffects } from "@/hooks/useUserEffects";
 import { useSolanaWalletSafe } from "@/hooks/useSolanaWalletSafe";
 import { useOrphanedEscrowRecovery } from "@/hooks/useOrphanedEscrowRecovery";
 import { IssueReporter } from "@/components/IssueReporter";
+import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
 
 import type { Screen } from "@/components/user/screens/types";
 import { FEE_CONFIG } from "@/components/user/screens/helpers";
@@ -394,6 +395,27 @@ export default function Home() {
     (o) => !["complete", "cancelled", "expired", "disputed"].includes(o.status),
   );
   const completedOrders = orders.filter((o) => o.status === "complete");
+  // ── Scratch-card reward modal trigger ───────────────────────────────────
+  // When a SELL order transitions to "complete"/"completed" we surface a
+  // scratch card with the freshly-granted reward (granted server-side in
+  // core-api on status=completed). Track previous statuses in a ref so we
+  // only fire on the *transition*, not on every render.
+  const prevOrderStatusRef = useRef<Map<string, string>>(new Map());
+  const [showScratchReward, setShowScratchReward] = useState(false);
+  useEffect(() => {
+    const prev = prevOrderStatusRef.current;
+    let justCompletedSell = false;
+    for (const o of orders) {
+      const cur = String(o.status);
+      const was = prev.get(o.id);
+      prev.set(o.id, cur);
+      if (was && was !== cur && (cur === "complete" || cur === "completed") && o.type === "sell") {
+        justCompletedSell = true;
+      }
+    }
+    if (justCompletedSell) setShowScratchReward(true);
+  }, [orders]);
+
   const cancelledOrders = orders.filter(
     (o) => o.status === "cancelled" || o.status === "expired",
   );
@@ -920,6 +942,17 @@ export default function Home() {
       />
 
       <IssueReporter authed={!!auth.userId} />
+
+      {/* Scratch-card reward — opens automatically when a sell order
+          transitions to completed. After "Back to wallet", route to home. */}
+      <ScratchRewardModal
+        open={showScratchReward}
+        onClose={() => setShowScratchReward(false)}
+        onDone={() => {
+          setShowScratchReward(false);
+          setScreen("home");
+        }}
+      />
     </div>
   );
 }

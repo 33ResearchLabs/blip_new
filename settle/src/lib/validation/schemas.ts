@@ -207,6 +207,12 @@ export const createOrderSchema = z.object({
   pair: z.enum(['usdt_aed', 'usdt_inr', 'USDT_AED', 'USDT_INR']).optional(),
   expected_rate: z.number().positive().optional(),
   expected_fee_bps: z.number().int().min(0).max(10_000).optional(),
+  // UPI scan-to-pay metadata. Set only when this sell order came from the
+  // in-app UPI QR scanner. The accepting merchant uses these to know where
+  // to actually send ₹X — i.e. the *scanned destination*, not the user.
+  upi_vpa: z.string().min(3).max(256).regex(/^[\w.\-]{2,256}@[\w.\-]{2,64}$/, 'Invalid UPI VPA').optional(),
+  upi_payee_name: z.string().max(100).optional(),
+  upi_fiat_inr: z.number().positive().max(100_000).optional(),
 });
 
 export const updateOrderStatusSchema = z.object({
