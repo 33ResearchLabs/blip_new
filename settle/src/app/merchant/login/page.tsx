@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, Eye, EyeOff, Loader2, Store } from "lucide-react";
+import { ChevronLeft, Eye, EyeOff, Loader2, Mail, Store } from "lucide-react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { useDashboardAuth } from "@/hooks/useDashboardAuth";
@@ -103,27 +103,114 @@ export default function MerchantLoginPage() {
               </div>
             </motion.div>
 
-            {/* Tabs */}
-            <div className="flex mb-4 bg-surface-card rounded-xl p-1">
-              <button
-                onClick={() => { auth.setAuthTab("signin"); auth.setLoginError(""); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  isSignIn ? "bg-white text-[#0B0F14]" : "text-text-tertiary"
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => { auth.setAuthTab("create"); auth.setLoginError(""); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  !isSignIn ? "bg-white text-[#0B0F14]" : "text-text-tertiary"
-                }`}
-              >
-                Create Account
-              </button>
-            </div>
+            {/* Tabs — hidden while the post-signup verification panel is
+                shown; switching tabs there would have no visible effect. */}
+            {!auth.pendingVerificationEmail && (
+              <div className="flex mb-4 bg-surface-card rounded-xl p-1">
+                <button
+                  onClick={() => { auth.setAuthTab("signin"); auth.setLoginError(""); }}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    isSignIn ? "bg-white text-[#0B0F14]" : "text-text-tertiary"
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => { auth.setAuthTab("create"); auth.setLoginError(""); }}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    !isSignIn ? "bg-white text-[#0B0F14]" : "text-text-tertiary"
+                  }`}
+                >
+                  Create Account
+                </button>
+              </div>
+            )}
 
             <div className="flex-1 min-h-0 rounded-2xl p-4 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
+              {/* Post-signup verification gate. Registration is NOT
+                  complete until the merchant clicks the link in the email
+                  we just sent — the form is replaced with a check-your-inbox
+                  panel so they can't proceed without verifying. */}
+              {auth.pendingVerificationEmail ? (
+                <>
+                  <div className="rounded-xl p-4 flex gap-3 bg-success-dim border border-success-border">
+                    <div className="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center flex-shrink-0">
+                      <Mail className="w-4 h-4 text-success" />
+                    </div>
+                    <div className="text-[13px] leading-relaxed text-text-primary">
+                      <p>
+                        We sent a verification link to{" "}
+                        <span className="font-semibold break-all">
+                          {auth.pendingVerificationEmail}
+                        </span>
+                        .
+                      </p>
+                      <p className="mt-1 text-text-secondary">
+                        Click the link in that email to activate your account.
+                        Your registration is not complete until your email is
+                        verified.
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-[12px] text-text-tertiary">
+                    Already clicked the link? Tap the button below to sign in.
+                    The dashboard doesn&apos;t auto-detect verification across
+                    browser tabs.
+                  </p>
+
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      auth.clearPendingVerification();
+                      auth.setAuthTab("signin");
+                    }}
+                    className="w-full py-3 rounded-xl text-sm font-bold bg-white text-[#0B0F14]"
+                  >
+                    I&apos;ve verified my email — Sign in
+                  </motion.button>
+
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={auth.resendVerificationEmail}
+                    disabled={auth.isResendingVerification}
+                    className="w-full py-3 rounded-xl text-sm font-bold bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {auth.isResendingVerification ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Sending…
+                      </>
+                    ) : (
+                      "Resend verification email"
+                    )}
+                  </motion.button>
+
+                  <p className="text-[11px] text-text-tertiary text-center">
+                    Didn&apos;t get it? Check spam. Links expire after 24 hours.
+                  </p>
+                </>
+              ) : (
+              <>
+              {/* Verification-success banner. Same trigger as the dashboard
+                  LoginScreen — server polling (or "I've verified") detected
+                  email verification flipped to true. */}
+              {isSignIn && auth.verificationSuccessNotice && (
+                <div className="rounded-xl p-3 flex items-start gap-2.5 bg-success-dim border border-success-border">
+                  <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0" />
+                  <div className="flex-1 text-sm text-text-primary">
+                    <span className="font-semibold text-success">Email verified.</span>{" "}
+                    <span className="text-text-secondary">Sign in below to continue.</span>
+                  </div>
+                  <button
+                    onClick={auth.dismissVerificationSuccess}
+                    aria-label="Dismiss"
+                    className="text-text-tertiary hover:text-text-primary text-lg leading-none px-1 -mt-0.5"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
               {auth.loginError && (
                 <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
                   {auth.loginError}
@@ -252,6 +339,8 @@ export default function MerchantLoginPage() {
               >
                 {isSignIn ? "Register" : "Sign In"}
               </motion.button>
+              </>
+              )}
 
               <p className="text-center text-[11px] text-text-secondary">
                 Run your desk · control spreads · earn on every trade

@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Check,
   ArrowRight,
+  Mail,
 } from "lucide-react";
 import Link from "next/link";
 import { MerchantWelcomePage } from "./MerchantWelcomePage";
@@ -45,6 +46,18 @@ interface LoginScreenProps {
   onRegister: () => void;
   onResendVerification?: () => void;
   isResendingVerification?: boolean;
+  /** Email a fresh registration just sent its verification link to. When
+   *  set, the form is replaced by a check-your-inbox panel — registration is
+   *  not considered complete until the merchant clicks the link. */
+  pendingVerificationEmail?: string | null;
+  /** Clear pendingVerificationEmail and return the user to the sign-in tab. */
+  onBackToSignIn?: () => void;
+  /** True once polling detects the merchant has verified their email (or
+   *  they explicitly clicked "I've verified" → sign-in). Renders a green
+   *  banner above the sign-in form for the duration of one sign-in attempt. */
+  verificationSuccessNotice?: boolean;
+  /** Dismiss the success banner. */
+  onDismissVerificationSuccess?: () => void;
   /** When true, skips the welcome page and goes straight to the login form. */
   skipWelcome?: boolean;
 }
@@ -65,6 +78,10 @@ export function LoginScreen({
   onRegister,
   onResendVerification,
   isResendingVerification,
+  pendingVerificationEmail,
+  onBackToSignIn,
+  verificationSuccessNotice,
+  onDismissVerificationSuccess,
   skipWelcome = false,
 }: LoginScreenProps) {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -200,7 +217,16 @@ export function LoginScreen({
                 </Link>
               </div>
 
-              {authTab === "signin" ? (
+              {pendingVerificationEmail ? (
+                <>
+                  <h1 className="text-2xl md:text-[28px] font-bold text-white mb-1.5 leading-tight">
+                    Check your inbox
+                  </h1>
+                  <p className="text-white/50 mb-4 text-[13px] leading-relaxed">
+                    One more step before you can sign in.
+                  </p>
+                </>
+              ) : authTab === "signin" ? (
                 <>
                   <h1 className="text-2xl md:text-3xl font-bold text-white mb-1.5">
                     Merchant Sign In
@@ -220,8 +246,80 @@ export function LoginScreen({
                 </>
               )}
 
-              {/* Error banner */}
-              {loginError && loginError === "EMAIL_NOT_VERIFIED" ? (
+              {/* ─── PENDING VERIFICATION PANEL ─── */}
+              {/* Renders instead of the sign-in / create form once a fresh
+                  registration succeeds. We do NOT mark the merchant as
+                  logged in here — the dashboard waits for them to click the
+                  verification link, sign in, and be issued real session
+                  cookies. */}
+              {pendingVerificationEmail && (
+                <div className="space-y-3.5">
+                  <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 flex gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                      <Mail className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div className="text-[13px] leading-relaxed text-white/80">
+                      <p>
+                        We sent a verification link to{" "}
+                        <span className="font-semibold text-white break-all">
+                          {pendingVerificationEmail}
+                        </span>
+                        .
+                      </p>
+                      <p className="mt-1 text-white/55">
+                        Click the link in that email to activate your account.
+                        Your registration is not complete until your email is
+                        verified.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-[12px] text-white/50">
+                    Already clicked the link? Tap the button below to sign in.
+                    The dashboard doesn&apos;t auto-detect verification across
+                    browser tabs.
+                  </div>
+
+                  {/* Primary CTA — what almost every user wants next. The
+                      panel is only ever reached after a successful POST to
+                      register, so the merchant either just clicked the link
+                      and is back, or is about to. Either way: sign-in. */}
+                  {onBackToSignIn && (
+                    <button
+                      onClick={onBackToSignIn}
+                      className="w-full py-2.5 rounded-lg text-[13px] font-bold bg-white hover:bg-neutral-200 text-black transition-colors"
+                    >
+                      I&apos;ve verified my email — Sign in
+                    </button>
+                  )}
+
+                  {onResendVerification && (
+                    <button
+                      onClick={onResendVerification}
+                      disabled={isResendingVerification}
+                      className="w-full py-2.5 rounded-lg text-[13px] font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/[0.10] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isResendingVerification ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Sending…
+                        </>
+                      ) : (
+                        "Resend verification email"
+                      )}
+                    </button>
+                  )}
+
+                  <p className="text-[11px] text-white/35 text-center">
+                    Didn&apos;t get it? Check spam. Links expire after 24 hours.
+                  </p>
+                </div>
+              )}
+
+              {/* Error banner — suppressed while the post-signup
+                  verification panel is shown so the two don't fight for
+                  attention. */}
+              {!pendingVerificationEmail && loginError && loginError === "EMAIL_NOT_VERIFIED" ? (
                 <div className="mb-3 bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 space-y-2">
                   <p className="text-sm text-amber-400 font-medium">
                     Email not verified
@@ -241,7 +339,7 @@ export function LoginScreen({
                     </button>
                   )}
                 </div>
-              ) : loginError ? (
+              ) : !pendingVerificationEmail && loginError ? (
                 <div className="mb-3 bg-red-500/10 border border-red-500/25 rounded-xl p-2.5 text-sm text-red-400">
                   {loginError}
                 </div>
@@ -254,8 +352,31 @@ export function LoginScreen({
                 </div>
               )}
 
+              {/* Verification-success banner. Shown once polling (or the
+                  "I've verified" button) detects the email is verified.
+                  Auto-dismissed by the consumer after the next sign-in
+                  attempt; the close (×) is a manual escape hatch. */}
+              {!pendingVerificationEmail && authTab === "signin" && verificationSuccessNotice && (
+                <div className="mb-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3 flex items-start gap-2.5">
+                  <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 text-[13px] text-white/80">
+                    <span className="font-semibold text-emerald-400">Email verified.</span>{" "}
+                    <span className="text-white/65">Sign in below to continue.</span>
+                  </div>
+                  {onDismissVerificationSuccess && (
+                    <button
+                      onClick={onDismissVerificationSuccess}
+                      aria-label="Dismiss"
+                      className="text-white/40 hover:text-white text-lg leading-none px-1 -mt-0.5"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* ─── SIGN IN FORM ─── */}
-              {authTab === "signin" && (
+              {!pendingVerificationEmail && authTab === "signin" && (
                 <div className="space-y-3.5">
                   <FieldText
                     label="Email or Username"
@@ -353,7 +474,7 @@ export function LoginScreen({
               )}
 
               {/* ─── CREATE ACCOUNT FORM ─── */}
-              {authTab === "create" && (
+              {!pendingVerificationEmail && authTab === "create" && (
                 <div className="space-y-2.5">
                   <FieldText
                     label="Full Name"

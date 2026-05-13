@@ -43,6 +43,16 @@ export function useDashboardAuth({
   // Email verification state
   const [unverifiedMerchantId, setUnverifiedMerchantId] = useState<string | null>(null);
   const [isResendingVerification, setIsResendingVerification] = useState(false);
+  // Set after a successful registration response while the merchant has not
+  // yet clicked the verification link. The dashboard refuses to mount until
+  // it's cleared; the LoginScreen renders a "check your inbox" panel instead
+  // of the form so the user can't proceed without verifying.
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
+  // Surface a green "Email verified — sign in to continue" banner above the
+  // sign-in form for one render cycle after we detect verification (either
+  // via ?verified=true on this tab, or via a storage event from a sibling
+  // tab that just landed on the verify redirect).
+  const [verificationSuccessNotice, setVerificationSuccessNotice] = useState(false);
 
   // 2FA state
   const [pending2FA, setPending2FA] = useState<{ pendingToken: string; merchantName: string } | null>(null);
@@ -294,6 +304,26 @@ export function useDashboardAuth({
 
       const data = await res.json();
       if (data.success && data.data.merchant) {
+        // Registration is NOT complete until the merchant clicks the link in
+        // the verification email. The backend already returns
+        // requiresEmailVerification=true and does not issue auth cookies on
+        // this response — so flipping isLoggedIn here used to put the UI in
+        // a "logged in" state with no actual session, and every subsequent
+        // protected call 401'd. Show a check-your-inbox panel instead.
+        if (data.data.requiresEmailVerification) {
+          setPendingVerificationEmail(registerForm.email.trim().toLowerCase());
+          // Capture the merchant id so the existing resend-verification
+          // flow can target this account without a separate lookup.
+          setUnverifiedMerchantId(data.data.merchant.id);
+          setLoginError('');
+          // Clear the password so it doesn't linger in memory while the
+          // user goes to check their inbox.
+          setRegisterForm(p => ({ ...p, password: '', confirmPassword: '' }));
+          return;
+        }
+        // Fallback path: backend chose not to require email verification
+        // for this account (e.g. an admin-provisioned bypass). Same as
+        // before — log them in.
         setMerchantId(data.data.merchant.id);
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
@@ -302,11 +332,10 @@ export function useDashboardAuth({
           setTimeout(() => setShowWalletPrompt(true), 500);
         }
       } else {
-        if (res.status === 409) {
-          setLoginError('An account with this email already exists. Please sign in instead.');
-        } else {
-          setLoginError(data.error || 'Registration failed');
-        }
+        // Trust the backend message — a 409 can be either "email already
+        // registered" or "business name already taken", and the original
+        // hardcoded text wrongly blamed the email in both cases.
+        setLoginError(data.error || 'Registration failed');
       }
     } catch (err) {
       console.error('Registration error:', err);
@@ -315,6 +344,92 @@ export function useDashboardAuth({
       setIsRegistering(false);
     }
   }, [registerForm, isMockMode, setMerchantId, setMerchantInfo, setIsLoggedIn, setShowWalletPrompt]);
+
+  const clearPendingVerification = useCallback(() => {
+    setPendingVerificationEmail(null);
+    setUnverifiedMerchantId(null);
+    setLoginError('');
+  }, []);
+
+  const dismissVerificationSuccess = useCallback(() => {
+    setVerificationSuccessNotice(false);
+  }, []);
+
+  // Poll the backend while the "check your inbox" panel is shown so we can
+  // auto-advance the moment the merchant clicks the verification link —
+  // including when that click happens on a different device (phone, etc).
+  // Server-authoritative: there is no client-side trust, no localStorage,
+  // and no cross-tab signal. The endpoint returns only { verified: boolean }
+  // and is rate-limited so polling can't be weaponised.
+  //
+  // Cadence: every 4s for the first minute, then back off to every 12s.
+  // Stop polling after 15 minutes — link still works, user just has to
+  // hit "I've verified my email" manually. Also polls immediately on
+  // window focus so returning to this tab feels instant.
+  useEffect(() => {
+    if (!pendingVerificationEmail || !unverifiedMerchantId) return;
+    if (typeof window === 'undefined') return;
+
+    let cancelled = false;
+    const startedAt = Date.now();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const advanceOnVerified = () => {
+      if (cancelled) return;
+      // Pre-fill the sign-in email so the merchant only has to type their
+      // password. Identity has already been confirmed server-side; this
+      // is purely a convenience.
+      setLoginForm(p => ({ ...p, email: pendingVerificationEmail }));
+      setPendingVerificationEmail(null);
+      setUnverifiedMerchantId(null);
+      setAuthTab('signin');
+      setVerificationSuccessNotice(true);
+    };
+
+    const checkOnce = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetchWithAuth(
+          `/api/auth/merchant/verification-status?merchantId=${encodeURIComponent(unverifiedMerchantId)}`,
+          { method: 'GET' },
+        );
+        if (cancelled) return;
+        if (!res.ok) return; // transient — try again next tick
+        const data = await res.json();
+        if (data?.success && data?.verified) {
+          advanceOnVerified();
+        }
+      } catch {
+        // Network blip — just wait for the next tick.
+      }
+    };
+
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > 15 * 60_000) return; // give up after 15 minutes
+      const delay = elapsed < 60_000 ? 4_000 : 12_000;
+      timer = setTimeout(async () => {
+        await checkOnce();
+        scheduleNext();
+      }, delay);
+    };
+
+    // Fire one immediate check so the panel reacts within a second of
+    // mounting if the user verified before the panel rendered (e.g.
+    // refreshed the tab after verifying).
+    void checkOnce();
+    scheduleNext();
+
+    const onFocus = () => { void checkOnce(); };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [pendingVerificationEmail, unverifiedMerchantId]);
 
   const handleLogout = useCallback(() => {
     // Server-side logout — invalidates the session row and clears the
@@ -440,6 +555,8 @@ export function useDashboardAuth({
 
     // Email verification state
     unverifiedMerchantId, isResendingVerification, resendVerificationEmail,
+    pendingVerificationEmail, clearPendingVerification,
+    verificationSuccessNotice, dismissVerificationSuccess,
 
     // 2FA state
     pending2FA, totpCode, setTotpCode, isVerifying2FA,
