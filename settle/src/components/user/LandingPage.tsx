@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, type PanInfo } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Zap, Loader2, Eye, EyeOff, Mail, ChevronLeft, User, Store, ArrowRight } from "lucide-react";
+import { Zap, Loader2, Eye, EyeOff, Mail, ChevronLeft, User, Store, ArrowRight, Check, X } from "lucide-react";
 import Link from "next/link";
 import { InstallPWAButton } from "@/components/InstallPWAButton";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import {
   validateUserUsername,
   validateUserEmail,
@@ -22,6 +23,20 @@ interface LandingPageProps {
   isLoggingIn: boolean;
   loginError: string;
   setLoginError: (e: string) => void;
+  /** Email a fresh registration just sent its verification link to. When
+   *  set, the form is replaced by a check-your-inbox panel — registration
+   *  is not considered complete until the user clicks the link. */
+  pendingVerificationEmail?: string | null;
+  /** Clear pendingVerificationEmail and return to the sign-in tab. */
+  onClearPendingVerification?: () => void;
+  /** Resend the verification email. Same handler used by the
+   *  EMAIL_NOT_VERIFIED login banner. */
+  onResendVerification?: () => void;
+  isResendingVerification?: boolean;
+  /** True once polling (or the manual "I've verified" button) detects the
+   *  email is verified. Renders a green banner above the sign-in form. */
+  verificationSuccessNotice?: boolean;
+  onDismissVerificationSuccess?: () => void;
   /** When true, skips the welcome page and goes straight to the login form.
    *  Used by the /login route. */
   skipWelcome?: boolean;
@@ -30,6 +45,12 @@ interface LandingPageProps {
 export function LandingPage({
   loginForm, setLoginForm, authMode, setAuthMode,
   handleUserLogin, handleUserRegister, isLoggingIn, loginError, setLoginError,
+  pendingVerificationEmail,
+  onClearPendingVerification,
+  onResendVerification,
+  isResendingVerification,
+  verificationSuccessNotice,
+  onDismissVerificationSuccess,
   skipWelcome = false,
 }: LandingPageProps) {
   const router = useRouter();
@@ -61,6 +82,69 @@ export function LandingPage({
     ? validateUserPassword(loginForm.password)
     : null;
 
+  // Live username-availability check for the register flow. Only fires
+  // when the username passes format validation — otherwise we'd waste
+  // calls and surface "taken" messaging on garbage inputs. The DB is
+  // still the source of truth at submit time; this is purely a UX hint.
+  type UsernameAvailability =
+    | { state: 'idle' }
+    | { state: 'checking' }
+    | { state: 'available'; value: string }
+    | { state: 'taken'; value: string }
+    | { state: 'error' };
+  const [usernameAvailability, setUsernameAvailability] =
+    useState<UsernameAvailability>({ state: 'idle' });
+  useEffect(() => {
+    if (authMode !== 'register') {
+      setUsernameAvailability({ state: 'idle' });
+      return;
+    }
+    const candidate = loginForm.username.trim();
+    if (!candidate || validateUserUsername(candidate)) {
+      setUsernameAvailability({ state: 'idle' });
+      return;
+    }
+    // Debounce typing so we don't spam the endpoint per keystroke. 350ms
+    // is long enough that fast typing doesn't trigger N requests but
+    // short enough that the indicator feels live.
+    //
+    // Uses the dedicated GET endpoint, NOT POST /api/auth/user with
+    // action=check_username: that path shares the brute-force login
+    // rate-limit bucket (10/min) in middleware and would silently 429
+    // after a few keystrokes. The dedicated endpoint sits under
+    // SEARCH_LIMIT (60/min) and is GET-only so it stays cache-friendly.
+    let cancelled = false;
+    setUsernameAvailability({ state: 'checking' });
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetchWithAuth(
+          `/api/auth/user/username-availability?username=${encodeURIComponent(candidate)}`,
+          { method: 'GET' },
+        );
+        if (cancelled) return;
+        const data = await res.json();
+        if (data?.success && typeof data.data?.available === 'boolean') {
+          setUsernameAvailability(
+            data.data.available
+              ? { state: 'available', value: candidate }
+              : { state: 'taken', value: candidate }
+          );
+        } else {
+          setUsernameAvailability({ state: 'error' });
+        }
+      } catch {
+        if (!cancelled) setUsernameAvailability({ state: 'error' });
+      }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [loginForm.username, authMode]);
+
+  // Treat "taken" only if the result matches the *current* input — guards
+  // against a stale response landing after the user kept typing.
+  const usernameTaken =
+    usernameAvailability.state === 'taken' &&
+    usernameAvailability.value === loginForm.username.trim();
+
   const isDisabled =
     isLoggingIn ||
     !loginForm.username ||
@@ -69,7 +153,9 @@ export function LandingPage({
       !loginForm.email ||
       !!validateUserUsername(loginForm.username) ||
       !!validateUserEmail(loginForm.email) ||
-      !!validateUserPassword(loginForm.password)
+      !!validateUserPassword(loginForm.password) ||
+      usernameTaken ||
+      usernameAvailability.state === 'checking'
     ));
 
   // Welcome page — Apple-style glass chooser.
@@ -356,27 +442,116 @@ export function LandingPage({
             </div>
           </motion.div>
 
-          {/* Tabs */}
-          <div className="flex mb-4 bg-surface-card rounded-xl p-1">
-            <button
-              onClick={() => { setAuthMode('login'); setLoginError(''); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                authMode === 'login' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => { setAuthMode('register'); setLoginError(''); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                authMode === 'register' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+          {/* Tabs — hidden while the post-signup verification panel is
+              shown; switching tabs there would have no visible effect. */}
+          {!pendingVerificationEmail && (
+            <div className="flex mb-4 bg-surface-card rounded-xl p-1">
+              <button
+                onClick={() => { setAuthMode('login'); setLoginError(''); }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  authMode === 'login' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => { setAuthMode('register'); setLoginError(''); }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  authMode === 'register' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+          )}
 
           <div className="flex-1 min-h-0 rounded-2xl p-4 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
+            {/* Post-signup verification gate. Registration is NOT complete
+                until the user clicks the link in the email we just sent —
+                the form is replaced with a check-your-inbox panel so they
+                can't proceed without verifying. */}
+            {pendingVerificationEmail ? (
+              <>
+                <div className="rounded-xl p-4 flex gap-3 bg-success-dim border border-success-border">
+                  <div className="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-4 h-4 text-success" />
+                  </div>
+                  <div className="text-[13px] leading-relaxed text-text-primary">
+                    <p>
+                      We sent a verification link to{" "}
+                      <span className="font-semibold break-all">
+                        {pendingVerificationEmail}
+                      </span>
+                      .
+                    </p>
+                    <p className="mt-1 text-text-secondary">
+                      Click the link in that email to activate your account.
+                      Your registration is not complete until your email is
+                      verified.
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-[12px] text-text-tertiary">
+                  Already clicked the link? Tap the button below to sign in.
+                  This page also checks automatically every few seconds — if
+                  you verified on another device, it will advance on its own.
+                </p>
+
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    onClearPendingVerification?.();
+                    setAuthMode('login');
+                  }}
+                  className="w-full py-3 rounded-xl text-sm font-bold bg-accent text-accent-text"
+                >
+                  I&apos;ve verified my email — Sign in
+                </motion.button>
+
+                {onResendVerification && (
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={onResendVerification}
+                    disabled={isResendingVerification}
+                    className="w-full py-3 rounded-xl text-sm font-bold bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isResendingVerification ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Sending…
+                      </>
+                    ) : (
+                      'Resend verification email'
+                    )}
+                  </motion.button>
+                )}
+
+                <p className="text-[11px] text-text-tertiary text-center">
+                  Didn&apos;t get it? Check spam. Links expire after 24 hours.
+                </p>
+              </>
+            ) : (
+              <>
+            {/* Verification-success banner. Shown once polling (or the
+                "I've verified" button) detects the email is verified. */}
+            {authMode === 'login' && verificationSuccessNotice && (
+              <div className="rounded-xl p-3 flex items-start gap-2.5 bg-success-dim border border-success-border">
+                <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0" />
+                <div className="flex-1 text-sm text-text-primary">
+                  <span className="font-semibold text-success">Email verified.</span>{" "}
+                  <span className="text-text-secondary">Sign in below to continue.</span>
+                </div>
+                <button
+                  onClick={onDismissVerificationSuccess}
+                  aria-label="Dismiss"
+                  className="text-text-tertiary hover:text-text-primary text-lg leading-none px-1 -mt-0.5"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
             {loginError && (
               <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
                 {loginError}
@@ -401,12 +576,30 @@ export function LandingPage({
                 maxLength={authMode === 'register' ? 20 : 254}
                 onKeyDown={e => e.key === 'Enter' && submit()}
                 className={`w-full rounded-xl px-4 py-3 text-sm font-medium outline-none bg-surface-hover border ${
-                  usernameError ? 'border-error' : 'border-border-subtle'
+                  usernameError || usernameTaken ? 'border-error' : 'border-border-subtle'
                 } text-text-primary placeholder:text-text-tertiary`}
               />
-              {usernameError && (
+              {/* Per-field status: format error wins over availability,
+                  since availability only matters once the format passes. */}
+              {usernameError ? (
                 <p className="mt-1.5 text-[11px] text-error">{usernameError}</p>
-              )}
+              ) : authMode === 'register' && usernameAvailability.state === 'checking' ? (
+                <p className="mt-1.5 text-[11px] text-text-tertiary inline-flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Checking availability…
+                </p>
+              ) : authMode === 'register' && usernameAvailability.state === 'available' &&
+                usernameAvailability.value === loginForm.username.trim() ? (
+                <p className="mt-1.5 text-[11px] text-success inline-flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  Available
+                </p>
+              ) : usernameTaken ? (
+                <p className="mt-1.5 text-[11px] text-error inline-flex items-center gap-1">
+                  <X className="w-3 h-3" />
+                  Username already taken
+                </p>
+              ) : null}
             </div>
 
             {/* Email — register only. Required so the user can recover their
@@ -508,6 +701,8 @@ export function LandingPage({
             >
               {authMode === 'login' ? 'Register' : 'Sign In'}
             </motion.button>
+            </>
+            )}
 
             <p className="text-center text-[11px] text-text-secondary">
               Connect your wallet after signing in to enable on-chain trading
