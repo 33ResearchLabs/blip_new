@@ -43,6 +43,12 @@ ARG NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
 ARG NEXT_PUBLIC_BLIPSCAN_URL
 ARG NEXT_PUBLIC_EMBEDDED_WALLET=true
 ARG NEXT_PUBLIC_ENABLE_APP_TOUR=false
+# Onboarding overlay / setup card / navbar chip / trade-participation gates
+# are all branched on this flag. NEXT_PUBLIC_* values are baked into the
+# client bundle at build time — without this ARG, Railway's runtime
+# variable for the same name never reaches the compiled JS and the entire
+# feature appears off in production.
+ARG NEXT_PUBLIC_ENABLE_MERCHANT_ONBOARDING=false
 ARG DEV_LOCK_ENABLED=true
 ENV DEV_LOCK_ENABLED=$DEV_LOCK_ENABLED
 ENV NEXT_PUBLIC_MOCK_MODE=false
@@ -56,6 +62,7 @@ ENV NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=$NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
 ENV NEXT_PUBLIC_BLIPSCAN_URL=$NEXT_PUBLIC_BLIPSCAN_URL
 ENV NEXT_PUBLIC_EMBEDDED_WALLET=$NEXT_PUBLIC_EMBEDDED_WALLET
 ENV NEXT_PUBLIC_ENABLE_APP_TOUR=$NEXT_PUBLIC_ENABLE_APP_TOUR
+ENV NEXT_PUBLIC_ENABLE_MERCHANT_ONBOARDING=$NEXT_PUBLIC_ENABLE_MERCHANT_ONBOARDING
 RUN pnpm -C settle build
 
 # ── Production image ────────────────────────────────────────────────
