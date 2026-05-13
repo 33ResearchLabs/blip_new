@@ -65,16 +65,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const hashed = hashPin(pin);
-    const upd = await query(
+    const upd = await query<{ id: string }>(
       `UPDATE users
          SET user_pin_hash = $2,
              user_pin_set_at = NOW(),
              user_pin_failed_attempts = 0,
              user_pin_locked_until = NULL
-       WHERE id = $1`,
+       WHERE id = $1
+       RETURNING id`,
       [auth.actorId, hashed],
     );
-    if (upd.rowCount === 0) return errorResponse('User not found');
+    if (upd.length === 0) return errorResponse('User not found');
     return successResponse({ ok: true });
   } catch (e) {
     console.error('[API] POST /api/user/pin error:', e);

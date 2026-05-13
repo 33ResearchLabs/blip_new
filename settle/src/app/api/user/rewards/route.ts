@@ -74,11 +74,12 @@ export async function POST(request: NextRequest) {
   }
   if (!body.id || typeof body.id !== 'string') return errorResponse('id required');
 
-  const result = await query(
+  const result = await query<{ id: string }>(
     `UPDATE user_rewards
         SET revealed_at = NOW()
-      WHERE id = $1 AND user_id = $2 AND revealed_at IS NULL`,
+      WHERE id = $1 AND user_id = $2 AND revealed_at IS NULL
+      RETURNING id`,
     [body.id, auth.actorId],
   );
-  return successResponse({ updated: result.rowCount ?? 0 });
+  return successResponse({ updated: result.length });
 }
