@@ -11,7 +11,12 @@
  * Visibility:
  *   - Renders nothing if feature flag is off
  *   - Renders nothing if status is still loading
- *   - Renders nothing once completed_at is set (3 required steps done)
+ *   - Renders nothing once ALL FIVE truth conditions are met (the three
+ *     required + the two optional). Previously the card hid the moment
+ *     completed_at fired (3 required done), but that meant the merchant
+ *     never saw the optional rows or the "Start Trading" CTA. The
+ *     marketplace gates still unlock at 3 required — that's a separate
+ *     server-side concern keyed off completed_at.
  *
  * Palette is intentionally neutral — borders + foreground-opacity
  * tones — to avoid the screen feeling like a marketing banner. The
@@ -54,9 +59,29 @@ export function OnboardingSetupCard({
   const router = useRouter();
 
   if (!enabled || !status) return null;
-  if (status.completed_at) return null;
+  if (status.skipped_at) return null;
 
   const conditions = status.conditions;
+
+  // Hide when every visible row would carry a checkmark — at that point
+  // there's nothing left to show or click. Note: this is independent of
+  // status.completed_at, which fires when only the 3 REQUIRED steps are
+  // done (and is the signal the server uses for marketplace visibility
+  // and the trade-participation gates).
+  const allConditionsMet =
+    conditions.usernameSet &&
+    conditions.walletConnected &&
+    conditions.hasPaymentMethod &&
+    conditions.walletFunded &&
+    conditions.hasTrade;
+  if (allConditionsMet) return null;
+
+  // Required steps drive the "you can trade" gate. Used to decide whether
+  // to surface the Go Live CTA + swap the footer copy.
+  const requiredDone =
+    conditions.usernameSet &&
+    conditions.walletConnected &&
+    conditions.hasPaymentMethod;
 
   const steps: StepView[] = [
     {
@@ -112,7 +137,16 @@ export function OnboardingSetupCard({
       done: conditions.hasTrade,
       doneLabel: 'Done',
       optional: true,
-      cta: null, // Triggered organically by accepting an order
+      // Go Live appears once the required 3 are complete — at that point
+      // the merchant is allowed to trade (server gates open). Tapping it
+      // skip()s the card so it gets out of the merchant's way; the chip
+      // in the navbar has already self-hidden by now via completed_at.
+      // Pre-required-done the row has no CTA (clicking would be moot —
+      // server would still reject any trade action).
+      cta:
+        !conditions.hasTrade && requiredDone
+          ? { label: 'Go Live', onClick: () => void skip() }
+          : null,
     },
   ];
 
@@ -220,13 +254,15 @@ export function OnboardingSetupCard({
         ))}
       </ul>
 
-      {/* Footer hint — neutral, single line. Visible while any REQUIRED
-          step (Profile, Wallet, Payment) is incomplete. Once all three
-          required are done, completed_at fires and the whole card hides,
-          so we never need to show "you're done but missing optional". */}
+      {/* Footer hint — copy swaps the moment the required 3 are done.
+          Pre-required-done: nudge the merchant to finish the gating steps.
+          Post-required-done (optional rows pending): reassure them they're
+          already trading and surface the optional rows as bonus polish. */}
       <div className="mt-3 pt-2 border-t border-foreground/[0.06]">
         <p className="text-[10.5px] text-foreground/55 leading-snug">
-          Complete all required steps to appear in the marketplace and unlock trading.
+          {requiredDone
+            ? "You're live in the marketplace. Optional steps boost your trading — or hit Go Live to dismiss."
+            : 'Complete all required steps to appear in the marketplace and unlock trading.'}
         </p>
       </div>
     </div>
