@@ -137,7 +137,12 @@ export function MerchantChatTabs({
   onClearAllUnread,
   onClose,
 }: MerchantChatTabsProps) {
-  const [activeTab, setActiveTab] = useState<"orders" | "disputes">("orders");
+  // Three-tab inbox: all order chats / only-in-flight order chats / disputes.
+  // "Active" filters orderConversations to in-flight statuses (post-accept,
+  // pre-terminal, non-disputed) so the merchant can focus on conversations
+  // where action is required without losing the full chat history view.
+  type ChatTab = "orders" | "active" | "disputes";
+  const [activeTab, setActiveTab] = useState<ChatTab>("orders");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Dispute conversations state (fetched independently)
@@ -174,11 +179,42 @@ export function MerchantChatTabs({
   }, [fetchDisputes]);
 
   // Filter: search by order number or username
+  // Statuses that count as "active" — post-accept, pre-terminal, non-disputed.
+  // Pending orders are NOT here (the Trade tab covers them); terminal states
+  // (completed / cancelled / expired) stay in the full Orders tab so the
+  // merchant keeps the full chat history.
+  const ACTIVE_STATUSES = new Set([
+    "accepted",
+    "escrowed",
+    "payment_sent",
+    "payment_pending",
+    "payment_confirmed",
+    "releasing",
+  ]);
+  const activeConversations = orderConversations.filter((c) =>
+    ACTIVE_STATUSES.has(c.order_status),
+  );
+  const activeUnread = activeConversations.reduce(
+    (sum, c) => sum + (c.unread_count || 0),
+    0,
+  );
+
   const filteredOrders = orderConversations.filter(
     (conv) =>
       conv.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
       conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+
+  const filteredActive = activeConversations.filter(
+    (conv) =>
+      conv.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
+  // The Active tab reuses the same card layout as Orders — only the data
+  // source changes. Pick once here so the render block below stays clean.
+  const visibleConversations =
+    activeTab === "active" ? filteredActive : filteredOrders;
 
   const filteredDisputes = disputeConversations.filter(
     (conv) =>
@@ -291,6 +327,27 @@ export function MerchantChatTabs({
           )}
         </button>
         <button
+          onClick={() => setActiveTab("active")}
+          className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
+            activeTab === "active"
+              ? "text-white/80"
+              : "text-white/30 hover:text-foreground/50"
+          }`}
+        >
+          <div className="flex items-center justify-center gap-1.5">
+            <MessageCircle className="w-3 h-3" />
+            <span>Active Chat</span>
+            {activeUnread > 0 && (
+              <span className="w-4 h-4 bg-primary text-background text-[8px] font-bold rounded-full flex items-center justify-center">
+                {activeUnread > 9 ? "9+" : activeUnread}
+              </span>
+            )}
+          </div>
+          {activeTab === "active" && (
+            <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab("disputes")}
           className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
             activeTab === "disputes"
@@ -327,7 +384,11 @@ export function MerchantChatTabs({
             data-form-type="other"
             maxLength={100}
             placeholder={
-              activeTab === "orders" ? "Search orders..." : "Search disputes..."
+              activeTab === "disputes"
+                ? "Search disputes..."
+                : activeTab === "active"
+                  ? "Search active chats..."
+                  : "Search orders..."
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -338,22 +399,27 @@ export function MerchantChatTabs({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-1.5">
-        {activeTab === "orders" ? (
-          /* ── Orders Tab ── */
+        {activeTab !== "disputes" ? (
+          /* ── Orders & Active tabs share the same card layout — only the
+                 data source (visibleConversations) and empty-state copy differ. ── */
           isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="w-4 h-4 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
             </div>
-          ) : filteredOrders.length === 0 ? (
+          ) : visibleConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-white/15">
               <MessageCircle className="w-8 h-8 mb-2 opacity-30" />
               <p className="text-[10px] font-mono">
-                {searchQuery ? "No matches" : "No order chats yet"}
+                {searchQuery
+                  ? "No matches"
+                  : activeTab === "active"
+                    ? "No active order chats"
+                    : "No order chats yet"}
               </p>
             </div>
           ) : (
             <div className="space-y-1">
-              {filteredOrders.map((conv) => {
+              {visibleConversations.map((conv) => {
                 const isBuy = conv.order_type === "buy";
                 const TypeIcon = isBuy ? ArrowDownLeft : ArrowUpRight;
                 const hasUnread = conv.unread_count > 0;

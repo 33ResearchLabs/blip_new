@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Check,
@@ -89,9 +89,32 @@ export function MobileOrdersView({
   // For YOU PAY / YOU RECEIVE perspective in the gradient amounts panel.
   const merchantId = useMerchantStore((s) => s.merchantId);
 
+  // Sub-tab state — mirrors the desktop PendingOrdersPanel
+  //   • All        — every pending order (mine + others)
+  //   • Pending    — orders waiting for me to accept (excludes mine) [default]
+  //   • My Orders  — orders I placed (broadcasts waiting for a counterparty)
+  // Client-side filter off the same pendingOrders array; uses the order.isMyOrder
+  // flag populated at mapping time.
+  type ViewTab = "all" | "pending" | "mine";
+  const [view, setView] = useState<ViewTab>("pending");
+
+  const myCount = useMemo(
+    () => pendingOrders.filter((o) => o.isMyOrder).length,
+    [pendingOrders],
+  );
+  const pendingTabCount = pendingOrders.length - myCount;
+  const allCount = pendingOrders.length;
+
   // Apply the same filter predicates the desktop pending panel uses.
+  // The view-tab filter runs FIRST so the existing pendingFilter (mineable /
+  // premium / large / expiring) and the search box operate on the already-
+  // scoped subset.
   const filteredPendingOrders = useMemo(() => {
     let list = pendingOrders;
+
+    if (view === "mine") list = list.filter((o) => o.isMyOrder);
+    else if (view === "pending") list = list.filter((o) => !o.isMyOrder);
+    // view === "all" → no filter
 
     if (pendingFilter !== "all") {
       list = list.filter((order) => {
@@ -126,7 +149,7 @@ export function MobileOrdersView({
     }
 
     return list;
-  }, [pendingOrders, pendingFilter, searchQuery]);
+  }, [pendingOrders, view, pendingFilter, searchQuery]);
 
   return (
     <div className="space-y-1">
@@ -180,22 +203,43 @@ export function MobileOrdersView({
           users. The same orders are visible in the regular Pending list
           below, where the Accept button actually works. */}
 
-      {/* Header Row */}
-      <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.04]">
-        <div className="flex items-center gap-2">
-          <motion.div
-            className="w-2 h-2 rounded-full bg-white/60"
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          />
-          <span className="text-xs font-mono text-foreground/40 uppercase tracking-wide">Pending</span>
-        </div>
-        <span className="text-xs font-mono text-foreground/40">
-          {filteredPendingOrders.length}
-          {filteredPendingOrders.length !== pendingOrders.length && (
-            <span className="text-foreground/25"> / {pendingOrders.length}</span>
-          )}
-        </span>
+      {/* Sub-tab strip — mirrors desktop PendingOrdersPanel's All/Pending/My
+          Orders split. Tab counts come from the un-pending-filtered, un-
+          searched pendingOrders array so a merchant on the Pending tab can
+          still see how many of their own broadcasts are out there. */}
+      <div className="flex items-center gap-1 px-1 py-1.5 border-b border-white/[0.04]">
+        {(
+          [
+            { id: "all", label: "All", count: allCount },
+            { id: "pending", label: "Pending", count: pendingTabCount },
+            { id: "mine", label: "My Orders", count: myCount },
+          ] as const
+        ).map((tab) => {
+          const isActive = view === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setView(tab.id)}
+              className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                isActive
+                  ? "bg-white text-black"
+                  : "text-foreground/45 hover:text-foreground/70"
+              }`}
+            >
+              {tab.label}
+              <span
+                className={`text-[9px] font-mono tabular-nums px-1 py-px rounded text-white ${
+                  isActive
+                    ? "bg-black/80"
+                    : "bg-foreground/[0.08]"
+                }`}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {filteredPendingOrders.length > 0 ? (
@@ -456,25 +500,45 @@ export function MobileOrdersView({
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-16 text-gray-600">
-          <Activity className="w-8 h-8 mb-2 opacity-20" />
-          <p className="text-xs text-foreground/35 font-mono">
-            {pendingOrders.length === 0
-              ? "Waiting for orders..."
-              : "No orders match your filter"}
-          </p>
-          {pendingOrders.length > 0 && (
-            <button
-              onClick={() => {
-                setSearchQuery("");
-                setPendingFilter("all");
-              }}
-              className="mt-3 text-[11px] text-primary/70 hover:text-primary font-mono"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
+        (() => {
+          // Empty-state copy + actions depend on WHY the list is empty:
+          //   1. Genuine inbox-zero → "Waiting for orders..."
+          //   2. Active filter / search hiding everything → contextual message
+          //      + "Clear filters" button
+          //   3. Sub-tab subset is just empty (no filters applied) → tab-
+          //      specific message, NO "Clear filters" (nothing to clear)
+          const hasActiveFilters =
+            pendingFilter !== "all" || searchQuery.trim().length > 0;
+          let message: string;
+          if (pendingOrders.length === 0) {
+            message = "Waiting for orders...";
+          } else if (hasActiveFilters) {
+            message = "No orders match your filter";
+          } else if (view === "mine") {
+            message = "You haven't placed any orders yet";
+          } else if (view === "pending") {
+            message = "No incoming orders waiting on you";
+          } else {
+            message = "Waiting for orders...";
+          }
+          return (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-600">
+              <Activity className="w-8 h-8 mb-2 opacity-20" />
+              <p className="text-xs text-foreground/35 font-mono">{message}</p>
+              {hasActiveFilters && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setPendingFilter("all");
+                  }}
+                  className="mt-3 text-[11px] text-primary/70 hover:text-primary font-mono"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          );
+        })()
       )}
     </div>
   );
