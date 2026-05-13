@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, type PanInfo } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Zap, Loader2, Eye, EyeOff, Mail, ChevronLeft, User, Store, ArrowRight } from "lucide-react";
+import { Zap, Loader2, Eye, EyeOff, Mail, ChevronLeft, User, Store, ArrowRight, Check, X } from "lucide-react";
 import Link from "next/link";
 import { InstallPWAButton } from "@/components/InstallPWAButton";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import {
   validateUserUsername,
   validateUserEmail,
@@ -81,6 +82,64 @@ export function LandingPage({
     ? validateUserPassword(loginForm.password)
     : null;
 
+  // Live username-availability check for the register flow. Only fires
+  // when the username passes format validation — otherwise we'd waste
+  // calls and surface "taken" messaging on garbage inputs. The DB is
+  // still the source of truth at submit time; this is purely a UX hint.
+  type UsernameAvailability =
+    | { state: 'idle' }
+    | { state: 'checking' }
+    | { state: 'available'; value: string }
+    | { state: 'taken'; value: string }
+    | { state: 'error' };
+  const [usernameAvailability, setUsernameAvailability] =
+    useState<UsernameAvailability>({ state: 'idle' });
+  useEffect(() => {
+    if (authMode !== 'register') {
+      setUsernameAvailability({ state: 'idle' });
+      return;
+    }
+    const candidate = loginForm.username.trim();
+    if (!candidate || validateUserUsername(candidate)) {
+      setUsernameAvailability({ state: 'idle' });
+      return;
+    }
+    // Debounce typing so we don't spam the endpoint per keystroke. 350ms
+    // is long enough that fast typing doesn't trigger N requests but
+    // short enough that the indicator feels live.
+    let cancelled = false;
+    setUsernameAvailability({ state: 'checking' });
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetchWithAuth('/api/auth/user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'check_username', username: candidate }),
+        });
+        if (cancelled) return;
+        const data = await res.json();
+        if (data?.success && typeof data.data?.available === 'boolean') {
+          setUsernameAvailability(
+            data.data.available
+              ? { state: 'available', value: candidate }
+              : { state: 'taken', value: candidate }
+          );
+        } else {
+          setUsernameAvailability({ state: 'error' });
+        }
+      } catch {
+        if (!cancelled) setUsernameAvailability({ state: 'error' });
+      }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [loginForm.username, authMode]);
+
+  // Treat "taken" only if the result matches the *current* input — guards
+  // against a stale response landing after the user kept typing.
+  const usernameTaken =
+    usernameAvailability.state === 'taken' &&
+    usernameAvailability.value === loginForm.username.trim();
+
   const isDisabled =
     isLoggingIn ||
     !loginForm.username ||
@@ -89,7 +148,9 @@ export function LandingPage({
       !loginForm.email ||
       !!validateUserUsername(loginForm.username) ||
       !!validateUserEmail(loginForm.email) ||
-      !!validateUserPassword(loginForm.password)
+      !!validateUserPassword(loginForm.password) ||
+      usernameTaken ||
+      usernameAvailability.state === 'checking'
     ));
 
   // Welcome page — Apple-style glass chooser.
@@ -510,12 +571,30 @@ export function LandingPage({
                 maxLength={authMode === 'register' ? 20 : 254}
                 onKeyDown={e => e.key === 'Enter' && submit()}
                 className={`w-full rounded-xl px-4 py-3 text-sm font-medium outline-none bg-surface-hover border ${
-                  usernameError ? 'border-error' : 'border-border-subtle'
+                  usernameError || usernameTaken ? 'border-error' : 'border-border-subtle'
                 } text-text-primary placeholder:text-text-tertiary`}
               />
-              {usernameError && (
+              {/* Per-field status: format error wins over availability,
+                  since availability only matters once the format passes. */}
+              {usernameError ? (
                 <p className="mt-1.5 text-[11px] text-error">{usernameError}</p>
-              )}
+              ) : authMode === 'register' && usernameAvailability.state === 'checking' ? (
+                <p className="mt-1.5 text-[11px] text-text-tertiary inline-flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Checking availability…
+                </p>
+              ) : authMode === 'register' && usernameAvailability.state === 'available' &&
+                usernameAvailability.value === loginForm.username.trim() ? (
+                <p className="mt-1.5 text-[11px] text-success inline-flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  Available
+                </p>
+              ) : usernameTaken ? (
+                <p className="mt-1.5 text-[11px] text-error inline-flex items-center gap-1">
+                  <X className="w-3 h-3" />
+                  Username already taken
+                </p>
+              ) : null}
             </div>
 
             {/* Email — register only. Required so the user can recover their
