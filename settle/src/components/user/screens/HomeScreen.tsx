@@ -342,9 +342,12 @@ function WalletBalanceSection({
           { label: 'Deposit',  Icon: Download,      primary: false, comingSoon: false, fn: onDeposit },
         ] as const).map(({ label, Icon, primary, comingSoon, fn }) => (
           <motion.button key={label} whileTap={{ scale: 0.93 }} onClick={fn}
-            className="relative flex flex-col items-center justify-center gap-1.5 cursor-pointer"
+            className="relative flex flex-col items-center justify-center gap-1 cursor-pointer min-w-0"
             style={{
-              padding: '14px 6px',
+              // Padding scales with viewport so 4 tiles + 3 gaps always fit
+              // a small phone (~320px) without overflow, and grow up on
+              // wider devices.
+              padding: 'clamp(10px, 3.2vw, 14px) clamp(4px, 1.5vw, 8px)',
               borderRadius: 18,
               background: primary
                 ? 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(235,235,240,0.92))'
@@ -358,12 +361,16 @@ function WalletBalanceSection({
               opacity: comingSoon ? 0.55 : 1,
             }}
           >
-            <Icon size={22} strokeWidth={2.2}
+            <Icon size={20} strokeWidth={2.2}
               style={{ color: primary ? '#0B0F14' : 'rgba(255,255,255,0.92)' }} />
-            <span style={{
-              fontSize: 11, fontWeight: 700, letterSpacing: '-0.005em',
-              color: primary ? '#0B0F14' : 'rgba(255,255,255,0.78)',
-            }}>
+            <span
+              className="truncate max-w-full"
+              style={{
+                fontSize: 'clamp(10px, 2.8vw, 12px)',
+                fontWeight: 700, letterSpacing: '-0.005em',
+                color: primary ? '#0B0F14' : 'rgba(255,255,255,0.78)',
+              }}
+            >
               {label}
             </span>
             {comingSoon && (
@@ -598,7 +605,10 @@ export const HomeScreen = ({
   return (
     <div
       className="relative flex flex-col h-[100dvh] overflow-hidden"
-      style={{ background: '#ffffff' }}
+      // Match the hero's terminal gradient so the body section visually
+      // blends with the dark card above, rather than showing white gap
+      // between content end and the bottom nav.
+      style={{ background: '#07090F' }}
     >
 
       {/* ══════════════════════════════════════════════
@@ -614,7 +624,10 @@ export const HomeScreen = ({
           borderBottomRightRadius: 44,
           boxShadow:
             '0 30px 40px -28px rgba(0,0,0,0.45), 0 18px 22px -16px rgba(0,0,0,0.30)',
-          minHeight: '60svh',
+          // Adapts to device — shorter on small phones, leaves room for body
+          // + bottom nav without an awkward whitespace gap. `clamp` floors at
+          // 480px (small phones) and caps at 60svh (tablets / large phones).
+          minHeight: 'clamp(480px, 56svh, 60svh)',
         }}
       >
 

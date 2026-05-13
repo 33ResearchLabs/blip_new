@@ -941,7 +941,9 @@ export default function Home() {
         acceptedOrderInfo={userEffects.acceptedOrderInfo}
       />
 
-      <IssueReporter authed={!!auth.userId} />
+      {/* Issue reporter floating button removed per UX feedback — the
+          inline bug icon in the header still routes to the same reporter
+          via openIssueReporter() if needed. */}
 
       {/* Scratch-card reward — opens automatically when a sell order
           transitions to completed. After "Back to wallet", route to home. */}

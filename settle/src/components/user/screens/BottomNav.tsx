@@ -24,9 +24,13 @@ export const BottomNav = ({ screen, setScreen, chatUnreadCount = 0 }: BottomNavP
   <div
     className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full max-w-110 px-3"
     style={{
-      paddingBottom: 'max(env(safe-area-inset-bottom, 12px), 12px)',
-      // ── Always white nav with dark buttons, regardless of theme
-      background: '#ffffff',
+      // Honor the device's home-indicator inset, but no extra floor — keeps
+      // the nav glued to the bottom edge on devices without a chin.
+      paddingBottom: 'env(safe-area-inset-bottom, 6px)',
+      paddingTop: 6,
+      // Transparent wrapper — the pill below carries its own bg + shadow, so
+      // there's no white slab below the pill bleeding into the dark page.
+      background: 'transparent',
     }}
   >
     <div
