@@ -42,6 +42,7 @@ import { OnboardingSetupCard } from "@/components/merchant/OnboardingSetupCard";
 import { SwapModal } from "@/components/merchant/SwapModal";
 import { DepositModal } from "@/components/merchant/DepositModal";
 import { SendModal } from "@/components/merchant/SendModal";
+import { WalletActionsMenu } from "@/components/merchant/WalletActionsMenu";
 
 interface MobileHomeViewProps {
   effectiveBalance: number | null;
@@ -98,142 +99,11 @@ export function MobileHomeView({
   // grid and matches the "everything you need to know in one card" UX.
   const solanaWallet = useSolanaWallet();
   const [addressCopied, setAddressCopied] = useState(false);
-  const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [initFeesState, setInitFeesState] = useState<
-    | { stage: "idle" }
-    | { stage: "running" }
-    | { stage: "done"; sig: string }
-    | { stage: "error"; message: string }
-  >({ stage: "idle" });
-  // `null` = haven't checked yet, `true` = both treasury fee ATAs exist
-  // on-chain (so the admin button is redundant), `false` = at least one
-  // is missing.
-  const [feeAtasReady, setFeeAtasReady] = useState<boolean | null>(null);
-
-  // One-shot check on mount: do both fee ATAs (wSOL + USDC) exist on
-  // mainnet? If yes, hide the "Init Fee Accounts" menu item — the
-  // setup has already been completed and the button has no useful
-  // action left. USDT is pre-confirmed live (treasury already holds
-  // USDT) so we don't probe it.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/rpc", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "getMultipleAccounts",
-            params: [
-              [
-                "85usXNGrscbDRRkv2q6gj4EgE96eVi4Uv62vnPSugft", // wSOL ATA
-                "FTQbL7yU8ajYuTEWRcqsjkMKfUD2v4gRYRZMK2zX5EmK", // USDC ATA
-              ],
-              { encoding: "base64" },
-            ],
-          }),
-        });
-        const json = await res.json();
-        if (cancelled) return;
-        const values = (json?.result?.value ?? []) as Array<unknown>;
-        const bothLive = values.length === 2 && values.every((v) => v !== null);
-        setFeeAtasReady(bothLive);
-      } catch {
-        // Best-effort — if probe fails we keep the button visible so the
-        // admin can still trigger init manually.
-        if (!cancelled) setFeeAtasReady(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  // After a successful on-chain init, mark the ATAs as ready so the
-  // menu item disappears on next open without requiring a page reload.
-  useEffect(() => {
-    if (initFeesState.stage === "done") setFeeAtasReady(true);
-  }, [initFeesState.stage]);
-
-  // Inline wallet-action modal state (Export Private Key + Download Backup).
-  // Keeps these flows on the home card instead of routing to /merchant/wallet
-  // — eliminates the need for the separate wallet page.
-  type WalletActionKind = "export" | "backup";
-  const [walletAction, setWalletAction] = useState<WalletActionKind | null>(null);
-  const [walletActionPw, setWalletActionPw] = useState("");
-  const [walletActionLoading, setWalletActionLoading] = useState(false);
-  const [walletActionError, setWalletActionError] = useState<string | null>(null);
-  // For export: holds the decrypted private key once revealed.
-  const [exportedKey, setExportedKey] = useState<string | null>(null);
-  const [exportedKeyCopied, setExportedKeyCopied] = useState(false);
 
   const merchantIdForWallet: string | undefined = merchantInfo?.id;
-
-  /**
-   * One-time admin action: create the platform treasury's wSOL + USDC
-   * Associated Token Accounts on-chain. After this runs, every swap
-   * that outputs SOL or USDC pays a 0.5% platform fee into these ATAs.
-   * The connected (merchant) wallet pays ~0.004 SOL of rent. USDT is
-   * already initialized (the treasury holds USDT).
-   */
-  const handleInitFeeAccounts = async () => {
-    if (!solanaWallet?.walletAddress || !solanaWallet?.signTransaction) {
-      setInitFeesState({ stage: "error", message: "Connect your wallet first." });
-      return;
-    }
-    setInitFeesState({ stage: "running" });
-    try {
-      const [
-        { Connection, PublicKey, Transaction },
-        { createAssociatedTokenAccountIdempotentInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID },
-      ] = await Promise.all([
-        import("@solana/web3.js"),
-        import("@solana/spl-token"),
-      ]);
-      const TREASURY = new PublicKey("D3oNcCQ7yareg3UkzK7AQ4qk8oax9AbkZFVJcakD9vSP");
-      const WSOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
-      const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-      const WSOL_ATA = new PublicKey("85usXNGrscbDRRkv2q6gj4EgE96eVi4Uv62vnPSugft");
-      const USDC_ATA = new PublicKey("FTQbL7yU8ajYuTEWRcqsjkMKfUD2v4gRYRZMK2zX5EmK");
-      const payer = new PublicKey(solanaWallet.walletAddress);
-
-      const tx = new Transaction();
-      // Idempotent — no-op if ATA already exists, costs ~0.002 SOL each
-      // for new accounts.
-      tx.add(
-        createAssociatedTokenAccountIdempotentInstruction(
-          payer, WSOL_ATA, TREASURY, WSOL_MINT, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
-        ),
-      );
-      tx.add(
-        createAssociatedTokenAccountIdempotentInstruction(
-          payer, USDC_ATA, TREASURY, USDC_MINT, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
-        ),
-      );
-
-      const connection = new Connection(`${window.location.origin}/api/rpc`, "confirmed");
-      const { blockhash } = await connection.getLatestBlockhash("confirmed");
-      tx.recentBlockhash = blockhash;
-      tx.feePayer = payer;
-
-      const signed = await solanaWallet.signTransaction(tx);
-      const sig = await connection.sendRawTransaction(signed.serialize(), {
-        skipPreflight: false,
-        maxRetries: 3,
-      });
-      setInitFeesState({ stage: "done", sig });
-    } catch (err) {
-      setInitFeesState({
-        stage: "error",
-        message: err instanceof Error ? err.message : "Init failed",
-      });
-    }
-  };
 
   // Corridor catalogue — list of all USDT⇄fiat markets. Only entries
   // with `available: true` are selectable; the rest render as
@@ -375,88 +245,6 @@ export function MobileHomeView({
       ? "https://solscan.io"
       : "https://solscan.io/?cluster=devnet";
   })();
-
-  const resetWalletActionModal = () => {
-    setWalletAction(null);
-    setWalletActionPw("");
-    setWalletActionError(null);
-    setExportedKey(null);
-    setExportedKeyCopied(false);
-    setWalletActionLoading(false);
-  };
-
-  const runWalletAction = async () => {
-    if (!walletAction || !merchantIdForWallet) return;
-    setWalletActionLoading(true);
-    setWalletActionError(null);
-    try {
-      const blob = loadEncryptedWallet(merchantIdForWallet);
-      if (!blob) {
-        setWalletActionError("No encrypted wallet found on this device.");
-        return;
-      }
-      // v3 blobs need the per-actor server helper. Fetch fresh on every
-      // attempt so a stale value can't lock the user out forever.
-      let helper: string | null = null;
-      try {
-        const res = await fetchWithAuth("/api/wallet/unlock-helper");
-        if (res.ok) helper = (await res.json())?.data?.unlock_helper ?? null;
-      } catch { /* helper is optional for v1/v2 */ }
-
-      const kp = await decryptWallet(blob, walletActionPw.trim(), helper);
-
-      if (walletAction === "export") {
-        setExportedKey(exportPrivateKey(kp));
-      } else if (walletAction === "backup") {
-        const key = exportPrivateKey(kp);
-        const fileBlob = new Blob(
-          [`Blip Money — Wallet Backup\n\nPublic Key: ${kp.publicKey.toBase58()}\nPrivate Key: ${key}\n\nKeep this file safe. Anyone with the private key can access your funds.\nExported: ${new Date().toISOString()}\n`],
-          { type: "text/plain" },
-        );
-        const url = URL.createObjectURL(fileBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `blip-wallet-backup-${kp.publicKey.toBase58().slice(0, 8)}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        resetWalletActionModal();
-      }
-    } catch (err) {
-      setWalletActionError(
-        err instanceof Error
-          ? (/decrypt|password/i.test(err.message)
-              ? "Wrong password. Try again."
-              : err.message)
-          : "Failed to unlock wallet.",
-      );
-    } finally {
-      setWalletActionLoading(false);
-    }
-  };
-
-  // Close the wallet settings menu on outside click / Escape so it
-  // behaves like a normal dropdown.
-  useEffect(() => {
-    if (!walletMenuOpen) return;
-    const onDown = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest("[data-wallet-menu-root]")) return;
-      setWalletMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setWalletMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("touchstart", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("touchstart", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [walletMenuOpen]);
 
   // ─── INR cash (off-chain physical cash the merchant holds) ─────────
   // Persisted per merchant in localStorage — same key the desktop
@@ -612,60 +400,10 @@ export function MobileHomeView({
           <span className="text-[11px] text-foreground/40 uppercase tracking-wider font-medium">
             Available Balance
           </span>
-          {/* Wallet settings menu — Export Key / Download Backup / Delete.
-              All three actions now run inline; tapping Delete opens an
-              in-place confirmation dialog (no wallet-page overlay). */}
-          <div className="relative" data-wallet-menu-root>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setWalletMenuOpen((v) => !v);
-              }}
-              className="p-1.5 rounded-lg text-foreground/40 hover:text-foreground/70 hover:bg-foreground/[0.04] transition-colors"
-              aria-label="Wallet settings"
-              aria-expanded={walletMenuOpen}
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            {walletMenuOpen && (
-              <div
-                className="absolute right-0 top-full mt-1 z-20 w-[180px] rounded-xl bg-background border border-foreground/[0.08] shadow-xl shadow-black/30 overflow-hidden"
-                role="menu"
-              >
-                {([
-                  { Icon: Key, label: "Export Private Key", action: "export" as WalletActionKind },
-                  { Icon: Download, label: "Download Backup", action: "backup" as WalletActionKind },
-                  // Hide the admin init item once both fee ATAs are live
-                  // on-chain — the button would be a no-op at that point.
-                  ...(feeAtasReady === true
-                    ? []
-                    : [{ Icon: Settings, label: "Init Fee Accounts (admin)", action: "init-fees" as const }]),
-                  { Icon: Trash2, label: "Delete Wallet", danger: true as const, action: null },
-                ] as Array<{ Icon: typeof Key; label: string; action: WalletActionKind | "init-fees" | null; danger?: boolean }>).map(({ Icon, label, danger, action }) => (
-                  <button
-                    key={label}
-                    role="menuitem"
-                    onClick={() => {
-                      setWalletMenuOpen(false);
-                      if (action === "export" || action === "backup") {
-                        setWalletAction(action);
-                      } else if (action === "init-fees") {
-                        handleInitFeeAccounts();
-                      } else {
-                        setDeleteConfirmOpen(true);
-                      }
-                    }}
-                    className={`w-full flex items-center gap-2 px-3 py-2.5 text-[12px] font-medium hover:bg-foreground/[0.04] transition-colors ${
-                      danger ? "text-rose-400/90" : "text-foreground/80"
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Shared wallet-actions menu — same component the desktop
+              StatusCard renders. Owns its own state and modals so
+              MobileHomeView stays slim. */}
+          <WalletActionsMenu actorId={merchantIdForWallet} />
         </div>
         {/* Locked / no wallet → hide the misleading "0.00" and surface a CTA */}
         {embeddedWalletState === "locked" ? (
@@ -1212,117 +950,11 @@ export function MobileHomeView({
         })()}
       </motion.div>
 
-      {/* ── Inline Delete Wallet confirmation ──
-          Replaces the previous "route to /merchant/wallet" flow so the
-          merchant never has to leave the home card for any wallet
-          management action. Clears the encrypted blob + session
-          keypair, then reloads so the EmbeddedWalletContext re-probes
-          state cleanly (returns to the "No wallet" panel). ── */}
-      {deleteConfirmOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setDeleteConfirmOpen(false)}
-        >
-          <motion.div
-            initial={{ y: 40, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full md:max-w-sm bg-background border-t md:border border-foreground/[0.08] md:rounded-2xl rounded-t-2xl p-5 pb-24 md:pb-5 space-y-3"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-rose-400">Delete Wallet</h3>
-              <button
-                onClick={() => setDeleteConfirmOpen(false)}
-                className="p-1 rounded-lg text-foreground/40 hover:text-foreground/70"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-[12px] text-foreground/60 leading-relaxed">
-              This removes the encrypted wallet from this device. Without your
-              <strong className="text-foreground"> 12-word recovery phrase</strong> or
-              <strong className="text-foreground"> exported private key</strong>, the funds
-              become permanently inaccessible. There is no recovery from Blip.
-            </p>
-            <div className="bg-rose-500/[0.08] border border-rose-500/20 rounded-lg p-3 text-[11px] text-rose-400/90 flex items-start gap-2">
-              <span className="text-base leading-none">⚠️</span>
-              <span>Make sure you have your recovery phrase saved before continuing.</span>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={() => setDeleteConfirmOpen(false)}
-                className="flex-1 py-2.5 rounded-lg bg-foreground/[0.05] border border-foreground/[0.08] text-foreground/70 text-[12px] font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (!merchantIdForWallet) return;
-                  clearSessionKeypair(merchantIdForWallet);
-                  clearEncryptedWallet(merchantIdForWallet);
-                  setDeleteConfirmOpen(false);
-                  // Reload so EmbeddedWalletContext re-probes from a clean
-                  // slate — the home card will render the "No wallet" state.
-                  if (typeof window !== "undefined") window.location.reload();
-                }}
-                className="flex-1 py-2.5 rounded-lg bg-rose-500/90 hover:bg-rose-500 text-white text-[12px] font-bold"
-              >
-                Delete Forever
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      {/* Delete / Export / Backup / Init-fees flows moved into the
+          shared <WalletActionsMenu /> component rendered above next to
+          the balance card. Deleted blocks removed below. */}
 
-      {/* ── Init-fee-accounts status toast ── */}
-      {initFeesState.stage !== "idle" && (
-        <div
-          className="fixed bottom-20 inset-x-4 z-[60] md:inset-x-auto md:right-4 md:max-w-sm rounded-xl bg-foreground text-background p-3 shadow-xl shadow-black/40 flex items-start gap-2 cursor-pointer"
-          onClick={() => setInitFeesState({ stage: "idle" })}
-        >
-          {initFeesState.stage === "running" ? (
-            <>
-              <Loader2Icon />
-              <div className="text-[12px]">
-                <p className="font-bold">Initializing fee accounts…</p>
-                <p className="opacity-70 text-[10px]">
-                  Sign in your wallet and wait for confirmation.
-                </p>
-              </div>
-            </>
-          ) : initFeesState.stage === "done" ? (
-            <>
-              <Check className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" />
-              <div className="text-[12px] min-w-0">
-                <p className="font-bold">Fee accounts initialized</p>
-                <p className="opacity-70 text-[10px] truncate">
-                  Future SOL & USDC swaps will pay 0.5% to treasury.{" "}
-                  <a
-                    href={`https://solscan.io/tx/${initFeesState.sig}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="underline"
-                  >
-                    View tx
-                  </a>
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <X className="w-4 h-4 mt-0.5 shrink-0 text-rose-400" />
-              <div className="text-[12px] min-w-0">
-                <p className="font-bold">Init failed</p>
-                <p className="opacity-70 text-[10px] line-clamp-2">
-                  {initFeesState.message}
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      {/* Init-fee-accounts toast moved into <WalletActionsMenu />. */}
 
       {/* ── Swap modal — Jupiter v6, real on-chain swap, live rates ── */}
       <SwapModal
@@ -1355,109 +987,7 @@ export function MobileHomeView({
         onSendSuccess={() => solanaWallet?.refreshBalances?.()}
       />
 
-      {/* ── Inline wallet-action modal (Export Key / Download Backup) ──
-          Both flows ask for the merchant's wallet password, decrypt the
-          local encrypted blob using the v3 (password + server helper)
-          scheme, and either reveal the key or download a backup file.
-          Centralised here so the merchant never has to navigate away
-          from the home card. */}
-      {walletAction && (
-        <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={resetWalletActionModal}
-        >
-          <motion.div
-            initial={{ y: 40, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full md:max-w-sm bg-background border-t md:border border-foreground/[0.08] md:rounded-2xl rounded-t-2xl p-5 space-y-3"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-foreground">
-                {walletAction === "export" ? "Export Private Key" : "Download Backup"}
-              </h3>
-              <button
-                onClick={resetWalletActionModal}
-                className="p-1 rounded-lg text-foreground/40 hover:text-foreground/70"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {exportedKey ? (
-              <>
-                <p className="text-[12px] text-foreground/60">
-                  Anyone with this key can drain your wallet. Copy it somewhere safe — never share it.
-                </p>
-                <div className="bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg p-3 break-all text-[11px] font-mono text-foreground/90">
-                  {exportedKey}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={async () => {
-                      await copyToClipboard(exportedKey);
-                      setExportedKeyCopied(true);
-                      setTimeout(() => setExportedKeyCopied(false), 1400);
-                    }}
-                    className="flex-1 py-2.5 rounded-lg bg-foreground text-background text-[12px] font-semibold flex items-center justify-center gap-1.5"
-                  >
-                    {exportedKeyCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {exportedKeyCopied ? "Copied" : "Copy"}
-                  </button>
-                  <button
-                    onClick={resetWalletActionModal}
-                    className="flex-1 py-2.5 rounded-lg bg-foreground/[0.05] border border-foreground/[0.08] text-foreground/70 text-[12px] font-semibold"
-                  >
-                    Done
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="text-[12px] text-foreground/50">
-                  {walletAction === "export"
-                    ? "Enter your wallet password to reveal your private key."
-                    : "Enter your wallet password to download an encrypted backup file."}
-                </p>
-                <input
-                  type="password"
-                  value={walletActionPw}
-                  onChange={(e) => setWalletActionPw(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !walletActionLoading && walletActionPw.length > 0) runWalletAction(); }}
-                  placeholder="Wallet password"
-                  maxLength={100}
-                  autoFocus
-                  className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2.5 text-sm text-foreground placeholder-foreground/30 focus:outline-none focus:border-foreground/30"
-                />
-                {walletActionError && (
-                  <p className="text-[11px] text-rose-400">{walletActionError}</p>
-                )}
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={resetWalletActionModal}
-                    disabled={walletActionLoading}
-                    className="flex-1 py-2.5 rounded-lg bg-foreground/[0.05] border border-foreground/[0.08] text-foreground/70 text-[12px] font-semibold disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={runWalletAction}
-                    disabled={walletActionLoading || walletActionPw.length === 0}
-                    className="flex-1 py-2.5 rounded-lg bg-foreground text-background text-[12px] font-semibold disabled:opacity-40"
-                  >
-                    {walletActionLoading
-                      ? "Unlocking…"
-                      : walletAction === "export"
-                        ? "Reveal Key"
-                        : "Download"}
-                  </button>
-                </div>
-              </>
-            )}
-          </motion.div>
-        </div>
-      )}
+      {/* Export/Backup password modal moved into <WalletActionsMenu />. */}
     </div>
   );
 }

@@ -106,6 +106,12 @@ export interface MerchantDesktopLayoutProps {
   /** Threaded to the OnboardingSetupCard inside NotificationsPanel. */
   onOpenPaymentMethods?: () => void;
   onOpenSettings?: () => void;
+  /** Open the on-chain Swap modal (Jupiter v1, 0.5% platform fee). */
+  onOpenSwap?: () => void;
+  /** Open the SOL / USDT / USDC Send modal. */
+  onOpenSend?: () => void;
+  /** Open the Deposit / receive-address QR modal. */
+  onOpenDeposit?: () => void;
 }
 
 export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(props: MerchantDesktopLayoutProps) {
@@ -183,6 +189,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onCorridorChange={onCorridorChange}
                 onToggleOnline={() => setIsMerchantOnline((prev) => !prev)}
                 onOpenCorridor={() => window.open("/merchant/mempool", "_blank")}
+                onOpenSwap={props.onOpenSwap}
+                onOpenSend={props.onOpenSend}
+                onOpenDeposit={props.onOpenDeposit}
               />
             </div>
             <div className="rounded-xl overflow-hidden border border-foreground/[0.06] bg-foreground/[0.025]">

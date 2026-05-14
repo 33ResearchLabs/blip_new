@@ -40,6 +40,9 @@ import { formatCrypto } from "@/lib/format";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { MerchantModals } from "@/components/merchant/MerchantModals";
 import { MerchantUpiPayModal } from "@/components/merchant/MerchantUpiPayModal";
+import { SwapModal } from "@/components/merchant/SwapModal";
+import { SendModal } from "@/components/merchant/SendModal";
+import { DepositModal } from "@/components/merchant/DepositModal";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayout";
 import { MerchantTour } from "@/components/merchant/MerchantTour";
@@ -68,6 +71,12 @@ export default function MerchantDashboard() {
   );
 
   const [showWalletModal, setShowWalletModal] = useState(false);
+  // Shared modal state — works for both desktop StatusCard and mobile
+  // home view. The modals themselves render at the page root so a single
+  // instance covers every viewport.
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWalletPrompt, setShowWalletPrompt] = useState(false);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -961,6 +970,39 @@ export default function MerchantDashboard() {
         playSound={playSound}
         onOpenPaymentMethods={() => setShowPaymentMethods(true)}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenSwap={() => setShowSwapModal(true)}
+        onOpenSend={() => setShowSendModal(true)}
+        onOpenDeposit={() => setShowDepositModal(true)}
+      />
+
+      {/* Page-level Swap / Send / Deposit modals — shared between desktop
+          (StatusCard) and mobile (MobileHomeView) triggers so we don't
+          mount two copies. Wallet adapter values come from useSolanaWallet
+          at this scope; merchant page already consumes them above. */}
+      <SwapModal
+        isOpen={showSwapModal}
+        onClose={() => setShowSwapModal(false)}
+        walletAddress={solanaWallet?.walletAddress ?? null}
+        signTransaction={(solanaWallet as { signTransaction?: never })?.signTransaction ?? null}
+        solBalance={solanaWallet?.solBalance ?? null}
+        usdtBalance={solanaWallet?.usdtBalance ?? null}
+        usdcBalance={(solanaWallet as { usdcBalance?: number | null })?.usdcBalance ?? null}
+        onSwapSuccess={() => solanaWallet?.refreshBalances?.()}
+      />
+      <SendModal
+        isOpen={showSendModal}
+        onClose={() => setShowSendModal(false)}
+        walletAddress={solanaWallet?.walletAddress ?? null}
+        signTransaction={(solanaWallet as { signTransaction?: never })?.signTransaction ?? null}
+        solBalance={solanaWallet?.solBalance ?? null}
+        usdtBalance={solanaWallet?.usdtBalance ?? null}
+        usdcBalance={(solanaWallet as { usdcBalance?: number | null })?.usdcBalance ?? null}
+        onSendSuccess={() => solanaWallet?.refreshBalances?.()}
+      />
+      <DepositModal
+        isOpen={showDepositModal}
+        onClose={() => setShowDepositModal(false)}
+        walletAddress={solanaWallet?.walletAddress ?? null}
       />
 
       <MerchantMobileContent

@@ -18,6 +18,9 @@ interface DashboardWidgetsProps {
   onCorridorChange?: (corridorId: string) => void;
   onToggleOnline?: () => void;
   onOpenCorridor?: () => void;
+  onOpenSwap?: () => void;
+  onOpenSend?: () => void;
+  onOpenDeposit?: () => void;
 }
 
 export const DashboardWidgets = memo(function DashboardWidgets({
@@ -34,6 +37,9 @@ export const DashboardWidgets = memo(function DashboardWidgets({
   onCorridorChange,
   onToggleOnline,
   onOpenCorridor,
+  onOpenSwap,
+  onOpenSend,
+  onOpenDeposit,
 }: DashboardWidgetsProps) {
   return (
     <div className="flex flex-col h-full">
@@ -52,6 +58,9 @@ export const DashboardWidgets = memo(function DashboardWidgets({
           onCorridorChange={onCorridorChange}
           onToggleOnline={onToggleOnline}
           onOpenCorridor={onOpenCorridor}
+          onOpenSwap={onOpenSwap}
+          onOpenSend={onOpenSend}
+          onOpenDeposit={onOpenDeposit}
         />
       </div>
     </div>

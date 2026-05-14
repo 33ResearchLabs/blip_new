@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
+import { WalletActionsMenu } from "@/components/merchant/WalletActionsMenu";
 
 const CORRIDORS = [
   { id: "USDT_AED", label: "USDT / AED", flag: "🇦🇪", fiat: "AED" },
@@ -61,6 +62,12 @@ interface StatusCardProps {
   onCorridorChange?: (corridorId: string) => void;
   onToggleOnline?: () => void;
   onOpenCorridor?: () => void;
+  /** Open the on-chain Swap modal (Jupiter v1, 0.5% platform fee). */
+  onOpenSwap?: () => void;
+  /** Open the SOL / USDT / USDC Send modal. */
+  onOpenSend?: () => void;
+  /** Open the Deposit / receive-address QR modal. */
+  onOpenDeposit?: () => void;
 }
 
 interface CorridorData {
@@ -90,6 +97,9 @@ export const StatusCard = memo(function StatusCard({
   onCorridorChange,
   onToggleOnline,
   onOpenCorridor,
+  onOpenSwap,
+  onOpenSend,
+  onOpenDeposit,
 }: StatusCardProps) {
   const [corridor, setCorridor] = useState<CorridorData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -452,22 +462,28 @@ export const StatusCard = memo(function StatusCard({
           <div className="w-48 h-24 bg-primary/[0.03] rounded-full blur-[60px]" />
         </div>
 
-        {/* USDT Label */}
-        <div className="flex items-center gap-1.5 mb-1 relative z-10">
-          {walletStatus === 'locked' ? (
-            <Lock className="w-3 h-3 text-foreground/30" />
-          ) : walletStatus === 'none' ? (
-            <Plus className="w-3 h-3 text-foreground/30" />
-          ) : (
-            <Wallet className="w-3 h-3 text-foreground/20" />
+        {/* USDT Label + wallet-actions gear menu */}
+        <div className="flex items-center justify-between mb-1 relative z-10">
+          <div className="flex items-center gap-1.5">
+            {walletStatus === 'locked' ? (
+              <Lock className="w-3 h-3 text-foreground/30" />
+            ) : walletStatus === 'none' ? (
+              <Plus className="w-3 h-3 text-foreground/30" />
+            ) : (
+              <Wallet className="w-3 h-3 text-foreground/20" />
+            )}
+            <span className="text-[10px] text-foreground/30 font-mono uppercase tracking-widest">
+              {walletStatus === 'locked'
+                ? 'Wallet Locked'
+                : walletStatus === 'none'
+                  ? 'No Wallet'
+                  : 'Available Balance'}
+            </span>
+          </div>
+          {/* Gear menu — Export Key / Backup / Delete / Init Fee Accounts */}
+          {walletStatus === 'ok' && merchantId && (
+            <WalletActionsMenu actorId={merchantId} />
           )}
-          <span className="text-[10px] text-foreground/30 font-mono uppercase tracking-widest">
-            {walletStatus === 'locked'
-              ? 'Wallet Locked'
-              : walletStatus === 'none'
-                ? 'No Wallet'
-                : 'Available Balance'}
-          </span>
         </div>
 
         {/* Big USDT Amount — branches on wallet state */}
@@ -522,6 +538,41 @@ export const StatusCard = memo(function StatusCard({
             </>
           )}
         </div>
+
+        {/* Quick actions — Swap / Send / Deposit. Mirrors the mobile
+            home card so desktop merchants don't have to drill into a
+            separate wallet page for everyday transfers. */}
+        {(onOpenSwap || onOpenSend || onOpenDeposit) && (
+          <div className="mt-3 grid grid-cols-3 gap-2 relative z-10">
+            {onOpenSwap && (
+              <button
+                onClick={onOpenSwap}
+                className="flex flex-col items-center gap-1 py-2 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.06] text-foreground/80 hover:text-foreground transition-colors"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Swap</span>
+              </button>
+            )}
+            {onOpenSend && (
+              <button
+                onClick={onOpenSend}
+                className="flex flex-col items-center gap-1 py-2 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.06] text-foreground/80 hover:text-foreground transition-colors"
+              >
+                <ArrowUpFromLine className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Send</span>
+              </button>
+            )}
+            {onOpenDeposit && (
+              <button
+                onClick={onOpenDeposit}
+                className="flex flex-col items-center gap-1 py-2 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.06] text-foreground/80 hover:text-foreground transition-colors"
+              >
+                <ArrowDownToLine className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Deposit</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* 24h Earnings badge */}
         {todayEarnings !== 0 && (
