@@ -90,15 +90,17 @@ export function PinSheet({ open, mode, title, subtitle, onClose, onSuccess }: Pr
     setError("");
   };
 
-  // Auto-submit when PIN reaches its max length (6 digits) in verify mode.
-  // For setup, also auto-advance on min length match. Lets the user choose
-  // 4-digit or 6-digit PINs without an extra "confirm" tap.
+  // Auto-submit only at MAX length. For shorter PINs (4 or 5 digits) the
+  // user must tap the explicit "Continue" button below — we cannot read
+  // their mind about whether they've finished typing. Previous behaviour
+  // auto-submitted verify at MIN (4), which truncated 6-digit PINs to 4
+  // digits and produced false "Incorrect PIN" errors on every tap.
   useEffect(() => {
     if (busy || !open) return;
-    if (mode === "verify" && pin.length >= PIN_LEN_MIN) {
+    if (mode === "verify" && pin.length === PIN_LEN_MAX) {
       void submitVerify();
     } else if (mode === "setup") {
-      if (step === "enter" && pin.length >= PIN_LEN_MIN && pin.length === PIN_LEN_MAX) {
+      if (step === "enter" && pin.length === PIN_LEN_MAX) {
         setStep("confirm");
       }
       if (step === "confirm" && confirmPin.length === pin.length) {
@@ -107,6 +109,25 @@ export function PinSheet({ open, mode, title, subtitle, onClose, onSuccess }: Pr
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pin, confirmPin, step, busy, open, mode]);
+
+  // Manual commit handler for users with 4- or 5-digit PINs (or to advance
+  // the setup "enter" step early). Disabled below MIN and at MAX (the
+  // auto-submit covers MAX).
+  const canCommit =
+    !busy &&
+    activePin.length >= PIN_LEN_MIN &&
+    activePin.length < PIN_LEN_MAX;
+  const onCommit = () => {
+    if (!canCommit) return;
+    if (mode === "verify") {
+      void submitVerify();
+    } else if (mode === "setup") {
+      if (step === "enter") setStep("confirm");
+      else if (step === "confirm" && confirmPin.length === pin.length) {
+        void submitSetup();
+      }
+    }
+  };
 
   const submitVerify = async () => {
     setBusy(true);
@@ -267,9 +288,24 @@ export function PinSheet({ open, mode, title, subtitle, onClose, onSuccess }: Pr
                 </button>
               </div>
 
+              {/* Continue button — appears once user has typed ≥ MIN but
+                  < MAX. At MAX the input auto-submits, so the button is
+                  hidden to avoid a redundant tap. Below MIN the button is
+                  disabled rather than hidden so the user can see it
+                  becoming available as they type. */}
+              {activePin.length >= PIN_LEN_MIN && activePin.length < PIN_LEN_MAX && (
+                <button
+                  onClick={onCommit}
+                  disabled={!canCommit}
+                  className="mt-3 w-full py-3 rounded-xl text-[14px] font-semibold bg-accent text-accent-text disabled:opacity-50"
+                >
+                  Continue
+                </button>
+              )}
+
               <p className="mt-3 text-[10px] text-text-tertiary text-center">
                 {mode === "verify"
-                  ? "Required for every Pay action."
+                  ? "Required for every Payment."
                   : `${PIN_LEN_MIN}-${PIN_LEN_MAX} digits. Avoid obvious patterns.`}
               </p>
             </div>

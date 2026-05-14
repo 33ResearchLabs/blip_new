@@ -321,10 +321,17 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   const handlePayTap = () => {
     const v = validateBeforeSubmit();
     if (!v) return;
-    if (hasPin === false) {
-      setPinGate("setup");
-    } else {
+    // Defense-in-depth on top of the disabled-button gate above:
+    //   - hasPin === true  → verify (PIN exists server-side)
+    //   - hasPin === false → setup (no PIN row yet)
+    //   - hasPin === null  → shouldn't happen (button disabled), but if it
+    //     does, default to setup. POST /api/user/pin without
+    //     current_password will fail closed for users who already have one,
+    //     instead of hammering verify against a missing hash.
+    if (hasPin === true) {
       setPinGate("verify");
+    } else {
+      setPinGate("setup");
     }
   };
 
@@ -610,7 +617,11 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
                 currentRate && currentRate > 0 ? amt / currentRate : Infinity;
               const overBalance =
                 usdtBalance !== null && need > usdtBalance;
-              const disabled = !amount || amt <= 0 || overBalance;
+              // Block tap until we know whether the user has a PIN — otherwise
+              // a fast user can open the verify modal against a non-existent
+              // PIN and the server returns 409 on every keystroke.
+              const pinReady = hasPin !== null;
+              const disabled = !amount || amt <= 0 || overBalance || !pinReady;
               return (
                 <motion.button
                   whileTap={disabled ? undefined : { scale: 0.98 }}
@@ -624,7 +635,9 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
                 >
                   {overBalance
                     ? "Insufficient balance"
-                    : `Pay ₹${formattedAmount || "0"}`}
+                    : !pinReady
+                      ? "Loading…"
+                      : `Pay ₹${formattedAmount || "0"}`}
                 </motion.button>
               );
             })()}
