@@ -77,15 +77,17 @@ export function AppLockSettingsCard({ userId }: AppLockSettingsCardProps) {
         </span>
       </div>
 
-      {/* App PIN row */}
+      {/* App Lock PIN row — renamed from "App PIN" to disambiguate from
+          the Payment PIN row added in PaymentPinRow.tsx. This PIN locks
+          the app UI on background/idle; it has nothing to do with paying. */}
       <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-white/[0.03]">
         <div className="flex items-center gap-3 min-w-0">
           <ShieldCheck className="w-4 h-4 text-white/60 shrink-0" />
           <div className="min-w-0">
-            <div className="text-[12px] font-bold text-white/90 font-mono">App PIN</div>
+            <div className="text-[12px] font-bold text-white/90 font-mono">App Lock PIN</div>
             <div className="text-[10px] text-white/40 font-mono truncate">
               {settings.pinEnrolled
-                ? '4-digit PIN locks the app'
+                ? 'Locks the app when you switch away'
                 : 'Add a 4-digit PIN to lock the app'}
             </div>
           </div>

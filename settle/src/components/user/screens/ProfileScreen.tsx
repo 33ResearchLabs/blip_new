@@ -26,6 +26,7 @@ import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
 import { AppLockSettingsCard } from "@/components/app-lock/AppLockSettingsCard";
+import { PaymentPinRow } from "@/components/user/PaymentPinRow";
 import type { Screen, Order, BankAccount } from "./types";
 import { networkLabel } from "@/lib/solana/networkLabel";
 import type { MutableRefObject } from "react";
@@ -405,12 +406,26 @@ export const ProfileScreen = ({
           )}
         </div>
 
-        {/* App Lock — 4-digit PIN + optional biometric for app entry,
-            background re-lock, and inactivity timeout. Independent of
-            wallet password and user auth tokens. */}
+        {/* App Lock — two independent PINs grouped under one heading:
+              1. App Lock PIN (client-side, locks the UI on idle)
+              2. Payment PIN (server-side, required to authorise Payments)
+            Both live here so users have one canonical place to see, set,
+            change, or reset either of them. Previous architecture left
+            the Payment PIN with NO management UI, producing "ghost PIN"
+            bugs where users had a hash they didn't remember setting. */}
         <p className={`${SECTION_LABEL} block mb-2`}>App Lock</p>
         <div className="mb-3">
           <AppLockSettingsCard userId={userId} />
+        </div>
+        <div className="mb-3">
+          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-white/[0.04]">
+              <span className="text-[10px] font-bold text-white/40 font-mono uppercase tracking-wider">
+                Payment
+              </span>
+            </div>
+            <PaymentPinRow userId={userId} />
+          </div>
         </div>
 
         {/* Payment Methods — supports bank, UPI, cash, and other types.
