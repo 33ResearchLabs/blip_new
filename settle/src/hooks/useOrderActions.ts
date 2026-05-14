@@ -10,6 +10,7 @@ import { isValidSolanaAddress } from '@/lib/validation/solana';
 import { showConfirm } from '@/context/ModalContext';
 import { formatFiat } from '@/lib/format';
 import { getCachedPrice, ensurePriceFresh } from '@/lib/price/clientPriceCache';
+import bs58 from 'bs58';
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -126,7 +127,7 @@ export function useOrderActions({
       const walletAddr = solanaWallet.walletAddress;
       const bindingMsg = `Claim order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
       const sigBytes = await solanaWallet.signMessage(new TextEncoder().encode(bindingMsg));
-      acceptorSignatureB64 = Buffer.from(sigBytes).toString('base64');
+      acceptorSignatureB64 = bs58.encode(sigBytes);
     } catch (sigErr) {
       console.error('[Merchant] Accept signature failed:', sigErr);
       addNotification('system', 'Failed to sign accept binding — wallet rejected or locked. Please retry.', order.id);
@@ -439,7 +440,7 @@ export function useOrderActions({
 
       addNotification('system', 'Please sign in your wallet to proceed...', order.id);
       const signatureBytes = await solanaWallet.signMessage(messageBytes);
-      const signature = Buffer.from(signatureBytes).toString('base64');
+      const signature = bs58.encode(signatureBytes);
 
       const proceedBody: Record<string, string> = {
         status: "payment_sent",
