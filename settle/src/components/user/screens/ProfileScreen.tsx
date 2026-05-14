@@ -19,6 +19,8 @@ import {
   Pencil,
   Trash2,
   Loader2,
+  Shield,
+  RefreshCw,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -26,7 +28,6 @@ import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
 import { AppLockSettingsCard } from "@/components/app-lock/AppLockSettingsCard";
-import { PaymentPinRow } from "@/components/user/PaymentPinRow";
 import type { Screen, Order, BankAccount } from "./types";
 import { networkLabel } from "@/lib/solana/networkLabel";
 import type { MutableRefObject } from "react";
@@ -250,182 +251,289 @@ export const ProfileScreen = ({
     }
   };
 
+  // Derived identity metrics — kept at render-top so header + identity card
+  // can reference the same numbers without re-deriving them inline.
+  const tradesCount = completedOrders.length;
+  const volumeTotal = completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0);
+  const successRate = tradesCount > 0
+    ? (tradesCount / (tradesCount + timedOutOrders.length)) * 100
+    : null;
+  const tier =
+    tradesCount >= 50 ? 'Elite Trader'
+    : tradesCount >= 20 ? 'Trusted'
+    : tradesCount >= 10 ? 'Established'
+    : tradesCount >= 3 ? 'Emerging'
+    : tradesCount > 0 ? 'New Trader'
+    : null;
+  const tierLvl =
+    tradesCount >= 50 ? 5
+    : tradesCount >= 20 ? 4
+    : tradesCount >= 10 ? 3
+    : tradesCount >= 3 ? 2
+    : tradesCount > 0 ? 1
+    : 0;
+  const nextTierThreshold =
+    tradesCount < 3 ? 3
+    : tradesCount < 10 ? 10
+    : tradesCount < 20 ? 20
+    : tradesCount < 50 ? 50
+    : null;
+  const prevTierThreshold =
+    tradesCount < 3 ? 0
+    : tradesCount < 10 ? 3
+    : tradesCount < 20 ? 10
+    : tradesCount < 50 ? 20
+    : 50;
+  const tierProgress = nextTierThreshold
+    ? Math.min(100, Math.max(0, ((tradesCount - prevTierThreshold) / (nextTierThreshold - prevTierThreshold)) * 100))
+    : 100;
+
+  const copyAddress = async () => {
+    if (!solanaWallet.walletAddress) return;
+    await copyToClipboard(solanaWallet.walletAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
-      {/* ── Header ── */}
-      <header className="px-5 pt-10 pb-4 shrink-0">
-        <p className={`${SECTION_LABEL} mb-1`}>Account</p>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-[16px] flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle">
-              <span className="text-[20px] font-extrabold text-text-primary">{(userName || 'U').charAt(0).toUpperCase()}</span>
+      {/* ── Header ── Hero profile banner: avatar with connection dot, name,
+          tier line, and a tappable wallet pill (replaces the separate copy
+          button for a cleaner one-tap interaction). */}
+      <header className="px-5 pt-10 pb-5 shrink-0">
+        <p className={`${SECTION_LABEL} mb-3`}>Account</p>
+        <div className="flex items-start gap-4">
+          <div className="relative shrink-0">
+            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center bg-surface-raised border border-border-medium">
+              <span className="text-[24px] font-extrabold tracking-[-0.03em] text-text-primary">
+                {(userName || 'U').charAt(0).toUpperCase()}
+              </span>
             </div>
-            <div>
-              <p className="text-[20px] font-extrabold tracking-[-0.03em] text-text-primary leading-[1.1]">{userName || 'User'}</p>
-              <p className="text-[11px] font-semibold text-text-tertiary font-mono mt-0.5">
-                {solanaWallet.connected && solanaWallet.walletAddress
-                  ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
-                  : 'Wallet not connected'}
-              </p>
-            </div>
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-surface-base ${
+                solanaWallet.connected ? 'bg-success' : 'bg-text-quaternary'
+              }`}
+              aria-label={solanaWallet.connected ? 'Wallet connected' : 'Wallet disconnected'}
+            />
           </div>
-          {solanaWallet.connected && solanaWallet.walletAddress && (
-            <motion.button whileTap={{ scale: 0.85 }}
-              onClick={async () => {
-                await copyToClipboard(solanaWallet.walletAddress!);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="w-9 h-9 rounded-[12px] flex items-center justify-center bg-surface-raised border border-border-subtle">
-              {copied
-                ? <Check size={15} className="text-success" />
-                : <Copy size={15} className="text-text-tertiary" />}
-            </motion.button>
-          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-[22px] font-extrabold tracking-[-0.03em] text-text-primary leading-none truncate mb-1">
+              {userName || 'User'}
+            </p>
+            {tier && (
+              <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-text-secondary mb-2">
+                {tier}
+              </p>
+            )}
+            {solanaWallet.connected && solanaWallet.walletAddress ? (
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={copyAddress}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[10px] bg-surface-raised border border-border-subtle"
+              >
+                <span className="text-[11px] font-semibold text-text-secondary font-mono">
+                  {`${solanaWallet.walletAddress.slice(0, 4)}…${solanaWallet.walletAddress.slice(-4)}`}
+                </span>
+                {copied
+                  ? <Check size={11} className="text-success" />
+                  : <Copy size={11} className="text-text-quaternary" />}
+              </motion.button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[10px] bg-surface-raised border border-border-subtle">
+                <span className="w-1.5 h-1.5 rounded-full bg-text-quaternary" />
+                <span className="text-[11px] font-semibold text-text-tertiary">Wallet not connected</span>
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 px-5 pb-24 overflow-y-auto scrollbar-hide">
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          {[
-            { label: 'Trades', value: completedOrders.length.toString() },
-            { label: 'Volume', value: completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0).toFixed(0) , currency:'USDT'  } ,
-            { label: 'Score', value: completedOrders.length > 0 ? (completedOrders.length / (completedOrders.length + timedOutOrders.length) * 100).toFixed(0) + '%' : '\u2014' },
-          ].map(stat => (
-            <div key={stat.label} className={`rounded-[18px] flex flex-col items-center py-3 ${CARD}`}>
-              <p className={`${CARD_LABEL} mb-1`}>{stat.label}</p>
-              <p className="text-[20px] font-extrabold tracking-[-0.03em] text-text-primary">{stat.value}{" "}<span className="text-sm">{stat.currency}</span></p>
+        {/* Identity card \u2014 combines reputation + stats into a single cohesive
+            block. Reputation row sits on top with a progress bar showing
+            trades-to-next-tier; the 3 stat columns sit below, divided by
+            vertical hairlines for a tabular, professional read. */}
+        <div className={`rounded-[20px] mb-3 overflow-hidden ${CARD}`}>
+          {tier ? (
+            <div className="px-4 pt-4 pb-3.5 border-b border-border-subtle">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-[9px] flex items-center justify-center bg-surface-active">
+                    <Shield size={13} className="text-text-secondary" />
+                  </div>
+                  <div>
+                    <p className={`${CARD_LABEL} leading-none mb-1`}>Reputation</p>
+                    <p className="text-[15px] font-extrabold tracking-[-0.02em] text-text-primary leading-none">
+                      {tier}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-end gap-[3px]">
+                  {[...Array(5)].map((_, i) => (
+                    <div
+                      key={i}
+                      className={`w-[3px] rounded-[2px] ${REP_BAR_H[i]} ${i < tierLvl ? 'bg-accent' : 'bg-border-medium'}`}
+                    />
+                  ))}
+                </div>
+              </div>
+              {nextTierThreshold !== null && (
+                <>
+                  <div className="h-1 w-full rounded-full bg-surface-active overflow-hidden">
+                    <div
+                      className="h-full bg-accent rounded-full transition-all"
+                      style={{ width: `${tierProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] font-semibold text-text-tertiary mt-1.5">
+                    {nextTierThreshold - tradesCount} more trade{nextTierThreshold - tradesCount === 1 ? '' : 's'} to next tier
+                  </p>
+                </>
+              )}
             </div>
-          ))}
+          ) : (
+            <div className="px-4 pt-4 pb-3.5 border-b border-border-subtle flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-[9px] flex items-center justify-center bg-surface-active">
+                <Shield size={13} className="text-text-tertiary" />
+              </div>
+              <div>
+                <p className={`${CARD_LABEL} leading-none mb-1`}>Reputation</p>
+                <p className="text-[13px] font-semibold text-text-tertiary leading-none">
+                  Complete your first trade to earn a tier
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 divide-x divide-border-subtle">
+            {[
+              { label: 'Trades', value: tradesCount.toString(), sub: null as string | null },
+              { label: 'Volume', value: volumeTotal.toFixed(0), sub: 'USDT' },
+              { label: 'Success', value: successRate !== null ? `${successRate.toFixed(0)}%` : '\u2014', sub: null },
+            ].map((stat) => (
+              <div key={stat.label} className="px-3 py-3.5 flex flex-col items-center">
+                <p className={`${CARD_LABEL} mb-1.5`}>{stat.label}</p>
+                <p className="text-[19px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+                  {stat.value}
+                  {stat.sub && <span className="text-[11px] font-bold text-text-tertiary ml-1">{stat.sub}</span>}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Reputation */}
-        {completedOrders.length > 0 && (() => {
-          const tier = completedOrders.length >= 50 ? 'Elite Trader' : completedOrders.length >= 20 ? 'Trusted' : completedOrders.length >= 10 ? 'Established' : completedOrders.length >= 3 ? 'Emerging' : 'New Trader';
-          const lvl = completedOrders.length >= 50 ? 5 : completedOrders.length >= 20 ? 4 : completedOrders.length >= 10 ? 3 : completedOrders.length >= 3 ? 2 : 1;
-          return (
-            <div className={`rounded-[18px] px-4 py-3 flex items-center justify-between mb-3 ${CARD}`}>
-              <div>
-                <p className={`${CARD_LABEL} mb-1`}>Reputation</p>
-                <p className="text-[16px] font-extrabold tracking-[-0.02em] text-text-primary">{tier}</p>
-              </div>
-              <div className="flex items-end gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <div
-                    key={i}
-                    className={`w-1 rounded-[2px] ${REP_BAR_H[i]} ${i < lvl ? 'bg-accent' : 'bg-text-quaternary'}`}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Wallet */}
+        {/* Wallet — refined: header row carries network + Live status pill;
+            balances render in two equal-weight columns separated by a vertical
+            divider; actions sit in a clean bottom row. */}
         <p className={`${SECTION_LABEL} block mb-2`}>Solana Wallet</p>
-        <div className={`rounded-[18px] p-4 mb-3 ${CARD}`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className={`w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border border-border-medium ${
-              solanaWallet.connected ? 'bg-surface-active' : 'bg-surface-hover'
-            }`}>
-              <Wallet size={16} className={solanaWallet.connected ? 'text-text-primary' : 'text-text-tertiary'} />
+        <div className={`rounded-[20px] overflow-hidden mb-3 ${CARD}`}>
+          <div className="px-4 pt-4 pb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className={`w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border ${
+                solanaWallet.connected
+                  ? 'bg-surface-active border-border-medium'
+                  : 'bg-surface-hover border-border-subtle'
+              }`}>
+                <Wallet size={15} className={solanaWallet.connected ? 'text-text-primary' : 'text-text-tertiary'} />
+              </div>
+              <div className="min-w-0">
+                <p className={`${CARD_LABEL} mb-0.5`}>
+                  {solanaWallet.connected ? networkLabel() : 'Not Connected'}
+                </p>
+                <p className="text-[13px] font-bold text-text-primary font-mono truncate">
+                  {solanaWallet.connected && solanaWallet.walletAddress
+                    ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
+                    : 'Connect your wallet'}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className={`${CARD_LABEL} mb-0.5`}>
-                {solanaWallet.connected ? networkLabel() : 'Not Connected'}
-              </p>
-              <p className="text-[13px] font-bold text-text-primary font-mono">
-                {solanaWallet.connected && solanaWallet.walletAddress
-                  ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
-                  : 'Connect your wallet'}
-              </p>
-            </div>
+            {solanaWallet.connected && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-success-dim border border-success-border shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                <span className="text-[9px] font-bold tracking-[0.1em] uppercase text-success">Live</span>
+              </span>
+            )}
           </div>
 
           {/* Solana Balances */}
           {solanaWallet.connected && (
             <>
-              <div className="flex gap-2 mb-2 pt-3 border-t border-border-medium">
+              <div className="grid grid-cols-2 border-t border-border-subtle divide-x divide-border-subtle">
                 {[
                   { label: 'SOL', value: solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(4) : '\u2014' },
                   { label: 'USDT', value: solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '\u2014' },
-                ].map(b => (
-                  <div key={b.label} className="flex-1 rounded-[14px] px-3 py-2 bg-surface-hover border border-border-medium">
-                    <p className={`${CARD_LABEL} mb-[3px]`}>{b.label}</p>
-                    <p className="text-[17px] font-extrabold tracking-[-0.02em] text-text-primary">{b.value}</p>
+                ].map((b) => (
+                  <div key={b.label} className="px-4 py-3.5">
+                    <p className={`${CARD_LABEL} mb-1.5`}>{b.label}</p>
+                    <p className="text-[20px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">{b.value}</p>
                   </div>
                 ))}
               </div>
-              <div className="flex gap-2">
-                <motion.button whileTap={{ scale: 0.96 }} onClick={() => solanaWallet.refreshBalances()}
-                  className="flex-1 py-2 rounded-[12px] bg-surface-active text-[11px] font-bold text-text-secondary tracking-[0.08em] uppercase">
-                  Refresh
-                </motion.button>
-                <motion.button whileTap={{ scale: 0.96 }} onClick={() => solanaWallet.disconnect()}
-                  className="flex-1 py-2 rounded-[12px] bg-error-dim border border-error-border text-[11px] font-bold text-error tracking-[0.08em] uppercase">
-                  Disconnect
-                </motion.button>
-              </div>
 
-              {/* Embedded-wallet management — Send / Export key / Backup / Lock
-                  / Delete. Mirrors the merchant wallet page, adapted for users.
-                  Only surfaced when the embedded-wallet flag is on so the
-                  external-wallet flow (Phantom / etc.) doesn't get an empty
-                  manage screen. */}
-              {IS_EMBEDDED_WALLET && (
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => router.push('/user/wallet')}
-                  className="w-full mt-2 py-2.5 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-raised border border-border-subtle text-[11px] font-bold text-text-secondary tracking-[0.08em] uppercase"
-                >
-                  Manage Wallet
-                  <ChevronRight size={13} className="text-text-tertiary" />
-                </motion.button>
-              )}
+              <div className="px-3 pt-3 pb-3 border-t border-border-subtle">
+                <div className="flex gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => solanaWallet.refreshBalances()}
+                    className="flex-1 h-9 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-active text-[11px] font-bold text-text-secondary tracking-[0.08em] uppercase"
+                  >
+                    <RefreshCw size={12} className="text-text-tertiary" />
+                    Refresh
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => solanaWallet.disconnect()}
+                    className="flex-1 h-9 rounded-[12px] flex items-center justify-center gap-1.5 bg-error-dim border border-error-border text-[11px] font-bold text-error tracking-[0.08em] uppercase"
+                  >
+                    <LogOut size={12} className="text-error" />
+                    Disconnect
+                  </motion.button>
+                </div>
+
+                {/* Embedded-wallet management. Surfaced only when the
+                    embedded-wallet flag is on. */}
+                {IS_EMBEDDED_WALLET && (
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => router.push('/user/wallet')}
+                    className="w-full mt-2 h-10 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-raised border border-border-subtle text-[12px] font-bold text-text-secondary tracking-[-0.01em]"
+                  >
+                    Manage Wallet
+                    <ChevronRight size={14} className="text-text-tertiary" />
+                  </motion.button>
+                )}
+              </div>
             </>
           )}
 
           {/* Connect Solana Wallet Button */}
           {!solanaWallet.connected && (
-            <motion.button whileTap={{ scale: 0.97 }}
-              onClick={() => {
-                if (IS_EMBEDDED_WALLET && setShowWalletSetup && setShowWalletUnlock) {
-                  if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
-                  else setShowWalletSetup(true);
-                } else {
-                  setShowWalletModal(true);
-                }
-              }}
-              className="w-full py-3 rounded-[14px] flex items-center justify-center gap-2 mt-2 bg-accent text-accent-text text-[14px] font-extrabold tracking-[-0.01em]">
-              <Wallet size={16} className="text-accent-text" /> Connect Wallet
-            </motion.button>
+            <div className="px-4 pb-4">
+              <motion.button whileTap={{ scale: 0.97 }}
+                onClick={() => {
+                  if (IS_EMBEDDED_WALLET && setShowWalletSetup && setShowWalletUnlock) {
+                    if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
+                    else setShowWalletSetup(true);
+                  } else {
+                    setShowWalletModal(true);
+                  }
+                }}
+                className="w-full h-12 rounded-[14px] flex items-center justify-center gap-2 bg-accent text-accent-text text-[14px] font-extrabold tracking-[-0.01em]">
+                <Wallet size={16} className="text-accent-text" /> Connect Wallet
+              </motion.button>
+            </div>
           )}
         </div>
 
-        {/* App Lock — two independent PINs grouped under one heading:
-              1. App Lock PIN (client-side, locks the UI on idle)
-              2. Payment PIN (server-side, required to authorise Payments)
-            Both live here so users have one canonical place to see, set,
-            change, or reset either of them. Previous architecture left
-            the Payment PIN with NO management UI, producing "ghost PIN"
-            bugs where users had a hash they didn't remember setting. */}
+        {/* App Lock PIN (client-side, locks the UI on idle). Payment PIN
+            management is surfaced elsewhere — kept out of the profile screen
+            to avoid two-PIN UX confusion. */}
         <p className={`${SECTION_LABEL} block mb-2`}>App Lock</p>
         <div className="mb-3">
           <AppLockSettingsCard userId={userId} />
-        </div>
-        <div className="mb-3">
-          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-white/[0.04]">
-              <span className="text-[10px] font-bold text-white/40 font-mono uppercase tracking-wider">
-                Payment
-              </span>
-            </div>
-            <PaymentPinRow userId={userId} />
-          </div>
         </div>
 
         {/* Payment Methods — supports bank, UPI, cash, and other types.
