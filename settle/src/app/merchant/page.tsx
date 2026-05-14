@@ -43,6 +43,7 @@ import { MerchantUpiPayModal } from "@/components/merchant/MerchantUpiPayModal";
 import { SwapModal } from "@/components/merchant/SwapModal";
 import { SendModal } from "@/components/merchant/SendModal";
 import { DepositModal } from "@/components/merchant/DepositModal";
+import { UnlockWalletModal } from "@/components/merchant/UnlockWalletModal";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayout";
 import { MerchantTour } from "@/components/merchant/MerchantTour";
@@ -77,6 +78,7 @@ export default function MerchantDashboard() {
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [showWalletPrompt, setShowWalletPrompt] = useState(false);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -921,7 +923,19 @@ export default function MerchantDashboard() {
                 // No wallet at all (state === 'none' or undefined, and no external)
                 : 'none'
         }
-        onAddWallet={() => router.push('/merchant/wallet')}
+        // When the wallet exists but is locked, open the inline Unlock
+        // modal instead of routing to /merchant/wallet — keeps the
+        // merchant on the dashboard. For state === 'none' (no wallet
+        // yet) we still send them to the wallet page where the
+        // generate/import flow lives, since that flow is too heavy to
+        // inline right now.
+        onAddWallet={() => {
+          if (embeddedWallet?.state === 'locked') {
+            setShowUnlockModal(true);
+          } else {
+            router.push('/merchant/wallet');
+          }
+        }}
         activeCorridor={activeCorridor}
         onCorridorChange={setActiveCorridor}
         openTradeForm={openTradeForm}
@@ -1003,6 +1017,12 @@ export default function MerchantDashboard() {
         isOpen={showDepositModal}
         onClose={() => setShowDepositModal(false)}
         walletAddress={solanaWallet?.walletAddress ?? null}
+      />
+      <UnlockWalletModal
+        isOpen={showUnlockModal}
+        onClose={() => setShowUnlockModal(false)}
+        unlockWallet={embeddedWallet?.unlockWallet ?? null}
+        onUnlocked={() => solanaWallet?.refreshBalances?.()}
       />
 
       <MerchantMobileContent
