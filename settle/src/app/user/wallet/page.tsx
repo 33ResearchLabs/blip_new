@@ -286,10 +286,14 @@ export default function UserWalletPage() {
 
   const handleImport = async () => {
     setSetupError("");
-    // Import re-encrypts under a new PIN. Same 6-digit enforcement as
-    // create so import isn't a back-door around the format check.
+    // Import re-encrypts under a new PIN. Same 6-digit + confirm gates
+    // as Create so import isn't a back-door around the format check.
     if (!/^[0-9]{6}$/.test(password)) {
       setSetupError("Enter a 6-digit PIN");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setSetupError("PINs do not match");
       return;
     }
     const strength = validatePasswordStrength(password);
@@ -812,13 +816,26 @@ export default function UserWalletPage() {
                     </div>
                     {/* User-side wallet password is a 6-digit PIN (see
                         Create flow above for the full rationale). Import
-                        re-encrypts the supplied keypair under this PIN. */}
+                        re-encrypts the supplied keypair under this PIN.
+                        showToggle is enabled here so users can verify the
+                        PIN they entered matches Confirm before committing
+                        — recovering an imported wallet wrong is worse than
+                        recovering a freshly-created one, since the keypair
+                        is already in their hands. */}
                     <WalletPinKeypad
                       value={password}
                       onChange={setPassword}
                       label="Set a 6-digit PIN"
                       hint="You'll use this PIN every time you Pay."
                       disabled={setupLoading}
+                      showToggle
+                    />
+                    <WalletPinKeypad
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      label="Confirm PIN"
+                      disabled={setupLoading}
+                      showToggle
                     />
                     <button
                       type="submit"

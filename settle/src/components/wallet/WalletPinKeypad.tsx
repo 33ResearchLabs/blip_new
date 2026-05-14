@@ -27,7 +27,8 @@
  * accepts 4-6 digit numeric strings, so submit handlers don't change.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 interface Props {
   value: string;
@@ -42,6 +43,11 @@ interface Props {
    *  (Set + Confirm) don't fight for focus. Parent sets true on the
    *  first one. */
   autoFocus?: boolean;
+  /** Render an eye icon that toggles the slots between dots and visible
+   *  digits. Opt-in because not every callsite wants it — e.g. unlock
+   *  should keep dots-only, but Import wants the toggle so the user can
+   *  double-check their PIN against the Confirm slot. */
+  showToggle?: boolean;
 }
 
 const PIN_LENGTH = 6;
@@ -53,8 +59,10 @@ export function WalletPinKeypad({
   hint,
   disabled,
   autoFocus,
+  showToggle,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [revealed, setRevealed] = useState(false);
 
   // Auto-focus on mount when requested. iOS Safari sometimes needs an
   // explicit re-focus after the dots become tappable, so we run it on
@@ -80,14 +88,42 @@ export function WalletPinKeypad({
 
   return (
     <div className="space-y-2">
-      {label && (
-        <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider">
-          {label}
-        </p>
+      {(label || showToggle) && (
+        <div className="flex items-center justify-between">
+          {label ? (
+            <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider">
+              {label}
+            </p>
+          ) : (
+            <span />
+          )}
+          {showToggle && (
+            <button
+              type="button"
+              onClick={() => setRevealed((v) => !v)}
+              disabled={disabled}
+              aria-label={revealed ? "Hide PIN" : "Show PIN"}
+              aria-pressed={revealed}
+              className="inline-flex items-center gap-1 text-[10px] text-white/40 hover:text-white/70 font-mono uppercase tracking-wider disabled:opacity-40 transition-colors"
+            >
+              {revealed ? (
+                <>
+                  <EyeOff className="w-3 h-3" /> Hide
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3 h-3" /> Show
+                </>
+              )}
+            </button>
+          )}
+        </div>
       )}
 
       {/* Tap target: 6 slots, fills as user types. The whole row is one
-          button-like surface that forwards focus to the hidden input. */}
+          button-like surface that forwards focus to the hidden input.
+          When `showToggle` is enabled and the user has tapped "Show",
+          each filled slot renders the actual digit instead of a dot. */}
       <button
         type="button"
         onClick={focusInput}
@@ -97,6 +133,17 @@ export function WalletPinKeypad({
       >
         {Array.from({ length: PIN_LENGTH }).map((_, i) => {
           const filled = i < value.length;
+          if (filled && revealed) {
+            return (
+              <span
+                key={i}
+                className="text-[18px] font-mono font-semibold text-primary tabular-nums select-none"
+                style={{ minWidth: 14, textAlign: "center" }}
+              >
+                {value[i]}
+              </span>
+            );
+          }
           return (
             <div
               key={i}
