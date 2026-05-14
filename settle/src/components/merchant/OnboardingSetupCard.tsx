@@ -122,7 +122,7 @@ export function OnboardingSetupCard({
     {
       key: 'fund',
       label: 'Fund Wallet',
-      description: 'Deposit at least 10 USDT to start accepting BUY orders.',
+      description: 'Deposit at least 1 USDT to start accepting BUY orders.',
       done: conditions.walletFunded,
       doneLabel: 'Funded',
       optional: true,

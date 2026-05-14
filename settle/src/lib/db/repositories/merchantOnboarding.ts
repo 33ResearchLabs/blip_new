@@ -98,7 +98,7 @@ async function computeConditions(merchantId: string): Promise<TruthConditions> {
   // Minimum funding threshold for onboarding step 4. Set above zero so
   // a stray dust balance (e.g. a refund of a tiny fee) doesn't trip
   // "Funded" without the merchant actually being able to back a trade.
-  const MIN_FUND_USDT = 10;
+  const MIN_FUND_USDT = 1;
   const walletFunded = Number(merchantRow.balance ?? 0) >= MIN_FUND_USDT;
 
   const pmRow = await queryOne<{ c: string | number }>(
