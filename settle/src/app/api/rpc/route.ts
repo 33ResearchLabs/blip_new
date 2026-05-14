@@ -114,6 +114,32 @@ function jsonRpcError(id: string | number | null | undefined, code: number, mess
   );
 }
 
+/** Recursively strip `apiVersion` from any response `context` objects.
+ *  Returns the original text unchanged when the input doesn't parse or
+ *  doesn't contain `apiVersion`. */
+function scrubApiVersion(raw: string): string {
+  if (!raw.includes('"apiVersion"')) return raw;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        for (const item of node) walk(item);
+        return;
+      }
+      const obj = node as Record<string, unknown>;
+      if ('apiVersion' in obj && 'slot' in obj) {
+        delete obj.apiVersion;
+      }
+      for (const v of Object.values(obj)) walk(v);
+    };
+    walk(parsed);
+    return JSON.stringify(parsed);
+  } catch {
+    return raw;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, 'solana_rpc_proxy', RPC_RATE_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
@@ -170,11 +196,19 @@ export async function POST(request: NextRequest) {
       signal: controller.signal,
     });
 
-    const text = await upstreamRes.text();
-    // Pass through upstream's status + body verbatim. Do NOT echo upstream
-    // response headers (they may include rate-limit info that fingerprints
-    // the provider / plan tier).
-    return new NextResponse(text, {
+    const rawText = await upstreamRes.text();
+    // Strip `apiVersion` from response contexts. Recent Solana validators
+    // (Helius / Triton at >= 1.18) include it in `{ context: { slot,
+    // apiVersion }, value }`, but @solana/web3.js <= 1.95 has a strict
+    // superstruct schema that rejects the extra field with a StructError.
+    // The field is purely informational — safe to drop server-side until
+    // the SDK is upgraded.
+    const scrubbed = scrubApiVersion(rawText);
+
+    // Pass through upstream's status + (scrubbed) body. Do NOT echo
+    // upstream response headers (they may include rate-limit info that
+    // fingerprints the provider / plan tier).
+    return new NextResponse(scrubbed, {
       status: upstreamRes.status,
       headers: { 'content-type': 'application/json' },
     });

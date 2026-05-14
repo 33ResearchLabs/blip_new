@@ -238,17 +238,19 @@ export default function MerchantLoginPage() {
 
               <div>
                 <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">
-                  Email
+                  {isSignIn ? "Email or Username" : "Email"}
                 </label>
                 <input
-                  type="email"
+                  type={isSignIn ? "text" : "email"}
+                  autoComplete={isSignIn ? "username" : "email"}
+                  inputMode={isSignIn ? "email" : undefined}
                   value={isSignIn ? auth.loginForm.email : auth.registerForm.email}
                   onChange={(e) =>
                     isSignIn
                       ? auth.setLoginForm({ ...auth.loginForm, email: e.target.value })
                       : auth.setRegisterForm({ ...auth.registerForm, email: e.target.value })
                   }
-                  placeholder="you@business.com"
+                  placeholder={isSignIn ? "you@business.com or username" : "you@business.com"}
                   autoCapitalize="none"
                   autoCorrect="off"
                   maxLength={254}
@@ -285,6 +287,19 @@ export default function MerchantLoginPage() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {/* Forgot password — sign-in only. Routes to the existing
+                    /merchant/forgot-password page which posts to
+                    /api/auth/merchant/forgot-password to email a reset link. */}
+                {isSignIn && (
+                  <div className="mt-2 text-right">
+                    <Link
+                      href="/merchant/forgot-password"
+                      className="text-[11px] text-text-tertiary hover:text-text-primary transition-colors"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+                )}
               </div>
 
               {!isSignIn && (

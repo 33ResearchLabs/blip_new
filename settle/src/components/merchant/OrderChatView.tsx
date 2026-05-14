@@ -132,7 +132,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
               {userName}
             </p>
             {orderType && (
-              <span className={`text-[8px] px-1 py-0.5 rounded font-mono border ${typeColor}`}>
+              <span className={`text-[12px] px-1 py-0.5 rounded font-mono border ${typeColor}`}>
                 {typeLabel}
               </span>
             )}
@@ -140,11 +140,11 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
           {/* Online / Typing status */}
           <div className="flex items-center gap-1">
             {chatWindow?.isTyping ? (
-              <p className="text-[10px] text-green-400 font-medium">typing...</p>
+              <p className="text-[12px] text-green-400 font-medium">typing...</p>
             ) : (
               <>
                 <ConnectionIndicator isConnected={chatWindow?.presence?.some(p => p.actorType === 'user' && p.isOnline) ?? false} />
-                <p className="text-[10px] text-foreground/30 font-mono truncate">
+                <p className="text-[12px] text-foreground/30 font-mono truncate">
                   {chatWindow?.presence?.some(p => p.actorType === 'user' && p.isOnline)
                     ? 'Online'
                     : `Order #${orderNumber}`}
@@ -154,7 +154,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
           </div>
         </div>
         {orderStatus && (
-          <span className="text-[8px] px-1.5 py-0.5 bg-foreground/[0.04] text-foreground/40 rounded font-mono uppercase">
+          <span className="text-[12px] px-1.5 py-0.5 bg-foreground/[0.04] text-foreground/40 rounded font-mono uppercase">
             {orderStatus}
           </span>
         )}

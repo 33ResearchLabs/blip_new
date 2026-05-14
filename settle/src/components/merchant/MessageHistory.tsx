@@ -249,7 +249,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
                         <span className="font-medium text-white truncate">
                           {conv.user.username}
                         </span>
-                        <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded uppercase
+                        <span className={`px-1.5 py-0.5 text-[12px] font-medium rounded uppercase
                           ${STATUS_COLORS[conv.order_status] || 'bg-white/10 text-white/70'}`}>
                           {conv.order_status}
                         </span>

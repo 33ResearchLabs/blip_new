@@ -26,7 +26,6 @@ import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { OnboardingSetupChip } from "@/components/merchant/OnboardingSetupChip";
 
 const CORRIDOR_OPTIONS = [
-  { key: "USDT_AED", label: "🇦🇪 USDT / AED" },
   { key: "USDT_INR", label: "🇮🇳 USDT / INR" },
 ] as const;
 
@@ -154,14 +153,11 @@ export function MerchantNavbar({
             </button>
           )}
 
-          {/* Left: Logo — always visible */}
+          {/* Left: Logo — always visible. Wordmark removed; the bolt
+              alone is enough brand recognition and frees up nav space. */}
           <div className="flex items-center shrink-0">
-            <Link href="/merchant" className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-primary fill-primary" />
-              <span className="text-[17px] leading-none whitespace-nowrap">
-                <span className="font-bold text-foreground">Blip</span>{" "}
-                <span className="italic text-foreground/80">money</span>
-              </span>
+            <Link href="/merchant" aria-label="Blip Money home" className="flex items-center">
+              <Zap className="w-6 h-6 text-primary fill-primary" />
             </Link>
           </div>
 
@@ -183,36 +179,12 @@ export function MerchantNavbar({
               >
                 Dashboard
               </Link>
-              {onOpenWallet ? (
-                <button
-                  onClick={onOpenWallet}
-                  className={`${pill(activePage === "wallet")} flex items-center gap-1.5`}
-                >
-                  {embeddedWalletState === "unlocked" ? (
-                    <Wallet className="w-3.5 h-3.5 text-green-400" />
-                  ) : embeddedWalletState === "locked" ? (
-                    <Lock className="w-3.5 h-3.5 text-primary" />
-                  ) : (
-                    <Wallet className="w-3.5 h-3.5" />
-                  )}
-                  Wallet
-                </button>
-              ) : (
-                <Link
-                  href="/merchant/wallet"
-                  className={`${pill(activePage === "wallet")} flex items-center gap-1.5`}
-                  onClick={onNavLinkClick}
-                >
-                  {embeddedWalletState === "unlocked" ? (
-                    <Wallet className="w-3.5 h-3.5 text-green-400" />
-                  ) : embeddedWalletState === "locked" ? (
-                    <Lock className="w-3.5 h-3.5 text-primary" />
-                  ) : (
-                    <Wallet className="w-3.5 h-3.5" />
-                  )}
-                  Wallet
-                </Link>
-              )}
+              {/* Wallet nav entry removed — the whole wallet UX now
+                  lives on the home dashboard (balance card with the
+                  gear menu, Send/Swap/Deposit/Buy/Sell buttons, QR
+                  shortcut next to the address). The route still
+                  exists at /merchant/wallet for direct links, but the
+                  navbar shouldn't surface it as a primary destination. */}
               {onOpenSettings ? (
                 <button
                   onClick={onOpenSettings}

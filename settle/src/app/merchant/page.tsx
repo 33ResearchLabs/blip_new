@@ -881,10 +881,9 @@ export default function MerchantDashboard() {
         }
       />
 
-      {/* Mobile live-price ticker — only shown on the Home tab. Balance is
-          visible in the home view's balance card; on other tabs the ticker
-          would just steal vertical space. */}
-      {mobileView === "home" && <MobilePriceTicker />}
+      {/* Mobile live-price ticker — shown on every tab now so the live
+          rate is always one glance away. */}
+      <MobilePriceTicker />
 
       <MerchantDesktopLayout
         isWideScreen={isWideScreen}

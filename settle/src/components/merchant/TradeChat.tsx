@@ -283,11 +283,11 @@ function TimelineStep({
             <Check className="w-3 h-3 text-background p-0.5" />
           )}
         </div>
-        <span className={`text-[10px] mt-1 whitespace-nowrap ${styles.text}`}>
+        <span className={`text-[12px] mt-1 whitespace-nowrap ${styles.text}`}>
           {label}
         </span>
         {time && (
-          <span className="text-[9px] text-gray-600">
+          <span className="text-[12px] text-gray-600">
             {time.toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
@@ -676,7 +676,7 @@ export function TradeChat({
               </h2>
               {tradeInfo && (
                 <span
-                  className={`px-2 py-0.5 text-[10px] font-medium rounded-full flex items-center gap-1 ${statusInfo.bg} ${statusInfo.text}`}
+                  className={`px-2 py-0.5 text-[12px] font-medium rounded-full flex items-center gap-1 ${statusInfo.bg} ${statusInfo.text}`}
                 >
                   {statusInfo.icon}
                   {tradeInfo.status.replace("_", " ")}
@@ -699,7 +699,7 @@ export function TradeChat({
             {/* User */}
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-                <span className="text-[10px]">
+                <span className="text-[12px]">
                   {userEmoji ||
                     getUserEmoji(
                       tradeInfo?.user.username || userName || "User",
@@ -872,7 +872,7 @@ export function TradeChat({
                   {/* Show indicator if there are more than 10 events */}
                   {systemMessages.length > 10 && (
                     <div className="text-center py-2 border-b border-white/[0.04] mb-2">
-                      <span className="text-[10px] text-foreground/35">
+                      <span className="text-[12px] text-foreground/35">
                         Showing last 10 of {systemMessages.length} events
                       </span>
                     </div>
@@ -1067,7 +1067,7 @@ export function TradeChat({
                 <span>Order Chat</span>
                 {chatMessages.length > 0 && (
                   <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    className={`text-[12px] px-1.5 py-0.5 rounded-full ${
                       activeChatTab === "order"
                         ? "bg-primary/20 text-primary"
                         : "bg-gray-700 text-foreground/40"
@@ -1122,7 +1122,7 @@ export function TradeChat({
                       {/* Date separator */}
                       <div className="flex items-center gap-3 my-4">
                         <div className="flex-1 h-px bg-white/[0.04]" />
-                        <span className="text-[10px] text-gray-600 uppercase tracking-wider">
+                        <span className="text-[12px] text-gray-600 uppercase tracking-wider">
                           {group.date}
                         </span>
                         <div className="flex-1 h-px bg-white/[0.04]" />
@@ -1162,7 +1162,7 @@ export function TradeChat({
                                   data={receiptData}
                                   currentStatus={liveReceiptStatus || tradeInfo?.status}
                                 />
-                                <span className="text-[10px] text-foreground/35 mt-1 block">
+                                <span className="text-[12px] text-foreground/35 mt-1 block">
                                   {formatTime(msg.timestamp)}
                                 </span>
                               </motion.div>
@@ -1186,14 +1186,14 @@ export function TradeChat({
                                 <div className="w-full max-w-[90%] bg-amber-500/5 border border-amber-500/10 rounded-2xl px-4 py-3">
                                   <div className="flex items-center gap-1.5 mb-1.5">
                                     <Bot className="w-3.5 h-3.5 text-amber-400" />
-                                    <span className="text-[10px] text-amber-400 font-medium">
+                                    <span className="text-[12px] text-amber-400 font-medium">
                                       Trade Bot
                                     </span>
                                   </div>
                                   <p className="text-[13px] text-foreground/60 whitespace-pre-line leading-relaxed">
                                     {msg.text}
                                   </p>
-                                  <span className="text-[10px] text-gray-600 mt-1.5 block">
+                                  <span className="text-[12px] text-gray-600 mt-1.5 block">
                                     {formatTime(msg.timestamp)}
                                   </span>
                                 </div>
@@ -1223,7 +1223,7 @@ export function TradeChat({
                               >
                                 {/* Sender name */}
                                 <span
-                                  className={`text-[10px] mb-1 ${senderInfo.color}`}
+                                  className={`text-[12px] mb-1 ${senderInfo.color}`}
                                 >
                                   {senderInfo.name}
                                 </span>
@@ -1244,7 +1244,7 @@ export function TradeChat({
                                     msg.senderType === "compliance") && (
                                     <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-red-500/20">
                                       <Shield className="w-3 h-3 text-red-400" />
-                                      <span className="text-[10px] text-red-400 font-medium">
+                                      <span className="text-[12px] text-red-400 font-medium">
                                         Official Compliance Message
                                       </span>
                                     </div>
@@ -1268,7 +1268,7 @@ export function TradeChat({
                                     <p>{msg.text}</p>
                                   )}
                                   <span
-                                    className={`text-[10px] mt-1 block ${
+                                    className={`text-[12px] mt-1 block ${
                                       msg.from === "compliance" ||
                                       msg.senderType === "compliance"
                                         ? "text-red-400/50"
@@ -1299,7 +1299,7 @@ export function TradeChat({
                 <p className="text-xs mt-1 text-center px-4">
                   Private messages between you and the counterparty
                 </p>
-                <p className="text-[10px] mt-3 text-gray-600 bg-white/[0.02] px-3 py-2 rounded-lg">
+                <p className="text-[12px] mt-3 text-gray-600 bg-white/[0.02] px-3 py-2 rounded-lg">
                   Coming soon
                 </p>
               </div>
@@ -1324,14 +1324,14 @@ export function TradeChat({
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
               </div>
-              <span className="text-[11px] text-white/30">Ready to send</span>
+              <span className="text-[12px] text-white/30">Ready to send</span>
             </div>
           )}
 
           {/* Upload error banner */}
           {uploadError && (
             <div className="mx-3 mb-1 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-between gap-2">
-              <p className="text-[11px] text-red-400">{uploadError}</p>
+              <p className="text-[12px] text-red-400">{uploadError}</p>
               <button
                 onClick={() => setUploadError(null)}
                 className="text-red-400/60 hover:text-red-400"
@@ -1349,7 +1349,7 @@ export function TradeChat({
             return isChatClosed ? (
               <div className="p-3 bg-card-solid border-t border-white/[0.04]">
                 <div className="px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.06] text-center">
-                  <p className="text-[11px] text-white/40 font-mono uppercase tracking-wider">
+                  <p className="text-[12px] text-white/40 font-mono uppercase tracking-wider">
                     Chat closed — order {tradeInfo?.status}
                   </p>
                 </div>

@@ -422,7 +422,7 @@ export function DirectChatView({
           </div>
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase truncate">
+              <span className="text-[12px] font-bold text-foreground/60 font-mono tracking-wider uppercase truncate">
                 {contactName}
               </span>
               {contactType === 'merchant' ? (
@@ -436,12 +436,12 @@ export function DirectChatView({
                 {isTyping ? (
                   <>
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                    <span className="text-[9px] font-mono text-green-400">typing...</span>
+                    <span className="text-[12px] font-mono text-green-400">typing...</span>
                   </>
                 ) : (
                   <>
                     <span className={`w-1.5 h-1.5 rounded-full ${presence?.isOnline ? 'bg-green-500' : 'bg-white/25'}`} />
-                    <span className={`text-[9px] font-mono ${presence?.isOnline ? 'text-green-400' : 'text-foreground/35'}`}>
+                    <span className={`text-[12px] font-mono ${presence?.isOnline ? 'text-green-400' : 'text-foreground/35'}`}>
                       {presence?.isOnline ? 'Online' : `last seen ${formatLastSeen(presence?.lastSeen || null)}`}
                     </span>
                   </>
@@ -460,7 +460,7 @@ export function DirectChatView({
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-foreground/15">
-            <p className="text-[10px] font-mono">No messages yet</p>
+            <p className="text-[12px] font-mono">No messages yet</p>
           </div>
         ) : (
           <div className="space-y-0.5">
@@ -493,7 +493,7 @@ export function DirectChatView({
                 <div key={msg.id}>
                   {showDate && (
                     <div className="flex justify-center my-2">
-                      <span className="text-[9px] text-foreground/20 bg-foreground/[0.03] px-2 py-0.5 rounded-full font-mono">
+                      <span className="text-[12px] text-foreground/20 bg-foreground/[0.03] px-2 py-0.5 rounded-full font-mono">
                         {msgDate}
                       </span>
                     </div>
@@ -503,7 +503,7 @@ export function DirectChatView({
                     /* Receipt card — shown centered for both parties */
                     <div className="max-w-[90%] mx-auto my-2">
                       <ReceiptCard data={receiptPayload as any} currentStatus={receiptStatuses[(receiptPayload as any).order_number] || orderStatus} />
-                      <span className="text-[9px] text-foreground/20 mt-1 block text-center font-mono">
+                      <span className="text-[12px] text-foreground/20 mt-1 block text-center font-mono">
                         {formatTime(msg.timestamp)}
                       </span>
                     </div>
@@ -511,14 +511,14 @@ export function DirectChatView({
                     /* Incoming message */
                     <div className={`flex items-end gap-1.5 ${isFirstInGroup ? 'mt-2' : 'mt-0.5'}`}>
                       {isFirstInGroup ? (
-                        <div className="w-5 h-5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center text-[10px] shrink-0">
+                        <div className="w-5 h-5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center text-[12px] shrink-0">
                           {emoji}
                         </div>
                       ) : (
                         <div className="w-5 shrink-0" />
                       )}
                       <div className="max-w-[80%]">
-                        <div className="px-2.5 py-1.5 rounded-lg rounded-bl-sm bg-foreground/[0.04] border border-foreground/[0.06] text-[11px] text-foreground/80">
+                        <div className="px-2.5 py-1.5 rounded-lg rounded-bl-sm bg-foreground/[0.04] border border-foreground/[0.06] text-[12px] text-foreground/80">
                           {msg.messageType === 'image' && msg.imageUrl && (
                             <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
                               <img
@@ -530,7 +530,7 @@ export function DirectChatView({
                             </a>
                           )}
                           {msg.text !== 'Photo' && <span>{msg.text}</span>}
-                          <span className="text-[9px] text-foreground/20 ml-1.5 whitespace-nowrap font-mono">
+                          <span className="text-[12px] text-foreground/20 ml-1.5 whitespace-nowrap font-mono">
                             {formatTime(msg.timestamp)}
                           </span>
                         </div>
@@ -540,7 +540,7 @@ export function DirectChatView({
                     /* Outgoing message */
                     <div className={`flex justify-end ${isFirstInGroup ? 'mt-2' : 'mt-0.5'}`}>
                       <div className="max-w-[80%]">
-                        <div className="px-2.5 py-1.5 rounded-lg rounded-br-sm bg-primary/10 border border-primary/15 text-[11px] text-foreground/80">
+                        <div className="px-2.5 py-1.5 rounded-lg rounded-br-sm bg-primary/10 border border-primary/15 text-[12px] text-foreground/80">
                           {msg.messageType === 'image' && msg.imageUrl && (
                             <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
                               <img
@@ -553,7 +553,7 @@ export function DirectChatView({
                           )}
                           {msg.text !== 'Photo' && <span>{msg.text}</span>}
                           <span className="inline-flex items-center gap-0.5 ml-1.5 align-bottom">
-                            <span className="text-[9px] text-foreground/20 whitespace-nowrap font-mono">
+                            <span className="text-[12px] text-foreground/20 whitespace-nowrap font-mono">
                               {formatTime(msg.timestamp)}
                             </span>
                             <CheckCheck className={`w-2.5 h-2.5 ${
@@ -627,14 +627,14 @@ export function DirectChatView({
               <X className="w-2.5 h-2.5 text-foreground" />
             </button>
           </div>
-          <span className="text-[9px] text-foreground/30 font-mono flex-1">Ready to send</span>
+          <span className="text-[12px] text-foreground/30 font-mono flex-1">Ready to send</span>
         </div>
       )}
 
       {/* Upload error banner */}
       {uploadError && (
         <div className="mx-2 mb-1 px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-between gap-2">
-          <p className="text-[10px] text-red-400">{uploadError}</p>
+          <p className="text-[12px] text-red-400">{uploadError}</p>
           <button onClick={() => setUploadError(null)} className="text-red-400/60 hover:text-red-400">
             <X className="w-3 h-3" />
           </button>
@@ -644,7 +644,7 @@ export function DirectChatView({
       {/* No active order info banner — chat still works */}
       {!hasActiveOrder && (
         <div className="mx-2 mb-1 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-          <p className="text-[10px] text-amber-400/80">
+          <p className="text-[12px] text-amber-400/80">
             No active trade with this {contactType}. You can still send messages.
           </p>
         </div>
@@ -694,7 +694,7 @@ export function DirectChatView({
               }
             }}
             placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
-            className="flex-1 min-w-0 appearance-none px-3 py-1.5 text-[11px] bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg
+            className="flex-1 min-w-0 appearance-none px-3 py-1.5 text-[12px] bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg
                        text-white placeholder:text-foreground/15 focus:outline-none focus:border-white/15 transition-colors font-mono"
           />
           <button

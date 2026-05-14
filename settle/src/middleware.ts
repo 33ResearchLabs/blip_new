@@ -295,7 +295,7 @@ export function buildCsp(nonce: string): string {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' wss: https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com",
+    "connect-src 'self' wss: https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag",
     "frame-ancestors 'none'",
     'report-uri /api/csp-report',
     'report-to csp-endpoint',

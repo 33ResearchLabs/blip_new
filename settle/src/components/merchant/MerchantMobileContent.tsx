@@ -137,6 +137,8 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               onShowWalletModal={onShowWalletModal}
               onOpenWallet={onOpenWallet}
               embeddedWalletState={embeddedWalletState}
+              activeCorridor={activeCorridor}
+              onCorridorChange={onCorridorChange}
               onStartTrade={(side) => {
                 setOpenTradeForm({ ...openTradeForm, tradeType: side });
                 setShowOpenTradeModal(true);

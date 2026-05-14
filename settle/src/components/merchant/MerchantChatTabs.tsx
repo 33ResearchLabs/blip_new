@@ -229,13 +229,13 @@ export function MerchantChatTabs({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <MessageCircle className="w-3.5 h-3.5 text-white/30" />
-            <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
+            <h2 className="text-[12px] font-bold text-white/60 font-mono tracking-wider uppercase">
               Messages
             </h2>
           </div>
           <div className="flex items-center gap-1">
             {totalUnread + disputeUnread > 0 && (
-              <span className="text-[10px] border border-primary/30 text-primary px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+              <span className="text-[12px] border border-primary/30 text-primary px-1.5 py-0.5 rounded-full font-mono tabular-nums">
                 {totalUnread + disputeUnread}
               </span>
             )}
@@ -263,7 +263,7 @@ export function MerchantChatTabs({
                   aria-label="Mark all conversations as read"
                 >
                   <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  <span className="text-[9px] font-bold uppercase tracking-wider hidden sm:inline">
+                  <span className="text-[12px] font-bold uppercase tracking-wider hidden sm:inline">
                     Read
                   </span>
                 </button>
@@ -307,7 +307,7 @@ export function MerchantChatTabs({
       <div className="flex border-b border-white/[0.04]">
         <button
           onClick={() => setActiveTab("orders")}
-          className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
+          className={`flex-1 px-3 py-1.5 text-[12px] font-mono font-medium transition-colors relative ${
             activeTab === "orders"
               ? "text-white/80"
               : "text-white/30 hover:text-foreground/50"
@@ -317,7 +317,7 @@ export function MerchantChatTabs({
             <MessageCircle className="w-3 h-3" />
             <span>Orders</span>
             {totalUnread > 0 && (
-              <span className="w-4 h-4 bg-primary text-background text-[8px] font-bold rounded-full flex items-center justify-center">
+              <span className="w-4 h-4 bg-primary text-background text-[12px] font-bold rounded-full flex items-center justify-center">
                 {totalUnread > 9 ? "9+" : totalUnread}
               </span>
             )}
@@ -328,7 +328,7 @@ export function MerchantChatTabs({
         </button>
         <button
           onClick={() => setActiveTab("active")}
-          className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
+          className={`flex-1 px-3 py-1.5 text-[12px] font-mono font-medium transition-colors relative ${
             activeTab === "active"
               ? "text-white/80"
               : "text-white/30 hover:text-foreground/50"
@@ -338,7 +338,7 @@ export function MerchantChatTabs({
             <MessageCircle className="w-3 h-3" />
             <span>Active Chat</span>
             {activeUnread > 0 && (
-              <span className="w-4 h-4 bg-primary text-background text-[8px] font-bold rounded-full flex items-center justify-center">
+              <span className="w-4 h-4 bg-primary text-background text-[12px] font-bold rounded-full flex items-center justify-center">
                 {activeUnread > 9 ? "9+" : activeUnread}
               </span>
             )}
@@ -349,7 +349,7 @@ export function MerchantChatTabs({
         </button>
         <button
           onClick={() => setActiveTab("disputes")}
-          className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
+          className={`flex-1 px-3 py-1.5 text-[12px] font-mono font-medium transition-colors relative ${
             activeTab === "disputes"
               ? "text-white/80"
               : "text-white/30 hover:text-foreground/50"
@@ -359,7 +359,7 @@ export function MerchantChatTabs({
             <Shield className="w-3 h-3" />
             <span>Disputes</span>
             {disputeUnread > 0 && (
-              <span className="w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+              <span className="w-4 h-4 bg-red-500 text-white text-[12px] font-bold rounded-full flex items-center justify-center">
                 {disputeUnread > 9 ? "9+" : disputeUnread}
               </span>
             )}
@@ -392,7 +392,7 @@ export function MerchantChatTabs({
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 bg-transparent text-[11px] text-white placeholder:text-white/15 outline-none font-mono"
+            className="flex-1 bg-transparent text-[12px] text-white placeholder:text-white/15 outline-none font-mono"
           />
         </div>
       </div>
@@ -409,7 +409,7 @@ export function MerchantChatTabs({
           ) : visibleConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-white/15">
               <MessageCircle className="w-8 h-8 mb-2 opacity-30" />
-              <p className="text-[10px] font-mono">
+              <p className="text-[12px] font-mono">
                 {searchQuery
                   ? "No matches"
                   : activeTab === "active"
@@ -487,7 +487,7 @@ export function MerchantChatTabs({
                           />
                         </div>
                         {hasUnread && (
-                          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-primary text-background text-[10px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-background">
+                          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-primary text-background text-[12px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-background">
                             {conv.unread_count > 9 ? "9+" : conv.unread_count}
                           </span>
                         )}
@@ -503,7 +503,7 @@ export function MerchantChatTabs({
                             {conv.user.username}
                           </span>
                           <span
-                            className={`text-[10px] font-mono tabular-nums shrink-0 ${hasUnread ? "text-primary/80" : "text-white/30"}`}
+                            className={`text-[12px] font-mono tabular-nums shrink-0 ${hasUnread ? "text-primary/80" : "text-white/30"}`}
                           >
                             {formatRelativeTime(timestamp)}
                           </span>
@@ -512,7 +512,7 @@ export function MerchantChatTabs({
                         {/* Amount row — crypto → fiat */}
                         <div className="flex items-center gap-1.5 mb-1">
                           <span
-                            className={`text-[9px] font-extrabold font-mono tracking-[0.1em] px-1.5 py-px rounded ${
+                            className={`text-[12px] font-extrabold font-mono tracking-[0.1em] px-1.5 py-px rounded ${
                               isBuy
                                 ? "bg-emerald-500/15 text-emerald-400"
                                 : "bg-orange-500/15 text-orange-400"
@@ -522,7 +522,7 @@ export function MerchantChatTabs({
                           </span>
                           <span className="text-[12px] font-bold text-white tabular-nums">
                             {Number(conv.crypto_amount).toFixed(2)}
-                            <span className="text-[9px] font-semibold text-white/40 ml-0.5">
+                            <span className="text-[12px] font-semibold text-white/40 ml-0.5">
                               USDT
                             </span>
                           </span>
@@ -550,7 +550,7 @@ export function MerchantChatTabs({
                               />
                             )}
                             <p
-                              className={`text-[11px] truncate flex-1 ${
+                              className={`text-[12px] truncate flex-1 ${
                                 hasUnread
                                   ? "text-white/80 font-medium"
                                   : "text-white/40"
@@ -559,18 +559,18 @@ export function MerchantChatTabs({
                               {truncate(conv.last_message.content, 38)}
                             </p>
                             <span
-                              className={`text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-px rounded shrink-0 ${getStatusColor(conv.order_status)}`}
+                              className={`text-[12px] font-bold font-mono uppercase tracking-wider px-1.5 py-px rounded shrink-0 ${getStatusColor(conv.order_status)}`}
                             >
                               {conv.order_status}
                             </span>
                           </div>
                         ) : (
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-mono text-white/25 truncate">
+                            <span className="text-[12px] font-mono text-white/25 truncate">
                               #{conv.order_number}
                             </span>
                             <span
-                              className={`text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-px rounded shrink-0 ${getStatusColor(conv.order_status)}`}
+                              className={`text-[12px] font-bold font-mono uppercase tracking-wider px-1.5 py-px rounded shrink-0 ${getStatusColor(conv.order_status)}`}
                             >
                               {conv.order_status}
                             </span>
@@ -591,7 +591,7 @@ export function MerchantChatTabs({
         ) : filteredDisputes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-white/15">
             <Shield className="w-8 h-8 mb-2 opacity-30" />
-            <p className="text-[10px] font-mono">
+            <p className="text-[12px] font-mono">
               {searchQuery ? "No matches" : "No active disputes"}
             </p>
           </div>
@@ -625,7 +625,7 @@ export function MerchantChatTabs({
                       <AlertTriangle className="w-4 h-4 text-red-400" />
                     </div>
                     {conv.unread_count > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[12px] font-bold rounded-full flex items-center justify-center">
                         {conv.unread_count > 9 ? "9+" : conv.unread_count}
                       </span>
                     )}
@@ -635,11 +635,11 @@ export function MerchantChatTabs({
                       <span className="text-xs font-medium text-white/70 truncate">
                         Order #{conv.order_number}
                       </span>
-                      <span className="text-[8px] px-1 py-0.5 bg-red-500/15 text-red-400 rounded font-mono">
+                      <span className="text-[12px] px-1 py-0.5 bg-red-500/15 text-red-400 rounded font-mono">
                         DISPUTE
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-[9px] text-white/30 font-mono">
+                    <div className="flex items-center gap-2 text-[12px] text-white/30 font-mono">
                       <span>{conv.user.username}</span>
                       <span className="text-white/10">·</span>
                       <span>${Number(conv.crypto_amount).toFixed(2)}</span>
@@ -658,7 +658,7 @@ export function MerchantChatTabs({
                           <Shield className="w-2.5 h-2.5 flex-shrink-0 text-red-400/60" />
                         )}
                         <p
-                          className={`text-[10px] truncate ${
+                          className={`text-[12px] truncate ${
                             conv.unread_count > 0
                               ? "text-white/60 font-medium"
                               : "text-white/30"

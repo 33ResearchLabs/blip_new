@@ -777,6 +777,38 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     return nacl.sign.detached(message, keypair.secretKey);
   }, [keypair, touchActivity]);
 
+  // Sign transaction — handles both legacy Transaction and the newer
+  // VersionedTransaction the swap flow (Jupiter v1) hands us. Without
+  // this exported the swap CTA stays disabled because the modal can't
+  // get a `signTransaction` from the embedded wallet adapter.
+  const signTransactionFn = useCallback(
+    async <T,>(tx: T): Promise<T> => {
+      if (!keypair) throw new Error('Wallet locked');
+      touchActivity();
+      // Lazy-import web3.js to avoid bloating the EmbeddedWalletContext
+      // bundle for callers that only need signMessage.
+      const { VersionedTransaction, Transaction } = await import('@solana/web3.js');
+      if (tx instanceof VersionedTransaction) {
+        tx.sign([keypair]);
+        return tx;
+      }
+      if (tx instanceof Transaction) {
+        tx.partialSign(keypair);
+        return tx;
+      }
+      throw new Error('Unsupported transaction type');
+    },
+    [keypair, touchActivity],
+  );
+  const signAllTransactionsFn = useCallback(
+    async <T,>(txs: T[]): Promise<T[]> => {
+      const signed: T[] = [];
+      for (const tx of txs) signed.push(await signTransactionFn(tx));
+      return signed;
+    },
+    [signTransactionFn],
+  );
+
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const value: any = {
     // Wallet state
@@ -790,6 +822,8 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     disconnect: lockWallet,
     openWalletModal: () => { /* no external wallet modal */ },
     signMessage: signMessageFn,
+    signTransaction: signTransactionFn,
+    signAllTransactions: signAllTransactionsFn,
 
     // Balance
     solBalance,

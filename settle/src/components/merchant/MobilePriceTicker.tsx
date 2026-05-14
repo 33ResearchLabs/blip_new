@@ -11,15 +11,10 @@ import { formatRate } from "@/lib/format";
 export function MobilePriceTicker() {
   const prices = useCorridorPrices();
 
-  // USDT is pegged — show as $1.00. AED/INR pull from the live ref price.
+  // USDT is pegged — show as $1.00. INR pulls from the live ref price.
+  // AED dropped along with the rest of the AED references in the UI.
   const items = [
     { flag: "💵", label: "USDT", value: "$1.00", color: "text-foreground/70" },
-    {
-      flag: "🇦🇪",
-      label: "USDT / AED",
-      value: prices.USDT_AED ? formatRate(prices.USDT_AED) : "—",
-      color: "text-emerald-300",
-    },
     {
       flag: "🇮🇳",
       label: "USDT / INR",

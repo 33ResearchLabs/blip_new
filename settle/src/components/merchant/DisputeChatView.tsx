@@ -76,9 +76,9 @@ export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendS
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-foreground/80 truncate">Dispute Chat</p>
-          <p className="text-[10px] text-foreground/30 font-mono">Order with {userName}</p>
+          <p className="text-[12px] text-foreground/30 font-mono">Order with {userName}</p>
         </div>
-        <span className="text-[8px] px-1.5 py-0.5 bg-red-500/15 text-red-400 rounded font-mono">
+        <span className="text-[12px] px-1.5 py-0.5 bg-red-500/15 text-red-400 rounded font-mono">
           DISPUTE
         </span>
       </div>
