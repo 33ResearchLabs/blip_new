@@ -213,6 +213,10 @@ export const createOrderSchema = z.object({
   upi_vpa: z.string().min(3).max(256).regex(/^[\w.\-]{2,256}@[\w.\-]{2,64}$/, 'Invalid UPI VPA').optional(),
   upi_payee_name: z.string().max(100).optional(),
   upi_fiat_inr: z.number().positive().max(100_000).optional(),
+  // Audit F-3: INR amount asserted by the scanned QR's `am=` param.
+  // Recorded for audit only — no balance logic depends on it.
+  // Absent / null = QR was open-ended (user typed the amount).
+  upi_qr_amount: z.number().positive().max(100_000).optional(),
 });
 
 export const updateOrderStatusSchema = z.object({

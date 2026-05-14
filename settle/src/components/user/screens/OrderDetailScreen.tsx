@@ -41,6 +41,9 @@ import dynamic from "next/dynamic";
 import { showAlert } from "@/context/ModalContext";
 import { formatCrypto, formatFiat } from "@/lib/format";
 import { useGlobalNow } from "@/hooks/useGlobalNow";
+import { OrderProgressStepper } from "@/components/user/OrderProgressStepper";
+import { OrderMinimisedPill } from "@/components/user/OrderMinimisedPill";
+import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
@@ -300,6 +303,72 @@ export const OrderDetailScreen = ({
   const [isUploading, setIsUploading] = useLocalState(false);
   const [copiedField, setCopiedField] = useLocalState<string | null>(null);
   const [reviewText, setReviewText] = useLocalState("");
+
+  // ── Consumer UX additions (Swiggy-style tracking) ─────────────────────
+  // - `minimised` collapses the entire order body into a top pill
+  //   ("Hide Details"); persisted per-order in sessionStorage so a refresh
+  //   keeps the chosen state.
+  // - `showScratchModal` auto-pops the scratch card on first land for any
+  //   SELL/QR order that has an unrevealed, non-voided pending reward.
+  //   Gated by sessionStorage key so it doesn't re-popup on refresh.
+  const orderId = activeOrder.id;
+  const isSellQR = activeOrder.type === "sell";
+  const minimisedKey = `blip_order_${orderId}_minimised`;
+  const scratchShownKey = `blip_scratch_shown_${orderId}`;
+  const [minimised, setMinimised] = useLocalState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem(minimisedKey) === "1";
+  });
+  const [showScratchModal, setShowScratchModal] = useLocalState(false);
+  const [pendingReward, setPendingReward] = useLocalState<{
+    id: string;
+    amount_usdt: number;
+    reward_bps: number;
+    claimable_at: string | null;
+  } | null>(null);
+
+  useLocalEffect(() => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem(minimisedKey, minimised ? "1" : "0");
+  }, [minimised, minimisedKey]);
+
+  // First-mount: if we just landed here from a fresh SELL/QR order and the
+  // user hasn't been shown the scratch card yet for this order, pop it.
+  useLocalEffect(() => {
+    if (!isSellQR) return;
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem(scratchShownKey) === "1") return;
+    let cancelled = false;
+    fetchWithAuth("/api/user/rewards")
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const rows = (d?.data?.recent || []) as Array<{
+          id: string;
+          order_id: string;
+          amount_usdt: string;
+          reward_bps: number;
+          revealed_at: string | null;
+          claimable_at: string | null;
+          voided_at: string | null;
+        }>;
+        const match = rows.find(
+          (r) => r.order_id === orderId && !r.revealed_at && !r.voided_at,
+        );
+        if (match) {
+          setPendingReward({
+            id: match.id,
+            amount_usdt: Number(match.amount_usdt),
+            reward_bps: match.reward_bps,
+            claimable_at: match.claimable_at,
+          });
+          setShowScratchModal(true);
+          sessionStorage.setItem(scratchShownKey, "1");
+        }
+      })
+      .catch(() => { /* non-fatal — modal just won't auto-popup */ });
+    return () => { cancelled = true; };
+  }, [isSellQR, orderId, scratchShownKey, setPendingReward, setShowScratchModal]);
 
   const copyField = useLocalCallback(
     (field: string, text: string) => {
@@ -621,12 +690,43 @@ export const OrderDetailScreen = ({
         >
           <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold pr-8 text-text-primary">
+        <h1 className="flex-1 text-center text-[17px] font-semibold text-text-primary">
           Order Details
         </h1>
+        {isSellQR ? (
+          <button
+            onClick={() => setMinimised(true)}
+            className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-raised border border-border-subtle text-text-secondary hover:text-text-primary"
+            aria-label="Hide details"
+          >
+            Hide details
+          </button>
+        ) : (
+          <div className="w-[88px]" />
+        )}
       </div>
 
-      <div className="flex-1 px-5 overflow-auto pb-6">
+      {/* Minimised pill — replaces the full tracking card while open. */}
+      {minimised && (
+        <OrderMinimisedPill
+          status={String(activeOrder.dbStatus || activeOrder.status || "")}
+          onExpand={() => setMinimised(false)}
+        />
+      )}
+
+      <div className={`flex-1 px-5 overflow-auto pb-6 ${minimised ? "hidden" : ""}`}>
+        {/* Consumer-style progress stepper — only for SELL/QR orders.
+            Sits above the existing summary card so the technical details
+            stay available for users who scroll, but the headline is the
+            three-step "Finding payer → Payment on the way → Done" timeline. */}
+        {isSellQR && (
+          <div className="mb-4 pt-1">
+            <OrderProgressStepper
+              status={String(activeOrder.dbStatus || activeOrder.status || "")}
+            />
+          </div>
+        )}
+
         {/* Order Summary */}
         <div className={`rounded-2xl p-4 mb-4 ${CARD}`}>
           <div className="flex items-center gap-3 mb-4">
@@ -705,19 +805,21 @@ export const OrderDetailScreen = ({
           )}
         </div>
 
-        {/* Escrow Status Section - Show for sell orders with escrow */}
+        {/* "Payment secured" card — consumer-friendly version of the old
+            Escrow Locked panel. Trade ID and on-chain tx are tucked behind
+            a small "View receipt" link instead of being headline labels. */}
         {activeOrder.type === "sell" && activeOrder.escrowTxHash && (
           <div className={`rounded-2xl p-4 mb-4 ${CARD}`}>
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active">
-                <Lock className="w-5 h-5 text-text-secondary" />
+                <Shield className="w-5 h-5 text-text-secondary" />
               </div>
               <div className="flex-1">
                 <p className="text-[15px] font-semibold text-text-primary">
-                  Escrow Locked
+                  Payment secured
                 </p>
                 <p className="text-[13px] text-text-secondary">
-                  Your USDT is secured on-chain
+                  Held safely until your payment lands
                 </p>
               </div>
               <div className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-active">
@@ -725,33 +827,25 @@ export const OrderDetailScreen = ({
               </div>
             </div>
 
-            <div className="space-y-2 text-[13px]">
-              {activeOrder.escrowTradeId && (
-                <div className="flex items-center justify-between">
-                  <span className="text-text-tertiary">Trade ID</span>
-                  <span className="font-mono font-semibold text-text-primary">
-                    #{activeOrder.escrowTradeId}
-                  </span>
-                </div>
-              )}
-              {activeOrder.escrowTxHash && (
-                <div className="flex items-center justify-between">
-                  <span className="text-text-tertiary">Transaction</span>
-                  <a
-                    href={explorerUrl('tx', activeOrder.escrowTxHash)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-text-secondary"
-                  >
-                    <span className="font-mono">
-                      {activeOrder.escrowTxHash.slice(0, 8)}...
-                      {activeOrder.escrowTxHash.slice(-6)}
-                    </span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              )}
-            </div>
+            {/* Receipt link — only surface for users who want the proof. */}
+            {activeOrder.escrowTxHash && (
+              <div className="mt-3 pt-3 border-t border-border-subtle flex items-center justify-between">
+                <span className="text-[11px] text-text-tertiary">
+                  {activeOrder.escrowTradeId
+                    ? `Order #${activeOrder.escrowTradeId}`
+                    : "Order receipt"}
+                </span>
+                <a
+                  href={explorerUrl('tx', activeOrder.escrowTxHash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[12px] text-text-secondary hover:text-text-primary"
+                >
+                  View receipt
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            )}
           </div>
         )}
 
@@ -773,7 +867,7 @@ export const OrderDetailScreen = ({
                     Extension Requested
                   </p>
                   <p className="text-[13px] text-text-secondary">
-                    Merchant wants +
+                    Your payer wants +
                     {extensionRequest.extensionMinutes >= 60
                       ? `${Math.round(extensionRequest.extensionMinutes / 60)} hour${Math.round(extensionRequest.extensionMinutes / 60) > 1 ? "s" : ""}`
                       : `${extensionRequest.extensionMinutes} minutes`}
@@ -828,7 +922,7 @@ export const OrderDetailScreen = ({
                     Cancel Requested
                   </p>
                   <p className="text-[13px] text-warning">
-                    Merchant wants to cancel: {activeOrder.cancelRequest.reason}
+                    Your payer wants to cancel: {activeOrder.cancelRequest.reason}
                   </p>
                 </div>
               </div>
@@ -916,7 +1010,7 @@ export const OrderDetailScreen = ({
                       </div>
                       <div className="flex-1">
                         <p className="text-[15px] font-semibold text-success">
-                          Merchant Approved Extension
+                          Extension approved
                         </p>
                         <p className="text-[13px] text-text-secondary">
                           Your time has been extended.{' '}
@@ -1006,8 +1100,8 @@ export const OrderDetailScreen = ({
                   </p>
                   <p className="text-[13px] text-error">
                     {new Date(activeOrder.disputeAutoResolveAt) > new Date()
-                      ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) % 3600000) / 60000))}m`
-                      : "Auto-refund processing..."}
+                      ? `Auto-refund in ${Math.max(0, Math.round((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) % 3600000) / 60000))}m`
+                      : "Refund processing…"}
                   </p>
                 </div>
               </div>
@@ -1127,8 +1221,8 @@ export const OrderDetailScreen = ({
                     Refund not yet received?
                   </p>
                   <p className="text-[13px] text-warning mt-0.5">
-                    Your escrow is still held on-chain. Our system retries
-                    automatically, but you can claim it back manually now.
+                    We&apos;re still releasing your funds. Our system retries
+                    automatically, but you can claim your refund now.
                   </p>
                   <button
                     onClick={claimRefund}
@@ -1138,11 +1232,11 @@ export const OrderDetailScreen = ({
                     {isClaimingRefund ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Claiming refund…
+                        Processing…
                       </>
                     ) : (
                       <>
-                        <Wallet className="w-4 h-4" />
+                        <Shield className="w-4 h-4" />
                         Claim refund
                       </>
                     )}
@@ -1182,8 +1276,8 @@ export const OrderDetailScreen = ({
                     {activeOrder.step >= 1 && (
                       <p className="text-[13px] text-text-secondary">
                         {activeOrder.dbStatus === "pending"
-                          ? "Waiting for merchant..."
-                          : `Matched with ${activeOrder.merchant.name}`}
+                          ? "Looking for a payer…"
+                          : `Paired with ${activeOrder.merchant.name}`}
                       </p>
                     )}
                     {/* For sell orders waiting for merchant to mine/claim */}
@@ -1197,18 +1291,17 @@ export const OrderDetailScreen = ({
                             </div>
                             <div>
                               <p className="text-[14px] font-medium text-text-primary">
-                                Waiting for Merchant
+                                Looking for a payer
                               </p>
                               <p className="text-[12px] text-text-secondary">
-                                Your USDT is locked. Waiting for merchant to
-                                claim
+                                Your funds are safe — we&apos;re finding someone to pay you
                               </p>
                             </div>
                           </div>
                           <p className="text-[12px] text-text-tertiary">
-                            Your USDT is secured in escrow on-chain. A merchant
-                            will claim this order and send fiat to your bank
-                            account.
+                            A payer will accept your request and send the money
+                            straight to your account. You don&apos;t need to do
+                            anything yet.
                           </p>
                         </div>
                       )}
@@ -1240,25 +1333,28 @@ export const OrderDetailScreen = ({
                         ? activeOrder.merchant.paymentMethod === "cash"
                           ? "Meet & pay cash"
                           : "Send payment"
-                        : "Waiting for merchant"}
+                        : "Waiting for your payer"}
                     </p>
 
-                    {/* Funds Locked indicator - show when escrow is locked */}
+                    {/* Funds secured indicator — replaces the old
+                        "Funds locked in escrow" line. Same trust signal,
+                        no technical jargon. */}
                     {activeOrder.step === 2 &&
                       activeOrder.dbStatus === "escrowed" && (
                         <div className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 ${CARD_STRONG}`}>
                           <div className="w-5 h-5 rounded-full flex items-center justify-center bg-surface-active">
-                            <Lock className="w-3 h-3 text-text-primary" />
+                            <Shield className="w-3 h-3 text-text-primary" />
                           </div>
                           <span className="text-[13px] font-medium text-text-primary">
                             {activeOrder.type === "buy"
-                              ? "Funds locked in escrow"
-                              : "Your USDT locked in escrow"}
+                              ? "Funds secured"
+                              : "Your money is safe"}
                           </span>
                         </div>
                       )}
 
-                    {/* Show escrow funding in progress for buy orders when escrow not yet funded */}
+                    {/* BUY: payer is getting ready to send. Was "Escrow
+                        Funding in Progress" — same loader, plain words. */}
                     {activeOrder.step === 2 &&
                       activeOrder.type === "buy" &&
                       activeOrder.dbStatus !== "escrowed" && (
@@ -1270,10 +1366,10 @@ export const OrderDetailScreen = ({
                               </div>
                               <div>
                                 <p className="text-[15px] font-medium text-text-primary">
-                                  Escrow Funding in Progress
+                                  Getting things ready
                                 </p>
                                 <p className="text-[12px] text-text-secondary">
-                                  Merchant is locking USDT in escrow
+                                  We&apos;re setting up your trade
                                 </p>
                               </div>
                             </div>
@@ -1290,8 +1386,8 @@ export const OrderDetailScreen = ({
                               />
                             </div>
                             <p className="mt-3 text-[12px] text-text-tertiary">
-                              Once the merchant funds the escrow, you&apos;ll be
-                              able to send your payment.
+                              You&apos;ll be able to send your payment in just a
+                              moment.
                             </p>
                           </div>
                           <button
@@ -1299,7 +1395,7 @@ export const OrderDetailScreen = ({
                             className={`w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
-                            Message Merchant
+                            Message your payer
                           </button>
                         </div>
                       )}
@@ -1784,7 +1880,10 @@ export const OrderDetailScreen = ({
                         </div>
                       )}
 
-                    {/* Sell order step 2 - merchant accepted with wallet signature, now user locks escrow */}
+                    {/* SELL step 2 — a payer has accepted, user needs to
+                        confirm the trade to move funds to the safe-hold.
+                        Old copy talked about wallets, escrow, locking. New
+                        copy frames it as "confirm" / "send to safe-hold". */}
                     {activeOrder.step === 2 &&
                       activeOrder.type === "sell" &&
                       activeOrder.dbStatus === "accepted" &&
@@ -1793,26 +1892,23 @@ export const OrderDetailScreen = ({
                           <div className={`rounded-xl p-4 ${CARD_STRONG}`}>
                             <div className="flex items-center gap-3 mb-3">
                               <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active">
-                                <Lock className="w-5 h-5 text-text-primary" />
+                                <Shield className="w-5 h-5 text-text-primary" />
                               </div>
                               <div>
                                 <p className="text-[15px] font-medium text-text-primary">
-                                  Merchant Accepted - Lock Escrow
+                                  Ready to send
                                 </p>
                                 <p className="text-[12px] text-text-secondary">
-                                  Merchant verified their wallet. Lock funds to
-                                  proceed.
+                                  Your payer is ready. Confirm to continue.
                                 </p>
                               </div>
                             </div>
                             <p className="text-[12px] mb-3 text-text-tertiary">
-                              The merchant has signed with their wallet (
-                              {activeOrder.acceptorWalletAddress?.slice(0, 4)}
-                              ...{activeOrder.acceptorWalletAddress?.slice(-4)}
-                              ). Lock your{" "}
+                              Confirm{" "}
                               {formatCrypto(parseFloat(activeOrder.cryptoAmount))}{" "}
-                              USDT to the escrow. Funds will be released to this
-                              wallet when you confirm payment received.
+                              USDT to start the trade. We&apos;ll hold it safely
+                              and release it to your payer only after you
+                              confirm the money has landed.
                             </p>
                             <motion.button
                               whileTap={{ scale: 0.98 }}
@@ -1823,8 +1919,8 @@ export const OrderDetailScreen = ({
                                 }
                                 if (!solanaWallet.programReady) {
                                   showAlert(
-                                    "Wallet Error",
-                                    "Wallet not ready. Please reconnect your wallet.",
+                                    "Something went wrong",
+                                    "Please try again in a moment.",
                                     "error",
                                   );
                                   return;
@@ -1841,8 +1937,8 @@ export const OrderDetailScreen = ({
                                     )
                                   ) {
                                     showAlert(
-                                      "Wallet Error",
-                                      "Merchant wallet not available. Please wait for merchant to accept the order with their wallet.",
+                                      "Just a moment",
+                                      "Waiting for your payer. Please try again shortly.",
                                       "warning",
                                     );
                                     setIsLoading(false);
@@ -1894,9 +1990,9 @@ export const OrderDetailScreen = ({
                                 } catch (err: any) {
                                   console.error("Escrow failed:", err);
                                   showAlert(
-                                    "Escrow Failed",
+                                    "Couldn't start the Order",
                                     err?.message ||
-                                      "Failed to lock escrow. Please try again.",
+                                      "Something went wrong. Please try again.",
                                     "error",
                                   );
                                   playSound("error");
@@ -1914,21 +2010,21 @@ export const OrderDetailScreen = ({
                               {isLoading ? (
                                 <>
                                   <Loader2 className="w-5 h-5 animate-spin" />
-                                  Locking...
+                                  Processing…
                                 </>
                               ) : !solanaWallet.connected ? (
                                 <>
                                   <Wallet className="w-5 h-5" />
-                                  Connect Wallet to Lock
+                                  Continue
                                 </>
                               ) : !solanaWallet.programReady ? (
-                                "Wallet Not Ready"
+                                "One moment…"
                               ) : (
                                 <>
-                                  <Lock className="w-5 h-5" />
-                                  Lock{" "}
+                                  <Shield className="w-5 h-5" />
+                                  Continue with{" "}
                                   {formatCrypto(parseFloat(activeOrder.cryptoAmount))}{" "}
-                                  USDT to Escrow
+                                  USDT
                                 </>
                               )}
                             </motion.button>
@@ -1938,26 +2034,28 @@ export const OrderDetailScreen = ({
                             className={`w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
-                            Message Merchant
+                            Message your payer
                           </button>
                         </div>
                       )}
 
-                    {/* Sell order step 2 - escrow IS locked, waiting for payment */}
+                    {/* SELL step 2 — funds are safe, waiting for the payer
+                        to send the money. Old copy said "locked in escrow"
+                        + "Locked Payment Method"; both now phrased plainly. */}
                     {activeOrder.step === 2 &&
                       activeOrder.type === "sell" &&
                       (activeOrder.dbStatus === "escrowed" ||
                         activeOrder.escrowTxHash) && (
                         <div className="mt-2">
                           <p className="text-[13px] text-text-secondary">
-                            Your USDT is locked in escrow. Waiting for merchant
-                            to send {activeOrder.fiatCode || 'AED'} payment...
+                            Your money is safe. Waiting for your payer to send
+                            you {activeOrder.fiatCode || 'AED'}…
                           </p>
 
                           <div className={`mt-3 rounded-xl p-3 ${CARD}`}>
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-[12px] text-text-secondary">
-                                Expected payment
+                                You&apos;ll receive
                               </span>
                               <span className="text-[15px] font-semibold text-text-primary">
                                 {fiatSym(activeOrder.fiatCode)}{" "}
@@ -1967,9 +2065,9 @@ export const OrderDetailScreen = ({
                             {activeOrder.lockedPaymentMethod ? (
                               <div className="pt-2 space-y-1.5 border-t border-border-medium">
                                 <div className="flex items-center gap-1.5">
-                                  <Lock className="w-3 h-3 text-warning" />
+                                  <Shield className="w-3 h-3 text-warning" />
                                   <span className="text-[11px] text-warning font-semibold uppercase tracking-wide">
-                                    Locked Payment Method
+                                    Where they&apos;ll pay you
                                   </span>
                                 </div>
                                 <p className="text-[13px] font-medium text-text-primary">
@@ -2010,13 +2108,12 @@ export const OrderDetailScreen = ({
                                     </p>
                                   )}
                                 <p className="text-[10px] text-text-tertiary">
-                                  Merchant will send payment to this method
+                                  They&apos;ll send the money here
                                 </p>
                               </div>
                             ) : (
                               <p className="text-[11px] text-text-tertiary">
-                                Merchant will send this amount to your bank
-                                account
+                                They&apos;ll send this amount to your account
                               </p>
                             )}
                           </div>
@@ -2038,7 +2135,7 @@ export const OrderDetailScreen = ({
                             className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
-                            Message Merchant
+                            Message your payer
                           </button>
                         </div>
                       )}
@@ -2133,7 +2230,7 @@ export const OrderDetailScreen = ({
                             className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
-                            Message Merchant
+                            Message your payer
                           </button>
                         </div>
                       )}
@@ -2144,12 +2241,12 @@ export const OrderDetailScreen = ({
                         <div className="mt-3">
                           <div className={`rounded-xl p-3 mb-3 ${CARD_STRONG}`}>
                             <p className="text-[13px] text-text-primary">
-                              Merchant has sent {fiatSym(activeOrder.fiatCode)}{" "}
+                              Your payer sent {fiatSym(activeOrder.fiatCode)}{" "}
                               {formatCrypto(parseFloat(activeOrder.fiatAmount))}{" "}
-                              to your bank.
+                              to your account.
                             </p>
                             <p className="text-[12px] mt-1 text-text-secondary">
-                              Check your bank account before confirming.
+                              Check your account before confirming.
                             </p>
                           </div>
                           <div className="flex gap-2">
@@ -2309,7 +2406,7 @@ export const OrderDetailScreen = ({
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-[15px] font-medium text-text-primary">
-                    {activeOrder.merchant.name || 'Waiting for merchant...'}
+                    {activeOrder.merchant.name || 'Looking for a payer…'}
                   </p>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-active text-text-secondary">
                     {activeOrder.merchant.paymentMethod === "cash"
@@ -2718,7 +2815,7 @@ export const OrderDetailScreen = ({
                                   : "bg-error-dim text-error"
                               }`}
                             >
-                              {data.party === "user" ? "You" : "Merchant"}{" "}
+                              {data.party === "user" ? "You" : "Payer"}{" "}
                               {isAccepted ? "accepted" : "rejected"} the
                               resolution
                             </div>
@@ -3041,6 +3138,17 @@ export const OrderDetailScreen = ({
           </>
         )}
       </AnimatePresence>
+
+      {/* Scratch-card reward — auto-opens once on first land for SELL/QR
+          orders with an unrevealed pending reward. After reveal the reward
+          row stays pending in DB; it only becomes claimable when the order
+          reaches `completed` (see migration 124 + routes/orders.ts). */}
+      <ScratchRewardModal
+        open={showScratchModal}
+        reward={pendingReward}
+        onClose={() => setShowScratchModal(false)}
+        onDone={() => setShowScratchModal(false)}
+      />
     </div>
   );
 };

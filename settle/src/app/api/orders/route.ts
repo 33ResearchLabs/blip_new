@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
       upi_vpa,
       upi_payee_name,
       upi_fiat_inr,
+      upi_qr_amount,
     } = parseResult.data;
 
     // Authorization: stricter token auth for order creation (financial
@@ -295,6 +296,7 @@ export async function POST(request: NextRequest) {
               upi_vpa,
               upi_payee_name,
               upi_fiat_inr,
+              upi_qr_amount,
               corridor_id: orderCorridorId,
               fiat_currency: orderFiatCurrency,
             },

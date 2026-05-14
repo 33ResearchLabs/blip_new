@@ -62,8 +62,11 @@ export function MerchantUpiPayModal({ order, open, onClose, onMarkPaid }: Props)
     let cancelled = false;
     QRCode.toDataURL(upiUrl, {
       width: 600,
-      margin: 2,
-      errorCorrectionLevel: "M",
+      // NPCI UPI-QR spec recommends quiet zone ≥ 4 modules + ECC level H
+      // (~30%). "M" was ~15%, which fails too often on cracked / glare-
+      // affected phone screens. Output is still a standard UPI QR.
+      margin: 4,
+      errorCorrectionLevel: "H",
       color: { dark: "#000000", light: "#ffffff" },
     })
       .then((url) => { if (!cancelled) setQrDataUrl(url); })

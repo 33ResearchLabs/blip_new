@@ -371,6 +371,31 @@ export async function atomicFinalizeDispute(
         ]
       );
 
+      // Scratch-card reward bookkeeping (migration 124):
+      //   - buyer-wins dispute (newStatus='completed') → trade ran end-to-end,
+      //     unlock the SELL user's pending reward.
+      //   - seller-wins dispute (newStatus='cancelled') → seller refunded,
+      //     trade did not settle, void the reward.
+      // Bypasses the regular PATCH /orders status-handler reward path because
+      // compliance finalization writes status directly here.
+      if (newStatus === 'completed') {
+        await client.query(
+          `UPDATE user_rewards
+              SET claimable_at = NOW()
+            WHERE order_id = $1
+              AND claimable_at IS NULL
+              AND voided_at IS NULL`,
+          [orderId]
+        );
+      } else {
+        await client.query(
+          `UPDATE user_rewards
+              SET voided_at = NOW(), voided_reason = 'dispute_refund'
+            WHERE order_id = $1 AND voided_at IS NULL`,
+          [orderId]
+        );
+      }
+
       await client.query(
         `INSERT INTO notification_outbox (event_type, order_id, payload)
          VALUES ($1, $2, $3)`,

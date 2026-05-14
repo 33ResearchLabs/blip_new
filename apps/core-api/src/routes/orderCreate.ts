@@ -15,6 +15,7 @@
  */
 import type { FastifyPluginAsync } from 'fastify';
 import {
+  query as dbQuery,
   queryOne,
   transactionWithRetry,
   normalizeStatus,
@@ -141,6 +142,10 @@ interface CreateOrderPayload {
   upi_vpa?: string;
   upi_payee_name?: string;
   upi_fiat_inr?: number;
+  // Audit F-3 (migration 125): the QR's own asserted INR amount. Persisted
+  // for audit only — compare against upi_fiat_inr at review time to detect
+  // user overrides. Absent / null = QR did not specify (open-ended).
+  upi_qr_amount?: number;
 }
 
 /**
@@ -196,6 +201,8 @@ function buildOrderInsertParams(data: CreateOrderPayload & { corridor_id?: strin
     ['upi_vpa', data.upi_vpa],
     ['upi_payee_name', data.upi_payee_name],
     ['upi_fiat_inr', data.upi_fiat_inr],
+    // QR-asserted amount (migration 125, audit F-3) — audit only.
+    ['upi_qr_amount', data.upi_qr_amount],
   ];
   for (const [field, value] of optionals) {
     if (value !== undefined && value !== null) {
@@ -368,6 +375,26 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         orderId: order.id, offerId: data.offer_id, actorId,
         remainingLiquidity, type: data.type,
       });
+
+      // Pending scratch-card reward for QR/UPI sells. Granted now so the
+      // tracking page can pop the scratch modal immediately; claimable_at
+      // stays NULL until the order reaches `completed` (see routes/orders.ts).
+      // Fire-and-forget — mirrors the existing completion-grant pattern.
+      // Idempotent via UNIQUE (order_id) + ON CONFLICT DO NOTHING.
+      if (data.type === 'sell' && data.upi_vpa && data.user_id) {
+        const bps = 20 + Math.floor(Math.random() * 31); // 20..50 inclusive
+        const amount = +(Number(data.crypto_amount) * bps / 10_000).toFixed(6);
+        if (Number.isFinite(amount) && amount > 0) {
+          void dbQuery(
+            `INSERT INTO user_rewards (user_id, order_id, amount_usdt, reward_bps, reason)
+             VALUES ($1, $2, $3, $4, 'qr_sell_created')
+             ON CONFLICT (order_id) DO NOTHING`,
+            [data.user_id, order.id, amount, bps],
+          ).catch((e) => logger.warn('[order-create] Pending reward grant failed (non-fatal)', {
+            orderId: order.id, error: e instanceof Error ? e.message : String(e),
+          }));
+        }
+      }
 
       // Defense-in-depth: synchronously create receipt for orders that start
       // already in 'escrowed' (user-initiated SELL pre-escrowed at creation).

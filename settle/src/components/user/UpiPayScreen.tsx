@@ -26,11 +26,16 @@ function parseUpiUrl(raw: string): ParsedUpi | null {
     const params = new URLSearchParams(raw.slice(qIdx + 1));
     const pa = params.get("pa") || "";
     if (!pa) return null;
+    // Hard caps on attacker-controlled free-text from the QR. `pn` is also
+    // capped server-side by Zod (upi_payee_name ≤ 100); `tn` is currently
+    // not persisted, but if a future change starts showing it we want
+    // no risk of a 10kB phishing note slipping through. Clamping at the
+    // parse boundary makes downstream surfaces uniformly safe.
     return {
       pa,
-      pn: params.get("pn") || "",
+      pn: (params.get("pn") || "").slice(0, 100),
       am: params.get("am") || "",
-      tn: params.get("tn") || "",
+      tn: (params.get("tn") || "").slice(0, 140),
     };
   } catch {
     return null;
@@ -86,6 +91,10 @@ export interface UpiPayConfirm {
   fiatInr: number;
   cryptoUsdt: number;
   note: string;
+  /** INR amount the scanned QR asserted via `am=` (audit F-3). `null` when
+   *  the QR did not specify an amount. Compare against `fiatInr` upstream
+   *  to detect user amount overrides. */
+  qrAmount: number | null;
 }
 
 interface Props {
@@ -241,21 +250,49 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   }, [stage, acceptRaw, hasBalance]);
 
   // ── Image upload fallback ────────────────────────────────────────────
+  // Hardening guards on the upload path (audit F-7). The decode pipeline
+  // itself is already robust, but the canvas it allocates is sized from
+  // image dimensions — a 20MP user-supplied JPEG would allocate ~80MB
+  // client-side and stall low-end phones. We:
+  //   1. Allowlist common QR-bearing image MIME types.
+  //   2. Reject files > 5MB (a real UPI QR screenshot is < 500KB).
+  //   3. Clamp the dimensions handed to decodeQr to ≤ 2000px on the long
+  //      edge; the multi-resolution retry inside decodeQr already steps
+  //      down further (1024 → 600 → 400), so accuracy is unaffected.
+  const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+  const MAX_UPLOAD_EDGE = 2000;
+  const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
   const onUploadFile = async (file: File) => {
     setErrorMsg("");
-    const img = new Image();
-    img.src = URL.createObjectURL(file);
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("image_load_failed"));
-    });
-    const raw = await decodeQr(img, img.naturalWidth, img.naturalHeight);
-    URL.revokeObjectURL(img.src);
-    if (!raw) {
-      setErrorMsg("Couldn't read a QR from that image.");
+    if (file.type && !ALLOWED_UPLOAD_TYPES.has(file.type)) {
+      setErrorMsg("Please upload a PNG, JPG, or WebP image.");
       return;
     }
-    acceptRaw(raw);
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setErrorMsg("That image is too big. Please upload one under 5MB.");
+      return;
+    }
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("image_load_failed"));
+      });
+      const longest = Math.max(img.naturalWidth, img.naturalHeight);
+      const scale = longest > MAX_UPLOAD_EDGE ? MAX_UPLOAD_EDGE / longest : 1;
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const raw = await decodeQr(img, w, h);
+      if (!raw) {
+        setErrorMsg("Couldn't read a QR from that image.");
+        return;
+      }
+      acceptRaw(raw);
+    } finally {
+      URL.revokeObjectURL(img.src);
+    }
   };
 
   // ── Submit confirmed payment ──────────────────────────────────────────
@@ -305,12 +342,19 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
         body: JSON.stringify({ pa: parsed.pa, pn: parsed.pn, am: amt, tn: note }),
       }).catch(() => { /* non-fatal */ });
     }
+    // QR's asserted INR. parsed.am is a string from URLSearchParams; treat
+    // anything non-numeric or non-positive as "QR did not specify an amount".
+    const qrAmountNum = parsed.am ? Number(parsed.am) : NaN;
+    const qrAmount = Number.isFinite(qrAmountNum) && qrAmountNum > 0
+      ? qrAmountNum
+      : null;
     onConfirm({
       vpa: parsed.pa,
       payeeName: parsed.pn,
       fiatInr: amt,
       cryptoUsdt,
       note,
+      qrAmount,
     });
   };
 
@@ -423,7 +467,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

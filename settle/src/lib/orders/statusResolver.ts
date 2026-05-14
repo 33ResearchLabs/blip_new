@@ -214,52 +214,55 @@ export function getStatusBadgeConfig(minimalStatus: MinimalStatus): {
   bg: string;
   border: string;
 } {
+  // Consumer-friendly labels. The old technical strings ("ESCROWED",
+  // "PAYMENT SENT") leaked backend mechanics; these read like Swiggy/Uber.
+  // Single source of truth — admin pages render the same labels.
   const configs = {
     open: {
       color: "text-blue-400",
-      label: "OPEN",
+      label: "Looking for a payer",
       bg: "bg-blue-500/20",
       border: "border-blue-500/30",
     },
     accepted: {
       color: "text-yellow-400",
-      label: "ACCEPTED",
+      label: "Payer found",
       bg: "bg-yellow-500/20",
       border: "border-yellow-500/30",
     },
     escrowed: {
       color: "text-purple-400",
-      label: "ESCROWED",
+      label: "Waiting for payment",
       bg: "bg-purple-500/20",
       border: "border-purple-500/30",
     },
     payment_sent: {
       color: "text-orange-400",
-      label: "PAYMENT SENT",
+      label: "Payment on the way",
       bg: "bg-orange-500/20",
       border: "border-orange-500/30",
     },
     completed: {
       color: "text-green-400",
-      label: "COMPLETED",
+      label: "Done",
       bg: "bg-green-500/20",
       border: "border-green-500/30",
     },
     cancelled: {
       color: "text-red-400",
-      label: "CANCELLED",
+      label: "Cancelled",
       bg: "bg-red-500/20",
       border: "border-red-500/30",
     },
     expired: {
       color: "text-gray-400",
-      label: "EXPIRED",
+      label: "Timed out",
       bg: "bg-gray-500/20",
       border: "border-gray-500/30",
     },
     disputed: {
       color: "text-red-400",
-      label: "DISPUTED",
+      label: "Under review",
       bg: "bg-red-500/20",
       border: "border-red-500/30",
     },

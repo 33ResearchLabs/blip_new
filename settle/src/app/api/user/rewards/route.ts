@@ -1,15 +1,33 @@
 /**
  * GET /api/user/rewards
  *
- * Returns the authenticated user's reward total + recent grants. Source of
- * truth is the `user_rewards` table (migration 123). Granted in core-api
- * when a sell order completes — see routes/orders.ts.
+ * Returns the authenticated user's reward totals split by lifecycle state:
+ *   - pending:   granted but not yet claimable (trade still in flight)
+ *   - claimable: trade completed; reward is withdrawable
+ *   - voided rows are excluded from both totals (kept for audit only).
+ *
+ * Source of truth is the `user_rewards` table (migrations 123 + 124).
+ * Pending rewards are inserted at order creation for QR/UPI sells
+ * (orderCreate.ts); claimable_at is flipped on `completed` (orders.ts);
+ * voided_at is set on cancel/expire/dispute-refund (atomicCancel*).
  *
  * Response: {
- *   total_usdt: number,
- *   count: number,
- *   recent: [{ id, order_id, amount_usdt, reward_bps, granted_at, revealed_at }]
+ *   claimable_total_usdt: number,
+ *   pending_total_usdt:   number,
+ *   pending_count:        number,
+ *   claimable_count:      number,
+ *   unrevealed_count:     number,
+ *   // Back-compat: callers that haven't migrated still see the legacy
+ *   // single-total + count. Returns claimable totals only.
+ *   total_usdt:           number,
+ *   count:                number,
+ *   recent: [{ id, order_id, amount_usdt, reward_bps,
+ *              granted_at, revealed_at, claimable_at, voided_at }]
  * }
+ *
+ * Any future withdrawal endpoint MUST filter to
+ *   claimable_at IS NOT NULL AND voided_at IS NULL
+ * — voided/pending rewards are NOT withdrawable.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
@@ -29,6 +47,8 @@ interface RewardRow {
   reward_bps: number;
   granted_at: string;
   revealed_at: string | null;
+  claimable_at: string | null;
+  voided_at: string | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -38,19 +58,42 @@ export async function GET(request: NextRequest) {
 
   try {
     const rows = await query<RewardRow>(
-      `SELECT id, order_id, amount_usdt, reward_bps, granted_at, revealed_at
+      `SELECT id, order_id, amount_usdt, reward_bps,
+              granted_at, revealed_at, claimable_at, voided_at
          FROM user_rewards
         WHERE user_id = $1
         ORDER BY granted_at DESC
         LIMIT 50`,
       [auth.actorId],
     );
-    const total = rows.reduce((s, r) => s + Number(r.amount_usdt), 0);
-    const unrevealed = rows.filter((r) => !r.revealed_at);
+
+    let claimableTotal = 0;
+    let pendingTotal = 0;
+    let claimableCount = 0;
+    let pendingCount = 0;
+    let unrevealedCount = 0;
+    for (const r of rows) {
+      if (r.voided_at) continue;
+      const amt = Number(r.amount_usdt);
+      if (r.claimable_at) {
+        claimableTotal += amt;
+        claimableCount++;
+      } else {
+        pendingTotal += amt;
+        pendingCount++;
+      }
+      if (!r.revealed_at) unrevealedCount++;
+    }
+
     return successResponse({
-      total_usdt: +total.toFixed(6),
-      count: rows.length,
-      unrevealed_count: unrevealed.length,
+      claimable_total_usdt: +claimableTotal.toFixed(6),
+      pending_total_usdt: +pendingTotal.toFixed(6),
+      pending_count: pendingCount,
+      claimable_count: claimableCount,
+      unrevealed_count: unrevealedCount,
+      // Legacy fields — preserve old callers' contract. They see claimable only.
+      total_usdt: +claimableTotal.toFixed(6),
+      count: claimableCount,
       recent: rows,
     });
   } catch (e) {
@@ -61,7 +104,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   // POST /api/user/rewards — body: { id } — mark a reward as revealed (after
-  // the user has tapped/scratched the card in the UI).
+  // the user has tapped/scratched the card in the UI). Voided rewards cannot
+  // be revealed (DB guard).
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
   if (auth.actorType !== 'user') return forbiddenResponse('Rewards are user-only');
@@ -77,7 +121,9 @@ export async function POST(request: NextRequest) {
   const result = await query<{ id: string }>(
     `UPDATE user_rewards
         SET revealed_at = NOW()
-      WHERE id = $1 AND user_id = $2 AND revealed_at IS NULL
+      WHERE id = $1 AND user_id = $2
+        AND revealed_at IS NULL
+        AND voided_at IS NULL
       RETURNING id`,
     [body.id, auth.actorId],
   );

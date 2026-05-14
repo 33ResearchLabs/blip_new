@@ -580,6 +580,10 @@ export default function Home() {
                       vpa: data.vpa,
                       payeeName: data.payeeName,
                       fiatInr: data.fiatInr,
+                      // Audit F-3: record the QR's own asserted amount so
+                      // downstream order POST can pass it to upi_qr_amount.
+                      // null = open-ended QR (user typed the amount).
+                      qrAmount: data.qrAmount,
                       note: data.note,
                       at: Date.now(),
                     }),
