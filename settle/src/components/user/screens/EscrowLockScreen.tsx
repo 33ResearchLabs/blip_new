@@ -88,6 +88,38 @@ export const EscrowLockScreen = ({
   const balanceOk = solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance >= parseFloat(amount || '0');
   const isProcessing = ['signing', 'confirming', 'recording'].includes(escrowTxStatus);
 
+  // QR-scan handoff: when this screen is reached from UpiPayScreen
+  // (scan a merchant's UPI QR → enter amount → land here for escrow lock),
+  // page.tsx writes the scanned UPI destination into sessionStorage under
+  // `blip_pending_upi_payment`. We surface those details as the order's
+  // payment-method card so the user can see WHERE the INR will land
+  // instead of an empty "Add Payment Method" CTA.
+  const [scannedUpi, setScannedUpi] = useState<{
+    vpa: string;
+    payeeName: string;
+    fiatInr: number;
+  } | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem("blip_pending_upi_payment");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        vpa?: string;
+        payeeName?: string;
+        fiatInr?: number;
+        at?: number;
+      };
+      // Match the freshness window the order-create hook uses (15 min).
+      if (!parsed?.vpa || Date.now() - (parsed.at || 0) > 15 * 60 * 1000) return;
+      setScannedUpi({
+        vpa: parsed.vpa,
+        payeeName: parsed.payeeName || "",
+        fiatInr: Number(parsed.fiatInr || 0),
+      });
+    } catch { /* sessionStorage blocked / bad JSON — non-fatal */ }
+  }, []);
+
   return (
     <div
       className="relative flex flex-col min-h-[100dvh] overflow-y-auto"
@@ -288,7 +320,56 @@ export const EscrowLockScreen = ({
               Your Payment Method
             </span>
           </div>
-          {selectedPaymentMethod ? (
+          {scannedUpi ? (
+            // Scanned UPI handoff from UpiPayScreen — the merchant who
+            // accepts this order pays INR directly to this VPA. We show
+            // it as a read-only card here (and again on the order-detail
+            // page) so the user can sanity-check the scanned destination
+            // before locking funds.
+            <div
+              className="w-full flex items-center"
+              style={{
+                gap: 11,
+                padding: "11px 12px",
+                borderRadius: 16,
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.06)",
+              }}
+            >
+              <div
+                className="flex items-center justify-center shrink-0"
+                style={{
+                  width: 32, height: 32, borderRadius: 10,
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                <Smartphone size={14} strokeWidth={2.2} style={{ color: T.md }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p style={{
+                  fontSize: 13, fontWeight: 800, letterSpacing: "-0.005em",
+                  color: T.hi,
+                }} className="truncate">
+                  {scannedUpi.payeeName || scannedUpi.vpa}
+                </p>
+                <p style={{
+                  fontSize: 10, fontWeight: 600, color: T.lo, marginTop: 1,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                }} className="truncate">
+                  UPI · {scannedUpi.vpa}
+                </p>
+                {scannedUpi.fiatInr > 0 && (
+                  <p style={{
+                    fontSize: 10, fontWeight: 700, color: T.md, marginTop: 2,
+                  }}>
+                    ₹{scannedUpi.fiatInr.toFixed(2)} expected
+                  </p>
+                )}
+              </div>
+              <Lock size={13} strokeWidth={2.4} style={{ color: T.lo, flexShrink: 0 }} />
+            </div>
+          ) : selectedPaymentMethod ? (
             <div
               className="w-full flex items-center"
               style={{
