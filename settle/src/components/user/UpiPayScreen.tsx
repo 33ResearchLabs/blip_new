@@ -5,10 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import jsQR from "jsqr";
 import { ChevronLeft, Loader2, Check, AlertCircle, ImagePlus } from "lucide-react";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
-import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
-import { PinSheet } from "@/components/user/PinSheet";
 import { UpiProcessingOverlay } from "@/components/user/UpiProcessingOverlay";
-import { useSolanaWallet } from "@/context/SolanaWalletContext";
 
 // ── UPI URL parsing ────────────────────────────────────────────────────────
 interface ParsedUpi {
@@ -113,29 +110,12 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   const balanceReady = usdtBalance !== null;
   const hasBalance = balanceReady && usdtBalance > 0;
 
-  // PIN gating — required on every Pay action. Three states:
-  //   - unknown: still loading whether the user has set a PIN
-  //   - need_setup: open PinSheet in setup mode
-  //   - need_verify: open PinSheet in verify mode
-  // After successful verify, we call doSubmit() which proceeds to the
-  // escrow handoff.
-  const [pinGate, setPinGate] = useState<"closed" | "verify" | "setup">("closed");
-  const [hasPin, setHasPin] = useState<boolean | null>(null);
+  // PIN gating removed (wallet-password = 6-digit PIN unification): the
+  // wallet-unlock prompt downstream (during escrow lock) is the single
+  // point of payment authorisation. The QR screen no longer needs a
+  // separate /api/user/pin check — that endpoint and the PinSheet stay
+  // for any legacy callers but this screen is decoupled from them.
   const [processing, setProcessing] = useState<null | "processing" | "success">(null);
-  // The merged PIN ↔ wallet secret. Lives only for the duration of the
-  // PIN-success → escrow handoff so we can unlock the embedded wallet
-  // automatically without a second prompt. Cleared immediately after.
-  const wallet = useSolanaWallet() as unknown as {
-    createOrUnlockWithPin?: (pin: string) => Promise<boolean>;
-  };
-  useEffect(() => {
-    let cancelled = false;
-    fetchWithAuth("/api/user/pin")
-      .then((r) => r.json())
-      .then((d) => { if (!cancelled) setHasPin(!!d?.data?.has_pin); })
-      .catch(() => { if (!cancelled) setHasPin(false); });
-    return () => { cancelled = true; };
-  }, []);
   const [stage, setStage] = useState<"scanning" | "entering">("scanning");
   const [parsed, setParsed] = useState<ParsedUpi | null>(null);
   const [amount, setAmount] = useState("");
@@ -321,18 +301,11 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   const handlePayTap = () => {
     const v = validateBeforeSubmit();
     if (!v) return;
-    // Defense-in-depth on top of the disabled-button gate above:
-    //   - hasPin === true  → verify (PIN exists server-side)
-    //   - hasPin === false → setup (no PIN row yet)
-    //   - hasPin === null  → shouldn't happen (button disabled), but if it
-    //     does, default to setup. POST /api/user/pin without
-    //     current_password will fail closed for users who already have one,
-    //     instead of hammering verify against a missing hash.
-    if (hasPin === true) {
-      setPinGate("verify");
-    } else {
-      setPinGate("setup");
-    }
+    // No separate Payment PIN gate — the wallet unlock prompt (triggered
+    // by the downstream escrow flow when the wallet is locked) is the
+    // single point of payment authorisation. We just hand off.
+    setProcessing("processing");
+    doSubmit();
   };
 
   const doSubmit = () => {
@@ -617,11 +590,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
                 currentRate && currentRate > 0 ? amt / currentRate : Infinity;
               const overBalance =
                 usdtBalance !== null && need > usdtBalance;
-              // Block tap until we know whether the user has a PIN — otherwise
-              // a fast user can open the verify modal against a non-existent
-              // PIN and the server returns 409 on every keystroke.
-              const pinReady = hasPin !== null;
-              const disabled = !amount || amt <= 0 || overBalance || !pinReady;
+              const disabled = !amount || amt <= 0 || overBalance;
               return (
                 <motion.button
                   whileTap={disabled ? undefined : { scale: 0.98 }}
@@ -635,9 +604,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
                 >
                   {overBalance
                     ? "Insufficient balance"
-                    : !pinReady
-                      ? "Loading…"
-                      : `Pay ₹${formattedAmount || "0"}`}
+                    : `Pay ₹${formattedAmount || "0"}`}
                 </motion.button>
               );
             })()}
@@ -645,38 +612,10 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
         )}
       </AnimatePresence>
 
-      {/* PIN gate — opens between Pay tap and the seamless processing flow. */}
-      <PinSheet
-        open={pinGate !== "closed"}
-        mode={pinGate === "setup" ? "setup" : "verify"}
-        subtitle={
-          parsed && amount
-            ? `Pay ₹${Number(amount).toFixed(2)} to ${parsed.pn || parsed.pa}`
-            : undefined
-        }
-        onClose={() => setPinGate("closed")}
-        onSuccess={async (pin) => {
-          setPinGate("closed");
-          setHasPin(true);
-          setProcessing("processing");
-          // Single-secret merge: use the same PIN to create or unlock the
-          // embedded wallet — so the user never sees a separate password
-          // prompt. Non-fatal on failure (older 12-char wallets still work
-          // through the legacy unlock screen further down the flow).
-          try {
-            if (wallet.createOrUnlockWithPin) {
-              await wallet.createOrUnlockWithPin(pin);
-            }
-          } catch { /* fall through to legacy unlock if needed */ }
-          // Hand off to the escrow flow. The Processing overlay stays up
-          // until the parent advances the screen.
-          doSubmit();
-        }}
-      />
-
-      {/* Seamless "Processing payment…" overlay between PIN and the next
-          screen. Stays up briefly; parent will unmount this whole screen
-          shortly after as it routes to the escrow handler. */}
+      {/* The separate PIN sheet that used to sit between Pay tap and
+          the escrow handoff was removed. The wallet password is now the
+          6-digit PIN itself, so the downstream wallet-unlock prompt
+          (during escrow lock) is the single point of payment auth. */}
       <UpiProcessingOverlay
         open={processing !== null}
         stage={processing === "success" ? "success" : "processing"}

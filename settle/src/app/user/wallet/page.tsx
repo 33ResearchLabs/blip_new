@@ -55,6 +55,21 @@ import {
 import { Keypair } from "@solana/web3.js";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { showAlert } from "@/context/ModalContext";
+import { WalletPinKeypad } from "@/components/wallet/WalletPinKeypad";
+import {
+  getWalletFormat,
+  setWalletFormat,
+  clearWalletFormat,
+} from "@/lib/wallet/walletFormat";
+
+// User-side wallet password is now a 6-digit PIN — the same secret unlocks
+// the wallet AND authorises payments. Existing free-form wallet passwords
+// keep working on unlock (handled by the legacy fallback below); only NEW
+// wallets created via this page are minted with the PIN format.
+//
+// The per-actor format marker (lib/wallet/walletFormat.ts) is written after
+// a successful PIN-format create / import. The unlock UI reads it to pick
+// between the PIN keypad and the legacy password input.
 import { MOCK_MODE } from "@/lib/config/mockMode";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { usdtLabel, explorerUrl, isMainnet } from "@/lib/solana/networkLabel";
@@ -213,16 +228,22 @@ export default function UserWalletPage() {
 
   const handleCreate = async () => {
     setSetupError("");
-    // Strength check enforced at creation only — never at unlock — so
-    // existing mainnet users with shorter legacy passwords aren't
-    // locked out.
-    const strength = validatePasswordStrength(password);
-    if (!strength.ok) {
-      setSetupError(strength.reason || "Password is too weak");
+    // User-side wallet password is a 6-digit PIN. The WalletPinKeypad UI
+    // already caps input at 6 digits, but we re-check here so a manual
+    // state mutation (or autofill) can't slip a non-PIN value through.
+    // The lower-level validatePasswordStrength still accepts 4-6 digits;
+    // we enforce exactly 6 at the user-side UI layer.
+    if (!/^[0-9]{6}$/.test(password)) {
+      setSetupError("Enter a 6-digit PIN");
       return;
     }
     if (password !== confirmPassword) {
-      setSetupError("Passwords do not match");
+      setSetupError("PINs do not match");
+      return;
+    }
+    const strength = validatePasswordStrength(password);
+    if (!strength.ok) {
+      setSetupError(strength.reason || "PIN is too weak");
       return;
     }
 
@@ -250,6 +271,10 @@ export default function UserWalletPage() {
         await generateMnemonicWallet(password, unlockHelper);
       saveEncryptedWallet(userId, encrypted);
       saveEncryptedMnemonic(userId, encryptedMnemonic);
+      // Tag this wallet as PIN-format so a future unlock UI can render
+      // the keypad instead of the legacy password input. Non-fatal if
+      // localStorage is blocked — the wallet still works.
+      setWalletFormat(userId, "pin");
       setPendingKeypair(keypair);
       setPendingMnemonic(mnemonic);
     } catch (err: any) {
@@ -261,11 +286,19 @@ export default function UserWalletPage() {
 
   const handleImport = async () => {
     setSetupError("");
-    // Import re-encrypts under a new password, so apply the same rules
-    // — otherwise import would be a back-door around strength checks.
+    // Import re-encrypts under a new PIN. Same 6-digit + confirm gates
+    // as Create so import isn't a back-door around the format check.
+    if (!/^[0-9]{6}$/.test(password)) {
+      setSetupError("Enter a 6-digit PIN");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setSetupError("PINs do not match");
+      return;
+    }
     const strength = validatePasswordStrength(password);
     if (!strength.ok) {
-      setSetupError(strength.reason || "Password is too weak");
+      setSetupError(strength.reason || "PIN is too weak");
       return;
     }
     if (!privateKeyInput.trim()) {
@@ -300,6 +333,8 @@ export default function UserWalletPage() {
       if (encryptedMnemonic) {
         saveEncryptedMnemonic(userId, encryptedMnemonic);
       }
+      // Imported wallets are also PIN-format on the user side now.
+      setWalletFormat(userId, "pin");
       embeddedWallet?.setKeypairAndUnlock(keypair);
     } catch (err: any) {
       setSetupError(err.message || "Invalid private key");
@@ -704,55 +739,25 @@ export default function UserWalletPage() {
                       tabIndex={-1}
                       className="absolute opacity-0 pointer-events-none h-0 w-0"
                     />
-                    <div>
-                      <label htmlFor="wallet-new-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                        Password
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="wallet-new-password"
-                          name="wallet-new-password"
-                          type={showPassword ? "text" : "password"}
-                          autoComplete="new-password"
-                          maxLength={100}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Min 12 characters"
-                          className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                     text-sm text-white font-mono placeholder:text-white/20
-                                     focus:outline-none focus:border-primary/50 transition-colors"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2"
-                        >
-                          {showPassword ? (
-                            <EyeOff className="w-4 h-4 text-white/30" />
-                          ) : (
-                            <Eye className="w-4 h-4 text-white/30" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="wallet-new-password-confirm" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                        Confirm Password
-                      </label>
-                      <input
-                        id="wallet-new-password-confirm"
-                        name="wallet-new-password-confirm"
-                        type="password"
-                        autoComplete="new-password"
-                        maxLength={100}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter password"
-                        className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                   text-sm text-white font-mono placeholder:text-white/20
-                                   focus:outline-none focus:border-primary/50 transition-colors"
-                      />
-                    </div>
+                    {/* User-side wallet password is a 6-digit PIN — same secret
+                        unlocks the wallet AND authorises payments. Existing
+                        merchant wallets (different page) still use free-form
+                        passwords. The handleCreate path validates exactly 6
+                        digits before submitting. */}
+                    <WalletPinKeypad
+                      value={password}
+                      onChange={setPassword}
+                      label="Set a 6-digit PIN"
+                      hint="This PIN unlocks your wallet and authorises Payments."
+                      disabled={setupLoading}
+                      autoFocus
+                    />
+                    <WalletPinKeypad
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      label="Confirm PIN"
+                      disabled={setupLoading}
+                    />
                     <button
                       type="submit"
                       disabled={setupLoading}
@@ -809,24 +814,29 @@ export default function UserWalletPage() {
                                    focus:outline-none focus:border-primary/50 transition-colors"
                       />
                     </div>
-                    <div>
-                      <label htmlFor="wallet-import-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                        Encryption Password
-                      </label>
-                      <input
-                        id="wallet-import-password"
-                        name="wallet-import-password"
-                        type="password"
-                        autoComplete="new-password"
-                        maxLength={100}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Min 12 characters"
-                        className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                   text-sm text-white font-mono placeholder:text-white/20
-                                   focus:outline-none focus:border-primary/50 transition-colors"
-                      />
-                    </div>
+                    {/* User-side wallet password is a 6-digit PIN (see
+                        Create flow above for the full rationale). Import
+                        re-encrypts the supplied keypair under this PIN.
+                        showToggle is enabled here so users can verify the
+                        PIN they entered matches Confirm before committing
+                        — recovering an imported wallet wrong is worse than
+                        recovering a freshly-created one, since the keypair
+                        is already in their hands. */}
+                    <WalletPinKeypad
+                      value={password}
+                      onChange={setPassword}
+                      label="Set a 6-digit PIN"
+                      hint="You'll use this PIN every time you Pay."
+                      disabled={setupLoading}
+                      showToggle
+                    />
+                    <WalletPinKeypad
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      label="Confirm PIN"
+                      disabled={setupLoading}
+                      showToggle
+                    />
                     <button
                       type="submit"
                       disabled={setupLoading}
@@ -973,73 +983,124 @@ export default function UserWalletPage() {
                   </div>
                 )}
 
-                <form
-                  onSubmit={(e) => { e.preventDefault(); handleUnlock(); }}
-                  autoComplete="off"
-                  className="space-y-4"
-                >
-                  <input
-                    type="text"
-                    name="wallet-account"
-                    autoComplete="username"
-                    value="blip-user-wallet"
-                    readOnly
-                    aria-hidden="true"
-                    tabIndex={-1}
-                    className="absolute opacity-0 pointer-events-none h-0 w-0"
-                  />
-                  <div>
-                    <label htmlFor="wallet-unlock-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                      Password
-                    </label>
-                    <input
-                      id="wallet-unlock-password"
-                      name="wallet-unlock-password"
-                      type="password"
-                      autoComplete="current-password"
-                      maxLength={100}
-                      value={unlockPassword}
-                      onChange={(e) => setUnlockPassword(e.target.value)}
-                      placeholder="Enter your wallet password"
-                      autoFocus
-                      className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                 text-sm text-white font-mono placeholder:text-white/20
-                                 focus:outline-none focus:border-white/20 transition-colors"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={unlockLoading || !unlockPassword}
-                    className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
-                               hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                {/* Unlock UI branches on the format marker:
+                      - 'pin'  → PIN keypad (new wallets created via this page)
+                      - null   → legacy password input (existing free-form
+                                 wallets predating this change; they keep
+                                 working with their original password)
+                    The decision is purely a render-time choice — the
+                    underlying `unlockWallet(secret)` call is the same.
+                    Existing users see zero change. */}
+                {getWalletFormat(userId) === "pin" ? (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleUnlock(); }}
+                    autoComplete="off"
+                    className="space-y-4"
                   >
-                    {unlockLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Unlocking...
-                      </>
-                    ) : (
-                      <>
-                        <Unlock className="w-4 h-4" /> Unlock
-                      </>
-                    )}
-                  </button>
-                </form>
+                    <WalletPinKeypad
+                      value={unlockPassword}
+                      onChange={setUnlockPassword}
+                      label="Enter your 6-digit PIN"
+                      disabled={unlockLoading}
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      disabled={unlockLoading || unlockPassword.length !== 6}
+                      className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {unlockLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" /> Unlocking...
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-4 h-4" /> Unlock
+                        </>
+                      )}
+                    </button>
+                  </form>
+                ) : (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleUnlock(); }}
+                    autoComplete="off"
+                    className="space-y-4"
+                  >
+                    <input
+                      type="text"
+                      name="wallet-account"
+                      autoComplete="username"
+                      value="blip-user-wallet"
+                      readOnly
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      className="absolute opacity-0 pointer-events-none h-0 w-0"
+                    />
+                    <div>
+                      <label htmlFor="wallet-unlock-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                        Password
+                      </label>
+                      <input
+                        id="wallet-unlock-password"
+                        name="wallet-unlock-password"
+                        type="password"
+                        autoComplete="current-password"
+                        maxLength={100}
+                        value={unlockPassword}
+                        onChange={(e) => setUnlockPassword(e.target.value)}
+                        placeholder="Enter your wallet password"
+                        autoFocus
+                        className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
+                                   text-sm text-white font-mono placeholder:text-white/20
+                                   focus:outline-none focus:border-white/20 transition-colors"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={unlockLoading || !unlockPassword}
+                      className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {unlockLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" /> Unlocking...
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-4 h-4" /> Unlock
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )}
 
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => {
+                      // "Forgot PIN" recovery path: jump to the Import tab so
+                      // the user can paste their 12-word recovery phrase and
+                      // set a NEW PIN. Existing encrypted blob is replaced
+                      // when they complete import. The recovery phrase is
+                      // the only canonical "you own this wallet" proof —
+                      // account password alone is not enough since the PIN
+                      // controls funds directly.
                       embeddedWallet?.deleteWallet();
+                      clearWalletFormat(userId);
                       setSetupTab("import");
                     }}
                     className="text-[10px] text-white/40 hover:text-foreground/70 font-mono transition-colors flex items-center gap-1"
                   >
                     <Key className="w-3 h-3" />
-                    Import with private key
+                    {getWalletFormat(userId) === "pin"
+                      ? "Forgot PIN? Recover with phrase"
+                      : "Import with private key"}
                   </button>
                   <button
                     onClick={() => {
                       embeddedWallet?.deleteWallet();
+                      clearWalletFormat(userId);
                       setSetupTab("create");
                     }}
                     className="text-[10px] text-white/30 hover:text-foreground/50 font-mono transition-colors flex items-center gap-1"
