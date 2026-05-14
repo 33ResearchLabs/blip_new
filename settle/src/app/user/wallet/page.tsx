@@ -746,6 +746,7 @@ export default function UserWalletPage() {
                       label="Set a 6-digit PIN"
                       hint="This PIN unlocks your wallet and authorises Payments."
                       disabled={setupLoading}
+                      autoFocus
                     />
                     <WalletPinKeypad
                       value={confirmPassword}
@@ -965,73 +966,124 @@ export default function UserWalletPage() {
                   </div>
                 )}
 
-                <form
-                  onSubmit={(e) => { e.preventDefault(); handleUnlock(); }}
-                  autoComplete="off"
-                  className="space-y-4"
-                >
-                  <input
-                    type="text"
-                    name="wallet-account"
-                    autoComplete="username"
-                    value="blip-user-wallet"
-                    readOnly
-                    aria-hidden="true"
-                    tabIndex={-1}
-                    className="absolute opacity-0 pointer-events-none h-0 w-0"
-                  />
-                  <div>
-                    <label htmlFor="wallet-unlock-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                      Password
-                    </label>
-                    <input
-                      id="wallet-unlock-password"
-                      name="wallet-unlock-password"
-                      type="password"
-                      autoComplete="current-password"
-                      maxLength={100}
-                      value={unlockPassword}
-                      onChange={(e) => setUnlockPassword(e.target.value)}
-                      placeholder="Enter your wallet password"
-                      autoFocus
-                      className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                 text-sm text-white font-mono placeholder:text-white/20
-                                 focus:outline-none focus:border-white/20 transition-colors"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={unlockLoading || !unlockPassword}
-                    className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
-                               hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                {/* Unlock UI branches on the format marker:
+                      - 'pin'  → PIN keypad (new wallets created via this page)
+                      - null   → legacy password input (existing free-form
+                                 wallets predating this change; they keep
+                                 working with their original password)
+                    The decision is purely a render-time choice — the
+                    underlying `unlockWallet(secret)` call is the same.
+                    Existing users see zero change. */}
+                {getWalletFormat(userId) === "pin" ? (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleUnlock(); }}
+                    autoComplete="off"
+                    className="space-y-4"
                   >
-                    {unlockLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Unlocking...
-                      </>
-                    ) : (
-                      <>
-                        <Unlock className="w-4 h-4" /> Unlock
-                      </>
-                    )}
-                  </button>
-                </form>
+                    <WalletPinKeypad
+                      value={unlockPassword}
+                      onChange={setUnlockPassword}
+                      label="Enter your 6-digit PIN"
+                      disabled={unlockLoading}
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      disabled={unlockLoading || unlockPassword.length !== 6}
+                      className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {unlockLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" /> Unlocking...
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-4 h-4" /> Unlock
+                        </>
+                      )}
+                    </button>
+                  </form>
+                ) : (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleUnlock(); }}
+                    autoComplete="off"
+                    className="space-y-4"
+                  >
+                    <input
+                      type="text"
+                      name="wallet-account"
+                      autoComplete="username"
+                      value="blip-user-wallet"
+                      readOnly
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      className="absolute opacity-0 pointer-events-none h-0 w-0"
+                    />
+                    <div>
+                      <label htmlFor="wallet-unlock-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                        Password
+                      </label>
+                      <input
+                        id="wallet-unlock-password"
+                        name="wallet-unlock-password"
+                        type="password"
+                        autoComplete="current-password"
+                        maxLength={100}
+                        value={unlockPassword}
+                        onChange={(e) => setUnlockPassword(e.target.value)}
+                        placeholder="Enter your wallet password"
+                        autoFocus
+                        className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
+                                   text-sm text-white font-mono placeholder:text-white/20
+                                   focus:outline-none focus:border-white/20 transition-colors"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={unlockLoading || !unlockPassword}
+                      className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {unlockLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" /> Unlocking...
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-4 h-4" /> Unlock
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )}
 
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => {
+                      // "Forgot PIN" recovery path: jump to the Import tab so
+                      // the user can paste their 12-word recovery phrase and
+                      // set a NEW PIN. Existing encrypted blob is replaced
+                      // when they complete import. The recovery phrase is
+                      // the only canonical "you own this wallet" proof —
+                      // account password alone is not enough since the PIN
+                      // controls funds directly.
                       embeddedWallet?.deleteWallet();
+                      clearWalletFormat(userId);
                       setSetupTab("import");
                     }}
                     className="text-[10px] text-white/40 hover:text-foreground/70 font-mono transition-colors flex items-center gap-1"
                   >
                     <Key className="w-3 h-3" />
-                    Import with private key
+                    {getWalletFormat(userId) === "pin"
+                      ? "Forgot PIN? Recover with phrase"
+                      : "Import with private key"}
                   </button>
                   <button
                     onClick={() => {
                       embeddedWallet?.deleteWallet();
+                      clearWalletFormat(userId);
                       setSetupTab("create");
                     }}
                     className="text-[10px] text-white/30 hover:text-foreground/50 font-mono transition-colors flex items-center gap-1"

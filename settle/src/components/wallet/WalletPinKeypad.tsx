@@ -3,34 +3,45 @@
 /**
  * WalletPinKeypad
  * ───────────────
- * Controlled numeric keypad for the user-side wallet password.
+ * Controlled 6-digit PIN entry for the user-side wallet password.
  *
  * Background: as of the PIN unification, the user-facing wallet password
  * IS a 6-digit numeric PIN — the same secret unlocks the wallet AND
  * authorises payments. (Merchants keep free-form passwords; this component
  * is user-side only.)
  *
- * The component is a controlled input — the parent owns the value and the
- * keypad just provides the entry UI. That keeps it a drop-in replacement
- * for the previous `<input type="password" />` slot in Create / Import
- * forms without changing the submit handlers.
+ * UX model — OTP-style native keyboard:
+ *   - The visible UI is 6 dot/slot boxes that fill as the user types.
+ *   - Behind them sits an invisible `<input inputMode="numeric">` that
+ *     captures focus on tap. Mobile browsers pop the native numeric
+ *     keyboard, which is faster and matches `inputMode="numeric"` autofill
+ *     hints (one-time-code, SMS paste, etc).
+ *   - Desktop users can just type — the input is focused on mount.
+ *
+ * Why no custom on-screen pad: previous revision rendered an always-
+ * visible 3×4 numeric grid. That added a lot of vertical real estate AND
+ * blocked native autofill paths (banks' "paste OTP" buttons, password
+ * managers). The hidden-input approach is the standard OTP pattern.
  *
  * `validatePasswordStrength` in `lib/wallet/embeddedWallet.ts` already
- * accepts 4-6 digit numeric strings as valid wallet passwords, so the
- * pre-existing submit path works unchanged with a 6-digit PIN.
+ * accepts 4-6 digit numeric strings, so submit handlers don't change.
  */
 
-import { Delete } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 interface Props {
   value: string;
   onChange: (next: string) => void;
   /** Small label above the dots row. Defaults to "PIN". */
   label?: string;
-  /** Optional helper text below the keypad. */
+  /** Optional helper text below the slots. */
   hint?: string;
   /** Disable input while a submit is in flight. */
   disabled?: boolean;
+  /** Auto-focus on mount. Defaults to false so two stacked keypads
+   *  (Set + Confirm) don't fight for focus. Parent sets true on the
+   *  first one. */
+  autoFocus?: boolean;
 }
 
 const PIN_LENGTH = 6;
@@ -41,74 +52,85 @@ export function WalletPinKeypad({
   label = "PIN",
   hint,
   disabled,
+  autoFocus,
 }: Props) {
-  const push = (digit: string) => {
-    if (disabled) return;
-    if (value.length >= PIN_LENGTH) return;
-    onChange(value + digit);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Auto-focus on mount when requested. iOS Safari sometimes needs an
+  // explicit re-focus after the dots become tappable, so we run it on
+  // mount AND on the first non-disabled render.
+  useEffect(() => {
+    if (autoFocus && !disabled && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [autoFocus, disabled]);
+
+  // Strip everything that isn't a digit and clamp to 6. Handles paste of
+  // codes with spaces / dashes (e.g. "12 34 56") and oversize pastes.
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cleaned = e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH);
+    onChange(cleaned);
   };
-  const pop = () => {
+
+  // Tap anywhere on the dots row → focus the hidden input → keyboard pops.
+  const focusInput = () => {
     if (disabled) return;
-    onChange(value.slice(0, -1));
+    inputRef.current?.focus();
   };
 
   return (
-    <div className="space-y-3">
-      <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider">
-        {label}
-      </p>
+    <div className="space-y-2">
+      {label && (
+        <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider">
+          {label}
+        </p>
+      )}
 
-      {/* 6 dots — filled as the user types. */}
-      <div className="flex items-center justify-center gap-3 py-2">
+      {/* Tap target: 6 slots, fills as user types. The whole row is one
+          button-like surface that forwards focus to the hidden input. */}
+      <button
+        type="button"
+        onClick={focusInput}
+        disabled={disabled}
+        className="relative w-full flex items-center justify-center gap-3 py-4 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.18] focus-within:border-primary/50 disabled:opacity-50 transition-colors cursor-text"
+        aria-label={label}
+      >
         {Array.from({ length: PIN_LENGTH }).map((_, i) => {
           const filled = i < value.length;
           return (
             <div
               key={i}
               className={`rounded-full transition-all ${
-                filled ? "bg-primary" : "border-2 border-white/15"
+                filled ? "bg-primary scale-100" : "border-2 border-white/20 scale-90"
               }`}
-              style={{ width: 12, height: 12 }}
+              style={{ width: 14, height: 14 }}
             />
           );
         })}
-      </div>
 
-      {/* Numeric grid */}
-      <div className="grid grid-cols-3 gap-2 max-w-[280px] mx-auto">
-        {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-          <button
-            key={d}
-            type="button"
-            disabled={disabled}
-            onClick={() => push(d)}
-            className="py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-[20px] font-semibold text-white disabled:opacity-40 transition-colors"
-          >
-            {d}
-          </button>
-        ))}
-        <div />
-        <button
-          type="button"
+        {/* Hidden input that owns the value and triggers the native
+            numeric keyboard on tap. `inputMode="numeric"` is what pops
+            the digit-only keyboard on iOS / Android; `type="tel"` is a
+            belt-and-braces fallback for older browsers that ignore
+            inputMode. `autoComplete="one-time-code"` lets iOS suggest
+            SMS codes (handy when this is reused for OTP entry later). */}
+        <input
+          ref={inputRef}
+          type="tel"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9]*"
+          maxLength={PIN_LENGTH}
+          value={value}
+          onChange={handleInput}
           disabled={disabled}
-          onClick={() => push("0")}
-          className="py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-[20px] font-semibold text-white disabled:opacity-40 transition-colors"
-        >
-          0
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={pop}
-          aria-label="Delete last digit"
-          className="py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] inline-flex items-center justify-center disabled:opacity-40 transition-colors"
-        >
-          <Delete className="w-4 h-4 text-white/80" />
-        </button>
-      </div>
+          className="absolute inset-0 w-full h-full opacity-0 cursor-text"
+          aria-hidden="false"
+        />
+      </button>
 
       {hint && (
-        <p className="text-[10px] text-white/40 font-mono text-center">{hint}</p>
+        <p className="text-[10px] text-white/40 font-mono">{hint}</p>
       )}
     </div>
   );
