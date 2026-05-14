@@ -73,7 +73,11 @@ export function PushPermissionPrompt({ authed }: Props) {
       const readyReg = await navigator.serviceWorker.ready;
       const sub = await (reg.pushManager || readyReg.pushManager).subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        // TS lib.dom narrows `BufferSource` to ArrayBufferView<ArrayBuffer>;
+        // `new Uint8Array(n)` infers ArrayBufferLike under strict generics,
+        // which won't satisfy that constraint. The allocation is ArrayBuffer-
+        // backed at runtime, so the cast is safe.
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
       });
       const raw = sub.toJSON();
       await fetchWithAuth("/api/user/push/subscribe", {
