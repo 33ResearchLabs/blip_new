@@ -45,5 +45,5 @@ export declare function atomicCancelWithRefund(orderId: string, currentStatus: s
     crypto_currency: string;
     fiat_amount: number;
     fiat_currency: string;
-}): Promise<AtomicCancelResult>;
+}, refundTxHash?: string): Promise<AtomicCancelResult>;
 //# sourceMappingURL=atomicCancel.d.ts.map

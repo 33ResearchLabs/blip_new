@@ -205,11 +205,12 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       actor_id: string;
       reason?: string;
       acceptor_wallet_address?: string;
+      refund_tx_hash?: string;
       metadata?: Record<string, unknown>;
     };
   }>('/orders/:id', async (request, reply) => {
     const { id } = request.params;
-    const { status: newStatus, actor_type, actor_id, reason, acceptor_wallet_address } = request.body;
+    const { status: newStatus, actor_type, actor_id, reason, acceptor_wallet_address, refund_tx_hash } = request.body;
 
     if (!newStatus || !actor_type || !actor_id) {
       return reply.status(400).send({
@@ -252,6 +253,17 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(404).send({ success: false, error: 'Order not found' });
         }
         if (order.escrow_tx_hash) {
+          // The caller MUST have signed + submitted the on-chain
+          // cancelTrade/refundEscrow first and forwarded the tx hash here.
+          // Without it the DB would mark the order cancelled while the PDA
+          // still holds the funds.
+          if (!refund_tx_hash) {
+            return reply.status(400).send({
+              success: false,
+              error: 'refund_tx_hash is required to cancel an order with on-chain escrow. Sign the on-chain refund first.',
+              code: 'REFUND_TX_HASH_REQUIRED',
+            });
+          }
           const cancelResult = await atomicCancelWithRefund(
             id, order.status, actor_type, actor_id, reason,
             {
@@ -263,7 +275,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
               crypto_currency: order.crypto_currency,
               fiat_amount: parseFloat(String(order.fiat_amount)),
               fiat_currency: order.fiat_currency,
-            }
+            },
+            refund_tx_hash
           );
           if (!cancelResult.success) {
             return reply.status(400).send({ success: false, error: cancelResult.error });
@@ -891,55 +904,17 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         if (order.escrow_tx_hash) {
-          // Atomic cancel with refund
-          const result = await atomicCancelWithRefund(
-            id,
-            order.status,
-            actor_type as ActorType,
-            actor_id,
-            reason || undefined,
-            {
-              type: order.type as 'buy' | 'sell',
-              crypto_amount: parseFloat(String(order.crypto_amount)),
-              merchant_id: order.merchant_id,
-              user_id: order.user_id,
-              buyer_merchant_id: order.buyer_merchant_id,
-              order_number: parseInt(order.order_number, 10),
-              crypto_currency: order.crypto_currency,
-              fiat_amount: parseFloat(String(order.fiat_amount)),
-              fiat_currency: order.fiat_currency,
-            }
-          );
-
-          if (!result.success) {
-            return { statusCode: 400, body: { success: false, error: result.error } };
-          }
-
-          try {
-            await verifyRefundInvariants({
-              orderId: id,
-              expectedStatus: 'cancelled',
-              expectedMinOrderVersion: order.order_version + 1,
-            });
-          } catch (invariantError) {
-            logger.error('[CRITICAL] Refund invariant FAILED (DELETE)', { orderId: id, error: invariantError });
-            return { statusCode: 500, body: { success: false, error: 'ORDER_REFUND_INVARIANT_FAILED' } };
-          }
-
-          await insertOutboxEventDirect({
-            event: ORDER_EVENT.CANCELLED,
-            orderId: id, previousStatus: order.status, newStatus: 'cancelled',
-            actorType: actor_type, actorId: actor_id,
-            userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined,
-            order: result.order as unknown as Record<string, unknown>,
-            orderVersion: result.order!.order_version, minimalStatus: 'cancelled',
-            refundTxHash: result.order?.refund_tx_hash ?? undefined,
-          });
-          syncReceiptTransition(id, 'CANCELLED', { refundTxHash: result.order?.refund_tx_hash ?? null });
-
+          // DELETE is the non-escrow cancel path. Escrowed orders must go
+          // through PATCH /orders/:id (status='cancelled', refund_tx_hash=…)
+          // so the caller is forced to sign the on-chain refund first. If we
+          // ran atomicCancelWithRefund here it would strand on-chain funds.
           return {
-            statusCode: 200,
-            body: { success: true, data: { ...result.order, minimal_status: normalizeStatus(result.order!.status) } },
+            statusCode: 400,
+            body: {
+              success: false,
+              error: 'This order has on-chain escrow. Cancel via PATCH /orders/:id with refund_tx_hash after signing the on-chain refund.',
+              code: 'USE_PATCH_FOR_ESCROW_CANCEL',
+            },
           };
         } else {
           // Simple cancel via state machine
@@ -1167,6 +1142,12 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           };
         });
       } else if (event_type === 'refund') {
+        // On-chain refund tx hash is mandatory: this endpoint records the
+        // result of a signed cancelTrade/refundEscrow. Without it we'd be
+        // marking the order cancelled with no proof the funds returned.
+        if (!tx_hash) {
+          return reply.status(400).send({ success: false, error: 'tx_hash required for refund' });
+        }
         // Refund needs pre-read for atomicCancelWithRefund
         const order = await queryOne<OrderRow>('SELECT * FROM orders WHERE id = $1', [id]);
         if (!order) {
@@ -1188,7 +1169,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             crypto_currency: order.crypto_currency,
             fiat_amount: parseFloat(String(order.fiat_amount)),
             fiat_currency: order.fiat_currency,
-          }
+          },
+          tx_hash
         );
 
         if (!refundResult.success) {

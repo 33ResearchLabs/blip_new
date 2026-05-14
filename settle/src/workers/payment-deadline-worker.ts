@@ -255,16 +255,22 @@ async function processPendingExpiries(): Promise<void> {
 
 async function processEscrowExpiries(): Promise<void> {
   try {
-    // Find escrowed orders past their expires_at
+    // Find escrowed orders past their expires_at. We need escrow_creator_wallet
+    // + escrow_trade_id to drive the backend on-chain refund (cancelTrade) —
+    // without those columns we can only DB-mark the order, which would strand
+    // the on-chain funds. Such orders fall through to processStuckOnChainEscrows.
     const { query } = await import('@/lib/db');
     const expiredRows = await query<{
       id: string; status: string; user_id: string; merchant_id: string;
       buyer_merchant_id: string | null; order_number: number;
       crypto_amount: number; crypto_currency: string;
       fiat_amount: number; fiat_currency: string; type: string;
+      escrow_tx_hash: string | null; escrow_creator_wallet: string | null;
+      escrow_trade_id: number | null;
     }>(
       `SELECT id, status, user_id, merchant_id, buyer_merchant_id,
-              order_number, crypto_amount, crypto_currency, fiat_amount, fiat_currency, type
+              order_number, crypto_amount, crypto_currency, fiat_amount, fiat_currency, type,
+              escrow_tx_hash, escrow_creator_wallet, escrow_trade_id
        FROM orders
        WHERE status = 'escrowed'
          AND expires_at IS NOT NULL
@@ -279,6 +285,35 @@ async function processEscrowExpiries(): Promise<void> {
 
     for (const order of expiredRows) {
       try {
+        // Sign + submit the on-chain refund BEFORE touching the DB.
+        // atomicCancelWithRefund now requires refundTxHash whenever the
+        // order has escrow_tx_hash — otherwise it would silently strand
+        // funds in the on-chain PDA.
+        let refundTxHash: string | undefined;
+        if (order.escrow_tx_hash) {
+          if (!order.escrow_creator_wallet || order.escrow_trade_id == null) {
+            logger.warn('[EscrowExpiry] Missing on-chain refund inputs; skipping (will retry next tick)', {
+              orderId: order.id,
+              hasCreator: !!order.escrow_creator_wallet,
+              hasTradeId: order.escrow_trade_id != null,
+            });
+            continue;
+          }
+          const { refundEscrowFromBackend } = await import('@/lib/solana/backendRefund');
+          const onChain = await refundEscrowFromBackend(
+            order.escrow_creator_wallet,
+            order.escrow_trade_id
+          );
+          if (!onChain.success || !onChain.txHash) {
+            logger.error('[EscrowExpiry] On-chain refund failed; leaving order in escrowed so worker retries', {
+              orderId: order.id,
+              error: onChain.error,
+            });
+            continue;
+          }
+          refundTxHash = onChain.txHash;
+        }
+
         const result = await atomicCancelWithRefund(
           order.id,
           order.status,
@@ -295,7 +330,8 @@ async function processEscrowExpiries(): Promise<void> {
             crypto_currency: order.crypto_currency,
             fiat_amount: order.fiat_amount,
             fiat_currency: order.fiat_currency,
-          }
+          },
+          refundTxHash
         );
 
         if (result.success) {
@@ -345,9 +381,12 @@ async function processDisputeAutoResolve(): Promise<void> {
       buyer_merchant_id: string | null; order_number: number;
       crypto_amount: number; crypto_currency: string;
       fiat_amount: number; fiat_currency: string; type: string;
+      escrow_tx_hash: string | null; escrow_creator_wallet: string | null;
+      escrow_trade_id: number | null;
     }>(
       `SELECT id, status, user_id, merchant_id, buyer_merchant_id,
-              order_number, crypto_amount, crypto_currency, fiat_amount, fiat_currency, type
+              order_number, crypto_amount, crypto_currency, fiat_amount, fiat_currency, type,
+              escrow_tx_hash, escrow_creator_wallet, escrow_trade_id
        FROM orders
        WHERE status = 'disputed'
          AND dispute_auto_resolve_at IS NOT NULL
@@ -362,6 +401,32 @@ async function processDisputeAutoResolve(): Promise<void> {
 
     for (const order of expiredDisputes) {
       try {
+        // Same constraint as processEscrowExpiries: sign on-chain refund
+        // first, then update DB. atomicCancelWithRefund refuses to cancel
+        // an order with escrow_tx_hash unless we pass refundTxHash.
+        let refundTxHash: string | undefined;
+        if (order.escrow_tx_hash) {
+          if (!order.escrow_creator_wallet || order.escrow_trade_id == null) {
+            logger.warn('[DisputeAutoResolve] Missing on-chain refund inputs; skipping (will retry next tick)', {
+              orderId: order.id,
+            });
+            continue;
+          }
+          const { refundEscrowFromBackend } = await import('@/lib/solana/backendRefund');
+          const onChain = await refundEscrowFromBackend(
+            order.escrow_creator_wallet,
+            order.escrow_trade_id
+          );
+          if (!onChain.success || !onChain.txHash) {
+            logger.error('[DisputeAutoResolve] On-chain refund failed; leaving order in disputed so worker retries', {
+              orderId: order.id,
+              error: onChain.error,
+            });
+            continue;
+          }
+          refundTxHash = onChain.txHash;
+        }
+
         const result = await atomicCancelWithRefund(
           order.id,
           order.status,
@@ -378,7 +443,8 @@ async function processDisputeAutoResolve(): Promise<void> {
             crypto_currency: order.crypto_currency,
             fiat_amount: order.fiat_amount,
             fiat_currency: order.fiat_currency,
-          }
+          },
+          refundTxHash
         );
 
         if (result.success) {
@@ -430,6 +496,12 @@ async function processStuckOnChainEscrows(): Promise<void> {
     // that just failed get skipped until refund_retry_after passes — this
     // stops a single chronically-failing row from burning the whole batch
     // every 30s. See migration 107.
+    // Historic bug: this worker was the only path that ever recorded an
+    // on-chain refund, but it wrote into release_tx_hash. release = funds
+    // to buyer (happy path); refund = funds back to seller. We now record
+    // into refund_tx_hash, and the SELECT looks at BOTH columns to catch
+    // legacy rows where the refund signature was misfiled into
+    // release_tx_hash so we don't re-refund them.
     const stuckOrders = await query<{
       id: string; order_number: string; status: string;
       escrow_creator_wallet: string; escrow_trade_id: string;
@@ -439,6 +511,7 @@ async function processStuckOnChainEscrows(): Promise<void> {
        FROM orders
        WHERE status IN ('expired', 'cancelled', 'disputed')
          AND escrow_tx_hash IS NOT NULL
+         AND refund_tx_hash IS NULL
          AND release_tx_hash IS NULL
          AND escrow_creator_wallet IS NOT NULL
          AND escrow_trade_id IS NOT NULL
@@ -485,10 +558,11 @@ async function processStuckOnChainEscrows(): Promise<void> {
               [`resolved:${result.txHash}`, order.id]
             );
           } else {
-            // Normal success path — record the real tx hash + clear retry state.
+            // Normal success path — record into refund_tx_hash (NOT
+            // release_tx_hash; that's the buyer-receives column).
             await query(
               `UPDATE orders
-               SET release_tx_hash = $1,
+               SET refund_tx_hash = $1,
                    refund_retry_after = NULL,
                    refund_last_error = NULL
                WHERE id = $2`,

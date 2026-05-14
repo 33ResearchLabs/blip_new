@@ -448,6 +448,7 @@ export async function PATCH(
               actor_id,
               reason,
               acceptor_wallet_address,
+              refund_tx_hash,
             },
             // Forward the SAME key — core-api requires it for these
             // status transitions (payment_sent / cancel_order /
@@ -477,7 +478,7 @@ export async function PATCH(
     // Non-financial transitions: forward directly without idempotency
     const response = await proxyCoreApi(`/v1/orders/${id}`, {
       method: "PATCH",
-      body: { status, actor_type, actor_id, reason, acceptor_wallet_address },
+      body: { status, actor_type, actor_id, reason, acceptor_wallet_address, refund_tx_hash },
     });
     __mark('proxy_core_api');
 

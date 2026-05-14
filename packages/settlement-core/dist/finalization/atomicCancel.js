@@ -33,7 +33,13 @@ import { validateTransition } from '../state-machine/stateMachine';
  *
  * All in a SINGLE database transaction to prevent money printer bugs.
  */
-export async function atomicCancelWithRefund(orderId, currentStatus, actorType, actorId, reason, orderData) {
+export async function atomicCancelWithRefund(orderId, currentStatus, actorType, actorId, reason, orderData, 
+// On-chain refund signature. REQUIRED when the order has escrow_tx_hash —
+// callers must sign + submit the on-chain cancelTrade/refundEscrow FIRST,
+// then pass the resulting signature here. Without it the DB would mark the
+// order cancelled while the on-chain PDA still holds the funds (the
+// "phantom refund" bug).
+refundTxHash) {
     // Validate transition
     const validation = validateTransition(currentStatus, 'cancelled', actorType);
     if (!validation.valid) {
@@ -60,6 +66,14 @@ export async function atomicCancelWithRefund(orderId, currentStatus, actorType, 
             }
             const amount = parseFloat(String(lockedOrder.crypto_amount));
             const hadEscrow = !!lockedOrder.escrow_tx_hash;
+            // Phantom-refund guard: if on-chain escrow exists, the caller MUST
+            // have already signed + submitted the on-chain refund and passed its
+            // signature in `refundTxHash`. Without it, we'd flip the order to
+            // 'cancelled' while the on-chain PDA still holds the funds.
+            // MOCK_MODE bypasses this since there is no on-chain transaction.
+            if (hadEscrow && !MOCK_MODE && !refundTxHash) {
+                throw new Error('REFUND_TX_HASH_REQUIRED');
+            }
             // Refund escrow if present (MOCK_MODE only)
             if (MOCK_MODE && hadEscrow) {
                 const isBuyOrder = lockedOrder.type === 'buy';
@@ -84,17 +98,20 @@ export async function atomicCancelWithRefund(orderId, currentStatus, actorType, 
                     table: refundTable,
                 });
             }
-            // Update order status with version + previous status guard
+            // Update order status with version + previous status guard.
+            // refund_tx_hash is set when the caller provided the on-chain refund
+            // signature (mandatory for escrowed orders per the guard above).
             const updateResult = await client.query(`UPDATE orders
          SET status = 'cancelled',
              cancelled_at = NOW(),
              cancelled_by = $1,
              cancellation_reason = $2,
+             refund_tx_hash = COALESCE($6, refund_tx_hash),
              order_version = order_version + 1
          WHERE id = $3
            AND order_version = $4
            AND status = $5::order_status
-         RETURNING *`, [actorType, reason || 'Cancelled by ' + actorType, orderId, lockedOrder.order_version, lockedOrder.status]);
+         RETURNING *`, [actorType, reason || 'Cancelled by ' + actorType, orderId, lockedOrder.order_version, lockedOrder.status, refundTxHash ?? null]);
             if (updateResult.rows.length === 0) {
                 throw new Error('STATUS_CHANGED_INVALID_TRANSITION');
             }
@@ -113,6 +130,16 @@ export async function atomicCancelWithRefund(orderId, currentStatus, actorType, 
                     atomic_cancellation: true,
                 }),
             ]);
+            // Void any pending scratch-card reward tied to this order (migration 124).
+            // voided_at != NULL excludes the row from claimable totals and any
+            // future withdrawal path. Reason derived from cancel-reason string.
+            const reasonStr = String(reason || '').toLowerCase();
+            const voidReason = reasonStr.includes('expired') ? 'order_expired'
+                : reasonStr.includes('dispute') ? 'dispute_refund'
+                    : 'order_cancelled';
+            await client.query(`UPDATE user_rewards
+            SET voided_at = NOW(), voided_reason = $2
+          WHERE order_id = $1 AND voided_at IS NULL`, [orderId, voidReason]);
             // Create notification_outbox record
             await client.query(`INSERT INTO notification_outbox (event_type, order_id, payload)
          VALUES ($1, $2, $3)`, [

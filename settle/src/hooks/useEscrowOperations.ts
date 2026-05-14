@@ -855,6 +855,16 @@ export function useEscrowOperations({
   const cancelOrderWithoutEscrow = useCallback((orderId: string) => {
     if (!merchantId) return;
 
+    // If the order has on-chain escrow, the seller must sign an on-chain
+    // refund first — bounce to the escrow cancel modal instead of taking
+    // the plain DELETE path (which the backend now rejects for escrowed
+    // orders to prevent phantom refunds).
+    const fullOrder = useMerchantStore.getState().orders.find(o => o.id === orderId);
+    if (fullOrder?.escrowTxHash || fullOrder?.dbOrder?.escrow_tx_hash) {
+      openCancelModal(fullOrder);
+      return;
+    }
+
     showConfirm('Cancel Order', 'Cancel this order? This action cannot be undone.', async () => {
       setCancellingOrderId(orderId);
       try {

@@ -58,7 +58,13 @@ export async function atomicCancelWithRefund(
     crypto_currency: string;
     fiat_amount: number;
     fiat_currency: string;
-  }
+  },
+  // On-chain refund signature. REQUIRED when the order has escrow_tx_hash —
+  // callers must sign + submit the on-chain cancelTrade/refundEscrow FIRST,
+  // then pass the resulting signature here. Without it the DB would mark the
+  // order cancelled while the on-chain PDA still holds the funds (the
+  // "phantom refund" bug).
+  refundTxHash?: string
 ): Promise<AtomicCancelResult> {
   // Validate transition
   const validation = validateTransition(currentStatus as any, 'cancelled', actorType);
@@ -100,6 +106,15 @@ export async function atomicCancelWithRefund(
       const amount = parseFloat(String(lockedOrder.crypto_amount));
       const hadEscrow = !!lockedOrder.escrow_tx_hash;
 
+      // Phantom-refund guard: if on-chain escrow exists, the caller MUST
+      // have already signed + submitted the on-chain refund and passed its
+      // signature in `refundTxHash`. Without it, we'd flip the order to
+      // 'cancelled' while the on-chain PDA still holds the funds.
+      // MOCK_MODE bypasses this since there is no on-chain transaction.
+      if (hadEscrow && !MOCK_MODE && !refundTxHash) {
+        throw new Error('REFUND_TX_HASH_REQUIRED');
+      }
+
       // Refund escrow if present (MOCK_MODE only)
       if (MOCK_MODE && hadEscrow) {
         const isBuyOrder = lockedOrder.type === 'buy';
@@ -130,19 +145,22 @@ export async function atomicCancelWithRefund(
         });
       }
 
-      // Update order status with version + previous status guard
+      // Update order status with version + previous status guard.
+      // refund_tx_hash is set when the caller provided the on-chain refund
+      // signature (mandatory for escrowed orders per the guard above).
       const updateResult = await client.query(
         `UPDATE orders
          SET status = 'cancelled',
              cancelled_at = NOW(),
              cancelled_by = $1,
              cancellation_reason = $2,
+             refund_tx_hash = COALESCE($6, refund_tx_hash),
              order_version = order_version + 1
          WHERE id = $3
            AND order_version = $4
            AND status = $5::order_status
          RETURNING *`,
-        [actorType, reason || 'Cancelled by ' + actorType, orderId, lockedOrder.order_version, lockedOrder.status]
+        [actorType, reason || 'Cancelled by ' + actorType, orderId, lockedOrder.order_version, lockedOrder.status, refundTxHash ?? null]
       );
 
       if (updateResult.rows.length === 0) {
