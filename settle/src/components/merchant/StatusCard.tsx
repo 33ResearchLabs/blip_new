@@ -496,9 +496,25 @@ export const StatusCard = memo(function StatusCard({
               <div className="text-4xl font-black text-foreground/30 font-mono tabular-nums tracking-tight leading-none">
                 ••••
               </div>
-              <div className="text-[11px] text-foreground/30 font-mono mt-1">
-                Unlock to view balance
-              </div>
+              {/* Real Unlock button — matches mobile MobileHomeView's
+                  affordance instead of the bare "Unlock to view balance"
+                  text we had before. Reuses onAddWallet (the existing
+                  "go to wallet page" handler) since the unlock password
+                  prompt lives on that page. */}
+              {onAddWallet ? (
+                <button
+                  type="button"
+                  onClick={onAddWallet}
+                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/[0.12] border border-primary/30 text-[11px] font-bold text-primary font-mono hover:bg-primary/[0.18] transition-colors"
+                >
+                  <Lock className="w-3 h-3" />
+                  Unlock Wallet
+                </button>
+              ) : (
+                <div className="text-[11px] text-foreground/30 font-mono mt-1">
+                  Unlock to view balance
+                </div>
+              )}
             </>
           ) : walletStatus === 'none' ? (
             <>
