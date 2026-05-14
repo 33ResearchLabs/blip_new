@@ -542,6 +542,16 @@ export const StatusCard = memo(function StatusCard({
           )}
         </div>
 
+        {/* Wallet address row — matches the mobile home card.
+            Truncated address with copy-on-tap, SOL balance chip, and
+            a QR-icon shortcut that opens the Deposit modal. Mounted
+            inline (just below the balance) instead of as a separate
+            panel so the wallet UI on desktop reads like the mobile
+            version. */}
+        {walletStatus === 'ok' && (
+          <WalletAddressRow onOpenDeposit={onOpenDeposit} />
+        )}
+
         {/* Quick actions — Swap / Send / Deposit. Mirrors the mobile
             home card so desktop merchants don't have to drill into a
             separate wallet page for everyday transfers. */}
@@ -1024,3 +1034,62 @@ export const StatusCard = memo(function StatusCard({
     </div>
   );
 });
+
+/**
+ * Inline wallet-address row used inside StatusCard. Reads the connected
+ * wallet from useSolanaWallet(), so callers only have to pass an
+ * onOpenDeposit handler.
+ *
+ *   {ABCDE…1234}  copy   · 0.0123 SOL   [QR]
+ *
+ * Mirrors the same affordance from MobileHomeView for visual parity
+ * between desktop and mobile wallet cards.
+ */
+import { Copy as CopyIcon, Check as CheckIcon, QrCode as QrCodeIcon } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
+import { useSolanaWallet } from "@/context/SolanaWalletContext";
+
+function WalletAddressRow({ onOpenDeposit }: { onOpenDeposit?: () => void }) {
+  const solanaWallet = useSolanaWallet();
+  const address = solanaWallet?.walletAddress ?? null;
+  const solBalance = solanaWallet?.solBalance ?? null;
+  const [copied, setCopied] = useState(false);
+  if (!address) return null;
+  return (
+    <div className="mt-2.5 flex items-center justify-center gap-2 relative z-10">
+      <button
+        onClick={async () => {
+          await copyToClipboard(address);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1400);
+        }}
+        className="flex items-center gap-1.5 text-foreground/40 hover:text-foreground/70 transition-colors"
+        aria-label="Copy wallet address"
+      >
+        <span className="text-[11px] font-mono tabular-nums">
+          {address.slice(0, 6)}…{address.slice(-4)}
+        </span>
+        {copied ? (
+          <CheckIcon className="w-3 h-3 text-emerald-400" />
+        ) : (
+          <CopyIcon className="w-3 h-3" />
+        )}
+      </button>
+      {solBalance !== null && (
+        <span className="text-[11px] text-foreground/30 font-mono tabular-nums">
+          · {solBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} SOL
+        </span>
+      )}
+      {onOpenDeposit && (
+        <button
+          onClick={onOpenDeposit}
+          className="p-1 rounded-md text-foreground/40 hover:text-foreground/70 hover:bg-foreground/[0.04] transition-colors"
+          aria-label="Show deposit QR"
+          title="Show deposit QR"
+        >
+          <QrCodeIcon className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
