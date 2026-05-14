@@ -55,6 +55,9 @@ export interface HomeScreenProps {
     fiatInr: number;
     cryptoUsdt: number;
     note: string;
+    /** INR amount asserted by the scanned QR (audit F-3). Null when the
+     *  QR did not specify an amount. */
+    qrAmount: number | null;
   }) => void;
   setActiveOrderId: (id: string) => void;
   setPendingTradeData: (data: { amount: string; fiatAmount: string; type: "buy" | "sell"; paymentMethod: "bank" | "cash" } | null) => void;

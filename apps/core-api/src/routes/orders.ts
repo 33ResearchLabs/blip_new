@@ -812,9 +812,12 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           syncReceiptTransition(id, 'PAYMENT_SENT');
         } else if (s === 'completed') {
           syncReceiptTransition(id, 'COMPLETED');
-          // Grant scratch-card reward to the SELL user. 20-50 bps of
-          // crypto_amount, randomized. ON CONFLICT keeps this idempotent
-          // if the completion handler ever re-fires.
+          // Scratch-card reward unlock on SELL completion. The QR/UPI flow
+          // pre-grants a pending row at order creation (orderCreate.ts) so
+          // this UPSERT only flips claimable_at for that existing row.
+          // Non-QR sell paths land in the INSERT branch and get a fully-
+          // claimable row in one shot. ON CONFLICT keeps it idempotent if
+          // the completion handler re-fires.
           if (result.order.type === 'sell' && result.order.user_id) {
             const order = result.order as { user_id: string; crypto_amount: string | number };
             void (async () => {
@@ -825,13 +828,14 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
                 const amount = +(cryptoAmt * bps / 10_000).toFixed(6);
                 if (amount <= 0) return;
                 await dbQuery(
-                  `INSERT INTO user_rewards (user_id, order_id, amount_usdt, reward_bps, reason)
-                   VALUES ($1, $2, $3, $4, 'sell_completed')
-                   ON CONFLICT (order_id) DO NOTHING`,
+                  `INSERT INTO user_rewards (user_id, order_id, amount_usdt, reward_bps, reason, claimable_at)
+                   VALUES ($1, $2, $3, $4, 'sell_completed', NOW())
+                   ON CONFLICT (order_id) DO UPDATE
+                     SET claimable_at = COALESCE(user_rewards.claimable_at, NOW())`,
                   [order.user_id, id, amount, bps],
                 );
               } catch (e) {
-                fastify.log.warn({ err: e, id }, 'Reward grant failed (non-fatal)');
+                fastify.log.warn({ err: e, id }, 'Reward unlock failed (non-fatal)');
               }
             })();
           }

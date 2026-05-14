@@ -457,15 +457,17 @@ function buildTimers(order: OrderForEnrichment): EnrichedOrderResponse['timers']
   };
 }
 
+// Consumer-friendly labels. Kept in sync with getStatusBadgeConfig() in
+// statusResolver.ts — both must agree because they both feed user-facing UI.
 const STATUS_LABELS: Record<MinimalOrderStatus, string> = {
-  open: 'OPEN',
-  accepted: 'ACCEPTED',
-  escrowed: 'ESCROWED',
-  payment_sent: 'PAYMENT SENT',
-  completed: 'COMPLETED',
-  cancelled: 'CANCELLED',
-  expired: 'EXPIRED',
-  disputed: 'DISPUTED',
+  open: 'Looking for a payer',
+  accepted: 'Payer found',
+  escrowed: 'Waiting for payment',
+  payment_sent: 'Payment on the way',
+  completed: 'Done',
+  cancelled: 'Cancelled',
+  expired: 'Timed out',
+  disputed: 'Under review',
 };
 
 /**

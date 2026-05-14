@@ -495,7 +495,15 @@ export function useUserTradeCreation({
       // UPI scan-to-pay metadata (set by UpiPayScreen → page.tsx before
       // jumping to the escrow screen). Cleared after read so subsequent
       // non-UPI trades don't carry stale values.
-      let upiMeta: { vpa: string; payeeName: string; fiatInr: number; note: string; at: number } | null = null;
+      let upiMeta: {
+        vpa: string;
+        payeeName: string;
+        fiatInr: number;
+        // Audit F-3: the QR's own asserted INR (null if QR didn't specify).
+        qrAmount?: number | null;
+        note: string;
+        at: number;
+      } | null = null;
       try {
         const raw = sessionStorage.getItem('blip_pending_upi_payment');
         if (raw) {
@@ -524,6 +532,10 @@ export function useUserTradeCreation({
         upi_vpa: upiMeta?.vpa,
         upi_payee_name: upiMeta?.payeeName,
         upi_fiat_inr: upiMeta?.fiatInr,
+        // Audit F-3: persist the QR's asserted amount alongside the user-typed
+        // amount so we can later flag mismatches. Send `undefined` (omitted)
+        // for legacy entries without qrAmount; server treats absent = NULL.
+        upi_qr_amount: upiMeta?.qrAmount ?? undefined,
       };
       // Don't clear sessionStorage yet — only after a successful POST below,
       // so an orphan-recovery retry still has the same UPI metadata.

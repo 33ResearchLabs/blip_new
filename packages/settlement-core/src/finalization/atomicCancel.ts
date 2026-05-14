@@ -169,6 +169,20 @@ export async function atomicCancelWithRefund(
         ]
       );
 
+      // Void any pending scratch-card reward tied to this order (migration 124).
+      // voided_at != NULL excludes the row from claimable totals and any
+      // future withdrawal path. Reason derived from cancel-reason string.
+      const reasonStr = String(reason || '').toLowerCase();
+      const voidReason = reasonStr.includes('expired') ? 'order_expired'
+        : reasonStr.includes('dispute') ? 'dispute_refund'
+        : 'order_cancelled';
+      await client.query(
+        `UPDATE user_rewards
+            SET voided_at = NOW(), voided_reason = $2
+          WHERE order_id = $1 AND voided_at IS NULL`,
+        [orderId, voidReason]
+      );
+
       // Create notification_outbox record
       await client.query(
         `INSERT INTO notification_outbox (event_type, order_id, payload)

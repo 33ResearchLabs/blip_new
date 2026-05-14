@@ -22,6 +22,8 @@ interface RewardLite {
   id: string;
   amount_usdt: number;
   reward_bps: number;
+  /** NULL when reward is still pending (trade not yet completed). */
+  claimable_at?: string | null;
 }
 
 interface Props {
@@ -35,8 +37,8 @@ interface Props {
 
 export function ScratchRewardModal({ open, reward: rewardProp, onClose, onDone }: Props) {
   const [reward, setReward] = useState<RewardLite | null>(rewardProp ?? null);
-  const [totalUsdt, setTotalUsdt] = useState<number | null>(null);
-  const [count, setCount] = useState<number | null>(null);
+  const [claimableTotal, setClaimableTotal] = useState<number | null>(null);
+  const [pendingTotal, setPendingTotal] = useState<number | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -55,17 +57,20 @@ export function ScratchRewardModal({ open, reward: rewardProp, onClose, onDone }
         if (cancelled) return;
         const data = d?.data;
         if (data) {
-          setTotalUsdt(Number(data.total_usdt || 0));
-          setCount(Number(data.count || 0));
+          setClaimableTotal(Number(data.claimable_total_usdt ?? data.total_usdt ?? 0));
+          setPendingTotal(Number(data.pending_total_usdt ?? 0));
           if (!rewardProp) {
+            // Prefer an unrevealed *non-voided* row; pending or claimable both fine.
             const latestUnrevealed = (data.recent || []).find(
-              (r: { revealed_at: string | null }) => !r.revealed_at,
+              (r: { revealed_at: string | null; voided_at: string | null }) =>
+                !r.revealed_at && !r.voided_at,
             );
             if (latestUnrevealed) {
               setReward({
                 id: latestUnrevealed.id,
                 amount_usdt: Number(latestUnrevealed.amount_usdt),
                 reward_bps: Number(latestUnrevealed.reward_bps),
+                claimable_at: latestUnrevealed.claimable_at ?? null,
               });
             }
           }
@@ -171,7 +176,7 @@ export function ScratchRewardModal({ open, reward: rewardProp, onClose, onDone }
             <div className="mx-auto max-w-[420px] px-5 py-5 pb-[max(env(safe-area-inset-bottom,16px),16px)]">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-text-tertiary">
-                  Payment Complete
+                  Reward unlocked
                 </p>
                 <button onClick={onClose} className="p-1.5 rounded-full hover:bg-surface-hover">
                   <X className="w-4 h-4 text-text-tertiary" />
@@ -180,7 +185,7 @@ export function ScratchRewardModal({ open, reward: rewardProp, onClose, onDone }
 
               <div className="mt-2 text-center">
                 <Sparkles className="w-7 h-7 text-accent inline-block" />
-                <p className="mt-2 text-[20px] font-bold tracking-[-0.02em]">You earned a reward</p>
+                <p className="mt-2 text-[20px] font-bold tracking-[-0.02em]">A little something for you</p>
                 <p className="text-[12px] text-text-tertiary">Scratch the card to reveal</p>
               </div>
 
@@ -223,19 +228,37 @@ export function ScratchRewardModal({ open, reward: rewardProp, onClose, onDone }
                 </button>
               )}
 
-              {/* Running total */}
-              <div className="mt-4 rounded-2xl p-4 bg-surface-card border border-border-subtle">
-                <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-text-tertiary">
-                  Total rewards earned
-                </p>
-                <p className="mt-1 text-[22px] font-bold tracking-[-0.02em]">
-                  {totalUsdt === null ? "—" : `${totalUsdt.toFixed(4)} USDT`}
-                  {count !== null && count > 0 && (
-                    <span className="ml-2 text-[12px] font-medium text-text-tertiary">
-                      across {count} trade{count === 1 ? "" : "s"}
-                    </span>
-                  )}
-                </p>
+              {/* Pending banner — only shown once the user has revealed and
+                  the reward is still in pending state (claimable_at == null). */}
+              {revealed && reward && !reward.claimable_at && (
+                <div className="mt-3 inline-flex items-start gap-2 w-full rounded-xl px-3 py-2.5 text-[12px] bg-yellow-500/10 border border-yellow-500/30 text-yellow-200">
+                  <span aria-hidden>🔒</span>
+                  <span className="leading-snug">
+                    Will be credited to your wallet once the payment lands.
+                  </span>
+                </div>
+              )}
+
+              {/* Pending vs ready-to-use split */}
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="rounded-2xl p-3 bg-surface-card border border-border-subtle">
+                  <p className="text-[9px] font-bold tracking-[0.2em] uppercase text-text-tertiary">
+                    Pending
+                  </p>
+                  <p className="mt-1 text-[16px] font-bold tracking-[-0.02em]">
+                    {pendingTotal === null ? "—" : `${pendingTotal.toFixed(4)} USDT`}
+                  </p>
+                  <p className="text-[10px] text-text-tertiary mt-0.5">unlocks when trade completes</p>
+                </div>
+                <div className="rounded-2xl p-3 bg-surface-card border border-border-subtle">
+                  <p className="text-[9px] font-bold tracking-[0.2em] uppercase text-text-tertiary">
+                    Ready to use
+                  </p>
+                  <p className="mt-1 text-[16px] font-bold tracking-[-0.02em]">
+                    {claimableTotal === null ? "—" : `${claimableTotal.toFixed(4)} USDT`}
+                  </p>
+                  <p className="text-[10px] text-text-tertiary mt-0.5">claimable now</p>
+                </div>
               </div>
 
               <motion.button
@@ -243,7 +266,7 @@ export function ScratchRewardModal({ open, reward: rewardProp, onClose, onDone }
                 onClick={onDone}
                 className="mt-4 w-full py-3.5 rounded-xl text-sm font-bold tracking-[-0.01em] bg-accent text-accent-text inline-flex items-center justify-center gap-2"
               >
-                Back to wallet
+                Got it
                 <ArrowRight className="w-4 h-4" />
               </motion.button>
             </div>

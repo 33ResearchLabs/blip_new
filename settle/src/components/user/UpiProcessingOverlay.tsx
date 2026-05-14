@@ -40,12 +40,12 @@ export function UpiProcessingOverlay({ open, stage, title, subtitle, onDone }: P
 
   const headline =
     title ??
-    (stage === "processing" ? "Processing payment…" : "Request created");
+    (stage === "processing" ? "Setting up your payment…" : "You're all set");
   const subline =
     subtitle ??
     (stage === "processing"
-      ? "Locking USDT in escrow — don't close this screen"
-      : "A merchant will pay your UPI shortly");
+      ? "Securing your request…"
+      : "All set. Your payer will send the money shortly.");
 
   return (
     <AnimatePresence>
