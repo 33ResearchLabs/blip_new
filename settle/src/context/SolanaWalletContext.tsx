@@ -133,7 +133,19 @@ interface SolanaWalletContextType {
   // Balance
   solBalance: number | null;
   usdtBalance: number | null;
+  /** USDC balance — optional; only populated by providers that fetch it.
+   *  Defensive consumers (SwapModal / SendModal callers) read with `?.` so
+   *  a missing field is treated as "not tracked" rather than 0. */
+  usdcBalance?: number | null;
   refreshBalances: () => Promise<void>;
+
+  /** Raw Solana transaction signer. Optional on the public type: most
+   *  consumers go through higher-level helpers (lockEscrow, depositToEscrow,
+   *  etc.) which call this internally. Exposed here for components that
+   *  build their own transactions (e.g. Swap / Send modals). When the
+   *  underlying adapter doesn't provide it, the property is absent and
+   *  callers should fall back gracefully (`?.signTransaction ?? null`). */
+  signTransaction?: <T>(tx: T) => Promise<T>;
 
   // Lane operations (corridors)
   createCorridor: (params: {

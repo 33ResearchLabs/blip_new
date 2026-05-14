@@ -355,7 +355,11 @@ export function MobileHomeView({
                       disabled={!available}
                       onClick={() => {
                         if (!available) return;
-                        onCorridorChange(c.id);
+                        // onCorridorChange is declared optional on the prop
+                        // type — outer wrapper at line ~293 already guards
+                        // its render, but TS still requires the call to be
+                        // optional-chained.
+                        onCorridorChange?.(c.id);
                         setCorridorPickerOpen(false);
                         setCorridorSearch("");
                       }}
