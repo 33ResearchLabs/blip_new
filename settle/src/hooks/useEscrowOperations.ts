@@ -812,29 +812,54 @@ export function useEscrowOperations({
       if (refundResult.success) {
         dispatch({ type: 'SET_TX_HASH', op: 'cancel', txHash: refundResult.txHash });
 
-        // status=cancelled is a financial transition — backend rejects
-        // without Idempotency-Key (see PATCH /api/orders/[id] handler).
-        // Anchor to the on-chain refund tx so a network-retried PATCH
-        // collapses on the backend instead of attempting a second cancel
-        // (which would 4xx on the state guard but produces a noisier UX
-        // than a clean cached replay).
-        await fetchWithAuth(`/api/orders/${cancelOrder.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': txAnchoredKey(refundResult.txHash, 'cancel_with_refund'),
-          },
-          body: JSON.stringify({
-            status: 'cancelled',
-            actor_type: 'merchant',
-            actor_id: merchantId,
-            refund_tx_hash: refundResult.txHash,
-          }),
-        });
+        // Two server paths depending on the current DB status:
+        //
+        //   `escrowed` (still active)      → PATCH to flip status='cancelled'
+        //                                     and persist refund_tx_hash.
+        //   `expired` / `cancelled` already → DO NOT try to flip status; the
+        //                                     state machine rejects terminal
+        //                                     → terminal transitions with
+        //                                     "No further actions allowed".
+        //                                     Just record the on-chain refund
+        //                                     via the /escrow event_type=refund
+        //                                     endpoint so refund_tx_hash lands.
+        const dbStatus = cancelOrder.dbOrder?.status ?? cancelOrder.status;
+        const isAlreadyTerminal = dbStatus === 'expired' || dbStatus === 'cancelled';
+
+        if (isAlreadyTerminal) {
+          await fetchWithAuth(`/api/orders/${cancelOrder.id}/escrow`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Idempotency-Key': txAnchoredKey(refundResult.txHash, 'escrow_refund_event'),
+            },
+            body: JSON.stringify({
+              event_type: 'refund',
+              tx_hash: refundResult.txHash,
+              actor_type: 'merchant',
+              actor_id: merchantId,
+              reason: 'Seller withdrew expired escrow',
+            }),
+          });
+        } else {
+          await fetchWithAuth(`/api/orders/${cancelOrder.id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Idempotency-Key': txAnchoredKey(refundResult.txHash, 'cancel_with_refund'),
+            },
+            body: JSON.stringify({
+              status: 'cancelled',
+              actor_type: 'merchant',
+              actor_id: merchantId,
+              refund_tx_hash: refundResult.txHash,
+            }),
+          });
+        }
 
         playSound('click');
-        addNotification('system', `Escrow cancelled. ${cancelOrder.amount} USDT returned to your balance.`, cancelOrder.id);
-        await afterMutationReconcile(cancelOrder.id, { status: "cancelled" as const });
+        addNotification('system', `Escrow refunded. ${cancelOrder.amount} USDT returned to your wallet.`, cancelOrder.id);
+        await afterMutationReconcile(cancelOrder.id, { status: 'cancelled' as const });
       } else {
         dispatch({ type: 'SET_ERROR', op: 'cancel', error: refundResult.error || 'Failed to refund escrow' });
         playSound('error');
