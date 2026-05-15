@@ -16,6 +16,7 @@ import React, {
   useRef,
   ReactNode,
 } from 'react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import type {
   ActorType,
   MessageType,
@@ -253,19 +254,33 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
 
     // Mint a fresh ticket for every connect attempt. Tickets are single-use
     // by design — replays after a network blip MUST get a new ticket.
+    //
+    // Use `fetchWithAuth` so a 401 here transparently triggers the silent
+    // refresh-then-retry path the rest of the app uses. Without that, an
+    // expired access cookie sent the ticket fetch into an endless retry
+    // loop (no refresh, no force-logout, just reconnect every backoff
+    // interval) instead of recovering or failing fast.
     let ticket: string | null = null;
     try {
-      const res = await fetch('/api/ws/ticket', {
+      const res = await fetchWithAuth('/api/ws/ticket', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       });
       if (!res.ok) {
         console.warn('[WebSocket] Ticket request failed:', res.status);
-        // 401 → auth cookie expired; user needs a real re-login. We let the
-        // existing reconnection backoff handle this; the next attempt may
-        // succeed if a refresh interceptor rotated the cookie in the
-        // meantime.
+        // 401/403 after fetchWithAuth means the session is genuinely
+        // dead — its silent refresh already tried, failed, and (for this
+        // path, which is NOT in NO_FORCED_LOGOUT_PATHS) triggered
+        // forceLogoutAndRedirect(). The page is about to navigate to
+        // /merchant/login. Stop scheduling reconnects so we don't spam
+        // the console during the redirect window. Transient errors
+        // (5xx, 429, network blips) fall through to the original retry
+        // path so behavior for healthy sessions is unchanged.
+        if (res.status === 401 || res.status === 403) {
+          setConnectionState('failed');
+          return;
+        }
         setConnectionState(retryCountRef.current >= MAX_RETRIES ? 'failed' : 'reconnecting');
         scheduleReconnect();
         return;
