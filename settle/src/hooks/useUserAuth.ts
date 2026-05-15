@@ -238,9 +238,8 @@ export function useUserAuth({
         setUnverifiedUserId(null);
         setScreen('home');
       } else if (data.code === 'EMAIL_NOT_VERIFIED') {
-        // Same pattern useDashboardAuth uses on the merchant side: surface
-        // the sentinel string as the error and stash the user id so the
-        // login screen can render a "Resend verification email" button.
+        // Surface the sentinel so the login screen pops the
+        // "Email not verified" modal with a resend button.
         setLoginError('EMAIL_NOT_VERIFIED');
         setUnverifiedUserId(data.userId || null);
       } else {

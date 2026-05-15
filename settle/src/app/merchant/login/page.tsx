@@ -56,13 +56,13 @@ export default function MerchantLoginPage() {
         !auth.registerForm.confirmPassword);
 
   return (
-    <div className="w-full mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden h-dvh">
+    <div className="w-full mx-auto flex flex-col bg-surface-base text-text-primary relative min-h-dvh">
       {/* Ambient background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] md:w-[700px] h-[300px] md:h-[500px] bg-warning/[0.05] rounded-full blur-[120px]" />
       </div>
 
-      <div className="flex h-full flex-col items-center px-5 py-4 relative z-10">
+      <div className="flex min-h-dvh flex-col items-center px-5 py-4 relative z-10">
         <div className="w-full max-w-[440px] flex-1 flex flex-col self-stretch mx-auto">
           {/* Top bar */}
           <div className="flex items-center justify-between mb-3 gap-2">

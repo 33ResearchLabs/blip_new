@@ -409,7 +409,7 @@ export function LandingPage({
 
   return (
     <motion.div
-      className="w-full mx-auto flex flex-col bg-surface-base text-text-primary relative overflow-hidden h-dvh touch-pan-y"
+      className="w-full mx-auto flex flex-col bg-surface-base text-text-primary relative min-h-dvh touch-pan-y"
       drag="x"
       dragDirectionLock
       dragConstraints={{ left: 0, right: 0 }}
@@ -848,6 +848,52 @@ export function LandingPage({
 
         </div>
       </div>
+
+      {loginError === 'EMAIL_NOT_VERIFIED' && (
+        <div className="fixed inset-0 z-[200] bg-black text-white flex flex-col px-6 py-8">
+          <button
+            onClick={() => setLoginError('')}
+            className="self-start inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-white/80 bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            Back
+          </button>
+
+          <div className="flex-1 flex flex-col justify-center max-w-[420px] w-full mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-warning/15 border border-warning/20 flex items-center justify-center mb-5">
+              <Mail className="w-6 h-6 text-warning" />
+            </div>
+            <h1 className="text-[26px] font-semibold tracking-[-0.02em] leading-tight">
+              Email not verified
+            </h1>
+            <p className="mt-2 text-[14px] text-white/60 leading-relaxed">
+              Verify your email before signing in.
+              {loginForm.email && (
+                <> We&apos;ll resend the link to{' '}
+                  <span className="font-semibold text-white break-all">{loginForm.email.trim()}</span>.
+                </>
+              )}
+            </p>
+
+            {onResendVerification && (
+              <button
+                type="button"
+                onClick={onResendVerification}
+                disabled={isResendingVerification}
+                className="mt-8 w-full py-3.5 rounded-xl text-sm font-bold bg-white text-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isResendingVerification ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>
+                ) : 'Resend verification email'}
+              </button>
+            )}
+
+            <p className="mt-4 text-[11px] text-white/40 text-center">
+              Didn&apos;t get it? Check spam. Links expire after 24 hours.
+            </p>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

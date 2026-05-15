@@ -177,12 +177,16 @@ if (dbUrl) {
   console.log(`[startup] Connected DB: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${process.env.DB_NAME || 'settle'}`);
 }
 
-try {
-  await runPendingMigrations();
-  await validateSchema();
-} catch (err) {
-  console.error('[FATAL] Startup pre-flight failed:', err);
-  process.exit(1);
+if (process.env.SKIP_PREFLIGHT !== '1') {
+  try {
+    await runPendingMigrations();
+    await validateSchema();
+  } catch (err) {
+    console.error('[FATAL] Startup pre-flight failed:', err);
+    process.exit(1);
+  }
+} else {
+  console.warn('[startup] SKIP_PREFLIGHT=1 — bypassing runPendingMigrations + validateSchema (local dev only)');
 }
 
 // Start server

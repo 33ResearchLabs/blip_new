@@ -184,6 +184,8 @@ export function useDashboardAuth({
         }
       } else {
         if (data.code === 'EMAIL_NOT_VERIFIED') {
+          // Surface the sentinel so the login screen pops the
+          // "Email not verified" modal with a resend button.
           setLoginError('EMAIL_NOT_VERIFIED');
           setUnverifiedMerchantId(data.merchantId || null);
         } else if (res.status === 401) {
