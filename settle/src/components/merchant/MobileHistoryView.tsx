@@ -116,14 +116,18 @@ export function MobileHistoryView({
           onClick={() => setHistoryTab('completed')}
           className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
             historyTab === 'completed'
-              ? 'bg-white/10 text-white'
+              ? 'bg-foreground text-background shadow'
               : 'text-foreground/35'
           }`}
         >
           <Check className="w-3.5 h-3.5" />
-          Done
+          Complete
           {completedOrders.length > 0 && (
-            <span className="px-1.5 py-0.5 bg-white/10 text-white text-[10px] rounded-full">
+            <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${
+              historyTab === 'completed'
+                ? 'bg-background/15 text-background'
+                : 'bg-white/10 text-white'
+            }`}>
               {completedOrders.length}
             </span>
           )}
@@ -132,7 +136,7 @@ export function MobileHistoryView({
           onClick={() => setHistoryTab('cancelled')}
           className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
             historyTab === 'cancelled'
-              ? 'bg-red-500/20 text-red-400'
+              ? 'bg-foreground text-background shadow'
               : 'text-foreground/35'
           }`}
         >
@@ -143,7 +147,7 @@ export function MobileHistoryView({
           onClick={() => setHistoryTab('stats')}
           className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
             historyTab === 'stats'
-              ? 'bg-white/10 text-white'
+              ? 'bg-foreground text-background shadow'
               : 'text-foreground/35'
           }`}
         >

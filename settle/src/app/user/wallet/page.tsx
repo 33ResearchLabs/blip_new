@@ -761,7 +761,7 @@ export default function UserWalletPage() {
                     <button
                       type="submit"
                       disabled={setupLoading}
-                      className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
                                  hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {setupLoading ? (
@@ -840,7 +840,7 @@ export default function UserWalletPage() {
                     <button
                       type="submit"
                       disabled={setupLoading}
-                      className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
                                  hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {setupLoading ? (
@@ -927,7 +927,7 @@ export default function UserWalletPage() {
                   className={`w-full py-3.5 rounded-xl font-bold font-mono text-sm flex items-center justify-center gap-2 transition-colors ${
                     backupDownloaded
                       ? "bg-green-500/20 border border-green-500/30 text-green-400"
-                      : "bg-primary text-white hover:bg-primary/90"
+                      : "bg-primary text-background hover:bg-primary/90"
                   }`}
                 >
                   {backupDownloaded ? (
@@ -1007,7 +1007,7 @@ export default function UserWalletPage() {
                     <button
                       type="submit"
                       disabled={unlockLoading || unlockPassword.length !== 6}
-                      className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
                                  hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {unlockLoading ? (
@@ -1060,7 +1060,7 @@ export default function UserWalletPage() {
                     <button
                       type="submit"
                       disabled={unlockLoading || !unlockPassword}
-                      className="w-full py-3.5 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
                                  hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {unlockLoading ? (
@@ -1449,7 +1449,7 @@ export default function UserWalletPage() {
                 <button
                   onClick={handleSend}
                   disabled={isSending}
-                  className="w-full py-3 rounded-xl bg-primary text-white font-bold font-mono text-sm
+                  className="w-full py-3 rounded-xl bg-primary text-background font-bold font-mono text-sm
                              hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isSending ? (

@@ -76,7 +76,7 @@ export default function UserVerifyEmailPage() {
             <p className="text-foreground/50 text-sm">{message}</p>
             <Link
               href="/"
-              className="inline-block w-full py-3 rounded-xl text-sm font-bold bg-primary text-white hover:bg-primary/90 transition-colors"
+              className="inline-block w-full py-3 rounded-xl text-sm font-bold bg-primary text-background hover:bg-primary/90 transition-colors"
             >
               Sign In
             </Link>

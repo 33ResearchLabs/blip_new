@@ -53,23 +53,27 @@ export const viewport: Viewport = {
   themeColor: "#0a0a0a",
 };
 
-// Script to prevent theme flash - runs before React hydrates
+// Script to prevent theme flash - runs before React hydrates.
+// Defaults to 'mono' when no theme is saved so first-time visitors don't
+// flash the legacy orange :root palette before React's effect mounts.
 const themeScript = `
   (function() {
     try {
-      var theme = localStorage.getItem('theme');
+      var saved = localStorage.getItem('theme');
       var lightThemes = ['light', 'clean'];
       var bgMap = {
         light: '#FDF6E3', clean: '#FFFFFF', navy: '#0B1120',
-        emerald: '#050705', orchid: '#1A1A2E', gold: '#1C1C1C', dark: '#060606'
+        emerald: '#050705', orchid: '#1A1A2E', gold: '#1C1C1C',
+        dark: '#060606', mono: '#060606'
       };
-      if (theme && theme !== 'dark') {
+      var theme = saved || 'mono';
+      if (theme !== 'dark') {
         document.documentElement.setAttribute('data-theme', theme);
         if (lightThemes.indexOf(theme) !== -1) {
           document.documentElement.classList.add('light');
         }
       }
-      var bg = bgMap[theme || 'dark'] || '#060606';
+      var bg = bgMap[theme] || '#060606';
       document.documentElement.style.backgroundColor = bg;
     } catch (e) {}
   })();

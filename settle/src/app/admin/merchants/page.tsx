@@ -472,7 +472,7 @@ export default function MerchantsPage() {
                 <Upload className="w-3.5 h-3.5" />
                 Export
               </button>
-              <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-foreground text-[12px] font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20">
+              <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-background text-[12px] font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20">
                 <Plus className="w-3.5 h-3.5" />
                 Add Merchant
               </button>
@@ -847,7 +847,7 @@ function Pagination({
             onClick={() => onChange(p)}
             className={`w-7 h-7 rounded-md text-[11px] font-medium transition-colors ${
               p === page
-                ? "bg-primary text-foreground shadow-sm shadow-primary/20"
+                ? "bg-primary text-background shadow-sm shadow-primary/20"
                 : "border border-border bg-card text-foreground/60 hover:bg-accent-subtle"
             }`}
           >

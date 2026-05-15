@@ -505,7 +505,7 @@ export default function AccessControlPage() {
           {/* Add User — focuses search to find a merchant to grant */}
           <button
             onClick={() => searchInputRef.current?.focus()}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-bold bg-primary text-background hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20"
           >
             <Plus className="w-3.5 h-3.5" />
             Add User
@@ -604,7 +604,7 @@ export default function AccessControlPage() {
                     onClick={() => setPage(p)}
                     className={`w-8 h-8 flex items-center justify-center rounded-lg text-[12px] font-mono font-medium transition-colors ${
                       p === page
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-primary text-background"
                         : "bg-card border border-border text-foreground/60 hover:bg-accent-subtle hover:text-foreground"
                     }`}
                   >

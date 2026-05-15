@@ -353,7 +353,7 @@ export default function MerchantSettingsPage({
   // identity is the cookie's signed token, not anything the client wrote.
   useEffect(() => {
     if (!merchantId && !isLoggedIn) {
-      router.push("/merchant");
+      router.replace("/merchant/login");
     }
   }, [merchantId, isLoggedIn, router]);
 
@@ -361,7 +361,7 @@ export default function MerchantSettingsPage({
   const fetchMerchant = useCallback(async () => {
     // Identity comes from the store (populated by useDashboardAuth's
     // /api/auth/me restore). When it's missing we just skip — the redirect
-    // effect above will bounce the user to /merchant.
+    // effect above will bounce the user to /merchant/login.
     const id = merchantId;
     if (!id) return;
 
@@ -1281,8 +1281,8 @@ export default function MerchantSettingsPage({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {/* Total Trades */}
                   <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                      <Activity className="w-4 h-4 text-primary" />
+                    <div className="w-10 h-10 rounded-lg bg-transparent flex items-center justify-center shrink-0">
+                      <Activity className="w-4 h-4 text-white" />
                     </div>
                     <div className="flex-1">
                       <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider mb-0.5">
@@ -1296,8 +1296,8 @@ export default function MerchantSettingsPage({
 
                   {/* Rating */}
                   <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                      <Star className="w-4 h-4 text-primary fill-primary" />
+                    <div className="w-10 h-10 rounded-lg bg-transparent flex items-center justify-center shrink-0">
+                      <Star className="w-4 h-4 text-white fill-white" />
                     </div>
                     <div className="flex-1">
                       <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider mb-0.5">
@@ -1323,8 +1323,8 @@ export default function MerchantSettingsPage({
 
                   {/* Status */}
                   <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                      <Activity className="w-4 h-4 text-primary" />
+                    <div className="w-10 h-10 rounded-lg bg-transparent flex items-center justify-center shrink-0">
+                      <Activity className="w-4 h-4 text-white" />
                     </div>
                     <div className="flex-1">
                       <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider mb-0.5">
@@ -3156,6 +3156,14 @@ const THEME_PREVIEWS: Record<
     sidebar: "#060606",
     card: "#0c0c0c",
     accent: "#F97316",
+    text: "#ffffff",
+    muted: "#525252",
+  },
+  mono: {
+    bg: "#000000",
+    sidebar: "#060606",
+    card: "#0c0c0c",
+    accent: "#FFFFFF",
     text: "#ffffff",
     muted: "#525252",
   },

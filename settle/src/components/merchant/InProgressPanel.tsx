@@ -413,7 +413,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                           onSelectOrder(order);
                         }
                       }}
-                      className={`w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] text-white font-bold transition-colors ${
+                      className={`w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] text-background font-bold transition-colors ${
                         isActionLoading
                           ? 'bg-primary/40 cursor-wait'
                           : 'bg-primary hover:bg-primary/80'
@@ -447,7 +447,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     <MessageSquare className="w-3 h-3" />
                     Chat
                     {order.unreadCount > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-white text-[8px] font-bold min-w-[16px] text-center">
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-background text-[8px] font-bold min-w-[16px] text-center">
                         {order.unreadCount}
                       </span>
                     )}
@@ -582,7 +582,7 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
                   onClick={() => setStatusFilter(f.value)}
                   className={`text-[9px] font-mono font-medium px-1.5 py-0.5 rounded-full border transition-colors ${
                     isActive
-                      ? 'bg-primary/15 border-primary/30 text-primary'
+                      ? 'bg-foreground text-background border-transparent shadow'
                       : 'bg-foreground/[0.02] border-foreground/[0.06] text-foreground/30 hover:text-foreground/50 hover:border-foreground/[0.10]'
                   }`}
                 >

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   TrendingUp,
@@ -50,9 +51,22 @@ function timeframeCutoffMs(tf: "7d" | "30d" | "all"): number {
 }
 
 export default function AnalyticsPage() {
+  const router = useRouter();
   const [timeframe, setTimeframe] = useState<"7d" | "30d" | "all">("7d");
   const [merchantInfo, setMerchantInfo] = useState<MerchantInfo | null>(null);
   const orders = useMerchantStore((s) => s.orders);
+  const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
+  const merchantId = useMerchantStore((s) => s.merchantId);
+  const isLoading = useMerchantStore((s) => s.isLoading);
+
+  // Auth gate. The analytics page reads orders from the in-memory store and
+  // merchant info from localStorage, so it does not naturally trip the
+  // fetchWithAuth 401 safety net. Send unauthenticated visitors straight to
+  // the canonical login URL instead of rendering empty state.
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isLoggedIn || !merchantId) router.replace("/merchant/login");
+  }, [isLoading, isLoggedIn, merchantId, router]);
 
   // Load merchant info from localStorage
   useEffect(() => {

@@ -180,7 +180,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                 <Bell className="w-3.5 h-3.5" />
                 Notifications
                 {unreadCount > 0 && (
-                  <span className="text-[9px] bg-primary text-white font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center shadow-sm shadow-primary/20">
+                  <span className="text-[9px] bg-primary text-background font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center shadow-sm shadow-primary/20">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}

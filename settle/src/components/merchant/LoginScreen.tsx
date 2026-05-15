@@ -204,22 +204,30 @@ export function LoginScreen({
             <div className="pointer-events-none absolute -inset-4  rounded-3xl blur-2xl" />
             <div className="relative bg-[#0C0C0E]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-7 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)]">
               {/* MERCHANT PORTAL pill + user switch */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="inline-flex items-center px-3 py-1 rounded-full border border-white/15">
-                  <span className="text-[10px] font-semibold tracking-[0.18em] text-white/70">
+              <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                <div className="inline-flex items-center px-3 py-1 rounded-full border border-white/15 shrink-0">
+                  <span className="text-[10px] font-semibold tracking-[0.18em] text-white/70 whitespace-nowrap">
                     MERCHANT PORTAL
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <InstallPWAButton app="merchant" />
                   <Link
                     href="/"
-                    className="text-[11px] font-semibold text-white/50 hover:text-white transition-colors"
+                    className="hidden sm:inline text-[11px] font-semibold text-white/50 hover:text-white transition-colors whitespace-nowrap"
                   >
                     Not a merchant? →
                   </Link>
                 </div>
               </div>
+              {/* Mobile-only "Not a merchant?" link — sits below the header so
+                  the Download button has room to render fully on narrow widths. */}
+              <Link
+                href="/"
+                className="sm:hidden block mb-3 text-[11px] font-semibold text-white/50 hover:text-white transition-colors"
+              >
+                Not a merchant? →
+              </Link>
 
               {pendingVerificationEmail ? (
                 <>

@@ -2,7 +2,7 @@
 
 import {
   Home,
-  Lock,
+  Activity,
   MessageCircle,
   Sparkles,
   History,
@@ -28,35 +28,30 @@ export function MobileBottomNav({
       id: 'home' as const,
       label: 'Home',
       icon: Home,
-      activeColor: 'text-primary',
       badge: 0,
     },
     {
       id: 'orders' as const,
       label: 'New Order',
       icon: Sparkles,
-      activeColor: 'text-primary',
       badge: pendingCount,
     },
     {
       id: 'escrow' as const,
       label: 'Active Order',
-      icon: Lock,
-      activeColor: 'text-primary',
+      icon: Activity,
       badge: ongoingCount,
     },
     {
       id: 'chat' as const,
       label: 'Chat',
       icon: MessageCircle,
-      activeColor: 'text-primary',
       badge: totalUnread,
     },
     {
       id: 'history' as const,
       label: 'History',
       icon: History,
-      activeColor: 'text-foreground/70',
       badge: 0,
     },
   ];
@@ -76,9 +71,9 @@ export function MobileBottomNav({
               }`}
             >
               <div className="relative">
-                <Icon className={`w-[22px] h-[22px] ${isActive ? tab.activeColor : 'text-foreground/30'}`} />
+                <Icon className={`w-[22px] h-[22px] ${isActive ? 'text-foreground' : 'text-foreground/30'}`} />
                 {tab.badge > 0 && (
-                  <span className="absolute -top-1 -right-1.5 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1.5 w-4 h-4 bg-primary text-background text-[10px] font-bold rounded-full flex items-center justify-center">
                     {tab.badge > 9 ? '9+' : tab.badge}
                   </span>
                 )}

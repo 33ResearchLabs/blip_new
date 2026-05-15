@@ -541,7 +541,7 @@ export function TradeFormModal({
                     className={`flex-[2] py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
                       submitDisabled
                         ? "bg-gray-600 text-foreground/40 cursor-not-allowed"
-                        : "bg-primary text-white hover:bg-primary/90"
+                        : "bg-primary text-background hover:bg-primary/90"
                     }`}
                   >
                     {isCreatingTrade ? (
