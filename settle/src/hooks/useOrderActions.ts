@@ -43,17 +43,18 @@ export function useOrderActions({
   // Sync merchant DB balance from Solana wallet after trade completion.
   // This ensures ledger entries have accurate balance_before/balance_after.
   const syncBalance = async () => {
-    if (!merchantId || !solanaWallet.usdtBalance) return;
+    if (!merchantId) return;
     try {
+      // Best-effort refresh of the client's view; the server fetches the
+      // authoritative ATA balance itself and writes it to merchants.balance.
+      // The number the client knows is no longer trusted — only used to
+      // trigger the server-side reconcile.
       await solanaWallet.refreshBalances();
-      const balance = solanaWallet.usdtBalance;
-      if (balance != null) {
-        await fetchWithAuth('/api/merchant/sync-balance', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ merchant_id: merchantId, balance }),
-        });
-      }
+      await fetchWithAuth('/api/merchant/sync-balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merchant_id: merchantId }),
+      });
     } catch {
       // Non-critical — balance will sync on next trade
     }

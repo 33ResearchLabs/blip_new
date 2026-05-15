@@ -166,44 +166,32 @@ export async function atomicCancelWithRefund(
 
           const refundTable = resolved.entityType === 'merchant' ? 'merchants' : 'users';
 
-          const balanceResult = await client.query(
-            `SELECT balance FROM ${refundTable} WHERE id = $1 FOR UPDATE`,
-            [resolved.entityId]
-          );
-
-          if (balanceResult.rows.length === 0) {
-            // Hard fail — was previously a soft log. Cancelling the order
-            // without the refund would leave the seller with no record of
-            // the lost balance.
-            throw new Error('REFUND_TARGET_NOT_FOUND');
-          }
-
-          const balanceBefore = parseFloat(String(balanceResult.rows[0].balance));
-
-          await client.query(
-            `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
-            [resolved.amount, resolved.entityId]
-          );
-
-          // Per-row balance invariant
-          const balanceCheck = await client.query(
+          // DB balance no longer mutates on refund — on-chain truth is the
+          // signed cancelTrade tx (refundTxHash above) which already moved
+          // the USDT back to the seller's wallet. The merchants/users
+          // balance column is now a cached snapshot of the on-chain ATA;
+          // it'll converge on the next /api/merchant/sync-balance call.
+          // Previously this block did `UPDATE … SET balance = balance + amt`
+          // which double-credited (chain returned funds AND DB credited too).
+          const balanceSnap = await client.query(
             `SELECT balance FROM ${refundTable} WHERE id = $1`,
             [resolved.entityId]
           );
-          const balanceAfter = parseFloat(String(balanceCheck.rows[0].balance));
-          const expectedBalance = balanceBefore + resolved.amount;
-          if (Math.abs(balanceAfter - expectedBalance) > 0.00000001) {
-            throw new Error(
-              `BALANCE_MISMATCH: refund balance ${balanceAfter} != expected ${expectedBalance}`
-            );
+          if (balanceSnap.rows.length === 0) {
+            throw new Error('REFUND_TARGET_NOT_FOUND');
           }
+          const balanceSnapshot = parseFloat(String(balanceSnap.rows[0].balance));
 
+          // Pure event log — records that a refund occurred for audit, but
+          // doesn't gate or mutate balance. balance_before/_after both
+          // hold the cached snapshot at the moment of cancel (not a
+          // before/after pair, since no DB mutation happened).
           await client.query(
             `INSERT INTO ledger_entries
              (account_type, account_id, entry_type, amount, asset,
               related_order_id, description, metadata,
               balance_before, balance_after)
-             VALUES ($1, $2, 'ESCROW_REFUND', $3, $4, $5, $6, $7, $8, $9)
+             VALUES ($1, $2, 'ESCROW_REFUND', $3, $4, $5, $6, $7, $8, $8)
              ON CONFLICT (related_order_id, entry_type, account_id)
                WHERE related_order_id IS NOT NULL
                  AND entry_type IN ('ESCROW_LOCK', 'ESCROW_RELEASE', 'ESCROW_REFUND', 'FEE')
@@ -220,9 +208,10 @@ export async function atomicCancelWithRefund(
                 target_source: resolved.kind,
                 target_rationale: resolved.rationale,
                 original_lock_at: lockedOrder.escrow_debited_at,
+                on_chain_refund_tx: refundTxHash,
+                db_balance_at_cancel: balanceSnapshot,
               }),
-              balanceBefore,
-              balanceAfter,
+              balanceSnapshot,
             ]
           );
 
@@ -260,14 +249,14 @@ export async function atomicCancelWithRefund(
             amount: resolved.amount,
           };
 
-          logger.info('[Atomic] Escrow balance refunded', {
+          logger.info('[Atomic] Escrow refunded on-chain; ledger event written (DB balance untouched)', {
             orderId,
             refundedTo: resolved.entityId,
             refundedType: resolved.entityType,
             amount: resolved.amount,
             source: resolved.kind,
-            balanceBefore,
-            balanceAfter,
+            onChainRefundTx: refundTxHash,
+            dbBalanceAtCancel: balanceSnapshot,
           });
         }
       }
