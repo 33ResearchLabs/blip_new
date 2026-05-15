@@ -1080,6 +1080,7 @@ export default function MerchantDashboard() {
         activeCorridor={activeCorridor}
         onCorridorChange={setActiveCorridor}
         totalUnread={totalUnread}
+        onOpenPaymentMethods={() => setShowPaymentMethods(true)}
       />
 
       {/* Mobile Notifications Overlay */}

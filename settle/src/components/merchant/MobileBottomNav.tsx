@@ -33,10 +33,17 @@ export function MobileBottomNav({
     },
     {
       id: 'orders' as const,
-      label: 'Active Trade',
+      label: 'New Order',
       icon: Sparkles,
       activeColor: 'text-primary',
       badge: pendingCount,
+    },
+    {
+      id: 'escrow' as const,
+      label: 'Active Order',
+      icon: Lock,
+      activeColor: 'text-primary',
+      badge: ongoingCount,
     },
     {
       id: 'chat' as const,
@@ -44,13 +51,6 @@ export function MobileBottomNav({
       icon: MessageCircle,
       activeColor: 'text-primary',
       badge: totalUnread,
-    },
-    {
-      id: 'escrow' as const,
-      label: 'Escrow',
-      icon: Lock,
-      activeColor: 'text-foreground/70',
-      badge: ongoingCount,
     },
     {
       id: 'history' as const,
