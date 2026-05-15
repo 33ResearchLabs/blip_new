@@ -104,6 +104,15 @@ export interface AssertWalletOwnershipInput {
   /** Which action is being signed — affects message format. */
   signatureAction?: 'Claim' | 'Confirm';
   /**
+   * The order's already-recorded acceptor wallet, when known. If the
+   * caller's supplied `walletAddress` matches this value, ownership is
+   * accepted — this is the wallet that was already vouched for at accept
+   * time. Closes the bug where Option A compared against the merchant's
+   * profile wallet (`merchants.wallet_address`), which is stale by design
+   * and unrelated to which wallet the user actually controls right now.
+   */
+  orderAcceptorWallet?: string | null;
+  /**
    * Historically forced strict at sensitive sites (escrow release) when the
    * env-var-controlled default was lax. Now that strict is the only mode,
    * this flag is a no-op kept for caller backward-compatibility — it does
@@ -132,7 +141,7 @@ export interface AssertWalletOwnershipInput {
 export async function assertWalletOwnership(
   input: AssertWalletOwnershipInput
 ): Promise<OwnershipVerification> {
-  const { auth, walletAddress, orderId, signature, signatureAction } = input;
+  const { auth, walletAddress, orderId, signature, signatureAction, orderAcceptorWallet } = input;
 
   // Empty/absent wallet: nothing to verify. Caller decides whether the
   // wallet was required at all.
@@ -140,9 +149,21 @@ export async function assertWalletOwnership(
     return { ok: true, source: 'no_check_needed' };
   }
 
+  // ── Option A (preferred): wallet matches the wallet ALREADY RECORDED
+  // on this order at accept time. That wallet was vouched for then; the
+  // user proving they still control it now (it's still the wallet they're
+  // signing with) is the strongest live signal we have. This is the
+  // correct source of truth — not the merchant's profile wallet column
+  // which is independent and frequently stale.
+  if (orderAcceptorWallet && walletEq(orderAcceptorWallet, walletAddress)) {
+    return { ok: true, source: 'auth_match' };
+  }
+
   const actorWallet = await getActorWallet(auth);
 
-  // ── Option A: wallet matches the actor's verified wallet on file ────
+  // ── Option A (fallback): wallet matches the actor's profile wallet.
+  // Useful for first-time actions on a fresh order where no acceptor
+  // wallet has been recorded yet.
   if (walletEq(actorWallet, walletAddress)) {
     return { ok: true, source: 'auth_match' };
   }

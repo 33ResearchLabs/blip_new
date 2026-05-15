@@ -194,12 +194,16 @@ export async function POST(
       const { assertWalletOwnership } = await import('@/lib/auth/walletOwnership');
       const sigAction: 'Claim' | 'Confirm' =
         action === 'CLAIM' || action === 'ACCEPT' ? 'Claim' : 'Confirm';
+      // Pass the order's already-recorded acceptor wallet (vouched for at
+      // accept time) so ownership can match on that — not just on the
+      // merchant's stale profile wallet column.
       const ownership = await assertWalletOwnership({
         auth,
         walletAddress: acceptor_wallet_address,
         orderId: id,
         signature: acceptor_wallet_signature ?? null,
         signatureAction: sigAction,
+        orderAcceptorWallet: order.acceptor_wallet_address ?? null,
       });
       if (!ownership.ok) {
         return forbiddenResponse(
