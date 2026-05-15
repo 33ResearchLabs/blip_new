@@ -28,6 +28,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
+import { formatCrypto, formatFiat, formatCount } from "@/lib/format";
 import {
   loadEncryptedWallet,
   decryptWallet,
@@ -43,6 +44,7 @@ import { SwapModal } from "@/components/merchant/SwapModal";
 import { DepositModal } from "@/components/merchant/DepositModal";
 import { SendModal } from "@/components/merchant/SendModal";
 import { WalletActionsMenu } from "@/components/merchant/WalletActionsMenu";
+import { MobilePaymentMethodChip } from "@/components/merchant/MobilePaymentMethodChip";
 
 interface MobileHomeViewProps {
   effectiveBalance: number | null;
@@ -180,9 +182,11 @@ export function MobileHomeView({
 
   // Recent Activity tab — Trades is the default so the panel doesn't
   // fire the on-chain fetch on first mount (the merchant's own trades
-  // are already in memory). TX is fetched lazily on first activation
-  // of the TX or All tab and then cached for the wallet — no refetch
-  // unless the address changes.
+  // are already in memory). The All tab is trades-only too — the raw
+  // on-chain signatures duplicate every trade (escrow lock / release /
+  // fee) and clutter the feed, so they're scoped to the dedicated TX
+  // tab. TX is fetched lazily on first activation of the TX tab and
+  // then cached for the wallet — no refetch unless the address changes.
   const [activityTab, setActivityTab] = useState<"all" | "trades" | "tx">("trades");
   interface OnChainTx {
     signature: string;
@@ -199,7 +203,7 @@ export function MobileHomeView({
   useEffect(() => {
     const addr = solanaWallet?.walletAddress;
     if (!addr) return;
-    if (activityTab !== "tx" && activityTab !== "all") return;
+    if (activityTab !== "tx") return;
     // Single-fetch cache: if we already loaded for this address, skip.
     if (onchainTxsFetchedForRef.current === addr) return;
     let cancelled = false;
@@ -556,6 +560,15 @@ export function MobileHomeView({
               </button>
             </div>
 
+            {/* Default payment method chip — shows current default with
+                a picker to switch, or an "Add payment method" CTA when
+                none is configured. Sits below the action grid so it's
+                the next thing the merchant sees after the balance &
+                trading actions. */}
+            <div className="mt-3">
+              <MobilePaymentMethodChip merchantId={merchantIdForWallet ?? null} />
+            </div>
+
             {/* INR Cash + My Rate — minimal inline row, no boxes. Each
                 "pill" is just a tap target with the value inline next to
                 the label. Separated by a subtle vertical hairline.
@@ -797,7 +810,7 @@ export function MobileHomeView({
               });
             }
           }
-          if (activityTab === "tx" || activityTab === "all") {
+          if (activityTab === "tx") {
             for (const t of (onchainTxs ?? []).slice(0, TX_LIMIT)) {
               items.push({
                 kind: "tx",
@@ -811,10 +824,10 @@ export function MobileHomeView({
             items.sort((a, b) => b.ts - a.ts);
           }
 
-          // Loading is only shown if we're on a TX-needing tab AND haven't
-          // resolved the fetch yet — Trades tab never blocks for RPC.
+          // Loading is only shown if we're on the TX tab AND haven't
+          // resolved the fetch yet — Trades/All tabs never block for RPC.
           const txFetchActive =
-            (activityTab === "tx" || activityTab === "all") && onchainTxsLoading && !onchainTxs;
+            activityTab === "tx" && onchainTxsLoading && !onchainTxs;
 
           return (
             <div className="space-y-2">
@@ -885,15 +898,15 @@ export function MobileHomeView({
                             {order.user}
                           </p>
                           <p className="text-[11px] text-foreground/40">
-                            {order.dbOrder?.order_number || `${order.amount} USDT`}
+                            {order.dbOrder?.order_number || `${formatCrypto(order.amount)} USDT`}
                           </p>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-bold text-foreground">
-                            {order.amount} USDT
+                            {formatCrypto(order.amount)} USDT
                             <span className="text-foreground/30 mx-1">→</span>
                             <span className="text-primary">
-                              {Math.round(order.total)} {activeCorridorMeta.fiat}
+                              {formatFiat(order.total, activeCorridorMeta.fiat)}
                             </span>
                           </p>
                           <p className={`text-[10px] font-medium ${statusColor}`}>
@@ -926,25 +939,35 @@ export function MobileHomeView({
                       rel="noopener noreferrer"
                       className="w-full flex items-center gap-3 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 hover:bg-foreground/[0.05] transition-colors"
                     >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${success ? "bg-emerald-400" : "bg-rose-400"}`}
-                      />
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                          success
+                            ? "bg-foreground/[0.06] text-foreground/60"
+                            : "bg-rose-500/10 text-rose-400"
+                        }`}
+                      >
+                        TX
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-mono text-foreground/80 truncate">
                           {tx.signature.slice(0, 8)}…{tx.signature.slice(-8)}
                         </p>
                         <p className="text-[10px] text-foreground/40">
-                          Slot {tx.slot.toLocaleString()} · {ageLabel} ago
+                          Slot {formatCount(tx.slot)} · {ageLabel} ago
                         </p>
                       </div>
-                      <span className="text-[10px] font-medium text-foreground/30 shrink-0">
-                        {success ? "OK" : "FAIL"} ↗
+                      <span
+                        className={`text-[10px] font-medium shrink-0 ${
+                          success ? "text-emerald-400" : "text-rose-400"
+                        }`}
+                      >
+                        {success ? "SUCCESS" : "FAILED"} ↗
                       </span>
                     </a>
                   );
                 })
               )}
-              {onchainTxsError && (activityTab === "tx" || activityTab === "all") && (
+              {onchainTxsError && activityTab === "tx" && (
                 <p className="text-[10px] text-rose-400/70 text-center">
                   {onchainTxsError}
                 </p>

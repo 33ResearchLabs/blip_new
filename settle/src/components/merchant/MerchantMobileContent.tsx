@@ -4,8 +4,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
 import type { Order } from "@/types/merchant";
-import { MobileOrdersView } from "@/components/merchant/MobileOrdersView";
-import { MobileEscrowView } from "@/components/merchant/MobileEscrowView";
+import { MobileOrdersTab } from "@/components/merchant/MobileOrdersTab";
 import { MobileChatView } from "@/components/merchant/MobileChatView";
 import type { OrderConversation } from "@/hooks/useMerchantConversations";
 import { MobileHistoryView } from "@/components/merchant/MobileHistoryView";
@@ -145,19 +144,20 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               }}
             />
           )}
-          {mobileView === "orders" && (
-            <MobileOrdersView
+          {(mobileView === "orders" || mobileView === "escrow") && (
+            // The Escrow bottom-nav tab was merged into Orders — both lists
+            // (active escrow + pending offers) render in one unified feed.
+            // Active orders that need an escrow action surface at the top
+            // with their per-row action button; pending offers sit below.
+            // The legacy "escrow" mobileView still routes here so existing
+            // deep links (e.g. tapping an in-progress trade on Home) keep
+            // working.
+            <MobileOrdersTab
               pendingOrders={pendingOrders}
               onAcceptOrder={acceptOrder}
               acceptingOrderId={acceptingOrderId}
-              onOpenChat={handleOpenChat}
-              setMobileView={setMobileView}
               onCancelOrder={handleCancelOrder}
               cancellingOrderId={cancellingOrderId}
-            />
-          )}
-          {mobileView === "escrow" && (
-            <MobileEscrowView
               ongoingOrders={ongoingOrders}
               markingDone={markingDone}
               onOpenEscrowModal={openEscrowModal}

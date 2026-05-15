@@ -527,6 +527,8 @@ export function MerchantNavbar({
                     <Wallet className="w-5 h-5" /> Wallet
                   </Link>
                 )}
+                {/* Analytics hidden from the hamburger drawer for now —
+                    surface it from the desktop nav / dashboard instead.
                 <Link
                   href="/merchant/analytics"
                   onClick={() => {
@@ -537,6 +539,7 @@ export function MerchantNavbar({
                 >
                   <BarChart3 className="w-5 h-5" /> Analytics
                 </Link>
+                */}
                 {onOpenSettings ? (
                   <button
                     onClick={() => {
@@ -556,6 +559,9 @@ export function MerchantNavbar({
                     <Settings className="w-5 h-5" /> Settings
                   </Link>
                 )}
+                {/* Edit Profile removed from the hamburger drawer —
+                    profile editing lives inside Settings, so the entry
+                    here was redundant.
                 <button
                   onClick={() => {
                     setDrawerOpen(false);
@@ -565,6 +571,7 @@ export function MerchantNavbar({
                 >
                   <User className="w-5 h-5" /> Edit Profile
                 </button>
+                */}
 
                 {merchantInfo?.has_ops_access && (
                   <>
