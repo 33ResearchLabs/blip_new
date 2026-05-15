@@ -300,12 +300,21 @@ export async function getMerchantOrders(
 
   // Honor an explicit status filter (incl. 'expired' / 'cancelled') from the
   // caller. Otherwise default to "active-ish" orders — hide noisy terminal
-  // expired/cancelled rows.
+  // expired/cancelled rows BUT always surface terminal orders whose on-chain
+  // escrow is still outstanding (escrow_tx_hash set, refund_tx_hash NULL,
+  // release_tx_hash NULL). Those rows need the seller's wallet to sign a
+  // refund/cancel; hiding them blocks the auto-refund hook in
+  // useMerchantEffects from ever seeing the order.
   if (status && status.length > 0) {
     params.push(status);
     sql += ` AND o.status = ANY($${params.length})`;
   } else {
-    sql += ` AND o.status NOT IN ('expired', 'cancelled')`;
+    sql += ` AND (
+      o.status NOT IN ('expired', 'cancelled')
+      OR (o.escrow_tx_hash IS NOT NULL
+          AND o.refund_tx_hash IS NULL
+          AND o.release_tx_hash IS NULL)
+    )`;
   }
 
   if (options?.cursor) {
