@@ -294,33 +294,35 @@ export function computeMyRole(order: any, myMerchantId: string): MyRole {
   const merchantId = order.merchant_id || order.orderMerchantId;
   const orderType = order.type || order.orderType;
 
-  // Rule 1: buyer_merchant_id = creating merchant. Role depends on stored type:
-  // Stored 'sell' = creator buys → buyer
-  // Stored 'buy' = creator sells → seller
+  // Priority 2: on-chain ground truth. If I funded the escrow, I'm the
+  // seller by definition — the program moved USDT from my wallet into
+  // the PDA. Must run BEFORE the M2M/type branches below; they previously
+  // misclassified BUY-M2M sellers as 'buyer' because they keyed off
+  // `type` instead of `escrow_debited_entity_id`.
+  const debitedType =
+    order.escrow_debited_entity_type ||
+    order.dbOrder?.escrow_debited_entity_type;
+  const debitedId =
+    order.escrow_debited_entity_id || order.dbOrder?.escrow_debited_entity_id;
+  if (debitedType === "merchant" && debitedId === myMerchantId) return "seller";
+
+  // Rule 1: buyer_merchant_id = me → buyer. M2M architectural rule:
+  // buyer_merchant_id is ALWAYS the buyer side, regardless of stored type.
   if (buyerMerchantId === myMerchantId) {
-    return orderType === 'sell' ? 'buyer' : 'seller';
+    return "buyer";
   }
 
-  // Rule 2: merchant_id match
+  // Rule 2: merchant_id = me
   if (merchantId === myMerchantId) {
-    // M2M: I'm merchant_id (target), role is opposite of buyer_merchant_id
+    // M2M (buyer_merchant_id set & differs): merchant_id is ALWAYS seller
     if (buyerMerchantId && buyerMerchantId !== myMerchantId) {
-      return orderType === 'sell' ? 'seller' : 'buyer';
+      return "seller";
     }
 
-    // Check if I locked escrow (strong signal: I'm the seller)
-    const debitedType =
-      order.escrow_debited_entity_type ||
-      order.dbOrder?.escrow_debited_entity_type;
-    const debitedId =
-      order.escrow_debited_entity_id || order.dbOrder?.escrow_debited_entity_id;
-    if (debitedType === "merchant" && debitedId === myMerchantId)
-      return "seller";
-
-    // BUY order: merchant fills by selling → seller
+    // Non-M2M: BUY order → merchant sells → seller
     if (orderType === "buy") return "seller";
 
-    // SELL order without buyer_merchant: non-M2M (user sells, merchant buys) → buyer
+    // Non-M2M SELL order: user sells, merchant buys → buyer
     return "buyer";
   }
 
