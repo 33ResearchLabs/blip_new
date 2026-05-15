@@ -154,21 +154,28 @@ export function AppLockScreen() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-      style={{ background: 'rgba(6,6,6,0.96)', backdropFilter: 'blur(20px)' }}
+      className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center overflow-y-auto"
+      style={{
+        background: 'rgba(6,6,6,0.96)',
+        backdropFilter: 'blur(20px)',
+        paddingTop: 'max(env(safe-area-inset-top, 16px), 16px)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 16px)',
+        paddingLeft: 'max(env(safe-area-inset-left, 16px), 16px)',
+        paddingRight: 'max(env(safe-area-inset-right, 16px), 16px)',
+      }}
       role="dialog"
       aria-modal="true"
       aria-label="App locked"
     >
-      <div className="w-full max-w-sm space-y-6">
+      <div className="w-full max-w-sm space-y-4 sm:space-y-6 my-auto">
         {/* Header */}
-        <div className="flex flex-col items-center gap-3 pt-2">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-accent/15 border border-accent/30">
-            <Lock className="w-6 h-6 text-accent" />
+        <div className="flex flex-col items-center gap-2 sm:gap-3 pt-1 sm:pt-2">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center bg-accent/15 border border-accent/30">
+            <Lock className="w-5 h-5 sm:w-6 sm:h-6 text-accent" />
           </div>
           <div className="text-center">
-            <h2 className="text-lg font-bold text-white font-mono">Welcome back</h2>
-            <p className="text-[12px] text-white/50 font-mono mt-1">
+            <h2 className="text-base sm:text-lg font-bold text-white font-mono">Welcome back</h2>
+            <p className="text-[11px] sm:text-[12px] text-white/50 font-mono mt-1">
               {lockedOut
                 ? `Try again in ${cooldownLeft}s`
                 : biometricEnrolled

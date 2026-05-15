@@ -181,26 +181,26 @@ export default function ConsolePage() {
     <div className="min-h-screen bg-black text-white">
       {/* Ambient Background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-primary/[0.03] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-primary/[0.02] rounded-full blur-[150px]" />
+        <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.03] rounded-full blur-[150px]" />
+        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-white/[0.02] rounded-full blur-[150px]" />
       </div>
 
       {/* Header */}
       <header className="sticky top-0 z-50 bg-black/95 backdrop-blur-sm border-b border-white/[0.04]">
         <div className="px-4 h-14 flex items-center gap-4">
           <Link href="/" className="p-2 -ml-2 hover:bg-white/5 rounded-lg transition-colors">
-            <ArrowLeft className="w-5 h-5 text-neutral-400" />
+            <ArrowLeft className="w-5 h-5 text-text-secondary" />
           </Link>
           <div>
-            <h1 className="text-sm font-semibold">Console</h1>
-            <p className="text-[10px] text-neutral-500">Order Analytics & Timeouts</p>
+            <h1 className="text-sm font-semibold text-text-primary">Console</h1>
+            <p className="text-[10px] text-text-tertiary">Order Analytics & Timeouts</p>
           </div>
           <div className="flex-1" />
           <button
             onClick={() => window.location.reload()}
             className="p-2 hover:bg-white/5 rounded-lg transition-colors"
           >
-            <RefreshCw className="w-4 h-4 text-neutral-400" />
+            <RefreshCw className="w-4 h-4 text-text-secondary" />
           </button>
         </div>
       </header>
@@ -212,15 +212,15 @@ export default function ConsolePage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => setStatusFilter("expired")}
-            className={`glass-card rounded-xl p-4 cursor-pointer transition-all ${statusFilter === 'expired' ? 'ring-1 ring-amber-500/50' : ''}`}
+            className={`glass-card rounded-xl p-4 cursor-pointer transition-all ${statusFilter === 'expired' ? 'ring-1 ring-white/20' : ''}`}
           >
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <Timer className="w-4 h-4 text-amber-400" />
+              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                <Timer className="w-4 h-4 text-text-secondary" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-amber-400">{stats.expiredOrders}</p>
-            <p className="text-[11px] text-neutral-500">Expired</p>
+            <p className="text-2xl font-bold text-text-primary ml-2">{stats.expiredOrders}</p>
+            <p className="text-[11px] text-text-tertiary ">Expired</p>
           </motion.div>
 
           <motion.div
@@ -228,15 +228,15 @@ export default function ConsolePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
             onClick={() => setStatusFilter("cancelled")}
-            className={`glass-card rounded-xl p-4 cursor-pointer transition-all ${statusFilter === 'cancelled' ? 'ring-1 ring-red-500/50' : ''}`}
+            className={`glass-card rounded-xl p-4 cursor-pointer transition-all ${statusFilter === 'cancelled' ? 'ring-1 ring-white/20' : ''}`}
           >
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
-                <XCircle className="w-4 h-4 text-red-400" />
+              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                <XCircle className="w-4 h-4 text-text-secondary" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-red-400">{stats.cancelledOrders}</p>
-            <p className="text-[11px] text-neutral-500">Cancelled</p>
+            <p className="text-2xl font-bold text-text-primary ml-2">{stats.cancelledOrders}</p>
+            <p className="text-[11px] text-text-tertiary">Cancelled</p>
           </motion.div>
 
           <motion.div
@@ -244,15 +244,15 @@ export default function ConsolePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             onClick={() => setStatusFilter("disputed")}
-            className={`glass-card rounded-xl p-4 cursor-pointer transition-all ${statusFilter === 'disputed' ? 'ring-1 ring-primary/50' : ''}`}
+            className={`glass-card rounded-xl p-4 cursor-pointer transition-all ${statusFilter === 'disputed' ? 'ring-1 ring-white/20' : ''}`}
           >
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <AlertTriangle className="w-4 h-4 text-primary" />
+              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                <AlertTriangle className="w-4 h-4 text-text-secondary" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-primary">{stats.disputedOrders}</p>
-            <p className="text-[11px] text-neutral-500">Disputed</p>
+            <p className="text-2xl font-bold text-text-primary ml-2">{stats.disputedOrders}</p>
+            <p className="text-[11px] text-text-tertiary">Disputed</p>
           </motion.div>
         </div>
 
@@ -266,15 +266,15 @@ export default function ConsolePage() {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-neutral-500/10 flex items-center justify-center">
-                <Activity className="w-5 h-5 text-neutral-400" />
+              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                <Activity className="w-5 h-5 text-text-secondary" />
               </div>
               <div>
-                <p className="text-[11px] text-neutral-500 uppercase tracking-wide">Total Closed</p>
-                <p className="text-xl font-bold">{closedOrders.length}</p>
+                <p className="text-[11px] text-text-tertiary uppercase tracking-wide">Total Closed</p>
+                <p className="text-xl font-bold text-text-primary">{closedOrders.length}</p>
               </div>
             </div>
-            <span className="text-[11px] text-neutral-500">
+            <span className="text-[11px] text-text-tertiary">
               {statusFilter === 'all' ? 'Showing all' : `Filtered: ${statusFilter}`}
             </span>
           </div>
@@ -288,9 +288,9 @@ export default function ConsolePage() {
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-neutral-400" />
-              <h2 className="text-sm font-semibold">Closed Orders</h2>
-              <span className="px-2 py-0.5 bg-neutral-500/10 rounded-full text-[10px] text-neutral-400 font-medium">
+              <History className="w-4 h-4 text-text-secondary" />
+              <h2 className="text-sm font-semibold text-text-primary">Closed Orders</h2>
+              <span className="px-2 py-0.5 bg-white/5 rounded-full text-[10px] text-text-tertiary font-medium">
                 {filteredOrders.length}
               </span>
             </div>
@@ -304,8 +304,8 @@ export default function ConsolePage() {
                 onClick={() => setTypeFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
                   typeFilter === f
-                    ? "bg-primary text-background"
-                    : "bg-neutral-900 text-neutral-400 hover:text-white"
+                    ? "bg-white text-black"
+                    : "bg-white/5 text-text-tertiary hover:text-text-primary"
                 }`}
               >
                 {f === "all" ? "All Types" : f === "buy" ? "Buy" : "Sell"}
@@ -322,8 +322,8 @@ export default function ConsolePage() {
                   animate={{ opacity: 1 }}
                   className="text-center py-8"
                 >
-                  <RefreshCw className="w-6 h-6 text-neutral-500 animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-neutral-500">Loading orders...</p>
+                  <RefreshCw className="w-6 h-6 text-text-tertiary animate-spin mx-auto mb-3" />
+                  <p className="text-sm text-text-tertiary">Loading orders...</p>
                 </motion.div>
               ) : filteredOrders.length === 0 ? (
                 <motion.div
@@ -331,11 +331,11 @@ export default function ConsolePage() {
                   animate={{ opacity: 1 }}
                   className="text-center py-8"
                 >
-                  <div className="w-12 h-12 rounded-full bg-neutral-900 flex items-center justify-center mx-auto mb-3">
-                    <CheckCircle className="w-6 h-6 text-neutral-600" />
+                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
+                    <CheckCircle className="w-6 h-6 text-text-tertiary" />
                   </div>
-                  <p className="text-sm text-neutral-500">No closed orders</p>
-                  <p className="text-[12px] text-neutral-600 mt-1">
+                  <p className="text-sm text-text-secondary">No closed orders</p>
+                  <p className="text-[12px] text-text-tertiary mt-1">
                     {statusFilter === 'all'
                       ? 'All your orders completed successfully'
                       : `No ${statusFilter} orders found`}
@@ -353,74 +353,58 @@ export default function ConsolePage() {
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          order.type === "buy" ? "bg-emerald-500/10" : "bg-primary/10"
-                        }`}>
-                          {order.type === "buy" ? (
-                            <ArrowUpRight className="w-4 h-4 text-emerald-400" />
-                          ) : (
-                            <ArrowUpRight className="w-4 h-4 text-primary rotate-180" />
-                          )}
+                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                          <ArrowUpRight
+                            className={`w-4 h-4 text-text-secondary ${order.type === "buy" ? "" : "rotate-180"}`}
+                          />
                         </div>
                         <div>
-                          <p className="text-[13px] font-medium">
+                          <p className="text-[13px] font-medium text-text-primary">
                             {order.type === "buy" ? "Buy" : "Sell"} {order.cryptoAmount} USDT
                           </p>
-                          <p className="text-[11px] text-neutral-500">{order.orderNumber}</p>
+                          <p className="text-[11px] text-text-tertiary">{order.orderNumber}</p>
                         </div>
                       </div>
                       {/* Status Badge */}
-                      <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${
-                        order.status === 'expired'
-                          ? 'bg-amber-500/10'
-                          : order.status === 'cancelled'
-                            ? 'bg-red-500/10'
-                            : 'bg-primary/10'
-                      }`}>
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5">
                         {order.status === 'expired' ? (
-                          <Timer className="w-3 h-3 text-amber-400" />
+                          <Timer className="w-3 h-3 text-text-secondary" />
                         ) : order.status === 'cancelled' ? (
-                          <XCircle className="w-3 h-3 text-red-400" />
+                          <XCircle className="w-3 h-3 text-text-secondary" />
                         ) : (
-                          <AlertTriangle className="w-3 h-3 text-primary" />
+                          <AlertTriangle className="w-3 h-3 text-text-secondary" />
                         )}
-                        <span className={`text-[10px] font-medium capitalize ${
-                          order.status === 'expired'
-                            ? 'text-amber-400'
-                            : order.status === 'cancelled'
-                              ? 'text-red-400'
-                              : 'text-primary'
-                        }`}>
+                        <span className="text-[10px] font-medium capitalize text-text-secondary">
                           {order.status}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-[12px] mb-3 pb-3 border-b border-neutral-800">
-                      <span className="text-neutral-500">Amount</span>
-                      <span className="font-medium">د.إ {order.fiatAmount.toFixed(2)}</span>
+                    <div className="flex items-center justify-between text-[12px] mb-3 pb-3 border-b border-white/6">
+                      <span className="text-text-tertiary">Amount</span>
+                      <span className="font-medium text-text-primary">د.إ {order.fiatAmount.toFixed(2)}</span>
                     </div>
 
                     <div className="flex items-center justify-between text-[12px] mb-3">
-                      <span className="text-neutral-500">Payment</span>
-                      <span className="capitalize">{order.paymentMethod}</span>
+                      <span className="text-text-tertiary">Payment</span>
+                      <span className="capitalize text-text-secondary">{order.paymentMethod}</span>
                     </div>
 
                     <div className="flex items-center justify-between text-[12px] mb-3">
-                      <span className="text-neutral-500">Reason</span>
-                      <span className="text-neutral-400">{order.reason}</span>
+                      <span className="text-text-tertiary">Reason</span>
+                      <span className="text-text-secondary">{order.reason}</span>
                     </div>
 
                     {order.extensionCount > 0 && (
                       <div className="flex items-center justify-between text-[12px] mb-3">
-                        <span className="text-neutral-500">Extensions Used</span>
-                        <span className="text-neutral-400">{order.extensionCount} / {order.maxExtensions}</span>
+                        <span className="text-text-tertiary">Extensions Used</span>
+                        <span className="text-text-secondary">{order.extensionCount} / {order.maxExtensions}</span>
                       </div>
                     )}
 
                     <div className="flex items-center justify-between text-[12px] mb-4">
-                      <span className="text-neutral-500">Closed</span>
-                      <span className="text-neutral-400">{formatDate(order.closedAt)}</span>
+                      <span className="text-text-tertiary">Closed</span>
+                      <span className="text-text-secondary">{formatDate(order.closedAt)}</span>
                     </div>
 
                     {/* Only show retry for expired/cancelled, not disputed */}
@@ -428,13 +412,13 @@ export default function ConsolePage() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => retryOrder(order)}
-                          className="flex-1 py-2.5 rounded-xl bg-primary text-background text-[13px] font-medium press-effect"
+                          className="flex-1 py-2.5 rounded-xl bg-white text-black text-[13px] font-medium press-effect"
                         >
                           Retry Order
                         </button>
                         <button
                           onClick={() => dismissOrder(order.id)}
-                          className="px-4 py-2.5 rounded-xl bg-neutral-900 text-neutral-400 text-[13px] font-medium"
+                          className="px-4 py-2.5 rounded-xl bg-white/5 text-text-secondary text-[13px] font-medium"
                         >
                           Dismiss
                         </button>
@@ -445,13 +429,13 @@ export default function ConsolePage() {
                     {order.status === 'disputed' && (
                       <div className="flex gap-2">
                         <button
-                          className="flex-1 py-2.5 rounded-xl bg-primary/20 text-primary text-[13px] font-medium"
+                          className="flex-1 py-2.5 rounded-xl bg-white/10 text-text-primary text-[13px] font-medium"
                         >
                           View Dispute
                         </button>
                         <button
                           onClick={() => dismissOrder(order.id)}
-                          className="px-4 py-2.5 rounded-xl bg-neutral-900 text-neutral-400 text-[13px] font-medium"
+                          className="px-4 py-2.5 rounded-xl bg-white/5 text-text-secondary text-[13px] font-medium"
                         >
                           Dismiss
                         </button>
@@ -471,21 +455,21 @@ export default function ConsolePage() {
           transition={{ delay: 0.3 }}
           className="mt-6"
         >
-          <h3 className="text-[12px] text-neutral-500 uppercase tracking-wide mb-3">Quick Actions</h3>
+          <h3 className="text-[12px] text-text-tertiary uppercase tracking-wide mb-3">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-3">
             <Link href="/" className="glass-card rounded-xl p-4 hover:bg-white/5 transition-colors">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
-                <ArrowUpRight className="w-4 h-4 text-primary" />
+              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mb-2">
+                <ArrowUpRight className="w-4 h-4 text-text-secondary" />
               </div>
-              <p className="text-[13px] font-medium">New Trade</p>
-              <p className="text-[11px] text-neutral-500">Start a new order</p>
+              <p className="text-[13px] font-medium text-text-primary">New Trade</p>
+              <p className="text-[11px] text-text-tertiary">Start a new order</p>
             </Link>
             <Link href="/" className="glass-card rounded-xl p-4 hover:bg-white/5 transition-colors">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-2">
-                <History className="w-4 h-4 text-emerald-400" />
+              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mb-2">
+                <History className="w-4 h-4 text-text-secondary" />
               </div>
-              <p className="text-[13px] font-medium">Order History</p>
-              <p className="text-[11px] text-neutral-500">View all orders</p>
+              <p className="text-[13px] font-medium text-text-primary">Order History</p>
+              <p className="text-[11px] text-text-tertiary">View all orders</p>
             </Link>
           </div>
         </motion.div>

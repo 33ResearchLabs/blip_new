@@ -78,7 +78,7 @@ export function AppPinPad({
         key={errorTick}
         animate={errorTick > 0 ? { x: [0, -10, 10, -8, 8, -4, 4, 0] } : { x: 0 }}
         transition={{ duration: 0.45 }}
-        className="flex items-center justify-center gap-4 py-4"
+        className="flex items-center justify-center gap-3 sm:gap-4 py-3 sm:py-4"
         aria-label="PIN entry indicator"
         role="img"
       >
@@ -87,7 +87,7 @@ export function AppPinPad({
           return (
             <div
               key={i}
-              className="w-3.5 h-3.5 rounded-full"
+              className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full"
               style={{
                 background: errorTick > 0 && value.length === 0
                   ? '#dc2626'
@@ -99,8 +99,13 @@ export function AppPinPad({
         })}
       </motion.div>
 
-      {/* Numeric keypad */}
-      <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto" role="group" aria-label="PIN keypad">
+      {/* Numeric keypad — width capped so buttons don't balloon on tablets */}
+      <div
+        className="grid grid-cols-3 gap-2 sm:gap-3 mx-auto"
+        style={{ maxWidth: 'min(100%, 320px)' }}
+        role="group"
+        aria-label="PIN keypad"
+      >
         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
           <KeypadKey key={n} label={String(n)} onPress={() => press(String(n))} disabled={disabled} />
         ))}
@@ -115,7 +120,7 @@ export function AppPinPad({
             className="aspect-square rounded-2xl flex items-center justify-center transition-colors disabled:opacity-40"
             style={{ background: 'rgba(255,255,255,0.04)' }}
           >
-            <Fingerprint className="w-6 h-6 text-white/80" />
+            <Fingerprint className="w-5 h-5 sm:w-6 sm:h-6 text-white/80" />
           </button>
         ) : (
           <div aria-hidden="true" />
@@ -131,7 +136,7 @@ export function AppPinPad({
           className="aspect-square rounded-2xl flex items-center justify-center transition-opacity disabled:opacity-30"
           style={{ background: 'rgba(255,255,255,0.04)' }}
         >
-          <Delete className="w-5 h-5 text-white/80" />
+          <Delete className="w-4 h-4 sm:w-5 sm:h-5 text-white/80" />
         </button>
       </div>
     </div>
@@ -151,7 +156,7 @@ function KeypadKey({ label, onPress, disabled }: KeypadKeyProps) {
       whileTap={{ scale: 0.92 }}
       onClick={onPress}
       disabled={disabled}
-      className="aspect-square rounded-2xl flex items-center justify-center text-2xl font-light text-white disabled:opacity-30"
+      className="aspect-square rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-light text-white disabled:opacity-30"
       style={{ background: 'rgba(255,255,255,0.04)' }}
       aria-label={`Digit ${label}`}
     >

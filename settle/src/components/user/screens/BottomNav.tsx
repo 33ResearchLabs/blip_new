@@ -36,12 +36,15 @@ export const BottomNav = ({ screen, setScreen, chatUnreadCount = 0 }: BottomNavP
     <div
       className="flex items-center justify-around px-4 pt-2.5 pb-1"
       style={{
-        background: 'rgba(255,255,255,0.96)',
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
+        // Off-white so the pill never disappears against the white Transactions
+        // panel above; subtle blur + stronger shadow give a clear floating edge.
+        background: 'rgba(244,246,250,0.98)',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
         borderRadius: 18,
-        border: '1px solid rgba(15,23,42,0.06)',
-        boxShadow: '0 8px 28px -8px rgba(15,23,42,0.18), 0 2px 6px -2px rgba(15,23,42,0.10)',
+        border: '1px solid rgba(15,23,42,0.10)',
+        boxShadow:
+          '0 -2px 12px -4px rgba(15,23,42,0.10), 0 12px 32px -10px rgba(15,23,42,0.28), 0 4px 10px -4px rgba(15,23,42,0.16)',
       }}
     >
       {TABS.map(({ key, Icon, label }) => {

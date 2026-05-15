@@ -336,7 +336,7 @@ function WalletBalanceSection({
       <motion.div
         initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
         className="grid grid-cols-4 gap-2.5"
-        style={{ marginTop: 30 }}
+        style={{ marginTop: 20 }}
       >
         {([
           { label: 'Pay',      Icon: QrCode,        primary: false, comingSoon: false, fn: onPay },
@@ -761,7 +761,7 @@ export const HomeScreen = ({
           </div>
 
           {/* ── Balance section ── */}
-          <div className="mt-8" />
+          <div className="mt-4" />
           <WalletBalanceSection
             displayBalance={displayBalance}
             isWalletReady={isWalletReady}
@@ -780,7 +780,7 @@ export const HomeScreen = ({
           />
 
           {/* ── Circle (trading partners) — lives inside the dark hero ── */}
-          <div className="mt-7">
+          <div className="mt-4">
             <div className="flex justify-between items-center mb-3">
               <span style={{
                 fontSize: 10, fontWeight: 800, letterSpacing: '0.22em',

@@ -106,7 +106,6 @@ export const TradeCreationScreen = ({
   const hasAmount = !!amount && parseFloat(amount) > 0;
   const isBuy = tradeType === "buy";
   const accent = isBuy ? "#34D399" : "#F87171";
-  const accentDeep = isBuy ? "#10B981" : "#EF4444";
 
   const [ratePair, setRatePairLocal] = useState<RatePair>(
     selectedPair || "usdt_inr",
@@ -527,7 +526,7 @@ export const TradeCreationScreen = ({
             )}
         </div>
 
-        {/* Buy/Sell — active = white tile with colored outline (Buy green, Sell red) */}
+        {/* Buy/Sell — active = white tile */}
         <div className="grid grid-cols-2 w-full" style={{ gap: 10, marginTop: 28 }}>
           {(
             [
@@ -536,16 +535,12 @@ export const TradeCreationScreen = ({
                 label: "Buy",
                 Icon: ArrowDownLeft,
                 color: "#10B981", // emerald-500 — slightly darker for legibility on white
-                borderOn: "#10B981",
-                glow: "0 10px 24px -10px rgba(16,185,129,0.55), 0 0 0 3px rgba(16,185,129,0.12)",
               },
               {
                 type: "sell" as const,
                 label: "Sell",
                 Icon: ArrowUpRight,
                 color: "#EF4444", // red-500
-                borderOn: "#EF4444",
-                glow: "0 10px 24px -10px rgba(239,68,68,0.50), 0 0 0 3px rgba(239,68,68,0.12)",
               },
             ] as const
           ).map((opt) => {
@@ -559,15 +554,15 @@ export const TradeCreationScreen = ({
                   background: on
                     ? "#FFFFFF"
                     : "rgba(255,255,255,0.04)",
-                  borderColor: on ? opt.borderOn : "rgba(255,255,255,0.08)",
-                  boxShadow: on ? opt.glow : "none",
+                  borderColor: "rgba(255,255,255,0.08)",
+                  boxShadow: "none",
                 }}
                 transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
                 className="relative flex items-center justify-center"
                 style={{
                   padding: "12px 0",
                   borderRadius: 16,
-                  borderWidth: on ? 1.5 : 1,
+                  borderWidth: 1,
                   borderStyle: "solid",
                   backdropFilter: on ? undefined : "blur(14px)",
                   WebkitBackdropFilter: on ? undefined : "blur(14px)",
@@ -1043,7 +1038,7 @@ export const TradeCreationScreen = ({
           animate={{
             background:
               hasAmount && !isLoading
-                ? `linear-gradient(180deg, ${accent} 0%, ${accentDeep} 100%)`
+                ? "#FFFFFF"
                 : "rgba(255,255,255,0.05)",
             color: hasAmount && !isLoading ? "#0B0F14" : T.md,
             borderColor:
@@ -1052,7 +1047,7 @@ export const TradeCreationScreen = ({
                 : "rgba(255,255,255,0.08)",
             boxShadow:
               hasAmount && !isLoading
-                ? `0 16px 36px -14px ${accentDeep}AA, 0 6px 14px -6px ${accentDeep}55, inset 0 1px 0 rgba(255,255,255,0.30)`
+                ? "0 16px 36px -14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.6)"
                 : "none",
           }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
