@@ -142,11 +142,7 @@ export function MerchantChatTabs({
   // pre-terminal, non-disputed) so the merchant can focus on conversations
   // where action is required without losing the full chat history view.
   type ChatTab = "orders" | "active" | "disputes";
-  // Default to the Active tab — merchants land here first because the
-  // conversations they need to act on (post-accept, pre-terminal) live
-  // there; the broader Orders tab is one tap away when they want the
-  // full history.
-  const [activeTab, setActiveTab] = useState<ChatTab>("active");
+  const [activeTab, setActiveTab] = useState<ChatTab>("orders");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Dispute conversations state (fetched independently)
@@ -307,31 +303,8 @@ export function MerchantChatTabs({
         </div>
       </div>
 
-      {/* Tabs — Active is the default and the leftmost slot since it's
-          where merchants need to act; Orders (full history) and Disputes
-          follow. */}
+      {/* Tabs */}
       <div className="flex border-b border-white/[0.04]">
-        <button
-          onClick={() => setActiveTab("active")}
-          className={`flex-1 px-3 py-1.5 text-[12px] font-mono font-medium transition-colors relative ${
-            activeTab === "active"
-              ? "text-white/80"
-              : "text-white/30 hover:text-foreground/50"
-          }`}
-        >
-          <div className="flex items-center justify-center gap-1.5">
-            <MessageCircle className="w-3 h-3" />
-            <span>Active Chat</span>
-            {activeUnread > 0 && (
-              <span className="w-4 h-4 bg-primary text-background text-[12px] font-bold rounded-full flex items-center justify-center">
-                {activeUnread > 9 ? "9+" : activeUnread}
-              </span>
-            )}
-          </div>
-          {activeTab === "active" && (
-            <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
-          )}
-        </button>
         <button
           onClick={() => setActiveTab("orders")}
           className={`flex-1 px-3 py-1.5 text-[12px] font-mono font-medium transition-colors relative ${
@@ -350,6 +323,27 @@ export function MerchantChatTabs({
             )}
           </div>
           {activeTab === "orders" && (
+            <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("active")}
+          className={`flex-1 px-3 py-1.5 text-[12px] font-mono font-medium transition-colors relative ${
+            activeTab === "active"
+              ? "text-white/80"
+              : "text-white/30 hover:text-foreground/50"
+          }`}
+        >
+          <div className="flex items-center justify-center gap-1.5">
+            <MessageCircle className="w-3 h-3" />
+            <span>Active Chat</span>
+            {activeUnread > 0 && (
+              <span className="w-4 h-4 bg-primary text-background text-[12px] font-bold rounded-full flex items-center justify-center">
+                {activeUnread > 9 ? "9+" : activeUnread}
+              </span>
+            )}
+          </div>
+          {activeTab === "active" && (
             <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
           )}
         </button>

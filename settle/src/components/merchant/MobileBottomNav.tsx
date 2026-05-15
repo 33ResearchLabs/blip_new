@@ -1,12 +1,16 @@
 "use client";
 
-import { Home, MessageCircle, Sparkles, History } from "lucide-react";
+import {
+  Home,
+  Lock,
+  MessageCircle,
+  Sparkles,
+  History,
+} from "lucide-react";
 
 export interface MobileBottomNavProps {
-  mobileView: "home" | "orders" | "escrow" | "chat" | "history" | "marketplace";
-  setMobileView: (
-    view: "home" | "orders" | "escrow" | "chat" | "history" | "marketplace",
-  ) => void;
+  mobileView: 'home' | 'orders' | 'escrow' | 'chat' | 'history' | 'marketplace';
+  setMobileView: (view: 'home' | 'orders' | 'escrow' | 'chat' | 'history' | 'marketplace') => void;
   pendingCount: number;
   ongoingCount: number;
   totalUnread: number;
@@ -19,37 +23,40 @@ export function MobileBottomNav({
   ongoingCount,
   totalUnread,
 }: MobileBottomNavProps) {
-  // Escrow used to be its own tab; it's now a sub-tab inside Orders, so
-  // the Orders badge surfaces the combined active workload (pending +
-  // ongoing) — keeps the "unread work" signal the merchant relied on
-  // without burning a bottom-nav slot for it.
   const tabs = [
     {
-      id: "home" as const,
-      label: "Home",
+      id: 'home' as const,
+      label: 'Home',
       icon: Home,
-      activeColor: "text-primary",
+      activeColor: 'text-primary',
       badge: 0,
     },
     {
-      id: "orders" as const,
-      label: "Orders",
+      id: 'orders' as const,
+      label: 'Active Trade',
       icon: Sparkles,
-      activeColor: "text-primary",
-      badge: pendingCount + ongoingCount,
+      activeColor: 'text-primary',
+      badge: pendingCount,
     },
     {
-      id: "chat" as const,
-      label: "Chat",
+      id: 'chat' as const,
+      label: 'Chat',
       icon: MessageCircle,
-      activeColor: "text-primary",
+      activeColor: 'text-primary',
       badge: totalUnread,
     },
     {
-      id: "history" as const,
-      label: "History",
+      id: 'escrow' as const,
+      label: 'Escrow',
+      icon: Lock,
+      activeColor: 'text-foreground/70',
+      badge: ongoingCount,
+    },
+    {
+      id: 'history' as const,
+      label: 'History',
       icon: History,
-      activeColor: "text-foreground/70",
+      activeColor: 'text-foreground/70',
       badge: 0,
     },
   ];
@@ -65,22 +72,18 @@ export function MobileBottomNav({
               key={tab.id}
               onClick={() => setMobileView(tab.id)}
               className={`flex flex-col items-center gap-0.5 px-2 py-2 min-w-[56px] rounded-xl transition-all ${
-                isActive ? "bg-foreground/[0.08]" : ""
+                isActive ? 'bg-foreground/[0.08]' : ''
               }`}
             >
               <div className="relative">
-                <Icon
-                  className={`w-[22px] h-[22px] ${isActive ? tab.activeColor : "text-foreground/30"}`}
-                />
+                <Icon className={`w-[22px] h-[22px] ${isActive ? tab.activeColor : 'text-foreground/30'}`} />
                 {tab.badge > 0 && (
                   <span className="absolute -top-1 -right-1.5 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {tab.badge > 9 ? "9+" : tab.badge}
+                    {tab.badge > 9 ? '9+' : tab.badge}
                   </span>
                 )}
               </div>
-              <span
-                className={`text-[10px] font-medium ${isActive ? "text-foreground" : "text-foreground/30"}`}
-              >
+              <span className={`text-[10px] font-medium ${isActive ? 'text-foreground' : 'text-foreground/30'}`}>
                 {tab.label}
               </span>
             </button>

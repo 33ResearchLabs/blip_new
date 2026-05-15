@@ -80,8 +80,10 @@ function rateLimited(): boolean {
 }
 
 const DEBUG = true;
-const log = (...args: unknown[]) => {
-  if (DEBUG) 
+const log = (..._args: unknown[]) => {
+  if (DEBUG) {
+    /* no-op: console call stripped by dev-noise pass */
+  }
 };
 
 export interface CaptureRegion {

@@ -35,7 +35,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { CorridorProviderSettings } from "@/components/merchant/CorridorProviderSettings";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
@@ -165,29 +165,7 @@ export default function MerchantSettingsPage({
   const setMerchantInfo = useMerchantStore((s) => s.setMerchantInfo);
   const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
 
-  // Allow deep-linking into a specific tab via `?tab=<id>` — e.g. the
-  // Home view's payment-method chip routes to `/merchant/settings?tab=payments`
-  // so the merchant lands directly on the Payments section instead of
-  // having to scan the tab rail.
-  const searchParams = useSearchParams();
-  const VALID_TABS: SettingsTab[] = [
-    "profile",
-    "account",
-    "security",
-    "theme",
-    "payments",
-    "notifications",
-    "liquidity",
-    "reputation",
-    "ledger",
-  ];
-  const initialTab: SettingsTab = (() => {
-    const t = searchParams?.get("tab");
-    return t && (VALID_TABS as string[]).includes(t)
-      ? (t as SettingsTab)
-      : "profile";
-  })();
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const [isLoading, setIsLoading] = useState(!merchantInfo);
   const [merchant, setMerchant] = useState<any>(merchantInfo ?? null);
 
@@ -737,7 +715,7 @@ export default function MerchantSettingsPage({
   ];
   const preferenceTabs: { id: SettingsTab; label: string; icon: any }[] = [
     { id: "notifications", label: "Alerts", icon: Bell },
-    // { id: "liquidity", label: "Liquidity", icon: Droplets },
+    { id: "liquidity", label: "Liquidity", icon: Droplets },
     { id: "reputation", label: "Reputation", icon: Trophy },
     { id: "ledger", label: "Wallet Ledger", icon: BookOpen },
   ];
@@ -1865,9 +1843,20 @@ export default function MerchantSettingsPage({
             </div>
           )}
 
-          {/* Mobile Logout removed — it rendered on every settings tab
-              and the hamburger drawer already exposes Logout, so there
-              was no need for the per-tab duplicate. */}
+          {/* Mobile Logout */}
+          <div className="md:hidden mt-8 pt-6 border-t border-white/[0.04]">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-[var(--color-error)]/20 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Log Out
+            </button>
+
+            <p className="text-center text-[10px] text-white/15 mt-4 font-mono">
+              Blip Money v1.0
+            </p>
+          </div>
         </main>
       </div>
 
