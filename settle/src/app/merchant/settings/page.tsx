@@ -1843,20 +1843,6 @@ export default function MerchantSettingsPage({
             </div>
           )}
 
-          {/* Mobile Logout */}
-          <div className="md:hidden mt-8 pt-6 border-t border-white/[0.04]">
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-[var(--color-error)]/20 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Log Out
-            </button>
-
-            <p className="text-center text-[10px] text-white/15 mt-4 font-mono">
-              Blip Money v1.0
-            </p>
-          </div>
         </main>
       </div>
 
