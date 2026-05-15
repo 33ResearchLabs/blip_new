@@ -69,7 +69,7 @@ if (!globalForSchema.__schemaEnsured) {
     ALTER TABLE merchants ADD COLUMN IF NOT EXISTS has_ops_access BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE compliance_team ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(64);
   `).then(() => {
-    console.log('[DB] Schema safety net applied');
+
   }).catch((err) => {
     // Non-fatal — core-api migration runner will handle it
     console.warn('[DB] Schema safety net skipped:', err.message);
@@ -199,7 +199,7 @@ export async function query<T = unknown>(
   if (duration > 200) {
     console.warn('[SLOW QUERY]', { sql: text.substring(0, 120), duration_ms: duration, rows: result.rowCount });
   } else if (process.env.NODE_ENV === 'development') {
-    console.log('Executed query', { text: text.substring(0, 50), duration, rows: result.rowCount });
+
   }
   if (duration > SLOW_QUERY_THRESHOLD_MS) {
     void logSlowQuery(text, params, duration, result.rowCount ?? 0);

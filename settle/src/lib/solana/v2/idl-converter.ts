@@ -51,14 +51,12 @@ export function convertIdlToAnchor32(idl: any): Idl {
   // CRITICAL: Always remove accounts array to prevent AccountClient validation
   // Even if the IDL is already in the correct format, we must strip accounts
   if (idl.version && idl.name && idl.accounts?.[0]?.type?.kind) {
-    console.log('[IDL] Already in Anchor 0.32 format, removing accounts array:', idl.name);
+
     return {
       ...idl,
       accounts: [], // CRITICAL: Empty accounts to prevent validation
     } as Idl;
   }
-
-  console.log('[IDL] Converting to Anchor 0.32 format:', idl.metadata?.name || idl.name);
 
   // Build type map
   const typeMap = new Map<string, any>();
@@ -130,6 +128,5 @@ export function convertIdlToAnchor32(idl: any): Idl {
     metadata: idl.metadata || { address: idl.address },
   } as Idl;
 
-  console.log('[IDL] Converted IDL (accounts disabled for validation)');
   return converted;
 }

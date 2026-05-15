@@ -123,7 +123,7 @@ export function useRealtimeOrder(
 
       if (!res.ok) {
         // API not available (demo mode)
-        console.log('Order API not available - running in demo mode');
+
         if (!silent) setIsLoading(false);
         return;
       }
@@ -147,7 +147,7 @@ export function useRealtimeOrder(
       }
     } catch (err) {
       // Silently handle in demo mode
-      console.log('Order fetch error - running in demo mode');
+
     } finally {
       if (!silent) setIsLoading(false);
     }

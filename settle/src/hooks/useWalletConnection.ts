@@ -87,25 +87,23 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
   const connectWallet = useCallback(async (walletName: string) => {
     // Prevent duplicate connection attempts
     if (connectionInProgress.current) {
-      console.log('[WalletConnection] Connection already in progress, ignoring');
+
       return;
     }
 
     // Debounce: prevent rapid repeated calls (within 500ms)
     const now = Date.now();
     if (now - lastConnectionAttempt.current < 500) {
-      console.log('[WalletConnection] Debouncing rapid connection attempt');
+
       return;
     }
     lastConnectionAttempt.current = now;
 
     // If already connected at context level, skip connection
     if (connected && walletAddress) {
-      console.log('[WalletConnection] Already connected at context level:', walletAddress);
+
       return;
     }
-
-    console.log('[WalletConnection] Connecting to:', walletName);
 
     connectionInProgress.current = true;
     setConnectionError(null);
@@ -120,7 +118,7 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
         const isInstalled = walletAdapter?.readyState === 'Installed' || walletAdapter?.readyState === 'Loadable';
 
         if (!isInstalled && hasMobileDeepLink(walletName)) {
-          console.log('[WalletConnection] Wallet not installed on mobile, opening deep link');
+
           openMobileWalletApp(walletName);
           setIsConnecting(false);
           setConnectingWallet(null);
@@ -137,7 +135,7 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
 
       // If already connected with publicKey, we're done
       if (adapter.connected && adapter.publicKey) {
-        console.log('[WalletConnection] Already connected');
+
         setIsConnecting(false);
         setConnectingWallet(null);
         connectionInProgress.current = false;
@@ -169,7 +167,7 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
         // Check if Phantom already has publicKey and signMessage available
         // If so, user is already connected - just proceed without calling select again
         if (phantom.publicKey && phantom.signMessage) {
-          console.log('[WalletConnection] Phantom already connected with publicKey:', phantom.publicKey.toString());
+
           // Don't call select() here - it can trigger re-renders and loops
           // The wallet is already connected, just let the state sync naturally
           return;
@@ -179,21 +177,21 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
         try {
           const resp = await phantom.connect({ onlyIfTrusted: true });
           if (resp?.publicKey) {
-            console.log('[WalletConnection] Phantom silent connect successful');
+
             select(adapter.name);
             await new Promise(resolve => setTimeout(resolve, 100));
             return;
           }
         } catch {
           // Silent connect failed - this is normal for first-time users
-          console.log('[WalletConnection] Silent connect not available, trying full connect...');
+
         }
 
         // Single connect attempt - no retries, no complex logic
         try {
           const resp = await phantom.connect();
           if (resp?.publicKey) {
-            console.log('[WalletConnection] Phantom connected:', resp.publicKey.toString());
+
             select(adapter.name);
             await new Promise(resolve => setTimeout(resolve, 100));
             return;
@@ -212,7 +210,7 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
       }
 
       // For other wallets, use standard adapter flow
-      console.log('[WalletConnection] Using standard adapter flow for', walletName);
+
       select(adapter.name);
 
       // Wait for adapter to be ready
@@ -220,7 +218,6 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
 
       // Simple connect - no complex timeout logic
       await adapter.connect();
-      console.log('[WalletConnection] Connected successfully!');
 
     } catch (error: any) {
       console.error('[WalletConnection] Error:', error);

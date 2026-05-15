@@ -95,7 +95,7 @@ export function useOrderReconciliation(
       prev !== 'connected' &&
       prev !== 'disconnected' // Don't reconcile on initial connect
     ) {
-      console.log('[Reconciliation] WebSocket reconnected, fetching latest order state');
+
       reconcile();
     }
   }, [ws?.connectionState, reconcile]);
@@ -106,7 +106,7 @@ export function useOrderReconciliation(
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[Reconciliation] Tab became visible, fetching latest order state');
+
         reconcile();
       }
     };
@@ -122,7 +122,7 @@ export function useOrderReconciliation(
     if (!orderId) return;
 
     const handleOnline = () => {
-      console.log('[Reconciliation] Network restored, fetching latest order state');
+
       reconcile();
     };
 

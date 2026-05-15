@@ -325,9 +325,7 @@ export async function getMerchantOrders(
   const pageLimit = Math.min(options?.limit || 10, 100);
   sql += ` ORDER BY o.created_at DESC LIMIT ${pageLimit}`;
 
-  console.log('[DB] getMerchantOrders for merchant:', merchantId);
   const results = await query<OrderWithRelations>(sql, params);
-  console.log('[DB] getMerchantOrders found:', results?.length || 0, 'orders');
 
   return results;
 }
@@ -514,9 +512,7 @@ export async function getAllPendingOrdersForMerchant(
   const pageLimit = Math.min(options?.limit || 10, 100);
   sql += ` ORDER BY o.created_at DESC LIMIT ${pageLimit}`;
 
-  console.log('[DB] getAllPendingOrdersForMerchant for merchant:', merchantId);
   const results = await query<OrderWithRelations>(sql, params);
-  console.log('[DB] getAllPendingOrdersForMerchant found:', results?.length || 0, 'orders');
 
   return results;
 }
@@ -544,14 +540,6 @@ export async function createOrder(data: {
   protocol_fee_amount?: number;
 }): Promise<Order> {
   return transaction(async (client) => {
-    console.log('[DB] createOrder called with:', {
-      user_id: data.user_id,
-      merchant_id: data.merchant_id,
-      offer_id: data.offer_id,
-      type: data.type,
-      crypto_amount: data.crypto_amount,
-      hasEscrow: !!data.escrow_tx_hash,
-    });
 
     // ── Enforce order type flow rules ─────────────────────────────────
     // SELL orders MUST have escrow locked at creation (escrow-first model)
@@ -656,7 +644,6 @@ export async function createOrder(data: {
     );
 
     const order = result.rows[0] as Order;
-    console.log('[DB] Order created:', order.id, 'status:', order.status);
 
     logger.info('Order created in database', {
       orderId: order.id,

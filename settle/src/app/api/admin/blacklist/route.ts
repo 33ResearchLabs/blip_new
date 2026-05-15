@@ -80,13 +80,6 @@ export async function POST(request: NextRequest) {
       expires_at ? new Date(expires_at) : undefined
     );
 
-    console.log('[BLACKLIST] Entity added to blacklist', {
-      entity_id,
-      entity_type,
-      reason,
-      severity: severity || 'hard',
-    });
-
     return NextResponse.json({
       success: true,
       data: entry,
@@ -116,12 +109,6 @@ export async function DELETE(request: NextRequest) {
     }
 
     const removed = await removeFromBlacklist(entity_id, entity_type);
-
-    console.log('[BLACKLIST] Entity removed from blacklist', {
-      entity_id,
-      entity_type,
-      removed,
-    });
 
     return NextResponse.json({
       success: true,

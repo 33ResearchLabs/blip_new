@@ -18,7 +18,6 @@ const WORKER_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 async function recalculateAllScores(): Promise<void> {
   try {
-    console.log('[ReputationWorker] Starting daily reputation recalculation...');
 
     // Get all active merchants
     const merchants = await query<{ id: string; username: string }>(
@@ -69,11 +68,6 @@ async function recalculateAllScores(): Promise<void> {
       }
     }
 
-    console.log('[ReputationWorker] Daily recalculation complete', {
-      merchants: `${merchantUpdated}/${merchants.length}`,
-      users: `${userUpdated}/${users.length}`,
-      errors,
-    });
   } catch (error) {
     logger.error('[ReputationWorker] Worker error', {
       error: error instanceof Error ? error.message : String(error),
@@ -82,8 +76,6 @@ async function recalculateAllScores(): Promise<void> {
 }
 
 async function start() {
-  console.log('[ReputationWorker] Worker started');
-  console.log(`[ReputationWorker] Recalculating every ${WORKER_INTERVAL_MS / 1000 / 60 / 60} hours`);
 
   // Initial run
   await recalculateAllScores();
@@ -94,12 +86,12 @@ async function start() {
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
-  console.log('[ReputationWorker] Worker shutting down');
+
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[ReputationWorker] Worker shutting down');
+
   process.exit(0);
 });
 

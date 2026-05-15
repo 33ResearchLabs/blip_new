@@ -208,7 +208,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
   // ── DIAGNOSTIC: verify this hook is loaded and running ──
   useEffect(() => {
-    console.log('[useRealtimeChat] HOOK MOUNTED', { actorType, actorId, hasPusher: !!pusher, connected: pusher?.isConnected });
+
   }, [actorType, actorId, pusher]);
   const subscribedChannelsRef = useRef<Map<string, boolean>>(new Map());
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -365,10 +365,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           `/api/orders/${orderId}/messages${authParam}`,
         );
         if (!res.ok) {
-          console.log(
-            "Messages API not available - using demo mode",
-            res.status,
-          );
+
           return;
         }
         const data = await res.json();
@@ -397,7 +394,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           );
         }
       } catch (error) {
-        console.log("Messages API error - running in demo mode", error);
+
       }
     },
     [actorType, actorId, mapDbMessageToUI],
@@ -985,7 +982,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         );
 
         if (!res.ok) {
-          console.log("Messages API not available - demo mode");
+
           // Update status to sent even in demo mode
           setChatWindows((prev) =>
             prev.map((w) => {
@@ -1026,7 +1023,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           );
         }
       } catch (error) {
-        console.log("Send message error - demo mode, keeping local message");
+
       }
     },
     [actorType, actorId],

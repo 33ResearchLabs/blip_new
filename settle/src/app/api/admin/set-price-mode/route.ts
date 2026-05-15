@@ -88,8 +88,6 @@ export async function POST(request: NextRequest) {
     const adminUser = request.headers.get('authorization')?.slice(0, 20) || 'admin';
     await setPriceConfig(pair, price_mode as PriceMode, price_mode === 'MANUAL' ? admin_price : null, adminUser);
 
-    console.log(`[set-price-mode] ${pair}: ${price_mode}${price_mode === 'MANUAL' ? ` @ ${admin_price}` : ''}`);
-
     return NextResponse.json({
       success: true,
       data: { pair, price_mode, admin_price: price_mode === 'MANUAL' ? admin_price : null },

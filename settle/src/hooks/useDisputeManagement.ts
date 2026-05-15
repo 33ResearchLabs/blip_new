@@ -270,12 +270,12 @@ export function useDisputeManagement(
             } else {
               addNotification("dispute", `On-chain operation failed: ${errorMsg}`, selectedDispute.id);
             }
-            console.log("[Compliance] Escrow details for manual processing:", escrow);
+
           } finally {
             setIsProcessingOnChain(false);
           }
         } else if (data.data?.escrowDetails) {
-          console.log("[Compliance] Escrow details for manual processing:", data.data.escrowDetails);
+
           addNotification("system", `Escrow details logged to console for manual processing`, selectedDispute.id);
         }
 

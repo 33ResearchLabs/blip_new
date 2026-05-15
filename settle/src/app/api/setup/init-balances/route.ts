@@ -13,7 +13,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    console.log(`[Init Balances] Starting balance initialization to ${MOCK_INITIAL_BALANCE}...`);
 
     // Update users with 0 or null balance
     const usersResult = await query(
@@ -21,15 +20,11 @@ export async function POST(request: NextRequest) {
       [MOCK_INITIAL_BALANCE]
     );
 
-    console.log(`[Init Balances] Updated ${usersResult?.length || 0} users`);
-
     // Update merchants with 0 or null balance
     const merchantsResult = await query(
       'UPDATE merchants SET balance = $1 WHERE balance IS NULL OR balance = 0 RETURNING id, balance',
       [MOCK_INITIAL_BALANCE]
     );
-
-    console.log(`[Init Balances] Updated ${merchantsResult?.length || 0} merchants`);
 
     // Get summary
     const userStats = await query<{ count: string; total: string }>('SELECT COUNT(*) as count, SUM(balance) as total FROM users');
@@ -43,8 +38,6 @@ export async function POST(request: NextRequest) {
       totalUserBalance: parseFloat(userStats?.[0]?.total || '0'),
       totalMerchantBalance: parseFloat(merchantStats?.[0]?.total || '0'),
     };
-
-    console.log('[Init Balances] Summary:', summary);
 
     return NextResponse.json({
       success: true,

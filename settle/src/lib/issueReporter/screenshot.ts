@@ -81,7 +81,7 @@ function rateLimited(): boolean {
 
 const DEBUG = true;
 const log = (...args: unknown[]) => {
-  if (DEBUG) console.log('[IssueReporter/screenshot]', ...args);
+  if (DEBUG) 
 };
 
 export interface CaptureRegion {

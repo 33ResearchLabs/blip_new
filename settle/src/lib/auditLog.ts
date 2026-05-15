@@ -64,7 +64,6 @@ export function auditLog(
   // Structured JSON log line — easily parseable by log aggregators.
   // PRESERVED: this stdout line is the original behavior and remains the
   // primary signal. The DB write below is purely additive.
-  console.log(`[AUDIT] ${JSON.stringify(entry)}`);
 
   // Fire-and-forget DB persistence for order-scoped events.
   // The financial_audit_log table requires order_id + new_status NOT NULL,

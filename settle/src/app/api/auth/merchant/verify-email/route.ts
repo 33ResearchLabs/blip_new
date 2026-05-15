@@ -48,8 +48,6 @@ export async function GET(request: NextRequest) {
       [merchantId]
     );
 
-    console.log('[Verify Email] Merchant email verified:', merchantId);
-
     // Redirect to login with success message
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     return NextResponse.redirect(`${appUrl}/merchant?verified=true`);

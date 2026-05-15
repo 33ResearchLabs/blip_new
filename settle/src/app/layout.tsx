@@ -75,6 +75,26 @@ const themeScript = `
   })();
 `;
 
+// Dev-only filter: Next.js's HMR client logs "[Fast Refresh] rebuilding"
+// and "[Fast Refresh] done in Xms" on every hot update. The messages
+// come from `forward-logs-shared.ts` inside node_modules/next, so we
+// can't disable them from app code — but we can silence them by
+// shadowing console.log with a wrapper that drops any first-arg string
+// starting with "[Fast Refresh]". Gated to non-production builds at
+// emit time (see RootLayout below) so prod consoles are never patched.
+const fastRefreshSilencer = `
+  (function() {
+    try {
+      var _log = console.log;
+      console.log = function() {
+        var a = arguments[0];
+        if (typeof a === 'string' && a.indexOf('[Fast Refresh]') === 0) return;
+        return _log.apply(console, arguments);
+      };
+    } catch (e) {}
+  })();
+`;
+
 // Service worker cleanup — unregister any stale workers EXCEPT the
 // install-only worker used to make the app PWA-installable.
 const swScript = `
@@ -122,6 +142,16 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeScript }}
           suppressHydrationWarning
         />
+        {/* Dev-only: drop "[Fast Refresh]" log spam. Emitted before any
+            other client code runs so it patches console.log before
+            Next's HMR client wires up its logger. */}
+        {process.env.NODE_ENV !== 'production' && (
+          <script
+            nonce={nonce}
+            dangerouslySetInnerHTML={{ __html: fastRefreshSilencer }}
+            suppressHydrationWarning
+          />
+        )}
         <script
           nonce={nonce}
           dangerouslySetInnerHTML={{ __html: swScript }}

@@ -43,7 +43,6 @@ export async function executeSafeMutation<T = any>(
   } = options;
 
   try {
-    console.log(`[Mutation] ${method} ${endpoint}`, payload);
 
     const res = await fetchWithAuth(endpoint, {
       method,
@@ -81,7 +80,7 @@ export async function executeSafeMutation<T = any>(
     }
 
     // Success - refetch to get authoritative server state
-    console.log('[Mutation] Success, refetching order data');
+
     await refetchFn();
 
     if (toastSuccess) {
@@ -150,7 +149,7 @@ export async function refetchSingleOrder(
 
     const data = await res.json();
     if (data.success && data.data) {
-      console.log(`[Refetch] Order ${orderId} updated from server`);
+
       onUpdate(data.data);
     }
   } catch (error) {
@@ -184,7 +183,7 @@ export async function executeMutationWithOptimisticUpdate<TState, TResult = any>
 
   // Rollback on error
   if (!result.success) {
-    console.log('[Mutation] Rolling back optimistic update');
+
     optimistic.rollback();
   }
 

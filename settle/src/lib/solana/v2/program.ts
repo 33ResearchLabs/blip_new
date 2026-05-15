@@ -334,23 +334,12 @@ export async function initializeProtocolConfig(
   const [protocolConfigPda] = findProtocolConfigPda();
   const treasuryPubkey = treasury || getFeeTreasury();
 
-  console.log('[initializeProtocolConfig] Parameters:');
-  console.log('  authority:', authority.toString());
-  console.log('  protocolConfigPda:', protocolConfigPda.toString());
-  console.log('  treasuryPubkey:', treasuryPubkey.toString());
-  console.log('  systemProgram:', SystemProgram.programId.toString());
-  console.log('  feeBps:', feeBps, typeof feeBps);
-  console.log('  maxFeeBps:', maxFeeBps, typeof maxFeeBps);
-  console.log('  minFeeBps:', minFeeBps, typeof minFeeBps);
-
   // Validate parameters
   if (!authority) throw new Error('Authority is required');
   if (!treasuryPubkey) throw new Error('Treasury is required');
   if (typeof feeBps !== 'number') throw new Error('feeBps must be a number');
   if (typeof maxFeeBps !== 'number') throw new Error('maxFeeBps must be a number');
   if (typeof minFeeBps !== 'number') throw new Error('minFeeBps must be a number');
-
-  console.log('[initializeProtocolConfig] Calling initializeConfig...');
 
   // Belt-and-braces: if the PDA already exists on-chain, don't try to
   // allocate it again (the system program rejects with 0x0 "account
@@ -361,21 +350,18 @@ export async function initializeProtocolConfig(
     'confirmed'
   );
   if (existing) {
-    console.log('[initializeProtocolConfig] Already initialized at', protocolConfigPda.toBase58());
+
     return 'already-initialized';
   }
 
   // Build the instruction step by step to catch errors
   try {
     const methods = (program.methods as any);
-    console.log('[initializeProtocolConfig] Got methods object:', !!methods);
-    console.log('[initializeProtocolConfig] Has initializeConfig:', !!methods.initializeConfig);
 
     // 0.30+ IDL: `initialize_config` takes a single `params: InitializeConfigParams`
     // struct ({ fee_bps, max_fee_bps, min_fee_bps }). Anchor TS client
     // camelCase-maps snake_case field names automatically.
     const methodBuilder = methods.initializeConfig({ feeBps, maxFeeBps, minFeeBps });
-    console.log('[initializeProtocolConfig] Method builder created:', !!methodBuilder);
 
     const accountsBuilder = methodBuilder.accounts({
       authority,
@@ -383,11 +369,8 @@ export async function initializeProtocolConfig(
       treasury: treasuryPubkey,
       systemProgram: SystemProgram.programId,
     });
-    console.log('[initializeProtocolConfig] Accounts builder created:', !!accountsBuilder);
 
-    console.log('[initializeProtocolConfig] About to call RPC...');
     const tx = await accountsBuilder.rpc({ commitment: 'confirmed' });
-    console.log('[initializeProtocolConfig] RPC call succeeded!');
 
     return tx;
   } catch (error) {

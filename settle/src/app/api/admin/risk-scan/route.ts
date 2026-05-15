@@ -242,11 +242,6 @@ export async function POST(request: NextRequest) {
   const totalFlags = results.multi_account_devices + results.ip_clusters +
     results.frequent_device_changes + results.high_cancellation + results.dispute_spikes;
 
-  console.log('[RISK_SCAN] Completed', {
-    ...results,
-    total_new_flags: totalFlags,
-  });
-
   return NextResponse.json({
     success: true,
     data: {

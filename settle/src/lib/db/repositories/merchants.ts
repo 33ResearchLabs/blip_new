@@ -181,7 +181,6 @@ export async function updateMerchant(
   return result;
 }
 
-
 /**
  * Serialize a merchant DB row to the API response DTO.
  * Single source of truth — replaces 6+ inline object spreads in auth/merchant/route.ts.
@@ -318,8 +317,6 @@ export async function findBestOffer(
       break;
   }
 
-  console.log('[DB] findBestOffer - type:', type, 'paymentMethod:', paymentMethod, 'amount:', amount, 'preference:', preference);
-
   // For "buy" offers (user is selling), merchant wallet is REQUIRED for escrow release
   // Filter out merchants without wallets to avoid matching failures
   const walletFilter = type === 'buy' ? "AND m.wallet_address IS NOT NULL AND m.wallet_address != ''" : '';
@@ -351,7 +348,6 @@ export async function findBestOffer(
     [type, paymentMethod, amount]
   );
 
-  console.log('[DB] findBestOffer result:', result ? { id: result.id, merchant_id: result.merchant_id, merchant: result.merchant } : 'null');
   return result;
 }
 

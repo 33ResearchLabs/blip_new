@@ -211,7 +211,7 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     const handleTypingStart = (raw: unknown) => {
       const data = raw as { senderId: string };
       const currentContactId = activeContactIdRef.current;
-      console.log('[useDirectChat] TYPING_START received', { senderId: data.senderId, currentContactId });
+
       if (!currentContactId || data.senderId !== currentContactId) return;
       setIsContactTyping(true);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
@@ -220,12 +220,12 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     const handleTypingStop = (raw: unknown) => {
       const data = raw as { senderId: string };
       const currentContactId = activeContactIdRef.current;
-      console.log('[useDirectChat] TYPING_STOP received', { senderId: data.senderId, currentContactId });
+
       if (!currentContactId || data.senderId !== currentContactId) return;
       setIsContactTyping(false);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
-    console.log('[useDirectChat] subscribing to typing on', channelName);
+
     channel.bind(CHAT_EVENTS.TYPING_START, handleTypingStart);
     channel.bind(CHAT_EVENTS.TYPING_STOP, handleTypingStop);
 

@@ -55,11 +55,10 @@ function getCachedResult<T>(key: string, ttlMs: number): CachedResult<T> | null 
     if (age > ttlMs) {
       // Expired, remove from cache
       localStorage.removeItem(storageKey);
-      console.log('[Idempotency] Cache expired:', key, `(age: ${age}ms, ttl: ${ttlMs}ms)`);
+
       return null;
     }
 
-    console.log('[Idempotency] Cache hit:', key, `(age: ${age}ms)`);
     return parsed;
   } catch (error) {
     console.error('[Idempotency] Error reading cache:', error);
@@ -85,7 +84,7 @@ function setCachedResult<T>(key: string, result: T): void {
     };
 
     localStorage.setItem(storageKey, JSON.stringify(cached));
-    console.log('[Idempotency] Result cached:', key);
+
   } catch (error) {
     console.error('[Idempotency] Error writing cache:', error);
   }
@@ -122,7 +121,7 @@ export async function executeWithIdempotency<T>(
   const cached = getCachedResult<T>(key, ttlMs);
 
   if (cached) {
-    console.log('[Idempotency] Returning cached result for:', key);
+
     return {
       result: cached.result,
       cached: true,
@@ -130,7 +129,7 @@ export async function executeWithIdempotency<T>(
   }
 
   // Execute operation
-  console.log('[Idempotency] Executing fresh operation:', key);
+
   const result = await operation();
 
   // Cache result
@@ -153,7 +152,7 @@ export function clearCachedResult(key: string): void {
   try {
     const storageKey = IDEMPOTENCY_PREFIX + key;
     localStorage.removeItem(storageKey);
-    console.log('[Idempotency] Cache cleared:', key);
+
   } catch (error) {
     console.error('[Idempotency] Error clearing cache:', error);
   }
@@ -178,7 +177,6 @@ export function clearAllCachedResults(): void {
       }
     }
 
-    console.log('[Idempotency] Cleared all cached results:', cleared, 'items');
   } catch (error) {
     console.error('[Idempotency] Error clearing all cache:', error);
   }

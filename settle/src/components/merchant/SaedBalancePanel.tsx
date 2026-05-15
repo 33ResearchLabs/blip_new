@@ -27,7 +27,6 @@ export function SaedBalancePanel({
   merchantId,
   isMockMode,
 }: SaedBalancePanelProps) {
-  console.log('[SaedBalancePanel] Render - merchantId:', merchantId, 'isMockMode:', isMockMode);
 
   const [balances, setBalances] = useState<Balances>({
     usdt: 0,
@@ -150,8 +149,6 @@ export function SaedBalancePanel({
       </div>
     );
   }
-
-  console.log('[SaedBalancePanel] Rendering panel with balances:', balances);
 
   return (
     <>

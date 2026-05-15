@@ -13,7 +13,7 @@ export function captureError(error: unknown, context?: Record<string, unknown>) 
 }
 
 export function captureMessage(message: string, level: 'info' | 'warning' | 'error' = 'info') {
-  console.log(`[${level.toUpperCase()}]`, message);
+
   try {
     const Sentry = require('@sentry/nextjs');
     Sentry.captureMessage(message, level);
@@ -136,7 +136,6 @@ export function startMetricsReporter(intervalMs = 60_000): void {
   reporterTimer = setInterval(async () => {
     try {
       const m = await getMetricsSnapshot();
-      console.log(JSON.stringify({ level: 'info', msg: '[Metrics]', ...m }));
 
       if (m.db.pool.waiting > 5) {
         console.warn(JSON.stringify({ level: 'warn', msg: '[Metrics] DB pool contention', waiting: m.db.pool.waiting }));
@@ -153,7 +152,7 @@ export function startMetricsReporter(intervalMs = 60_000): void {
   }, intervalMs);
 
   reporterTimer.unref();
-  console.log(`[Metrics] Reporter started (${intervalMs}ms interval)`);
+
 }
 
 export function stopMetricsReporter(): void {

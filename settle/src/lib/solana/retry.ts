@@ -150,11 +150,11 @@ export async function retryWithBackoff<T>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[Retry] Attempt ${attempt + 1}/${maxRetries + 1}`);
+
       const result = await operation();
 
       if (attempt > 0) {
-        console.log(`[Retry] ✅ Succeeded on attempt ${attempt + 1}`);
+
       }
 
       return result;

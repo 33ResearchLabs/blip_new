@@ -121,12 +121,7 @@ export async function POST(request: NextRequest) {
         [isOnline, actorId]
       )
         .then((rows) => {
-          console.log('[heartbeat] merchants.last_seen_at update', {
-            actorId,
-            isOnline,
-            affected: Array.isArray(rows) ? rows.length : null,
-            row: Array.isArray(rows) && rows[0] ? rows[0] : null,
-          });
+
         })
         .catch((err) => {
           console.error('[heartbeat] merchants.last_seen_at UPDATE failed', {

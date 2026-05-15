@@ -87,7 +87,7 @@ export function useUserAuth({
         body: JSON.stringify({ wallet_address: walletAddress, type: 'user', name }),
       });
       if (!res.ok) {
-        console.log('Auth API not available - running in demo mode');
+
         return false;
       }
       const data = await res.json();
@@ -116,11 +116,11 @@ export function useUserAuth({
   setEscrowTxStatusRef.current = setEscrowTxStatus;
 
   const handleSolanaWalletConnect = useCallback(async (walletAddress: string) => {
-    console.log('[User] Wallet connected via modal:', walletAddress);
+
     setShowWalletModal(false);
     if (escrowTxStatusRef.current === 'connecting') {
       setEscrowTxStatusRef.current('idle');
-      console.log('[Wallet] Connected during escrow flow, user can now click Confirm & Lock');
+
     }
   }, []);
 
@@ -446,7 +446,6 @@ export function useUserAuth({
 
         if (savedUser) {
           const user = JSON.parse(savedUser);
-          console.log('[Session] Restoring user session:', user.username);
 
           const checkRes = await fetchWithAuth(`/api/auth/user?action=check_session&user_id=${user.id}`);
           if (checkRes.ok) {
@@ -478,7 +477,7 @@ export function useUserAuth({
               return;
             }
           }
-          console.log('[Session] User session invalid, clearing...');
+
           // The server has already told us the session is gone — run the
           // shared logout sweep so we drop EVERY auth/identity key + any
           // unlocked wallet session material in one place, not just the

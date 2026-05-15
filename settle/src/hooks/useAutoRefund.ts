@@ -28,14 +28,14 @@ export function useAutoRefund({
     autoRefundInFlightRef.current.add(order.id);
 
     try {
-      console.log(`[AutoRefund] Refunding escrow for order ${order.id}...`);
+
       const refundResult = await solanaWallet.refundEscrow({
         creatorPubkey: order.escrowCreatorWallet || '',
         tradeId: order.escrowTradeId || 0,
       });
 
       if (refundResult.success) {
-        console.log(`[AutoRefund] Success: ${refundResult.txHash}`);
+
         addNotification('system', `Escrow auto-refunded! ${order.amount} USDT returned to your wallet.`, order.id);
         playSound('click');
 
@@ -73,7 +73,7 @@ export function useAutoRefund({
         || errMsg.includes('0x1791')
         || errMsg.includes('already been refunded')
         || errMsg.includes('never funded')) {
-        console.log(`[AutoRefund] Skipped for ${order.id}: ${errMsg.slice(0, 120)}`);
+
       } else {
         console.warn(`[AutoRefund] Error for ${order.id}:`, errMsg);
       }

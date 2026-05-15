@@ -47,9 +47,9 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        console.log('[API] Checking username availability:', username);
+
         const available = await checkUsernameAvailable(username);
-        console.log('[API] Username availability result:', { username, available });
+
         return NextResponse.json({
           success: true,
           data: { available },
@@ -103,8 +103,6 @@ export async function POST(request: NextRequest) {
         // Existing user without a proper username
         needsUsername = true;
       }
-
-      console.log('[API] User authenticated via wallet:', user.id, user.username, { isNewUser, needsUsername });
 
       // Fire-and-forget: device + IP tracking (never blocks auth)
       trackRequest(request, {
@@ -261,8 +259,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      console.log('[API] Username set for user:', user.id, username);
-
       const setUnPayload = { actorId: user.id, actorType: 'user' as const };
       const setUsernameToken = generateSessionToken(setUnPayload);
 
@@ -336,8 +332,6 @@ export async function POST(request: NextRequest) {
           userId: user.id,
         }, { status: 403 });
       }
-
-      console.log('[API] User login successful:', user.id, user.username);
 
       // Fire-and-forget: device + IP tracking
       trackRequest(request, { entityId: user.id, entityType: 'user', action: 'login' }).catch(() => {});
@@ -499,8 +493,6 @@ export async function POST(request: NextRequest) {
         console.error('[user register] failed to create verification token:', emailErr);
       }
 
-      console.log('[API] New user registered:', user.id, user.username);
-
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: user.id, entityType: 'user', action: 'signup' }).catch(() => {});
 
@@ -570,8 +562,6 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
-
-        console.log('[API] Wallet linked to user:', user_id, wallet_address);
 
         return NextResponse.json({
           success: true,
@@ -674,10 +664,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('[API] GET /api/auth/user - fetching user:', userId);
     const user = await getUserById(userId);
     if (!user) {
-      console.log('[API] GET /api/auth/user - user not found:', userId);
+
       return NextResponse.json(
         { success: false, error: 'User not found' },
         { status: 404 }

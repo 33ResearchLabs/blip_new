@@ -99,7 +99,7 @@ function log(level: LogLevel, message: string, context?: LogContext, error?: Err
   switch (level) {
     case 'debug':
     case 'info':
-      console.log(formatted);
+
       break;
     case 'warn':
       console.warn(formatted);

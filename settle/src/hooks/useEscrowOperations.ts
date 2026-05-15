@@ -437,7 +437,7 @@ export function useEscrowOperations({
               else console.error(`[Escrow] Attempt ${attempt + 1} — server returned success:false`, data);
             } else if (res.status === 409) {
               // 409 = already escrowed (idempotent) — treat as success
-              console.log(`[Escrow] Attempt ${attempt + 1} — already escrowed (409), treating as success`);
+
               recorded = true;
             } else {
               const errData = await res.json().catch(() => ({}));
@@ -665,18 +665,15 @@ export function useEscrowOperations({
         // Ensure acceptTrade is called first (merchant joins escrow as counterparty)
         // This is required before releaseEscrow — the on-chain trade must be in Locked state
         try {
-          console.log('[Release] Ensuring acceptTrade before release:', {
-            tradeId: escrowTradeId,
-            creatorWallet: escrowCreatorWallet,
-          });
+
           await solanaWallet.acceptTrade({
             creatorPubkey: escrowCreatorWallet,
             tradeId: escrowTradeId,
           });
-          console.log('[Release] acceptTrade succeeded (or was already done)');
+
         } catch (acceptErr: any) {
           // Expected to fail if already accepted — safe to continue
-          console.log('[Release] acceptTrade skipped (likely already done):', acceptErr?.message);
+
         }
 
         try {
@@ -691,7 +688,7 @@ export function useEscrowOperations({
 
           // Escrow account gone = already released on-chain, just sync DB
           if (msg.includes('AccountNotInitialized')) {
-            console.log('[Release] Escrow already released on-chain — syncing backend...');
+
             releaseResult = { success: true, txHash: releaseOrder.escrowTxHash || 'already-released' };
           } else if (msg.includes('ConstraintRaw') || msg.includes('CannotRelease')) {
             dispatch({ type: 'SET_ERROR', op: 'release', error: `Unable to release escrow: ${msg.slice(0, 200)}` });

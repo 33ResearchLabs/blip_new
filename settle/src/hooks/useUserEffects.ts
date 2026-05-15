@@ -348,20 +348,20 @@ export function useUserEffects({
       }
 
       if (newStatus === 'escrowed') {
-        console.log('[User] Escrow locked - refetching order data');
+
         refetchActiveOrder();
 
         if (solanaWallet.connected && orderData) {
           const escrowCreatorWallet = (orderData as any).escrow_creator_wallet;
           const escrowTradeId = (orderData as any).escrow_trade_id;
           if (escrowCreatorWallet && escrowTradeId) {
-            console.log('[User] Auto-calling acceptTrade on-chain:', { escrowCreatorWallet, escrowTradeId });
+
             solanaWallet.acceptTrade({
               creatorPubkey: escrowCreatorWallet,
               tradeId: Number(escrowTradeId),
             }).then((result: any) => {
               if (result.success) {
-                console.log('[User] acceptTrade success:', result.txHash);
+
               } else {
                 console.warn('[User] acceptTrade failed:', result.error);
               }
@@ -469,16 +469,16 @@ export function useUserEffects({
     if (acceptTradeCalledRef.current.has(activeOrder.id)) return;
 
     acceptTradeCalledRef.current.add(activeOrder.id);
-    console.log('[User] Safety net: calling acceptTrade for escrowed order', activeOrder.id);
+
     solanaWallet.acceptTrade({
       creatorPubkey: activeOrder.escrowCreatorWallet,
       tradeId: Number(activeOrder.escrowTradeId),
     }).then((result: any) => {
       if (result.success) {
-        console.log('[User] acceptTrade success (safety net):', result.txHash);
+
       }
     }).catch((err: any) => {
-      console.log('[User] acceptTrade skipped (likely already accepted):', err.message);
+
     });
   }, [activeOrder?.id, activeOrder?.dbStatus, activeOrder?.escrowCreatorWallet, solanaWallet.connected]);
 
@@ -682,7 +682,6 @@ export function useUserEffects({
     );
 
     if (stuck.length === 0) return;
-    console.log(`[UserAutoRefund] Found ${stuck.length} stuck escrow(s) — refunding via user wallet…`);
 
     for (const order of stuck) {
       if (userRefundInFlightRef.current.has(order.id)) continue;
@@ -713,7 +712,7 @@ export function useUserEffects({
                 refund_tx_hash: sentinel,
               }),
             });
-            console.log(`[UserAutoRefund] ${order.id}: marked resolved (${reason})`);
+
           } catch {
             // Network blip — next scan will see the same state and retry. Not fatal.
           }
@@ -725,7 +724,7 @@ export function useUserEffects({
             tradeId: order.escrowTradeId || 0,
           });
           if (refund?.success && refund?.txHash) {
-            console.log(`[UserAutoRefund] ✓ ${order.id}: ${refund.txHash}`);
+
             await markResolvedInDb(refund.txHash, 'refunded on-chain');
             try { solanaWallet.refreshBalances?.(); } catch { /* ignore */ }
           } else if (refund?.error) {
@@ -749,7 +748,7 @@ export function useUserEffects({
               msg.includes('Error Number: 3003');
 
             if (alreadyClosed) {
-              console.log(`[UserAutoRefund] ${order.id}: escrow already closed on-chain`);
+
               await markResolvedInDb('already-closed-on-chain', 'escrow already closed');
             } else if (programIncompatible) {
               console.warn(`[UserAutoRefund] ${order.id}: program-incompatible — needs manual admin recovery`);
@@ -773,7 +772,7 @@ export function useUserEffects({
             msg.includes('0xbbb') ||
             msg.includes('Error Number: 3003');
           if (alreadyClosed) {
-            console.log(`[UserAutoRefund] ${order.id}: escrow already closed on-chain (caught)`);
+
             await markResolvedInDb('already-closed-on-chain', 'escrow already closed');
           } else if (programIncompatible) {
             console.warn(`[UserAutoRefund] ${order.id}: program-incompatible (caught) — needs manual admin recovery`);

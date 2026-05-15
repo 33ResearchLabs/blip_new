@@ -28,7 +28,7 @@ export function useUserDataFetching() {
       if (opts?.days) params.set('days', opts.days.toString());
       const res = await fetchWithAuth(`/api/orders?${params}`);
       if (!res.ok) {
-        console.log('Orders API not available - running in demo mode');
+
         return;
       }
       const data = await res.json();
@@ -45,7 +45,7 @@ export function useUserDataFetching() {
     try {
       const res = await fetchWithAuth(`/api/users/${uid}/bank-accounts`);
       if (!res.ok) {
-        console.log('Bank accounts API not available - running in demo mode');
+
         return;
       }
       const data = await res.json();
@@ -91,7 +91,7 @@ export function useUserDataFetching() {
         }),
       });
       if (!res.ok) {
-        console.log('Bank accounts API not available - running in demo mode');
+
         setBankAccounts(prev => [...prev, {
           id: `demo_${Date.now()}`,
           bank: newBank.bank,

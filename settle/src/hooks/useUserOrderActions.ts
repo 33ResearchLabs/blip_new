@@ -142,10 +142,7 @@ export function useUserOrderActions({
 
   const markPaymentSent = async () => {
     if (!activeOrder || !userId) {
-      console.log("markPaymentSent: missing activeOrder or userId", {
-        activeOrder: !!activeOrder,
-        userId,
-      });
+
       return;
     }
 
@@ -188,7 +185,7 @@ export function useUserOrderActions({
             tradeId: activeOrder.escrowTradeId,
           });
           if (acceptResult.success) {
-            console.log("[User] acceptTrade success:", acceptResult.txHash);
+
           } else {
             const errMsg = acceptResult.error ?? 'unknown';
             const isAlreadyAccepted = KNOWN_ALREADY_ACCEPTED.some((k) =>
@@ -203,7 +200,7 @@ export function useUserOrderActions({
               setIsLoading(false);
               return;
             }
-            console.log('[User] acceptTrade: trade already accepted — proceeding');
+
           }
         } catch (acceptErr: unknown) {
           const errMsg =
@@ -221,7 +218,7 @@ export function useUserOrderActions({
             setIsLoading(false);
             return;
           }
-          console.log('[User] acceptTrade: trade already accepted — proceeding');
+
         }
       }
 
@@ -337,29 +334,17 @@ export function useUserOrderActions({
           return;
         }
 
-        console.log("[Release] Releasing escrow to merchant:", {
-          creatorPubkey: activeOrder.escrowCreatorWallet,
-          tradeId: activeOrder.escrowTradeId,
-          counterparty: merchantWallet,
-          merchantName: activeOrder.merchant.name,
-        });
-
         let releaseResult: { success: boolean; txHash: string; error?: string };
         try {
           try {
-            console.log("[Release] Ensuring acceptTrade before release...");
+
             await solanaWallet.acceptTrade({
               creatorPubkey: activeOrder.escrowCreatorWallet,
               tradeId: activeOrder.escrowTradeId,
             });
-            console.log(
-              "[Release] acceptTrade succeeded (or was already done)",
-            );
+
           } catch (acceptErr: any) {
-            console.log(
-              "[Release] acceptTrade skipped (likely already done):",
-              acceptErr?.message,
-            );
+
           }
 
           releaseResult = await solanaWallet.releaseEscrow({
@@ -380,9 +365,7 @@ export function useUserOrderActions({
             // Anchor error 6027 = trade in invalid state for release
             msg.includes("6027");
           if (isAlreadyReleased) {
-            console.log(
-              "[Release] Escrow already released on-chain, completing order...",
-            );
+
             let backendOk = false;
             try {
               const escrowRes = await fetchWithAuth(
@@ -404,7 +387,7 @@ export function useUserOrderActions({
                 },
               );
               backendOk = escrowRes.ok;
-              console.log("[Release] Core-api release result:", backendOk);
+
             } catch (backendErr) {
               console.error("[Release] Core-api release failed:", backendErr);
             }
@@ -425,7 +408,7 @@ export function useUserOrderActions({
                     }),
                   },
                 );
-                console.log("[Release] Direct completion result:", patchRes.ok);
+
               } catch (patchErr) {
                 console.error("[Release] Direct completion failed:", patchErr);
               }
@@ -466,8 +449,6 @@ export function useUserOrderActions({
           setIsLoading(false);
           return;
         }
-
-        console.log("[Release] Escrow released:", releaseResult.txHash);
 
         // PATCH /escrow requires Idempotency-Key for the release transition —
         // without it the backend silently rejects the sync, the DB stays at
@@ -620,10 +601,6 @@ export function useUserOrderActions({
         activeOrder.escrowTradeId &&
         activeOrder.escrowCreatorWallet
       ) {
-        console.log("[User] Opening on-chain dispute:", {
-          tradeId: activeOrder.escrowTradeId,
-          creatorWallet: activeOrder.escrowCreatorWallet,
-        });
 
         try {
           const disputeResult = await solanaWallet.openDispute({
@@ -632,10 +609,7 @@ export function useUserOrderActions({
           });
 
           if (disputeResult.success) {
-            console.log(
-              "[User] On-chain dispute opened:",
-              disputeResult.txHash,
-            );
+
           } else {
             console.warn("[User] On-chain dispute failed, continuing with API");
           }

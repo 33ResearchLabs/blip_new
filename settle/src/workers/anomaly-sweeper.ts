@@ -296,21 +296,21 @@ async function runSweep(): Promise<void> {
 
 async function start(): Promise<void> {
   if (!ENABLED) {
-    console.log('[anomaly-sweeper] Disabled (ENABLE_ERROR_TRACKING or ENABLE_ANOMALY_SWEEPER not "true"/not set)');
+
     return;
   }
-  console.log(`[anomaly-sweeper] Started (interval: ${SWEEP_INTERVAL_MS}ms)`);
+
   // Initial run after a short delay so DB pool is warm
   setTimeout(() => { runSweep().catch(() => {}); }, 5_000);
   setInterval(() => { runSweep().catch(() => {}); }, SWEEP_INTERVAL_MS);
 }
 
 process.on('SIGINT', () => {
-  console.log('[anomaly-sweeper] Worker shutting down');
+
   process.exit(0);
 });
 process.on('SIGTERM', () => {
-  console.log('[anomaly-sweeper] Worker shutting down');
+
   process.exit(0);
 });
 

@@ -76,7 +76,7 @@ function buildClient(role: 'pub' | 'sub'): RedisClient | null {
     }
   });
   client.on('ready', () => {
-    console.log(`${TAG} redis ${role} ready`);
+
     if (role === 'pub') {
       publisherWarned = false;
       void flushRetryBuffer();
@@ -90,7 +90,7 @@ function buildClient(role: 'pub' | 'sub'): RedisClient | null {
 async function flushRetryBuffer(): Promise<void> {
   if (!publisher || retryBuffer.length === 0) return;
   const drained = retryBuffer.splice(0, retryBuffer.length);
-  console.log(`${TAG} flushing ${drained.length} buffered events`);
+
   for (const payload of drained) {
     try {
       await publisher.publish(SHADOW_CHANNEL, payload);
@@ -162,7 +162,7 @@ export function subscribeShadowEvents(handler: ShadowEventHandler): () => Promis
       console.warn(`${TAG} subscribe failed:`, err.message);
       return;
     }
-    console.log(`${TAG} subscribed to ${SHADOW_CHANNEL} (channels=${count})`);
+
   });
 
   client.on('message', (channel, message) => {
