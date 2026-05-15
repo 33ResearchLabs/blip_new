@@ -529,9 +529,22 @@ export function useOrderActions({
         actor_id: merchantId,
       };
 
-      // Include wallet address for auto-claim scenarios
+      // Include wallet address + a fresh ownership signature. The backend
+      // runs assertWalletOwnership: Option A compares against the merchant's
+      // profile wallet, which can mismatch the wallet recorded on the order
+      // (e.g. buyer accepted with a freshly-imported wallet that wasn't yet
+      // persisted to merchants.wallet_address). Option B unblocks that case
+      // — sign the canonical "Claim order …" binding so the server can
+      // verify the user controls this wallet, regardless of profile drift.
       if (isValidSolanaAddress(solanaWallet.walletAddress)) {
         actionBody.acceptor_wallet_address = solanaWallet.walletAddress;
+        try {
+          const bindingMsg = `Claim order ${order.id} - I will send fiat payment. Wallet: ${solanaWallet.walletAddress}`;
+          const sigBytes = await solanaWallet.signMessage(new TextEncoder().encode(bindingMsg));
+          actionBody.acceptor_wallet_signature = bs58.encode(sigBytes);
+        } catch (sigErr) {
+          console.warn('[Merchant] SEND_PAYMENT ownership signature failed; server may reject:', sigErr);
+        }
       }
 
       // SEND_PAYMENT is a financial transition — backend rejects without
