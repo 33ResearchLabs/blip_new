@@ -80,7 +80,7 @@ async function collectTicks() {
   const summary = results
     .map((r) => ('failed' in r ? `${r.pair}=FAIL` : `${r.pair}=${r.price}(${r.source})`))
     .join(' ');
-  console.log(`[price-tick] ${summary}`);
+
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ async function runCleanup() {
   try {
     const deleted = await cleanupOldTicks(HOURS_TO_KEEP);
     if (deleted > 0) {
-      console.log(`[price-tick] Cleaned up ${deleted} ticks older than ${HOURS_TO_KEEP}h`);
+
     }
   } catch (err) {
     console.error('[price-tick] Cleanup error:', err);
@@ -103,9 +103,6 @@ async function runCleanup() {
 // ---------------------------------------------------------------------------
 
 async function start() {
-  console.log('[price-tick] Price Tick Collector started');
-  console.log(`[price-tick] Collecting every ${TICK_INTERVAL_MS / 1000}s for ${SUPPORTED_PAIRS.length} pairs`);
-  console.log(`[price-tick] Pairs: ${SUPPORTED_PAIRS.map((p) => p.id).join(', ')}`);
 
   // Initial run
   await collectTicks();
@@ -119,12 +116,12 @@ async function start() {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('[price-tick] Shutting down');
+
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[price-tick] Shutting down');
+
   process.exit(0);
 });
 

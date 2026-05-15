@@ -275,7 +275,6 @@ export async function requireAdminAuth(request: NextRequest): Promise<NextRespon
   return null;
 }
 
-
 export interface AuthContext {
   userId?: string;
   merchantId?: string;
@@ -609,19 +608,7 @@ export async function getVerifiedAuthContext(
     const sensitiveTokenPct = sensitiveTotal > 0
       ? ((authMigrationMetrics.sensitiveTokenAuth / sensitiveTotal) * 100).toFixed(1)
       : 'N/A';
-    console.log('[AUTH_MIGRATION] Metrics', {
-      totalRequests,
-      tokenAuth: authMigrationMetrics.tokenAuth,
-      headerAuth: authMigrationMetrics.headerAuth,
-      tokenPct: `${tokenPct}%`,
-      sensitiveRoutes: {
-        total: sensitiveTotal,
-        tokenAuth: authMigrationMetrics.sensitiveTokenAuth,
-        headerAuth: authMigrationMetrics.sensitiveHeaderAuth,
-        tokenPct: `${sensitiveTokenPct}%`,
-      },
-      enforcement: AUTH_TOKEN_REQUIRED ? 'STRICT' : 'SOFT',
-    });
+
   }
 
   return auth;

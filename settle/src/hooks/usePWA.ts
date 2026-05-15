@@ -114,7 +114,6 @@ export function registerServiceWorker() {
         const registration = await navigator.serviceWorker.register('/sw.js', {
           scope: '/',
         });
-        console.log('[PWA] Service Worker registered:', registration.scope);
 
         // Check for updates
         registration.addEventListener('updatefound', () => {
@@ -123,7 +122,7 @@ export function registerServiceWorker() {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                 // New content available, prompt user to refresh
-                console.log('[PWA] New content available');
+
               }
             });
           }

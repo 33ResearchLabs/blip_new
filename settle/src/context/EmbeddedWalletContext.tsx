@@ -642,12 +642,12 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     if (onChainTrade?.counterparty) {
       counterpartyPk = onChainTrade.counterparty;
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[EmbeddedWallet] releaseEscrow using on-chain counterparty:', counterpartyPk.toString());
+
       }
     } else {
       counterpartyPk = new PublicKey(params.counterparty);
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[EmbeddedWallet] releaseEscrow using passed counterparty:', counterpartyPk.toString());
+
       }
     }
 

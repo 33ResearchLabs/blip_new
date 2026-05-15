@@ -158,7 +158,7 @@ export function useOrderActions({
           const errMsg = acceptError?.message || acceptError?.toString() || '';
           // CannotAccept / 0x177d = trade already accepted (e.g. auto-fix ran first) — continue
           if (errMsg.includes('CannotAccept') || errMsg.includes('0x177d') || errMsg.includes('6013')) {
-            console.log('[Go] Trade already accepted on-chain, continuing to backend accept');
+
           } else {
             console.error('[Go] Error accepting trade on-chain:', acceptError);
             addNotification('system', `Failed to join escrow: ${errMsg}`, order.id);
@@ -504,13 +504,13 @@ export function useOrderActions({
             creatorPubkey: order.escrowCreatorWallet!,
             tradeId: order.escrowTradeId!,
           });
-          console.log('[Merchant] On-chain acceptTrade succeeded — escrow now in Locked state');
+
         } catch (joinErr: unknown) {
           const joinMsg = joinErr instanceof Error ? joinErr.message : String(joinErr);
           // CannotAccept (6011) = already accepted/locked — safe to continue
           // 0x177d = already accepted variant
           if (joinMsg.includes('CannotAccept') || joinMsg.includes('0x177d') || joinMsg.includes('6011')) {
-            console.log('[Merchant] On-chain escrow already in Locked state, continuing');
+
           } else if (joinMsg.includes('User rejected')) {
             addNotification('system', 'Wallet signature rejected. Please try again.', order.id);
             playSound('error');
@@ -751,7 +751,7 @@ export function useOrderActions({
                   errMsg.includes('Released');
 
                 if (looksLikeAlreadyDone) {
-                  console.log('[Merchant] Escrow account missing — checking on-chain history for an actual ReleaseEscrow tx');
+
                   // Look up the real release tx hash from on-chain. If a
                   // ReleaseEscrow already ran successfully (race with a prior
                   // click, reconciliation worker, etc.), we'll find its
@@ -775,9 +775,9 @@ export function useOrderActions({
                       );
                       if (outcome.kind === 'released') {
                         onChainReleaseTxHash = outcome.signature;
-                        console.log('[Merchant] Found on-chain ReleaseEscrow tx:', outcome.signature);
+
                       } else {
-                        console.log('[Merchant] No on-chain release found, outcome:', outcome.kind);
+
                       }
                     }
                   } catch (lookupErr) {
@@ -799,7 +799,7 @@ export function useOrderActions({
                         }),
                       });
                       if (syncRes.ok) {
-                        console.log('[Merchant] Backend confirmed release — marking order complete');
+
                         playSound('trade_complete');
                         addNotification('complete', `Order completed - ${order.amount} USDT released to buyer`, orderId);
                         await afterMutationReconcile(orderId, { status: 'completed' as const });

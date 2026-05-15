@@ -162,7 +162,6 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
       switch (message.type) {
         case 'connected': {
           setConnectionId(message.connectionId);
-          console.log('[WebSocket] Connected:', message.connectionId);
 
           // Re-subscribe to ALL rooms after (re)connect — not just the ones
           // currently in `pending`. The server has no memory of our previous
@@ -197,7 +196,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
           if (message.success) {
             subscribedOrdersRef.current.add(message.orderId);
             pendingSubscriptionsRef.current.delete(message.orderId);
-            console.log('[WebSocket] Subscribed to order:', message.orderId);
+
           } else {
             console.error('[WebSocket] Subscription failed:', message.orderId, message.error);
             pendingSubscriptionsRef.current.delete(message.orderId);
@@ -206,7 +205,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
 
         case 'chat:unsubscribed':
           subscribedOrdersRef.current.delete(message.orderId);
-          console.log('[WebSocket] Unsubscribed from order:', message.orderId);
+
           break;
 
         case 'chat:message-new':
@@ -225,7 +224,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
         case 'order:status-updated':
         case 'order:created':
         case 'order:cancelled':
-          console.log('[WebSocket] Order event:', message.type, message);
+
           orderEventCallbacksRef.current.forEach((cb) => cb(message as WSOrderEvent));
           break;
 
@@ -297,15 +296,13 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
     // identity from the ticket. The URL stays free of any auth material.
     const url = `${protocol}//${host}/ws/chat`;
 
-    console.log('[WebSocket] Connecting to:', url);
-
     try {
       const ws = new WebSocket(url, ['bearer', ticket]);
       wsRef.current = ws;
 
       ws.onopen = () => {
         if (!isMountedRef.current) return;
-        console.log('[WebSocket] Connection opened');
+
         setIsConnected(true);
         setConnectionState('connected');
         retryCountRef.current = 0;
@@ -314,7 +311,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
 
       ws.onclose = (event) => {
         if (!isMountedRef.current) return;
-        console.log('[WebSocket] Connection closed:', event.code, event.reason);
+
         setIsConnected(false);
         setConnectionId(null);
         stopPing();
@@ -364,7 +361,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
   const scheduleReconnect = useCallback(() => {
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     const delay = getRetryDelay();
-    console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${retryCountRef.current}/${MAX_RETRIES})`);
+
     retryTimeoutRef.current = setTimeout(() => {
       if (isMountedRef.current) void connectRef.current();
     }, delay);
@@ -397,7 +394,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
 
   // Set actor
   const setActor = useCallback((type: ActorType, id: string) => {
-    console.log('[WebSocket] setActor:', type, id);
+
     setActorType(type);
     setActorId(id);
   }, []);

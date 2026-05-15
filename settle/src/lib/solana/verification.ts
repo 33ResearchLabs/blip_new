@@ -50,10 +50,6 @@ export async function verifyCanRelease(
   releaser: PublicKey
 ): Promise<VerificationResult> {
   try {
-    console.log('[Verification] Checking if trade can be released...', {
-      tradePda: tradePda.toString(),
-      releaser: releaser.toString(),
-    });
 
     // Fetch trade account
     let tradeAccount: any;
@@ -65,13 +61,6 @@ export async function verifyCanRelease(
         error: 'Trade account not found. Trade may not exist or PDA derivation is incorrect.',
       };
     }
-
-    console.log('[Verification] Trade account fetched:', {
-      creator: tradeAccount.creator.toString(),
-      counterparty: tradeAccount.counterparty?.toString(),
-      status: tradeAccount.status,
-      amount: tradeAccount.amount.toString(),
-    });
 
     // Check if status is Locked
     const statusKey = Object.keys(tradeAccount.status)[0];
@@ -95,11 +84,7 @@ export async function verifyCanRelease(
     const [escrowPda] = findEscrowPda(tradePda, program.programId);
     try {
       const escrowAccount: any = await program.account.escrow.fetch(escrowPda);
-      console.log('[Verification] Escrow account verified:', {
-        escrowPda: escrowPda.toString(),
-        depositor: escrowAccount.depositor.toString(),
-        amount: escrowAccount.amount.toString(),
-      });
+
     } catch (error) {
       return {
         canProceed: false,
@@ -107,7 +92,6 @@ export async function verifyCanRelease(
       };
     }
 
-    console.log('[Verification] ✅ All checks passed - can release');
     return {
       canProceed: true,
       status: 'locked',
@@ -146,10 +130,6 @@ export async function verifyCanRefund(
   refunder: PublicKey
 ): Promise<VerificationResult> {
   try {
-    console.log('[Verification] Checking if trade can be refunded...', {
-      tradePda: tradePda.toString(),
-      refunder: refunder.toString(),
-    });
 
     // Fetch trade account
     let tradeAccount: any;
@@ -161,12 +141,6 @@ export async function verifyCanRefund(
         error: 'Trade account not found. Trade may not exist or PDA derivation is incorrect.',
       };
     }
-
-    console.log('[Verification] Trade account fetched:', {
-      creator: tradeAccount.creator.toString(),
-      status: tradeAccount.status,
-      amount: tradeAccount.amount.toString(),
-    });
 
     // Check if status is Locked
     const statusKey = Object.keys(tradeAccount.status)[0];
@@ -190,11 +164,7 @@ export async function verifyCanRefund(
     const [escrowPda] = findEscrowPda(tradePda, program.programId);
     try {
       const escrowAccount: any = await program.account.escrow.fetch(escrowPda);
-      console.log('[Verification] Escrow account verified:', {
-        escrowPda: escrowPda.toString(),
-        depositor: escrowAccount.depositor.toString(),
-        amount: escrowAccount.amount.toString(),
-      });
+
     } catch (error) {
       return {
         canProceed: false,
@@ -202,7 +172,6 @@ export async function verifyCanRefund(
       };
     }
 
-    console.log('[Verification] ✅ All checks passed - can refund');
     return {
       canProceed: true,
       status: 'locked',

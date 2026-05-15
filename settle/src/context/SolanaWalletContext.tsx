@@ -92,12 +92,9 @@ const PROGRAM_ID = new PublicKey(
     ?? BLIP_V2_PROGRAM_ID,
 );
 
-// Debug: Log IDL and program ID at module load
-if (typeof window !== 'undefined') {
-  console.log('[SolanaWallet] Module loaded - IDL address:', (idl as any).address || idlRaw.address);
-  console.log('[SolanaWallet] Module loaded - PROGRAM_ID:', PROGRAM_ID.toString());
-  console.log('[SolanaWallet] Module loaded - IDL instructions:', (idl as any).instructions?.length || 0);
-}
+// Module-load debug logs were removed — they fired on every page load
+// and cluttered the dev console. Re-enable temporarily if you need to
+// verify IDL/PROGRAM_ID resolution.
 
 // USDT Mint - dynamically selected based on network
 const USDT_MINT = getUsdtMint(SOLANA_NETWORK);
@@ -302,7 +299,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
           // Only update state if the key actually changed to avoid re-render loops
           if (phantomDirectKeyRef.current !== pubKeyStr) {
-            console.log('[SolanaWallet] Phantom connected (via event):', pubKeyStr);
+
             phantomDirectKeyRef.current = pubKeyStr;
             setPhantomDirectKey(pubKey);
           }
@@ -316,7 +313,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
     const handlePhantomDisconnect = () => {
       if (phantomDirectKeyRef.current !== null) {
-        console.log('[SolanaWallet] Phantom disconnected (via event)');
+
         phantomDirectKeyRef.current = null;
         setPhantomDirectKey(null);
       }
@@ -324,7 +321,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
     const handleAccountChanged = (newPublicKey: any) => {
       if (newPublicKey) {
-        console.log('[SolanaWallet] Phantom account changed');
+
         handlePhantomConnect(newPublicKey);
       } else {
         handlePhantomDisconnect();
@@ -363,10 +360,10 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     if (connected && publicKey && !hasLoggedConnection.current) {
       hasLoggedConnection.current = true;
-      console.log('[SolanaWallet] Connected:', publicKey.toString());
+
     } else if (!connected && hasLoggedConnection.current) {
       hasLoggedConnection.current = false;
-      console.log('[SolanaWallet] Disconnected');
+
     }
   }, [connected, publicKey]);
 
@@ -465,7 +462,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     // Note: Only depend on values used to create the wallet object, not for logging
   }, [publicKey, signTransaction, signAllTransactions]);
 
-
   // Create Anchor program instance using useEffect for more reliable updates
   // This ensures the program is created/updated whenever dependencies change
   useEffect(() => {
@@ -511,7 +507,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
   // Reinitialize program (useful for recovery after wallet issues)
   const reinitializeProgram = useCallback(() => {
-    console.log('[SolanaWallet] Forcing program reinitialization...');
+
     setProgramVersion(v => v + 1);
   }, []);
 
@@ -658,14 +654,12 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const configExists = await checkProtocolConfigExists(program);
 
       if (!configExists) {
-        console.log('[SolanaWallet] Protocol config not found, initializing...');
 
         // Initialize with default values
         // Note: In production, you'd want a dedicated authority wallet
         // For now, we'll use the connected wallet as authority
         // Treasury: User-specified wallet for receiving protocol fees
         const treasuryWallet = new PublicKey('3ZRyqoMVfCuxgKjGQeJzAuuDZ91L29jCHpi82B3UbAjP');
-        console.log('[SolanaWallet] Using treasury:', treasuryWallet.toString());
 
         const txHash = await initializeProtocolConfig(
           program,
@@ -676,9 +670,8 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
           0     // 0% min fee
         );
 
-        console.log('[SolanaWallet] Protocol config initialized:', txHash);
       } else {
-        console.log('[SolanaWallet] Protocol config already exists');
+
       }
     } catch (error) {
       console.error('[SolanaWallet] Failed to check/initialize protocol config:', error);
@@ -956,11 +949,11 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       if (onChainTrade?.counterparty) {
         // Use the counterparty stored on-chain (this is what the program validates)
         counterpartyPk = onChainTrade.counterparty;
-        console.log('[releaseEscrow] Using on-chain counterparty:', counterpartyPk.toString());
+
       } else {
         // Fallback to passed counterparty if trade not found
         counterpartyPk = new PublicKey(params.counterparty);
-        console.log('[releaseEscrow] Using passed counterparty (trade not found):', counterpartyPk.toString());
+
       }
 
       const builtTx = await buildReleaseEscrowTx(
@@ -1127,13 +1120,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const amountBN = new BN(Math.floor(params.amount * 1_000_000));
       const sideEnum = params.side === 'buy' ? TradeSide.Buy : TradeSide.Sell;
 
-      console.log('[fundEscrowOnly] Creating trade + funding escrow:', {
-        tradeId: params.tradeId,
-        amount: amountBN.toString(),
-        side: params.side,
-        tradePda: tradePda.toString(),
-      });
-
       // Step 1: Build create trade transaction
       const createTradeTx = await buildCreateTradeTx(
         program,
@@ -1180,11 +1166,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         priority: 'medium',
       });
       const txHash = safeResult.signature;
-      console.log('[fundEscrowOnly] Success! Trade funded, waiting for counterparty to accept', {
-        signature: txHash,
-        attempts: safeResult.attempts,
-        reconciled: safeResult.reconciled,
-      });
 
       // Balance refresh ONLY after on-chain confirmation
       await refreshBalances();
@@ -1234,13 +1215,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const [tradePda] = findTradePda(creatorPk, params.tradeId);
       const [escrowPda] = findEscrowPda(tradePda);
 
-      console.log('[acceptTrade] Accepting trade as counterparty:', {
-        creator: params.creatorPubkey,
-        tradeId: params.tradeId,
-        acceptor: publicKey.toString(),
-        tradePda: tradePda.toString(),
-      });
-
       // Build accept trade transaction (instructions only — signing handled below)
       const builtTx = await buildAcceptTradeTx(
         program,
@@ -1258,11 +1232,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         maxRetries: 2,
       });
       const txHash = safeResult.signature;
-
-      console.log('[acceptTrade] Success! You are now the counterparty', {
-        signature: txHash,
-        attempts: safeResult.attempts,
-      });
 
       await refreshBalances();
 
@@ -1314,18 +1283,10 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
   }> => {
     // Prevent concurrent deposit calls (double-click protection)
     if (depositInProgressRef.current) {
-      console.log('[depositToEscrow] Deposit already in progress, ignoring duplicate call');
+
       throw new Error('Deposit already in progress');
     }
     depositInProgressRef.current = true;
-
-    console.log('[depositToEscrow] Starting with params:', params);
-    console.log('[depositToEscrow] State:', {
-      publicKey: publicKey?.toString(),
-      signTransaction: !!signTransaction,
-      program: !!program,
-      connected
-    });
 
     if (!publicKey || !signTransaction || !program) {
       depositInProgressRef.current = false;
@@ -1349,10 +1310,8 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         throw new Error(`Invalid counterparty wallet address: not a valid Solana address (got ${counterpartyWallet.slice(0, 10)}...)`);
       }
 
-      console.log('[depositToEscrow] Using counterparty:', counterpartyWallet, merchantWallet ? '(merchant)' : '(treasury placeholder)');
-
       // Ensure protocol config is initialized before creating trades
-      console.log('[depositToEscrow] Ensuring protocol config is initialized...');
+
       await ensureProtocolConfigInitialized();
 
       // Generate a unique trade ID if not provided (timestamp-based)
@@ -1365,14 +1324,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const [tradePda] = findTradePda(publicKey, tradeId);
       const [escrowPda] = findEscrowPda(tradePda);
 
-      console.log('[depositToEscrow] Creating trade with params:', {
-        tradeId,
-        amount: amountBN.toString(),
-        tradePda: tradePda.toString(),
-        escrowPda: escrowPda.toString(),
-        counterpartyWallet,
-      });
-
       // Helper function with timeout
       const withTimeout = <T,>(promise: Promise<T>, ms: number, name: string): Promise<T> => {
         return Promise.race([
@@ -1384,7 +1335,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       };
 
       // Step 1: Build the create trade transaction
-      console.log('[depositToEscrow] Building create trade tx...');
+
       const createTradeTx = await withTimeout(
         buildCreateTradeTx(
           program,
@@ -1402,10 +1353,9 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         10000,
         'buildCreateTradeTx'
       );
-      console.log('[depositToEscrow] Create trade tx built, instructions:', createTradeTx.instructions.length);
 
       // Step 2: Build the lock escrow transaction
-      console.log('[depositToEscrow] Building lock escrow tx...');
+
       const counterpartyPubkey = new PublicKey(counterpartyWallet);
       const lockEscrowTx = await withTimeout(
         buildLockEscrowTx(
@@ -1418,7 +1368,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         10000,
         'buildLockEscrowTx'
       );
-      console.log('[depositToEscrow] Lock escrow tx built, instructions:', lockEscrowTx.instructions.length);
 
       // Combine instructions for a single atomic transaction
       const instructions = [
@@ -1430,7 +1379,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       // (so the user's 60s popup window starts from the popup opening),
       // retries automatically on blockhash expiry, and reconciles via
       // getTransaction if confirmation times out.
-      console.log('[depositToEscrow] Submitting via sendAndConfirmSafe...');
+
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
@@ -1441,11 +1390,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         confirmTimeoutMs: 60_000,
       });
       const txHash = safeResult.signature;
-      console.log('[depositToEscrow] Transaction confirmed!', {
-        signature: txHash,
-        attempts: safeResult.attempts,
-        reconciled: safeResult.reconciled,
-      });
 
       // Refresh balances ONLY after on-chain confirmation
       await refreshBalances();
@@ -1483,12 +1427,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     const tradeId = params.tradeId ?? Date.now();
     const side = params.side ?? 'sell';
 
-    console.log('[depositToEscrowOpen] Starting unified flow (no counterparty):', {
-      amount: params.amount,
-      tradeId,
-      side,
-    });
-
     // Use fundEscrowOnly which creates trade + funds escrow without counterparty
     const result = await fundEscrowOnly({
       tradeId,
@@ -1522,13 +1460,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const [tradePda] = findTradePda(creatorPk, params.tradeId);
       const [escrowPda] = findEscrowPda(tradePda);
 
-      console.log('[confirmPayment] Confirming fiat payment sent:', {
-        creator: params.creatorPubkey,
-        tradeId: params.tradeId,
-        buyer: publicKey.toString(),
-        tradePda: tradePda.toString(),
-      });
-
       const builtTx = await buildConfirmPaymentTx(
         program,
         publicKey,
@@ -1548,11 +1479,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         priority: 'high',
       });
       const txHash = safeResult.signature;
-
-      console.log('[confirmPayment] Payment confirmed! Auto-refund now disabled', {
-        signature: txHash,
-        attempts: safeResult.attempts,
-      });
 
       return {
         txHash,
@@ -1594,13 +1520,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const [tradePda] = findTradePda(creatorPk, params.tradeId);
       const [escrowPda] = findEscrowPda(tradePda);
 
-      console.log('[openDispute] Opening dispute:', {
-        creator: params.creatorPubkey,
-        tradeId: params.tradeId,
-        initiator: publicKey.toString(),
-        tradePda: tradePda.toString(),
-      });
-
       const builtTx = await buildOpenDisputeTx(
         program,
         publicKey,
@@ -1617,11 +1536,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         maxRetries: 2,
       });
       const txHash = safeResult.signature;
-
-      console.log('[openDispute] Dispute opened! Funds frozen until arbiter resolves', {
-        signature: txHash,
-        attempts: safeResult.attempts,
-      });
 
       return {
         txHash,
@@ -1668,14 +1582,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         ? DisputeResolution.ReleaseToBuyer
         : DisputeResolution.RefundToSeller;
 
-      console.log('[resolveDispute] Resolving dispute:', {
-        creator: params.creatorPubkey,
-        tradeId: params.tradeId,
-        arbiter: publicKey.toString(),
-        resolution: params.resolution,
-        tradePda: tradePda.toString(),
-      });
-
       const builtTx = await buildResolveDisputeTx(
         program,
         publicKey,
@@ -1694,12 +1600,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         priority: 'high',
       });
       const txHash = safeResult.signature;
-
-      console.log('[resolveDispute] Dispute resolved!', {
-        resolution: params.resolution,
-        signature: txHash,
-        attempts: safeResult.attempts,
-      });
 
       await refreshBalances();
 
@@ -1785,7 +1685,7 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
       try {
         const healthyEndpoint = await getHealthyEndpoint(SOLANA_NETWORK);
         if (mounted && healthyEndpoint !== endpoint) {
-          console.log('[SolanaWallet] Switching to healthier RPC endpoint:', healthyEndpoint);
+
           setEndpoint(healthyEndpoint);
         }
       } catch (error) {
@@ -1870,7 +1770,7 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
           },
         })
       );
-      console.log('[SolanaWallet] WalletConnect adapter enabled for', SOLANA_NETWORK);
+
     } else {
       console.warn('[SolanaWallet] WalletConnect disabled - set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID for mobile support');
     }
@@ -1882,13 +1782,12 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
     if (particleProjectId && particleClientKey && particleAppId) {
       try {
         walletList.push(new ParticleAdapter());
-        console.log('[SolanaWallet] Particle social login enabled');
+
       } catch (e) {
         console.warn('[SolanaWallet] Failed to initialize Particle adapter:', e);
       }
     }
 
-    console.log(`[SolanaWallet] Initialized ${walletList.length} wallet adapters on ${SOLANA_NETWORK}`);
     return walletList;
   }, []);
 

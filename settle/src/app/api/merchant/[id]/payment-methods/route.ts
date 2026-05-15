@@ -94,7 +94,6 @@ export async function POST(
     const { type, name, details, is_default } = body;
 
     // Debug logging — helps diagnose payment method save failures
-    console.log('[PM-ADD] Received:', { merchantId: id, type, name, details: details?.slice?.(0, 50), is_default });
 
     // Validate. Matches the client-side rules in PaymentMethodModal.tsx so
     // a crafted request can't smuggle junk past the UI.

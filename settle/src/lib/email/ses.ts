@@ -48,7 +48,6 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams): P
       return false;
     }
 
-    console.log(`[Email] Sent to ${to}: ${subject}`, { resendId: data?.id });
     return true;
   } catch (error) {
     console.error('[Email] sendEmail threw — likely network/SDK bug', {

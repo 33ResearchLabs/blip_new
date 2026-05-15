@@ -25,7 +25,7 @@ async function updateCorridorMetrics(corridorId: string) {
     const calculatedRefPrice = await calculateRefPriceFromTrades(corridorId, LOOKBACK_MINUTES);
 
     if (!calculatedRefPrice) {
-      console.log(`[refprice] No recent trades for ${corridorId}, skipping update`);
+
       return;
     }
 
@@ -73,13 +73,6 @@ async function updateCorridorMetrics(corridorId: string) {
       ? ((calculatedRefPrice - currentCorridor.ref_price) / currentCorridor.ref_price) * 100
       : 0;
 
-    console.log(
-      `[refprice] ${corridorId}: ${calculatedRefPrice.toFixed(6)} AED/USDT ` +
-      `(${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}%) | ` +
-      `Volume: ${volume5m.toFixed(2)} USDT | ` +
-      `Avg Fill: ${avgFillTimeSec}s | ` +
-      `Active Merchants: ${activeMerchantsCount}`
-    );
   } catch (error) {
     console.error(`[refprice] Failed to update ${corridorId}:`, error);
   }
@@ -99,9 +92,6 @@ async function processUpdate() {
 }
 
 async function start() {
-  console.log('[refprice] Reference Price Updater started');
-  console.log(`[refprice] Updating every ${WORKER_INTERVAL_MS}ms`);
-  console.log(`[refprice] Using ${LOOKBACK_MINUTES}-minute lookback window`);
 
   // Initial run
   await processUpdate();
@@ -112,12 +102,12 @@ async function start() {
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
-  console.log('[refprice] Worker shutting down');
+
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[refprice] Worker shutting down');
+
   process.exit(0);
 });
 

@@ -61,24 +61,17 @@ export async function POST(request: NextRequest) {
     );
 
     if (allUsers.length === 0) {
-      console.log('[user forgot-password] email_not_found', { emailHash: emailLogHash });
+
       return successResponse;
     }
 
     const candidate = allUsers[0];
     if (!candidate.password_hash) {
-      console.log('[user forgot-password] wallet_only_account_no_password_to_reset', {
-        emailHash: emailLogHash,
-        userId: candidate.id,
-      });
+
       return successResponse;
     }
 
     const user = candidate;
-    console.log('[user forgot-password] sending_reset_email', {
-      emailHash: emailLogHash,
-      userId: user.id,
-    });
 
     // Invalidate any existing unused tokens for this user — prevents
     // multiple in-flight reset links sitting in inboxes.

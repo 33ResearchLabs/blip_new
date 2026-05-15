@@ -40,7 +40,7 @@ export function useSounds() {
       oscillator.start(ctx.currentTime);
       oscillator.stop(ctx.currentTime + duration);
     } catch (e) {
-      console.log('Sound not available:', e);
+
     }
   }, [getAudioContext]);
 

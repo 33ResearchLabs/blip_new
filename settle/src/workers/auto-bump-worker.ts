@@ -49,15 +49,12 @@ async function processAutoBumps() {
     });
 
     if (bumpedOrders.length === 0) {
-      console.log('[auto-bump] No orders ready for auto-bump');
+
       return;
     }
 
     for (const result of bumpedOrders) {
-      console.log(
-        `[auto-bump] Order ${result.orderId} bumped to ${result.new_premium_bps} bps` +
-        (result.max_reached ? ' (max reached)' : '')
-      );
+
     }
   } catch (error) {
     console.error('[auto-bump] Worker error:', error);
@@ -65,8 +62,6 @@ async function processAutoBumps() {
 }
 
 async function start() {
-  console.log('[auto-bump] Worker started');
-  console.log(`[auto-bump] Checking every ${WORKER_INTERVAL_MS}ms`);
 
   // Initial run
   await processAutoBumps();
@@ -77,12 +72,12 @@ async function start() {
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
-  console.log('[auto-bump] Worker shutting down');
+
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[auto-bump] Worker shutting down');
+
   process.exit(0);
 });
 

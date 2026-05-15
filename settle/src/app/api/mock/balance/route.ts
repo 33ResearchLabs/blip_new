@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         `UPDATE ${table} SET balance = $1 WHERE id = $2`,
         [DEFAULT_BALANCE, userId]
       );
-      console.log(`[Mock Balance] Auto-initialized ${type} ${userId} balance to ${DEFAULT_BALANCE}`);
+
       return NextResponse.json({ success: true, balance: DEFAULT_BALANCE });
     }
 

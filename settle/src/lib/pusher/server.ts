@@ -25,7 +25,7 @@ async function getPusherServer(): Promise<PusherLike> {
   // Mock pusher that does nothing - used when pusher isn't configured or available
   const mockPusher: PusherLike = {
     trigger: async (...args) => {
-      console.log('[Pusher Server] MOCK trigger called (Pusher not configured):', JSON.stringify(args[0]));
+
       return {};
     },
     triggerBatch: async () => ({}),
@@ -54,7 +54,7 @@ async function getPusherServer(): Promise<PusherLike> {
       cluster,
       useTLS: true,
     });
-    console.log('[Pusher Server] Pusher instance created successfully');
+
     return pusherServer;
   } catch (err) {
     console.warn('[Pusher Server] Module not available:', err);
@@ -70,11 +70,11 @@ export async function triggerEvent(
   event: PusherEvent,
   data: unknown
 ): Promise<void> {
-  console.log('[Pusher Server] triggerEvent called:', { channel, event });
+
   try {
     const pusher = await getPusherServer();
     const result = await pusher.trigger(channel, event, data);
-    console.log('[Pusher Server] Event triggered successfully:', { channel, event, result });
+
   } catch (error) {
     console.error('[Pusher Server] Failed to trigger event:', error);
     throw error; // Re-throw so caller knows it failed
@@ -123,12 +123,6 @@ export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
     getAllMerchantsChannel(), // All merchants receive new orders
   ];
 
-  console.log('[Pusher] Broadcasting ORDER_CREATED to all merchants:', {
-    channels,
-    event: ORDER_EVENTS.CREATED,
-    orderId: data.orderId,
-  });
-
   await triggerEvent(channels, ORDER_EVENTS.CREATED, {
     orderId: data.orderId,
     status: data.status,
@@ -138,7 +132,6 @@ export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
     data: data.data,
   });
 
-  console.log('[Pusher] ORDER_CREATED broadcast sent to all merchants');
 }
 
 /**

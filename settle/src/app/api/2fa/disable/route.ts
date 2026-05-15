@@ -125,12 +125,7 @@ export async function POST(request: NextRequest) {
     const pwHex = Array.from(trimmedPassword as string)
       .map((ch: string) => ch.charCodeAt(0).toString(16))
       .join("");
-    console.log("[2FA Disable]", {
-      pwLen: trimmedPassword.length,
-      pwHex,
-      hashFirstPart: row.password_hash.split(":")[0]?.slice(0, 8),
-      pwOk,
-    });
+
     if (!pwOk) {
       const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       await recordAttempt(auth.actorId, actorType, false, ip);

@@ -339,15 +339,15 @@ export function useUserTradeCreation({
   };
 
   const confirmEscrow = async () => {
-    console.log('[Escrow] confirmEscrow called', { amount, userId });
+
     if (!amount) {
-      console.log('[Escrow] Missing amount');
+
       showAlert('Error', 'Missing order amount', 'error');
       return;
     }
 
     if (!userId) {
-      console.log('[Escrow] No userId - user not authenticated');
+
       showAlert('Wallet Required', 'Please connect your wallet first', 'warning');
       return;
     }
@@ -365,16 +365,14 @@ export function useUserTradeCreation({
     setEscrowError(null);
     setEscrowTxHash(null);
 
-    console.log('[Escrow] Wallet connected:', solanaWallet.connected);
     if (!solanaWallet.connected) {
-      console.log('[Escrow] Opening wallet modal');
+
       setEscrowTxStatus('connecting');
       setShowWalletModal(true);
       return;
     }
 
     const amountNum = parseFloat(amount);
-    console.log('[Escrow] Balance check:', { usdtBalance: solanaWallet.usdtBalance, amountNeeded: amountNum });
 
     if (solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance < amountNum) {
       setEscrowError(`Insufficient USDT balance. You have ${solanaWallet.usdtBalance.toFixed(2)} USDT but need ${amountNum} USDT.`);
@@ -383,7 +381,7 @@ export function useUserTradeCreation({
     }
 
     if (solanaWallet.usdtBalance === null) {
-      console.log('[Escrow] Balance still loading, refreshing...');
+
       await solanaWallet.refreshBalances();
       await new Promise(r => setTimeout(r, 500));
       if (solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance < amountNum) {
@@ -395,16 +393,8 @@ export function useUserTradeCreation({
 
     setIsLoading(true);
     setEscrowTxStatus('signing');
-    console.log('[Escrow] Starting escrow transaction');
 
     try {
-      console.log('[Escrow] User wallet:', solanaWallet.walletAddress);
-      console.log('[Escrow] Program ready:', solanaWallet.programReady);
-      console.log('[Escrow] Wallet state before escrow:', {
-        connected: solanaWallet.connected,
-        walletAddress: solanaWallet.walletAddress,
-        hasPublicKey: !!solanaWallet.publicKey,
-      });
 
       // Pre-generate the trade_id we'll use on-chain. Breadcrumb gives the
       // sweep script a recoverable trail if we crash between sign+confirm
@@ -423,11 +413,6 @@ export function useUserTradeCreation({
         );
       } catch { /* non-fatal */ }
 
-      console.log('[Escrow] Calling depositToEscrowOpen (broadcast) with:', {
-        amount: amountNum,
-        tradeId: userTradeId,
-      });
-
       let escrowResult: { txHash: string; success: boolean; tradePda?: string; escrowPda?: string; tradeId?: number };
 
       try {
@@ -436,7 +421,6 @@ export function useUserTradeCreation({
           tradeId: userTradeId,
           side: 'sell',
         });
-        console.log('[Escrow] depositToEscrow result:', escrowResult);
 
         if (!escrowResult.success) {
           throw new Error('Transaction failed');

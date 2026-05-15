@@ -62,7 +62,7 @@ export function FileUpload({
         body: JSON.stringify({ orderId }),
       });
       if (!res.ok) {
-        console.log('Upload signature API not available - demo mode');
+
         onUploadError?.('File upload not available in demo mode');
         return null;
       }
@@ -86,7 +86,6 @@ export function FileUpload({
     formData.append('timestamp', signature.timestamp.toString());
     formData.append('api_key', signature.apiKey);
     formData.append('folder', signature.folder);
-
 
     // Determine resource type based on file
     const isImage = file.type.startsWith('image/');

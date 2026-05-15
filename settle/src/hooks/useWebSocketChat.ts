@@ -164,10 +164,8 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const wsContext = useWebSocketChatContextOptional();
   const pusher = usePusherOptional();
 
-  // ── DIAGNOSTIC: verify this hook is loaded and running ──
-  useEffect(() => {
-    console.log('[useWebSocketChat] HOOK MOUNTED', { actorType, actorId, hasPusher: !!pusher, pusherConnected: pusher?.isConnected });
-  }, [actorType, actorId, pusher]);
+  // HOOK MOUNTED diagnostic removed — it fired on every actor change
+  // and was the loudest source of dev-console spam.
   const subscribedOrdersRef = useRef<Set<string>>(new Set());
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
@@ -349,7 +347,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
           );
         }
       } catch (error) {
-        console.log('[Chat] Messages API error', error);
+
       }
     },
     [actorType, mapDbMessageToUI]
@@ -362,12 +360,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const handlePusherMessage = useCallback(
     (rawData: unknown) => {
       const event = rawData as PusherChatMessageEvent;
-      console.log('[useWebSocketChat] ORDER CHANNEL MESSAGE:', {
-        messageId: event?.messageId,
-        orderId: event?.orderId,
-        senderType: event?.senderType,
-        content: event?.content?.substring(0, 30),
-      });
+
       if (!event?.messageId || !event?.orderId) return;
 
       // Track lastSeq for reconnect catch-up
@@ -490,14 +483,15 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       }));
     };
 
-    // Subscribe to any orderId we haven't subscribed to yet
-    console.log('[useWebSocketChat] ORDER CHANNEL CHECK:', { orderIds, alreadySubscribed: Array.from(pusherSubscribedRef.current.keys()) });
+    // Subscribe to any orderId we haven't subscribed to yet.
+    // (Periodic ORDER CHANNEL CHECK log removed — it ran every effect
+    // pass and dominated the dev console.)
     for (const orderId of orderIds) {
       if (pusherSubscribedRef.current.get(orderId)) continue;
       const channelName = getOrderChannel(orderId);
-      console.log('[useWebSocketChat] SUBSCRIBING order channel:', channelName);
+
       const channel = pusher.subscribe(channelName);
-      if (!channel) { console.log('[useWebSocketChat] FAILED order subscribe:', channelName); continue; }
+      if (!channel) {  continue; }
       channel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePusherMessage);
       channel.bind(CHAT_EVENTS.MESSAGES_DELIVERED, handleDelivered);
       channel.bind(CHAT_EVENTS.MESSAGES_READ, handleRead);
@@ -526,39 +520,33 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   // inbox can update (unread badges, last message preview) even when
   // no chat window is open for that order.
   useEffect(() => {
-    if (!pusher || actorType !== 'merchant' || !actorId) {
-      console.log('[useWebSocketChat] MERCHANT CHANNEL SKIP', { hasPusher: !!pusher, actorType, actorId });
-      return;
-    }
+    // Early-return when there's no merchant identity yet — fires on
+    // initial mount before auth hydrates. The previous MERCHANT CHANNEL
+    // SKIP log fired every time and was pure noise.
+    if (!pusher || actorType !== 'merchant' || !actorId) return;
 
     const { getMerchantChannel } = require('@/lib/pusher/channels');
     const channelName = getMerchantChannel(actorId);
-    console.log('[useWebSocketChat] SUBSCRIBING merchant channel:', channelName);
+
     const channel = pusher.subscribe(channelName);
     if (!channel) {
-      console.log('[useWebSocketChat] FAILED to subscribe merchant channel');
+
       return;
     }
-    console.log('[useWebSocketChat] SUBSCRIBED merchant channel:', channelName);
 
     const handlePrivateMessage = (rawData: unknown) => {
       const data = rawData as PusherChatMessageEvent;
-      console.log('[useWebSocketChat] MERCHANT CHANNEL EVENT RECEIVED:', {
-        orderId: data?.orderId,
-        messageId: data?.messageId,
-        senderType: data?.senderType,
-      });
 
       if (!data?.orderId || !data?.messageId) return;
 
       const existingWindow = chatWindowsRef.current.find(w => w.orderId === data.orderId);
       if (existingWindow) {
-        console.log('[useWebSocketChat] skipping (window exists, order channel will handle)');
+
         return;
       }
 
       if (data.senderType !== actorType) {
-        console.log('[useWebSocketChat] FIRING onNewMessage for inbox update');
+
         const message: ChatMessage = {
           id: data.messageId,
           from: 'them',
@@ -577,7 +565,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
     channel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateMessage);
 
     return () => {
-      console.log('[useWebSocketChat] UNSUBSCRIBING merchant channel:', channelName);
+
       channel.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateMessage);
     };
     // Intentionally NOT depending on onNewMessage — that's why the ref exists.

@@ -91,7 +91,7 @@ export function useOrderFetching({
   // ═══════════════════════════════════════════════════════════════════
 
   const fetchOrders = useCallback(async () => {
-    console.log(merchantId, "merchant id is this ");
+
     if (!merchantId) {
       setIsLoading(false); // Prevent infinite loading spinner
       return;

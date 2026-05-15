@@ -104,7 +104,6 @@ export async function GET(request: NextRequest) {
 
       // Set merchant online when session is validated (critical for order matching!)
       await updateMerchantOnlineStatus(merchant.id, true);
-      console.log('[API] Merchant session restored, set online:', merchant.id);
 
       const payload = { actorId: merchant.id, actorType: 'merchant' as const };
 
@@ -270,9 +269,6 @@ export async function POST(request: NextRequest) {
 
         // Update online status
         await updateMerchantOnlineStatus(merchant.id, true);
-
-
-        console.log('[API] Merchant login successful:', merchant.id, merchant.username);
 
         // Fire-and-forget: device + IP tracking
         trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'login' }).catch(() => {});
@@ -441,11 +437,8 @@ export async function POST(request: NextRequest) {
         total_trades: number;
       };
 
-      console.log('[API] New merchant created:', merchant.id, merchant.username, MOCK_MODE ? `(mock balance: ${merchantBalance})` : '');
-
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
-
 
       const createPayload = { actorId: merchant.id, actorType: 'merchant' as const };
       const createToken = generateSessionToken(createPayload);
@@ -568,8 +561,6 @@ export async function POST(request: NextRequest) {
         }
         throw updateErr;
       }
-
-      console.log('[API] Merchant username set:', merchant.id, username);
 
       return NextResponse.json({
         success: true,
@@ -783,8 +774,6 @@ export async function POST(request: NextRequest) {
       // Update online status
       await updateMerchantOnlineStatus(merchant.id, true);
 
-      console.log('[API] Merchant email login successful:', merchant.id, merchant.email);
-
       // Fire-and-forget: device + IP tracking
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'login' }).catch(() => {});
       checkDeviceChangeFrequency(merchant.id, 'merchant').catch(() => {});
@@ -908,8 +897,6 @@ export async function POST(request: NextRequest) {
         [newHash, merchant_id]
       );
 
-      console.log('[API] Merchant password changed:', merchant_id);
-
       // Revoke every OTHER active session for this merchant. The current
       // session (auth.sessionId, when present) is preserved so the
       // merchant stays logged in on the device that just confirmed their
@@ -1024,11 +1011,8 @@ export async function POST(request: NextRequest) {
         total_trades: number;
       };
 
-      console.log('[API] New merchant registered:', merchant.id, merchant.email);
-
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
-
 
       // Send verification email
       try {
@@ -1145,8 +1129,6 @@ export async function PATCH(request: NextRequest) {
       `UPDATE merchants SET wallet_address = $1, updated_at = NOW() WHERE id = $2`,
       [wallet_address, merchant_id]
     );
-
-    console.log('[API] Merchant wallet updated:', merchant_id);
 
     return NextResponse.json({
       success: true,

@@ -752,7 +752,7 @@ export const ProfileScreen = ({
         {/* Logout */}
         <motion.button whileTap={{ scale: 0.97 }}
           onClick={() => {
-            console.log('[User] Signing out...');
+
             // Sweep all auth/identity state + any unlocked wallet session
             // material. Encrypted blobs stay in place so the same user can
             // re-unlock on next login.

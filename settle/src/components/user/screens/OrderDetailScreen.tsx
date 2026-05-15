@@ -985,12 +985,7 @@ export const OrderDetailScreen = ({
           activeOrder.status !== "expired" && (
             (() => {
               // DEBUG: check what data we have
-              console.log('[OrderDetail] Extension banner check:', {
-                extensionRequest,
-                lastExtendedAt: activeOrder.lastExtendedAt,
-                inactivityWarned: activeOrder.inactivityWarned,
-                orderId: activeOrder.id,
-              });
+
               // Priority 1: Extension was granted (extended after warning)
               const wasExtended = activeOrder.lastExtendedAt &&
                 (!activeOrder.lastActivityAt ||

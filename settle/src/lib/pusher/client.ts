@@ -77,7 +77,7 @@ export function getPusherClient(): PusherClient | null {
     // Log connection state changes in development
     if (process.env.NODE_ENV === 'development') {
       pusherClient.connection.bind('state_change', (states: { current: string; previous: string }) => {
-        console.log('[Pusher] Connection state:', states.previous, '->', states.current);
+
       });
 
       pusherClient.connection.bind('error', (error: Error) => {

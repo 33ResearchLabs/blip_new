@@ -30,7 +30,7 @@ function loadVerifier(): Verifier {
         const p = mod.verifyAccessToken!(token);
         return p ? { actorId: p.actorId, actorType: p.actorType } : null;
       };
-      console.log(`${WS_SHADOW_LOG_PREFIX} auth: using sessionToken.verifyAccessToken`);
+
       return cachedVerifier;
     }
   } catch (err) {
@@ -59,7 +59,7 @@ function loadVerifier(): Verifier {
       return null;
     }
   };
-  console.log(`${WS_SHADOW_LOG_PREFIX} auth: using WS_SHADOW_JWT_SECRET fallback`);
+
   return cachedVerifier;
 }
 

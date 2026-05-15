@@ -289,13 +289,18 @@ export function generateNonce(): string {
  * Reporting API v2 mechanism (matches the `Reporting-Endpoints` header).
  */
 export function buildCsp(nonce: string): string {
+  // In development the chat/orders websocket runs on plain ws:// against
+  // localhost, which fails the production-grade `wss:`-only rule. Add
+  // `ws:` to connect-src only when NODE_ENV !== 'production' so prod
+  // stays strict (TLS-only sockets).
+  const wsScheme = process.env.NODE_ENV === 'production' ? 'wss:' : 'ws: wss:';
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' wss: https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag",
+    `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag`,
     "frame-ancestors 'none'",
     'report-uri /api/csp-report',
     'report-to csp-endpoint',

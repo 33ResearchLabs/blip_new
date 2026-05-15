@@ -42,7 +42,7 @@ export function ImageUpload({
       });
       if (!res.ok) {
         // API not available (demo mode)
-        console.log('Upload signature API not available - demo mode');
+
         onUploadError?.('Image upload not available in demo mode');
         return null;
       }
@@ -66,7 +66,6 @@ export function ImageUpload({
     formData.append('timestamp', signature.timestamp.toString());
     formData.append('api_key', signature.apiKey);
     formData.append('folder', signature.folder);
-
 
     try {
       const xhr = new XMLHttpRequest();

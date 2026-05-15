@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         .sort()
         .map((k) => `${k}=${params[k]}`)
         .join('&');
-      console.log('[upload/signature] string_to_sign:', stringToSign);
+
     }
 
     return NextResponse.json({

@@ -34,7 +34,7 @@ function createRedisClient(): Redis | null {
     });
 
     client.on("connect", () => {
-      console.log("[Redis] Connected successfully");
+
     });
 
     client.connect().catch((err) => {

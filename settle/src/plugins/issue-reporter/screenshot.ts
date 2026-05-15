@@ -79,9 +79,16 @@ function rateLimited(): boolean {
   return false;
 }
 
-const DEBUG = true;
-const log = (...args: unknown[]) => {
-  if (DEBUG) console.log('[IssueReporter/screenshot]', ...args);
+// Debug logger turned into a no-op after the console-log sweep. Kept as
+// a function (vs. removing every call site) so the surrounding code
+// continues to read clearly. Flip `DEBUG` and add a real handler back
+// here if you need to diagnose screenshot capture flow again.
+const DEBUG = false;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const log = (..._args: unknown[]) => {
+  if (DEBUG) {
+    /* no-op */
+  }
 };
 
 export interface CaptureRegion {

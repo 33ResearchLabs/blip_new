@@ -250,12 +250,12 @@ export function useMerchantEffects({
             creatorPubkey: order.escrowCreatorWallet,
             tradeId: order.escrowTradeId,
           });
-          console.log(`[AutoFix] acceptTrade succeeded for order ${order.id}`);
+
           acceptTradeFixRef.current.add(order.id);
         } catch (err: any) {
           const msg = err?.message || '';
           if (msg.includes('CannotAccept') || msg.includes('0x177d') || msg.includes('6013')) {
-            console.log(`[AutoFix] acceptTrade already done for order ${order.id}`);
+
             acceptTradeFixRef.current.add(order.id);
           } else if (msg.includes('AccountNotInitialized') || msg.includes('0xbc4') || msg.includes('3012')) {
             console.warn(`[AutoFix] Escrow not on-chain for order ${order.id} — skipping`);
@@ -288,7 +288,7 @@ export function useMerchantEffects({
     );
 
     if (stuckEscrows.length > 0) {
-      console.log(`[AutoRefund] Found ${stuckEscrows.length} stuck escrow(s), refunding...`);
+
       for (const order of stuckEscrows) {
         autoRefundEscrow(order);
       }
@@ -310,7 +310,6 @@ export function useMerchantEffects({
         if (!data.orderId || !data.txHash) { localStorage.removeItem(key); continue; }
         if (Date.now() - (data.timestamp || 0) > 86400000) { localStorage.removeItem(key); continue; }
 
-        console.log(`[EscrowRecovery] Retrying escrow recording for order ${data.orderId}`);
         const payload: Record<string, unknown> = {
           tx_hash: data.txHash,
           actor_type: 'merchant',
@@ -328,7 +327,7 @@ export function useMerchantEffects({
           body: JSON.stringify(payload),
         }).then(res => {
           if (res.ok) {
-            console.log(`[EscrowRecovery] Successfully recorded escrow for ${data.orderId}`);
+
             localStorage.removeItem(key);
           }
         }).catch(() => {});
@@ -348,9 +347,6 @@ export function useMerchantEffects({
         // Only retry if the saved merchant_id matches the active session.
         if ((record.payload as { merchant_id?: string }).merchant_id !== merchantId) continue;
 
-        console.log('[EscrowRecovery] Retrying orphan merchant sell order', {
-          tx: (record.payload as { escrow_tx_hash?: string }).escrow_tx_hash,
-        });
         fetchWithAuth('/api/merchant/orders', {
           method: 'POST',
           headers: {
@@ -362,7 +358,7 @@ export function useMerchantEffects({
           if (!res.ok) return;
           const body = await res.json().catch(() => null);
           if (body?.success) {
-            console.log('[EscrowRecovery] Merchant sell order recovered', { orderId: body?.data?.id });
+
             localStorage.removeItem(key);
           }
         }).catch(() => {});

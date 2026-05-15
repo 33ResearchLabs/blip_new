@@ -220,9 +220,6 @@ export function startShadowServer(
         actorType: 'user' | 'merchant' | 'compliance';
       };
       register(ws, actorType, actorId);
-      console.log(
-        `${TAG} connect ${actorType}:${actorId} (total=${totalConnectionCount()})`
-      );
 
       // Mark heartbeat alive
       (ws as WebSocket & { isAlive?: boolean }).isAlive = true;
@@ -244,9 +241,7 @@ export function startShadowServer(
           broadcastPresence(ws, 'USER_OFFLINE');
         }
         leaveAllRooms(ws);
-        console.log(
-          `${TAG} disconnect ${meta?.actorType}:${meta?.actorId} offline=${wentOffline} (total=${totalConnectionCount()})`
-        );
+
       });
 
       ws.on('error', (err) => {
@@ -293,7 +288,7 @@ export function startShadowServer(
     });
 
     http.listen(port, () => {
-      console.log(`${TAG} listening on :${port}`);
+
       resolve({
         wss,
         http,

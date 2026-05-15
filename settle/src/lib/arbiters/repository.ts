@@ -123,7 +123,6 @@ export async function initializeArbiterTables(): Promise<void> {
     ADD COLUMN IF NOT EXISTS reputation_score INTEGER DEFAULT 0
   `).catch(() => {});
 
-  console.log('[Arbiters] Tables initialized');
 }
 
 /**

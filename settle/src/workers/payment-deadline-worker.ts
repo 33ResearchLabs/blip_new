@@ -663,9 +663,6 @@ async function runCycle(): Promise<void> {
 }
 
 async function start() {
-  console.log('[payment-deadline] Worker started');
-  console.log(`[payment-deadline] Checking every ${WORKER_INTERVAL_MS}ms`);
-  console.log('[payment-deadline] Jobs: pending expiry + payment deadline expiry + escrow expiry + dispute auto-resolve + on-chain escrow refund');
 
   // Initial run
   await runCycle();
@@ -676,12 +673,12 @@ async function start() {
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
-  console.log('[payment-deadline] Worker shutting down');
+
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[payment-deadline] Worker shutting down');
+
   process.exit(0);
 });
 

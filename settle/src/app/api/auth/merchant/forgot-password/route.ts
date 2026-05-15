@@ -45,24 +45,17 @@ export async function POST(request: NextRequest) {
     );
 
     if (allMerchants.length === 0) {
-      console.log('[forgot-password] email_not_found', { emailHash: emailLogHash });
+
       return successResponse;
     }
 
     const candidate = allMerchants[0];
     if (!candidate.password_hash) {
-      console.log('[forgot-password] wallet_only_account_no_password_to_reset', {
-        emailHash: emailLogHash,
-        merchantId: candidate.id,
-      });
+
       return successResponse;
     }
 
     const merchant = candidate;
-    console.log('[forgot-password] sending_reset_email', {
-      emailHash: emailLogHash,
-      merchantId: merchant.id,
-    });
 
     // Invalidate any existing unused tokens for this merchant
     await query(
