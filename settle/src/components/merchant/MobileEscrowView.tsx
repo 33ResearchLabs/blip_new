@@ -16,7 +16,6 @@ import {
 import { UserBadge } from "@/components/merchant/UserBadge";
 import { ActionPulse } from "@/components/NotificationToast";
 import type { Order } from "@/types/merchant";
-import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { formatCrypto, formatRate } from "@/lib/format";
 
@@ -91,10 +90,10 @@ const ESCROW_STATUS_OPTIONS: ReadonlyArray<{
   label: string;
 }> = [
   { key: "all", label: "All" },
-  { key: "accepted", label: "Awaiting Lock" },
-  { key: "escrowed", label: "Locked" },
-  { key: "payment_sent", label: "Payment Sent" },
-  { key: "disputed", label: "Disputed" },
+  { key: "accepted", label: "Accepted" },
+  { key: "escrowed", label: "Escrowed" },
+  { key: "payment_sent", label: "Paid" },
+  { key: "disputed", label: "Cancel Disp" },
 ];
 
 export interface MobileEscrowViewProps {
@@ -135,32 +134,46 @@ export function MobileEscrowView({
 
   return (
     <div className="space-y-1">
-      {/* Toolbar — filter by escrow status */}
-      <div className="sticky top-0 z-20 -mx-3 px-3 py-2 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04] flex items-center justify-between gap-2">
-        <span className="text-[11px] text-foreground/40 uppercase tracking-wide">
-          Status
-        </span>
-        <FilterDropdown<EscrowStatusFilter>
-          value={statusFilter}
-          onChange={setStatusFilter}
-          ariaLabel="Filter escrow by status"
-          align="right"
-          options={ESCROW_STATUS_OPTIONS}
-        />
-      </div>
-
-      {/* Header Row */}
-      <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.04]">
-        <div className="flex items-center gap-2">
-          <Lock className="w-3.5 h-3.5 text-white/70" />
-          <span className="text-xs font-mono text-foreground/40 uppercase tracking-wide">Escrow</span>
+      {/* Sticky header — "IN PROGRESS" title + horizontal status tabs */}
+      <div className="sticky top-0 z-20 -mx-3 px-3 pt-2 pb-1 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04]">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-[11px] font-mono font-bold text-primary uppercase tracking-[0.15em]">
+              In Progress
+            </span>
+          </div>
+          <span className="text-xs font-mono text-white/70">
+            {filteredOngoingOrders.length}
+            {filteredOngoingOrders.length !== ongoingOrders.length && (
+              <span className="text-foreground/30"> / {ongoingOrders.length}</span>
+            )}
+          </span>
         </div>
-        <span className="text-xs font-mono text-white/70">
-          {filteredOngoingOrders.length}
-          {filteredOngoingOrders.length !== ongoingOrders.length && (
-            <span className="text-foreground/30"> / {ongoingOrders.length}</span>
-          )}
-        </span>
+        <div
+          className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1 no-scrollbar"
+          role="tablist"
+          aria-label="Filter active orders by status"
+        >
+          {ESCROW_STATUS_OPTIONS.map((opt) => {
+            const isActive = statusFilter === opt.key;
+            return (
+              <button
+                key={opt.key}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setStatusFilter(opt.key)}
+                className={`shrink-0 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-colors ${
+                  isActive
+                    ? "bg-white border-white text-black"
+                    : "bg-foreground/[0.03] border-foreground/[0.06] text-foreground/50 hover:text-foreground/70"
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {filteredOngoingOrders.length > 0 ? (
@@ -519,8 +532,8 @@ export function MobileEscrowView({
           <Lock className="w-8 h-8 mb-2 opacity-20" />
           <p className="text-xs text-foreground/35 font-mono">
             {ongoingOrders.length === 0
-              ? "No active escrows"
-              : "No escrows match this status"}
+              ? "No active trades"
+              : "No trades match this status"}
           </p>
           {ongoingOrders.length > 0 && statusFilter !== "all" && (
             <button

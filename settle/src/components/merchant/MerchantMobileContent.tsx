@@ -94,6 +94,9 @@ export interface MerchantMobileContentProps {
 
   // Bottom nav counts
   totalUnread: number;
+
+  // Opens the shared PaymentMethodModal (state lives on merchant/page.tsx).
+  onOpenPaymentMethods?: () => void;
 }
 
 export const MerchantMobileContent = React.memo(function MerchantMobileContent(props: MerchantMobileContentProps) {
@@ -116,6 +119,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     embeddedWalletState,
     activeCorridor, onCorridorChange,
     totalUnread,
+    onOpenPaymentMethods,
   } = props;
 
   return (
@@ -139,6 +143,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               embeddedWalletState={embeddedWalletState}
               activeCorridor={activeCorridor}
               onCorridorChange={onCorridorChange}
+              onOpenPaymentMethods={onOpenPaymentMethods}
               onStartTrade={(side) => {
                 setOpenTradeForm({ ...openTradeForm, tradeType: side });
                 setShowOpenTradeModal(true);

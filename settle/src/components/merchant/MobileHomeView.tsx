@@ -26,6 +26,10 @@ import {
   Key,
   Download,
   Trash2,
+  Building2,
+  DollarSign,
+  CreditCard,
+  Smartphone,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import {
@@ -73,7 +77,30 @@ interface MobileHomeViewProps {
   // Quick-action handlers wired into the balance-card button row.
   // Buy/Sell preselect the trade side and open the create-trade modal.
   onStartTrade?: (side: "buy" | "sell") => void;
+
+  // Opens the full PaymentMethodModal (same one the desktop uses).
+  // When omitted, the "Manage" link inside the default-payment card is hidden.
+  onOpenPaymentMethods?: () => void;
 }
+
+type MerchantPaymentMethod = {
+  id: string;
+  type: "bank" | "cash" | "crypto" | "card" | "mobile";
+  name: string;
+  details: string;
+  is_default: boolean;
+};
+
+const PM_TYPE_META: Record<
+  MerchantPaymentMethod["type"],
+  { label: string; Icon: typeof Building2; cls: string }
+> = {
+  bank: { label: "Bank Account", Icon: Building2, cls: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+  cash: { label: "Cash Meeting", Icon: DollarSign, cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+  crypto: { label: "Crypto Wallet", Icon: Wallet, cls: "text-primary bg-primary/10 border-primary/20" },
+  card: { label: "Card Payment", Icon: CreditCard, cls: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
+  mobile: { label: "Mobile Money", Icon: Smartphone, cls: "text-pink-400 bg-pink-500/10 border-pink-500/20" },
+};
 
 export function MobileHomeView({
   effectiveBalance,
@@ -91,6 +118,7 @@ export function MobileHomeView({
   activeCorridor = "USDT_INR",
   onCorridorChange,
   onStartTrade,
+  onOpenPaymentMethods,
 }: MobileHomeViewProps) {
   const openWallet = onOpenWallet ?? onShowWalletModal;
 
@@ -275,6 +303,49 @@ export function MobileHomeView({
     setInrInputValue("");
     setShowInrPanel(false);
   };
+
+  // Payment methods — surface the default one inline on the home card,
+  // with an expand toggle for the rest and a "Manage" link that opens
+  // the full PaymentMethodModal (same one the desktop uses).
+  const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
+  const [paymentMethodsLoaded, setPaymentMethodsLoaded] = useState(false);
+  const [paymentMethodsExpanded, setPaymentMethodsExpanded] = useState(false);
+  useEffect(() => {
+    if (!merchantIdForWallet) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithAuth(
+          `/api/merchant/${merchantIdForWallet}/payment-methods`,
+        );
+        const json = await res.json();
+        if (cancelled) return;
+        if (json?.success && Array.isArray(json.data)) {
+          setPaymentMethods(
+            json.data.map((m: any) => ({
+              id: String(m.id),
+              type: m.type,
+              name: String(m.name ?? ""),
+              details: String(m.details ?? ""),
+              is_default: !!m.is_default,
+            })),
+          );
+        }
+      } catch {
+        // Swallow — the card just hides itself when there's no data.
+      } finally {
+        if (!cancelled) setPaymentMethodsLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [merchantIdForWallet]);
+  const defaultPaymentMethod =
+    paymentMethods.find((m) => m.is_default) ?? paymentMethods[0] ?? null;
+  const otherPaymentMethods = paymentMethods.filter(
+    (m) => m.id !== defaultPaymentMethod?.id,
+  );
 
   // Recent activity — merge pending + ongoing + recent completed
   const recentOrders = [
@@ -555,6 +626,97 @@ export function MobileHomeView({
                 </span>
               </button>
             </div>
+
+            {/* Default Payment Method — compact row showing the merchant's
+                default method (type + name), with a chevron to expand the
+                rest inline and a "Manage" link that opens the full modal. */}
+            {paymentMethodsLoaded && defaultPaymentMethod && (() => {
+              const meta = PM_TYPE_META[defaultPaymentMethod.type];
+              const Icon = meta.Icon;
+              const canExpand = otherPaymentMethods.length > 0;
+              return (
+                <div className="mt-4">
+                  <button
+                    onClick={() =>
+                      canExpand
+                        ? setPaymentMethodsExpanded((v) => !v)
+                        : onOpenPaymentMethods?.()
+                    }
+                    aria-expanded={paymentMethodsExpanded}
+                    className="w-full flex items-center gap-2.5 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl px-3 py-2.5 hover:bg-foreground/[0.05] transition-colors text-left"
+                  >
+                    <div
+                      className={`shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center ${meta.cls}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[9px] text-foreground/40 uppercase tracking-wider font-medium truncate">
+                        Default Payment · {meta.label}
+                      </p>
+                      <p className="text-[13px] font-semibold text-foreground truncate">
+                        {defaultPaymentMethod.name}
+                      </p>
+                    </div>
+                    {canExpand && (
+                      <ChevronDown
+                        className={`shrink-0 w-4 h-4 text-foreground/40 transition-transform ${
+                          paymentMethodsExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    )}
+                  </button>
+
+                  {paymentMethodsExpanded && (
+                    <div className="mt-1.5 space-y-1.5">
+                      {otherPaymentMethods.map((pm) => {
+                        const m = PM_TYPE_META[pm.type];
+                        const I = m.Icon;
+                        return (
+                          <div
+                            key={pm.id}
+                            className="w-full flex items-center gap-2.5 bg-foreground/[0.02] border border-foreground/[0.05] rounded-xl px-3 py-2"
+                          >
+                            <div
+                              className={`shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ${m.cls}`}
+                            >
+                              <I className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[9px] text-foreground/40 uppercase tracking-wider font-medium truncate">
+                                {m.label}
+                              </p>
+                              <p className="text-[12px] font-semibold text-foreground/80 truncate">
+                                {pm.name}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {onOpenPaymentMethods && (
+                        <button
+                          onClick={onOpenPaymentMethods}
+                          className="w-full py-2 rounded-xl border border-dashed border-foreground/[0.10] text-[11px] font-semibold text-foreground/60 hover:text-foreground hover:border-foreground/30 transition-colors"
+                        >
+                          View more
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* No payment methods yet — surface a CTA to add one */}
+            {paymentMethodsLoaded && !defaultPaymentMethod && onOpenPaymentMethods && (
+              <button
+                onClick={onOpenPaymentMethods}
+                className="mt-4 w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-foreground/[0.10] text-[11px] font-semibold text-foreground/50 hover:text-foreground hover:border-foreground/30 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add payment method
+              </button>
+            )}
 
             {/* INR Cash + My Rate — minimal inline row, no boxes. Each
                 "pill" is just a tap target with the value inline next to

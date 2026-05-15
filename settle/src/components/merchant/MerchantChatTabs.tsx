@@ -142,7 +142,7 @@ export function MerchantChatTabs({
   // pre-terminal, non-disputed) so the merchant can focus on conversations
   // where action is required without losing the full chat history view.
   type ChatTab = "orders" | "active" | "disputes";
-  const [activeTab, setActiveTab] = useState<ChatTab>("orders");
+  const [activeTab, setActiveTab] = useState<ChatTab>("active");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Dispute conversations state (fetched independently)
@@ -306,27 +306,6 @@ export function MerchantChatTabs({
       {/* Tabs */}
       <div className="flex border-b border-white/[0.04]">
         <button
-          onClick={() => setActiveTab("orders")}
-          className={`flex-1 px-3 py-1.5 text-[12px] font-mono font-medium transition-colors relative ${
-            activeTab === "orders"
-              ? "text-white/80"
-              : "text-white/30 hover:text-foreground/50"
-          }`}
-        >
-          <div className="flex items-center justify-center gap-1.5">
-            <MessageCircle className="w-3 h-3" />
-            <span>Orders</span>
-            {totalUnread > 0 && (
-              <span className="w-4 h-4 bg-primary text-background text-[12px] font-bold rounded-full flex items-center justify-center">
-                {totalUnread > 9 ? "9+" : totalUnread}
-              </span>
-            )}
-          </div>
-          {activeTab === "orders" && (
-            <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
-          )}
-        </button>
-        <button
           onClick={() => setActiveTab("active")}
           className={`flex-1 px-3 py-1.5 text-[12px] font-mono font-medium transition-colors relative ${
             activeTab === "active"
@@ -334,8 +313,7 @@ export function MerchantChatTabs({
               : "text-white/30 hover:text-foreground/50"
           }`}
         >
-          <div className="flex items-center justify-center gap-1.5">
-            <MessageCircle className="w-3 h-3" />
+          <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
             <span>Active Chat</span>
             {activeUnread > 0 && (
               <span className="w-4 h-4 bg-primary text-background text-[12px] font-bold rounded-full flex items-center justify-center">
@@ -344,6 +322,26 @@ export function MerchantChatTabs({
             )}
           </div>
           {activeTab === "active" && (
+            <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("orders")}
+          className={`flex-1 px-3 py-1.5 text-[12px] font-mono font-medium transition-colors relative ${
+            activeTab === "orders"
+              ? "text-white/80"
+              : "text-white/30 hover:text-foreground/50"
+          }`}
+        >
+          <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+            <span>Inbox</span>
+            {totalUnread > 0 && (
+              <span className="w-4 h-4 bg-primary text-background text-[12px] font-bold rounded-full flex items-center justify-center">
+                {totalUnread > 9 ? "9+" : totalUnread}
+              </span>
+            )}
+          </div>
+          {activeTab === "orders" && (
             <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
           )}
         </button>
@@ -388,7 +386,7 @@ export function MerchantChatTabs({
                 ? "Search disputes..."
                 : activeTab === "active"
                   ? "Search active chats..."
-                  : "Search orders..."
+                  : "Search inbox..."
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

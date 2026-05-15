@@ -153,9 +153,68 @@ export function MobileOrdersView({
 
   return (
     <div className="space-y-1">
-      {/* Toolbar — search + filter + sound on/off */}
-      <div className="sticky top-0 z-20 -mx-3 px-3 py-2 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04] flex items-center gap-2">
-        <div className="flex-1 relative">
+      {/* Sticky header — sub-tabs on top, search below.
+          Tab counts come from the un-pending-filtered, un-searched
+          pendingOrders array so a merchant on the Pending tab can still
+          see how many of their own broadcasts are out there. */}
+      <div className="sticky top-0 z-20 -mx-3 px-3 pt-2 pb-2 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04] space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto no-scrollbar">
+            {(
+              [
+                { id: "all", label: "All", count: allCount },
+                { id: "pending", label: "Pending", count: pendingTabCount },
+                { id: "mine", label: "My Orders", count: myCount },
+              ] as const
+            ).map((tab) => {
+              const isActive = view === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setView(tab.id)}
+                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                    isActive
+                      ? "bg-white text-black"
+                      : "text-foreground/45 hover:text-foreground/70"
+                  }`}
+                >
+                  {tab.label}
+                  <span
+                    className={`text-[9px] font-mono tabular-nums px-1 py-px rounded text-white ${
+                      isActive ? "bg-black/80" : "bg-foreground/[0.08]"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <FilterDropdown<PendingFilter>
+            value={pendingFilter}
+            onChange={setPendingFilter}
+            ariaLabel="Filter pending orders"
+            align="right"
+            options={PENDING_FILTER_OPTIONS}
+          />
+
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
+            aria-pressed={soundEnabled}
+            className={`p-2 rounded-lg border transition-colors ${
+              soundEnabled
+                ? "bg-primary/10 border-primary/25 text-primary"
+                : "bg-foreground/[0.04] border-foreground/[0.08] text-foreground/40"
+            }`}
+          >
+            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+        </div>
+
+        <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/30 pointer-events-none" />
           <input
             type="text"
@@ -175,27 +234,6 @@ export function MobileOrdersView({
             </button>
           )}
         </div>
-
-        <FilterDropdown<PendingFilter>
-          value={pendingFilter}
-          onChange={setPendingFilter}
-          ariaLabel="Filter pending orders"
-          align="right"
-          options={PENDING_FILTER_OPTIONS}
-        />
-
-        <button
-          onClick={() => setSoundEnabled(!soundEnabled)}
-          aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
-          aria-pressed={soundEnabled}
-          className={`p-2 rounded-lg border transition-colors ${
-            soundEnabled
-              ? "bg-primary/10 border-primary/25 text-primary"
-              : "bg-foreground/[0.04] border-foreground/[0.08] text-foreground/40"
-          }`}
-        >
-          {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-        </button>
       </div>
 
       {/* Whale Orders section removed \u2014 its Contact button was a TODO that
@@ -207,41 +245,6 @@ export function MobileOrdersView({
           Orders split. Tab counts come from the un-pending-filtered, un-
           searched pendingOrders array so a merchant on the Pending tab can
           still see how many of their own broadcasts are out there. */}
-      <div className="flex items-center gap-1 px-1 py-1.5 border-b border-white/[0.04]">
-        {(
-          [
-            { id: "all", label: "All", count: allCount },
-            { id: "pending", label: "Pending", count: pendingTabCount },
-            { id: "mine", label: "My Orders", count: myCount },
-          ] as const
-        ).map((tab) => {
-          const isActive = view === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setView(tab.id)}
-              className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors ${
-                isActive
-                  ? "bg-white text-black"
-                  : "text-foreground/45 hover:text-foreground/70"
-              }`}
-            >
-              {tab.label}
-              <span
-                className={`text-[9px] font-mono tabular-nums px-1 py-px rounded text-white ${
-                  isActive
-                    ? "bg-black/80"
-                    : "bg-foreground/[0.08]"
-                }`}
-              >
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
       {filteredPendingOrders.length > 0 ? (
         <div className="space-y-2 py-1">
           {filteredPendingOrders.map((order) => {
