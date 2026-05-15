@@ -40,6 +40,7 @@ import {
   clearSessionKeypair,
 } from "@/lib/wallet/embeddedWallet";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { formatCount } from "@/lib/format";
 import type { Order } from "@/types/merchant";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { OnboardingSetupCard } from "@/components/merchant/OnboardingSetupCard";
@@ -294,9 +295,11 @@ export function MobileHomeView({
     localStorage.setItem(`inr_cash_${merchantId}`, inrBalance.toString());
   }, [merchantId, inrBalance]);
 
+  const MAX_INR_INPUT = 100_000_000; // 10 crore ceiling per submission
   const handleInrSubmit = () => {
     const amount = parseFloat(inrInputValue);
     if (Number.isNaN(amount) || amount <= 0) return;
+    if (amount > MAX_INR_INPUT) return;
     setInrBalance((prev) =>
       inrInputMode === "add" ? prev + amount : Math.max(0, prev - amount),
     );
@@ -494,7 +497,7 @@ export function MobileHomeView({
             </p>
             <button
               onClick={openWallet}
-              className="w-full py-2.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-primary text-background font-semibold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
             >
               <Unlock className="w-4 h-4" />
               Unlock Wallet
@@ -513,7 +516,7 @@ export function MobileHomeView({
             </p>
             <button
               onClick={openWallet}
-              className="w-full py-2.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-primary text-background font-semibold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
             >
               <Wallet className="w-4 h-4" />
               Set Up Wallet
@@ -794,10 +797,24 @@ export function MobileHomeView({
                   <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-primary/30 transition-colors">
                     <span className="text-sm text-foreground/40 mr-1">₹</span>
                     <input
-                      type="number"
+                      type="text"
                       inputMode="decimal"
                       value={inrInputValue}
-                      onChange={(e) => setInrInputValue(e.target.value)}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^\d.]/g, "");
+                        const parts = v.split(".");
+                        const sanitized =
+                          parts.length > 2
+                            ? `${parts[0]}.${parts.slice(1).join("")}`
+                            : v;
+                        if (sanitized === "" || sanitized === ".") {
+                          setInrInputValue(sanitized);
+                          return;
+                        }
+                        const num = parseFloat(sanitized);
+                        if (Number.isNaN(num) || num > MAX_INR_INPUT) return;
+                        setInrInputValue(sanitized);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleInrSubmit();
                         if (e.key === "Escape") setShowInrPanel(false);
@@ -824,9 +841,11 @@ export function MobileHomeView({
                     <button
                       onClick={handleInrSubmit}
                       disabled={
-                        !inrInputValue || parseFloat(inrInputValue) <= 0
+                        !inrInputValue ||
+                        parseFloat(inrInputValue) <= 0 ||
+                        parseFloat(inrInputValue) > MAX_INR_INPUT
                       }
-                      className="flex-1 py-2 rounded-lg bg-primary text-white text-[12px] font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center justify-center gap-1"
+                      className="flex-1 py-2 rounded-lg bg-primary text-background text-[12px] font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center justify-center gap-1"
                     >
                       <Check className="w-3.5 h-3.5" />
                       {inrInputMode === "add" ? "Add INR Cash" : "Subtract"}
@@ -878,7 +897,7 @@ export function MobileHomeView({
                     <button
                       onClick={handleSaveRate}
                       disabled={!rateInput || parseFloat(rateInput) <= 0}
-                      className="flex-1 py-2 rounded-lg bg-primary text-white text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"
+                      className="flex-1 py-2 rounded-lg bg-primary text-background text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"
                     >
                       <Check className="w-3.5 h-3.5" />
                       Save Rate
@@ -1055,7 +1074,7 @@ export function MobileHomeView({
                             {order.amount} USDT
                             <span className="text-foreground/30 mx-1">→</span>
                             <span className="text-primary">
-                              {Math.round(order.total)} {activeCorridorMeta.fiat}
+                              {formatCount(Math.round(order.total))} {activeCorridorMeta.fiat}
                             </span>
                           </p>
                           <p className={`text-[10px] font-medium ${statusColor}`}>

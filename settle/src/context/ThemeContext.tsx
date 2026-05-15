@@ -2,10 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-export type Theme = 'dark' | 'light' | 'clean' | 'navy' | 'emerald' | 'orchid' | 'gold';
+export type Theme = 'dark' | 'mono' | 'light' | 'clean' | 'navy' | 'emerald' | 'orchid' | 'gold';
 
 export const THEMES: { id: Theme; label: string; color: string }[] = [
   { id: 'dark', label: 'Amoled Dark', color: '#F97316' },
+  { id: 'mono', label: 'Mono', color: '#FFFFFF' },
   { id: 'navy', label: 'Midnight Navy', color: '#38BDF8' },
   { id: 'emerald', label: 'Emerald Matrix', color: '#10B981' },
   { id: 'orchid', label: 'Cyberpunk Orchid', color: '#E94560' },
@@ -41,7 +42,7 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark');
+  const [theme, setThemeState] = useState<Theme>('mono');
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -51,6 +52,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (savedTheme && THEMES.some(t => t.id === savedTheme)) {
       setThemeState(savedTheme);
       applyTheme(savedTheme);
+    } else {
+      // No saved preference → fall back to the new default (mono). Apply
+      // explicitly so the data-theme attribute is set before paint, instead
+      // of leaving :root styles (which are the legacy 'dark' palette) visible.
+      applyTheme('mono');
     }
 
     requestAnimationFrame(() => {

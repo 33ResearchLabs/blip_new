@@ -58,6 +58,11 @@ function getViewerSide(
 
 export interface MobileOrdersViewProps {
   pendingOrders: Order[];
+  // Kept on the prop interface for backward compat with existing call sites
+  // (MerchantMobileContent still passes it). No longer consumed inside —
+  // the "All" tab now reads the full orders array from the merchant store
+  // directly, mirroring PendingOrdersPanel's "All" branch.
+  ongoingOrders?: Order[];
   onAcceptOrder: (order: Order) => void;
   acceptingOrderId?: string | null;
   onOpenChat: (order: Order) => void;
@@ -88,6 +93,40 @@ export function MobileOrdersView({
   const setSoundEnabled = useMerchantStore((s) => s.setSoundEnabled);
   // For YOU PAY / YOU RECEIVE perspective in the gradient amounts panel.
   const merchantId = useMerchantStore((s) => s.merchantId);
+  // Pull the FULL orders array from the same store the desktop pending
+  // bar reads from (PendingOrdersPanel.tsx's "All" branch — line ~1235:
+  // `const marketOrders = [...orders];`). The parent passes `pendingOrders`
+  // already-filtered to pending+escrow-unaccepted; that's correct for the
+  // Pending/My-Orders tabs but too narrow for "All", which should also
+  // surface accepted / payment_sent / completed / cancelled rows the way
+  // desktop does.
+  const allMerchantOrders = useMerchantStore((s) => s.orders) as Order[];
+
+  // Exact copy of the desktop pending bar's `isMyOwnOrder` check
+  // (PendingOrdersPanel.tsx:479-483) so mobile rows label themselves the
+  // same way as desktop:
+  //   • If it's an M2M order (buyer_merchant_id set + placeholder user) →
+  //     I'm the placer ONLY if buyer_merchant_id matches me. The seller
+  //     side (merchant_id) gets the ACCEPT button instead.
+  //   • Otherwise (incl. unaccepted broadcasts where buyer_merchant_id is
+  //     null) → I'm the placer if the API-returned isMyOrder flag is set,
+  //     OR the user is a placeholder and merchant_id matches me.
+  // Both checks use `order.orderMerchantId` / `order.buyerMerchantId` —
+  // the mapped fields from `mapDbOrderToUI` — instead of dipping into
+  // `order.dbOrder` so we don't depend on whether the raw DB row is
+  // attached on every code path.
+  const isCreatedByMe = (order: Order): boolean => {
+    if (!merchantId) return false;
+    const username: string =
+      (order as any)?.dbOrder?.user?.username || order.user || "";
+    const isPlaceholderUser =
+      username.startsWith("open_order_") || username.startsWith("m2m_");
+    const isM2MOrder = !!order.buyerMerchantId && isPlaceholderUser;
+    return isM2MOrder
+      ? order.buyerMerchantId === merchantId
+      : !!order.isMyOrder ||
+          (isPlaceholderUser && order.orderMerchantId === merchantId);
+  };
 
   // Sub-tab state — mirrors the desktop PendingOrdersPanel
   //   • All        — every pending order (mine + others)
@@ -98,23 +137,42 @@ export function MobileOrdersView({
   type ViewTab = "all" | "pending" | "mine";
   const [view, setView] = useState<ViewTab>("pending");
 
+  // "All" view = full orders feed from the store, every status (pending /
+  //   accepted / escrowed / payment_sent / completed / cancelled / …),
+  //   matching the desktop pending bar's "All" branch in PendingOrdersPanel.
+  //   Deduped by id as a safety net.
+  // "Pending" view stays scoped to pending-only (excluding mine — that's the
+  //   actionable market list).
+  // "Mine" view stays scoped to pending-only mine (same as before; the
+  //   Active Order tab still owns the in-progress mine list).
+  const allOrders = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: Order[] = [];
+    for (const o of allMerchantOrders) {
+      if (o?.id && seen.has(o.id)) continue;
+      if (o?.id) seen.add(o.id);
+      merged.push(o);
+    }
+    return merged;
+  }, [allMerchantOrders]);
+
   const myCount = useMemo(
     () => pendingOrders.filter((o) => o.isMyOrder).length,
     [pendingOrders],
   );
   const pendingTabCount = pendingOrders.length - myCount;
-  const allCount = pendingOrders.length;
+  const allCount = allOrders.length;
 
   // Apply the same filter predicates the desktop pending panel uses.
   // The view-tab filter runs FIRST so the existing pendingFilter (mineable /
   // premium / large / expiring) and the search box operate on the already-
   // scoped subset.
   const filteredPendingOrders = useMemo(() => {
-    let list = pendingOrders;
+    let list = view === "all" ? allOrders : pendingOrders;
 
     if (view === "mine") list = list.filter((o) => o.isMyOrder);
     else if (view === "pending") list = list.filter((o) => !o.isMyOrder);
-    // view === "all" → no filter
+    // view === "all" → no filter, but list already includes ongoing orders
 
     if (pendingFilter !== "all") {
       list = list.filter((order) => {
@@ -149,7 +207,7 @@ export function MobileOrdersView({
     }
 
     return list;
-  }, [pendingOrders, view, pendingFilter, searchQuery]);
+  }, [pendingOrders, allOrders, view, pendingFilter, searchQuery]);
 
   return (
     <div className="space-y-1">
@@ -293,7 +351,7 @@ export function MobileOrdersView({
                     />
                     <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
                       <span className="text-[13px] font-semibold text-white truncate">
-                        {order.isMyOrder ? "Your offer" : order.user}
+                        {isCreatedByMe(order) ? "Your offer" : order.user}
                       </span>
                       {order.spreadPreference && (
                         <span
@@ -305,12 +363,12 @@ export function MobileOrdersView({
                           title={order.spreadPreference}
                         />
                       )}
-                      {order.isMyOrder && (
+                      {isCreatedByMe(order) && (
                         <span className="px-1.5 py-0.5 bg-foreground/[0.04] border border-foreground/[0.06] rounded text-[9px] font-bold text-foreground/40">
                           YOURS
                         </span>
                       )}
-                      {order.isNew && !order.isMyOrder && (
+                      {order.isNew && !isCreatedByMe(order) && (
                         <span className="px-1.5 py-0.5 bg-white/5 text-white/70 rounded text-[9px] font-bold">
                           NEW
                         </span>
@@ -318,7 +376,7 @@ export function MobileOrdersView({
                     </div>
                   </div>
                   {/* Timer (others) or Waiting pill (own) */}
-                  {order.isMyOrder ? (
+                  {isCreatedByMe(order) ? (
                     <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-[10px] font-mono text-amber-300 font-medium">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                       Waiting
@@ -414,7 +472,7 @@ export function MobileOrdersView({
                   <span className="text-[10px] text-foreground/40 font-mono shrink-0">
                     @ {order.rate.toFixed(2)}
                   </span>
-                  {!order.isMyOrder && (
+                  {!isCreatedByMe(order) && (
                     <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
                       +${Math.round(order.amount * 0.005)}
                     </span>
@@ -434,7 +492,7 @@ export function MobileOrdersView({
                     </a>
                   )}
                   <div className="flex-1" />
-                  {order.isMyOrder ? (
+                  {isCreatedByMe(order) ? (
                     <>
                       {onCancelOrder && (
                         <motion.button
@@ -465,26 +523,42 @@ export function MobileOrdersView({
                     </>
                   ) : (
                     <>
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        disabled={acceptingOrderId === order.id}
-                        onClick={() => onAcceptOrder(order)}
-                        className={`h-9 px-3 border rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
-                          acceptingOrderId === order.id
-                            ? "bg-white/[0.03] border-white/[0.06] text-white/50 cursor-wait"
-                            : "bg-primary text-white border-primary hover:bg-primary/90"
-                        }`}
-                      >
-                        {acceptingOrderId === order.id ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Accepting…
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-3.5 h-3.5" /> Accept
-                          </>
-                        )}
-                      </motion.button>
+                      {/* Same gate as desktop PendingOrdersPanel:932 — only
+                          render the Accept button when the order is
+                          actively pending (status === 'pending' AND
+                          expires_in > 0). Already-claimed / escrowed /
+                          accepted / completed rows show no action button. */}
+                      {(() => {
+                        const effStatus: string =
+                          (order as any).status ||
+                          (order as any)?.dbOrder?.status ||
+                          "pending";
+                        const isActivelyPending =
+                          effStatus === "pending" && order.expiresIn > 0;
+                        if (!isActivelyPending) return null;
+                        return (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            disabled={acceptingOrderId === order.id}
+                            onClick={() => onAcceptOrder(order)}
+                            className={`h-9 px-3 border rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                              acceptingOrderId === order.id
+                                ? "bg-white/[0.03] border-white/[0.06] text-white/50 cursor-wait"
+                                : "bg-primary text-background border-primary hover:bg-primary/90"
+                            }`}
+                          >
+                            {acceptingOrderId === order.id ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Accepting…
+                              </>
+                            ) : (
+                              <>
+                                <Check className="w-3.5 h-3.5" /> Accept
+                              </>
+                            )}
+                          </motion.button>
+                        );
+                      })()}
                       <button
                         onClick={() => {
                           onOpenChat(order);

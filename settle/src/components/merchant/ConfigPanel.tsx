@@ -613,7 +613,7 @@ export const ConfigPanel = memo(function ConfigPanel({
             className="flex-1 py-3 rounded-xl font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5"
             style={{
               backgroundColor: "var(--primary)",
-              color: "#ffffff",
+              color: "var(--background)",
               boxShadow: "0 2px 12px var(--primary-dim)",
             }}
           >

@@ -31,7 +31,10 @@ export function MobileChatView({
   playSound,
 }: MobileChatViewProps) {
   return (
-    <div className="h-full flex flex-col pb-16">
+    // The parent <main> in MerchantMobileContent already has `pb-20` to
+    // clear the fixed bottom nav. Adding a second bottom padding here
+    // would stack 64+80=144px of empty space below the chat composer.
+    <div className="h-full flex flex-col">
       {activeOrderChat && merchantId ? (
         <OrderChatView
           orderId={activeOrderChat.orderId}
@@ -51,6 +54,7 @@ export function MobileChatView({
           onOpenOrderChat={onOpenOrderChat}
           onClearUnread={onClearUnread}
           onClearAllUnread={onClearAllUnread}
+          hideHeading
         />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center py-12">

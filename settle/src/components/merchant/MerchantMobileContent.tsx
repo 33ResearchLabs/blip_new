@@ -153,6 +153,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
           {mobileView === "orders" && (
             <MobileOrdersView
               pendingOrders={pendingOrders}
+              ongoingOrders={ongoingOrders}
               onAcceptOrder={acceptOrder}
               acceptingOrderId={acceptingOrderId}
               onOpenChat={handleOpenChat}
@@ -237,7 +238,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
           onClick={() => setShowOpenTradeModal(true)}
           className="md:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-primary shadow-lg shadow-primary/25 flex items-center justify-center"
         >
-          <Plus className="w-6 h-6 text-white" />
+          <Plus className="w-6 h-6 text-background" />
         </motion.button>
       )}
 

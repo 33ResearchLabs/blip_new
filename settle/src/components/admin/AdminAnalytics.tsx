@@ -215,7 +215,7 @@ export default function AdminAnalytics({ adminToken }: { adminToken: string }) {
               onClick={() => handleTf(tf.key)}
               className={`px-2 py-1 rounded text-[10px] font-mono font-bold transition-all duration-200 ${
                 timeframe === tf.key
-                  ? 'bg-primary text-foreground shadow-sm shadow-primary/20'
+                  ? 'bg-primary text-background shadow-sm shadow-primary/20'
                   : 'text-foreground/25 hover:text-foreground/50 hover:bg-card'
               }`}
             >

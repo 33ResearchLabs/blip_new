@@ -1485,10 +1485,10 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           <div className="relative">
             <button
               onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
-              className={`flex items-center gap-1 text-[9px] font-mono bg-foreground/[0.02] border rounded-lg px-1.5 py-1.5 cursor-pointer transition-colors ${
+              className={`flex items-center gap-1 text-[9px] font-mono border rounded-lg px-1.5 py-1.5 cursor-pointer transition-colors ${
                 pendingFilter !== "all"
-                  ? "text-primary border-primary/30 bg-primary/5"
-                  : "text-white/35 border-foreground/[0.06] hover:border-border-strong"
+                  ? "bg-foreground text-background border-transparent shadow"
+                  : "bg-foreground/[0.02] text-white/35 border-foreground/[0.06] hover:border-border-strong"
               }`}
             >
               {
@@ -1524,7 +1524,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                       }}
                       className={`w-full px-3 py-1.5 text-left text-[10px] font-medium transition-colors ${
                         pendingFilter === f
-                          ? "text-primary bg-primary/5"
+                          ? "bg-foreground text-background shadow"
                           : "text-foreground/60 hover:bg-foreground/[0.04]"
                       }`}
                     >

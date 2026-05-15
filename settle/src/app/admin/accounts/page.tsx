@@ -51,7 +51,7 @@ function AccountsInner() {
             onClick={() => switchTab("users")}
             className={`px-5 py-2 rounded-full text-[12px] font-medium transition-colors ${
               tab === "users"
-                ? "bg-primary text-foreground shadow-lg shadow-primary/30"
+                ? "bg-primary text-background shadow-lg shadow-primary/30"
                 : "text-foreground/50 hover:text-foreground/80"
             }`}
           >
@@ -61,7 +61,7 @@ function AccountsInner() {
             onClick={() => switchTab("merchants")}
             className={`px-5 py-2 rounded-full text-[12px] font-medium transition-colors ${
               tab === "merchants"
-                ? "bg-primary text-foreground shadow-lg shadow-primary/30"
+                ? "bg-primary text-background shadow-lg shadow-primary/30"
                 : "text-foreground/50 hover:text-foreground/80"
             }`}
           >

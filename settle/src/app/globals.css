@@ -221,6 +221,45 @@
   --color-info: #818CF8;
 }
 
+/* Mono — same Amoled Dark base, but the primary CTA color is white
+   (button bg) with dark text. Use this when you want the orange-free
+   look while keeping everything else identical to the default dark theme. */
+[data-theme="mono"] {
+  --background: #060606;
+  --foreground: #ffffff;
+  --color-bg-primary: #060606;
+  --color-bg-secondary: #0c0c0c;
+  --color-bg-tertiary: #131313;
+  --color-text-primary: rgba(255, 255, 255, 0.92);
+  --color-text-secondary: rgba(255, 255, 255, 0.50);
+  --color-text-tertiary: rgba(255, 255, 255, 0.30);
+  --color-text-quaternary: rgba(255, 255, 255, 0.15);
+  --card: rgba(255, 255, 255, 0.03);
+  --card-solid: #0c0c0c;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --section-divider: rgba(255, 255, 255, 0.06);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-medium: rgba(255, 255, 255, 0.09);
+  --muted: #525252;
+  --muted-bg: #131313;
+  --accent: #ffffff;
+  --accent-bright: #f5f5f5;
+  --accent-dark: #e5e5e5;
+  --accent-dim: #d4d4d4;
+  --accent-subtle: rgba(255, 255, 255, 0.06);
+  --accent-glow: rgba(255, 255, 255, 0.04);
+  /* The point of this theme: primary CTA → white bg, primary text → white.
+     Buttons that pair `bg-primary` with `text-background` keep their dark
+     text because --background stays #060606. */
+  --primary: #FFFFFF;
+  --primary-dim: rgba(255, 255, 255, 0.10);
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #60a5fa;
+}
+
 /* Slate & Gold */
 [data-theme="gold"] {
   --background: #1C1C1C;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Bell, Plus, Loader2, History, X } from "lucide-react";
 import { usePusher } from "@/context/PusherContext";
@@ -16,7 +16,6 @@ import {
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsOverlay";
 import { MerchantWalletOverlay } from "@/components/merchant/MerchantWalletOverlay";
-import { LoginScreen } from "@/components/merchant/LoginScreen";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order } from "@/types/merchant";
 import {
@@ -170,6 +169,7 @@ export default function MerchantDashboard() {
   }, []);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
   const solanaWallet = useSolanaWallet();
   const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
   const { isConnected: isPusherConnected } = usePusher();
@@ -216,32 +216,9 @@ export default function MerchantDashboard() {
     solanaRefreshBalances: solanaWallet.refreshBalances,
   });
 
+  // Login form / 2FA state live on `/merchant/login` now. This page only
+  // needs the post-login handlers (logout, username prompt, profile sync).
   const {
-    loginForm,
-    setLoginForm,
-    registerForm,
-    setRegisterForm,
-    authTab,
-    setAuthTab,
-    loginError,
-    setLoginError,
-    isLoggingIn,
-    isRegistering,
-    unverifiedMerchantId,
-    isResendingVerification,
-    resendVerificationEmail,
-    pendingVerificationEmail,
-    clearPendingVerification,
-    verificationSuccessNotice,
-    dismissVerificationSuccess,
-    pending2FA,
-    totpCode,
-    setTotpCode,
-    isVerifying2FA,
-    handle2FAVerify,
-    cancel2FA,
-    handleLogin,
-    handleRegister,
     handleLogout,
     handleMerchantUsername,
     handleProfileUpdated,
@@ -251,6 +228,17 @@ export default function MerchantDashboard() {
     setShowWalletPrompt,
     setShowUsernameModal,
   });
+
+  // When the merchant isn't authenticated, bounce to `/merchant/login` (the
+  // canonical login URL). Any inbound query params (`?tab=register`,
+  // `?reason=session_expired`, etc.) are forwarded so the login page can
+  // render the right tab / surface the right error.
+  useEffect(() => {
+    if (isLoading) return;
+    if (isLoggedIn) return;
+    const qs = searchParams.toString();
+    router.replace(`/merchant/login${qs ? `?${qs}` : ""}`);
+  }, [isLoading, isLoggedIn, searchParams, router]);
 
   const { notifications, addNotification, markNotificationRead, markAllNotificationsRead, dismissStickyForOrder } =
     useNotifications(merchantId, isLoggedIn);
@@ -748,85 +736,15 @@ export default function MerchantDashboard() {
     );
   }
 
+  // Logged-out → the redirect effect above is sending the merchant to
+  // `/merchant/login`. Show a spinner during the brief flash before the
+  // route change commits, instead of mounting the LoginScreen here (which
+  // would duplicate the login UI on two routes).
   if (!isLoggedIn) {
-    // 2FA challenge screen
-    if (pending2FA) {
-      return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="w-full max-w-sm space-y-6">
-            <div className="text-center">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <svg className="w-7 h-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-              </div>
-              <h1 className="text-xl font-bold text-white">Two-Factor Authentication</h1>
-              <p className="text-sm text-white/40 mt-1">Enter the 6-digit code from your authenticator app</p>
-            </div>
-
-            {loginError && (
-              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
-                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                {loginError}
-              </div>
-            )}
-
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={totpCode}
-              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="000000"
-              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-4 text-2xl text-white text-center font-mono tracking-[0.4em] placeholder:text-white/10 outline-none focus:border-primary/30 transition-colors"
-              autoFocus
-              onKeyDown={(e) => { if (e.key === 'Enter' && totpCode.length === 6) handle2FAVerify(); }}
-            />
-
-            <button
-              onClick={handle2FAVerify}
-              disabled={isVerifying2FA || totpCode.length !== 6}
-              className="w-full py-3.5 rounded-xl bg-primary/15 border border-primary/25 text-primary font-semibold text-sm hover:bg-primary/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
-            >
-              {isVerifying2FA ? (
-                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> Verifying...</>
-              ) : 'Verify & Login'}
-            </button>
-
-            <button
-              onClick={cancel2FA}
-              className="w-full py-2.5 text-sm text-white/30 hover:text-foreground/50 transition-colors"
-            >
-              Back to login
-            </button>
-          </div>
-        </div>
-      );
-    }
-
     return (
-      <LoginScreen
-        authTab={authTab}
-        setAuthTab={setAuthTab}
-        loginForm={loginForm}
-        setLoginForm={setLoginForm}
-        registerForm={registerForm}
-        setRegisterForm={setRegisterForm}
-        loginError={loginError}
-        setLoginError={setLoginError}
-        isLoggingIn={isLoggingIn}
-        isRegistering={isRegistering}
-        isAuthenticating={false}
-        onLogin={handleLogin}
-        onRegister={handleRegister}
-        onResendVerification={resendVerificationEmail}
-        isResendingVerification={isResendingVerification}
-        pendingVerificationEmail={pendingVerificationEmail}
-        onBackToSignIn={() => {
-          clearPendingVerification();
-          setAuthTab("signin");
-        }}
-        verificationSuccessNotice={verificationSuccessNotice}
-        onDismissVerificationSuccess={dismissVerificationSuccess}
-      />
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
     );
   }
 
@@ -892,9 +810,11 @@ export default function MerchantDashboard() {
         }
       />
 
-      {/* Mobile live-price ticker — shown on every tab now so the live
-          rate is always one glance away. */}
-      <MobilePriceTicker />
+      {/* Mobile live-price ticker — only shown on the Home tab so other
+          tabs (History, Chat, Orders, Escrow, Marketplace) aren't crowded
+          by the corridor strip. The hook is shared, so re-mounting it on
+          tab switch is cheap and doesn't trigger extra network traffic. */}
+      {mobileView === "home" && <MobilePriceTicker />}
 
       <MerchantDesktopLayout
         isWideScreen={isWideScreen}
@@ -1094,7 +1014,7 @@ export default function MerchantDashboard() {
                 <Bell className="w-4 h-4 text-foreground/40" />
                 <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
                 {notifications.filter(n => !n.read).length > 0 && (
-                  <span className="text-[10px] bg-primary text-white font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                  <span className="text-[10px] bg-primary text-background font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                     {notifications.filter(n => !n.read).length}
                   </span>
                 )}

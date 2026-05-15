@@ -19,16 +19,14 @@ export default function MerchantLoginPage() {
 
   const auth = useDashboardAuth({
     isMockMode: false,
-    solanaWallet: {
-      connected: !!solanaWallet?.connected,
-      walletAddress: solanaWallet?.walletAddress ?? null,
-      signMessage: solanaWallet?.signMessage,
-      disconnect: solanaWallet?.disconnect,
-    },
+    solanaWallet,
     setShowWalletPrompt: () => {},
     setShowUsernameModal: () => {},
   });
 
+  // Seed authTab / loginError from URL params so deep links like
+  // /merchant/login?tab=register and /merchant/login?reason=session_expired
+  // land on the right state.
   useEffect(() => {
     const tab = searchParams.get("tab");
     auth.setAuthTab(tab === "register" || tab === "create" ? "create" : "signin");
@@ -287,9 +285,7 @@ export default function MerchantLoginPage() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                {/* Forgot password — sign-in only. Routes to the existing
-                    /merchant/forgot-password page which posts to
-                    /api/auth/merchant/forgot-password to email a reset link. */}
+                {/* Forgot password — sign-in only. */}
                 {isSignIn && (
                   <div className="mt-2 text-right">
                     <Link

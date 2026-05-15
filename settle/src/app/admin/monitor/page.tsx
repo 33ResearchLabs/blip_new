@@ -337,7 +337,7 @@ export default function MonitorPage() {
             <button
               onClick={handleLogin}
               disabled={isLoggingIn}
-              className="w-full py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold disabled:opacity-50"
+              className="w-full py-2 bg-primary text-background rounded-lg text-sm font-semibold disabled:opacity-50"
             >
               {isLoggingIn ? "Authenticating…" : "Sign In"}
             </button>
