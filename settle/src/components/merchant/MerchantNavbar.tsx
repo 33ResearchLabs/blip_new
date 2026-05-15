@@ -505,38 +505,6 @@ export function MerchantNavbar({
                 >
                   <Zap className="w-5 h-5" /> Dashboard
                 </Link>
-                {onOpenWallet ? (
-                  <button
-                    onClick={() => {
-                      setDrawerOpen(false);
-                      onOpenWallet();
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
-                  >
-                    <Wallet className="w-5 h-5" /> Wallet
-                  </button>
-                ) : (
-                  <Link
-                    href="/merchant/wallet"
-                    onClick={() => {
-                      setDrawerOpen(false);
-                      onNavLinkClick?.();
-                    }}
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
-                  >
-                    <Wallet className="w-5 h-5" /> Wallet
-                  </Link>
-                )}
-                <Link
-                  href="/merchant/analytics"
-                  onClick={() => {
-                    setDrawerOpen(false);
-                    onNavLinkClick?.();
-                  }}
-                  className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
-                >
-                  <BarChart3 className="w-5 h-5" /> Analytics
-                </Link>
                 {onOpenSettings ? (
                   <button
                     onClick={() => {
@@ -556,16 +524,6 @@ export function MerchantNavbar({
                     <Settings className="w-5 h-5" /> Settings
                   </Link>
                 )}
-                <button
-                  onClick={() => {
-                    setDrawerOpen(false);
-                    onOpenProfile?.();
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
-                >
-                  <User className="w-5 h-5" /> Edit Profile
-                </button>
-
                 {merchantInfo?.has_ops_access && (
                   <>
                     <div className="mx-4 my-2 border-t border-foreground/[0.06]" />
