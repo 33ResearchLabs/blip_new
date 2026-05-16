@@ -14,13 +14,11 @@ import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rat
 import { validateUsername } from '@/lib/validation/username';
 import {
   validateUserUsername,
-  validateUserEmail,
   validateUserPassword,
 } from '@/lib/validation/userAuth';
 import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS, ACCESS_TOKEN_COOKIE, ACCESS_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
-import { query } from '@/lib/db';
 
 /**
  * POST /api/auth/user
@@ -32,9 +30,8 @@ export async function POST(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
   try {
     const body = await request.json();
-    const { action, username: rawUsername, wallet_address, signature, message, nonce, password, email: rawEmail } = body;
+    const { action, username: rawUsername, wallet_address, signature, message, nonce, password } = body;
     const username = rawUsername?.trim();
-    const email: string | undefined = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : undefined;
 
     // Check username availability
     if (action === 'check_username') {
@@ -291,7 +288,7 @@ export async function POST(request: NextRequest) {
 
       if (!rawIdentifier || !password) {
         return NextResponse.json(
-          { success: false, error: 'Username or email and password are required' },
+          { success: false, error: 'Username and password are required' },
           { status: 400 }
         );
       }
@@ -358,21 +355,12 @@ export async function POST(request: NextRequest) {
       return loginRes;
     }
 
-    // Register with username/password (+ email for verification & recovery).
+    // Register with username + PIN. No email collected.
     if (action === 'register') {
-      // Authoritative validation — same helpers the client runs at submit
-      // time, so the user can't bypass anything by hitting the API directly.
       const usernameError = validateUserUsername(username || '');
       if (usernameError) {
         return NextResponse.json(
           { success: false, error: usernameError },
-          { status: 400 }
-        );
-      }
-      const emailError = validateUserEmail(email || '');
-      if (emailError) {
-        return NextResponse.json(
-          { success: false, error: emailError },
           { status: 400 }
         );
       }
@@ -384,24 +372,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check username availability
       const available = await checkUsernameAvailable(username);
       if (!available) {
         return NextResponse.json(
           { success: false, error: 'Username already taken' },
-          { status: 409 }
-        );
-      }
-
-      // Check email uniqueness up-front so we can return a friendlier error
-      // than letting the DB unique index fire (the DB still enforces it).
-      const existingByEmail = await query<{ id: string }>(
-        `SELECT id FROM users WHERE LOWER(email) = $1`,
-        [email]
-      );
-      if (existingByEmail.length > 0) {
-        return NextResponse.json(
-          { success: false, error: 'Email already registered' },
           { status: 409 }
         );
       }
@@ -412,19 +386,12 @@ export async function POST(request: NextRequest) {
           username,
           password,
           name: username,
-          email,
           email_verified: true,
         });
       } catch (createErr: any) {
         if (createErr?.message === 'Username already taken') {
           return NextResponse.json(
             { success: false, error: 'Username already taken' },
-            { status: 409 }
-          );
-        }
-        if (createErr?.message === 'Email already registered') {
-          return NextResponse.json(
-            { success: false, error: 'Email already registered' },
             { status: 409 }
           );
         }

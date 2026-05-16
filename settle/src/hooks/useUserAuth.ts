@@ -6,7 +6,6 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useMerchantStore } from '@/stores/merchantStore';
 import {
   validateUserUsername,
-  validateUserEmail,
   validateUserPin,
 } from '@/lib/validation/userAuth';
 
@@ -42,10 +41,7 @@ export function useUserAuth({
   const [newUserName, setNewUserName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  // `email` is only collected on the register form; sign-in uses
-  // username + password only. Keeping the shape unified avoids a separate
-  // register-form state object and a discriminated union here.
-  const [loginForm, setLoginForm] = useState({ username: "", password: "", email: "" });
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -233,14 +229,8 @@ export function useUserAuth({
   }, [loginForm, setScreen, fetchOrders, fetchBankAccounts, fetchResolvedDisputes]);
 
   const handleUserRegister = useCallback(async () => {
-    const email = loginForm.email?.trim() ?? '';
-    // Single source of truth for the rules — same module the API uses, so
-    // the message the user sees here matches what would come back from the
-    // server if they bypassed the client check.
     const usernameErr = validateUserUsername(loginForm.username);
     if (usernameErr) { setLoginError(usernameErr); return; }
-    const emailErr = validateUserEmail(email);
-    if (emailErr) { setLoginError(emailErr); return; }
     // First-time setup uses a 6-digit numeric PIN; server still validates as
     // a password (PIN passes the 6-char min, no-space rules) so no API change.
     const passwordErr = validateUserPin(loginForm.password);
@@ -256,7 +246,6 @@ export function useUserAuth({
         body: JSON.stringify({
           username: loginForm.username.trim(),
           password: loginForm.password,
-          email,
           action: 'register',
         }),
       });

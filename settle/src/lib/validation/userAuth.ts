@@ -12,8 +12,6 @@
  * usually see where the client says "valid" but the server rejects.
  */
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 // Disallow any whitespace in passwords — accidental leading/trailing spaces
 // from autofill / paste are a common silent gotcha.
 const PASSWORD_HAS_SPACE = /\s/;
@@ -22,7 +20,6 @@ export const USER_PASSWORD_MIN_LEN = 6;
 export const USER_PASSWORD_MAX_LEN = 24;
 export const USER_USERNAME_MIN_LEN = 3;
 export const USER_USERNAME_MAX_LEN = 20;
-export const USER_EMAIL_MAX_LEN = 254; // RFC 5321 ceiling
 
 export function validateUserUsername(raw: string): string | null {
   const username = raw.trim();
@@ -33,14 +30,6 @@ export function validateUserUsername(raw: string): string | null {
   if (!/^[a-zA-Z0-9_]+$/.test(username)) {
     return 'Letters, numbers, and underscores only';
   }
-  return null;
-}
-
-export function validateUserEmail(raw: string): string | null {
-  const email = raw.trim();
-  if (!email) return 'Email is required';
-  if (email.length > USER_EMAIL_MAX_LEN) return `Email must be ≤${USER_EMAIL_MAX_LEN} characters`;
-  if (!EMAIL_REGEX.test(email)) return 'Enter a valid email address';
   return null;
 }
 

@@ -2,20 +2,19 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Zap, Loader2, Eye, EyeOff, Mail } from "lucide-react";
+import { Zap, Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { UserWelcomePage } from "./UserWelcomePage";
 import {
   validateUserUsername,
-  validateUserEmail,
   validateUserPassword,
   validateUserPin,
   USER_PIN_LENGTH,
 } from "@/lib/validation/userAuth";
 
 interface LandingPageProps {
-  loginForm: { username: string; password: string; email: string };
-  setLoginForm: (f: { username: string; password: string; email: string }) => void;
+  loginForm: { username: string; password: string };
+  setLoginForm: (f: { username: string; password: string }) => void;
   authMode: 'login' | 'register';
   setAuthMode: (m: 'login' | 'register') => void;
   handleUserLogin: () => void;
@@ -38,16 +37,11 @@ export function LandingPage({
   const [showWelcome] = useState(!skipWelcome);
   // Track which fields the user has interacted with so we don't surface
   // "required" errors before they've even started typing.
-  const [touched, setTouched] = useState<{ username?: boolean; email?: boolean; password?: boolean }>({});
+  const [touched, setTouched] = useState<{ username?: boolean; password?: boolean }>({});
   const submit = () => authMode === 'login' ? handleUserLogin() : handleUserRegister();
 
-  // Per-field validity — only computed for register so login stays simple
-  // (login just needs a non-empty username + password and trusts the server).
   const usernameError = authMode === 'register' && touched.username
     ? validateUserUsername(loginForm.username)
-    : null;
-  const emailError = authMode === 'register' && touched.email
-    ? validateUserEmail(loginForm.email)
     : null;
   // Register uses a 6-digit PIN; login keeps the existing password field
   // since pre-PIN accounts still have password credentials.
@@ -62,9 +56,7 @@ export function LandingPage({
     !loginForm.username ||
     !loginForm.password ||
     (authMode === 'register' && (
-      !loginForm.email ||
       !!validateUserUsername(loginForm.username) ||
-      !!validateUserEmail(loginForm.email) ||
       !!validateUserPin(loginForm.password)
     ));
 
@@ -136,7 +128,7 @@ export function LandingPage({
 
             <div>
               <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">
-                {authMode === 'register' ? 'Username' : 'Username or Email'}
+                Username
               </label>
               <input
                 type="text"
@@ -146,7 +138,7 @@ export function LandingPage({
                   setLoginForm({ ...loginForm, username: e.target.value.trim() });
                   setTouched(t => ({ ...t, username: true }));
                 }}
-                placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'Username or you@email.com'}
+                placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'Your username'}
                 autoCapitalize="none"
                 autoCorrect="off"
                 maxLength={authMode === 'register' ? 20 : 254}
@@ -160,54 +152,11 @@ export function LandingPage({
               )}
             </div>
 
-            {/* Email — register only. Required so the user can recover their
-                account via the forgot-password flow. */}
-            {authMode === 'register' && (
-              <div>
-                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">Email</label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    value={loginForm.email}
-                    onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
-                    onBlur={e => {
-                      setLoginForm({ ...loginForm, email: e.target.value.trim() });
-                      setTouched(t => ({ ...t, email: true }));
-                    }}
-                    placeholder="you@email.com"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    maxLength={254}
-                    onKeyDown={e => e.key === 'Enter' && submit()}
-                    className={`w-full rounded-xl pl-10 pr-4 py-3 text-sm font-medium outline-none bg-surface-hover border ${
-                      emailError ? 'border-error' : 'border-border-subtle'
-                    } text-text-primary placeholder:text-text-tertiary`}
-                  />
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
-                </div>
-                {emailError ? (
-                  <p className="mt-1.5 text-[11px] text-error">{emailError}</p>
-                ) : (
-                  <p className="mt-1.5 text-[10px] text-text-tertiary">
-                    Used to recover your account if you forget your PIN.
-                  </p>
-                )}
-              </div>
-            )}
-
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary">
                   {authMode === 'register' ? `Set a ${USER_PIN_LENGTH}-digit PIN` : 'Password'}
                 </label>
-                {authMode === 'login' && (
-                  <Link
-                    href="/user/forgot-password"
-                    className="text-[10px] font-semibold text-text-secondary hover:text-text-primary transition-colors"
-                  >
-                    Forgot password?
-                  </Link>
-                )}
               </div>
               <div className="relative">
                 <input
