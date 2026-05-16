@@ -191,7 +191,7 @@ export const TradeCreationScreen = ({
       style={{ background: "#07090F" }}
     >
       {/* ── Ambient color glow that follows Buy / Sell ── */}
-      <motion.div
+      {/* <motion.div
         aria-hidden
         className="absolute inset-0 pointer-events-none"
         initial={false}
@@ -210,7 +210,7 @@ export const TradeCreationScreen = ({
             "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.025) 1px, transparent 0)",
           backgroundSize: "26px 26px",
         }}
-      />
+      /> */}
 
       {/* ── Header ── */}
       <header className="relative z-10 max-w-[440px] mx-auto w-full px-5 pt-5">
@@ -978,7 +978,7 @@ export const TradeCreationScreen = ({
                 { key: "best" as const, label: "Best Rate", fee: "2.5%", color: "#60A5FA" },
                 { key: "cheap" as const, label: "Cheapest", fee: "1.5%", color: "#34D399" },
               ] as const
-            ).map(({ key, label, fee, color }) => {
+            ).map(({ key, label, fee }) => {
               const on = tradePreference === key;
               return (
                 <motion.button
@@ -994,9 +994,9 @@ export const TradeCreationScreen = ({
                       className="absolute inset-0"
                       style={{
                         borderRadius: 12,
-                        background: `${color}1A`,
-                        border: `1px solid ${color}55`,
-                        boxShadow: `0 6px 14px -8px ${color}88`,
+                        background: "#FFFFFF",
+                        border: "1px solid rgba(255,255,255,0.85)",
+                        boxShadow: "0 6px 14px -8px rgba(255,255,255,0.35)",
                       }}
                       transition={SPRING}
                     />
@@ -1007,7 +1007,7 @@ export const TradeCreationScreen = ({
                       fontSize: 11,
                       fontWeight: 800,
                       letterSpacing: "-0.005em",
-                      color: on ? T.hi : T.md,
+                      color: on ? "#0B0F14" : T.md,
                     }}
                   >
                     {label}
@@ -1017,7 +1017,7 @@ export const TradeCreationScreen = ({
                     style={{
                       fontSize: 11,
                       fontWeight: 800,
-                      color: on ? color : T.lo,
+                      color: on ? "rgba(11,15,20,0.65)" : T.lo,
                       marginTop: 2,
                       fontFamily:
                         "ui-monospace, SFMono-Regular, Menlo, monospace",

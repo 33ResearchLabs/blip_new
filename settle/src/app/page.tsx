@@ -30,16 +30,21 @@ import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import type { Screen } from "@/components/user/screens/types";
 import { FEE_CONFIG } from "@/components/user/screens/helpers";
 
+// Transform-only animations — no opacity. Opacity crossfades blend the two
+// panels' colors mid-transition, which reads as flicker. Pure transform
+// keeps both panels fully opaque the entire time, so the entering panel
+// simply slides on top of the exiting one. Solid bg on Panel is required.
 const fade = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
+  initial: { scale: 0.985 },
+  animate: { scale: 1 },
+  exit: { scale: 1 },
 };
 const slide = {
-  initial: { opacity: 0, x: 20 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -20 },
+  initial: { x: '8%' },
+  animate: { x: 0 },
+  exit: { x: '-8%' },
 };
+const PANEL_TRANSITION = { duration: 0.26, ease: [0.22, 1, 0.36, 1] } as const;
 const darkBg = { background: "#080810" } as const;
 const lightPanelBg = { background: "#ffffff" } as const;
 function Panel({
@@ -59,8 +64,13 @@ function Panel({
     <motion.div
       key={k}
       {...anim}
-      className={`flex-1 w-full max-w-[440px] mx-auto flex flex-col ${className}`}
-      style={style}
+      transition={PANEL_TRANSITION}
+      // Absolute-positioned + horizontally centered so the entering and
+      // exiting screens overlap during the transition. Solid background
+      // (falls back to var(--user-frame) when no `style` is provided) makes
+      // sure nothing behind the panel ever shows through.
+      className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] flex flex-col ${className}`}
+      style={{ background: 'var(--user-frame)', ...style }}
     >
       {children}
     </motion.div>
@@ -492,7 +502,12 @@ export default function Home() {
         />
       )}
       {/* TransactionProgress removed — simple loading on buttons instead */}
-      <AnimatePresence mode="wait">
+      {/* Crossfade host: relative + flex-1 so absolute-positioned <Panel>s
+          stack on top of each other during transitions. Dropping mode="wait"
+          lets the outgoing screen fade out while the incoming fades in,
+          avoiding the parent-frame flash. */}
+      <div className="relative flex-1 w-full flex flex-col">
+      <AnimatePresence>
         {screen === "welcome" &&
           (() => {
             // Parse query params for login route redirects
@@ -596,7 +611,7 @@ export default function Home() {
         )}
 
         {screen === "trade" && (
-          <Panel k="trade" anim={slide}>
+          <Panel k="trade">
             <TradeCreationScreen
               screen={screen}
               setScreen={setScreen}
@@ -934,6 +949,7 @@ export default function Home() {
           </Panel>
         )}
       </AnimatePresence>
+      </div>
 
       <UserModals
         showWalletModal={auth.showWalletModal}

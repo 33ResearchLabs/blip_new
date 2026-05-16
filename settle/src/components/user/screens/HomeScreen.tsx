@@ -679,11 +679,10 @@ export const HomeScreen = ({
 
   return (
     <div
-      className="relative flex flex-col h-[100dvh] overflow-hidden"
-      // Match the hero's terminal gradient so the body section visually
-      // blends with the dark card above, rather than showing white gap
-      // between content end and the bottom nav.
-      style={{ background: '#07090F' }}
+      className="relative flex flex-col h-[100dvh] overflow-hidden  "
+      // White parent so the hero's rounded bottom corners reveal white
+      // behind them — otherwise the curves disappear against a dark parent.
+      style={{ background: '#fff' }}
     >
 
       {/* ══════════════════════════════════════════════
@@ -692,16 +691,16 @@ export const HomeScreen = ({
           Always 60svh tall — body below gets the remaining 40svh.
          ══════════════════════════════════════════════ */}
       <div
-        className="relative shrink-0 pb-3"
+        className="relative shrink-0 pb-3 h-[65dvh] md:h-[60dvh]  "
         style={{
           background: 'linear-gradient(180deg, #161B26 0%, #0B0F17 55%, #07090F 100%)',
           borderBottomLeftRadius: 44,
           borderBottomRightRadius: 44,
-          boxShadow:
-            '0 30px 40px -28px rgba(0,0,0,0.45), 0 18px 22px -16px rgba(0,0,0,0.30)',
-          // Size to content (header + wallet + actions + Beat any rate);
-          // avoids the awkward black gap below "Beat any rate" when the
-          // wallet is not connected and content is short.
+          // boxShadow:
+            // '0 30px 40px -28px rgba(0,0,0,0.45), 0 18px 22px -16px rgba(0,0,0,0.30)',
+          // Fixed 60% of viewport — leaves 40% for the white transactions
+          // section below. Inner content scrolls if it overflows.
+          // height: '65dvh',
         }}
       >
 
@@ -936,8 +935,9 @@ export const HomeScreen = ({
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="flex-1 min-h-0 relative z-10 pb-24 overflow-y-auto no-scrollbar"
+        className="relative z-10 pb-24 overflow-y-auto no-scrollbar"
         style={{
+          height: '40dvh',
           background: '#ffffff',
           // ── Force light tokens locally — overrides .user-scope (dark) tokens
           ['--color-surface-base' as any]: '#ffffff',

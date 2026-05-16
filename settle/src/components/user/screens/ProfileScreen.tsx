@@ -306,7 +306,7 @@ export const ProfileScreen = ({
         <div className="flex items-start gap-4">
           <div className="relative shrink-0">
             <div className="w-14 h-14 rounded-[18px] flex items-center justify-center bg-surface-raised border border-border-medium">
-              <span className="text-[24px] font-extrabold tracking-[-0.03em] text-text-primary">
+              <span className="text-[24px] font-bold tracking-[-0.03em] text-text-primary">
                 {(userName || 'U').charAt(0).toUpperCase()}
               </span>
             </div>
@@ -318,7 +318,7 @@ export const ProfileScreen = ({
             />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[22px] font-extrabold tracking-[-0.03em] text-text-primary leading-none truncate mb-1">
+            <p className="text-[22px] font-bold tracking-[-0.03em] text-text-primary leading-none truncate mb-1">
               {userName || 'User'}
             </p>
             {tier && (
@@ -366,7 +366,7 @@ export const ProfileScreen = ({
                   </div>
                   <div>
                     <p className={`${CARD_LABEL} leading-none mb-1`}>Reputation</p>
-                    <p className="text-[15px] font-extrabold tracking-[-0.02em] text-text-primary leading-none">
+                    <p className="text-[15px] font-bold tracking-[-0.02em] text-text-primary leading-none">
                       {tier}
                     </p>
                   </div>
@@ -416,7 +416,7 @@ export const ProfileScreen = ({
             ].map((stat) => (
               <div key={stat.label} className="px-3 py-3.5 flex flex-col items-center">
                 <p className={`${CARD_LABEL} mb-1.5`}>{stat.label}</p>
-                <p className="text-[19px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+                <p className="text-[19px] font-bold tracking-[-0.03em] text-text-primary leading-none">
                   {stat.value}
                   {stat.sub && <span className="text-[11px] font-bold text-text-tertiary ml-1">{stat.sub}</span>}
                 </p>
@@ -468,7 +468,7 @@ export const ProfileScreen = ({
                 ].map((b) => (
                   <div key={b.label} className="px-4 py-3.5">
                     <p className={`${CARD_LABEL} mb-1.5`}>{b.label}</p>
-                    <p className="text-[20px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">{b.value}</p>
+                    <p className="text-[20px] font-bold tracking-[-0.03em] text-text-primary leading-none">{b.value}</p>
                   </div>
                 ))}
               </div>
@@ -521,7 +521,7 @@ export const ProfileScreen = ({
                     setShowWalletModal(true);
                   }
                 }}
-                className="w-full h-12 rounded-[14px] flex items-center justify-center gap-2 bg-accent text-accent-text text-[14px] font-extrabold tracking-[-0.01em]">
+                className="w-full h-12 rounded-[14px] flex items-center justify-center gap-2 bg-accent text-accent-text text-[14px] font-bold tracking-[-0.01em]">
                 <Wallet size={16} className="text-accent-text" /> Connect Wallet
               </motion.button>
             </div>
@@ -622,7 +622,7 @@ export const ProfileScreen = ({
                       <div className="flex items-center gap-2">
                         <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em] truncate">{acc.bank}</p>
                         {acc.isDefault && (
-                          <span className="text-[8px] font-extrabold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-text">
+                          <span className="text-[8px] font-bold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-text">
                             Default
                           </span>
                         )}
@@ -716,7 +716,7 @@ export const ProfileScreen = ({
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-[12px] text-text-tertiary">vs {dispute.otherPartyName}</p>
-                      <p className="text-[14px] font-extrabold text-text-primary tracking-[-0.01em]">
+                      <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em]">
                         ${dispute.cryptoAmount.toLocaleString()}
                       </p>
                     </div>
@@ -781,7 +781,7 @@ export const ProfileScreen = ({
             }
             window.location.href = '/';
           }}
-          className="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-error-dim border border-error-border text-[14px] font-extrabold text-error tracking-[-0.01em]">
+          className="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-error-dim border border-error-border text-[14px] font-bold text-error tracking-[-0.01em]">
           <LogOut size={16} className="text-error" />
           Sign Out
         </motion.button>
@@ -811,7 +811,7 @@ export const ProfileScreen = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-                  <p className="text-[17px] font-extrabold text-text-primary tracking-[-0.02em]">Add Bank Account</p>
+                  <p className="text-[17px] font-bold text-text-primary tracking-[-0.02em]">Add Bank Account</p>
                   <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(false)}
                     className="w-8 h-8 rounded-[10px] flex items-center justify-center bg-surface-hover">
                     <X size={15} className="text-text-tertiary" />
@@ -850,7 +850,7 @@ export const ProfileScreen = ({
                   <motion.button whileTap={{ scale: 0.97 }}
                     onClick={addBankAccount}
                     disabled={!newBank.bank || !newBank.iban || !newBank.name}
-                    className={`w-full h-12 rounded-[14px] text-[14px] font-extrabold tracking-[-0.01em] ${
+                    className={`w-full h-12 rounded-[14px] text-[14px] font-bold tracking-[-0.01em] ${
                       newBank.bank && newBank.iban && newBank.name
                         ? 'bg-accent text-accent-text'
                         : 'bg-surface-hover text-text-quaternary'
