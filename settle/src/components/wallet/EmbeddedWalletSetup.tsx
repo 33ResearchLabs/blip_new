@@ -249,8 +249,18 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-      <div className="rounded-2xl w-full max-w-md p-5 space-y-3 shadow-2xl max-h-[92vh] overflow-y-auto" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+      <motion.div
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        className="rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3 shadow-2xl max-h-[92vh] overflow-y-auto"
+        style={{
+          background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`,
+          border: `1px solid ${colors.border.subtle}`,
+          paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))',
+        }}
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold font-mono" style={{ color: colors.text.primary }}>Setup Wallet</h2>
           {onClose && (
@@ -419,7 +429,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
         <p className="text-[9px] font-mono text-center" style={{ color: colors.text.tertiary }}>
           Your private key is encrypted with AES-256-GCM and stored locally. We never see it.
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 }

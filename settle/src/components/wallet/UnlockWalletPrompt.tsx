@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Lock, Key } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { colors } from "@/lib/design/theme";
 import { AppPinPad } from '@/components/app-lock/AppPinPad';
 
@@ -42,8 +43,18 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div className="rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-3" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+      <motion.div
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        className="rounded-t-3xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl p-5 space-y-3 max-h-[92vh] overflow-y-auto"
+        style={{
+          background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`,
+          border: `1px solid ${colors.border.subtle}`,
+          paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))',
+        }}
+      >
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: colors.surface.active }}>
             <Lock className="w-4 h-4" style={{ color: '#fff' }} />
@@ -112,7 +123,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
