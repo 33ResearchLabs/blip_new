@@ -55,7 +55,7 @@ function Panel({
   children,
 }: {
   k: string;
-  anim?: typeof fade;
+  anim?: typeof fade | typeof slide;
   className?: string;
   style?: React.CSSProperties;
   children: React.ReactNode;
