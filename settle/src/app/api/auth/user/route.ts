@@ -14,14 +14,11 @@ import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rat
 import { validateUsername } from '@/lib/validation/username';
 import {
   validateUserUsername,
-  validateUserEmail,
   validateUserPassword,
 } from '@/lib/validation/userAuth';
 import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS, ACCESS_TOKEN_COOKIE, ACCESS_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
-import { query } from '@/lib/db';
-import crypto from 'crypto';
 
 /**
  * POST /api/auth/user
@@ -33,9 +30,8 @@ export async function POST(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
   try {
     const body = await request.json();
-    const { action, username: rawUsername, wallet_address, signature, message, nonce, password, email: rawEmail } = body;
+    const { action, username: rawUsername, wallet_address, signature, message, nonce, password } = body;
     const username = rawUsername?.trim();
-    const email: string | undefined = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : undefined;
 
     // Check username availability
     if (action === 'check_username') {
@@ -301,7 +297,7 @@ export async function POST(request: NextRequest) {
 
       if (!rawIdentifier || !password) {
         return NextResponse.json(
-          { success: false, error: 'Username or email and password are required' },
+          { success: false, error: 'Username and password are required' },
           { status: 400 }
         );
       }
@@ -394,21 +390,12 @@ export async function POST(request: NextRequest) {
       return loginRes;
     }
 
-    // Register with username/password (+ email for verification & recovery).
+    // Register with username + PIN. No email collected.
     if (action === 'register') {
-      // Authoritative validation — same helpers the client runs at submit
-      // time, so the user can't bypass anything by hitting the API directly.
       const usernameError = validateUserUsername(username || '');
       if (usernameError) {
         return NextResponse.json(
           { success: false, error: usernameError },
-          { status: 400 }
-        );
-      }
-      const emailError = validateUserEmail(email || '');
-      if (emailError) {
-        return NextResponse.json(
-          { success: false, error: emailError },
           { status: 400 }
         );
       }
@@ -420,7 +407,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check username availability
       const available = await checkUsernameAvailable(username);
       if (!available) {
         return NextResponse.json(
@@ -429,28 +415,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check email uniqueness up-front so we can return a friendlier error
-      // than letting the DB unique index fire (the DB still enforces it).
-      const existingByEmail = await query<{ id: string }>(
-        `SELECT id FROM users WHERE LOWER(email) = $1`,
-        [email]
-      );
-      if (existingByEmail.length > 0) {
-        return NextResponse.json(
-          { success: false, error: 'Email already registered' },
-          { status: 409 }
-        );
-      }
-
-      // Create user — email_verified=false until they click the link.
       let user;
       try {
         user = await createUser({
           username,
           password,
           name: username,
-          email,
-          email_verified: false,
+          email_verified: true,
         });
       } catch (createErr: any) {
         if (createErr?.message === 'Username already taken') {
@@ -459,62 +430,46 @@ export async function POST(request: NextRequest) {
             { status: 409 }
           );
         }
-        if (createErr?.message === 'Email already registered') {
-          return NextResponse.json(
-            { success: false, error: 'Email already registered' },
-            { status: 409 }
-          );
-        }
         throw createErr;
       }
 
-      // Fire-and-forget verification email — don't fail registration if SES
-      // is misconfigured, just log it. The user can request a resend later.
-      try {
-        const verifyToken = crypto.randomBytes(32).toString('hex');
-        const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
-        await query(
-          `INSERT INTO user_email_verification_tokens (user_id, token_hash, expires_at)
-           VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
-          [user.id, tokenHash]
-        );
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-        // Point at the user-facing verify-email page (not the API endpoint
-        // directly). The page renders a success/error UI, then offers a
-        // "Sign In" button — mirrors the merchant flow at /merchant/verify-email.
-        const verifyLink = `${appUrl}/user/verify-email?token=${verifyToken}&id=${user.id}`;
-        const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
-        const emailContent = emailVerificationEmail(verifyLink, user.username || 'there');
-        // `email` is asserted non-null because validateUserEmail above
-        // returns early when it's missing — TS just can't track that.
-        sendEmail({ to: email!, ...emailContent })
-          .catch(err => console.error('[user register] verification email failed:', err));
-      } catch (emailErr) {
-        console.error('[user register] failed to create verification token:', emailErr);
-      }
+      console.log('[API] New user registered:', user.id, user.username);
 
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: user.id, entityType: 'user', action: 'signup' }).catch(() => {});
 
-      // Registration is NOT complete until the merchant clicks the link in
-      // the verification email. Previously we issued real session cookies
-      // (refresh + access) on this response, which meant an unverified user
-      // had a working 7-day refresh token and could call every user-
-      // protected route until it expired. The login endpoint's
-      // EMAIL_NOT_VERIFIED 403 was effectively dead code because the user
-      // never needed to log in again. Now we return the same "needs
-      // verification" payload without any session material; the client
-      // shows a "check your inbox" panel and the user signs in normally
-      // after clicking the link.
-      return NextResponse.json({
+      const regPayload = { actorId: user.id, actorType: 'user' as const };
+      const registerToken = generateSessionToken(regPayload);
+
+      let regSessionId: string | null = null;
+      let regRefreshToken: string | null = null;
+      try {
+        const sessionResult = await createSession(regPayload, request as any);
+        if (sessionResult) {
+          regSessionId = sessionResult.sessionId;
+          regRefreshToken = sessionResult.refreshToken;
+        }
+      } catch { /* session creation failed, proceed without sessionId */ }
+
+      const regAccessTk = generateAccessToken({ ...regPayload, ...(regSessionId && { sessionId: regSessionId }) });
+
+      const regRes = NextResponse.json({
         success: true,
         data: {
           user,
           needsWallet: true,
-          requiresEmailVerification: true,
-          message: 'Account created! Check your email to verify your account.',
+          message: 'Account created!',
+          ...(registerToken && { token: registerToken }),
+          ...(regAccessTk && { accessToken: regAccessTk }),
         },
       });
+      if (regRefreshToken) {
+        regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
+      if (regAccessTk) {
+        regRes.cookies.set(ACCESS_TOKEN_COOKIE, regAccessTk, ACCESS_COOKIE_OPTIONS);
+      }
+      return regRes;
     }
 
     // Link wallet to existing user account

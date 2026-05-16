@@ -7,8 +7,7 @@ import { useMerchantStore } from '@/stores/merchantStore';
 import { clearAuthStorageOnLogout } from '@/lib/auth/logoutCleanup';
 import {
   validateUserUsername,
-  validateUserEmail,
-  validateUserPassword,
+  validateUserPin,
 } from '@/lib/validation/userAuth';
 
 interface UseUserAuthParams {
@@ -43,10 +42,7 @@ export function useUserAuth({
   const [newUserName, setNewUserName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  // `email` is only collected on the register form; sign-in uses
-  // username + password only. Keeping the shape unified avoids a separate
-  // register-form state object and a discriminated union here.
-  const [loginForm, setLoginForm] = useState({ username: "", password: "", email: "" });
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -261,34 +257,27 @@ export function useUserAuth({
   // account-existence enumeration via this endpoint.
   const handleResendVerification = useCallback(async () => {
     const targetId = unverifiedUserId;
-    const targetEmail = loginForm.email?.trim();
-    if (!targetId && !targetEmail) return;
+    if (!targetId) return;
     setIsResendingVerification(true);
     try {
       await fetchWithAuth('/api/auth/user/resend-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          targetId ? { userId: targetId } : { email: targetEmail }
-        ),
+        body: JSON.stringify({ userId: targetId }),
       });
     } catch (err) {
       console.error('Resend verification error:', err);
     } finally {
       setIsResendingVerification(false);
     }
-  }, [unverifiedUserId, loginForm.email]);
+  }, [unverifiedUserId]);
 
   const handleUserRegister = useCallback(async () => {
-    const email = loginForm.email?.trim() ?? '';
-    // Single source of truth for the rules — same module the API uses, so
-    // the message the user sees here matches what would come back from the
-    // server if they bypassed the client check.
     const usernameErr = validateUserUsername(loginForm.username);
     if (usernameErr) { setLoginError(usernameErr); return; }
-    const emailErr = validateUserEmail(email);
-    if (emailErr) { setLoginError(emailErr); return; }
-    const passwordErr = validateUserPassword(loginForm.password);
+    // First-time setup uses a 6-digit numeric PIN; server still validates as
+    // a password (PIN passes the 6-char min, no-space rules) so no API change.
+    const passwordErr = validateUserPin(loginForm.password);
     if (passwordErr) { setLoginError(passwordErr); return; }
 
     setIsLoggingIn(true);
@@ -301,7 +290,6 @@ export function useUserAuth({
         body: JSON.stringify({
           username: loginForm.username.trim(),
           password: loginForm.password,
-          email,
           action: 'register',
         }),
       });
@@ -318,7 +306,7 @@ export function useUserAuth({
         // your-inbox panel instead, and capture the user id so polling
         // (and the resend button) can target this account.
         if (data.data.requiresEmailVerification) {
-          setPendingVerificationEmail(loginForm.email.trim().toLowerCase());
+          setPendingVerificationEmail(loginForm.username.trim().toLowerCase());
           setUnverifiedUserId(data.data.user.id);
           setLoginError('');
           // Clear the password so it doesn't linger in memory while the
@@ -387,7 +375,7 @@ export function useUserAuth({
       // Pre-fill the sign-in identifier so the user only has to type
       // their password. Identity is already confirmed server-side; this
       // is purely a convenience.
-      setLoginForm(p => ({ ...p, username: p.email || p.username }));
+      setLoginForm(p => ({ ...p, username: p.username }));
       setPendingVerificationEmail(null);
       setUnverifiedUserId(null);
       setAuthMode('login');

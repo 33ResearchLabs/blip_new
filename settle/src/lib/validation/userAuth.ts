@@ -12,8 +12,6 @@
  * usually see where the client says "valid" but the server rejects.
  */
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 // Disallow any whitespace in passwords — accidental leading/trailing spaces
 // from autofill / paste are a common silent gotcha.
 const PASSWORD_HAS_SPACE = /\s/;
@@ -22,7 +20,6 @@ export const USER_PASSWORD_MIN_LEN = 6;
 export const USER_PASSWORD_MAX_LEN = 24;
 export const USER_USERNAME_MIN_LEN = 3;
 export const USER_USERNAME_MAX_LEN = 20;
-export const USER_EMAIL_MAX_LEN = 254; // RFC 5321 ceiling
 
 export function validateUserUsername(raw: string): string | null {
   const username = raw.trim();
@@ -36,14 +33,6 @@ export function validateUserUsername(raw: string): string | null {
   return null;
 }
 
-export function validateUserEmail(raw: string): string | null {
-  const email = raw.trim();
-  if (!email) return 'Email is required';
-  if (email.length > USER_EMAIL_MAX_LEN) return `Email must be ≤${USER_EMAIL_MAX_LEN} characters`;
-  if (!EMAIL_REGEX.test(email)) return 'Enter a valid email address';
-  return null;
-}
-
 export function validateUserPassword(raw: string): string | null {
   if (!raw) return 'Password is required';
   if (PASSWORD_HAS_SPACE.test(raw)) return 'Password cannot contain spaces';
@@ -53,5 +42,17 @@ export function validateUserPassword(raw: string): string | null {
   if (raw.length > USER_PASSWORD_MAX_LEN) {
     return `Password must be at most ${USER_PASSWORD_MAX_LEN} characters`;
   }
+  return null;
+}
+
+// First-time setup uses a 6-digit numeric PIN. Stored server-side via the
+// same password hash field, so it passes validateUserPassword too.
+export const USER_PIN_LENGTH = 6;
+const PIN_DIGITS_ONLY = /^\d+$/;
+
+export function validateUserPin(raw: string): string | null {
+  if (!raw) return 'PIN is required';
+  if (!PIN_DIGITS_ONLY.test(raw)) return 'PIN must be digits only';
+  if (raw.length !== USER_PIN_LENGTH) return `PIN must be ${USER_PIN_LENGTH} digits`;
   return null;
 }

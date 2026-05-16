@@ -3,20 +3,21 @@
 import { useState, useEffect } from "react";
 import { motion, type PanInfo } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Zap, Loader2, Eye, EyeOff, Mail, ChevronLeft, User, Store, ArrowRight, Check, X } from "lucide-react";
+import { Zap, Loader2, Eye, EyeOff, ChevronLeft, User, Store, ArrowRight, Check, X } from "lucide-react";
 import Link from "next/link";
 import { InstallPWAButton } from "@/components/InstallPWAButton";
 import { usePwaContext } from "@/hooks/usePwaContext";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import {
   validateUserUsername,
-  validateUserEmail,
   validateUserPassword,
+  validateUserPin,
+  USER_PIN_LENGTH,
 } from "@/lib/validation/userAuth";
 
 interface LandingPageProps {
-  loginForm: { username: string; password: string; email: string };
-  setLoginForm: (f: { username: string; password: string; email: string }) => void;
+  loginForm: { username: string; password: string };
+  setLoginForm: (f: { username: string; password: string }) => void;
   authMode: 'login' | 'register';
   setAuthMode: (m: 'login' | 'register') => void;
   handleUserLogin: () => void;
@@ -115,11 +116,8 @@ export function LandingPage({
   const [showWelcome] = useState(!skipWelcome);
   // Track which fields the user has interacted with so we don't surface
   // "required" errors before they've even started typing.
-  const [touched, setTouched] = useState<{ username?: boolean; email?: boolean; password?: boolean }>({});
+  const [touched, setTouched] = useState<{ username?: boolean; password?: boolean }>({});
   const submit = () => {
-    // On login submission, refresh the remembered username so future
-    // visits prefill the most recently used handle. No-op when the
-    // checkbox is off (any previous value was already cleared on toggle).
     if (authMode === 'login' && rememberMe && loginForm.username) {
       try {
         window.localStorage.setItem(
@@ -131,16 +129,15 @@ export function LandingPage({
     return authMode === 'login' ? handleUserLogin() : handleUserRegister();
   };
 
-  // Per-field validity — only computed for register so login stays simple
-  // (login just needs a non-empty username + password and trusts the server).
   const usernameError = authMode === 'register' && touched.username
     ? validateUserUsername(loginForm.username)
     : null;
-  const emailError = authMode === 'register' && touched.email
-    ? validateUserEmail(loginForm.email)
-    : null;
-  const passwordError = authMode === 'register' && touched.password
-    ? validateUserPassword(loginForm.password)
+  // Register uses a 6-digit PIN; login keeps the existing password field
+  // since pre-PIN accounts still have password credentials.
+  const passwordError = touched.password
+    ? (authMode === 'register'
+        ? validateUserPin(loginForm.password)
+        : validateUserPassword(loginForm.password))
     : null;
 
   // Live username-availability check for the register flow. Only fires
@@ -211,10 +208,8 @@ export function LandingPage({
     !loginForm.username ||
     !loginForm.password ||
     (authMode === 'register' && (
-      !loginForm.email ||
       !!validateUserUsername(loginForm.username) ||
-      !!validateUserEmail(loginForm.email) ||
-      !!validateUserPassword(loginForm.password) ||
+      !!validateUserPin(loginForm.password) ||
       usernameTaken ||
       usernameAvailability.state === 'checking'
     ));
@@ -523,115 +518,27 @@ export function LandingPage({
             </div>
           </motion.div>
 
-          {/* Tabs — hidden while the post-signup verification panel is
-              shown; switching tabs there would have no visible effect. */}
-          {!pendingVerificationEmail && (
-            <div className="flex mb-4 bg-surface-card rounded-xl p-1">
-              <button
-                onClick={() => { setAuthMode('login'); setLoginError(''); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  authMode === 'login' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => { setAuthMode('register'); setLoginError(''); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  authMode === 'register' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
-                }`}
-              >
-                Create Account
-              </button>
-            </div>
-          )}
+          <div className="flex mb-4 bg-surface-card rounded-xl p-1">
+            <button
+              onClick={() => { setAuthMode('login'); setLoginError(''); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                authMode === 'login' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => { setAuthMode('register'); setLoginError(''); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                authMode === 'register' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
 
           <div className="flex-1 min-h-0 rounded-2xl p-4 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
-            {/* Post-signup verification gate. Registration is NOT complete
-                until the user clicks the link in the email we just sent —
-                the form is replaced with a check-your-inbox panel so they
-                can't proceed without verifying. */}
-            {pendingVerificationEmail ? (
-              <>
-                <div className="rounded-xl p-4 flex gap-3 bg-success-dim border border-success-border">
-                  <div className="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-4 h-4 text-success" />
-                  </div>
-                  <div className="text-[13px] leading-relaxed text-text-primary">
-                    <p>
-                      We sent a verification link to{" "}
-                      <span className="font-semibold break-all">
-                        {pendingVerificationEmail}
-                      </span>
-                      .
-                    </p>
-                    <p className="mt-1 text-text-secondary">
-                      Click the link in that email to activate your account.
-                      Your registration is not complete until your email is
-                      verified.
-                    </p>
-                  </div>
-                </div>
 
-                <p className="text-[12px] text-text-tertiary">
-                  Already clicked the link? Tap the button below to sign in.
-                  This page also checks automatically every few seconds — if
-                  you verified on another device, it will advance on its own.
-                </p>
-
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    onClearPendingVerification?.();
-                    setAuthMode('login');
-                  }}
-                  className="w-full py-3 rounded-xl text-sm font-bold bg-accent text-accent-text"
-                >
-                  I&apos;ve verified my email — Sign in
-                </motion.button>
-
-                {onResendVerification && (
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={onResendVerification}
-                    disabled={isResendingVerification}
-                    className="w-full py-3 rounded-xl text-sm font-bold bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isResendingVerification ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Sending…
-                      </>
-                    ) : (
-                      'Resend verification email'
-                    )}
-                  </motion.button>
-                )}
-
-                <p className="text-[11px] text-text-tertiary text-center">
-                  Didn&apos;t get it? Check spam. Links expire after 24 hours.
-                </p>
-              </>
-            ) : (
-              <>
-            {/* Verification-success banner. Shown once polling (or the
-                "I've verified" button) detects the email is verified. */}
-            {authMode === 'login' && verificationSuccessNotice && (
-              <div className="rounded-xl p-3 flex items-start gap-2.5 bg-success-dim border border-success-border">
-                <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0" />
-                <div className="flex-1 text-sm text-text-primary">
-                  <span className="font-semibold text-success">Email verified.</span>{" "}
-                  <span className="text-text-secondary">Sign in below to continue.</span>
-                </div>
-                <button
-                  onClick={onDismissVerificationSuccess}
-                  aria-label="Dismiss"
-                  className="text-text-tertiary hover:text-text-primary text-lg leading-none px-1 -mt-0.5"
-                >
-                  ×
-                </button>
-              </div>
-            )}
 
             {loginError && (
               <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
@@ -641,7 +548,7 @@ export function LandingPage({
 
             <div>
               <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">
-                {authMode === 'register' ? 'Username' : 'Username or Email'}
+                Username
               </label>
               <input
                 type="text"
@@ -651,7 +558,7 @@ export function LandingPage({
                   setLoginForm({ ...loginForm, username: e.target.value.trim() });
                   setTouched(t => ({ ...t, username: true }));
                 }}
-                placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'Username or you@email.com'}
+                placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'Your username'}
                 autoCapitalize="none"
                 autoCorrect="off"
                 maxLength={authMode === 'register' ? 20 : 254}
@@ -683,65 +590,33 @@ export function LandingPage({
               ) : null}
             </div>
 
-            {/* Email — register only. Required so the user can recover their
-                account via the forgot-password flow. */}
-            {authMode === 'register' && (
-              <div>
-                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">Email</label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    value={loginForm.email}
-                    onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
-                    onBlur={e => {
-                      setLoginForm({ ...loginForm, email: e.target.value.trim() });
-                      setTouched(t => ({ ...t, email: true }));
-                    }}
-                    placeholder="you@email.com"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    maxLength={254}
-                    onKeyDown={e => e.key === 'Enter' && submit()}
-                    className={`w-full rounded-xl pl-10 pr-4 py-3 text-sm font-medium outline-none bg-surface-hover border ${
-                      emailError ? 'border-error' : 'border-border-subtle'
-                    } text-text-primary placeholder:text-text-tertiary`}
-                  />
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
-                </div>
-                {emailError ? (
-                  <p className="mt-1.5 text-[11px] text-error">{emailError}</p>
-                ) : (
-                  <p className="mt-1.5 text-[10px] text-text-tertiary">
-                    We&apos;ll send a verification link. You&apos;ll also use this email to recover your password.
-                  </p>
-                )}
-              </div>
-            )}
-
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary">Password</label>
-                {authMode === 'login' && (
-                  <Link
-                    href="/user/forgot-password"
-                    className="text-[10px] font-semibold text-text-secondary hover:text-text-primary transition-colors"
-                  >
-                    Forgot password?
-                  </Link>
-                )}
+                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary">
+                  {authMode === 'register' ? `Set a ${USER_PIN_LENGTH}-digit PIN` : 'Password'}
+                </label>
               </div>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   value={loginForm.password}
-                  onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                  onChange={e => {
+                    const next = authMode === 'register'
+                      ? e.target.value.replace(/\D/g, '').slice(0, USER_PIN_LENGTH)
+                      : e.target.value;
+                    setLoginForm({ ...loginForm, password: next });
+                  }}
                   onBlur={() => setTouched(t => ({ ...t, password: true }))}
-                  placeholder={authMode === 'register' ? '6–24 characters' : '••••••••'}
-                  maxLength={24}
+                  placeholder={authMode === 'register' ? `${USER_PIN_LENGTH}-digit PIN` : '••••••••'}
+                  maxLength={authMode === 'register' ? USER_PIN_LENGTH : 24}
+                  inputMode={authMode === 'register' ? 'numeric' : undefined}
+                  autoComplete={authMode === 'register' ? 'one-time-code' : 'current-password'}
                   onKeyDown={e => e.key === 'Enter' && submit()}
                   className={`w-full rounded-xl pl-4 pr-11 py-3 text-sm font-medium outline-none bg-surface-hover border ${
                     passwordError ? 'border-error' : 'border-border-subtle'
-                  } text-text-primary placeholder:text-text-tertiary`}
+                  } text-text-primary placeholder:text-text-tertiary ${
+                    authMode === 'register' ? 'tracking-[0.4em] text-center' : ''
+                  }`}
                 />
                 <button
                   type="button"
@@ -753,6 +628,11 @@ export function LandingPage({
               </div>
               {passwordError && (
                 <p className="mt-1.5 text-[11px] text-error">{passwordError}</p>
+              )}
+              {authMode === 'register' && !passwordError && (
+                <p className="mt-1.5 text-[10px] text-text-tertiary">
+                  You&apos;ll use this PIN to sign in. Keep it private.
+                </p>
               )}
             </div>
 
@@ -807,8 +687,6 @@ export function LandingPage({
             >
               {authMode === 'login' ? 'Register' : 'Sign In'}
             </motion.button>
-            </>
-            )}
 
             <p className="text-center text-[11px] text-text-secondary">
               Connect your wallet after signing in to enable on-chain trading
@@ -849,51 +727,6 @@ export function LandingPage({
         </div>
       </div>
 
-      {loginError === 'EMAIL_NOT_VERIFIED' && (
-        <div className="fixed inset-0 z-[200] bg-black text-white flex flex-col px-6 py-8">
-          <button
-            onClick={() => setLoginError('')}
-            className="self-start inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-white/80 bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            Back
-          </button>
-
-          <div className="flex-1 flex flex-col justify-center max-w-[420px] w-full mx-auto">
-            <div className="w-14 h-14 rounded-2xl bg-warning/15 border border-warning/20 flex items-center justify-center mb-5">
-              <Mail className="w-6 h-6 text-warning" />
-            </div>
-            <h1 className="text-[26px] font-semibold tracking-[-0.02em] leading-tight">
-              Email not verified
-            </h1>
-            <p className="mt-2 text-[14px] text-white/60 leading-relaxed">
-              Verify your email before signing in.
-              {loginForm.email && (
-                <> We&apos;ll resend the link to{' '}
-                  <span className="font-semibold text-white break-all">{loginForm.email.trim()}</span>.
-                </>
-              )}
-            </p>
-
-            {onResendVerification && (
-              <button
-                type="button"
-                onClick={onResendVerification}
-                disabled={isResendingVerification}
-                className="mt-8 w-full py-3.5 rounded-xl text-sm font-bold bg-white text-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isResendingVerification ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>
-                ) : 'Resend verification email'}
-              </button>
-            )}
-
-            <p className="mt-4 text-[11px] text-white/40 text-center">
-              Didn&apos;t get it? Check spam. Links expire after 24 hours.
-            </p>
-          </div>
-        </div>
-      )}
     </motion.div>
   );
 }
