@@ -142,8 +142,10 @@
   --color-error-border:   rgba(220,38,38,0.22);
   --color-info: #2563eb;
 
-  /* Dark "desk" around the white phone column */
-  --user-frame: #0B0F14;
+  /* Dark "desk" around the white phone column. Matches the `darkBg` constant
+     used by home/orders/notifications Panels — keeping them equal prevents
+     a visible color shift during tab cross-fades. */
+  --user-frame: #080810;
 }
 
 /* ----- Raw class overrides for any remaining hardcoded dark-mode markup ----- */
