@@ -699,10 +699,9 @@ export const HomeScreen = ({
           borderBottomRightRadius: 44,
           boxShadow:
             '0 30px 40px -28px rgba(0,0,0,0.45), 0 18px 22px -16px rgba(0,0,0,0.30)',
-          // Adapts to device — shorter on small phones, leaves room for body
-          // + bottom nav without an awkward whitespace gap. `clamp` floors at
-          // 480px (small phones) and caps at 60svh (tablets / large phones).
-          minHeight: 'clamp(480px, 56svh, 60svh)',
+          // Size to content (header + wallet + actions + Beat any rate);
+          // avoids the awkward black gap below "Beat any rate" when the
+          // wallet is not connected and content is short.
         }}
       >
 
@@ -963,8 +962,11 @@ export const HomeScreen = ({
       >
         <div className={`${maxW} mx-auto px-5 pt-2`}>
 
-          {/* Section title — kept small to focus attention on the card above */}
-          <div className="flex items-center justify-between ">
+          {/* Section title — sticky so it stays visible while rows scroll under it */}
+          <div
+            className="sticky top-0 z-10 flex items-center justify-between py-2 -mx-5 px-5"
+            style={{ background: '#ffffff' }}
+          >
             <h2 className="text-[13px] font-bold text-text-secondary tracking-[-0.01em]">
               Transactions
             </h2>
@@ -1011,9 +1013,10 @@ export const HomeScreen = ({
               {[...orders, ...DUMMY_ORDERS].slice(0, 8).map((order, i, arr) => (
                 <motion.div
                   key={order.id}
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 + i * 0.07, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                  initial={{ opacity: 0, y: 18 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: false, amount: 0.35, margin: '0px 0px -40px 0px' }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <TxRow
                     order={order}
