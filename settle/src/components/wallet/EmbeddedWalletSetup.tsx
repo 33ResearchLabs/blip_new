@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Key, Download, Copy, Check, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   generateMnemonicWallet,
   importWallet,
@@ -13,7 +14,7 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
 import { colors } from "@/lib/design/theme";
-import { WalletPinKeypad } from './WalletPinKeypad';
+import { AppPinPad } from '@/components/app-lock/AppPinPad';
 
 const PIN_LENGTH = 6;
 
@@ -52,6 +53,11 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
   const [privateKeyInput, setPrivateKeyInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  // 'enter' = first PIN entry; 'confirm' = re-enter for confirmation.
+  // Two-step flow keeps a single visible on-screen keypad (AppPinPad is
+  // tap-driven; stacking two would crowd the modal).
+  const [createStep, setCreateStep] = useState<'enter' | 'confirm'>('enter');
+  const [errorTick, setErrorTick] = useState(0);
 
   // After creation — show backup key + recovery phrase
   const [createdKeypair, setCreatedKeypair] = useState<Keypair | null>(null);
@@ -68,7 +74,14 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
     // MPIN. Enforce 6 digits here; the same value decrypts the wallet
     // later via the unlock keypad.
     if (!/^\d{6}$/.test(password)) { setError(`Enter your ${PIN_LENGTH}-digit PIN`); return; }
-    if (password !== confirmPassword) { setError('PINs do not match'); return; }
+    if (password !== confirmPassword) {
+      setError('PINs do not match');
+      setErrorTick(t => t + 1);
+      setConfirmPassword('');
+      setCreateStep('enter');
+      setPassword('');
+      return;
+    }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
     setIsLoading(true);
@@ -244,9 +257,9 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-      <div className="rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
+      <div className="rounded-2xl w-full max-w-md p-5 space-y-3 shadow-2xl max-h-[92vh] overflow-y-auto" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>Setup Wallet</h2>
+          <h2 className="text-base font-bold font-mono" style={{ color: colors.text.primary }}>Setup Wallet</h2>
           {onClose && (
             <button onClick={onClose} className="text-sm font-mono" style={{ color: colors.text.tertiary }}>
               Skip
@@ -283,43 +296,72 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
           </div>
         )}
 
-        {/* Create tab */}
+        {/* Create tab — two-step single-keypad flow with animated swap */}
         {tab === 'create' && (
-          <form
-            onSubmit={(e) => { e.preventDefault(); handleCreate(); }}
-            autoComplete="off"
-            className="space-y-3"
-          >
-            <p className="text-[11px] font-mono leading-relaxed" style={{ color: colors.text.secondary }}>
-              Use your 6-digit sign-in PIN. The same PIN unlocks this wallet
-              every time you send or trade.
-            </p>
+          <div className="space-y-2">
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={createStep}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="text-[11px] font-mono leading-relaxed text-center"
+                style={{ color: colors.text.secondary }}
+              >
+                {createStep === 'enter'
+                  ? 'Use your 6-digit sign-in PIN.'
+                  : 'Re-enter to confirm.'}
+              </motion.p>
+            </AnimatePresence>
 
-            <WalletPinKeypad
-              value={password}
-              onChange={setPassword}
-              label="Enter PIN"
-              disabled={isLoading}
-              autoFocus
-              showToggle
-            />
+            <div style={{ maxWidth: 260, margin: '0 auto' }}>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={createStep}
+                  initial={{ opacity: 0, x: createStep === 'confirm' ? 24 : -24 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: createStep === 'confirm' ? -24 : 24 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  {createStep === 'enter' ? (
+                    <AppPinPad
+                      value={password}
+                      onChange={setPassword}
+                      onComplete={() => setCreateStep('confirm')}
+                      length={PIN_LENGTH}
+                      disabled={isLoading}
+                    />
+                  ) : (
+                    <AppPinPad
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      onComplete={(v) => {
+                        if (v === password) handleCreate();
+                        else {
+                          setError('PINs do not match');
+                          setErrorTick(t => t + 1);
+                          setConfirmPassword('');
+                          setPassword('');
+                          setCreateStep('enter');
+                        }
+                      }}
+                      length={PIN_LENGTH}
+                      errorTick={errorTick}
+                      disabled={isLoading}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
 
-            <WalletPinKeypad
-              value={confirmPassword}
-              onChange={setConfirmPassword}
-              label="Confirm PIN"
-              disabled={isLoading}
-            />
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: colors.accent.primary, color: colors.accent.text }}
-            >
-              {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Key className="w-4 h-4" /> Create Wallet</>}
-            </button>
-          </form>
+            {isLoading && (
+              <div className="flex items-center justify-center gap-2 pt-2" style={{ color: colors.text.secondary }}>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-xs font-mono">Generating wallet…</span>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Import tab */}
@@ -359,24 +401,25 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
               />
             </div>
 
-            <WalletPinKeypad
-              value={password}
-              onChange={setPassword}
-              label="Encrypt with your PIN"
-              hint="Same 6-digit PIN you use to sign in."
-              disabled={isLoading}
-              showToggle
-            />
+            <p className="text-[11px] font-mono text-center" style={{ color: colors.text.secondary }}>
+              Encrypt with your 6-digit sign-in PIN.
+            </p>
+            <div style={{ maxWidth: 260, margin: '0 auto' }}>
+              <AppPinPad
+                value={password}
+                onChange={setPassword}
+                onComplete={() => { if (privateKeyInput.trim()) handleImport(); }}
+                length={PIN_LENGTH}
+                disabled={isLoading}
+              />
+            </div>
 
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: colors.accent.primary, color: colors.accent.text }}
-            >
-              {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</> : <><Download className="w-4 h-4" /> Import Wallet</>}
-            </button>
+            {isLoading && (
+              <div className="flex items-center justify-center gap-2 pt-2" style={{ color: colors.text.secondary }}>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-xs font-mono">Importing wallet…</span>
+              </div>
+            )}
           </form>
         )}
 

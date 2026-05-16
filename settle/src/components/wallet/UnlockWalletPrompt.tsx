@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { Loader2, Lock, Key } from 'lucide-react';
 import { colors } from "@/lib/design/theme";
-import { WalletPinKeypad } from './WalletPinKeypad';
+import { AppPinPad } from '@/components/app-lock/AppPinPad';
+
+const PIN_LENGTH = 6;
 
 interface UnlockWalletPromptProps {
   onUnlock: (password: string) => Promise<boolean>;
@@ -16,33 +18,32 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
   const [password, setPassword] = useState('');
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [error, setError] = useState('');
+  const [errorTick, setErrorTick] = useState(0);
 
-  const handleUnlock = async () => {
-    if (!password) return;
+  const handleUnlock = async (pin: string) => {
+    if (!pin) return;
     setError('');
     setIsUnlocking(true);
 
     try {
-      const success = await onUnlock(password);
+      const success = await onUnlock(pin);
       if (!success) {
         setError('Wrong PIN');
+        setErrorTick(t => t + 1);
         setPassword('');
       }
     } catch {
       setError('Failed to decrypt wallet');
+      setErrorTick(t => t + 1);
+      setPassword('');
     } finally {
       setIsUnlocking(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleUnlock();
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div className="rounded-2xl w-full max-w-sm shadow-2xl p-6 space-y-4" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
+      <div className="rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-3" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: colors.surface.active }}>
             <Lock className="w-4 h-4" style={{ color: '#fff' }} />
@@ -50,32 +51,35 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
           <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>Unlock Wallet</h2>
         </div>
 
+        <p className="text-[11px] font-mono text-center" style={{ color: colors.text.secondary }}>
+          Enter your 6-digit sign-in PIN.
+        </p>
+
         {error && (
-          <div className="p-2 rounded-lg text-xs font-mono" style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.15)', color: '#dc2626' }}>
+          <div className="p-2 rounded-lg text-xs font-mono text-center" style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.15)', color: '#dc2626' }}>
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-          <WalletPinKeypad
+        <div style={{ maxWidth: 260, margin: '0 auto' }}>
+          <AppPinPad
             value={password}
             onChange={setPassword}
-            label="Enter your sign-in PIN"
+            onComplete={(v) => handleUnlock(v)}
+            length={PIN_LENGTH}
+            errorTick={errorTick}
             disabled={isUnlocking}
-            autoFocus
           />
+        </div>
 
-          <button
-            type="submit"
-            disabled={isUnlocking || password.length < 6}
-            className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            style={{ background: colors.accent.primary, color: colors.accent.text }}
-          >
-            {isUnlocking ? <><Loader2 className="w-4 h-4 animate-spin" /> Unlocking...</> : 'Unlock'}
-          </button>
-        </form>
+        {isUnlocking && (
+          <div className="flex items-center justify-center gap-2" style={{ color: colors.text.secondary }}>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-xs font-mono">Unlocking…</span>
+          </div>
+        )}
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-3">
             {onForgotPassword && (
               <button
