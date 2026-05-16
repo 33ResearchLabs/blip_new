@@ -43,16 +43,19 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
       <motion.div
-        initial={{ y: 40, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="rounded-t-3xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl p-5 space-y-3 max-h-[92vh] overflow-y-auto"
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+        className="rounded-3xl w-full max-w-md shadow-2xl p-6 sm:p-7 space-y-5 flex flex-col"
         style={{
           background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`,
           border: `1px solid ${colors.border.subtle}`,
-          paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))',
+          minHeight: 'min(660px, 88vh)',
+          maxHeight: '95vh',
+          paddingTop: 'max(1.5rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
         }}
       >
         <div className="flex items-center gap-2">
@@ -62,7 +65,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
           <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>Unlock Wallet</h2>
         </div>
 
-        <p className="text-[11px] font-mono text-center" style={{ color: colors.text.secondary }}>
+        <p className="text-sm font-mono text-center" style={{ color: colors.text.secondary }}>
           Enter your 6-digit sign-in PIN.
         </p>
 
@@ -72,15 +75,17 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
           </div>
         )}
 
-        <div style={{ maxWidth: 260, margin: '0 auto' }}>
-          <AppPinPad
-            value={password}
-            onChange={setPassword}
-            onComplete={(v) => handleUnlock(v)}
-            length={PIN_LENGTH}
-            errorTick={errorTick}
-            disabled={isUnlocking}
-          />
+        <div className="flex-1 flex items-center justify-center">
+          <div style={{ maxWidth: 320, width: '100%' }}>
+            <AppPinPad
+              value={password}
+              onChange={setPassword}
+              onComplete={(v) => handleUnlock(v)}
+              length={PIN_LENGTH}
+              errorTick={errorTick}
+              disabled={isUnlocking}
+            />
+          </div>
         </div>
 
         {isUnlocking && (
