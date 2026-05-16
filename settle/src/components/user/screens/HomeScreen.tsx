@@ -83,6 +83,62 @@ function formatDate(d: Date) {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Dummy transactions — visual placeholders for the Transactions section
+const DUMMY_ORDERS: Order[] = [
+  {
+    id: 'dummy-1',
+    type: 'buy',
+    cryptoAmount: '120.50',
+    cryptoCode: 'USDT',
+    fiatAmount: '10242.50',
+    fiatCode: 'INR',
+    merchant: { id: 'dm-1', name: 'Rahul S.', rating: 4.9, trades: 312, rate: 85.0, paymentMethod: 'bank' },
+    status: 'complete',
+    step: 4,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6),
+    expiresAt: new Date(),
+  },
+  {
+    id: 'dummy-2',
+    type: 'sell',
+    cryptoAmount: '50.00',
+    cryptoCode: 'USDT',
+    fiatAmount: '4250.00',
+    fiatCode: 'INR',
+    merchant: { id: 'dm-2', name: 'Priya M.', rating: 4.7, trades: 89, rate: 85.0, paymentMethod: 'bank' },
+    status: 'complete',
+    step: 4,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+    expiresAt: new Date(),
+  },
+  {
+    id: 'dummy-3',
+    type: 'buy',
+    cryptoAmount: '75.25',
+    cryptoCode: 'USDT',
+    fiatAmount: '6396.25',
+    fiatCode: 'INR',
+    merchant: { id: 'dm-3', name: 'Aman K.', rating: 4.8, trades: 156, rate: 85.0, paymentMethod: 'bank' },
+    status: 'complete',
+    step: 4,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48),
+    expiresAt: new Date(),
+  },
+  {
+    id: 'dummy-4',
+    type: 'sell',
+    cryptoAmount: '200.00',
+    cryptoCode: 'USDT',
+    fiatAmount: '17000.00',
+    fiatCode: 'INR',
+    merchant: { id: 'dm-4', name: 'Neha R.', rating: 4.95, trades: 420, rate: 85.0, paymentMethod: 'bank' },
+    status: 'complete',
+    step: 4,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72),
+    expiresAt: new Date(),
+  },
+];
+
 // ─── Single transaction row ────────────────────────────────────────────────
 function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: number; onPress: () => void; avatarUrl?: string }) {
   const isBuy = order.type === 'buy';
@@ -795,7 +851,8 @@ export const HomeScreen = ({
             onPay={() => setShowUpiPay(true)}
           />
 
-          {/* ── Circle (trading partners) — lives inside the dark hero ── */}
+          {/* ── Circle (trading partners) — temporarily hidden ── */}
+          {/*
           <div className="mt-4">
             <div className="flex justify-between items-center mb-2">
               <span style={{
@@ -864,6 +921,7 @@ export const HomeScreen = ({
               </div>
             )}
           </div>
+          */}
         </div>
       </div>
 
@@ -947,10 +1005,10 @@ export const HomeScreen = ({
             </motion.button>
           )}
 
-          {/* Transaction rows */}
-          {orders.length > 0 ? (
+          {/* Transaction rows — real orders first, then 4 dummies */}
+          {true ? (
             <div className="mt-2">
-              {orders.slice(0, 8).map((order, i, arr) => (
+              {[...orders, ...DUMMY_ORDERS].slice(0, 8).map((order, i, arr) => (
                 <motion.div
                   key={order.id}
                   initial={{ opacity: 0, x: -12 }}
