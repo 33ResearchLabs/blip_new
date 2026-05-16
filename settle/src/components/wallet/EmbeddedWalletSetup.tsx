@@ -68,20 +68,13 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
   const [copied, setCopied] = useState(false);
   const [backupConfirmed, setBackupConfirmed] = useState(false);
 
-  const handleCreate = async () => {
+  // Pin is passed explicitly because this is invoked from AppPinPad's
+  // synchronous onComplete callback — at that moment React hasn't yet
+  // committed the setConfirmPassword from the same press, so closing over
+  // `confirmPassword` here would read the previous (5-digit) value.
+  const handleCreate = async (pin: string = password) => {
     setError('');
-    // PIN unification: the wallet password IS the user's 6-digit sign-in
-    // MPIN. Enforce 6 digits here; the same value decrypts the wallet
-    // later via the unlock keypad.
-    if (!/^\d{6}$/.test(password)) { setError(`Enter your ${PIN_LENGTH}-digit PIN`); return; }
-    if (password !== confirmPassword) {
-      setError('PINs do not match');
-      setErrorTick(t => t + 1);
-      setConfirmPassword('');
-      setCreateStep('enter');
-      setPassword('');
-      return;
-    }
+    if (!/^\d{6}$/.test(pin)) { setError(`Enter your ${PIN_LENGTH}-digit PIN`); return; }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
     setIsLoading(true);
@@ -95,7 +88,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
       // Step 4: mnemonic-derived wallet — recoverable in any Solana wallet
       // via the 12-word phrase shown on the next screen.
       const { keypair, mnemonic, encrypted, encryptedMnemonic } =
-        await generateMnemonicWallet(password.trim(), unlockHelper);
+        await generateMnemonicWallet(pin.trim(), unlockHelper);
       saveEncryptedWallet(actorId, encrypted);
       saveEncryptedMnemonic(actorId, encryptedMnemonic);
       setCreatedKeypair(keypair);
@@ -108,10 +101,10 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
     }
   };
 
-  const handleImport = async () => {
+  const handleImport = async (pin: string = password) => {
     setError('');
     // Import re-encrypts under the user's MPIN — same secret as Create.
-    if (!/^\d{6}$/.test(password)) { setError(`Enter your ${PIN_LENGTH}-digit PIN`); return; }
+    if (!/^\d{6}$/.test(pin)) { setError(`Enter your ${PIN_LENGTH}-digit PIN`); return; }
     if (!privateKeyInput.trim()) { setError('Paste your recovery phrase or private key'); return; }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
@@ -127,7 +120,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
       // phrase later via "Show Recovery Phrase".
       const { keypair, encrypted, encryptedMnemonic } = await importWallet(
         privateKeyInput.trim(),
-        password.trim(),
+        pin.trim(),
         unlockHelper,
       );
       saveEncryptedWallet(actorId, encrypted);
@@ -337,7 +330,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                       value={confirmPassword}
                       onChange={setConfirmPassword}
                       onComplete={(v) => {
-                        if (v === password) handleCreate();
+                        if (v === password) handleCreate(v);
                         else {
                           setError('PINs do not match');
                           setErrorTick(t => t + 1);
@@ -408,7 +401,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
               <AppPinPad
                 value={password}
                 onChange={setPassword}
-                onComplete={() => { if (privateKeyInput.trim()) handleImport(); }}
+                onComplete={(v) => { if (privateKeyInput.trim()) handleImport(v); }}
                 length={PIN_LENGTH}
                 disabled={isLoading}
               />
