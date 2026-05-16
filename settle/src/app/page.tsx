@@ -35,14 +35,14 @@ import { FEE_CONFIG } from "@/components/user/screens/helpers";
 // keeps both panels fully opaque the entire time, so the entering panel
 // simply slides on top of the exiting one. Solid bg on Panel is required.
 const fade = {
-  initial: { scale: 0.985 },
-  animate: { scale: 1 },
-  exit: { scale: 1 },
+  initial: { opacity: 0, scale: 0.985 },
+  animate: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.985 },
 };
 const slide = {
-  initial: { x: '8%' },
-  animate: { x: 0 },
-  exit: { x: '-8%' },
+  initial: { opacity: 0, x: '8%' },
+  animate: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: '-8%' },
 };
 const PANEL_TRANSITION = { duration: 0.26, ease: [0.22, 1, 0.36, 1] } as const;
 const darkBg = { background: "#080810" } as const;
