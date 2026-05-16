@@ -1,19 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Key, Download, Eye, EyeOff, Copy, Check, AlertTriangle } from 'lucide-react';
+import { Loader2, Key, Download, Copy, Check, AlertTriangle } from 'lucide-react';
 import {
   generateMnemonicWallet,
   importWallet,
   saveEncryptedWallet,
   saveEncryptedMnemonic,
   exportPrivateKey,
-  validatePasswordStrength,
 } from '@/lib/wallet/embeddedWallet';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
 import { colors } from "@/lib/design/theme";
+import { WalletPinKeypad } from './WalletPinKeypad';
+
+const PIN_LENGTH = 6;
 
 // Fetch the per-actor unlock helper from the server. Required when
 // creating a new wallet at the current v3 blob version (Step 3 of
@@ -50,7 +52,6 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
   const [privateKeyInput, setPrivateKeyInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   // After creation — show backup key + recovery phrase
   const [createdKeypair, setCreatedKeypair] = useState<Keypair | null>(null);
@@ -63,12 +64,11 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
   const handleCreate = async () => {
     setError('');
-    // Strength check enforced at creation time only. Existing wallets
-    // (which may have been created under the old 6-char minimum) are
-    // unaffected — unlock path never validates strength.
-    const strength = validatePasswordStrength(password.trim());
-    if (!strength.ok) { setError(strength.reason || 'Password is too weak'); return; }
-    if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    // PIN unification: the wallet password IS the user's 6-digit sign-in
+    // MPIN. Enforce 6 digits here; the same value decrypts the wallet
+    // later via the unlock keypad.
+    if (!/^\d{6}$/.test(password)) { setError(`Enter your ${PIN_LENGTH}-digit PIN`); return; }
+    if (password !== confirmPassword) { setError('PINs do not match'); return; }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
     setIsLoading(true);
@@ -97,10 +97,8 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
 
   const handleImport = async () => {
     setError('');
-    // Import re-encrypts with a new password, so apply the same strength
-    // rules — otherwise importing would be a back-door around them.
-    const strength = validatePasswordStrength(password.trim());
-    if (!strength.ok) { setError(strength.reason || 'Password is too weak'); return; }
+    // Import re-encrypts under the user's MPIN — same secret as Create.
+    if (!/^\d{6}$/.test(password)) { setError(`Enter your ${PIN_LENGTH}-digit PIN`); return; }
     if (!privateKeyInput.trim()) { setError('Paste your recovery phrase or private key'); return; }
     if (!actorId) { setError('Session not ready — try again in a moment'); return; }
 
@@ -292,58 +290,26 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
             autoComplete="off"
             className="space-y-3"
           >
-            {/* Hidden username anchor — keeps the password manager bound to
-                THIS form so saved logins don't leak into nearby text inputs. */}
-            <input
-              type="text"
-              name="wallet-account"
-              autoComplete="username"
-              value="blip-user-wallet"
-              readOnly
-              aria-hidden="true"
-              tabIndex={-1}
-              className="absolute opacity-0 pointer-events-none h-0 w-0"
-            />
-            <div>
-              <label htmlFor="user-wallet-new-password" style={labelStyle}>Password</label>
-              <div className="relative">
-                <input
-                  id="user-wallet-new-password"
-                  name="user-wallet-new-password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  maxLength={100}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="4-6 digit PIN or 12+ char password"
-                  style={{ ...inputStyle, paddingRight: 40 }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1"
-                >
-                  {showPassword
-                    ? <EyeOff className="w-4 h-4" style={{ color: colors.text.tertiary }} />
-                    : <Eye className="w-4 h-4" style={{ color: colors.text.tertiary }} />}
-                </button>
-              </div>
-            </div>
+            <p className="text-[11px] font-mono leading-relaxed" style={{ color: colors.text.secondary }}>
+              Use your 6-digit sign-in PIN. The same PIN unlocks this wallet
+              every time you send or trade.
+            </p>
 
-            <div>
-              <label htmlFor="user-wallet-new-password-confirm" style={labelStyle}>Confirm Password</label>
-              <input
-                id="user-wallet-new-password-confirm"
-                name="user-wallet-new-password-confirm"
-                type="password"
-                autoComplete="new-password"
-                maxLength={100}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter password"
-                style={inputStyle}
-              />
-            </div>
+            <WalletPinKeypad
+              value={password}
+              onChange={setPassword}
+              label="Enter PIN"
+              disabled={isLoading}
+              autoFocus
+              showToggle
+            />
+
+            <WalletPinKeypad
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              label="Confirm PIN"
+              disabled={isLoading}
+            />
 
             <button
               type="submit"
@@ -393,20 +359,15 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
               />
             </div>
 
-            <div>
-              <label htmlFor="user-wallet-import-password" style={labelStyle}>Encryption Password</label>
-              <input
-                id="user-wallet-import-password"
-                name="user-wallet-import-password"
-                type="password"
-                autoComplete="new-password"
-                maxLength={100}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="4-6 digit PIN or 12+ char password"
-                style={inputStyle}
-              />
-            </div>
+            <WalletPinKeypad
+              value={password}
+              onChange={setPassword}
+              label="Encrypt with your PIN"
+              hint="Same 6-digit PIN you use to sign in."
+              disabled={isLoading}
+              showToggle
+            />
+
 
             <button
               type="submit"

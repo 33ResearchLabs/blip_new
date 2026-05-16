@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2, Lock, Key } from 'lucide-react';
 import { colors } from "@/lib/design/theme";
+import { WalletPinKeypad } from './WalletPinKeypad';
 
 interface UnlockWalletPromptProps {
   onUnlock: (password: string) => Promise<boolean>;
@@ -24,7 +25,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
     try {
       const success = await onUnlock(password);
       if (!success) {
-        setError('Wrong password');
+        setError('Wrong PIN');
         setPassword('');
       }
     } catch {
@@ -56,38 +57,17 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-          {/* Hidden username field anchors the password manager to THIS form,
-              so Chrome stops binding the saved Gmail to nearby search inputs.
-              aria-hidden + tabIndex=-1 keep it out of the keyboard/screen-reader flow. */}
-          <input
-            type="text"
-            name="wallet-account"
-            autoComplete="username"
-            value="blip-wallet"
-            readOnly
-            aria-hidden="true"
-            tabIndex={-1}
-            className="absolute opacity-0 pointer-events-none h-0 w-0"
+          <WalletPinKeypad
+            value={password}
+            onChange={setPassword}
+            label="Enter your sign-in PIN"
+            disabled={isUnlocking}
+            autoFocus
           />
-          <div>
-            <label htmlFor="wallet-password" className="text-[10px] font-mono uppercase mb-1 block" style={{ color: colors.text.tertiary, fontWeight: 700, letterSpacing: '0.2em' }}>Password</label>
-            <input
-              id="wallet-password"
-              name="wallet-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your wallet password"
-              autoFocus
-              className="w-full px-3 py-2.5 rounded-lg text-sm font-mono outline-none"
-              style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}`, color: colors.text.primary }}
-            />
-          </div>
 
           <button
             type="submit"
-            disabled={isUnlocking || !password}
+            disabled={isUnlocking || password.length < 6}
             className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             style={{ background: colors.accent.primary, color: colors.accent.text }}
           >
