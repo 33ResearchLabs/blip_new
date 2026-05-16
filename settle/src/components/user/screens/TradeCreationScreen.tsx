@@ -214,8 +214,8 @@ export const TradeCreationScreen = ({
 
       {/* ── Header ── */}
       <header className="relative z-10 max-w-[440px] mx-auto w-full px-5 pt-5">
-        <div className="flex items-center justify-between">
-          <motion.button
+        <div className="flex items-center justify-end">
+          {/* <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={() => setScreen("home")}
             className="flex items-center justify-center"
@@ -234,7 +234,7 @@ export const TradeCreationScreen = ({
               strokeWidth={2.2}
               style={{ color: T.hi }}
             />
-          </motion.button>
+          </motion.button> */}
 
           {/* Corridor selector — animated dropdown */}
           <div className="relative">
@@ -270,6 +270,7 @@ export const TradeCreationScreen = ({
                 <ChevronDown size={11} strokeWidth={2.4} style={{ color: T.md }} />
               </motion.span>
             </motion.button>
+
             <AnimatePresence>
               {pairOpen && (
                 <motion.div
@@ -340,7 +341,7 @@ export const TradeCreationScreen = ({
       </header>
 
       {/* ── Hero amount stack ── */}
-      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 flex flex-col items-center justify-start pt-10">
+      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 flex flex-col items-center justify-start pt-6">
         {/* Animated You Buy / You Sell label */}
         <AnimatePresence mode="wait">
           <motion.p
@@ -355,7 +356,7 @@ export const TradeCreationScreen = ({
               letterSpacing: "0.26em",
               textTransform: "uppercase",
               color: T.lo,
-              marginBottom: 14,
+              marginBottom: 10,
             }}
           >
             {isBuy ? "You're Buying" : "You're Selling"}
@@ -457,7 +458,7 @@ export const TradeCreationScreen = ({
         </div>
 
         {/* Quick-amount chips with spring snap */}
-        <div className="flex items-center" style={{ gap: 8, marginTop: 22 }}>
+        <div className="flex items-center" style={{ gap: 8, marginTop: 18 }}>
           {QUICK_AMOUNTS.map((v) => (
             <motion.button
               key={v}

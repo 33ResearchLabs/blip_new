@@ -231,47 +231,63 @@ function WalletBalanceSection({
 
       {/* ── Big centered balance + Apple-style page-dot token switcher ── */}
       {isWalletReady ? (
-        <div style={{ marginTop: 28, marginBottom: 8, textAlign: 'center' }}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={t.symbol}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <div className="flex items-baseline justify-center" style={{ gap: 2 }}>
-                <span style={{
-                  fontSize: 60, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1,
-                  color: heroText.hi,
+        <div style={{ marginTop: 20, marginBottom: 8, textAlign: 'center' }}>
+          <motion.div
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.18}
+            dragMomentum={false}
+            onDragEnd={(_, info) => {
+              const OFFSET = 50;
+              const VELOCITY = 350;
+              const swipedLeft = info.offset.x < -OFFSET || info.velocity.x < -VELOCITY;
+              const swipedRight = info.offset.x > OFFSET || info.velocity.x > VELOCITY;
+              if (swipedLeft) setTokenIdx((i) => Math.min(i + 1, tokens.length - 1));
+              else if (swipedRight) setTokenIdx((i) => Math.max(i - 1, 0));
+            }}
+            style={{ touchAction: 'pan-y', cursor: 'grab' }}
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={t.symbol}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div className="flex items-baseline justify-center" style={{ gap: 2 }}>
+                  <span style={{
+                    fontSize: 60, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1,
+                    color: heroText.hi,
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  }}>
+                    {tWhole}
+                  </span>
+                  <span style={{
+                    fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1,
+                    color: heroText.lo,
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  }}>
+                    {tDec}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
+                    color: heroText.lo, marginLeft: 8,
+                  }}>
+                    {t.symbol}
+                  </span>
+                </div>
+                <p style={{
+                  fontSize: 12, fontWeight: 600,
+                  color: heroText.md,
+                  marginTop: 12, letterSpacing: '-0.005em',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 }}>
-                  {tWhole}
-                </span>
-                <span style={{
-                  fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1,
-                  color: heroText.lo,
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                }}>
-                  {tDec}
-                </span>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
-                  color: heroText.lo, marginLeft: 8,
-                }}>
-                  {t.symbol}
-                </span>
-              </div>
-              <p style={{
-                fontSize: 12, fontWeight: 600,
-                color: heroText.md,
-                marginTop: 12, letterSpacing: '-0.005em',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              }}>
-                {tFiat ? `≈ ${tFiat} ${fiatLabel}` : t.name}
-              </p>
-            </motion.div>
-          </AnimatePresence>
+                  {tFiat ? `≈ ${tFiat} ${fiatLabel}` : t.name}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
 
           {/* ── Page-dot indicator (iOS-style) ── */}
           <div className="flex items-center justify-center" style={{ gap: 6, marginTop: 18 }}>
@@ -300,7 +316,7 @@ function WalletBalanceSection({
 
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-3" style={{ textAlign: 'center', marginTop: 28 }}>
+        <div className="flex flex-col items-center gap-3" style={{ textAlign: 'center', marginTop: 18 }}>
           <span style={{
             fontSize: 60, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1,
             color: 'rgba(255,255,255,0.18)',
@@ -336,7 +352,7 @@ function WalletBalanceSection({
       <motion.div
         initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
         className="grid grid-cols-4 gap-2.5"
-        style={{ marginTop: 20 }}
+        style={{ marginTop: 12 }}
       >
         {([
           { label: 'Pay',      Icon: QrCode,        primary: false, comingSoon: false, fn: onPay },
@@ -620,7 +636,7 @@ export const HomeScreen = ({
           Always 60svh tall — body below gets the remaining 40svh.
          ══════════════════════════════════════════════ */}
       <div
-        className="relative shrink-0 pb-5"
+        className="relative shrink-0 pb-3"
         style={{
           background: 'linear-gradient(180deg, #161B26 0%, #0B0F17 55%, #07090F 100%)',
           borderBottomLeftRadius: 44,
@@ -781,7 +797,7 @@ export const HomeScreen = ({
 
           {/* ── Circle (trading partners) — lives inside the dark hero ── */}
           <div className="mt-4">
-            <div className="flex justify-between items-center mb-3">
+            <div className="flex justify-between items-center mb-2">
               <span style={{
                 fontSize: 10, fontWeight: 800, letterSpacing: '0.22em',
                 color: 'rgba(255,255,255,0.32)', textTransform: 'uppercase',
@@ -887,10 +903,10 @@ export const HomeScreen = ({
           ['--accent-text' as any]: '#ffffff',
         }}
       >
-        <div className={`${maxW} mx-auto px-5 pt-4`}>
+        <div className={`${maxW} mx-auto px-5 pt-2`}>
 
           {/* Section title — kept small to focus attention on the card above */}
-          <div className="flex items-center justify-between mb-1 mt-2">
+          <div className="flex items-center justify-between ">
             <h2 className="text-[13px] font-bold text-text-secondary tracking-[-0.01em]">
               Transactions
             </h2>

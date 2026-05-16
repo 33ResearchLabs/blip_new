@@ -87,7 +87,7 @@ export function AppPinPad({
           return (
             <div
               key={i}
-              className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full"
+              className="w-3 h-3  rounded-full"
               style={{
                 background: errorTick > 0 && value.length === 0
                   ? '#dc2626'
@@ -133,7 +133,7 @@ export function AppPinPad({
           onClick={backspace}
           disabled={disabled || !value.length}
           aria-label="Delete last digit"
-          className="aspect-square rounded-2xl flex items-center justify-center transition-opacity disabled:opacity-30"
+          className="aspect-video rounded-2xl flex items-center justify-center transition-opacity disabled:opacity-30"
           style={{ background: 'rgba(255,255,255,0.04)' }}
         >
           <Delete className="w-4 h-4 sm:w-5 sm:h-5 text-white/80" />
@@ -156,7 +156,7 @@ function KeypadKey({ label, onPress, disabled }: KeypadKeyProps) {
       whileTap={{ scale: 0.92 }}
       onClick={onPress}
       disabled={disabled}
-      className="aspect-square rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-light text-white disabled:opacity-30"
+      className="aspect-video rounded-2xl p-2 flex items-center justify-center text-xl sm:text-2xl font-light text-white disabled:opacity-30"
       style={{ background: 'rgba(255,255,255,0.04)' }}
       aria-label={`Digit ${label}`}
     >
@@ -164,7 +164,7 @@ function KeypadKey({ label, onPress, disabled }: KeypadKeyProps) {
         <motion.span
           key={label}
           initial={{ opacity: 1 }}
-          className="font-mono tracking-wider"
+          className="font-mono tracking-wider "
         >
           {label}
         </motion.span>
