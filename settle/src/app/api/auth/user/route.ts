@@ -21,7 +21,6 @@ import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRES
 import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 import { query } from '@/lib/db';
-import crypto from 'crypto';
 
 /**
  * POST /api/auth/user
@@ -407,7 +406,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Create user — email_verified=false until they click the link.
       let user;
       try {
         user = await createUser({
@@ -415,7 +413,7 @@ export async function POST(request: NextRequest) {
           password,
           name: username,
           email,
-          email_verified: false,
+          email_verified: true,
         });
       } catch (createErr: any) {
         if (createErr?.message === 'Username already taken') {
@@ -431,31 +429,6 @@ export async function POST(request: NextRequest) {
           );
         }
         throw createErr;
-      }
-
-      // Fire-and-forget verification email — don't fail registration if SES
-      // is misconfigured, just log it. The user can request a resend later.
-      try {
-        const verifyToken = crypto.randomBytes(32).toString('hex');
-        const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
-        await query(
-          `INSERT INTO user_email_verification_tokens (user_id, token_hash, expires_at)
-           VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
-          [user.id, tokenHash]
-        );
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-        // Point at the user-facing verify-email page (not the API endpoint
-        // directly). The page renders a success/error UI, then offers a
-        // "Sign In" button — mirrors the merchant flow at /merchant/verify-email.
-        const verifyLink = `${appUrl}/user/verify-email?token=${verifyToken}&id=${user.id}`;
-        const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
-        const emailContent = emailVerificationEmail(verifyLink, user.username || 'there');
-        // `email` is asserted non-null because validateUserEmail above
-        // returns early when it's missing — TS just can't track that.
-        sendEmail({ to: email!, ...emailContent })
-          .catch(err => console.error('[user register] verification email failed:', err));
-      } catch (emailErr) {
-        console.error('[user register] failed to create verification token:', emailErr);
       }
 
       console.log('[API] New user registered:', user.id, user.username);
@@ -483,8 +456,7 @@ export async function POST(request: NextRequest) {
         data: {
           user,
           needsWallet: true,
-          requiresEmailVerification: true,
-          message: 'Account created! Check your email to verify your account.',
+          message: 'Account created!',
           ...(registerToken && { token: registerToken }),
           ...(regAccessTk && { accessToken: regAccessTk }),
         },

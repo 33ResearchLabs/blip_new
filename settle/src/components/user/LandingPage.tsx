@@ -9,6 +9,8 @@ import {
   validateUserUsername,
   validateUserEmail,
   validateUserPassword,
+  validateUserPin,
+  USER_PIN_LENGTH,
 } from "@/lib/validation/userAuth";
 
 interface LandingPageProps {
@@ -47,8 +49,12 @@ export function LandingPage({
   const emailError = authMode === 'register' && touched.email
     ? validateUserEmail(loginForm.email)
     : null;
-  const passwordError = authMode === 'register' && touched.password
-    ? validateUserPassword(loginForm.password)
+  // Register uses a 6-digit PIN; login keeps the existing password field
+  // since pre-PIN accounts still have password credentials.
+  const passwordError = touched.password
+    ? (authMode === 'register'
+        ? validateUserPin(loginForm.password)
+        : validateUserPassword(loginForm.password))
     : null;
 
   const isDisabled =
@@ -59,7 +65,7 @@ export function LandingPage({
       !loginForm.email ||
       !!validateUserUsername(loginForm.username) ||
       !!validateUserEmail(loginForm.email) ||
-      !!validateUserPassword(loginForm.password)
+      !!validateUserPin(loginForm.password)
     ));
 
   // Welcome page — full user landing
@@ -183,7 +189,7 @@ export function LandingPage({
                   <p className="mt-1.5 text-[11px] text-error">{emailError}</p>
                 ) : (
                   <p className="mt-1.5 text-[10px] text-text-tertiary">
-                    We&apos;ll send a verification link. You&apos;ll also use this email to recover your password.
+                    Used to recover your account if you forget your PIN.
                   </p>
                 )}
               </div>
@@ -191,7 +197,9 @@ export function LandingPage({
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary">Password</label>
+                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary">
+                  {authMode === 'register' ? `Set a ${USER_PIN_LENGTH}-digit PIN` : 'Password'}
+                </label>
                 {authMode === 'login' && (
                   <Link
                     href="/user/forgot-password"
@@ -205,14 +213,23 @@ export function LandingPage({
                 <input
                   type={showPassword ? "text" : "password"}
                   value={loginForm.password}
-                  onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                  onChange={e => {
+                    const next = authMode === 'register'
+                      ? e.target.value.replace(/\D/g, '').slice(0, USER_PIN_LENGTH)
+                      : e.target.value;
+                    setLoginForm({ ...loginForm, password: next });
+                  }}
                   onBlur={() => setTouched(t => ({ ...t, password: true }))}
-                  placeholder={authMode === 'register' ? '6–24 characters' : '••••••••'}
-                  maxLength={24}
+                  placeholder={authMode === 'register' ? `${USER_PIN_LENGTH}-digit PIN` : '••••••••'}
+                  maxLength={authMode === 'register' ? USER_PIN_LENGTH : 24}
+                  inputMode={authMode === 'register' ? 'numeric' : undefined}
+                  autoComplete={authMode === 'register' ? 'one-time-code' : 'current-password'}
                   onKeyDown={e => e.key === 'Enter' && submit()}
                   className={`w-full rounded-xl pl-4 pr-11 py-3 text-sm font-medium outline-none bg-surface-hover border ${
                     passwordError ? 'border-error' : 'border-border-subtle'
-                  } text-text-primary placeholder:text-text-tertiary`}
+                  } text-text-primary placeholder:text-text-tertiary ${
+                    authMode === 'register' ? 'tracking-[0.4em] text-center' : ''
+                  }`}
                 />
                 <button
                   type="button"
@@ -224,6 +241,11 @@ export function LandingPage({
               </div>
               {passwordError && (
                 <p className="mt-1.5 text-[11px] text-error">{passwordError}</p>
+              )}
+              {authMode === 'register' && !passwordError && (
+                <p className="mt-1.5 text-[10px] text-text-tertiary">
+                  You&apos;ll use this PIN to sign in. Keep it private.
+                </p>
               )}
             </div>
 

@@ -55,3 +55,15 @@ export function validateUserPassword(raw: string): string | null {
   }
   return null;
 }
+
+// First-time setup uses a 6-digit numeric PIN. Stored server-side via the
+// same password hash field, so it passes validateUserPassword too.
+export const USER_PIN_LENGTH = 6;
+const PIN_DIGITS_ONLY = /^\d+$/;
+
+export function validateUserPin(raw: string): string | null {
+  if (!raw) return 'PIN is required';
+  if (!PIN_DIGITS_ONLY.test(raw)) return 'PIN must be digits only';
+  if (raw.length !== USER_PIN_LENGTH) return `PIN must be ${USER_PIN_LENGTH} digits`;
+  return null;
+}

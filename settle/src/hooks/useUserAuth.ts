@@ -7,7 +7,7 @@ import { useMerchantStore } from '@/stores/merchantStore';
 import {
   validateUserUsername,
   validateUserEmail,
-  validateUserPassword,
+  validateUserPin,
 } from '@/lib/validation/userAuth';
 
 interface UseUserAuthParams {
@@ -241,7 +241,9 @@ export function useUserAuth({
     if (usernameErr) { setLoginError(usernameErr); return; }
     const emailErr = validateUserEmail(email);
     if (emailErr) { setLoginError(emailErr); return; }
-    const passwordErr = validateUserPassword(loginForm.password);
+    // First-time setup uses a 6-digit numeric PIN; server still validates as
+    // a password (PIN passes the 6-char min, no-space rules) so no API change.
+    const passwordErr = validateUserPin(loginForm.password);
     if (passwordErr) { setLoginError(passwordErr); return; }
 
     setIsLoggingIn(true);
