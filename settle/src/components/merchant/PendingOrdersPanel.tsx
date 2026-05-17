@@ -33,6 +33,7 @@ import {
   InfoTooltip,
   type InfoTooltipItem,
 } from "@/components/shared/InfoTooltip";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
   useCorridorPrices,
   resolveCorridorRef,
@@ -565,14 +566,21 @@ const OrderList = memo(function OrderList({
                       // resolved (very rare — observer view of a broken row).
                       const soloName =
                         sellerDisp || buyerDisp || order.user || null;
-                      const avatarChar = (soloName || "U")
-                        .charAt(0)
-                        .toUpperCase();
+                      // Prefer the avatar URL the backend sent with the
+                      // order row; UserAvatar falls back to a DiceBear
+                      // derived from the seed when src is missing.
+                      const avatarSrc =
+                        (order.dbOrder?.user?.avatar_url as string | undefined) ||
+                        (order as any).user_avatar ||
+                        null;
                       return (
                         <>
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-foreground/[0.03] flex items-center justify-center shrink-0 text-sm border border-foreground/[0.08] shadow-sm">
-                            {avatarChar}
-                          </div>
+                          <UserAvatar
+                            src={avatarSrc}
+                            seed={soloName || "U"}
+                            size={32}
+                            className="border border-foreground/[0.08] shadow-sm"
+                          />
                           <span className="flex items-center gap-1 text-[12px] font-semibold text-white min-w-0">
                             {bothKnown ? (
                               <>
@@ -691,99 +699,39 @@ const OrderList = memo(function OrderList({
                       </span>
                     )} */}
                   </div>
-                  {/* Timer (pending) OR status badge + date (non-pending) */}
+                  {/* Top-right slot: live countdown only when the order is
+                      actively pending. Status badge + date for non-pending
+                      orders moved into a compact meta row below the
+                      YOU PAY / RECEIVE block — see further down. */}
                   {(() => {
                     const effStatus: string =
                       order.status || order.dbOrder?.status || "pending";
                     const isActivelyPending =
                       effStatus === "pending" && order.expiresIn > 0;
-
-                    if (isActivelyPending) {
-                      return (
-                        <div
-                          className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
-                            order.expiresIn <= 120
-                              ? "text-red-400"
-                              : "text-primary"
-                          }`}
-                        >
-                          {order.expiresIn >= 3600
-                            ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
-                            : order.expiresIn >= 60
-                              ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
-                              : `${order.expiresIn}s`}
-                          <CountdownRing
-                            remaining={order.expiresIn}
-                            total={900}
-                            size={18}
-                            strokeWidth={2.5}
-                          />
-                        </div>
-                      );
-                    }
-
-                    const badge =
-                      MY_STATUS_BADGE[effStatus] || MY_STATUS_BADGE.pending;
-                    const StatusIcon = badge.Icon;
-                    const ts =
-                      order.dbOrder?.completed_at ||
-                      order.dbOrder?.cancelled_at ||
-                      order.dbOrder?.created_at ||
-                      order.timestamp;
-                    const tsDate =
-                      ts instanceof Date ? ts : ts ? new Date(ts) : null;
-
+                    if (!isActivelyPending) return null;
                     return (
-                      <div className="flex flex-col items-end gap-1 shrink-0 ml-auto">
-                        <span
-                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}
-                        >
-                          <StatusIcon className="w-2.5 h-2.5" />
-                          {badge.label}
-                        </span>
-                        {tsDate && (
-                          <span className="text-[9px] text-foreground/40 font-mono tabular-nums">
-                            {tsDate.toLocaleString([], {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        )}
+                      <div
+                        className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
+                          order.expiresIn <= 120
+                            ? "text-red-400"
+                            : "text-primary"
+                        }`}
+                      >
+                        {order.expiresIn >= 3600
+                          ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
+                          : order.expiresIn >= 60
+                            ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
+                            : `${order.expiresIn}s`}
+                        <CountdownRing
+                          remaining={order.expiresIn}
+                          total={900}
+                          size={18}
+                          strokeWidth={2.5}
+                        />
                       </div>
                     );
                   })()}
                 </div>
-
-                {/* Payment method badge with icon */}
-                {(() => {
-                  const pmType =
-                    order.lockedPaymentMethod?.type ||
-                    order.dbOrder?.payment_method ||
-                    (order.userBankDetails ? "bank" : null);
-                  if (!pmType) return null;
-                  const config: Record<
-                    string,
-                    { label: string; icon: string }
-                  > = {
-                    bank: { label: "Bank", icon: "🏦" },
-                    cash: { label: "Cash", icon: "💵" },
-                    upi: { label: "UPI", icon: "📱" },
-                  };
-                  const { label, icon } = config[pmType] || {
-                    label: pmType.toUpperCase(),
-                    icon: "💳",
-                  };
-                  return (
-                    <div className="flex justify-end mb-1.5">
-                      <span className="flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded border border-border text-secondary">
-                        <span className="text-[10px]">{icon}</span>
-                        {label}
-                      </span>
-                    </div>
-                  );
-                })()}
 
                 {/* Row 2: You Pay ⇄ You Receive — premium trading card */}
                 {(() => {
@@ -897,6 +845,73 @@ const OrderList = memo(function OrderList({
                       </span>
                     )}
                 </div>
+
+                {/* Compact meta row: payment method pill (always) + status
+                    badge + completion time (non-pending). Lives BELOW the
+                    YOU PAY/RECEIVE block so the primary numbers read first;
+                    status context is secondary. */}
+                {(() => {
+                  const effStatus: string =
+                    order.status || order.dbOrder?.status || "pending";
+                  const isActivelyPending =
+                    effStatus === "pending" && order.expiresIn > 0;
+                  const showStatus = !isActivelyPending;
+
+                  const badge =
+                    MY_STATUS_BADGE[effStatus] || MY_STATUS_BADGE.pending;
+                  const StatusIcon = badge.Icon;
+                  const ts =
+                    order.dbOrder?.completed_at ||
+                    order.dbOrder?.cancelled_at ||
+                    order.dbOrder?.created_at ||
+                    order.timestamp;
+                  const tsDate =
+                    ts instanceof Date ? ts : ts ? new Date(ts) : null;
+
+                  const pmType =
+                    order.lockedPaymentMethod?.type ||
+                    order.dbOrder?.payment_method ||
+                    (order.userBankDetails ? "bank" : null);
+                  const pmConfig: Record<string, { label: string; icon: string }> = {
+                    bank: { label: "Bank", icon: "🏦" },
+                    cash: { label: "Cash", icon: "💵" },
+                    upi: { label: "UPI", icon: "📱" },
+                  };
+                  const pm = pmType
+                    ? pmConfig[pmType] || { label: pmType.toUpperCase(), icon: "💳" }
+                    : null;
+
+                  if (!showStatus && !pm) return null;
+
+                  return (
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                      {showStatus && (
+                        <span
+                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}
+                        >
+                          <StatusIcon className="w-2.5 h-2.5" />
+                          {badge.label}
+                        </span>
+                      )}
+                      {showStatus && tsDate && (
+                        <span className="text-[9px] text-foreground/40 font-mono tabular-nums">
+                          {tsDate.toLocaleString([], {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
+                      {pm && (
+                        <span className="ml-auto flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded border border-border text-secondary">
+                          <span className="text-[10px]">{pm.icon}</span>
+                          {pm.label}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Row 3: Rate + premium ... small action button on right */}
                 <div className="flex items-center gap-1.5">
