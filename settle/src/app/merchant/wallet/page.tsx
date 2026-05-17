@@ -34,6 +34,10 @@ import {
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsOverlay";
+import { AppPinPad } from "@/components/app-lock/AppPinPad";
+import { AnimatePresence, motion } from "framer-motion";
+
+const PIN_LENGTH = 6;
 import { copyToClipboard } from "@/lib/clipboard";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { DEVNET_RPC, DEVNET_WS_ENDPOINT } from "@/lib/solana/v2/config";
@@ -93,14 +97,16 @@ export default function WalletPage({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [privateKeyInput, setPrivateKeyInput] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState("");
+  const [createStep, setCreateStep] = useState<"enter" | "confirm">("enter");
+  const [setupErrorTick, setSetupErrorTick] = useState(0);
 
   // Unlock state
   const [unlockPassword, setUnlockPassword] = useState("");
   const [unlockLoading, setUnlockLoading] = useState(false);
   const [unlockError, setUnlockError] = useState("");
+  const [unlockErrorTick, setUnlockErrorTick] = useState(0);
 
   // Main wallet state
   const [copied, setCopied] = useState(false);
@@ -353,17 +359,13 @@ export default function WalletPage({
 
   // ---- Handlers ----
 
-  const handleCreate = async () => {
+  // PIN passed explicitly so this isn't dependent on state that hasn't
+  // yet committed — AppPinPad fires onComplete synchronously inside the
+  // same press handler that called setPassword.
+  const handleCreate = async (pin: string = password) => {
     setSetupError("");
-    // Strength check enforced at creation only — never at unlock — so
-    // existing mainnet merchants with legacy passwords aren't locked out.
-    const strength = validatePasswordStrength(password);
-    if (!strength.ok) {
-      setSetupError(strength.reason || "Password is too weak");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setSetupError("Passwords do not match");
+    if (!/^\d{6}$/.test(pin)) {
+      setSetupError(`Enter your ${PIN_LENGTH}-digit PIN`);
       return;
     }
 
@@ -384,7 +386,7 @@ export default function WalletPage({
       // Step 4: mnemonic-derived wallet so the merchant can recover funds
       // via the 12-word phrase in any Solana wallet if the device is lost.
       const { keypair, mnemonic, encrypted, encryptedMnemonic } =
-        await generateMnemonicWallet(password, unlockHelper);
+        await generateMnemonicWallet(pin, unlockHelper);
       saveEncryptedWallet(merchantInfo.id, encrypted);
       saveEncryptedMnemonic(merchantInfo.id, encryptedMnemonic);
       setPendingKeypair(keypair);
@@ -396,13 +398,10 @@ export default function WalletPage({
     }
   };
 
-  const handleImport = async () => {
+  const handleImport = async (pin: string = password) => {
     setSetupError("");
-    // Import re-encrypts under a new password — same rules as Create so
-    // import isn't a back-door around the strength gate.
-    const strength = validatePasswordStrength(password);
-    if (!strength.ok) {
-      setSetupError(strength.reason || "Password is too weak");
+    if (!/^\d{6}$/.test(pin)) {
+      setSetupError(`Enter your ${PIN_LENGTH}-digit PIN`);
       return;
     }
     if (!privateKeyInput.trim()) {
@@ -427,7 +426,7 @@ export default function WalletPage({
       // supplied, persist the encrypted phrase too for later recovery.
       const { keypair, encrypted, encryptedMnemonic } = await importWallet(
         privateKeyInput.trim(),
-        password,
+        pin,
         unlockHelper,
       );
       saveEncryptedWallet(merchantInfo.id, encrypted);
@@ -475,18 +474,21 @@ export default function WalletPage({
     }
   };
 
-  const handleUnlock = async () => {
-    if (!unlockPassword) return;
+  const handleUnlock = async (pin: string = unlockPassword) => {
+    if (!pin) return;
     setUnlockError("");
     setUnlockLoading(true);
     try {
-      const ok = await embeddedWallet?.unlockWallet(unlockPassword.trim());
+      const ok = await embeddedWallet?.unlockWallet(pin.trim());
       if (!ok) {
-        setUnlockError("Wrong password");
+        setUnlockError("Wrong PIN");
+        setUnlockErrorTick((t) => t + 1);
         setUnlockPassword("");
       }
     } catch {
       setUnlockError("Failed to decrypt wallet");
+      setUnlockErrorTick((t) => t + 1);
+      setUnlockPassword("");
     } finally {
       setUnlockLoading(false);
     }
@@ -841,91 +843,70 @@ export default function WalletPage({
                 )}
 
                 {setupTab === "create" && (
-                  <form
-                    onSubmit={(e) => { e.preventDefault(); handleCreate(); }}
-                    autoComplete="off"
-                    className="space-y-3"
-                  >
-                    {/* Hidden username anchor: keeps Chrome's password manager
-                        bound to THIS form so saved Gmail credentials don't bleed
-                        into the chat search input on the page behind. */}
-                    <input
-                      type="text"
-                      name="wallet-account"
-                      autoComplete="username"
-                      value="blip-merchant-wallet"
-                      readOnly
-                      aria-hidden="true"
-                      tabIndex={-1}
-                      className="absolute opacity-0 pointer-events-none h-0 w-0"
-                    />
-                    <div>
-                      <label htmlFor="wallet-new-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                        Password
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="wallet-new-password"
-                          name="wallet-new-password"
-                          type={showPassword ? "text" : "password"}
-                          autoComplete="new-password"
-                          maxLength={100}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Min 12 characters"
-                          className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                     text-sm text-white font-mono placeholder:text-white/20
-                                     focus:outline-none focus:border-primary/50 transition-colors"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2"
+                  <div className="space-y-4">
+                    <AnimatePresence mode="wait">
+                      <motion.p
+                        key={createStep}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        className="text-sm font-mono text-center text-white/60"
+                      >
+                        {createStep === "enter"
+                          ? "Use your 6-digit sign-in PIN."
+                          : "Re-enter to confirm."}
+                      </motion.p>
+                    </AnimatePresence>
+
+                    <div style={{ maxWidth: 320, width: "100%", margin: "0 auto" }}>
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={createStep}
+                          initial={{ opacity: 0, x: createStep === "confirm" ? 24 : -24 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: createStep === "confirm" ? -24 : 24 }}
+                          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                         >
-                          {showPassword ? (
-                            <EyeOff className="w-4 h-4 text-white/30" />
+                          {createStep === "enter" ? (
+                            <AppPinPad
+                              value={password}
+                              onChange={setPassword}
+                              onComplete={() => setCreateStep("confirm")}
+                              length={PIN_LENGTH}
+                              disabled={setupLoading}
+                            />
                           ) : (
-                            <Eye className="w-4 h-4 text-white/30" />
+                            <AppPinPad
+                              value={confirmPassword}
+                              onChange={setConfirmPassword}
+                              onComplete={(v) => {
+                                if (v === password) {
+                                  handleCreate(v);
+                                } else {
+                                  setSetupError("PINs do not match");
+                                  setSetupErrorTick((t) => t + 1);
+                                  setConfirmPassword("");
+                                  setPassword("");
+                                  setCreateStep("enter");
+                                }
+                              }}
+                              length={PIN_LENGTH}
+                              errorTick={setupErrorTick}
+                              disabled={setupLoading}
+                            />
                           )}
-                        </button>
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+
+                    {setupLoading && (
+                      <div className="flex items-center justify-center gap-2 text-white/60">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-xs font-mono">Generating wallet…</span>
                       </div>
-                    </div>
-                    <div>
-                      <label htmlFor="wallet-new-password-confirm" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                        Confirm Password
-                      </label>
-                      <input
-                        id="wallet-new-password-confirm"
-                        name="wallet-new-password-confirm"
-                        type="password"
-                        autoComplete="new-password"
-                        maxLength={100}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter password"
-                        className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                   text-sm text-white font-mono placeholder:text-white/20
-                                   focus:outline-none focus:border-primary/50 transition-colors"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={setupLoading}
-                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
-                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {setupLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />{" "}
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Key className="w-4 h-4" /> Create Wallet
-                        </>
-                      )}
-                    </button>
-                  </form>
+                    )}
+                  </div>
                 )}
 
                 {setupTab === "import" && (
@@ -966,41 +947,24 @@ export default function WalletPage({
                                    focus:outline-none focus:border-primary/50 transition-colors"
                       />
                     </div>
-                    <div>
-                      <label htmlFor="wallet-import-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                        Encryption Password
-                      </label>
-                      <input
-                        id="wallet-import-password"
-                        name="wallet-import-password"
-                        type="password"
-                        autoComplete="new-password"
-                        maxLength={100}
+                    <p className="text-sm font-mono text-center text-white/60">
+                      Encrypt with your 6-digit sign-in PIN.
+                    </p>
+                    <div style={{ maxWidth: 320, width: "100%", margin: "0 auto" }}>
+                      <AppPinPad
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Min 12 characters"
-                        className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                   text-sm text-white font-mono placeholder:text-white/20
-                                   focus:outline-none focus:border-primary/50 transition-colors"
+                        onChange={setPassword}
+                        onComplete={(v) => { if (privateKeyInput.trim()) handleImport(v); }}
+                        length={PIN_LENGTH}
+                        disabled={setupLoading}
                       />
                     </div>
-                    <button
-                      type="submit"
-                      disabled={setupLoading}
-                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
-                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {setupLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />{" "}
-                          Importing...
-                        </>
-                      ) : (
-                        <>
-                          <ArrowDownToLine className="w-4 h-4" /> Import Wallet
-                        </>
-                      )}
-                    </button>
+                    {setupLoading && (
+                      <div className="flex items-center justify-center gap-2 text-white/60">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-xs font-mono">Importing wallet…</span>
+                      </div>
+                    )}
                   </form>
                 )}
               </div>
@@ -1153,42 +1117,25 @@ export default function WalletPage({
                     tabIndex={-1}
                     className="absolute opacity-0 pointer-events-none h-0 w-0"
                   />
-                  <div>
-                    <label htmlFor="wallet-unlock-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
-                      Password
-                    </label>
-                    <input
-                      id="wallet-unlock-password"
-                      name="wallet-unlock-password"
-                      type="password"
-                      autoComplete="current-password"
-                      maxLength={100}
+                  <p className="text-sm font-mono text-center text-white/60">
+                    Enter your 6-digit sign-in PIN.
+                  </p>
+                  <div style={{ maxWidth: 320, width: "100%", margin: "0 auto" }}>
+                    <AppPinPad
                       value={unlockPassword}
-                      onChange={(e) => setUnlockPassword(e.target.value)}
-                      placeholder="Enter your wallet password"
-                      autoFocus
-                      className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                 text-sm text-white font-mono placeholder:text-white/20
-                                 focus:outline-none focus:border-white/20 transition-colors"
+                      onChange={setUnlockPassword}
+                      onComplete={(v) => handleUnlock(v)}
+                      length={PIN_LENGTH}
+                      errorTick={unlockErrorTick}
+                      disabled={unlockLoading}
                     />
                   </div>
-
-                  <button
-                    type="submit"
-                    disabled={unlockLoading || !unlockPassword}
-                    className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
-                               hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {unlockLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Unlocking...
-                      </>
-                    ) : (
-                      <>
-                        <Unlock className="w-4 h-4" /> Unlock
-                      </>
-                    )}
-                  </button>
+                  {unlockLoading && (
+                    <div className="flex items-center justify-center gap-2 text-white/60">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-xs font-mono">Unlocking…</span>
+                    </div>
+                  )}
                 </form>
 
                 <div className="flex items-center justify-between">

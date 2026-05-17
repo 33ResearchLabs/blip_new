@@ -1,18 +1,20 @@
 "use client";
 
 /**
- * Inline Unlock Wallet modal — same pattern as the existing
- * Send / Swap / Deposit / Export-password sheets so desktop merchants
- * stay on the dashboard instead of routing to /merchant/wallet just to
- * type a password.
+ * Inline Unlock Wallet modal — desktop merchants stay on the dashboard
+ * instead of routing to /merchant/wallet just to enter their PIN.
  *
- * Calls the passed-in `unlockWallet(password)` (from EmbeddedWalletContext)
- * and surfaces a green-check animation + auto-close on success.
+ * Uses the same on-screen 6-digit PIN keypad as the user-side wallet.
+ * The PIN is the merchant's sign-in MPIN (same secret across sign-in,
+ * wallet setup, and wallet unlock). Auto-unlocks on the 6th digit.
  */
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { X, Lock, Loader2, AlertTriangle, Check } from "lucide-react";
+import { AppPinPad } from "@/components/app-lock/AppPinPad";
+
+const PIN_LENGTH = 6;
 
 interface UnlockWalletModalProps {
   isOpen: boolean;
@@ -28,28 +30,31 @@ export function UnlockWalletModal({
   unlockWallet,
   onUnlocked,
 }: UnlockWalletModalProps) {
-  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorTick, setErrorTick] = useState(0);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setPassword("");
+      setPin("");
       setError(null);
       setBusy(false);
       setDone(false);
     }
   }, [isOpen]);
 
-  const handleSubmit = async () => {
-    if (!unlockWallet || !password) return;
+  const handleSubmit = async (value: string) => {
+    if (!unlockWallet || !value) return;
     setBusy(true);
     setError(null);
     try {
-      const ok = await unlockWallet(password.trim());
+      const ok = await unlockWallet(value.trim());
       if (!ok) {
-        setError("Wrong password. Try again.");
+        setError("Wrong PIN. Try again.");
+        setErrorTick((t) => t + 1);
+        setPin("");
         setBusy(false);
         return;
       }
@@ -58,6 +63,8 @@ export function UnlockWalletModal({
       window.setTimeout(() => onClose(), 1600);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to unlock");
+      setErrorTick((t) => t + 1);
+      setPin("");
       setBusy(false);
     }
   };
@@ -66,17 +73,24 @@ export function UnlockWalletModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-md p-3 sm:p-4"
       onClick={onClose}
     >
       <motion.div
-        initial={{ y: 40, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full md:max-w-sm bg-background border-t md:border border-foreground/[0.08] md:rounded-2xl rounded-t-2xl p-5 pb-28 md:pb-5 space-y-3"
+        className="w-full max-w-md bg-background border border-foreground/[0.08] rounded-3xl p-6 sm:p-7 space-y-5 flex flex-col shadow-2xl"
+        style={{
+          minHeight: "min(660px, 88vh)",
+          maxHeight: "95vh",
+          paddingTop: "max(1.5rem, env(safe-area-inset-top))",
+          paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
+        }}
       >
         {done ? (
-          <div className="py-6 flex flex-col items-center text-center gap-3">
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-3">
             <motion.div
               initial={{ scale: 0.6, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -90,7 +104,7 @@ export function UnlockWalletModal({
         ) : (
           <>
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                 <Lock className="w-4 h-4 text-primary" />
                 Unlock Wallet
               </h3>
@@ -102,48 +116,36 @@ export function UnlockWalletModal({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-[12px] text-foreground/50">
-              Enter your wallet password to unlock for this session.
+
+            <p className="text-sm font-mono text-center text-foreground/60">
+              Enter your 6-digit sign-in PIN.
             </p>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !busy && password.length > 0) handleSubmit();
-              }}
-              placeholder="Wallet password"
-              maxLength={100}
-              autoFocus
-              className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2.5 text-sm text-foreground placeholder-foreground/30 focus:outline-none focus:border-foreground/30"
-            />
+
             {error && (
-              <p className="text-[11px] text-rose-400/80 flex items-center gap-1.5">
+              <p className="text-[12px] text-rose-400 text-center flex items-center justify-center gap-1.5">
                 <AlertTriangle className="w-3 h-3" /> {error}
               </p>
             )}
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={onClose}
-                disabled={busy}
-                className="flex-1 py-2.5 rounded-lg bg-foreground/[0.05] border border-foreground/[0.08] text-foreground/70 text-[12px] font-semibold disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={busy || password.length === 0 || !unlockWallet}
-                className="flex-1 py-2.5 rounded-lg bg-foreground text-background text-[12px] font-bold disabled:opacity-40 flex items-center justify-center gap-1.5"
-              >
-                {busy ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Unlocking…
-                  </>
-                ) : (
-                  "Unlock"
-                )}
-              </button>
+
+            <div className="flex-1 flex items-center justify-center">
+              <div style={{ maxWidth: 320, width: "100%" }}>
+                <AppPinPad
+                  value={pin}
+                  onChange={setPin}
+                  onComplete={(v) => handleSubmit(v)}
+                  length={PIN_LENGTH}
+                  errorTick={errorTick}
+                  disabled={busy}
+                />
+              </div>
             </div>
+
+            {busy && (
+              <div className="flex items-center justify-center gap-2 text-foreground/60">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-xs font-mono">Unlocking…</span>
+              </div>
+            )}
           </>
         )}
       </motion.div>
