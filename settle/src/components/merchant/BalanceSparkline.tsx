@@ -117,17 +117,18 @@ export function BalanceSparkline({
   const last = coords[coords.length - 1];
   d += ` L ${last.x.toFixed(2)} ${last.y.toFixed(2)}`;
 
-  const net = effectiveSeries[effectiveSeries.length - 1] - effectiveSeries[0];
-  // Use the active theme's tokens so the line picks up whatever palette
-  // the merchant is on (e.g. on the white/Solarized themes --primary is
-  // a blue, on the orange theme it's orange). Avoids hardcoded emerald.
-  const color = isPlaceholder
-    ? "var(--primary)"
-    : net > 0.0001 ? "var(--color-success)"
-      : net < -0.0001 ? "var(--color-error)"
-      : "var(--foreground)";
+  // Single accent colour regardless of direction — direction is already
+  // signalled by the +/- 24h earnings line above the chart, so painting
+  // the line red on a dip felt alarming. Theme-aware via CSS var so the
+  // colour follows whichever palette the merchant is on.
+  const color = "var(--color-success)";
   const glow = color;
-  const strokeOpacity = isPlaceholder ? 0.45 : 1;
+  // Unique gradient id per mount so multiple sparklines on one page
+  // (e.g. desktop split view) don't clobber each other's defs.
+  const gradientId = useMemo(
+    () => `bsl-stroke-${Math.random().toString(36).slice(2, 9)}`,
+    [],
+  );
 
   return (
     <svg
@@ -140,25 +141,33 @@ export function BalanceSparkline({
       className="block"
     >
       <defs>
-        <linearGradient id="bsl-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.18" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        {/* Horizontal stroke gradient: faded on the LEFT (older data,
+            visually receding) → solid on the RIGHT where the end-dot
+            sits. Matches the reference design. */}
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={color} stopOpacity="0" />
+          <stop offset="55%" stopColor={color} stopOpacity="0.45" />
+          <stop offset="100%" stopColor={color} stopOpacity="1" />
         </linearGradient>
       </defs>
-      <path d={`${d} L ${VB_W} ${VB_H} L 0 ${VB_H} Z`} fill="url(#bsl-fill)" />
       <path
         d={d}
         fill="none"
-        stroke={color}
-        strokeOpacity={strokeOpacity}
-        strokeWidth="1.5"
+        stroke={`url(#${gradientId})`}
+        strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
         style={{ filter: `drop-shadow(0 0 4px ${glow})` }}
       />
-      {/* End-point dot with subtle pulse. */}
-      <circle cx={last.x} cy={last.y} r="3" fill={color} fillOpacity={strokeOpacity} style={{ filter: `drop-shadow(0 0 6px ${glow})` }} />
+      {/* End-point dot — always full-opacity so it anchors the eye. */}
+      <circle
+        cx={last.x}
+        cy={last.y}
+        r="3"
+        fill={color}
+        style={{ filter: `drop-shadow(0 0 6px ${glow})` }}
+      />
     </svg>
   );
 }
