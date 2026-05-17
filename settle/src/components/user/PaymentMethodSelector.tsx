@@ -30,6 +30,15 @@ interface PaymentMethodSelectorProps {
   userId: string | null;
   selectedId: string | null;
   onSelect: (method: PaymentMethodItem | null) => void;
+  /** Hide the internal "Your Payment Method" header. Use when the caller
+   *  already renders a section title above (e.g. ProfileScreen) so the
+   *  same title doesn't appear twice. */
+  hideHeader?: boolean;
+  /** Wrap everything in a single unified rounded card and drop the
+   *  per-item border treatment, so the section reads as one "group
+   *  container" matching the AppLockSettingsCard pattern on the profile
+   *  screen. Trade / Escrow screens keep their default loose-cards look. */
+  groupContainer?: boolean;
 }
 
 // Each method type maps to a semantic token via its CSS variable.
@@ -47,6 +56,8 @@ export const PaymentMethodSelector = ({
   userId,
   selectedId,
   onSelect,
+  hideHeader = false,
+  groupContainer = false,
 }: PaymentMethodSelectorProps) => {
   const [methods, setMethods] = useState<PaymentMethodItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -69,6 +80,13 @@ export const PaymentMethodSelector = ({
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const selected = methods.find((m) => m.id === selectedId) || null;
+
+  // Show the default / selected method first in the expanded list so users
+  // can recognise their primary at a glance. Stable order is preserved for
+  // the rest of the methods.
+  const sortedMethods = selected
+    ? [selected, ...methods.filter((m) => m.id !== selected.id)]
+    : methods;
 
   // Fetch payment methods
   useEffect(() => {
@@ -239,25 +257,35 @@ export const PaymentMethodSelector = ({
   }
 
   return (
-    <div className="w-full">
-      <div className="flex items-center gap-2 mb-2">
-        <CreditCard className="w-4 h-4 text-text-tertiary" />
-        <span className="text-[12px] text-text-tertiary uppercase tracking-wide font-semibold">
-          Your Payment Method
-        </span>
-      </div>
+    <div
+      className={
+        groupContainer
+          ? "w-full rounded-xl bg-white/[0.02] border border-white/[0.06] p-3"
+          : "w-full"
+      }
+    >
+      {!hideHeader && (
+        <div className="flex items-center gap-2 mb-2">
+          <CreditCard className="w-4 h-4 text-text-tertiary" />
+          <span className="text-[12px] text-text-tertiary uppercase tracking-wide font-semibold">
+            Your Payment Method
+          </span>
+        </div>
+      )}
 
-      {/* Selected method display / dropdown trigger */}
+      {/* Selected method display / dropdown trigger — sized + styled to
+          match the legacy Bank Accounts card row (ProfileScreen) so both
+          render as visually identical sibling cards in the unified
+          Payment Methods group container. */}
       {methods.length > 0 && !showAddForm && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full rounded-xl p-3 flex items-center gap-3 text-left"
-          style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
+          className="w-full rounded-2xl px-4 py-3 flex items-start gap-3 text-left bg-surface-card border border-border-subtle"
         >
           {selected ? (
             <>
               <div
-                className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                 style={{ background: `${TYPE_CONFIG[selected.type].color}30` }}
               >
                 {(() => {
@@ -266,8 +294,8 @@ export const PaymentMethodSelector = ({
                 })()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-medium text-text-primary truncate">{selected.label}</p>
-                <p className="text-[12px] text-text-secondary truncate">{getSubtext(selected)}</p>
+                <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em] truncate">{selected.label}</p>
+                <p className="text-[11px] text-text-tertiary font-mono truncate">{getSubtext(selected)}</p>
               </div>
             </>
           ) : (
@@ -294,10 +322,10 @@ export const PaymentMethodSelector = ({
             className="overflow-hidden"
           >
             <div className="mt-1 space-y-1 max-h-[240px] overflow-y-auto">
-              {/* All methods listed (including the selected one) so the user
-                  can delete any of them. The currently selected method gets a
-                  check mark so its identity stays clear. */}
-              {methods.map((m) => {
+              {/* All methods listed — default / selected first (see
+                  `sortedMethods` above) so users see their primary at a
+                  glance. Selected gets a "Default" pill + check mark. */}
+              {sortedMethods.map((m) => {
                 const cfg = TYPE_CONFIG[m.type];
                 const Ic = cfg.Icon;
                 const armed = confirmDeleteId === m.id;
@@ -307,7 +335,7 @@ export const PaymentMethodSelector = ({
                   <div
                     key={m.id}
                     className="w-full flex items-center gap-2 rounded-xl p-3 text-left transition-colors"
-                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
+                    style={groupContainer ? {} : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
                   >
                     <button
                       onClick={() => {
@@ -325,7 +353,14 @@ export const PaymentMethodSelector = ({
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-medium text-text-primary truncate flex items-center gap-1.5">
                           <span className="truncate">{m.label}</span>
-                          {isSelected && <Check className="w-3 h-3 text-success shrink-0" />}
+                          {isSelected && (
+                            <>
+                              <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-success/15 text-success border border-success/25">
+                                Default
+                              </span>
+                              <Check className="w-3 h-3 text-success shrink-0" />
+                            </>
+                          )}
                           <span className="ml-1.5 text-[10px] text-text-secondary font-normal">
                             {cfg.label}
                           </span>
@@ -375,7 +410,7 @@ export const PaymentMethodSelector = ({
               <button
                 onClick={() => { resetForm(); setShowAddForm(true); }}
                 className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors"
-                style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
+                style={groupContainer ? {} : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
               >
                 <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center shrink-0">
                   <Plus className="w-3.5 h-3.5 text-text-tertiary" />
@@ -394,7 +429,7 @@ export const PaymentMethodSelector = ({
         <button
           onClick={() => { resetForm(); setShowAddForm(true); }}
           className="w-full rounded-xl p-4 flex items-center gap-3 text-left transition-colors"
-          style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
+          style={groupContainer ? {} : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
         >
           <div className="w-9 h-9 rounded-lg bg-surface-hover flex items-center justify-center shrink-0">
             <Plus className="w-4 h-4 text-text-tertiary" />
@@ -416,7 +451,7 @@ export const PaymentMethodSelector = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             className="rounded-xl p-4 mt-1"
-            style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
+            style={groupContainer ? {} : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-[13px] font-semibold text-text-primary">
