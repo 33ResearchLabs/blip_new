@@ -595,12 +595,24 @@ export function MobileHomeView({
               </div>
             )}
 
-            {/* Quick actions — neutral monochrome (no green/orange) so the
-                card reads as a single calm surface. The Wallet button is
-                gone — tapping the "Available Balance" header above opens
-                the wallet, and the USDT/SOL balances are already visible
-                here, so a separate Wallet tile was redundant. */}
-            <div className="grid grid-cols-4 gap-2 mt-4">
+            {/* Quick actions. Deposit is now a first-class tile so new
+                merchants can fund the wallet without spelunking into the
+                tiny QR icon next to the address. Five cells fit on a
+                320px viewport with the labels at text-[10px]. */}
+            <div className="grid grid-cols-5 gap-2 mt-4">
+              <button
+                onClick={() => setDepositOpen(true)}
+                className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-colors ${
+                  (effectiveBalance ?? 0) <= 0
+                    ? "bg-primary text-background border-primary/40 hover:bg-primary/90"
+                    : "bg-foreground/[0.05] border-foreground/[0.08] text-foreground hover:bg-foreground/[0.08]"
+                }`}
+              >
+                <ArrowDownToLine className="w-4 h-4" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">
+                  Deposit
+                </span>
+              </button>
               <button
                 onClick={() => onStartTrade?.("buy")}
                 className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-foreground/[0.05] border border-foreground/[0.08] text-foreground hover:bg-foreground/[0.08] transition-colors"
