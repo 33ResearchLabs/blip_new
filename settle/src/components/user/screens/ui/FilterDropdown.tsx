@@ -25,6 +25,8 @@ interface FilterDropdownProps<T extends string> {
    *   sit next to a form label or other rectangular controls.
    */
   variant?: "pill" | "square";
+  /** Extra classes appended to the trigger button — use to override radius/padding. */
+  triggerClassName?: string;
 }
 
 /**
@@ -40,6 +42,7 @@ export function FilterDropdown<T extends string>({
   ariaLabel = "Filter",
   align = "right",
   variant = "pill",
+  triggerClassName = "",
 }: FilterDropdownProps<T>) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -83,7 +86,7 @@ export function FilterDropdown<T extends string>({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={triggerClass}
+        className={`${triggerClass} ${triggerClassName}`}
       >
         <span>{activeLabel}</span>
         <ChevronDown

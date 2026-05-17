@@ -12,12 +12,53 @@ import {
   Loader2,
   Check,
   Send,
+  Shield,
 } from "lucide-react";
 import { UserBadge } from "@/components/merchant/UserBadge";
 import { ActionPulse } from "@/components/NotificationToast";
 import type { Order } from "@/types/merchant";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { formatCrypto, formatRate } from "@/lib/format";
+import {
+  InfoTooltip,
+  type InfoTooltipItem,
+} from "@/components/shared/InfoTooltip";
+
+// Mirrors IN_PROGRESS_RULES in InProgressPanel.tsx so the mobile header
+// surfaces the same buy/sell flow + expiry explanation as desktop. Keep
+// in sync there — source of truth is CLAUDE.md order lifecycle.
+const IN_PROGRESS_RULES: InfoTooltipItem[] = [
+  {
+    label: "BUY",
+    value:
+      "You send fiat → receive USDT. Seller locks escrow first; you then mark payment sent and wait for seller to release.",
+  },
+  {
+    label: "SELL",
+    value:
+      "You lock USDT in escrow first. Wait for fiat in your account, then confirm payment to release USDT.",
+  },
+  {
+    label: "PENDING",
+    value:
+      "Auto-expires 15 min after creation if no one accepts. No funds at risk.",
+  },
+  {
+    label: "ACCEPTED",
+    value:
+      "You have 2 hours from accept to lock escrow (if seller) or send payment (if buyer). Auto-cancels otherwise.",
+  },
+  {
+    label: "PAID",
+    value:
+      'After "payment sent", seller has 24 h to confirm. Auto-moves to dispute for compliance review if not confirmed.',
+  },
+  {
+    label: "DISPUTED",
+    value:
+      "Auto-resolves and refunds escrow to the funder after 24 h if no compliance action.",
+  },
+];
 
 // Mirrors `getViewerSide` in InProgressPanel.tsx so the mobile escrow card
 // resolves YOU PAY / YOU RECEIVE the same way the desktop in-progress
@@ -105,7 +146,9 @@ export interface MobileEscrowViewProps {
   onOpenDisputeModal: (orderId: string) => void;
   onOpenCancelModal: (order: Order) => void;
   onOpenChat: (order: Order) => void;
-  setMobileView: (view: 'orders' | 'escrow' | 'chat' | 'history' | 'marketplace') => void;
+  setMobileView: (
+    view: "orders" | "escrow" | "chat" | "history" | "marketplace",
+  ) => void;
 }
 
 export function MobileEscrowView({
@@ -135,23 +178,34 @@ export function MobileEscrowView({
   return (
     <div className="space-y-1">
       {/* Sticky header — "IN PROGRESS" title + horizontal status tabs */}
-      <div className="sticky top-0 z-20 -mx-3 px-3 pt-2 pb-1 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04]">
+      <div className="sticky top-0 z-20 -mx-3 -mt-3 px-3 pt-0.5 pb-1 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04]">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            {/* <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> */}
+            <Shield className="w-3.5 h-3.5 text-primary/70" />
             <span className="text-[11px] font-mono font-bold text-primary uppercase tracking-[0.15em]">
               In Progress
             </span>
+            <InfoTooltip
+              title="In Progress — rules"
+              description="Your role (buyer vs seller) and the auto-timeout at each stage."
+              items={IN_PROGRESS_RULES}
+              side="bottom"
+              size="xs"
+            />
           </div>
           <span className="text-xs font-mono text-white/70">
             {filteredOngoingOrders.length}
             {filteredOngoingOrders.length !== ongoingOrders.length && (
-              <span className="text-foreground/30"> / {ongoingOrders.length}</span>
+              <span className="text-foreground/30">
+                {" "}
+                / {ongoingOrders.length}
+              </span>
             )}
           </span>
         </div>
         <div
-          className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1 no-scrollbar"
+          className="flex items-center gap-0.5 p-0.5 h-9 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08]"
           role="tablist"
           aria-label="Filter active orders by status"
         >
@@ -163,10 +217,10 @@ export function MobileEscrowView({
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setStatusFilter(opt.key)}
-                className={`shrink-0 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-colors ${
+                className={`flex-1 min-w-0 inline-flex items-center justify-center h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
                   isActive
-                    ? "bg-white border-white text-black"
-                    : "bg-foreground/[0.03] border-foreground/[0.06] text-foreground/50 hover:text-foreground/70"
+                    ? "bg-white text-black shadow"
+                    : "text-foreground/60 hover:text-foreground/80"
                 }`}
               >
                 {opt.label}
@@ -179,11 +233,14 @@ export function MobileEscrowView({
       {filteredOngoingOrders.length > 0 ? (
         <div className="space-y-2 py-1">
           {filteredOngoingOrders.map((order) => {
-            const dbStatus = order.dbOrder?.minimal_status || order.dbOrder?.status;
+            const dbStatus =
+              order.dbOrder?.minimal_status || order.dbOrder?.status;
             const role = order.myRole || "observer";
             const hasBeenAccepted = !!order.dbOrder?.accepted_at;
             const needsLockEscrow =
-              dbStatus === "accepted" && !order.escrowTxHash && role === "seller";
+              dbStatus === "accepted" &&
+              !order.escrowTxHash &&
+              role === "seller";
             const canMarkPaid =
               role === "buyer" &&
               dbStatus === "escrowed" &&
@@ -196,20 +253,26 @@ export function MobileEscrowView({
             // Surfaced as a small pill in the footer so the card never looks
             // "stuck" with only chat / dispute / cancel icons visible.
             const hasPrimaryAction =
-              needsLockEscrow || canMarkPaid || canConfirmPayment || canComplete;
+              needsLockEscrow ||
+              canMarkPaid ||
+              canConfirmPayment ||
+              canComplete;
             let waitingFor: string | null = null;
             if (!hasPrimaryAction) {
               if (role === "seller") {
-                if (dbStatus === "accepted") waitingFor = "Waiting for escrow lock";
+                if (dbStatus === "accepted")
+                  waitingFor = "Waiting for escrow lock";
                 else if (dbStatus === "escrowed")
                   waitingFor = "Waiting for buyer payment";
-                else if (dbStatus === "disputed") waitingFor = "Awaiting resolution";
+                else if (dbStatus === "disputed")
+                  waitingFor = "Awaiting resolution";
               } else if (role === "buyer") {
                 if (dbStatus === "accepted")
                   waitingFor = "Waiting for seller to lock escrow";
                 else if (dbStatus === "payment_sent")
                   waitingFor = "Waiting for seller to confirm";
-                else if (dbStatus === "disputed") waitingFor = "Awaiting resolution";
+                else if (dbStatus === "disputed")
+                  waitingFor = "Awaiting resolution";
               }
             }
 
@@ -374,43 +437,52 @@ export function MobileEscrowView({
                 </div>
 
                 {/* Bank / payment-method details — surfaced only when buyer must pay */}
-                {canMarkPaid && (() => {
-                  if (order.lockedPaymentMethod) {
-                    const lpm = order.lockedPaymentMethod;
-                    return (
-                      <div className="mb-2 px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] text-[10px] font-mono space-y-0.5">
-                        <div className="truncate text-primary">
-                          &rarr; {lpm.label} ({lpm.type.toUpperCase()})
+                {canMarkPaid &&
+                  (() => {
+                    if (order.lockedPaymentMethod) {
+                      const lpm = order.lockedPaymentMethod;
+                      return (
+                        <div className="mb-2 px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] text-[10px] font-mono space-y-0.5">
+                          <div className="truncate text-primary">
+                            &rarr; {lpm.label} ({lpm.type.toUpperCase()})
+                          </div>
+                          {lpm.type === "bank" && lpm.details.iban && (
+                            <div className="truncate text-white/50">
+                              {lpm.details.iban}
+                            </div>
+                          )}
+                          {lpm.type === "upi" && lpm.details.upi_id && (
+                            <div className="truncate text-white/50">
+                              {lpm.details.upi_id}
+                            </div>
+                          )}
                         </div>
-                        {lpm.type === "bank" && lpm.details.iban && (
-                          <div className="truncate text-white/50">{lpm.details.iban}</div>
-                        )}
-                        {lpm.type === "upi" && lpm.details.upi_id && (
-                          <div className="truncate text-white/50">{lpm.details.upi_id}</div>
-                        )}
-                      </div>
-                    );
-                  }
-                  const bankDetails =
-                    order.sellerBankDetails || order.userBankDetails;
-                  if (bankDetails) {
-                    return (
-                      <div className="mb-2 px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] text-[10px] font-mono space-y-0.5 text-white/50">
-                        <div className="truncate">&rarr; {bankDetails.bank_name}</div>
-                        <div className="truncate">{bankDetails.account_name}</div>
-                        <div className="truncate">{bankDetails.iban}</div>
-                      </div>
-                    );
-                  }
-                  if (order.userBankAccount) {
-                    return (
-                      <div className="mb-2 px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] text-[10px] font-mono truncate text-white/50">
-                        &rarr; {order.userBankAccount}
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
+                      );
+                    }
+                    const bankDetails =
+                      order.sellerBankDetails || order.userBankDetails;
+                    if (bankDetails) {
+                      return (
+                        <div className="mb-2 px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] text-[10px] font-mono space-y-0.5 text-white/50">
+                          <div className="truncate">
+                            &rarr; {bankDetails.bank_name}
+                          </div>
+                          <div className="truncate">
+                            {bankDetails.account_name}
+                          </div>
+                          <div className="truncate">{bankDetails.iban}</div>
+                        </div>
+                      );
+                    }
+                    if (order.userBankAccount) {
+                      return (
+                        <div className="mb-2 px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] text-[10px] font-mono truncate text-white/50">
+                          &rarr; {order.userBankAccount}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                 {/* Last human message preview — subtle, opens chat on tap */}
                 {order.lastHumanMessage && (
@@ -423,7 +495,9 @@ export function MobileEscrowView({
                   >
                     <MessageCircle className="w-3 h-3 text-foreground/35 shrink-0" />
                     <span className="text-[10px] text-foreground/40 truncate flex-1">
-                      {order.lastHumanMessageSender === "merchant" ? "You: " : ""}
+                      {order.lastHumanMessageSender === "merchant"
+                        ? "You: "
+                        : ""}
                       {order.lastHumanMessage.length > 60
                         ? order.lastHumanMessage.slice(0, 60) + "…"
                         : order.lastHumanMessage}

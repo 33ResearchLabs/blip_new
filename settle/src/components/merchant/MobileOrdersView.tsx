@@ -215,39 +215,62 @@ export function MobileOrdersView({
           Tab counts come from the un-pending-filtered, un-searched
           pendingOrders array so a merchant on the Pending tab can still
           see how many of their own broadcasts are out there. */}
-      <div className="sticky top-0 z-20 -mx-3 px-3 pt-2 pb-2 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04] space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto no-scrollbar">
-            {(
-              [
-                { id: "all", label: "All", count: allCount },
-                { id: "pending", label: "Pending", count: pendingTabCount },
-                { id: "mine", label: "My Orders", count: myCount },
-              ] as const
-            ).map((tab) => {
-              const isActive = view === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setView(tab.id)}
-                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors ${
-                    isActive
-                      ? "bg-white text-black"
-                      : "text-foreground/45 hover:text-foreground/70"
-                  }`}
-                >
-                  {tab.label}
+      <div className="sticky top-0 z-20 -mx-3 -mt-3 px-3 pt-0.5 pb-1.5 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04] space-y-1.5">
+        <div className="inline-flex items-center gap-0.5 p-0.5 h-9 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] w-full overflow-x-auto no-scrollbar">
+          {(
+            [
+              { id: "all", label: "All", count: allCount },
+              { id: "pending", label: "Pending", count: pendingTabCount },
+              { id: "mine", label: "My Orders", count: myCount },
+            ] as const
+          ).map((tab) => {
+            const isActive = view === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setView(tab.id)}
+                className={`flex-1 shrink-0 inline-flex items-center justify-center gap-1 h-full px-2.5 rounded-md text-[12px] font-bold whitespace-nowrap transition-colors ${
+                  isActive
+                    ? "bg-white text-black shadow"
+                    : "text-foreground/60 hover:text-foreground/80"
+                }`}
+              >
+                {tab.label}
+                {tab.count > 0 && (
                   <span
-                    className={`text-[9px] font-mono tabular-nums px-1 py-px rounded text-white ${
-                      isActive ? "bg-black/80" : "bg-foreground/[0.08]"
+                    className={`text-[10px] font-mono tabular-nums ${
+                      isActive ? "text-black/55" : "text-foreground/40"
                     }`}
                   >
                     {tab.count}
                   </span>
-                </button>
-              );
-            })}
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/30 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search orders…"
+              maxLength={100}
+              className="w-full h-9 pl-8 pr-8 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-foreground/[0.06] transition-colors"
+              >
+                <X className="w-3 h-3 text-foreground/40" />
+              </button>
+            )}
           </div>
 
           <FilterDropdown<PendingFilter>
@@ -256,13 +279,14 @@ export function MobileOrdersView({
             ariaLabel="Filter pending orders"
             align="right"
             options={PENDING_FILTER_OPTIONS}
+            triggerClassName="!rounded-lg !h-9 !py-0 !text-[12px]"
           />
 
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
             aria-pressed={soundEnabled}
-            className={`p-2 rounded-lg border transition-colors ${
+            className={`inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors ${
               soundEnabled
                 ? "bg-primary/10 border-primary/25 text-primary"
                 : "bg-foreground/[0.04] border-foreground/[0.08] text-foreground/40"
@@ -270,27 +294,6 @@ export function MobileOrdersView({
           >
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
-        </div>
-
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/30 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search orders…"
-            maxLength={100}
-            className="w-full pl-8 pr-8 py-1.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              aria-label="Clear search"
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-foreground/[0.06] transition-colors"
-            >
-              <X className="w-3 h-3 text-foreground/40" />
-            </button>
-          )}
         </div>
       </div>
 

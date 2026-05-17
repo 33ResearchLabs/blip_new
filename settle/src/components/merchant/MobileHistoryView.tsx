@@ -111,22 +111,20 @@ export function MobileHistoryView({
   return (
     <div className="space-y-4">
       {/* History Tabs */}
-      <div className="flex bg-white/[0.03] rounded-xl p-1">
+      <div className="inline-flex items-center gap-0.5 p-0.5 h-9 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] w-full overflow-x-auto no-scrollbar">
         <button
           onClick={() => setHistoryTab('completed')}
-          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 shrink-0 inline-flex items-center justify-center gap-1.5 h-full px-2.5 rounded-md text-[12px] font-bold whitespace-nowrap transition-colors ${
             historyTab === 'completed'
-              ? 'bg-foreground text-background shadow'
-              : 'text-foreground/35'
+              ? 'bg-white text-black shadow'
+              : 'text-foreground/60 hover:text-foreground/80'
           }`}
         >
           <Check className="w-3.5 h-3.5" />
           Complete
           {completedOrders.length > 0 && (
-            <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${
-              historyTab === 'completed'
-                ? 'bg-background/15 text-background'
-                : 'bg-white/10 text-white'
+            <span className={`text-[10px] font-mono tabular-nums ${
+              historyTab === 'completed' ? 'text-black/55' : 'text-foreground/40'
             }`}>
               {completedOrders.length}
             </span>
@@ -134,10 +132,10 @@ export function MobileHistoryView({
         </button>
         <button
           onClick={() => setHistoryTab('cancelled')}
-          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 shrink-0 inline-flex items-center justify-center gap-1.5 h-full px-2.5 rounded-md text-[12px] font-bold whitespace-nowrap transition-colors ${
             historyTab === 'cancelled'
-              ? 'bg-foreground text-background shadow'
-              : 'text-foreground/35'
+              ? 'bg-white text-black shadow'
+              : 'text-foreground/60 hover:text-foreground/80'
           }`}
         >
           <X className="w-3.5 h-3.5" />
@@ -145,10 +143,10 @@ export function MobileHistoryView({
         </button>
         <button
           onClick={() => setHistoryTab('stats')}
-          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 shrink-0 inline-flex items-center justify-center gap-1.5 h-full px-2.5 rounded-md text-[12px] font-bold whitespace-nowrap transition-colors ${
             historyTab === 'stats'
-              ? 'bg-foreground text-background shadow'
-              : 'text-foreground/35'
+              ? 'bg-white text-black shadow'
+              : 'text-foreground/60 hover:text-foreground/80'
           }`}
         >
           <Activity className="w-3.5 h-3.5" />

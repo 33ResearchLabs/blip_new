@@ -153,11 +153,13 @@ export function MerchantNavbar({
             </button>
           )}
 
-          {/* Left: Logo — always visible. Wordmark removed; the bolt
-              alone is enough brand recognition and frees up nav space. */}
+          {/* Left: Logo + wordmark. */}
           <div className="flex items-center shrink-0">
-            <Link href="/merchant" aria-label="Blip Money home" className="flex items-center">
+            <Link href="/merchant" aria-label="Blip Money home" className="flex items-center gap-1.5">
               <Zap className="w-6 h-6 text-primary fill-primary" />
+              <span className="text-[15px] font-bold tracking-tight text-foreground">
+                Blip Money
+              </span>
             </Link>
           </div>
 
@@ -403,8 +405,10 @@ export function MerchantNavbar({
                   {notificationCount > 0 && (
                     <>
                       <span
-                        className={`absolute top-1 right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center text-white ${
-                          urgentNotificationCount > 0 ? 'bg-red-500' : 'bg-primary'
+                        className={`absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${
+                          urgentNotificationCount > 0
+                            ? 'bg-red-500 text-white'
+                            : 'bg-primary text-background'
                         }`}
                       >
                         {notificationCount > 9 ? "9+" : notificationCount}

@@ -568,7 +568,10 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
         </div>
         {/* Status Filter Pills */}
         {!collapsed && (
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="inline-flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
             {STATUS_FILTERS.map((f) => {
               const isActive = statusFilter === f.value;
               const count = f.value === 'all'
@@ -580,13 +583,15 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
                 <button
                   key={f.value}
                   onClick={() => setStatusFilter(f.value)}
-                  className={`text-[9px] font-mono font-medium px-1.5 py-0.5 rounded-full border transition-colors ${
+                  className={`flex-1 min-w-0 h-full px-1 xl:px-2 [@media(min-height:900px)]:px-2 inline-flex items-center justify-center rounded-md text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] font-bold transition-all ${
                     isActive
-                      ? 'bg-foreground text-background border-transparent shadow'
-                      : 'bg-foreground/[0.02] border-foreground/[0.06] text-foreground/30 hover:text-foreground/50 hover:border-foreground/[0.10]'
+                      ? 'bg-foreground text-background shadow'
+                      : 'text-foreground/40 hover:text-foreground/60'
                   }`}
                 >
-                  {f.label}{count > 0 ? ` ${count}` : ''}
+                  <span className="truncate">
+                    {f.label}{count > 0 ? ` ${count}` : ''}
+                  </span>
                 </button>
               );
             })}

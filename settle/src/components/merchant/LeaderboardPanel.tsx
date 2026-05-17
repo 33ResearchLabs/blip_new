@@ -148,6 +148,7 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                 value={leaderboardTab}
                 onChange={setLeaderboardTab}
                 options={LEADERBOARD_OPTIONS}
+                triggerClassName="!rounded-lg !bg-foreground/[0.04] !border-foreground/[0.06]"
               />
             </div>
           )}
