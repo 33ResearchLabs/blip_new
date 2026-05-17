@@ -154,6 +154,11 @@ export const ProfileScreen = ({
   // for which method is currently shown as the trigger card.
   const [profilePaymentMethodId, setProfilePaymentMethodId] = useState<string | null>(null);
 
+  // Payment Methods stays collapsible — the new Security card already
+  // surfaces a "Payment Methods" row that toggles this open, so the
+  // header below still needs the open/closed state.
+  const [paymentExpanded, setPaymentExpanded] = useState(false);
+
   // Inline edit state for the legacy Bank Accounts list. Edits the row's
   // bank/name/iban via PUT /api/users/[id]/bank-accounts/[accountId]; delete
   // uses DELETE on the same path. Two-tap delete pattern (arm → confirm) so
@@ -528,35 +533,71 @@ export const ProfileScreen = ({
           )}
         </div>
 
-        {/* App Lock PIN (client-side, locks the UI on idle). Payment PIN
-            management is surfaced elsewhere — kept out of the profile screen
-            to avoid two-PIN UX confusion. */}
-        <p className={`${SECTION_LABEL} block mb-2`}>App Lock</p>
-        <div className="mb-3">
-          <AppLockSettingsCard userId={userId} />
+        {/* Security — premium always-visible card with Payment PIN, App
+            Lock PIN, Biometric Unlock, Payment Methods, Trusted Devices
+            and Change Password rows. Each row is a single tap target;
+            destructive actions are surfaced one tier in. */}
+        <div className="flex items-center justify-between mb-2.5">
+          <span className={SECTION_LABEL}>Security</span>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-[0.18em] uppercase text-text-tertiary">
+            <Shield size={11} className="text-text-tertiary" />
+            Protected
+          </span>
         </div>
-
-        {/* Payment Methods — supports bank, UPI, cash, and other types.
-            Reuses the same component the trade screen uses so users can
-            add/manage payment methods directly from their profile. */}
-        <p className={`${SECTION_LABEL} block mb-2`}>Payment Methods</p>
-        <div className="mb-3">
-          <PaymentMethodSelector
+        <div className="mb-4">
+          <AppLockSettingsCard
             userId={userId}
-            selectedId={profilePaymentMethodId}
-            onSelect={(m) => setProfilePaymentMethodId(m?.id ?? null)}
+            paymentMethodCount={bankAccounts.length}
+            onOpenPaymentMethods={() => setPaymentExpanded(true)}
           />
         </div>
 
-        {/* Bank Accounts */}
+        {/* Payment Methods — collapsible. Same pattern as Lock & Security:
+            tap to expand and reveal the PaymentMethodSelector rows + legacy
+            bank-account rows in a unified group container. */}
         <div className="flex items-center justify-between mb-2">
-          <p className={SECTION_LABEL}>Bank Accounts</p>
-          <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(true)}
-            className="w-8 h-8 rounded-[10px] flex items-center justify-center bg-surface-raised border border-border-subtle">
-            <Plus size={15} className="text-text-secondary" />
-          </motion.button>
+          <button
+            type="button"
+            onClick={() => setPaymentExpanded((v) => !v)}
+            aria-expanded={paymentExpanded}
+            className="flex-1 flex items-center gap-1.5 text-left"
+          >
+            <span className={SECTION_LABEL}>Payment Methods</span>
+            <ChevronRight
+              size={14}
+              className={`text-text-tertiary transition-transform ${paymentExpanded ? "rotate-90" : ""}`}
+            />
+          </button>
+          {paymentExpanded && (
+            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(true)}
+              className="w-8 h-8 rounded-[10px] flex items-center justify-center bg-surface-raised border border-border-subtle"
+              aria-label="Add bank account">
+              <Plus size={15} className="text-text-secondary" />
+            </motion.button>
+          )}
         </div>
-        <div className="flex flex-col gap-2 mb-3">
+        <AnimatePresence initial={false}>
+          {paymentExpanded && (
+            <motion.div
+              key="payment-section"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="mb-3 rounded-xl bg-white/[0.02] border border-white/[0.06] p-3 space-y-3">
+                <PaymentMethodSelector
+                  userId={userId}
+                  selectedId={profilePaymentMethodId}
+                  onSelect={(m) => setProfilePaymentMethodId(m?.id ?? null)}
+                  hideHeader
+                  groupContainer
+                />
+                {bankAccounts.length > 0 && (
+                  <div className="border-t border-white/[0.05] pt-3 -mx-3 px-3" />
+                )}
+        <div className="flex flex-col gap-2">
           {bankAccounts.map(acc => {
             const isEditing = editingBankId === acc.id;
             const armed = confirmDeleteBankId === acc.id;
@@ -669,6 +710,10 @@ export const ProfileScreen = ({
             );
           })}
         </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Console & Analytics */}
         <p className={`${SECTION_LABEL} block mb-2`}>Analytics</p>
@@ -781,8 +826,8 @@ export const ProfileScreen = ({
             }
             window.location.href = '/';
           }}
-          className="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-error-dim border border-error-border text-[14px] font-bold text-error tracking-[-0.01em]">
-          <LogOut size={16} className="text-error" />
+          className="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-red-900 border border-red-800/70 text-[14px] font-bold text-red-100 tracking-[-0.01em]">
+          <LogOut size={16} className="text-red-100" />
           Sign Out
         </motion.button>
       </div>

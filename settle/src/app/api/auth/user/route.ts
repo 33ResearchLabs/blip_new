@@ -4,6 +4,7 @@ import {
   createUser,
   checkUsernameAvailable,
   updateUsername,
+  updatePassword,
   getUserById,
   authenticateUser,
   getUserByUsername,
@@ -17,8 +18,9 @@ import {
   validateUserPassword,
 } from '@/lib/validation/userAuth';
 import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS, ACCESS_TOKEN_COOKIE, ACCESS_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
-import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
+import { createSession, getSessionIdFromRefreshCookie, revokeAllSessionsExcept } from '@/lib/auth/sessions';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
+import { requireTokenAuth } from '@/lib/middleware/auth';
 
 /**
  * POST /api/auth/user
@@ -529,6 +531,61 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+    }
+
+    // Change Password (authenticated user). Verifies current password,
+    // writes the new hash, then revokes every OTHER active session so a
+    // stolen refresh cookie can't keep working for the 7-day TTL after
+    // a password change. The current session is preserved so the device
+    // that just confirmed the old password stays logged in.
+    if (action === 'change_password') {
+      const { user_id, current_password, new_password } = body;
+
+      if (!user_id || !current_password || !new_password) {
+        return NextResponse.json(
+          { success: false, error: 'user_id, current_password and new_password are required' },
+          { status: 400 }
+        );
+      }
+
+      const auth = await requireTokenAuth(request);
+      if (auth instanceof NextResponse) return auth;
+      if (auth.actorType !== 'user' || auth.actorId !== user_id) {
+        return NextResponse.json(
+          { success: false, error: 'You can only change your own password' },
+          { status: 403 }
+        );
+      }
+
+      const trimmedNew = String(new_password).trim();
+      const passwordError = validateUserPassword(trimmedNew);
+      if (passwordError) {
+        return NextResponse.json(
+          { success: false, error: passwordError },
+          { status: 400 }
+        );
+      }
+
+      const ok = await updatePassword(user_id, String(current_password).trim(), trimmedNew);
+      if (!ok) {
+        return NextResponse.json(
+          { success: false, error: 'Current password is incorrect' },
+          { status: 401 }
+        );
+      }
+
+      // Same rationale as the merchant flow — revocation failure doesn't
+      // roll back the password update.
+      try {
+        await revokeAllSessionsExcept(user_id, 'user', auth.sessionId);
+      } catch (revokeError) {
+        console.error('[user change_password] session revocation failed (password was changed)', revokeError);
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: { message: 'Password changed successfully' },
+      });
     }
 
     return NextResponse.json(
