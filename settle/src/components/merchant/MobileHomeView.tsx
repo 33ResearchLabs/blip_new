@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { BalanceSparkline } from "./BalanceSparkline";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
   loadEncryptedWallet,
   decryptWallet,
@@ -1068,18 +1069,35 @@ export function MobileHomeView({
                         className="w-full flex items-center gap-3 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 hover:bg-foreground/[0.05] transition-colors text-left"
                       >
                         <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                            isBuy
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : "bg-primary/10 text-primary"
-                          }`}
+                          className="relative shrink-0"
                           aria-label={isBuy ? "Buy" : "Sell"}
                         >
-                          {isBuy ? (
-                            <ArrowDownLeft className="w-5 h-5" strokeWidth={2.5} />
-                          ) : (
-                            <ArrowUpRight className="w-5 h-5" strokeWidth={2.5} />
-                          )}
+                          <UserAvatar
+                            src={
+                              ((order.dbOrder?.user as { avatar_url?: string } | undefined)?.avatar_url) ||
+                              (order as { user_avatar?: string }).user_avatar ||
+                              null
+                            }
+                            seed={order.user || "Unknown"}
+                            size={40}
+                            className="border border-foreground/[0.08]"
+                          />
+                          {/* Direction badge tucked into the corner so the
+                              row still reads buy/sell at a glance without
+                              losing the user identity to a plain icon. */}
+                          <span
+                            className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-2 border-background ${
+                              isBuy
+                                ? "bg-emerald-500/90 text-white"
+                                : "bg-primary/90 text-background"
+                            }`}
+                          >
+                            {isBuy ? (
+                              <ArrowDownLeft className="w-3 h-3" strokeWidth={3} />
+                            ) : (
+                              <ArrowUpRight className="w-3 h-3" strokeWidth={3} />
+                            )}
+                          </span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">
