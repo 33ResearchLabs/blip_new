@@ -370,21 +370,14 @@ export function MobileHomeView({
       {onCorridorChange && (
         <button
           onClick={() => setCorridorPickerOpen(true)}
-          className="w-full flex items-center justify-between bg-foreground/[0.04] hover:bg-foreground/[0.06] rounded-xl px-4 py-2.5 text-left transition-colors"
+          className="inline-flex items-center gap-1.5 self-start bg-foreground/[0.04] hover:bg-foreground/[0.06] rounded-full pl-2 pr-2.5 py-1 text-left transition-colors"
+          aria-label={`Market: USDT to ${activeCorridorMeta.fiat} · ${activeCorridorMeta.country}`}
         >
-          <span className="flex items-center gap-2.5">
-            <span className="text-base">{activeCorridorMeta.flag}</span>
-            <span className="flex flex-col">
-              <span className="text-[9px] text-foreground/40 uppercase tracking-wider font-medium">
-                Market
-              </span>
-              <span className="text-[13px] font-semibold text-foreground tabular-nums">
-                USDT → {activeCorridorMeta.fiat}
-                <span className="text-foreground/40 font-normal ml-1.5">· {activeCorridorMeta.country}</span>
-              </span>
-            </span>
+          <span className="text-[13px] leading-none">{activeCorridorMeta.flag}</span>
+          <span className="text-[11px] font-semibold text-foreground tabular-nums leading-none">
+            USDT → {activeCorridorMeta.fiat}
           </span>
-          <ChevronDown className="w-4 h-4 text-foreground/40" />
+          <ChevronDown className="w-3 h-3 text-foreground/40" />
         </button>
       )}
 
