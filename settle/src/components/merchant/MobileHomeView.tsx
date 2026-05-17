@@ -9,6 +9,7 @@ import {
   Lock,
   Unlock,
   ArrowDownRight,
+  ArrowDownLeft,
   ArrowUpRight,
   ArrowLeftRight,
   ArrowDownToLine,
@@ -1053,13 +1054,18 @@ export function MobileHomeView({
                         className="w-full flex items-center gap-3 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 hover:bg-foreground/[0.05] transition-colors text-left"
                       >
                         <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                             isBuy
                               ? "bg-emerald-500/10 text-emerald-400"
                               : "bg-primary/10 text-primary"
                           }`}
+                          aria-label={isBuy ? "Buy" : "Sell"}
                         >
-                          {isBuy ? "BUY" : "SELL"}
+                          {isBuy ? (
+                            <ArrowDownLeft className="w-5 h-5" strokeWidth={2.5} />
+                          ) : (
+                            <ArrowUpRight className="w-5 h-5" strokeWidth={2.5} />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">
