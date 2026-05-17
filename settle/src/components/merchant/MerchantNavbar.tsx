@@ -21,6 +21,7 @@ import {
   Bug,
 } from "lucide-react";
 import { openIssueReporter } from "@/plugins/issue-reporter/IssueReporter";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { OnboardingSetupChip } from "@/components/merchant/OnboardingSetupChip";
@@ -420,21 +421,18 @@ export function MerchantNavbar({
                   )}
                 </button>
               )}
-              {/* Report Issue — same trigger as desktop, icon-only, always
-                  visible. Sized slightly larger so it matches the bell. */}
-              <button
-                onClick={() => openIssueReporter()}
-                className="p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors"
-                title="Report Issue"
-                aria-label="Report an issue"
-              >
-                <Bug className="w-5 h-5 text-foreground/50" />
-              </button>
               <button
                 onClick={() => setDrawerOpen(true)}
-                className="p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors"
+                className="p-0.5 rounded-full hover:ring-2 hover:ring-foreground/10 transition-shadow"
+                aria-label="Open menu"
+                title="Menu"
               >
-                <Menu className="w-5 h-5 text-foreground/70" />
+                <UserAvatar
+                  src={merchantInfo?.avatar_url}
+                  seed={displayName || merchantInfo?.username || "merchant"}
+                  size={32}
+                  className="border border-foreground/[0.08]"
+                />
               </button>
             </div>
           </div>
