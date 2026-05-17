@@ -300,7 +300,10 @@ export function buildCsp(nonce: string): string {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com",
     "font-src 'self' data: https://fonts.gstatic.com",
-    `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag`,
+    // LI.FI cross-chain quotes (li.quest) — needed by the cross-chain
+    // deposit flow. Without it the browser blocks every quote request
+    // and the modal sits on "Couldn't get a quote right now".
+    `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag https://li.quest`,
     "frame-ancestors 'none'",
     'report-uri /api/csp-report',
     'report-to csp-endpoint',
