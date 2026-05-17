@@ -44,7 +44,15 @@ export interface OpenTradeFormState {
   paymentMethodId?: string;
   spreadPreference: "best" | "fastest" | "cheap";
   expiryMinutes: 15 | 90;
+  /** Optional Priority Boost (0–25 %). Drives faster matching. The
+   *  protocol splits the boost amount 70/30 (merchant/Blip) on the
+   *  backend; the UI just exposes the slider. Default 0 = no boost. */
+  boostPct?: number;
 }
+
+/** Max boost the user can dial in. Backend protocol limit per the
+ *  spec. Keep in sync with any matching changes in the order engine. */
+const BOOST_MAX_PCT = 25;
 
 export interface TradeFormModalProps {
   isOpen: boolean;
@@ -474,6 +482,97 @@ export function TradeFormModal({
                 })()}
 
                 {/* Error Message */}
+                {/* Priority Boost — optional, collapsed by default so a
+                    normal trade stays a one-tap flow. Tap to reveal a
+                    slider that lets the merchant offer up to BOOST_MAX_PCT
+                    extra on top of the rate to attract faster matches.
+                    The 70/30 backend split is hidden — the user just
+                    sees the % they're offering and what it does for
+                    them ("faster matching"). */}
+                {FEE_UI_V2 && (() => {
+                  const boost = openTradeForm.boostPct ?? 0;
+                  const boostOn = boost > 0;
+                  return (
+                    <div
+                      className={`rounded-xl border ${
+                        boostOn
+                          ? "bg-primary/[0.06] border-primary/30"
+                          : "bg-white/[0.03] border-white/[0.06]"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenTradeForm((prev) => ({
+                            ...prev,
+                            boostPct: boostOn ? 0 : 5,
+                          }))
+                        }
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Zap
+                            className={`w-3.5 h-3.5 ${
+                              boostOn ? "text-primary" : "text-foreground/40"
+                            }`}
+                          />
+                          <span
+                            className={`text-[11px] font-semibold uppercase tracking-wider ${
+                              boostOn ? "text-primary" : "text-foreground/55"
+                            }`}
+                          >
+                            Priority Boost
+                          </span>
+                          {boostOn && (
+                            <span className="text-[11px] font-mono tabular-nums text-primary">
+                              +{boost.toFixed(0)}%
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-[10px] font-medium text-foreground/40">
+                          {boostOn ? "Remove" : "Add"}
+                        </span>
+                      </button>
+
+                      {boostOn && (
+                        <div className="px-3 pb-3 space-y-1.5">
+                          <input
+                            type="range"
+                            min={1}
+                            max={BOOST_MAX_PCT}
+                            step={1}
+                            value={boost}
+                            onChange={(e) =>
+                              setOpenTradeForm((prev) => ({
+                                ...prev,
+                                boostPct: parseInt(e.target.value, 10),
+                              }))
+                            }
+                            aria-label="Priority Boost percentage"
+                            className="w-full accent-primary"
+                          />
+                          <p className="text-[10px] text-foreground/45">
+                            Higher boost = faster acceptance from any
+                            merchant. Capped at {BOOST_MAX_PCT}%.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Fees footnote — quiet disclosure so the merchant
+                    knows what's actually charged without a clinical
+                    breakdown above. Per the fee-UI spec fees are a
+                    "processing thing", not a screen element. */}
+                {FEE_UI_V2 && (
+                  <p className="text-[10px] text-foreground/40 leading-relaxed text-center px-2">
+                    No processing fee on regular trades. Priority Boost
+                    is an optional incentive to merchants for faster
+                    matching.
+                  </p>
+                )}
+
                 {createTradeError && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                     <p className="text-xs text-red-400 flex items-center gap-2">
