@@ -26,6 +26,8 @@ import { BottomNav } from "./BottomNav";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 import { formatCrypto, formatFiat, formatPercentage } from "@/lib/format";
+import { FeeBreakdown } from "@/components/shared/FeeBreakdown";
+import { FEE_UI_V2 } from "@/lib/featureFlags";
 
 type RatePair = "usdt_aed" | "usdt_inr";
 
@@ -636,73 +638,83 @@ export const TradeCreationScreen = ({
               transition={SPRING}
               style={{ overflow: "hidden" }}
             >
-              <div
-                className="flex items-center"
-                style={{
-                  padding: "11px 14px",
-                  borderRadius: 14,
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                  gap: 12,
-                }}
-              >
-                {[
-                  {
-                    label: "Fee",
-                    value: formatPercentage(currentFees.totalFee * 100),
-                  },
-                  {
-                    label: "Earns",
-                    value: formatPercentage(currentFees.traderCut * 100),
-                  },
-                  {
-                    label: "You Get",
-                    value: isBuy
-                      ? `${formatCrypto(parseFloat(amount || "0"))} USDT`
-                      : formatFiat(
-                          parseFloat(fiatAmount || "0"),
-                          rateCurrency,
-                        ),
-                  },
-                ].map((row, i, arr) => (
-                  <div key={row.label} className="flex-1 text-center flex items-center" style={{ gap: 12 }}>
-                    <div className="flex-1 text-center">
-                      <p
-                        style={{
-                          fontSize: 8.5,
-                          fontWeight: 800,
-                          letterSpacing: "0.18em",
-                          color: T.lo,
-                          textTransform: "uppercase",
-                          marginBottom: 3,
-                        }}
-                      >
-                        {row.label}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 800,
-                          color: i === arr.length - 1 ? T.hi : T.md,
-                          fontFamily:
-                            "ui-monospace, SFMono-Regular, Menlo, monospace",
-                        }}
-                      >
-                        {row.value}
-                      </p>
+              {FEE_UI_V2 ? (
+                <FeeBreakdown
+                  baseAmount={parseFloat(amount || "0")}
+                  merchantRate={displayRate ?? null}
+                  blipFeePct={currentFees.totalFee * 100}
+                  fiatCurrency={rateCurrency}
+                  collapsible
+                />
+              ) : (
+                <div
+                  className="flex items-center"
+                  style={{
+                    padding: "11px 14px",
+                    borderRadius: 14,
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    gap: 12,
+                  }}
+                >
+                  {[
+                    {
+                      label: "Fee",
+                      value: formatPercentage(currentFees.totalFee * 100),
+                    },
+                    {
+                      label: "Earns",
+                      value: formatPercentage(currentFees.traderCut * 100),
+                    },
+                    {
+                      label: "You Get",
+                      value: isBuy
+                        ? `${formatCrypto(parseFloat(amount || "0"))} USDT`
+                        : formatFiat(
+                            parseFloat(fiatAmount || "0"),
+                            rateCurrency,
+                          ),
+                    },
+                  ].map((row, i, arr) => (
+                    <div key={row.label} className="flex-1 text-center flex items-center" style={{ gap: 12 }}>
+                      <div className="flex-1 text-center">
+                        <p
+                          style={{
+                            fontSize: 8.5,
+                            fontWeight: 800,
+                            letterSpacing: "0.18em",
+                            color: T.lo,
+                            textTransform: "uppercase",
+                            marginBottom: 3,
+                          }}
+                        >
+                          {row.label}
+                        </p>
+                        <p
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 800,
+                            color: i === arr.length - 1 ? T.hi : T.md,
+                            fontFamily:
+                              "ui-monospace, SFMono-Regular, Menlo, monospace",
+                          }}
+                        >
+                          {row.value}
+                        </p>
+                      </div>
+                      {i < arr.length - 1 && (
+                        <span
+                          style={{
+                            width: 1,
+                            height: 26,
+                            background: "rgba(255,255,255,0.10)",
+                          }}
+                        />
+                      )}
                     </div>
-                    {i < arr.length - 1 && (
-                      <span
-                        style={{
-                          width: 1,
-                          height: 26,
-                          background: "rgba(255,255,255,0.10)",
-                        }}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

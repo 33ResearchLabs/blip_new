@@ -17,6 +17,18 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import { useCorridorPrices, resolveCorridorRef } from "@/hooks/useCorridorPrices";
 import { formatCrypto, formatRate } from "@/lib/format";
+import { FeeBreakdown } from "@/components/shared/FeeBreakdown";
+import { FEE_UI_V2 } from "@/lib/featureFlags";
+
+// Spread-preference → Blip service-fee mapping. Matches the inline
+// labels rendered by the Speed pill above (Best 2.0% / Fast 2.5% /
+// Cheap 1.5%). Centralised here so the FeeBreakdown and the chip
+// label can never drift apart.
+const SPREAD_FEE_PCT = {
+  best: 2.0,
+  fastest: 2.5,
+  cheap: 1.5,
+} as const;
 
 const CORRIDOR_OPTIONS = [
   { key: "USDT_AED", label: "🇦🇪 USDT / AED" },
@@ -179,31 +191,25 @@ export function TradeFormModal({
             className="fixed z-50 w-full max-w-md max-h-[90vh] overflow-y-auto inset-x-0 bottom-0 md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           >
             <div className="bg-card-solid rounded-t-2xl md:rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden pb-safe md:pb-0">
-              {/* Header */}
-              <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-                    <ArrowLeftRight className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-semibold">Open Trade</h2>
-                    <p className="text-[11px] text-foreground/35">Initiate a trade with a customer</p>
-                  </div>
-                </div>
+              {/* Header — slim, matches the compact pill aesthetic of the
+                  home card. No big icon block. */}
+              <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">Open Trade</h2>
                 <button
                   onClick={handleClose}
-                  className="p-2 hover:bg-card rounded-lg transition-colors"
+                  className="p-1.5 hover:bg-card rounded-lg transition-colors"
+                  aria-label="Close"
                 >
-                  <X className="w-4 h-4 text-foreground/35" />
+                  <X className="w-4 h-4 text-foreground/40" />
                 </button>
               </div>
 
               {/* Form */}
-              <div className="p-5 space-y-4">
-                {/* Trading Pair — choose which crypto/fiat corridor to trade in */}
+              <div className="p-4 space-y-3">
+                {/* Trading Pair — inline pill on the right */}
                 {activeCorridor && onCorridorChange && (
                   <div className="flex items-center justify-between gap-2">
-                    <label className="text-[11px] text-foreground/40">Trading Pair</label>
+                    <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium">Pair</label>
                     <FilterDropdown<string>
                       value={activeCorridor}
                       onChange={onCorridorChange}
@@ -218,47 +224,42 @@ export function TradeFormModal({
                   </div>
                 )}
 
-                {/* Trade Type — semantic colors so the merchant can tell at a
-                    glance which side they're on: Sell = primary, Buy = emerald. */}
+                {/* Trade Type — segmented pill toggle. Buy = emerald,
+                    Sell = primary, semantic colours preserved. */}
                 <div>
-                  <label className="text-[11px] text-foreground/40 mb-1.5 block">Trade Type</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium mb-1.5 block">Trade Type</label>
+                  <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/[0.04]">
                     <button
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "sell" }))}
-                      className={`py-3 rounded-xl text-xs font-medium transition-all border ${
+                      className={`py-2 rounded-lg text-[12px] font-semibold transition-colors ${
                         openTradeForm.tradeType === "sell"
-                          ? "bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20"
-                          : "bg-white/[0.04] text-foreground/40 border-transparent hover:bg-card"
+                          ? "bg-primary/15 text-primary"
+                          : "text-foreground/40 hover:text-foreground/70"
                       }`}
                     >
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="font-semibold">Sell USDT</span>
-                        <span className={`text-[9px] ${openTradeForm.tradeType === "sell" ? "text-primary/70" : "text-foreground/35"}`}>
-                          You send USDT, get AED
-                        </span>
-                      </div>
+                      Sell USDT
                     </button>
                     <button
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "buy" }))}
-                      className={`py-3 rounded-xl text-xs font-medium transition-all border ${
+                      className={`py-2 rounded-lg text-[12px] font-semibold transition-colors ${
                         openTradeForm.tradeType === "buy"
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 ring-1 ring-emerald-500/20"
-                          : "bg-white/[0.04] text-foreground/40 border-transparent hover:bg-card"
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : "text-foreground/40 hover:text-foreground/70"
                       }`}
                     >
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="font-semibold">Buy USDT</span>
-                        <span className={`text-[9px] ${openTradeForm.tradeType === "buy" ? "text-emerald-400/70" : "text-foreground/35"}`}>
-                          You send AED, get USDT
-                        </span>
-                      </div>
+                      Buy USDT
                     </button>
                   </div>
+                  <p className="mt-1 text-[10px] text-foreground/35 px-1">
+                    {openTradeForm.tradeType === "sell"
+                      ? `You send USDT, get ${fiatCcy}`
+                      : `You send ${fiatCcy}, get USDT`}
+                  </p>
                 </div>
 
-                {/* USDT Amount */}
+                {/* Amount */}
                 <div>
-                  <label className="text-[11px] text-foreground/40 mb-1.5 block">USDT Amount</label>
+                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium mb-1.5 block">Amount</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -270,9 +271,9 @@ export function TradeFormModal({
                         const value = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
                         setOpenTradeForm(prev => ({ ...prev, cryptoAmount: value }));
                       }}
-                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-16 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                      className="w-full bg-white/[0.04] rounded-xl px-3 py-2.5 pr-14 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-foreground/35">USDT</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-foreground/35 font-medium">USDT</span>
                   </div>
                   {openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount || "0") > effectiveBalance && (
                     <p className="text-[10px] text-red-400 mt-1 ml-1 flex items-center gap-1">
@@ -284,7 +285,7 @@ export function TradeFormModal({
 
                 {/* Payment Method */}
                 <div>
-                  <label className="text-[11px] text-foreground/40 mb-1.5 block">Payment Method</label>
+                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium mb-1.5 block">Payment Method</label>
                   <div className="relative">
                     <button
                       type="button"
@@ -392,88 +393,69 @@ export function TradeFormModal({
                   </div>
                 </div>
 
-                {/* Spread Preference / Speed */}
-                <div>
-                  <label className="text-[11px] text-foreground/40 mb-1.5 block">Match Speed & Fee</label>
-                  <div className="grid grid-cols-3 gap-1.5 bg-white/[0.03] p-1.5 rounded-xl border border-white/[0.04]">
-                    <button
-                      onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'best' }))}
-                      className={`px-3 py-3 rounded-lg text-center transition-all border ${
-                        openTradeForm.spreadPreference === 'best'
-                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
-                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
-                      }`}
-                    >
-                      <p className="text-xs font-bold">Best</p>
-                      <p className={`text-[10px] mt-0.5 ${openTradeForm.spreadPreference === 'best' ? 'text-primary/70' : 'text-foreground/35'}`}>2.0%</p>
-                    </button>
-                    <button
-                      onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'fastest' }))}
-                      className={`px-3 py-3 rounded-lg text-center transition-all border ${
-                        openTradeForm.spreadPreference === 'fastest'
-                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
-                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
-                      }`}
-                    >
-                      <p className="text-xs font-bold">Fast</p>
-                      <p className={`text-[10px] mt-0.5 ${openTradeForm.spreadPreference === 'fastest' ? 'text-primary/70' : 'text-foreground/35'}`}>2.5%</p>
-                    </button>
-                    <button
-                      onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'cheap' }))}
-                      className={`px-3 py-3 rounded-lg text-center transition-all border ${
-                        openTradeForm.spreadPreference === 'cheap'
-                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
-                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
-                      }`}
-                    >
-                      <p className="text-xs font-bold">Cheap</p>
-                      <p className={`text-[10px] mt-0.5 ${openTradeForm.spreadPreference === 'cheap' ? 'text-primary/70' : 'text-foreground/35'}`}>1.5%</p>
-                    </button>
-                  </div>
-                  <div className="mt-2 text-center">
-                    <p className="text-[10px] text-foreground/35">
-                      {openTradeForm.spreadPreference === 'best' && 'Instant match - Any spread above 2% is your profit'}
-                      {openTradeForm.spreadPreference === 'fastest' && '<5min match - Any spread above 2.5% is your profit'}
-                      {openTradeForm.spreadPreference === 'cheap' && 'Best price - Any spread above 1.5% is your profit'}
-                    </p>
+                {/* Speed + Expiry — two segmented pill rows, both inline
+                    with a tiny label on the left so we don't burn a full
+                    row per option group. */}
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium">Speed</label>
+                  <div className="grid grid-cols-3 gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.04]">
+                    {([
+                      { key: 'best', label: 'Best', pct: '2.0%' },
+                      { key: 'fastest', label: 'Fast', pct: '2.5%' },
+                      { key: 'cheap', label: 'Cheap', pct: '1.5%' },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: opt.key }))}
+                        title={`${opt.label} · ${opt.pct}`}
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                          openTradeForm.spreadPreference === opt.key
+                            ? 'bg-primary/15 text-primary'
+                            : 'text-foreground/40 hover:text-foreground/70'
+                        }`}
+                      >
+                        {opt.label}
+                        <span className={`ml-1 text-[9px] font-mono ${openTradeForm.spreadPreference === opt.key ? 'text-primary/70' : 'text-foreground/30'}`}>{opt.pct}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Order Expiry */}
-                <div>
-                  <label className="text-[11px] text-foreground/40 mb-1.5 block">Order Expiry</label>
-                  <div className="flex items-center gap-2 bg-white/[0.03] p-1.5 rounded-xl border border-white/[0.04]">
-                    <button
-                      onClick={() => setOpenTradeForm(prev => ({ ...prev, expiryMinutes: 15 as 15 | 90 }))}
-                      className={`flex-1 px-3 py-2.5 rounded-lg text-center transition-all border ${
-                        openTradeForm.expiryMinutes === 15
-                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
-                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
-                      }`}
-                    >
-                      <p className="text-xs font-bold">15 min</p>
-                      <p className={`text-[9px] mt-0.5 ${openTradeForm.expiryMinutes === 15 ? 'text-primary/70' : 'text-foreground/35'}`}>Default</p>
-                    </button>
-                    <button
-                      onClick={() => setOpenTradeForm(prev => ({ ...prev, expiryMinutes: 90 as 15 | 90 }))}
-                      className={`flex-1 px-3 py-2.5 rounded-lg text-center transition-all border ${
-                        openTradeForm.expiryMinutes === 90
-                          ? 'bg-primary/15 text-primary border-primary/40 ring-1 ring-primary/20'
-                          : 'text-foreground/35 border-transparent hover:text-foreground hover:bg-card'
-                      }`}
-                    >
-                      <p className="text-xs font-bold">90 min</p>
-                      <p className={`text-[9px] mt-0.5 ${openTradeForm.expiryMinutes === 90 ? 'text-primary/70' : 'text-foreground/35'}`}>Extended</p>
-                    </button>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium">Expires in</label>
+                  <div className="grid grid-cols-2 gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.04]">
+                    {([15, 90] as const).map((mins) => (
+                      <button
+                        key={mins}
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, expiryMinutes: mins as 15 | 90 }))}
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                          openTradeForm.expiryMinutes === mins
+                            ? 'bg-primary/15 text-primary'
+                            : 'text-foreground/40 hover:text-foreground/70'
+                        }`}
+                      >
+                        {mins} min
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Trade Preview — uses the live ref price for the active
-                    corridor (set via the Trading Pair dropdown above). When
-                    the rate isn't loaded yet we render "—" rather than
-                    inventing a fallback (CLAUDE.md: no hardcoded rates). */}
+                {/* Trade preview — new 3-component breakdown (Merchant
+                    rate · Blip service fee · Boost · Final). Legacy
+                    "Trade Preview" card preserved below the flag so we
+                    can flip back instantly if needed. */}
                 {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (() => {
                   const usdtAmount = parseFloat(openTradeForm.cryptoAmount);
+                  if (FEE_UI_V2) {
+                    return (
+                      <FeeBreakdown
+                        baseAmount={usdtAmount}
+                        merchantRate={liveRate ?? null}
+                        blipFeePct={SPREAD_FEE_PCT[openTradeForm.spreadPreference]}
+                        fiatCurrency={fiatCcy}
+                      />
+                    );
+                  }
                   const fiatAmount = liveRate ? usdtAmount * liveRate : null;
                   return (
                     <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.04]">

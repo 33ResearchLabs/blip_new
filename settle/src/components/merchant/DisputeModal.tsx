@@ -68,7 +68,8 @@ export function DisputeModal({
               {/* Body */}
               <div className="p-5 space-y-4">
                 <p className="text-[13px] text-foreground/40">
-                  If you&apos;re having a problem with this trade, our support team will help resolve it.
+                  Funds are temporarily frozen while trusted arbitrators
+                  review the case. Estimated resolution: 2–24 hours.
                 </p>
 
                 <div>
