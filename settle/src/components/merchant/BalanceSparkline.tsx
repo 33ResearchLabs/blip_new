@@ -118,12 +118,14 @@ export function BalanceSparkline({
   d += ` L ${last.x.toFixed(2)} ${last.y.toFixed(2)}`;
 
   const net = effectiveSeries[effectiveSeries.length - 1] - effectiveSeries[0];
+  // Use the active theme's tokens so the line picks up whatever palette
+  // the merchant is on (e.g. on the white/Solarized themes --primary is
+  // a blue, on the orange theme it's orange). Avoids hardcoded emerald.
   const color = isPlaceholder
-    ? "#34d399" // emerald placeholder — visible but communicates "demo"
-      // via opacity below
-    : net > 0.0001 ? "#34d399" // emerald-400
-      : net < -0.0001 ? "#fb7185" // rose-400
-      : "#9ca3af"; // neutral
+    ? "var(--primary)"
+    : net > 0.0001 ? "var(--color-success)"
+      : net < -0.0001 ? "var(--color-error)"
+      : "var(--foreground)";
   const glow = color;
   const strokeOpacity = isPlaceholder ? 0.45 : 1;
 
