@@ -175,7 +175,7 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
 
         {data.platform_fee != null && parseFloat(String(data.platform_fee)) > 0 && (
           <div className="flex justify-between items-center">
-            <span className={`text-xs ${t.label}`}>Fee</span>
+            <span className={`text-xs ${t.label}`}>Service fee</span>
             <span className={`text-sm ${t.valueDim}`}>
               {formatAmount(data.platform_fee)} {data.crypto_currency || 'USDT'}
             </span>

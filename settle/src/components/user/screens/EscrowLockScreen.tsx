@@ -284,9 +284,9 @@ export const EscrowLockScreen = ({
           }}
         >
           {[
-            { label: "Amount to Lock", value: `${parseFloat(amount).toFixed(2)} USDT`, primary: true },
+            { label: "Escrow secured", value: `${parseFloat(amount).toFixed(2)} USDT`, primary: true },
             { label: "You'll receive", value: `${fiatSymbol} ${parseFloat(fiatAmount).toLocaleString()}`, primary: true },
-            { label: "Rate", value: `1 USDT = ${currentRate} ${fiatCurrency}` },
+            { label: "Merchant rate", value: `1 USDT = ${currentRate} ${fiatCurrency}` },
             { label: "Network", value: networkLabel() },
           ].map((row, i, arr) => (
             <div

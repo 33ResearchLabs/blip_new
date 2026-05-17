@@ -6,6 +6,7 @@ import jsQR from "jsqr";
 import { ChevronLeft, Loader2, Check, AlertCircle, ImagePlus } from "lucide-react";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 import { UpiProcessingOverlay } from "@/components/user/UpiProcessingOverlay";
+import { FEE_UI_V2 } from "@/lib/featureFlags";
 
 // ── UPI URL parsing ────────────────────────────────────────────────────────
 interface ParsedUpi {
@@ -554,12 +555,29 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
                 const need = Number(amount) / currentRate;
                 const over = usdtBalance !== null && need > usdtBalance;
                 return (
-                  <p className={`mt-2 text-[11px] ${over ? "text-error" : "text-text-tertiary"}`}>
-                    ≈ {need.toFixed(4)} USDT @ ₹{currentRate.toFixed(2)}
-                    {usdtBalance !== null && (
-                      <> · Balance {usdtBalance.toFixed(4)} USDT</>
+                  <>
+                    <p className={`mt-2 text-[11px] ${over ? "text-error" : "text-text-tertiary"}`}>
+                      ≈ {need.toFixed(4)} USDT @ ₹{currentRate.toFixed(2)}
+                      {usdtBalance !== null && (
+                        <> · Balance {usdtBalance.toFixed(4)} USDT</>
+                      )}
+                    </p>
+                    {/* Instant-pay trust beat — explains why the wallet
+                        briefly debits more than the final settlement.
+                        Critical for the QR / scan-to-pay flow per the
+                        fee-UI spec. Gated behind FEE_UI_V2 so we can
+                        flip back to the bare estimate line if needed. */}
+                    {FEE_UI_V2 && !over && (
+                      <p className="mt-3 max-w-[280px] text-center text-[10px] leading-relaxed text-text-tertiary">
+                        Temporary authorization hold of{" "}
+                        <span className="font-semibold text-text-secondary tabular-nums">
+                          {need.toFixed(2)} USDT
+                        </span>
+                        . Unused amount is released back to your wallet
+                        instantly after the merchant accepts.
+                      </p>
                     )}
-                  </p>
+                  </>
                 );
               })()}
             </div>
