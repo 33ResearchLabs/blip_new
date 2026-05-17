@@ -17,18 +17,7 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import { useCorridorPrices, resolveCorridorRef } from "@/hooks/useCorridorPrices";
 import { formatCrypto, formatRate } from "@/lib/format";
-import { FeeBreakdown } from "@/components/shared/FeeBreakdown";
 import { FEE_UI_V2 } from "@/lib/featureFlags";
-
-// Spread-preference → Blip service-fee mapping. Matches the inline
-// labels rendered by the Speed pill above (Best 2.0% / Fast 2.5% /
-// Cheap 1.5%). Centralised here so the FeeBreakdown and the chip
-// label can never drift apart.
-const SPREAD_FEE_PCT = {
-  best: 2.0,
-  fastest: 2.5,
-  cheap: 1.5,
-} as const;
 
 const CORRIDOR_OPTIONS = [
   { key: "USDT_AED", label: "🇦🇪 USDT / AED" },
@@ -393,33 +382,15 @@ export function TradeFormModal({
                   </div>
                 </div>
 
-                {/* Speed + Expiry — two segmented pill rows, both inline
-                    with a tiny label on the left so we don't burn a full
-                    row per option group. */}
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium">Speed</label>
-                  <div className="grid grid-cols-3 gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.04]">
-                    {([
-                      { key: 'best', label: 'Best', pct: '2.0%' },
-                      { key: 'fastest', label: 'Fast', pct: '2.5%' },
-                      { key: 'cheap', label: 'Cheap', pct: '1.5%' },
-                    ] as const).map((opt) => (
-                      <button
-                        key={opt.key}
-                        onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: opt.key }))}
-                        title={`${opt.label} · ${opt.pct}`}
-                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                          openTradeForm.spreadPreference === opt.key
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-foreground/40 hover:text-foreground/70'
-                        }`}
-                      >
-                        {opt.label}
-                        <span className={`ml-1 text-[9px] font-mono ${openTradeForm.spreadPreference === opt.key ? 'text-primary/70' : 'text-foreground/30'}`}>{opt.pct}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {/* Speed/spread row was here previously — three pills
+                    (Best / Fast / Cheap) doubling as fee-tier picker. The
+                    new fee model removes per-trade fee tiers: Open Trade
+                    is always the 0%-fee "normal" path. Speed/priority is
+                    expressed on the user side via the Boost slider, not
+                    by the merchant when opening a trade. So the row is
+                    deleted; spreadPreference still lives in the form
+                    state for backwards-compat with downstream consumers
+                    (defaults to 'best') until those are migrated. */}
 
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium">Expires in</label>
@@ -444,19 +415,36 @@ export function TradeFormModal({
                     rate · Blip service fee · Boost · Final). Legacy
                     "Trade Preview" card preserved below the flag so we
                     can flip back instantly if needed. */}
+                {/* Final settlement line — Open Trade is the 0%-fee
+                    normal path under the new fee model, so we don't
+                    show a breakdown; merchant rate × amount = final
+                    fiat, full stop. Legacy "Trade Preview" / per-tier
+                    FeeBreakdown kept under the FEE_UI_V2=false branch
+                    for one-flag rollback. */}
                 {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (() => {
                   const usdtAmount = parseFloat(openTradeForm.cryptoAmount);
+                  const fiatAmount = liveRate ? usdtAmount * liveRate : null;
                   if (FEE_UI_V2) {
                     return (
-                      <FeeBreakdown
-                        baseAmount={usdtAmount}
-                        merchantRate={liveRate ?? null}
-                        blipFeePct={SPREAD_FEE_PCT[openTradeForm.spreadPreference]}
-                        fiatCurrency={fiatCcy}
-                      />
+                      <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] px-4 py-3 flex items-center justify-between gap-2">
+                        <span className="flex flex-col">
+                          <span className="text-[10px] font-medium uppercase tracking-wider text-foreground/40">
+                            You receive
+                          </span>
+                          {liveRate && (
+                            <span className="text-[10px] text-foreground/35 mt-0.5">
+                              @ {formatRate(liveRate)} {fiatCcy} / USDT
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-sm font-bold tabular-nums text-foreground">
+                          {fiatAmount !== null
+                            ? `${formatCrypto(fiatAmount)} ${fiatCcy}`
+                            : "—"}
+                        </span>
+                      </div>
                     );
                   }
-                  const fiatAmount = liveRate ? usdtAmount * liveRate : null;
                   return (
                     <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.04]">
                       <div className="flex items-center gap-2 mb-3">
