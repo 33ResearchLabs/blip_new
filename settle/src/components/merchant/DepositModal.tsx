@@ -14,8 +14,9 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import * as QRCode from "qrcode";
-import { X, Copy, Check, ExternalLink } from "lucide-react";
+import { X, Copy, Check, ExternalLink, ArrowDownToLine } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
+import { CrossChainDepositModal } from "@/components/wallet/CrossChainDepositModal";
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -23,9 +24,19 @@ interface DepositModalProps {
   walletAddress: string | null;
 }
 
+type DepositTab = "solana" | "cross-chain";
+
 export function DepositModal({ isOpen, onClose, walletAddress }: DepositModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Tabs: Solana (default — the existing QR/address flow) vs cross-chain
+  // (LI.FI). Cross-chain renders its own dedicated modal so the QR
+  // modal stays focused; flipping the tab just toggles which one is
+  // showing without losing the open state of the parent.
+  const [tab, setTab] = useState<DepositTab>("solana");
+  useEffect(() => {
+    if (isOpen) setTab("solana");
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen || !walletAddress) {
@@ -46,6 +57,19 @@ export function DepositModal({ isOpen, onClose, walletAddress }: DepositModalPro
 
   if (!isOpen) return null;
 
+  // Cross-chain mode: hand off to the dedicated modal. The parent
+  // (this component) stays mounted so flipping back to "Solana" keeps
+  // the QR generation cache warm.
+  if (tab === "cross-chain") {
+    return (
+      <CrossChainDepositModal
+        isOpen={true}
+        onClose={onClose}
+        destinationAddress={walletAddress}
+      />
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -65,6 +89,26 @@ export function DepositModal({ isOpen, onClose, walletAddress }: DepositModalPro
             aria-label="Close"
           >
             <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Tab switcher — "Solana" (this QR flow) vs "From another
+            chain" (LI.FI bridge). The latter swaps in a different
+            modal entirely so we don't shoehorn a chain picker into
+            the QR layout. */}
+        <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-foreground/[0.04] border border-foreground/[0.06]">
+          <button
+            onClick={() => setTab("solana")}
+            className="py-2 rounded-lg text-[11px] font-semibold transition-colors bg-foreground/[0.08] text-foreground"
+          >
+            Solana
+          </button>
+          <button
+            onClick={() => setTab("cross-chain")}
+            className="py-2 rounded-lg text-[11px] font-semibold transition-colors text-foreground/50 hover:text-foreground/80 flex items-center justify-center gap-1.5"
+          >
+            <ArrowDownToLine className="w-3 h-3" />
+            From another chain
           </button>
         </div>
 
