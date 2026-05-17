@@ -47,8 +47,25 @@ export interface CrossChainQuote {
   /** Underlying bridge name (e.g. "debridge", "allbridge"). Useful for
    *  the breakdown so users see which rails their funds rode on. */
   bridgeName: string;
-  /** The full raw quote — the source-chain tx payload lives on
-   *  `.transactionRequest`. Pass it through to the execute step. */
+  /** Source-chain tx the user needs to sign — built by LI.FI. Pass
+   *  the fields straight to `eth_sendTransaction` via the connected
+   *  wallet. */
+  transactionRequest: {
+    to: string;
+    data: string;
+    value: string;
+    gasLimit?: string;
+    gasPrice?: string;
+    chainId?: number;
+  } | null;
+  /** ERC20 spender LI.FI will pull `fromAmount` USDT from. Used to
+   *  check / set token allowance before submitting the main tx. */
+  approvalAddress: string | null;
+  /** USDT contract on the source chain (the token to approve). */
+  fromTokenAddress: string;
+  /** Source amount in base units (string, matches what we passed in). */
+  fromAmountBase: string;
+  /** The full raw quote — kept around for debugging. */
   raw: unknown;
 }
 
@@ -64,11 +81,20 @@ interface LifiEstimate {
   feeCosts?: LifiFeeCost[];
   gasCosts?: LifiGasCost[];
 }
+interface LifiTxRequest {
+  to?: string;
+  data?: string;
+  value?: string;
+  gasLimit?: string;
+  gasPrice?: string;
+  chainId?: number;
+}
 interface LifiQuoteResponse {
-  estimate?: LifiEstimate;
+  estimate?: LifiEstimate & { approvalAddress?: string };
   action?: { toToken?: { decimals?: number } };
   includedSteps?: LifiStep[];
   tool?: string;
+  transactionRequest?: LifiTxRequest;
 }
 
 const FETCH_TIMEOUT_MS = 12_000;
@@ -135,6 +161,18 @@ export async function getCrossChainQuote(
     const providerFeeUsd = sumFeeCostsUsd(feeCosts);
     const blipFeeUsd = 0; // intentionally hidden in the UI
 
+    const txReq = json.transactionRequest;
+    const transactionRequest = txReq && txReq.to && txReq.data && txReq.value
+      ? {
+          to: txReq.to,
+          data: txReq.data,
+          value: txReq.value,
+          gasLimit: txReq.gasLimit,
+          gasPrice: txReq.gasPrice,
+          chainId: txReq.chainId,
+        }
+      : null;
+
     return {
       receivedUsdt: received.toFixed(2),
       sentUsdt: sent.toFixed(2),
@@ -143,6 +181,10 @@ export async function getCrossChainQuote(
       gasFeeUsd: sumGasCostsUsd(est.gasCosts),
       etaSeconds: est.executionDuration ?? 60,
       bridgeName: json.tool ?? json.includedSteps?.[0]?.tool ?? 'bridge',
+      transactionRequest,
+      approvalAddress: est.approvalAddress ?? null,
+      fromTokenAddress: fromToken,
+      fromAmountBase: params.fromAmount,
       raw: json,
     };
   } catch (err) {
