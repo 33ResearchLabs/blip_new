@@ -133,6 +133,19 @@ export function useBackendOrders(options: UseBackendOrdersOptions): UseBackendOr
         fetchOrders();
       };
 
+      // Event names MUST match core-api/src/pusher.ts ORDER_EVENTS
+      // exactly. They use kebab-case ('order:status-updated', NOT
+      // 'order:status_changed' or 'order:updated'). When this drifts,
+      // clients silently miss every status flip and the UI lags by
+      // however long the polling fallback takes (which is also off
+      // when the Pusher connection is up). Keep these strings in sync
+      // with the server enum.
+      channel.bind('order:created', handleUpdate);
+      channel.bind('order:status-updated', handleUpdate);
+      channel.bind('order:cancelled', handleUpdate);
+      // Legacy aliases — kept so old emitters (if any still exist) and
+      // tests using the previous names don't silently no-op. Safe to
+      // remove once we're sure nothing still emits them.
       channel.bind('order:updated', handleUpdate);
       channel.bind('order:new', handleUpdate);
       channel.bind('order:status_changed', handleUpdate);
@@ -141,6 +154,9 @@ export function useBackendOrders(options: UseBackendOrdersOptions): UseBackendOr
       let globalChannel: any;
       if (mode === 'merchant' && includeAllPending) {
         globalChannel = pusher.subscribe('private-merchants-global');
+        globalChannel.bind('order:created', handleUpdate);
+        globalChannel.bind('order:status-updated', handleUpdate);
+        globalChannel.bind('order:cancelled', handleUpdate);
         globalChannel.bind('order:new', handleUpdate);
         globalChannel.bind('order:updated', handleUpdate);
       }

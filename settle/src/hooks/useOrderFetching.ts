@@ -604,9 +604,21 @@ export function useOrderFetching({
         tickCount++;
         if (isMempoolVisibleRef.current) fetchMempoolOrders();
         lastSyncRef.current = Date.now();
-        // Every 3rd tick (~90s): balance
+        // Every 3rd tick (~90s): balance + a safety-net orders refetch.
+        //
+        // Why we still poll orders with Pusher up: in production we saw
+        // a completed order sit stale for ~15 minutes because the
+        // Pusher event for "completed" never reached the client
+        // (likely outbox lag, channel auth blip, or the browser
+        // suspending the WebSocket on a backgrounded tab). The
+        // existing "sync on reconnect" + "sync on tab return" hooks
+        // didn't fire because Pusher believed the connection was
+        // healthy. A cheap 90s catch-up refetch costs nothing and
+        // guarantees the UI converges within ~1.5 min of the DB,
+        // even when realtime silently drops.
         if (tickCount % 3 === 0) {
           if (isMockMode) fetchInAppBalance();
+          debouncedFetchOrders();
         }
       };
       const interval = setInterval(tick, 30000);
