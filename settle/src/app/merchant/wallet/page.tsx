@@ -81,6 +81,7 @@ export default function WalletPage({
         actorId: string | null;
         setActorId: (id: string | null) => void;
         unlockWallet: (password: string) => Promise<boolean>;
+        migrateToPin?: (oldPassword: string, newPin: string) => Promise<boolean>;
         lockWallet: () => void;
         deleteWallet: () => void;
         setKeypairAndUnlock: (kp: Keypair) => void;

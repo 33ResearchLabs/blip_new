@@ -68,6 +68,7 @@ import {
   clearUnlockFailures,
   versionRequiresHelper,
   MAX_UNLOCK_FAILURES,
+  changeWalletPassword,
 } from '@/lib/wallet/embeddedWallet';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { createKeypairWalletAdapter } from '@/lib/wallet/keypairWalletAdapter';
@@ -414,6 +415,32 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
         setUsdtBalance(null);
         setWalletState('none');
       }
+      return false;
+    }
+  }, [actorId, fetchUnlockHelper]);
+
+  // Migrate a legacy password-protected wallet to the new 6-digit PIN.
+  // Decrypts with `oldPassword`, re-encrypts under `newPin`, marks the
+  // session unlocked. Returns false if the old password is wrong.
+  const migrateToPin = useCallback(async (oldPassword: string, newPin: string): Promise<boolean> => {
+    if (!actorId) return false;
+    const encrypted = loadEncryptedWallet(actorId);
+    if (!encrypted) return false;
+    if (!/^\d{6}$/.test(newPin)) return false;
+
+    const helper = await fetchUnlockHelper();
+    if (versionRequiresHelper(encrypted.version) && !helper) return false;
+
+    try {
+      const kp = await decryptWallet(encrypted, oldPassword.trim(), helper);
+      await changeWalletPassword(actorId, oldPassword.trim(), newPin, kp, helper);
+      clearUnlockFailures(actorId);
+      setKeypair(kp);
+      setWalletState('unlocked');
+      lastActivityRef.current = Date.now();
+      saveSessionKeypair(actorId, kp);
+      return true;
+    } catch {
       return false;
     }
   }, [actorId, fetchUnlockHelper]);
@@ -870,6 +897,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
       setActorId,
       unlockWallet,
       createOrUnlockWithPin,
+      migrateToPin,
       lockWallet,
       deleteWallet,
       setKeypairAndUnlock,

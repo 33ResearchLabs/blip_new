@@ -25,6 +25,7 @@ interface UserModalsProps {
     actorId: string | null;
     setActorId: (id: string | null) => void;
     unlockWallet: (password: string) => Promise<boolean>;
+    migrateToPin?: (oldPassword: string, newPin: string) => Promise<boolean>;
     lockWallet: () => void;
     deleteWallet: () => void;
     setKeypairAndUnlock: (kp: any) => void;
@@ -76,6 +77,15 @@ export function UserModals({
             if (ok) setShowWalletUnlock(false);
             return ok;
           }}
+          onMigrateToPin={
+            embeddedWallet.migrateToPin
+              ? async (oldPassword, newPin) => {
+                  const ok = await embeddedWallet.migrateToPin!(oldPassword, newPin);
+                  if (ok) setShowWalletUnlock(false);
+                  return ok;
+                }
+              : undefined
+          }
           onForgotPassword={() => {
             setShowWalletUnlock(false);
             setShowWalletSetup(true);

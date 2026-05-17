@@ -180,6 +180,7 @@ export default function MerchantDashboard() {
         actorId: string | null;
         setActorId: (id: string | null) => void;
         unlockWallet: (password: string) => Promise<boolean>;
+        migrateToPin?: (oldPassword: string, newPin: string) => Promise<boolean>;
         lockWallet: () => void;
         deleteWallet: () => void;
         setKeypairAndUnlock: (kp: any) => void;
@@ -942,6 +943,7 @@ export default function MerchantDashboard() {
         isOpen={showUnlockModal}
         onClose={() => setShowUnlockModal(false)}
         unlockWallet={embeddedWallet?.unlockWallet ?? null}
+        onMigrateToPin={embeddedWallet?.migrateToPin}
         onUnlocked={() => solanaWallet?.refreshBalances?.()}
       />
 

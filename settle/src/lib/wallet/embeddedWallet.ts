@@ -505,6 +505,60 @@ export async function decryptMnemonic(
   return new TextDecoder().decode(new Uint8Array(decrypted));
 }
 
+/** Re-encrypt the wallet (and mnemonic, if present) under a new password.
+ *  Used by the password→PIN migration UI: caller decrypts with the old
+ *  password, then calls this to persist a new blob keyed off the new
+ *  password. No-ops the mnemonic if there isn't one stored.
+ *
+ *  Caller is responsible for: (a) ensuring the keypair came from a
+ *  successful decrypt with `oldPassword`, and (b) supplying a valid
+ *  `unlockHelper` (mandatory at v3+). On any failure the original blobs
+ *  are left untouched. */
+export async function changeWalletPassword(
+  actorId: string,
+  oldPassword: string,
+  newPassword: string,
+  keypair: Keypair,
+  unlockHelper?: string | null,
+): Promise<void> {
+  if (currentVersionRequiresHelper() && !unlockHelper) {
+    throw new Error('Server helper unavailable — cannot re-encrypt');
+  }
+
+  // Re-encrypt the secret key under the new password at the current
+  // blob version. saveEncryptedWallet only writes after the encrypt
+  // succeeds, so a thrown error leaves the old blob in place.
+  const newEncrypted = await encryptSecretKey(
+    keypair.secretKey,
+    newPassword,
+    keypair.publicKey.toBase58(),
+    unlockHelper,
+  );
+  saveEncryptedWallet(actorId, newEncrypted);
+
+  // Mnemonic blob is optional — only re-encrypt if one already exists
+  // (i.e. wallet was created via the new mnemonic path, not a base58
+  // import). Failure here doesn't void the wallet itself: user can
+  // still recover via the written 12 words.
+  const oldMnemonicBlob = loadEncryptedMnemonic(actorId);
+  if (oldMnemonicBlob) {
+    try {
+      const phrase = await decryptMnemonic(oldMnemonicBlob, oldPassword, unlockHelper);
+      const mnemonicBytes = new TextEncoder().encode(phrase);
+      const newMnemonic = await encryptSecretKey(
+        mnemonicBytes,
+        newPassword,
+        keypair.publicKey.toBase58(),
+        unlockHelper,
+      );
+      saveEncryptedMnemonic(actorId, newMnemonic);
+    } catch {
+      // Old mnemonic blob couldn't be re-encrypted — leave it; the
+      // wallet's main key is already updated. User retains paper backup.
+    }
+  }
+}
+
 // ---- Failed-unlock counter ----
 //
 // Tracks consecutive wrong-password attempts per actor. The unlock path
