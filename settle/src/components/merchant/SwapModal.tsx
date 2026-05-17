@@ -28,6 +28,7 @@ import {
   Connection,
   PublicKey,
 } from "@solana/web3.js";
+import { recordSwap } from "@/lib/wallet/swapHistory";
 
 // ── Constants ───────────────────────────────────────────────────────
 const SLIPPAGE_BPS = 50; // 0.5% — hard-capped for safety
@@ -98,6 +99,11 @@ interface SwapModalProps {
   usdcBalance?: number | null;
   /** Optional callback after a successful swap so the parent can refresh balances. */
   onSwapSuccess?: () => void;
+  /** Actor id (merchant.id / user.id) — used to key the local swap
+   *  history so the Recent Activity feed can show this swap. Optional
+   *  to keep existing callers compiling; when omitted no record is
+   *  written and nothing breaks. */
+  actorId?: string | null;
 }
 
 export function SwapModal({
@@ -109,6 +115,7 @@ export function SwapModal({
   usdtBalance,
   usdcBalance,
   onSwapSuccess,
+  actorId,
 }: SwapModalProps) {
   const [inputToken, setInputToken] = useState<TokenMeta>(USDT);
   const [outputToken, setOutputToken] = useState<TokenMeta>(SOL);
@@ -290,6 +297,25 @@ export function SwapModal({
       //  noisy "ws error" in the console. The on-chain TX tab catches
       //  the confirmed state on its next poll.)
       setSwapTxSig(sig);
+      // Persist to local swap history so Recent Activity can render it.
+      // quote.inAmount / outAmount are stringified base units — convert
+      // back to human numbers using the token decimals.
+      try {
+        const inAmtHuman =
+          parseInt(quote.inAmount, 10) / Math.pow(10, inputToken.decimals);
+        const outAmtHuman =
+          parseInt(quote.outAmount, 10) / Math.pow(10, outputToken.decimals);
+        recordSwap(actorId, {
+          signature: sig,
+          inputSymbol: inputToken.symbol,
+          inputAmount: inAmtHuman,
+          outputSymbol: outputToken.symbol,
+          outputAmount: outAmtHuman,
+          blockTime: Math.floor(Date.now() / 1000),
+        });
+      } catch {
+        /* non-critical — recordSwap already swallows its own errors */
+      }
       onSwapSuccess?.();
       // Auto-close after a short success-state display so the merchant
       // can see the checkmark + tx link briefly without having to dismiss.

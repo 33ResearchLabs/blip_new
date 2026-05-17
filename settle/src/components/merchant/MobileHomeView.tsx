@@ -35,6 +35,7 @@ import {
 import { copyToClipboard } from "@/lib/clipboard";
 import { BalanceSparkline } from "./BalanceSparkline";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { loadSwaps, type SwapRecord } from "@/lib/wallet/swapHistory";
 import {
   loadEncryptedWallet,
   decryptWallet,
@@ -134,6 +135,9 @@ export function MobileHomeView({
   const [swapOpen, setSwapOpen] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  // Bumps when a swap completes so the Recent Activity feed re-reads
+  // localStorage. Initial mount pulls swaps once via useMemo (below).
+  const [swapHistoryTick, setSwapHistoryTick] = useState(0);
 
   const merchantIdForWallet: string | undefined = merchantInfo?.id;
 
@@ -986,8 +990,29 @@ export function MobileHomeView({
         {(() => {
           type Item =
             | { kind: "trade"; key: string; ts: number; data: typeof recentOrders[number] }
+            | { kind: "swap"; key: string; ts: number; data: SwapRecord }
             | { kind: "tx"; key: string; ts: number; data: OnChainTx };
           const items: Item[] = [];
+
+          // Swaps live alongside trades — they're a first-class merchant
+          // activity (SOL↔USDT through Jupiter), not just a raw on-chain
+          // signature. Surface them under both "trades" and "all" so a
+          // merchant who flips the tab away from raw TX still sees them.
+          // The swapHistoryTick value below is read so the closure
+          // re-evaluates whenever a new swap completes.
+          void swapHistoryTick;
+          const swaps = loadSwaps(merchantIdForWallet);
+          if (activityTab === "trades" || activityTab === "all") {
+            for (const s of swaps) {
+              items.push({
+                kind: "swap",
+                key: `s-${s.signature}`,
+                ts: s.blockTime ?? 0,
+                data: s,
+              });
+            }
+          }
+
           if (activityTab === "trades" || activityTab === "all") {
             for (const o of recentOrders) {
               const dt = (o.dbOrder as { created_at?: string } | undefined)?.created_at;
@@ -1009,9 +1034,9 @@ export function MobileHomeView({
               });
             }
           }
-          if (activityTab === "all") {
-            items.sort((a, b) => b.ts - a.ts);
-          }
+          // Always sort newest-first so a fresh swap appears at the top
+          // regardless of which tab is active.
+          items.sort((a, b) => b.ts - a.ts);
 
           // Loading is only shown if we're on a TX-needing tab AND haven't
           // resolved the fetch yet — Trades tab never blocks for RPC.
@@ -1128,6 +1153,62 @@ export function MobileHomeView({
                       </button>
                     );
                   }
+
+                  // Swap row — Jupiter SOL↔USDT (and friends). Tap
+                  // opens the explorer for the signature; rendering
+                  // mirrors the on-chain TX row for visual consistency
+                  // but the label is the swap pair so it's obvious at
+                  // a glance.
+                  if (item.kind === "swap") {
+                    const s = item.data;
+                    const ageSec = s.blockTime
+                      ? Math.max(0, Math.floor(Date.now() / 1000 - s.blockTime))
+                      : null;
+                    const ageLabel = !ageSec
+                      ? "—"
+                      : ageSec < 60
+                        ? `${ageSec}s`
+                        : ageSec < 3600
+                          ? `${Math.floor(ageSec / 60)}m`
+                          : ageSec < 86400
+                            ? `${Math.floor(ageSec / 3600)}h`
+                            : `${Math.floor(ageSec / 86400)}d`;
+                    return (
+                      <a
+                        key={item.key}
+                        href={`${explorerBaseUrl.includes("?") ? explorerBaseUrl.replace("/?", `/tx/${s.signature}?`) : `${explorerBaseUrl}/tx/${s.signature}`}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 hover:bg-foreground/[0.05] transition-colors"
+                      >
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center bg-foreground/[0.06] text-foreground/70 shrink-0"
+                          aria-label="Swap"
+                        >
+                          <ArrowLeftRight className="w-5 h-5" strokeWidth={2.5} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            Swap {s.inputSymbol} → {s.outputSymbol}
+                          </p>
+                          <p className="text-[11px] text-foreground/40 tabular-nums">
+                            {s.inputAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {s.inputSymbol}
+                            {" → "}
+                            {s.outputAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {s.outputSymbol}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-foreground tabular-nums">
+                            {s.outputAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {s.outputSymbol}
+                          </p>
+                          <p className="text-[10px] text-foreground/40">
+                            {ageLabel} ago
+                          </p>
+                        </div>
+                      </a>
+                    );
+                  }
+
                   // tx row
                   const tx = item.data;
                   const success = !tx.err;
@@ -1194,7 +1275,15 @@ export function MobileHomeView({
         solBalance={solanaWallet?.solBalance ?? null}
         usdtBalance={solanaWallet?.usdtBalance ?? null}
         usdcBalance={solanaWallet?.usdcBalance ?? null}
-        onSwapSuccess={() => solanaWallet?.refreshBalances?.()}
+        actorId={merchantIdForWallet}
+        onSwapSuccess={() => {
+          solanaWallet?.refreshBalances?.();
+          // Bump a local counter so the activity feed re-reads the
+          // swap-history slice from localStorage on the next render.
+          // Otherwise the newly-recorded swap wouldn't appear until
+          // some other re-render landed.
+          setSwapHistoryTick((n) => n + 1);
+        }}
       />
 
       {/* ── Deposit modal — wallet-address QR for inbound transfers ── */}
