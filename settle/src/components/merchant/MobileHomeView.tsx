@@ -33,6 +33,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
+import { BalanceSparkline } from "./BalanceSparkline";
 import {
   loadEncryptedWallet,
   decryptWallet,
@@ -586,6 +587,17 @@ export function MobileHomeView({
                 </span>
               </div>
             )}
+
+            {/* Balance trend sparkline — derived by replaying recent
+                completed orders backwards from effectiveBalance. Hidden
+                when there's no trade history (component returns null). */}
+            <div className="mt-3 -mx-2">
+              <BalanceSparkline
+                currentBalance={effectiveBalance}
+                completedOrders={completedOrders}
+                height={56}
+              />
+            </div>
 
             {/* Quick actions — neutral monochrome (no green/orange) so the
                 card reads as a single calm surface. The Wallet button is
