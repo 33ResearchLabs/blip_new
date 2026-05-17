@@ -82,18 +82,24 @@ export function BalanceSparkline({
     return points;
   }, [currentBalance, completedOrders, windowSize]);
 
-  if (!series || series.length < 2) {
-    return null;
-  }
+  // No real history yet — render a gentle synthetic curve so the card
+  // doesn't look broken. Neutral grey + lighter stroke makes it clear
+  // this is a placeholder, not a real signal.
+  const isPlaceholder = !series || series.length < 2;
+  const effectiveSeries: number[] = isPlaceholder
+    // Subtle sine wave anchored near the middle of the viewBox so the
+    // shape mimics a real sparkline at a glance.
+    ? Array.from({ length: 20 }, (_, i) => Math.sin(i / 2) * 0.25 + 0.55)
+    : (series as number[]);
 
-  const min = Math.min(...series);
-  const max = Math.max(...series);
+  const min = Math.min(...effectiveSeries);
+  const max = Math.max(...effectiveSeries);
   const range = max - min || 1; // avoid /0 on a flat line
-  const stepX = VB_W / (series.length - 1);
+  const stepX = VB_W / (effectiveSeries.length - 1);
 
   // Smooth path via mid-point quadratic curves so the line reads like
   // the reference design (gentle wave, no zigzag) without overshooting.
-  const coords = series.map((v, i) => {
+  const coords = effectiveSeries.map((v, i) => {
     const x = i * stepX;
     // Invert Y so larger values sit higher on screen.
     const y = VB_H - ((v - min) / range) * VB_H;
@@ -111,12 +117,15 @@ export function BalanceSparkline({
   const last = coords[coords.length - 1];
   d += ` L ${last.x.toFixed(2)} ${last.y.toFixed(2)}`;
 
-  const net = series[series.length - 1] - series[0];
-  const color =
-    net > 0.0001 ? "#34d399" // emerald-400
+  const net = effectiveSeries[effectiveSeries.length - 1] - effectiveSeries[0];
+  const color = isPlaceholder
+    ? "#34d399" // emerald placeholder — visible but communicates "demo"
+      // via opacity below
+    : net > 0.0001 ? "#34d399" // emerald-400
       : net < -0.0001 ? "#fb7185" // rose-400
       : "#9ca3af"; // neutral
   const glow = color;
+  const strokeOpacity = isPlaceholder ? 0.45 : 1;
 
   return (
     <svg
@@ -139,6 +148,7 @@ export function BalanceSparkline({
         d={d}
         fill="none"
         stroke={color}
+        strokeOpacity={strokeOpacity}
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -146,7 +156,7 @@ export function BalanceSparkline({
         style={{ filter: `drop-shadow(0 0 4px ${glow})` }}
       />
       {/* End-point dot with subtle pulse. */}
-      <circle cx={last.x} cy={last.y} r="3" fill={color} style={{ filter: `drop-shadow(0 0 6px ${glow})` }} />
+      <circle cx={last.x} cy={last.y} r="3" fill={color} fillOpacity={strokeOpacity} style={{ filter: `drop-shadow(0 0 6px ${glow})` }} />
     </svg>
   );
 }

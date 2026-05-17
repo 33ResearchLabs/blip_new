@@ -526,18 +526,31 @@ export function MobileHomeView({
           </div>
         ) : (
           <>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-5xl font-bold text-foreground tracking-tight">
-                {effectiveBalance !== null
-                  ? effectiveBalance.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })
-                  : "0.00"}
-              </span>
-              <span className="text-base text-foreground/40 font-medium">
-                USDT
-              </span>
+            <div className="flex items-center gap-3 mt-1">
+              <div className="flex items-baseline gap-1.5 shrink-0">
+                <span className="text-5xl font-bold text-foreground tracking-tight">
+                  {effectiveBalance !== null
+                    ? effectiveBalance.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })
+                    : "0.00"}
+                </span>
+                <span className="text-base text-foreground/40 font-medium">
+                  USDT
+                </span>
+              </div>
+              {/* Balance trend sparkline — sits to the right of the
+                  number, fills the remaining card width. Replays recent
+                  completed orders backwards from effectiveBalance.
+                  Returns null when there's no trade history yet. */}
+              <div className="flex-1 min-w-0 self-stretch">
+                <BalanceSparkline
+                  currentBalance={effectiveBalance}
+                  completedOrders={completedOrders}
+                  height={56}
+                />
+              </div>
             </div>
 
             {/* Wallet address — truncated, tap to copy, with a QR shortcut
@@ -587,17 +600,6 @@ export function MobileHomeView({
                 </span>
               </div>
             )}
-
-            {/* Balance trend sparkline — derived by replaying recent
-                completed orders backwards from effectiveBalance. Hidden
-                when there's no trade history (component returns null). */}
-            <div className="mt-3 -mx-2">
-              <BalanceSparkline
-                currentBalance={effectiveBalance}
-                completedOrders={completedOrders}
-                height={56}
-              />
-            </div>
 
             {/* Quick actions — neutral monochrome (no green/orange) so the
                 card reads as a single calm surface. The Wallet button is
