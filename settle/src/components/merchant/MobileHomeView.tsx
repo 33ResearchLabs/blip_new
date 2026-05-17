@@ -1103,17 +1103,18 @@ export function MobileHomeView({
                           <p className="text-sm font-medium text-foreground truncate">
                             {order.user}
                           </p>
-                          <p className="text-[11px] text-foreground/40">
-                            {order.dbOrder?.order_number || `${order.amount} USDT`}
+                          {/* Sub-label: BUY / SELL side instead of the order
+                              number, which read like a personal "BM" code
+                              and confused merchants. Direction label here is
+                              redundant with the corner badge but the wording
+                              makes the row scannable without colour cues. */}
+                          <p className="text-[11px] text-foreground/40 font-semibold uppercase tracking-wide">
+                            {isBuy ? "Buy" : "Sell"}
                           </p>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-bold text-foreground">
                             {order.amount} USDT
-                            <span className="text-foreground/30 mx-1">→</span>
-                            <span className="text-primary">
-                              {formatCount(Math.round(order.total))} {activeCorridorMeta.fiat}
-                            </span>
                           </p>
                           <p className={`text-[10px] font-medium ${statusColor}`}>
                             {statusLabel}
