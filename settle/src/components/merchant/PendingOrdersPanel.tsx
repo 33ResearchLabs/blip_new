@@ -1361,8 +1361,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       {/* Header */}
       <div className="px-3 py-2 border-b border-section-divider">
         {/* ─── Row 1: Tabs + controls ─── */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06]">
+        <div className="flex items-center justify-between gap-1 mb-2">
+          <div className="inline-flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] shrink-0">
             {(["all", "pending", "mine"] as const).map((tab) => {
               const tooltip =
                 tab === "all"
@@ -1375,7 +1375,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                   key={tab}
                   onClick={() => setView(tab)}
                   title={tooltip}
-                  className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                  className={`h-full px-2 xl:px-3 [@media(min-height:900px)]:px-3 inline-flex items-center rounded-md text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] font-bold transition-all ${
                     view === tab
                       ? "bg-foreground text-background shadow"
                       : "text-foreground/40 hover:text-foreground/60"
@@ -1390,10 +1390,13 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               );
             })}
           </div>
-          <div className="flex items-center gap-1">
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-foreground/[0.02] rounded border border-foreground/[0.06]">
+          <div className="flex items-center gap-0.5 xl:gap-1 [@media(min-height:900px)]:gap-1 min-w-0">
+            <div
+              className="inline-flex items-center justify-center gap-1 h-7 xl:h-8 [@media(min-height:900px)]:h-8 w-7 xl:w-auto [@media(min-height:900px)]:w-auto px-0 xl:px-1.5 [@media(min-height:900px)]:px-1.5 bg-foreground/[0.02] rounded border border-foreground/[0.06] shrink-0"
+              title="Live feed"
+            >
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
-              <span className="text-[9px] text-white/35 font-mono">Live</span>
+              <span className="hidden xl:inline [@media(min-height:900px)]:inline text-[9px] text-white/35 font-mono">Live</span>
             </div>
             <button
               onClick={() => {
@@ -1405,7 +1408,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                   setTimeout(() => playSound?.("notification"), 0);
                 }
               }}
-              className={`p-1 rounded border transition-all ${
+              className={`shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border transition-all ${
                 soundEnabled
                   ? "bg-primary/15 border-primary/30 text-primary ring-1 ring-primary/20"
                   : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/30 hover:bg-foreground/[0.05]"
@@ -1424,17 +1427,17 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             </button>
             <button
               onClick={fetchOrders}
-              className="p-1 hover:bg-foreground/[0.04] rounded transition-colors"
+              className="shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border border-foreground/[0.06] bg-foreground/[0.02] hover:bg-foreground/[0.05] transition-colors"
             >
               <RotateCcw className="w-3 h-3 text-foreground/25 hover:text-foreground/50" />
             </button>
             <button
               onClick={() => setShowOrderFilters(!showOrderFilters)}
-              className={`p-1 rounded transition-all ${showOrderFilters || Object.values(orderFilters).some((v) => v !== "all") ? "bg-white/[0.08] text-foreground/60" : "hover:bg-foreground/[0.04] text-foreground/25"}`}
+              className={`shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border transition-all ${showOrderFilters || Object.values(orderFilters).some((v) => v !== "all") ? "bg-white/[0.08] border-foreground/[0.06] text-foreground/60" : "bg-foreground/[0.02] border-foreground/[0.06] hover:bg-foreground/[0.05] text-foreground/25"}`}
             >
               <SlidersHorizontal className="w-3 h-3" />
             </button>
-            <span className="text-[10px] border border-foreground/[0.08] text-foreground/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+            <span className="shrink-0 inline-flex items-center justify-center h-7 xl:h-8 [@media(min-height:900px)]:h-8 min-w-7 xl:min-w-8 [@media(min-height:900px)]:min-w-8 px-1.5 text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] border border-foreground/[0.08] text-foreground/50 rounded-full font-mono tabular-nums">
               {filteredOrders.length}
             </span>
           </div>

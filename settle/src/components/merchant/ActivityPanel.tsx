@@ -207,6 +207,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                 value={activeTab}
                 onChange={setActiveTab}
                 options={activityOptions}
+                triggerClassName="!rounded-lg !bg-foreground/[0.04] !border-foreground/[0.06]"
               />
               {/* Stuck-order indicator follows the dropdown trigger */}
               {openOrders.some(isStuck) && (

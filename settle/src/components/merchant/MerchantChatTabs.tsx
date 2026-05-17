@@ -311,73 +311,68 @@ export function MerchantChatTabs({
       </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex border-b border-white/[0.04]">
+      {/* Tabs — on mobile (hideHeading) sit in a sticky header that cancels
+          the parent <main>'s p-3 so the filter is flush with the navbar,
+          matching MobileOrdersView / MobileEscrowView. */}
+      <div className={hideHeading ? "sticky top-0 z-20 -mx-3 -mt-3 px-3 pt-0.5 pb-1.5 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04]" : ""}>
+      <div className="flex items-center gap-0.5 p-0.5 h-9 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08]">
         <button
           onClick={() => setActiveTab("active")}
-          className={`flex-1 px-3 py-2.5 text-[9px] font-bold font-mono uppercase tracking-wider transition-colors relative ${
+          className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
             activeTab === "active"
-              ? "text-foreground"
-              : "text-foreground/40 hover:text-foreground/70"
+              ? "bg-white text-black shadow"
+              : "text-foreground/60 hover:text-foreground/80"
           }`}
         >
-          <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
-            <span>Active Chat</span>
-            {activeUnread > 0 && (
-              <span className="text-[9px] bg-primary text-background font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center">
-                {activeUnread > 9 ? "9+" : activeUnread}
-              </span>
-            )}
-          </div>
-          {activeTab === "active" && (
-            <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
+          <span className="truncate">Active Chat</span>
+          {activeUnread > 0 && (
+            <span className={`shrink-0 text-[10px] font-mono tabular-nums ${
+              activeTab === "active" ? "text-black/55" : "text-foreground/40"
+            }`}>
+              {activeUnread > 9 ? "9+" : activeUnread}
+            </span>
           )}
         </button>
         <button
           onClick={() => setActiveTab("orders")}
-          className={`flex-1 px-3 py-2.5 text-[9px] font-bold font-mono uppercase tracking-wider transition-colors relative ${
+          className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
             activeTab === "orders"
-              ? "text-foreground"
-              : "text-foreground/40 hover:text-foreground/70"
+              ? "bg-white text-black shadow"
+              : "text-foreground/60 hover:text-foreground/80"
           }`}
         >
-          <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
-            <span>Inbox</span>
-            {totalUnread > 0 && (
-              <span className="text-[9px] bg-primary text-background font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center">
-                {totalUnread > 9 ? "9+" : totalUnread}
-              </span>
-            )}
-          </div>
-          {activeTab === "orders" && (
-            <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
+          <span className="truncate">Inbox</span>
+          {totalUnread > 0 && (
+            <span className={`shrink-0 text-[10px] font-mono tabular-nums ${
+              activeTab === "orders" ? "text-black/55" : "text-foreground/40"
+            }`}>
+              {totalUnread > 9 ? "9+" : totalUnread}
+            </span>
           )}
         </button>
         <button
           onClick={() => setActiveTab("disputes")}
-          className={`flex-1 px-3 py-2.5 text-[9px] font-bold font-mono uppercase tracking-wider transition-colors relative ${
+          className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
             activeTab === "disputes"
-              ? "text-foreground"
-              : "text-foreground/40 hover:text-foreground/70"
+              ? "bg-white text-black shadow"
+              : "text-foreground/60 hover:text-foreground/80"
           }`}
         >
-          <div className="flex items-center justify-center gap-1.5">
-            <Shield className="w-3 h-3" />
-            <span>Disputes</span>
-            {disputeUnread > 0 && (
-              <span className="text-[9px] bg-red-500 text-white font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center">
-                {disputeUnread > 9 ? "9+" : disputeUnread}
-              </span>
-            )}
-          </div>
-          {activeTab === "disputes" && (
-            <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-red-500 rounded-t" />
+          <Shield className="w-3 h-3 shrink-0" />
+          <span className="truncate">Disputes</span>
+          {disputeUnread > 0 && (
+            <span className={`shrink-0 text-[10px] font-mono tabular-nums ${
+              activeTab === "disputes" ? "text-red-600" : "text-red-400"
+            }`}>
+              {disputeUnread > 9 ? "9+" : disputeUnread}
+            </span>
           )}
         </button>
       </div>
+      </div>
 
       {/* Search */}
-      <div className="px-2 py-1.5 border-b border-white/[0.04]">
+      <div className="py-1.5 border-b border-white/[0.04]">
         <div className="flex items-center gap-1.5 bg-white/[0.02] border border-white/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors">
           <Search className="w-3 h-3 text-white/20" />
           <input
