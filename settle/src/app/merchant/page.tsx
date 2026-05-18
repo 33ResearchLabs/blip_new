@@ -1003,6 +1003,17 @@ export default function MerchantDashboard() {
         onCorridorChange={setActiveCorridor}
         totalUnread={totalUnread}
         onOpenPaymentMethods={() => setShowPaymentMethods(true)}
+        onRefresh={async () => {
+          // Broad refetch — covers data for every mobile tab in parallel.
+          // Spinner stays up until the slowest request resolves.
+          await Promise.all([
+            fetchOrders(),
+            refreshBalance(),
+            fetchMempoolOrders(),
+            fetchActiveOffers(),
+            solanaWallet?.refreshBalances?.() ?? Promise.resolve(),
+          ]);
+        }}
       />
 
       {/* Mobile Notifications Overlay */}
