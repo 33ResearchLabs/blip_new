@@ -17,16 +17,29 @@ import * as QRCode from "qrcode";
 import { X, Copy, Check, ExternalLink, ArrowDownToLine } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { CrossChainDepositModal } from "@/components/wallet/CrossChainDepositModal";
+import type { DepositRecord } from "@/lib/wallet/depositHistory";
 
 interface DepositModalProps {
   isOpen: boolean;
   onClose: () => void;
   walletAddress: string | null;
+  /** Per-actor key (e.g. merchant id) — scopes cross-chain deposit
+   *  history persistence. Optional; legacy callers continue to work. */
+  actorId?: string | null;
+  /** Fired when a cross-chain bridge completes. Parent uses this to
+   *  refresh wallet balances and the Recent Activity feed. */
+  onDepositSuccess?: (record: DepositRecord) => void;
 }
 
 type DepositTab = "solana" | "cross-chain";
 
-export function DepositModal({ isOpen, onClose, walletAddress }: DepositModalProps) {
+export function DepositModal({
+  isOpen,
+  onClose,
+  walletAddress,
+  actorId,
+  onDepositSuccess,
+}: DepositModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   // Tabs: Solana (default — the existing QR/address flow) vs cross-chain
@@ -66,6 +79,8 @@ export function DepositModal({ isOpen, onClose, walletAddress }: DepositModalPro
         isOpen={true}
         onClose={onClose}
         destinationAddress={walletAddress}
+        actorId={actorId}
+        onSuccess={onDepositSuccess}
       />
     );
   }

@@ -42,6 +42,13 @@ export function recordSwap(actorId: string | null | undefined, record: SwapRecor
   } catch {
     /* ignore — see comment above */
   }
+  // Notify other surfaces (e.g. desktop ActivityPanel) that wallet
+  // activity changed so they can refresh on-chain views.
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('blip:wallet-activity', { detail: { kind: 'swap' } }));
+    }
+  } catch { /* ignore */ }
 }
 
 /** Read the swap history for the given actor, newest-first. Returns

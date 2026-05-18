@@ -49,11 +49,20 @@ import {
   readErc20Allowance,
   hasInjectedWallet,
 } from "@/lib/lifi/evmWallet";
+import { recordDeposit, type DepositRecord } from "@/lib/wallet/depositHistory";
 
 interface CrossChainDepositModalProps {
   isOpen: boolean;
   onClose: () => void;
   destinationAddress: string | null;
+  /** Per-actor key used to scope the deposit-history localStorage entry.
+   *  Optional — when absent, the deposit still completes on-chain but
+   *  isn't recorded to local history (existing pre-history behaviour). */
+  actorId?: string | null;
+  /** Fired exactly once when a bridge completes successfully (status=DONE).
+   *  Receives the persisted DepositRecord so parents can refresh balances
+   *  and bump activity-feed ticks without reaching into localStorage. */
+  onSuccess?: (record: DepositRecord) => void;
 }
 
 type Phase =
@@ -92,6 +101,8 @@ export function CrossChainDepositModal({
   isOpen,
   onClose,
   destinationAddress,
+  actorId,
+  onSuccess,
 }: CrossChainDepositModalProps) {
   const availableChains = useMemo(
     () => SOURCE_CHAINS.filter((c) => !c.comingSoon),
@@ -295,6 +306,25 @@ export function CrossChainDepositModal({
         setPhase("done");
         setDestTxHash(final.destinationTxHash ?? null);
         setFinalReceived(final.receivedUsdt ?? null);
+        // Persist + notify parent. receivedUsdt is a decimal string from
+        // LI.FI ("99.84"); parse defensively. The destination tx hash is
+        // the unique on-chain landing point — use it as dedupe key. If
+        // any field is missing we still fire onSuccess (parent may want
+        // to refresh balances regardless) but skip recordDeposit when
+        // there's no destSignature to dedupe against.
+        const destSig = final.destinationTxHash ?? null;
+        const amountNum = final.receivedUsdt != null ? Number(final.receivedUsdt) : NaN;
+        if (destSig) {
+          const record: DepositRecord = {
+            destSignature: destSig,
+            sourceTxHash: hash,
+            sourceChain: selectedChain.label,
+            amountUsdt: Number.isFinite(amountNum) ? amountNum : 0,
+            blockTime: Math.floor(Date.now() / 1000),
+          };
+          recordDeposit(actorId, record);
+          onSuccess?.(record);
+        }
       } else {
         setPhase("failed");
         setError(
