@@ -70,9 +70,12 @@ export function usePullToRefresh({
   const refreshingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
 
-  // Keep the latest onRefresh in a ref so re-renders don't re-attach listeners.
+  // Keep the latest callbacks in refs so re-renders don't re-attach listeners
+  // — the consumer almost always passes inline arrow functions for both.
   const onRefreshRef = useRef(onRefresh);
   onRefreshRef.current = onRefresh;
+  const isAtTopRef = useRef(isAtTop);
+  isAtTopRef.current = isAtTop;
 
   useEffect(() => {
     if (!enabled) return;
@@ -90,7 +93,9 @@ export function usePullToRefresh({
       targetRef?.current ?? scrollContainerRef?.current ?? window;
     const getEl = (): HTMLElement | null => scrollContainerRef?.current ?? null;
     const atTop = (): boolean =>
-      isAtTop ? isAtTop() : getScrollTop(getEl()) <= 0;
+      isAtTopRef.current
+        ? isAtTopRef.current()
+        : getScrollTop(getEl()) <= 0;
 
     const scheduleSetPull = (next: number) => {
       pullRef.current = next;
@@ -210,7 +215,7 @@ export function usePullToRefresh({
         rafRef.current = null;
       }
     };
-  }, [enabled, threshold, maxPull, resistance, scrollContainerRef, targetRef, isAtTop]);
+  }, [enabled, threshold, maxPull, resistance, scrollContainerRef, targetRef]);
 
   return {
     /** Current visual pull distance in px (after resistance + clamping). */

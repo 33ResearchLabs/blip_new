@@ -653,11 +653,12 @@ export const HomeScreen = ({
     isAtTop: () => (txScrollRef.current?.scrollTop ?? 0) <= 0,
   });
   const ptrActive = ptrPull > 0 || ptrRefreshing;
-  const ptrOverlayHeight = Math.max(ptrPull, ptrRefreshing ? PTR_THRESHOLD : 0);
   const ptrIsDragging = ptrStatus === "pulling" || ptrStatus === "ready";
+  // Spring-back on release / refresh-complete; no transition during the drag
+  // itself so the finger tracks the pill 1:1.
   const ptrTransition = ptrIsDragging
     ? "none"
-    : "transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1), height 360ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 360ms cubic-bezier(0.34, 1.56, 0.64, 1)";
+    : "transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 360ms cubic-bezier(0.34, 1.56, 0.64, 1), top 360ms cubic-bezier(0.34, 1.56, 0.64, 1)";
   const ptrIndicatorScale = 0.55 + Math.min(ptrProgress, 1) * 0.55;
   const ptrIndicatorRotation = ptrRefreshing ? 0 : ptrProgress * 220;
   const ptrLabel =
@@ -726,55 +727,64 @@ export const HomeScreen = ({
     setTimeout(() => setNavCopied(false), 2000);
   }
 
+  // ── Pull-to-refresh visual positions ──────────────────────────────────
+  // iOS-style: the spinner pill is parked just above the viewport top and
+  // slides DOWN with the pull (translateY = ptr - 50). The label slides in
+  // below it. This avoids being clipped by the home root's `overflow-hidden`
+  // and keeps a visible hint from the very first pixel of pull.
+  const PTR_PILL_REST = 50; // pill starts 50px above the top, slides down
+  const ptrPillTranslate = (ptrRefreshing ? PTR_THRESHOLD : ptrPull) - PTR_PILL_REST;
+  const ptrLabelTop = Math.max((ptrRefreshing ? PTR_THRESHOLD : ptrPull) - 6, -16);
+
   return (
     <div
       ref={homeRootRef}
       className="relative flex flex-col h-[100dvh] overflow-hidden  "
       // White parent so the hero's rounded bottom corners reveal white
       // behind them — otherwise the curves disappear against a dark parent.
-      style={{ background: '#fff', touchAction: 'pan-y' }}
+      // No `touch-action` override — the hook's preventDefault on touchmove
+      // does all the gating; setting `pan-y` here would let the browser's
+      // compositor claim the gesture before JS can cancel it.
+      style={{ background: '#fff' }}
     >
       {/* ══════════════════════════════════════════════════════════════════
-          PULL-TO-REFRESH INDICATOR — surfaces at the very top of the home
-          screen so the gesture works regardless of where the user starts
-          the pull (dark hero or white transactions list). The halo + pill
-          fade and scale with pull progress; the arrow rotates 180° at the
-          threshold and swaps for a spinning loader during the refetch.
+          PULL-TO-REFRESH INDICATOR — pill is positioned absolutely at the
+          top of the home root and translates DOWN with the pull (iOS-style),
+          so it works regardless of where the user starts the pull (dark
+          hero or white transactions list) and is never clipped by the
+          parent's `overflow-hidden`.
          ══════════════════════════════════════════════════════════════════ */}
       {onRefresh && (
-        <div
-          aria-hidden={!ptrActive}
-          className="pointer-events-none absolute left-0 right-0 top-0 z-[60] flex items-end justify-center"
-          style={{
-            height: `${ptrOverlayHeight}px`,
-            transition: ptrTransition,
-            willChange: 'height',
-          }}
-        >
-          {/* Soft halo glow — uses a light tint so it reads against the
-              dark hero background. */}
+        <>
+          {/* Soft halo glow — sits behind the pill, fades in with progress */}
           <div
-            className="absolute left-1/2 -translate-x-1/2 rounded-full blur-2xl"
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-full blur-2xl z-[59]"
             style={{
-              width: 200,
-              height: 200,
-              top: -60,
+              top: ptrPillTranslate - 60,
+              width: 220,
+              height: 220,
               background:
-                'radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(167,180,255,0.28) 38%, rgba(167,180,255,0) 72%)',
-              opacity: Math.min(ptrProgress, 1) * 0.9,
-              transform: `scale(${0.55 + Math.min(ptrProgress, 1) * 0.7})`,
+                'radial-gradient(circle, rgba(255,255,255,0.60) 0%, rgba(167,180,255,0.30) 38%, rgba(167,180,255,0) 72%)',
+              opacity: Math.min(ptrProgress, 1) * 0.95,
+              transform: `translate3d(0,0,0) scale(${0.55 + Math.min(ptrProgress, 1) * 0.7})`,
               transition: ptrTransition,
+              willChange: 'transform, opacity, top',
             }}
           />
-          {/* Spinner pill — bg is white so it reads on the dark hero. */}
+
+          {/* Spinner pill — bg white so it reads on the dark hero */}
           <div
-            className="relative mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-white"
+            aria-hidden={!ptrActive}
+            className="pointer-events-none absolute left-1/2 z-[60] flex h-11 w-11 items-center justify-center rounded-full bg-white"
             style={{
-              transform: `scale(${ptrIndicatorScale}) rotate(${ptrIndicatorRotation}deg)`,
-              opacity: Math.min(0.2 + ptrProgress * 0.9, 1),
+              top: 0,
+              transform: `translate3d(-50%, ${ptrPillTranslate}px, 0) scale(${ptrIndicatorScale}) rotate(${ptrIndicatorRotation}deg)`,
+              opacity: Math.min(0.25 + ptrProgress * 0.9, 1),
               transition: ptrTransition,
               boxShadow: `0 8px 24px -6px rgba(0,0,0,0.45), 0 0 ${28 * Math.min(ptrProgress, 1)}px rgba(167,180,255,${0.45 * Math.min(ptrProgress, 1)})`,
               border: '1px solid rgba(255,255,255,0.85)',
+              willChange: 'transform, opacity',
             }}
           >
             {ptrRefreshing ? (
@@ -789,26 +799,26 @@ export const HomeScreen = ({
               />
             )}
           </div>
-        </div>
-      )}
 
-      {/* Floating status label below the spinner */}
-      {onRefresh && ptrActive && (
-        <div
-          className="pointer-events-none absolute left-0 right-0 z-[60] flex justify-center"
-          style={{
-            top: Math.max(ptrOverlayHeight - 20, -20),
-            opacity: Math.min(ptrProgress * 1.4, 1),
-            transition: ptrTransition,
-          }}
-        >
-          <span
-            className="rounded-full px-3 py-[3px] text-[10.5px] font-semibold tracking-wide text-white shadow-sm backdrop-blur-md"
-            style={{ background: 'rgba(15,23,42,0.78)' }}
-          >
-            {ptrLabel}
-          </span>
-        </div>
+          {/* Floating status label — slides in beneath the pill */}
+          {ptrActive && (
+            <div
+              className="pointer-events-none absolute left-0 right-0 z-[60] flex justify-center"
+              style={{
+                top: ptrLabelTop,
+                opacity: Math.min(ptrProgress * 1.4, 1),
+                transition: ptrTransition,
+              }}
+            >
+              <span
+                className="rounded-full px-3 py-[3px] text-[10.5px] font-semibold tracking-wide text-white shadow-sm backdrop-blur-md"
+                style={{ background: 'rgba(15,23,42,0.78)' }}
+              >
+                {ptrLabel}
+              </span>
+            </div>
+          )}
+        </>
       )}
 
 
