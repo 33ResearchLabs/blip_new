@@ -265,6 +265,20 @@ export const AUTH_LIMIT: RateLimitConfig = {
   windowSeconds: 60,
 };
 
+/**
+ * Token refresh: 60/min per IP.
+ * Refresh is fired automatically by every authed request that hits 401, plus
+ * Pusher channel auth, presence heartbeats, and N concurrent polling loops.
+ * After token expiry across multiple tabs we can legitimately see 20–60 calls
+ * within a few seconds; AUTH_LIMIT (5/min) would 429 and create a retry storm
+ * that never recovers. Refresh isn't brute-force-sensitive (the refresh cookie
+ * is httpOnly + DB-backed + reuse-detected), so the higher cap is safe.
+ */
+export const REFRESH_LIMIT: RateLimitConfig = {
+  maxRequests: process.env.NEXT_PUBLIC_MOCK_MODE === 'true' ? 120 : 60,
+  windowSeconds: 60,
+};
+
 /** Order creation: 20/min */
 export const ORDER_LIMIT: RateLimitConfig = {
   maxRequests: 20,

@@ -206,11 +206,14 @@ Orders have multiple automated timeout/expiration paths. Two execution engines d
 | STANDARD | 100 | 60s |
 | STRICT | 10 | 60s |
 | AUTH | 5 | 60s |
+| REFRESH | 60 | 60s |
 | ORDER | 20 | 60s |
 | PAYMENT | 5 | 60s |
 | MESSAGE | 30 | 60s |
 | SEARCH | 60 | 60s |
 | WEBHOOK | 200 | 60s |
+
+**REFRESH (not AUTH):** `/api/auth/refresh` uses `REFRESH_LIMIT` (60/min), not `AUTH_LIMIT` (5/min). Refresh fires automatically from every 401 across N polling loops + Pusher reconnects + multi-tab sessions; AUTH's 5/min was creating a 401↔429 retry storm that never recovered. Refresh is not brute-force-sensitive (httpOnly cookie, DB-backed, reuse-detected). `fetchWithAuth` also honours `Retry-After` on a 429 from refresh and suppresses further calls for the backoff window.
 
 Dual-mode: Redis-backed (distributed) with in-memory fallback.
 

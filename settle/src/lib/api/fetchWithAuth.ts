@@ -136,9 +136,24 @@ type RefreshResult =
 
 let refreshPromise: Promise<RefreshResult> | null = null;
 
+// Suppresses outbound refresh calls until this timestamp. Set when the
+// refresh endpoint returns 429 (or honours Retry-After). Without this guard,
+// every subsequent 401 across N polling loops + Pusher reconnects would fire
+// another refresh, immediately re-hit the rate-limit, and spin in a 401↔429
+// loop until the window resets (~60s) — the symptom that motivated this.
+let refreshBackoffUntilMs = 0;
+
 async function refreshAccessToken(): Promise<RefreshResult> {
   // If a refresh is already in-flight, piggyback on it
   if (refreshPromise) return refreshPromise;
+
+  // If we recently got 429'd, short-circuit and report transient failure
+  // without touching the network. Callers already handle `{ ok: false,
+  // revoked: false }` as transient (no forced logout), so behaviour matches
+  // a real 429 response — just without hammering the endpoint.
+  if (Date.now() < refreshBackoffUntilMs) {
+    return { ok: false, revoked: false };
+  }
 
   refreshPromise = (async (): Promise<RefreshResult> => {
     try {
@@ -157,10 +172,23 @@ async function refreshAccessToken(): Promise<RefreshResult> {
         return { ok: false, revoked: true };
       }
 
-      // Any other non-2xx (429 rate limit, 5xx, etc.) is TRANSIENT. The
-      // refresh cookie may still be valid; we just couldn't talk to the
-      // server right now. Keep the in-memory token so subsequent UI
-      // observers don't flip to "logged out" prematurely.
+      // 429 = we tripped the refresh rate-limit. Honour Retry-After if the
+      // server sent one, else default to 5s. During this window we suppress
+      // further refresh attempts (see refreshBackoffUntilMs above).
+      if (res.status === 429) {
+        const retryAfterHeader = res.headers.get('retry-after');
+        const retryAfterSec = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+        const backoffSec = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+          ? Math.min(retryAfterSec, 60)
+          : 5;
+        refreshBackoffUntilMs = Date.now() + backoffSec * 1000;
+        return { ok: false, revoked: false };
+      }
+
+      // Any other non-2xx (5xx etc.) is TRANSIENT. The refresh cookie may
+      // still be valid; we just couldn't talk to the server right now. Keep
+      // the in-memory token so subsequent UI observers don't flip to
+      // "logged out" prematurely.
       if (!res.ok) {
         return { ok: false, revoked: false };
       }
@@ -171,6 +199,9 @@ async function refreshAccessToken(): Promise<RefreshResult> {
         // durable copy is the rotated `blip_access_token` cookie that the
         // refresh route just set — we never touch sessionStorage.
         useMerchantStore.getState().setSessionToken(data.data.accessToken);
+        // Successful refresh clears any prior backoff so the next 401 can
+        // retry immediately.
+        refreshBackoffUntilMs = 0;
         return { ok: true, token: data.data.accessToken as string };
       }
 
