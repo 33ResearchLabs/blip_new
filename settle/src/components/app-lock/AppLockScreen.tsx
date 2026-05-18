@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Loader2, Lock, LogOut } from 'lucide-react';
 import { AppPinPad } from './AppPinPad';
 import { useAppLock } from '@/context/AppLockContext';
+import { useUserTheme } from '@/hooks/useUserTheme';
 import {
   verifyAppPin,
   cooldownSecondsRemaining,
@@ -24,6 +25,8 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
  *  PIN pad is always available as a fallback. */
 export function AppLockScreen() {
   const { userId, markUnlocked, clearForCurrentUser } = useAppLock();
+  const { theme } = useUserTheme();
+  const isLight = theme === 'light';
 
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -156,7 +159,7 @@ export function AppLockScreen() {
       animate={{ opacity: 1 }}
       className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center overflow-y-auto"
       style={{
-        background: 'rgba(6,6,6,0.96)',
+        background: isLight ? 'rgba(248,250,252,0.96)' : 'rgba(6,6,6,0.96)',
         backdropFilter: 'blur(20px)',
         paddingTop: 'max(env(safe-area-inset-top, 16px), 16px)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 16px)',
@@ -170,12 +173,29 @@ export function AppLockScreen() {
       <div className="w-full max-w-sm space-y-4 sm:space-y-6 my-auto">
         {/* Header */}
         <div className="flex flex-col items-center gap-2 sm:gap-3 pt-1 sm:pt-2">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center bg-accent/15 border border-accent/30">
-            <Lock className="w-5 h-5 sm:w-6 sm:h-6 text-accent" />
+          <div
+            className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center"
+            style={{
+              background: isLight ? 'rgba(15,23,42,0.06)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${isLight ? 'rgba(15,23,42,0.10)' : 'rgba(255,255,255,0.10)'}`,
+            }}
+          >
+            <Lock
+              className="w-5 h-5 sm:w-6 sm:h-6"
+              style={{ color: isLight ? '#0f172a' : '#ffffff' }}
+            />
           </div>
           <div className="text-center">
-            <h2 className="text-base sm:text-lg font-bold text-white font-mono">Welcome back</h2>
-            <p className="text-[11px] sm:text-[12px] text-white/50 font-mono mt-1">
+            <h2
+              className="text-base sm:text-lg font-bold font-mono"
+              style={{ color: isLight ? 'rgba(15,23,42,0.95)' : '#ffffff' }}
+            >
+              Welcome back
+            </h2>
+            <p
+              className="text-[11px] sm:text-[12px] font-mono mt-1"
+              style={{ color: isLight ? 'rgba(15,23,42,0.55)' : 'rgba(255,255,255,0.50)' }}
+            >
               {lockedOut
                 ? `Try again in ${cooldownLeft}s`
                 : biometricEnrolled
@@ -186,7 +206,14 @@ export function AppLockScreen() {
         </div>
 
         {error && (
-          <div className="px-3 py-2 rounded-lg text-[11px] font-mono text-center bg-red-500/10 border border-red-500/20 text-red-400">
+          <div
+            className="px-3 py-2 rounded-lg text-[11px] font-mono text-center"
+            style={{
+              background: isLight ? 'rgba(220,38,38,0.08)' : 'rgba(239,68,68,0.10)',
+              border: `1px solid ${isLight ? 'rgba(220,38,38,0.20)' : 'rgba(239,68,68,0.20)'}`,
+              color: isLight ? '#b91c1c' : '#f87171',
+            }}
+          >
             {error}
           </div>
         )}
@@ -200,10 +227,14 @@ export function AppLockScreen() {
           disabled={busy || biometricRunning || lockedOut || loggingOut}
           onBiometric={tryBiometric}
           showBiometric={biometricSupported && biometricEnrolled}
+          theme={theme}
         />
 
         {biometricRunning && (
-          <div className="flex items-center justify-center gap-2 text-[11px] text-white/55 font-mono">
+          <div
+            className="flex items-center justify-center gap-2 text-[11px] font-mono"
+            style={{ color: isLight ? 'rgba(15,23,42,0.55)' : 'rgba(255,255,255,0.55)' }}
+          >
             <Loader2 className="w-3 h-3 animate-spin" /> Waiting for biometrics…
           </div>
         )}
@@ -213,7 +244,8 @@ export function AppLockScreen() {
           type="button"
           onClick={doLogout}
           disabled={loggingOut}
-          className="w-full py-2 rounded-lg text-[11px] text-white/45 font-mono hover:text-white/70 hover:bg-white/[0.03] disabled:opacity-50 flex items-center justify-center gap-1.5"
+          className="w-full py-2 rounded-lg text-[11px] font-mono disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors"
+          style={{ color: isLight ? 'rgba(15,23,42,0.55)' : 'rgba(255,255,255,0.45)' }}
         >
           {loggingOut ? <Loader2 className="w-3 h-3 animate-spin" /> : <LogOut className="w-3 h-3" />}
           {loggingOut ? 'Signing out…' : 'Sign out instead'}

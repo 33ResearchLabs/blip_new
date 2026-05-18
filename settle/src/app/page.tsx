@@ -648,6 +648,7 @@ export default function Home() {
               selectedPair={tradeCreation.selectedPair}
               onPairChange={tradeCreation.setSelectedPair}
               setCurrentRate={tradeCreation.setCurrentRate}
+              theme={theme}
             />
           </Panel>
         )}

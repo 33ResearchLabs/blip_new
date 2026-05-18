@@ -60,6 +60,7 @@ export interface TradeCreationScreenProps {
   selectedPair?: "usdt_aed" | "usdt_inr";
   onPairChange?: (pair: "usdt_aed" | "usdt_inr") => void;
   setCurrentRate?: (rate: number) => void;
+  theme?: "dark" | "light";
 }
 
 // iOS 26 spring physics — snappy
@@ -75,11 +76,76 @@ function formatAmountInput(value: string): string {
 
 const QUICK_AMOUNTS = ["100", "500", "1000", "5000"];
 
-const T = {
+const TOKENS_DARK = {
   hi: "rgba(255,255,255,0.96)",
   md: "rgba(255,255,255,0.55)",
   lo: "rgba(255,255,255,0.32)",
   xl: "rgba(255,255,255,0.16)",
+  bg: "#07090F",
+  surface1: "rgba(255,255,255,0.05)",
+  surface2: "rgba(255,255,255,0.04)",
+  surface3: "rgba(255,255,255,0.08)",
+  surface4: "rgba(255,255,255,0.03)",
+  border1: "rgba(255,255,255,0.08)",
+  border2: "rgba(255,255,255,0.06)",
+  border3: "rgba(255,255,255,0.10)",
+  borderStrong: "rgba(255,255,255,0.32)",
+  borderStrongAlt: "rgba(255,255,255,0.28)",
+  divider: "rgba(255,255,255,0.10)",
+  handle: "rgba(255,255,255,0.14)",
+  dropdownBg: "rgba(20,24,32,0.85)",
+  dropdownBorder: "rgba(255,255,255,0.10)",
+  activeTileBg: "#FFFFFF",
+  activeTileText: "#0B0F14",
+  activeTileSubText: "rgba(11,15,20,0.65)",
+  activeTileBorder: "rgba(255,255,255,0.85)",
+  ctaInactiveBg: "rgba(255,255,255,0.05)",
+  ctaInactiveBorder: "rgba(255,255,255,0.08)",
+  ctaActiveBg: "#FFFFFF",
+  ctaActiveText: "#0B0F14",
+  ctaActiveBorder: "rgba(255,255,255,0.30)",
+  ctaActiveShadow:
+    "0 16px 36px -14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.6)",
+  sheetBg: "rgba(255,255,255,0.04)",
+  sheetBorder: "rgba(255,255,255,0.06)",
+  sheetShadow:
+    "0 -16px 36px -16px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
+};
+
+const TOKENS_LIGHT = {
+  hi: "rgba(15,23,42,0.95)",
+  md: "rgba(15,23,42,0.60)",
+  lo: "rgba(15,23,42,0.42)",
+  xl: "rgba(15,23,42,0.18)",
+  bg: "#ffffff",
+  surface1: "rgba(15,23,42,0.05)",
+  surface2: "rgba(15,23,42,0.04)",
+  surface3: "rgba(15,23,42,0.07)",
+  surface4: "rgba(15,23,42,0.03)",
+  border1: "rgba(15,23,42,0.10)",
+  border2: "rgba(15,23,42,0.08)",
+  border3: "rgba(15,23,42,0.12)",
+  borderStrong: "rgba(15,23,42,0.28)",
+  borderStrongAlt: "rgba(15,23,42,0.24)",
+  divider: "rgba(15,23,42,0.10)",
+  handle: "rgba(15,23,42,0.18)",
+  dropdownBg: "rgba(255,255,255,0.98)",
+  dropdownBorder: "rgba(15,23,42,0.10)",
+  activeTileBg: "#0f172a",
+  activeTileText: "#FFFFFF",
+  activeTileSubText: "rgba(255,255,255,0.70)",
+  activeTileBorder: "rgba(15,23,42,0.85)",
+  ctaInactiveBg: "rgba(15,23,42,0.05)",
+  ctaInactiveBorder: "rgba(15,23,42,0.10)",
+  ctaActiveBg: "#0f172a",
+  ctaActiveText: "#FFFFFF",
+  ctaActiveBorder: "rgba(15,23,42,0.30)",
+  ctaActiveShadow:
+    "0 16px 36px -14px rgba(15,23,42,0.20), inset 0 1px 0 rgba(255,255,255,0.10)",
+  sheetBg: "rgba(15,23,42,0.025)",
+  sheetBorder: "rgba(15,23,42,0.06)",
+  sheetShadow:
+    "0 -16px 36px -16px rgba(15,23,42,0.10), inset 0 1px 0 rgba(15,23,42,0.04)",
 };
 
 export const TradeCreationScreen = ({
@@ -104,10 +170,15 @@ export const TradeCreationScreen = ({
   selectedPair,
   onPairChange,
   setCurrentRate,
+  theme = "dark",
 }: TradeCreationScreenProps) => {
+  const isLight = theme === "light";
+  const T = isLight ? TOKENS_LIGHT : TOKENS_DARK;
   const hasAmount = !!amount && parseFloat(amount) > 0;
   const isBuy = tradeType === "buy";
-  const accent = isBuy ? "#34D399" : "#F87171";
+  const accent = isBuy
+    ? isLight ? "#059669" : "#34D399"
+    : isLight ? "#DC2626" : "#F87171";
 
   const [ratePair, setRatePairLocal] = useState<RatePair>(
     selectedPair || "usdt_inr",
@@ -190,7 +261,7 @@ export const TradeCreationScreen = ({
   return (
     <div
       className="relative flex flex-col min-h-[100dvh] overflow-y-auto"
-      style={{ background: "#07090F" }}
+      style={{ background: T.bg }}
     >
       {/* ── Ambient color glow that follows Buy / Sell ── */}
       {/* <motion.div
@@ -248,8 +319,8 @@ export const TradeCreationScreen = ({
                 gap: 6,
                 padding: "8px 12px",
                 borderRadius: 999,
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.08)",
+                background: T.surface1,
+                border: `1px solid ${T.border1}`,
                 backdropFilter: "blur(12px)",
                 WebkitBackdropFilter: "blur(12px)",
               }}
@@ -285,12 +356,13 @@ export const TradeCreationScreen = ({
                     minWidth: 110,
                     padding: 4,
                     borderRadius: 14,
-                    background: "rgba(20,24,32,0.85)",
-                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: T.dropdownBg,
+                    border: `1px solid ${T.dropdownBorder}`,
                     backdropFilter: "blur(20px)",
                     WebkitBackdropFilter: "blur(20px)",
-                    boxShadow:
-                      "0 18px 32px -16px rgba(0,0,0,0.55), 0 4px 10px -4px rgba(0,0,0,0.30)",
+                    boxShadow: isLight
+                      ? "0 18px 32px -16px rgba(15,23,42,0.18), 0 4px 10px -4px rgba(15,23,42,0.10)"
+                      : "0 18px 32px -16px rgba(0,0,0,0.55), 0 4px 10px -4px rgba(0,0,0,0.30)",
                   }}
                 >
                   {(["usdt_aed", "usdt_inr"] as const).map((p) => {
@@ -307,9 +379,7 @@ export const TradeCreationScreen = ({
                         style={{
                           padding: "8px 12px",
                           borderRadius: 10,
-                          background: on
-                            ? "rgba(255,255,255,0.08)"
-                            : "transparent",
+                          background: on ? T.surface3 : "transparent",
                         }}
                       >
                         <span
@@ -471,8 +541,8 @@ export const TradeCreationScreen = ({
               style={{
                 padding: "6px 12px",
                 borderRadius: 999,
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.08)",
+                background: T.surface1,
+                border: `1px solid ${T.border1}`,
                 backdropFilter: "blur(10px)",
                 WebkitBackdropFilter: "blur(10px)",
               }}
@@ -509,10 +579,11 @@ export const TradeCreationScreen = ({
                 style={{
                   padding: "6px 12px",
                   borderRadius: 999,
-                  background: "#FFFFFF",
-                  border: "1px solid rgba(255,255,255,0.6)",
-                  boxShadow:
-                    "0 6px 14px -6px rgba(255,255,255,0.30), inset 0 1px 0 rgba(255,255,255,0.85)",
+                  background: T.activeTileBg,
+                  border: `1px solid ${T.activeTileBorder}`,
+                  boxShadow: isLight
+                    ? "0 6px 14px -6px rgba(15,23,42,0.25), inset 0 1px 0 rgba(255,255,255,0.10)"
+                    : "0 6px 14px -6px rgba(255,255,255,0.30), inset 0 1px 0 rgba(255,255,255,0.85)",
                 }}
               >
                 <span
@@ -520,7 +591,7 @@ export const TradeCreationScreen = ({
                     fontSize: 11,
                     fontWeight: 800,
                     letterSpacing: "0.10em",
-                    color: "#0B0F14",
+                    color: T.activeTileText,
                   }}
                 >
                   MAX
@@ -554,10 +625,8 @@ export const TradeCreationScreen = ({
                 onClick={() => setTradeType(opt.type)}
                 whileTap={{ scale: 0.97 }}
                 animate={{
-                  background: on
-                    ? "#FFFFFF"
-                    : "rgba(255,255,255,0.04)",
-                  borderColor: "rgba(255,255,255,0.08)",
+                  background: on ? T.activeTileBg : T.surface2,
+                  borderColor: T.border1,
                   boxShadow: "none",
                 }}
                 transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
@@ -580,7 +649,7 @@ export const TradeCreationScreen = ({
                   <opt.Icon size={16} strokeWidth={2.6} />
                 </motion.span>
                 <motion.span
-                  animate={{ color: on ? "#0B0F14" : T.md }}
+                  animate={{ color: on ? T.activeTileText : T.md }}
                   transition={{ duration: 0.25 }}
                   style={{
                     fontSize: 14,
@@ -607,12 +676,11 @@ export const TradeCreationScreen = ({
           padding: "18px 18px calc(env(safe-area-inset-bottom, 12px) + 90px)",
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.06)",
+          background: T.sheetBg,
+          border: `1px solid ${T.sheetBorder}`,
           backdropFilter: "blur(28px) saturate(1.4)",
           WebkitBackdropFilter: "blur(28px) saturate(1.4)",
-          boxShadow:
-            "0 -16px 36px -16px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
+          boxShadow: T.sheetShadow,
         }}
       >
         {/* Pulled-handle pip */}
@@ -622,7 +690,7 @@ export const TradeCreationScreen = ({
               width: 36,
               height: 4,
               borderRadius: 999,
-              background: "rgba(255,255,255,0.14)",
+              background: T.handle,
             }}
           />
         </div>
@@ -652,8 +720,8 @@ export const TradeCreationScreen = ({
                   style={{
                     padding: "11px 14px",
                     borderRadius: 14,
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.06)",
+                    background: T.surface2,
+                    border: `1px solid ${T.border2}`,
                     gap: 12,
                   }}
                 >
@@ -707,7 +775,7 @@ export const TradeCreationScreen = ({
                           style={{
                             width: 1,
                             height: 26,
-                            background: "rgba(255,255,255,0.10)",
+                            background: T.divider,
                           }}
                         />
                       )}
@@ -782,12 +850,10 @@ export const TradeCreationScreen = ({
                       padding: "11px 12px",
                       borderRadius: 14,
                       gap: 10,
-                      background: on
-                        ? "rgba(255,255,255,0.08)"
-                        : "rgba(255,255,255,0.03)",
+                      background: on ? T.surface3 : T.surface4,
                       border: on
-                        ? "1px solid rgba(255,255,255,0.32)"
-                        : "1px solid rgba(255,255,255,0.06)",
+                        ? `1px solid ${T.borderStrong}`
+                        : `1px solid ${T.border2}`,
                     }}
                   >
                     <div
@@ -796,15 +862,13 @@ export const TradeCreationScreen = ({
                         width: 26,
                         height: 26,
                         borderRadius: 9,
-                        background: on
-                          ? "#FFFFFF"
-                          : "rgba(255,255,255,0.06)",
+                        background: on ? T.activeTileBg : T.surface3,
                       }}
                     >
                       <Icon
                         size={14}
                         strokeWidth={2.4}
-                        style={{ color: on ? "#0B0F14" : T.md }}
+                        style={{ color: on ? T.activeTileText : T.md }}
                       />
                     </div>
                     <div className="flex flex-col text-left min-w-0">
@@ -862,12 +926,10 @@ export const TradeCreationScreen = ({
                             gap: 12,
                             padding: "10px 12px",
                             borderRadius: 14,
-                            background: on
-                              ? "rgba(255,255,255,0.08)"
-                              : "rgba(255,255,255,0.03)",
+                            background: on ? T.surface3 : T.surface4,
                             border: on
-                              ? "1px solid rgba(255,255,255,0.28)"
-                              : "1px solid rgba(255,255,255,0.06)",
+                              ? `1px solid ${T.borderStrongAlt}`
+                              : `1px solid ${T.border2}`,
                           }}
                         >
                           <div
@@ -876,8 +938,8 @@ export const TradeCreationScreen = ({
                               width: 30,
                               height: 30,
                               borderRadius: 10,
-                              background: "rgba(255,255,255,0.06)",
-                              border: "1px solid rgba(255,255,255,0.08)",
+                              background: T.surface3,
+                              border: `1px solid ${T.border1}`,
                             }}
                           >
                             <span style={{ fontSize: 12, fontWeight: 800, color: T.hi }}>
@@ -906,8 +968,8 @@ export const TradeCreationScreen = ({
                                     color: T.lo,
                                     padding: "1px 5px",
                                     borderRadius: 999,
-                                    background: "rgba(255,255,255,0.06)",
-                                    border: "1px solid rgba(255,255,255,0.08)",
+                                    background: T.surface3,
+                                    border: `1px solid ${T.border1}`,
                                   }}
                                 >
                                   Default
@@ -936,10 +998,10 @@ export const TradeCreationScreen = ({
                                 width: 20,
                                 height: 20,
                                 borderRadius: 999,
-                                background: "#FFFFFF",
+                                background: T.activeTileBg,
                               }}
                             >
-                              <Check size={12} strokeWidth={2.8} style={{ color: "#0B0F14" }} />
+                              <Check size={12} strokeWidth={2.8} style={{ color: T.activeTileText }} />
                             </div>
                           )}
                         </motion.button>
@@ -980,8 +1042,8 @@ export const TradeCreationScreen = ({
               gap: 4,
               padding: 4,
               borderRadius: 16,
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.06)",
+              background: T.surface2,
+              border: `1px solid ${T.border2}`,
             }}
           >
             {(
@@ -1006,9 +1068,11 @@ export const TradeCreationScreen = ({
                       className="absolute inset-0"
                       style={{
                         borderRadius: 12,
-                        background: "#FFFFFF",
-                        border: "1px solid rgba(255,255,255,0.85)",
-                        boxShadow: "0 6px 14px -8px rgba(255,255,255,0.35)",
+                        background: T.activeTileBg,
+                        border: `1px solid ${T.activeTileBorder}`,
+                        boxShadow: isLight
+                          ? "0 6px 14px -8px rgba(15,23,42,0.25)"
+                          : "0 6px 14px -8px rgba(255,255,255,0.35)",
                       }}
                       transition={SPRING}
                     />
@@ -1019,7 +1083,7 @@ export const TradeCreationScreen = ({
                       fontSize: 11,
                       fontWeight: 800,
                       letterSpacing: "-0.005em",
-                      color: on ? "#0B0F14" : T.md,
+                      color: on ? T.activeTileText : T.md,
                     }}
                   >
                     {label}
@@ -1029,7 +1093,7 @@ export const TradeCreationScreen = ({
                     style={{
                       fontSize: 11,
                       fontWeight: 800,
-                      color: on ? "rgba(11,15,20,0.65)" : T.lo,
+                      color: on ? T.activeTileSubText : T.lo,
                       marginTop: 2,
                       fontFamily:
                         "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -1050,18 +1114,12 @@ export const TradeCreationScreen = ({
           whileTap={hasAmount ? { scale: 0.985 } : undefined}
           animate={{
             background:
-              hasAmount && !isLoading
-                ? "#FFFFFF"
-                : "rgba(255,255,255,0.05)",
-            color: hasAmount && !isLoading ? "#0B0F14" : T.md,
+              hasAmount && !isLoading ? T.ctaActiveBg : T.ctaInactiveBg,
+            color: hasAmount && !isLoading ? T.ctaActiveText : T.md,
             borderColor:
-              hasAmount && !isLoading
-                ? "rgba(255,255,255,0.30)"
-                : "rgba(255,255,255,0.08)",
+              hasAmount && !isLoading ? T.ctaActiveBorder : T.ctaInactiveBorder,
             boxShadow:
-              hasAmount && !isLoading
-                ? "0 16px 36px -14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.6)"
-                : "none",
+              hasAmount && !isLoading ? T.ctaActiveShadow : "none",
           }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           className="w-full flex items-center justify-center"
