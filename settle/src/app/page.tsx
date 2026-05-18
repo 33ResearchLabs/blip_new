@@ -581,6 +581,17 @@ export default function Home() {
               userBalance={auth.userBalance}
               maxW={maxW}
               notificationCount={notifications.filter((n) => !n.read).length}
+              onRefresh={async () => {
+                if (!auth.userId) return;
+                // Refresh the surfaces visible on home: orders list + bank
+                // accounts + resolved-dispute markers. Run in parallel so the
+                // spinner only stays up as long as the slowest request.
+                await Promise.all([
+                  fetchOrders(auth.userId),
+                  fetchBankAccounts(auth.userId),
+                  fetchResolvedDisputes(auth.userId),
+                ]);
+              }}
               onUpiPayConfirm={(data) => {
                 // Prefill the trade state with the scanned UPI payment as a
                 // SELL order, then route to the escrow screen where the

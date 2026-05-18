@@ -21,10 +21,12 @@ import {
 import * as QRCode from "qrcode";
 import { UpiPayScreen } from "@/components/user/UpiPayScreen";
 import { openIssueReporter } from "@/components/IssueReporter";
-import { useState as useStateHook, useEffect } from "react";
+import { useState as useStateHook, useEffect, useRef } from "react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { showAlert } from "@/context/ModalContext";
 import { BottomNav } from "./BottomNav";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { ArrowDown } from "lucide-react";
 import type { Screen, Order } from "./types";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
@@ -77,6 +79,12 @@ export interface HomeScreenProps {
   userBalance?: number;
   maxW: string;
   notificationCount?: number;
+  /**
+   * Pull-to-refresh handler. Wired to the transactions list scroll container.
+   * Should refetch orders + balances. May return a promise — the spinner
+   * spins until it resolves.
+   */
+  onRefresh?: () => void | Promise<void>;
 }
 
 function formatDate(d: Date) {
@@ -617,7 +625,42 @@ export const HomeScreen = ({
   maxW,
   notificationCount = 0,
   onUpiPayConfirm,
+  onRefresh,
 }: HomeScreenProps) => {
+  // ── Pull-to-refresh wiring ───────────────────────────────────────────────
+  // Attached to the white transactions list (the only scrollable surface on
+  // this screen). The threshold sits just above the sticky "Transactions"
+  // header so casual scrolling never triggers a refetch.
+  const txScrollRef = useRef<HTMLDivElement | null>(null);
+  const PTR_THRESHOLD = 68;
+  const {
+    pull: ptrPull,
+    status: ptrStatus,
+    progress: ptrProgress,
+    isRefreshing: ptrRefreshing,
+  } = usePullToRefresh({
+    onRefresh: async () => {
+      if (onRefresh) await onRefresh();
+    },
+    threshold: PTR_THRESHOLD,
+    enabled: !!onRefresh,
+    scrollContainerRef: txScrollRef,
+  });
+  const ptrActive = ptrPull > 0 || ptrRefreshing;
+  const ptrOverlayHeight = Math.max(ptrPull, ptrRefreshing ? PTR_THRESHOLD : 0);
+  const ptrIsDragging = ptrStatus === "pulling" || ptrStatus === "ready";
+  const ptrTransition = ptrIsDragging
+    ? "none"
+    : "transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1), height 360ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 360ms cubic-bezier(0.34, 1.56, 0.64, 1)";
+  const ptrIndicatorScale = 0.55 + Math.min(ptrProgress, 1) * 0.55;
+  const ptrIndicatorRotation = ptrRefreshing ? 0 : ptrProgress * 220;
+  const ptrLabel =
+    ptrStatus === "refreshing"
+      ? "Refreshing…"
+      : ptrStatus === "ready"
+        ? "Release to refresh"
+        : "Pull to refresh";
+
   const displayBalance = IS_MOCK_MODE ? (userBalance ?? 0) : solanaWallet.usdtBalance;
   const isWalletReady = IS_MOCK_MODE ? (userBalance !== undefined && userBalance !== null) : solanaWallet.connected;
 
@@ -932,6 +975,7 @@ export const HomeScreen = ({
           utilities inside resolve to dark-on-white tokens.
          ══════════════════════════════════════════════ */}
       <motion.div
+        ref={txScrollRef}
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -939,6 +983,8 @@ export const HomeScreen = ({
         style={{
           height: '40dvh',
           background: '#ffffff',
+          overscrollBehaviorY: 'contain',
+          WebkitOverflowScrolling: 'touch',
           // ── Force light tokens locally — overrides .user-scope (dark) tokens
           ['--color-surface-base' as any]: '#ffffff',
           ['--color-surface-raised' as any]: '#f7f8fa',
@@ -960,6 +1006,85 @@ export const HomeScreen = ({
           ['--accent-text' as any]: '#ffffff',
         }}
       >
+        {/* ── Pull-to-refresh indicator overlay ─────────────────────────── */}
+        {onRefresh && (
+          <>
+            <div
+              aria-hidden={!ptrActive}
+              className="pointer-events-none sticky top-0 left-0 right-0 z-30 flex items-end justify-center"
+              style={{
+                height: `${ptrOverlayHeight}px`,
+                marginBottom: `-${ptrOverlayHeight}px`,
+                transition: ptrTransition,
+                willChange: 'height',
+              }}
+            >
+              {/* Soft halo glow — fades in with pull progress */}
+              <div
+                className="absolute left-1/2 -translate-x-1/2 rounded-full blur-2xl"
+                style={{
+                  width: 180,
+                  height: 180,
+                  top: -50,
+                  background:
+                    'radial-gradient(circle, rgba(99,102,241,0.30) 0%, rgba(99,102,241,0.12) 38%, rgba(99,102,241,0) 72%)',
+                  opacity: Math.min(ptrProgress, 1) * 0.85,
+                  transform: `scale(${0.55 + Math.min(ptrProgress, 1) * 0.7})`,
+                  transition: ptrTransition,
+                }}
+              />
+              {/* Spinner pill */}
+              <div
+                className="relative mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-md"
+                style={{
+                  transform: `scale(${ptrIndicatorScale}) rotate(${ptrIndicatorRotation}deg)`,
+                  opacity: Math.min(0.2 + ptrProgress * 0.9, 1),
+                  transition: ptrTransition,
+                  boxShadow: `0 6px 22px -6px rgba(15,23,42,0.20), 0 0 ${24 * Math.min(ptrProgress, 1)}px rgba(99,102,241,${0.35 * Math.min(ptrProgress, 1)})`,
+                  border: '1px solid rgba(15,23,42,0.06)',
+                }}
+              >
+                {ptrRefreshing ? (
+                  <Loader2 className="h-[18px] w-[18px] animate-spin text-zinc-700" />
+                ) : (
+                  <ArrowDown
+                    className="h-[18px] w-[18px] text-zinc-700"
+                    style={{
+                      transform: `rotate(${ptrStatus === 'ready' ? 180 : 0}deg)`,
+                      transition: 'transform 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Floating status label */}
+            {ptrActive && (
+              <div
+                className="pointer-events-none sticky left-0 right-0 z-30 flex justify-center"
+                style={{
+                  top: Math.max(ptrOverlayHeight - 22, -22),
+                  marginBottom: 0,
+                  opacity: Math.min(ptrProgress * 1.4, 1),
+                  transition: ptrTransition,
+                }}
+              >
+                <span className="rounded-full bg-zinc-900/80 px-3 py-[3px] text-[10.5px] font-semibold tracking-wide text-white shadow-sm backdrop-blur-md">
+                  {ptrLabel}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Content shifts with the pull for a tactile, native-app feel. */}
+        <div
+          style={{
+            transform: onRefresh ? `translate3d(0, ${ptrPull}px, 0)` : undefined,
+            transition: onRefresh ? ptrTransition : undefined,
+            willChange: onRefresh ? 'transform' : undefined,
+          }}
+        >
         <div className={`${maxW} mx-auto px-5 pt-2`}>
 
           {/* Section title — sticky so it stays visible while rows scroll under it */}
@@ -1043,6 +1168,7 @@ export const HomeScreen = ({
               <p className="text-[11px] text-text-tertiary">Your trades will appear here</p>
             </motion.div>
           )}
+        </div>
         </div>
       </motion.div>
 
