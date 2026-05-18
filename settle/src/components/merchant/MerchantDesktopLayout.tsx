@@ -159,7 +159,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
   }, [ongoingOrders, merchantId]);
 
   return (
-    <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
+    <div className="hidden lg:flex lg:flex-col h-screen overflow-hidden">
       <PanelGroup
         orientation="horizontal"
         className="flex-1 overflow-hidden"

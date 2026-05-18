@@ -495,6 +495,8 @@ const STATUS_FILTERS: { value: FilterValue; label: string }[] = [
   { value: 'escrowed', label: 'Escrowed' },
   { value: 'payment_sent', label: 'Paid' },
   { value: 'cancel_requested', label: 'Cancel Req' },
+  { value: 'cancelled', label: 'Cancel' },
+  { value: 'disputed', label: 'Dispute' },
 ];
 
 export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId, lockingEscrowOrderId, confirmingOrderId, markingDone, acceptingOrderId, cancellingOrderId }: InProgressPanelProps) {
@@ -569,7 +571,7 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
         {/* Status Filter Pills */}
         {!collapsed && (
           <div
-            className="inline-flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] w-full"
+            className="flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] w-full overflow-x-auto scrollbar-hide"
             onClick={(e) => e.stopPropagation()}
           >
             {STATUS_FILTERS.map((f) => {
@@ -583,13 +585,13 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
                 <button
                   key={f.value}
                   onClick={() => setStatusFilter(f.value)}
-                  className={`flex-1 min-w-0 h-full px-1 xl:px-2 [@media(min-height:900px)]:px-2 inline-flex items-center justify-center rounded-md text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] font-bold transition-all ${
+                  className={`shrink-0 h-full px-2 xl:px-2.5 [@media(min-height:900px)]:px-2.5 inline-flex items-center justify-center rounded-md text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] font-bold whitespace-nowrap transition-all ${
                     isActive
                       ? 'bg-foreground text-background shadow'
                       : 'text-foreground/40 hover:text-foreground/60'
                   }`}
                 >
-                  <span className="truncate">
+                  <span className="whitespace-nowrap">
                     {f.label}{count > 0 ? ` ${count}` : ''}
                   </span>
                 </button>

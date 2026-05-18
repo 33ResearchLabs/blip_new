@@ -744,15 +744,15 @@ export default function MerchantSettingsPage({
           which felt sparse next to the wallet page sitting at a tighter
           width. Sidebar still gets its fixed 240px column; the rest goes
           to content. */}
-      <div className="w-full max-w-[1080px] mx-auto flex flex-col md:flex-row min-h-[calc(100vh-50px)]">
+      <div className="w-full max-w-[1080px] mx-auto flex flex-col lg:flex-row min-h-[calc(100vh-50px)]">
         {/* Sidebar Tabs — sticky on desktop so it stays visible while the
             content area scrolls. Anchored at top-[50px] (the height of the
             MerchantNavbar) and capped at the viewport so very long sidebars
             scroll internally instead of pushing the page taller. */}
-        <nav className="md:w-60 md:border-r border-white/[0.05] md:py-6 md:px-3 shrink-0 flex flex-col md:sticky md:top-[50px] md:self-start md:h-[calc(100vh-50px)] md:overflow-y-auto">
+        <nav className="lg:w-60 lg:border-r border-white/[0.05] lg:py-6 lg:px-3 shrink-0 flex flex-col lg:sticky lg:top-[50px] lg:self-start lg:h-[calc(100vh-50px)] lg:overflow-y-auto">
           {/* Mobile: horizontal scroll tabs (single flat list, no section
               headers — they only make sense in the vertical desktop layout). */}
-          <div className="flex md:hidden gap-1 overflow-x-auto px-3 py-2 scrollbar-hide">
+          <div className="flex lg:hidden gap-1 overflow-x-auto px-3 py-2 scrollbar-hide">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -774,7 +774,7 @@ export default function MerchantSettingsPage({
 
           {/* Desktop: grouped sidebar — ACCOUNT then PREFERENCES, with the
               Logout pinned at the bottom via mt-auto. */}
-          <div className="hidden md:flex md:flex-col gap-1 flex-1">
+          <div className="hidden lg:flex lg:flex-col gap-1 flex-1">
             <p className="px-3 mb-2 text-[10px] font-bold tracking-[0.18em] text-white/30 uppercase">
               Account
             </p>
@@ -831,7 +831,7 @@ export default function MerchantSettingsPage({
 
         {/* Content — full remaining width with a comfortable max so very
             wide monitors don't stretch the form fields edge-to-edge. */}
-        <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8 max-w-[1100px] w-full">
+        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 max-w-[1100px] w-full">
           {/* Success/Error banners */}
           {saveSuccess && (
             <motion.div
@@ -1747,8 +1747,8 @@ export default function MerchantSettingsPage({
                         }`}
                       >
                         <div
-                          className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-all ${
-                            on ? "left-[26px]" : "left-0.5"
+                          className={`w-5 h-5 rounded-full shadow-sm absolute top-0.5 transition-all ${
+                            on ? "left-[26px] bg-background" : "left-0.5 bg-white"
                           }`}
                         />
                       </button>

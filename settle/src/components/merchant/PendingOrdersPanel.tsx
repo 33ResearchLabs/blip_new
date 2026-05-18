@@ -1371,6 +1371,66 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
     return true;
   });
 
+  // Right-side header controls, split into two groups so we can move only the
+  // filter (sliders) toggle + count badge into the search row at tablet width
+  // (<xl), while Live / sound / refresh stay in row 1 next to the tabs.
+  const mainControls = (
+    <>
+      <div
+        className="inline-flex items-center justify-center gap-1 h-7 xl:h-8 [@media(min-height:900px)]:h-8 w-7 xl:w-auto [@media(min-height:900px)]:w-auto px-0 xl:px-1.5 [@media(min-height:900px)]:px-1.5 bg-foreground/[0.02] rounded border border-foreground/[0.06] shrink-0"
+        title="Live feed"
+      >
+        <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
+        <span className="hidden xl:inline [@media(min-height:900px)]:inline text-[9px] text-white/35 font-mono">Live</span>
+      </div>
+      <button
+        onClick={() => {
+          const next = !soundEnabled;
+          setSoundEnabled(next);
+          if (next) {
+            setTimeout(() => playSound?.("notification"), 0);
+          }
+        }}
+        className={`shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border transition-all ${
+          soundEnabled
+            ? "bg-primary/15 border-primary/30 text-primary ring-1 ring-primary/20"
+            : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/30 hover:bg-foreground/[0.05]"
+        }`}
+        title={
+          soundEnabled
+            ? "Sound on — click to mute"
+            : "Sound off — click to enable"
+        }
+      >
+        {soundEnabled ? (
+          <Volume2 className="w-3 h-3" />
+        ) : (
+          <VolumeX className="w-3 h-3" />
+        )}
+      </button>
+      <button
+        onClick={fetchOrders}
+        className="shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border border-foreground/[0.06] bg-foreground/[0.02] hover:bg-foreground/[0.05] transition-colors"
+      >
+        <RotateCcw className="w-3 h-3 text-foreground/25 hover:text-foreground/50" />
+      </button>
+    </>
+  );
+
+  const filterControls = (
+    <>
+      <button
+        onClick={() => setShowOrderFilters(!showOrderFilters)}
+        className={`shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border transition-all ${showOrderFilters || Object.values(orderFilters).some((v) => v !== "all") ? "bg-white/[0.08] border-foreground/[0.06] text-foreground/60" : "bg-foreground/[0.02] border-foreground/[0.06] hover:bg-foreground/[0.05] text-foreground/25"}`}
+      >
+        <SlidersHorizontal className="w-3 h-3" />
+      </button>
+      <span className="shrink-0 inline-flex items-center justify-center h-7 xl:h-8 [@media(min-height:900px)]:h-8 min-w-7 xl:min-w-8 [@media(min-height:900px)]:min-w-8 px-1.5 text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] border border-foreground/[0.08] text-foreground/50 rounded-full font-mono tabular-nums">
+        {filteredOrders.length}
+      </span>
+    </>
+  );
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -1406,55 +1466,12 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             })}
           </div>
           <div className="flex items-center gap-0.5 xl:gap-1 [@media(min-height:900px)]:gap-1 min-w-0">
-            <div
-              className="inline-flex items-center justify-center gap-1 h-7 xl:h-8 [@media(min-height:900px)]:h-8 w-7 xl:w-auto [@media(min-height:900px)]:w-auto px-0 xl:px-1.5 [@media(min-height:900px)]:px-1.5 bg-foreground/[0.02] rounded border border-foreground/[0.06] shrink-0"
-              title="Live feed"
-            >
-              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
-              <span className="hidden xl:inline [@media(min-height:900px)]:inline text-[9px] text-white/35 font-mono">Live</span>
-            </div>
-            <button
-              onClick={() => {
-                const next = !soundEnabled;
-                setSoundEnabled(next);
-                // Play confirmation ping when enabling. This click also acts as
-                // the required user gesture to unlock the browser's AudioContext.
-                if (next) {
-                  setTimeout(() => playSound?.("notification"), 0);
-                }
-              }}
-              className={`shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border transition-all ${
-                soundEnabled
-                  ? "bg-primary/15 border-primary/30 text-primary ring-1 ring-primary/20"
-                  : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/30 hover:bg-foreground/[0.05]"
-              }`}
-              title={
-                soundEnabled
-                  ? "Sound on — click to mute"
-                  : "Sound off — click to enable"
-              }
-            >
-              {soundEnabled ? (
-                <Volume2 className="w-3 h-3" />
-              ) : (
-                <VolumeX className="w-3 h-3" />
-              )}
-            </button>
-            <button
-              onClick={fetchOrders}
-              className="shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border border-foreground/[0.06] bg-foreground/[0.02] hover:bg-foreground/[0.05] transition-colors"
-            >
-              <RotateCcw className="w-3 h-3 text-foreground/25 hover:text-foreground/50" />
-            </button>
-            <button
-              onClick={() => setShowOrderFilters(!showOrderFilters)}
-              className={`shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border transition-all ${showOrderFilters || Object.values(orderFilters).some((v) => v !== "all") ? "bg-white/[0.08] border-foreground/[0.06] text-foreground/60" : "bg-foreground/[0.02] border-foreground/[0.06] hover:bg-foreground/[0.05] text-foreground/25"}`}
-            >
-              <SlidersHorizontal className="w-3 h-3" />
-            </button>
-            <span className="shrink-0 inline-flex items-center justify-center h-7 xl:h-8 [@media(min-height:900px)]:h-8 min-w-7 xl:min-w-8 [@media(min-height:900px)]:min-w-8 px-1.5 text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] border border-foreground/[0.08] text-foreground/50 rounded-full font-mono tabular-nums">
-              {filteredOrders.length}
-            </span>
+            {mainControls}
+            {/* Filter toggle + count: only in row 1 at xl+. Below xl they
+                render in the search row instead (see below). `xl:contents`
+                makes the wrapper transparent at xl+ so the buttons sit
+                directly in this flex container with the same gap. */}
+            <div className="hidden xl:contents">{filterControls}</div>
           </div>
         </div>
 
@@ -1618,6 +1635,12 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                 </motion.div>
               )}
             </AnimatePresence>
+          </div>
+
+          {/* Tablet view (<xl): only the filter toggle + count drop into the
+              search row. Live / sound / refresh stay in row 1 next to tabs. */}
+          <div className="flex xl:hidden items-center gap-1 shrink-0">
+            {filterControls}
           </div>
         </div>
 
