@@ -17,10 +17,10 @@ import {
   ACCESS_COOKIE_OPTIONS,
 } from '@/lib/auth/sessionToken';
 import { rotateRefreshToken } from '@/lib/auth/sessions';
-import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
+import { checkRateLimit, REFRESH_LIMIT } from '@/lib/middleware/rateLimit';
 
 export async function POST(request: NextRequest) {
-  const rl = await checkRateLimit(request, 'auth:refresh', AUTH_LIMIT);
+  const rl = await checkRateLimit(request, 'auth:refresh', REFRESH_LIMIT);
   if (rl) return rl;
 
   try {
