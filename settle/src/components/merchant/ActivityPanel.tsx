@@ -68,6 +68,18 @@ export const ActivityPanel = memo(function ActivityPanel({
     }
   }, [completedOrders.length, cancelledOrders.length]);
 
+  // Also refresh when wallet activity (swaps / cross-chain deposits)
+  // completes. swapHistory.recordSwap + depositHistory.recordDeposit
+  // dispatch a 'blip:wallet-activity' CustomEvent so the desktop
+  // transactions tab picks up the new on-chain signature on its next
+  // fetch instead of waiting for a poll/page-focus cycle.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => setTxnRefreshKey(k => k + 1);
+    window.addEventListener('blip:wallet-activity', handler);
+    return () => window.removeEventListener('blip:wallet-activity', handler);
+  }, []);
+
   const handleCollapse = (collapsed: boolean) => {
     setIsCollapsed(collapsed);
     onCollapseChange?.(collapsed);

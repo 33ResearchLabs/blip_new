@@ -36,6 +36,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { BalanceSparkline } from "./BalanceSparkline";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { loadSwaps, type SwapRecord } from "@/lib/wallet/swapHistory";
+import { loadDeposits, type DepositRecord } from "@/lib/wallet/depositHistory";
 import {
   loadEncryptedWallet,
   decryptWallet,
@@ -138,6 +139,10 @@ export function MobileHomeView({
   // Bumps when a swap completes so the Recent Activity feed re-reads
   // localStorage. Initial mount pulls swaps once via useMemo (below).
   const [swapHistoryTick, setSwapHistoryTick] = useState(0);
+  // Same pattern for cross-chain deposits — bumped from the LI.FI bridge
+  // success callback so a freshly-landed deposit shows in the activity
+  // feed without waiting for the on-chain TX poll to find the signature.
+  const [depositHistoryTick, setDepositHistoryTick] = useState(0);
 
   const merchantIdForWallet: string | undefined = merchantInfo?.id;
 
@@ -991,6 +996,7 @@ export function MobileHomeView({
           type Item =
             | { kind: "trade"; key: string; ts: number; data: typeof recentOrders[number] }
             | { kind: "swap"; key: string; ts: number; data: SwapRecord }
+            | { kind: "deposit"; key: string; ts: number; data: DepositRecord }
             | { kind: "tx"; key: string; ts: number; data: OnChainTx };
           const items: Item[] = [];
 
@@ -1009,6 +1015,23 @@ export function MobileHomeView({
                 key: `s-${s.signature}`,
                 ts: s.blockTime ?? 0,
                 data: s,
+              });
+            }
+          }
+
+          // Cross-chain deposits (LI.FI). Same surfacing rules as swaps —
+          // they're a first-class wallet activity that lands on Solana
+          // out-of-band of the order pipeline. Reading the tick keeps the
+          // closure reactive when a new deposit completes.
+          void depositHistoryTick;
+          const deposits = loadDeposits(merchantIdForWallet);
+          if (activityTab === "trades" || activityTab === "all") {
+            for (const d of deposits) {
+              items.push({
+                kind: "deposit",
+                key: `d-${d.destSignature}`,
+                ts: d.blockTime ?? 0,
+                data: d,
               });
             }
           }
@@ -1209,6 +1232,59 @@ export function MobileHomeView({
                     );
                   }
 
+                  // Deposit row — cross-chain USDT bridged via LI.FI.
+                  // Tap opens the Solana destination tx in the explorer
+                  // (the source-chain hash lives in the record for future
+                  // "view source" links). Visual treatment mirrors the
+                  // swap row so the activity feed stays scannable.
+                  if (item.kind === "deposit") {
+                    const d = item.data;
+                    const ageSec = d.blockTime
+                      ? Math.max(0, Math.floor(Date.now() / 1000 - d.blockTime))
+                      : null;
+                    const ageLabel = !ageSec
+                      ? "—"
+                      : ageSec < 60
+                        ? `${ageSec}s`
+                        : ageSec < 3600
+                          ? `${Math.floor(ageSec / 60)}m`
+                          : ageSec < 86400
+                            ? `${Math.floor(ageSec / 3600)}h`
+                            : `${Math.floor(ageSec / 86400)}d`;
+                    return (
+                      <a
+                        key={item.key}
+                        href={`${explorerBaseUrl.includes("?") ? explorerBaseUrl.replace("/?", `/tx/${d.destSignature}?`) : `${explorerBaseUrl}/tx/${d.destSignature}`}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 hover:bg-foreground/[0.05] transition-colors"
+                      >
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-500/15 text-emerald-400 shrink-0"
+                          aria-label="Deposit"
+                        >
+                          <ArrowDownLeft className="w-5 h-5" strokeWidth={2.5} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            Deposit from {d.sourceChain}
+                          </p>
+                          <p className="text-[11px] text-foreground/40 tabular-nums">
+                            +{d.amountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-emerald-400 tabular-nums">
+                            +{d.amountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </p>
+                          <p className="text-[10px] text-foreground/40">
+                            {ageLabel} ago
+                          </p>
+                        </div>
+                      </a>
+                    );
+                  }
+
                   // tx row
                   const tx = item.data;
                   const success = !tx.err;
@@ -1291,6 +1367,13 @@ export function MobileHomeView({
         isOpen={depositOpen}
         onClose={() => setDepositOpen(false)}
         walletAddress={solanaWallet?.walletAddress ?? null}
+        actorId={merchantIdForWallet}
+        onDepositSuccess={() => {
+          solanaWallet?.refreshBalances?.();
+          // Re-read the deposit-history slice so the newly-recorded
+          // deposit appears in Recent Activity immediately.
+          setDepositHistoryTick((n) => n + 1);
+        }}
       />
 
       {/* ── Send modal — outbound transfer of SOL / USDT / USDC ── */}
