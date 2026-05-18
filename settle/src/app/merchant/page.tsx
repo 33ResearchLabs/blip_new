@@ -759,7 +759,7 @@ export default function MerchantDashboard() {
     >
       {/* Offset clears the sticky MerchantNavbar (h-12 mobile / h-[50px] desktop)
           so warning toasts don't overlap the bug-icon and avatar dropdown. */}
-      <NotificationToastContainer position="top-right" topOffsetClass="top-14 md:top-[58px]" />
+      <NotificationToastContainer position="top-right" topOffsetClass="top-14 lg:top-[58px]" />
       {tour.enabled && (
         <MerchantTour run={tour.isRunning} onComplete={tour.completeTour} />
       )}
@@ -1007,7 +1007,7 @@ export default function MerchantDashboard() {
 
       {/* Mobile Notifications Overlay */}
       {showNotifications && (
-        <div className="md:hidden fixed inset-0 z-[55]">
+        <div className="lg:hidden fixed inset-0 z-[55]">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNotifications(false)} />
           <div className="absolute inset-0 bg-card-solid flex flex-col animate-in slide-in-from-right duration-200">
             {/* Header */}

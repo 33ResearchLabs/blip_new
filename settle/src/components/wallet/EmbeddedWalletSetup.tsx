@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Key, Download, Copy, Check, AlertTriangle } from 'lucide-react';
+import { Loader2, Key, Download, Copy, Check, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   generateMnemonicWallet,
@@ -58,6 +58,11 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
   // tap-driven; stacking two would crowd the modal).
   const [createStep, setCreateStep] = useState<'enter' | 'confirm'>('enter');
   const [errorTick, setErrorTick] = useState(0);
+  // Import tab PIN UX — PhonePe-style: two displays (PIN + Confirm PIN),
+  // tapping one opens the keypad targeting that field; eye toggle reveals
+  // entered digits. activePinField = null hides the keypad entirely.
+  const [activePinField, setActivePinField] = useState<'pin' | 'confirm' | null>(null);
+  const [showPin, setShowPin] = useState(false);
 
   // After creation — show backup key + recovery phrase
   const [createdKeypair, setCreatedKeypair] = useState<Keypair | null>(null);
@@ -408,17 +413,83 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
             </div>
 
             <p className="text-sm font-mono text-center" style={{ color: colors.text.secondary }}>
-              Encrypt with your 6-digit sign-in PIN.
+              Set a 6-digit PIN to encrypt your wallet.
             </p>
-            <div style={{ maxWidth: 320, width: '100%', margin: '0 auto' }}>
-              <AppPinPad
+
+            {/* PIN + Confirm PIN displays — tap to open the keypad for that
+                field. PhonePe-style: dots show how many digits are entered;
+                the eye toggle reveals the actual digits in both fields. */}
+            <div className="flex flex-col gap-2">
+              <PinFieldDisplay
+                label="PIN"
                 value={password}
-                onChange={setPassword}
-                onComplete={(v) => { if (privateKeyInput.trim()) handleImport(v); }}
                 length={PIN_LENGTH}
-                disabled={isLoading}
+                active={activePinField === 'pin'}
+                show={showPin}
+                onClick={() => setActivePinField('pin')}
+              />
+              <PinFieldDisplay
+                label="Confirm PIN"
+                value={confirmPassword}
+                length={PIN_LENGTH}
+                active={activePinField === 'confirm'}
+                show={showPin}
+                onClick={() => setActivePinField('confirm')}
+                trailing={
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowPin((s) => !s); }}
+                    className="p-1.5 rounded-md transition-colors hover:bg-white/[0.06]"
+                    aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
+                  >
+                    {showPin ? (
+                      <EyeOff className="w-4 h-4" style={{ color: colors.text.tertiary }} />
+                    ) : (
+                      <Eye className="w-4 h-4" style={{ color: colors.text.tertiary }} />
+                    )}
+                  </button>
+                }
               />
             </div>
+
+            {/* Keypad — only appears after a field is tapped. Entering 6
+                digits in PIN auto-advances to Confirm PIN; matching both
+                triggers the import. Mismatched confirm shakes + clears. */}
+            <AnimatePresence>
+              {activePinField && (
+                <motion.div
+                  key={activePinField}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ maxWidth: 320, width: '100%', margin: '0 auto' }}
+                >
+                  <AppPinPad
+                    value={activePinField === 'pin' ? password : confirmPassword}
+                    onChange={(v) => {
+                      if (activePinField === 'pin') setPassword(v);
+                      else setConfirmPassword(v);
+                    }}
+                    onComplete={(v) => {
+                      if (activePinField === 'pin') {
+                        setActivePinField('confirm');
+                      } else if (v === password) {
+                        if (privateKeyInput.trim()) handleImport(v);
+                        else setError('Paste your recovery phrase or private key above.');
+                      } else {
+                        setError('PINs do not match');
+                        setErrorTick((t) => t + 1);
+                        setConfirmPassword('');
+                      }
+                    }}
+                    length={PIN_LENGTH}
+                    errorTick={errorTick}
+                    disabled={isLoading}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {isLoading && (
               <div className="flex items-center justify-center gap-2 pt-2" style={{ color: colors.text.secondary }}>
@@ -434,5 +505,76 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
         </p>
       </motion.div>
     </div>
+  );
+}
+
+interface PinFieldDisplayProps {
+  label: string;
+  value: string;
+  length: number;
+  active: boolean;
+  show: boolean;
+  onClick: () => void;
+  trailing?: React.ReactNode;
+}
+
+function PinFieldDisplay({
+  label,
+  value,
+  length,
+  active,
+  show,
+  onClick,
+  trailing,
+}: PinFieldDisplayProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left rounded-xl px-4 py-3 transition-colors"
+      style={{
+        background: 'rgba(255,255,255,0.02)',
+        border: `1px solid ${active ? colors.accent.primary : 'rgba(255,255,255,0.08)'}`,
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <p
+            className="text-[10px] font-mono uppercase tracking-[0.15em] mb-1.5"
+            style={{ color: colors.text.tertiary }}
+          >
+            {label}
+          </p>
+          <div className="flex items-center gap-2 h-6">
+            {Array.from({ length }).map((_, i) => {
+              const filled = i < value.length;
+              if (show && filled) {
+                return (
+                  <span
+                    key={i}
+                    className="text-base font-mono tabular-nums"
+                    style={{ color: '#fff', minWidth: 10, textAlign: 'center' }}
+                  >
+                    {value[i]}
+                  </span>
+                );
+              }
+              return (
+                <span
+                  key={i}
+                  className="rounded-full"
+                  style={{
+                    width: 8,
+                    height: 8,
+                    background: filled ? '#fff' : 'rgba(255,255,255,0.18)',
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        {trailing}
+      </div>
+    </button>
   );
 }

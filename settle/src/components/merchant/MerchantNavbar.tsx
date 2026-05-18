@@ -142,13 +142,13 @@ export function MerchantNavbar({
   return (
     <>
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border-strong">
-        <div className="relative h-12 md:h-[50px] flex items-center px-3 md:px-4 gap-3">
+        <div className="relative h-12 lg:h-[50px] flex items-center px-3 lg:px-4 gap-3">
           {/* Mobile back button — only on overlay screens that pass onBack */}
           {onBack && (
             <button
               onClick={onBack}
               aria-label="Back to dashboard"
-              className="md:hidden -ml-1 p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors"
+              className="lg:hidden -ml-1 p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors"
             >
               <ChevronLeft className="w-5 h-5 text-foreground/70" />
             </button>
@@ -173,7 +173,7 @@ export function MerchantNavbar({
               what flanks them. `pointer-events-none` on the wrapper keeps the
               empty space click-through; the inner <nav> re-enables pointer
               events for the pills themselves. */}
-          <div className="hidden md:flex items-center gap-2 absolute left-1/2 -translate-x-1/2 pointer-events-none">
+          <div className="hidden lg:flex items-center gap-2 absolute left-1/2 -translate-x-1/2 pointer-events-none">
             <nav className="pointer-events-auto flex items-center gap-0.5 bg-foreground/[0.03] rounded-lg p-[3px]">
               <Link
                 href="/merchant"
@@ -229,7 +229,7 @@ export function MerchantNavbar({
           {/* Right: Desktop — Avatar dropdown | Mobile — Notification + Hamburger */}
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             {/* Desktop: rightActions + avatar dropdown */}
-            <div className="hidden md:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-2">
               {/* Onboarding-incomplete chip — feature-flagged glanceable
                   reminder. Sits to the LEFT of the rightActions (history
                   icon, connection indicator, etc.) so it sits at the
@@ -372,7 +372,7 @@ export function MerchantNavbar({
             </div>
 
             {/* Mobile: Corridor dropdown + Notification bell + Hamburger */}
-            <div className="flex md:hidden items-center gap-1">
+            <div className="flex lg:hidden items-center gap-1">
               {/* {activeCorridor && onCorridorChange && (
                 <FilterDropdown<string>
                   value={activeCorridor}
@@ -448,7 +448,7 @@ export function MerchantNavbar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] md:hidden"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden"
               onClick={() => setDrawerOpen(false)}
             />
             {/* Drawer panel */}
@@ -457,7 +457,7 @@ export function MerchantNavbar({
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed top-0 right-0 bottom-0 w-[280px] bg-card-solid border-l border-foreground/[0.06] z-[61] md:hidden flex flex-col"
+              className="fixed top-0 right-0 bottom-0 w-[280px] bg-card-solid border-l border-foreground/[0.06] z-[61] lg:hidden flex flex-col"
             >
               {/* Drawer header */}
               <div className="flex items-center justify-between p-4 border-b border-foreground/[0.06]">

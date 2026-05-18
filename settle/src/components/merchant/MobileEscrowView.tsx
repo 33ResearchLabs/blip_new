@@ -124,6 +124,7 @@ type EscrowStatusFilter =
   | "accepted"
   | "escrowed"
   | "payment_sent"
+  | "cancelled"
   | "disputed";
 
 const ESCROW_STATUS_OPTIONS: ReadonlyArray<{
@@ -134,7 +135,8 @@ const ESCROW_STATUS_OPTIONS: ReadonlyArray<{
   { key: "accepted", label: "Accepted" },
   { key: "escrowed", label: "Escrowed" },
   { key: "payment_sent", label: "Paid" },
-  { key: "disputed", label: "Cancel Disp" },
+  { key: "cancelled", label: "Cancel" },
+  { key: "disputed", label: "Dispute" },
 ];
 
 export interface MobileEscrowViewProps {
@@ -205,7 +207,7 @@ export function MobileEscrowView({
           </span>
         </div>
         <div
-          className="flex items-center gap-0.5 p-0.5 h-9 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08]"
+          className="flex items-center gap-0.5 p-0.5 h-9 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] overflow-x-auto scrollbar-hide"
           role="tablist"
           aria-label="Filter active orders by status"
         >
@@ -217,7 +219,7 @@ export function MobileEscrowView({
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setStatusFilter(opt.key)}
-                className={`flex-1 min-w-0 inline-flex items-center justify-center h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
+                className={`shrink-0 inline-flex items-center justify-center h-full px-3 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
                   isActive
                     ? "bg-white text-black shadow"
                     : "text-foreground/60 hover:text-foreground/80"

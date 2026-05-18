@@ -40,7 +40,7 @@ export function MobilePriceTicker() {
     <div
       role="marquee"
       aria-label="Live USDT and corridor prices"
-      className="md:hidden relative overflow-hidden bg-foreground/[0.02] border-b border-foreground/[0.04] py-1.5"
+      className="lg:hidden relative overflow-hidden bg-foreground/[0.02] border-b border-foreground/[0.04] py-1.5"
     >
       <div className="flex w-max animate-marquee-x">
         {Strip}

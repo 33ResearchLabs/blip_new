@@ -125,7 +125,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
   return (
     <>
       {/* Mobile View Content */}
-      <div className="md:hidden flex-1 flex flex-col overflow-hidden">
+      <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-auto p-3 pb-20">
           {mobileView === "home" && (
             <MobileHomeView
@@ -236,7 +236,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setShowOpenTradeModal(true)}
-          className="md:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-primary shadow-lg shadow-primary/25 flex items-center justify-center"
+          className="lg:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-primary shadow-lg shadow-primary/25 flex items-center justify-center"
         >
           <Plus className="w-6 h-6 text-background" />
         </motion.button>
