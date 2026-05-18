@@ -112,8 +112,12 @@ export function LandingPage({
       router.push("/merchant/login?tab=signin");
     }
   };
-  // Setter unused — navigation to the form happens via /login URL, not state toggle.
-  const [showWelcome] = useState(!skipWelcome);
+  // Derived directly from the `skipWelcome` prop (which is itself read from
+  // `?welcome=skip` in the URL) so that client-side navigation back to "/"
+  // — e.g. tapping the Home button — flips us out of the form view and
+  // back to the welcome chooser. Using `useState` here would freeze the
+  // value at first mount and the Home button would appear to do nothing.
+  const showWelcome = !skipWelcome;
   // Track which fields the user has interacted with so we don't surface
   // "required" errors before they've even started typing.
   const [touched, setTouched] = useState<{ username?: boolean; password?: boolean }>({});
