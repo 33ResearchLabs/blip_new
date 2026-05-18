@@ -423,33 +423,72 @@ export function TradeFormModal({
                     rate · Blip service fee · Boost · Final). Legacy
                     "Trade Preview" card preserved below the flag so we
                     can flip back instantly if needed. */}
-                {/* Final settlement line — Open Trade is the 0%-fee
-                    normal path under the new fee model, so we don't
-                    show a breakdown; merchant rate × amount = final
-                    fiat, full stop. Legacy "Trade Preview" / per-tier
-                    FeeBreakdown kept under the FEE_UI_V2=false branch
-                    for one-flag rollback. */}
+                {/* Settlement breakdown — shows merchant rate, optional
+                    priority boost adjustment, then the final amount the
+                    merchant nets. Normal trades (boost = 0) reduce to
+                    a one-line "rate × amount = final" without noise,
+                    matching the no-breakdown-for-0%-fee spec; the boost
+                    rows only appear when the slider is non-zero. */}
                 {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (() => {
                   const usdtAmount = parseFloat(openTradeForm.cryptoAmount);
-                  const fiatAmount = liveRate ? usdtAmount * liveRate : null;
+                  const baseFiat = liveRate ? usdtAmount * liveRate : null;
+                  const boost = openTradeForm.boostPct ?? 0;
+                  // Boost direction: a SELL-USDT order creator gives
+                  // up a slice of their fiat to attract a buyer faster
+                  // (received fiat goes DOWN); a BUY-USDT creator pays
+                  // a premium to attract a seller (paid fiat goes UP).
+                  // From the merchant's POV the "you receive" line
+                  // tracks fiat for sell and crypto for buy, so the
+                  // adjustment is always a deduction visually.
+                  const boostFiat = baseFiat !== null ? baseFiat * (boost / 100) : null;
+                  const finalFiat =
+                    baseFiat !== null && boostFiat !== null
+                      ? openTradeForm.tradeType === "sell"
+                        ? baseFiat - boostFiat
+                        : baseFiat + boostFiat
+                      : baseFiat;
                   if (FEE_UI_V2) {
                     return (
-                      <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] px-4 py-3 flex items-center justify-between gap-2">
-                        <span className="flex flex-col">
-                          <span className="text-[10px] font-medium uppercase tracking-wider text-foreground/40">
-                            You receive
-                          </span>
-                          {liveRate && (
-                            <span className="text-[10px] text-foreground/35 mt-0.5">
-                              @ {formatRate(liveRate)} {fiatCcy} / USDT
+                      <div className="rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                        {/* Header row — always shows */}
+                        <div className="px-4 py-3 flex items-center justify-between gap-2 border-b border-white/[0.04]">
+                          <span className="flex flex-col">
+                            <span className="text-[10px] font-medium uppercase tracking-wider text-foreground/40">
+                              {openTradeForm.tradeType === "sell" ? "You receive" : "You pay"}
                             </span>
-                          )}
-                        </span>
-                        <span className="text-sm font-bold tabular-nums text-foreground">
-                          {fiatAmount !== null
-                            ? `${formatCrypto(fiatAmount)} ${fiatCcy}`
-                            : "—"}
-                        </span>
+                            {liveRate && (
+                              <span className="text-[10px] text-foreground/35 mt-0.5">
+                                @ {formatRate(liveRate)} {fiatCcy} / USDT
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-sm font-bold tabular-nums text-foreground">
+                            {finalFiat !== null
+                              ? `${formatCrypto(finalFiat)} ${fiatCcy}`
+                              : "—"}
+                          </span>
+                        </div>
+                        {/* Boost breakdown — only rendered when active */}
+                        {boost > 0 && (
+                          <div className="px-4 py-2.5 space-y-1.5 text-[11px]">
+                            <div className="flex items-center justify-between">
+                              <span className="text-foreground/55">Merchant rate</span>
+                              <span className="tabular-nums font-medium text-foreground/80">
+                                {baseFiat !== null ? `${formatCrypto(baseFiat)} ${fiatCcy}` : "—"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-primary/80">
+                                Priority Boost ({boost.toFixed(0)}%)
+                              </span>
+                              <span className="tabular-nums font-medium text-primary">
+                                {boostFiat !== null
+                                  ? `${openTradeForm.tradeType === "sell" ? "−" : "+"}${formatCrypto(boostFiat)} ${fiatCcy}`
+                                  : "—"}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   }
@@ -473,7 +512,7 @@ export function TradeFormModal({
                         <div className="flex justify-between pt-2 border-t border-white/[0.04]">
                           <span className="text-foreground/40">{fiatCcy} Amount</span>
                           <span className="text-white font-bold">
-                            {fiatAmount !== null ? `${formatCrypto(fiatAmount)} ${fiatCcy}` : "—"}
+                            {baseFiat !== null ? `${formatCrypto(baseFiat)} ${fiatCcy}` : "—"}
                           </span>
                         </div>
                       </div>
