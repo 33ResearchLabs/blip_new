@@ -19,6 +19,9 @@ interface AppPinPadProps {
    *  keypad. Bottom-right always has the backspace key. */
   onBiometric?: () => void;
   showBiometric?: boolean;
+  /** Drives dot/key colors. Defaults to dark for callers (e.g. PinSheet)
+   *  that haven't opted in to theming yet. */
+  theme?: 'dark' | 'light';
 }
 
 const HAPTIC_MS = 12;
@@ -46,7 +49,14 @@ export function AppPinPad({
   disabled = false,
   onBiometric,
   showBiometric = false,
+  theme = 'dark',
 }: AppPinPadProps) {
+  const isLight = theme === 'light';
+  const keyBg = isLight ? 'rgba(15,23,42,0.05)' : 'rgba(255,255,255,0.04)';
+  const keyText = isLight ? 'rgba(15,23,42,0.95)' : '#ffffff';
+  const iconColor = isLight ? 'rgba(15,23,42,0.75)' : 'rgba(255,255,255,0.80)';
+  const dotFilled = isLight ? '#0f172a' : '#ffffff';
+  const dotEmpty = isLight ? 'rgba(15,23,42,0.18)' : 'rgba(255,255,255,0.18)';
   // Drive the shake animation directly off the parent's tick — using
   // errorTick as the framer-motion `key` retriggers the animation on
   // every increment without needing a local state mirror. The vibrate
@@ -91,7 +101,7 @@ export function AppPinPad({
               style={{
                 background: errorTick > 0 && value.length === 0
                   ? '#dc2626'
-                  : filled ? '#fff' : 'rgba(255,255,255,0.18)',
+                  : filled ? dotFilled : dotEmpty,
                 transition: 'background-color 120ms',
               }}
             />
@@ -107,7 +117,14 @@ export function AppPinPad({
         aria-label="PIN keypad"
       >
         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-          <KeypadKey key={n} label={String(n)} onPress={() => press(String(n))} disabled={disabled} />
+          <KeypadKey
+            key={n}
+            label={String(n)}
+            onPress={() => press(String(n))}
+            disabled={disabled}
+            keyBg={keyBg}
+            keyText={keyText}
+          />
         ))}
 
         {/* Bottom row: biometric | 0 | backspace */}
@@ -118,15 +135,21 @@ export function AppPinPad({
             disabled={disabled}
             aria-label="Unlock with biometrics"
             className="aspect-square rounded-2xl flex items-center justify-center transition-colors disabled:opacity-40"
-            style={{ background: 'rgba(255,255,255,0.04)' }}
+            style={{ background: keyBg }}
           >
-            <Fingerprint className="w-5 h-5 sm:w-6 sm:h-6 text-white/80" />
+            <Fingerprint className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: iconColor }} />
           </button>
         ) : (
           <div aria-hidden="true" />
         )}
 
-        <KeypadKey label="0" onPress={() => press('0')} disabled={disabled} />
+        <KeypadKey
+          label="0"
+          onPress={() => press('0')}
+          disabled={disabled}
+          keyBg={keyBg}
+          keyText={keyText}
+        />
 
         <button
           type="button"
@@ -134,9 +157,9 @@ export function AppPinPad({
           disabled={disabled || !value.length}
           aria-label="Delete last digit"
           className="aspect-video rounded-2xl flex items-center justify-center transition-opacity disabled:opacity-30"
-          style={{ background: 'rgba(255,255,255,0.04)' }}
+          style={{ background: keyBg }}
         >
-          <Delete className="w-4 h-4 sm:w-5 sm:h-5 text-white/80" />
+          <Delete className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: iconColor }} />
         </button>
       </div>
     </div>
@@ -147,17 +170,19 @@ interface KeypadKeyProps {
   label: string;
   onPress: () => void;
   disabled: boolean;
+  keyBg: string;
+  keyText: string;
 }
 
-function KeypadKey({ label, onPress, disabled }: KeypadKeyProps) {
+function KeypadKey({ label, onPress, disabled, keyBg, keyText }: KeypadKeyProps) {
   return (
     <motion.button
       type="button"
       whileTap={{ scale: 0.92 }}
       onClick={onPress}
       disabled={disabled}
-      className="aspect-video rounded-2xl p-2 flex items-center justify-center text-xl sm:text-2xl font-light text-white disabled:opacity-30"
-      style={{ background: 'rgba(255,255,255,0.04)' }}
+      className="aspect-video rounded-2xl p-2 flex items-center justify-center text-xl sm:text-2xl font-light disabled:opacity-30"
+      style={{ background: keyBg, color: keyText }}
       aria-label={`Digit ${label}`}
     >
       <AnimatePresence>
