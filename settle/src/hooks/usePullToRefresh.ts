@@ -21,6 +21,19 @@ export interface UsePullToRefreshOptions {
    * is at the top.
    */
   scrollContainerRef?: RefObject<HTMLElement | null>;
+  /**
+   * Element to attach touch listeners to. Defaults to `scrollContainerRef`
+   * (or window). Use this when you want the gesture to trigger from a
+   * larger surface (e.g. the whole screen) while still gating on a nested
+   * scroll container's position via {@link isAtTop}.
+   */
+  targetRef?: RefObject<HTMLElement | null>;
+  /**
+   * Custom "is the user at the top" predicate. Overrides the default
+   * `scrollContainerRef.scrollTop === 0` check. Useful when the listener
+   * surface differs from the scroll surface (nested scroll layouts).
+   */
+  isAtTop?: () => boolean;
 }
 
 function getScrollTop(container: HTMLElement | null): number {
@@ -45,6 +58,8 @@ export function usePullToRefresh({
   resistance = 0.55,
   enabled = true,
   scrollContainerRef,
+  targetRef,
+  isAtTop,
 }: UsePullToRefreshOptions) {
   const [pull, setPull] = useState(0);
   const [status, setStatus] = useState<PullStatus>("idle");
@@ -67,8 +82,15 @@ export function usePullToRefresh({
     // interfering with regular drag interactions on desktop.
     if (!("ontouchstart" in window)) return;
 
-    const target: HTMLElement | Window = scrollContainerRef?.current ?? window;
+    // Listener target — defaults to the scroll container (or window) when not
+    // explicitly provided. Use a separate listener surface when the gesture
+    // should originate from a wrapping element while gating on a nested
+    // scroll container's position via `isAtTop`.
+    const target: HTMLElement | Window =
+      targetRef?.current ?? scrollContainerRef?.current ?? window;
     const getEl = (): HTMLElement | null => scrollContainerRef?.current ?? null;
+    const atTop = (): boolean =>
+      isAtTop ? isAtTop() : getScrollTop(getEl()) <= 0;
 
     const scheduleSetPull = (next: number) => {
       pullRef.current = next;
@@ -90,7 +112,7 @@ export function usePullToRefresh({
     const onTouchStart = (e: TouchEvent) => {
       if (refreshingRef.current) return;
       if (e.touches.length !== 1) return;
-      if (getScrollTop(getEl()) > 0) return;
+      if (!atTop()) return;
       startYRef.current = e.touches[0].clientY;
       activeRef.current = false;
     };
@@ -110,7 +132,7 @@ export function usePullToRefresh({
 
       // The user may have scrolled away from the top mid-gesture (e.g. they
       // pulled, then the page momentum kept scrolling down). Bail out.
-      if (getScrollTop(getEl()) > 0) {
+      if (!atTop()) {
         reset(true);
         return;
       }
@@ -188,7 +210,7 @@ export function usePullToRefresh({
         rafRef.current = null;
       }
     };
-  }, [enabled, threshold, maxPull, resistance, scrollContainerRef]);
+  }, [enabled, threshold, maxPull, resistance, scrollContainerRef, targetRef, isAtTop]);
 
   return {
     /** Current visual pull distance in px (after resistance + clamping). */

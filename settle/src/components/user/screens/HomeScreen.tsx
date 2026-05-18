@@ -628,9 +628,13 @@ export const HomeScreen = ({
   onRefresh,
 }: HomeScreenProps) => {
   // ── Pull-to-refresh wiring ───────────────────────────────────────────────
-  // Attached to the white transactions list (the only scrollable surface on
-  // this screen). The threshold sits just above the sticky "Transactions"
-  // header so casual scrolling never triggers a refetch.
+  // Listener attaches to the whole home screen (`homeRootRef`) so the gesture
+  // works from the dark hero as well as the white transactions list. The
+  // "at top" gate reads the inner transactions list's scrollTop — when that
+  // list is scrolled mid-way down, pulling-down scrolls the list instead of
+  // triggering a refresh. When it's at top (or the user touches above the
+  // list, where there's nothing to scroll), the pull triggers refresh.
+  const homeRootRef = useRef<HTMLDivElement | null>(null);
   const txScrollRef = useRef<HTMLDivElement | null>(null);
   const PTR_THRESHOLD = 68;
   const {
@@ -644,7 +648,9 @@ export const HomeScreen = ({
     },
     threshold: PTR_THRESHOLD,
     enabled: !!onRefresh,
+    targetRef: homeRootRef,
     scrollContainerRef: txScrollRef,
+    isAtTop: () => (txScrollRef.current?.scrollTop ?? 0) <= 0,
   });
   const ptrActive = ptrPull > 0 || ptrRefreshing;
   const ptrOverlayHeight = Math.max(ptrPull, ptrRefreshing ? PTR_THRESHOLD : 0);
@@ -722,11 +728,89 @@ export const HomeScreen = ({
 
   return (
     <div
+      ref={homeRootRef}
       className="relative flex flex-col h-[100dvh] overflow-hidden  "
       // White parent so the hero's rounded bottom corners reveal white
       // behind them — otherwise the curves disappear against a dark parent.
-      style={{ background: '#fff' }}
+      style={{ background: '#fff', touchAction: 'pan-y' }}
     >
+      {/* ══════════════════════════════════════════════════════════════════
+          PULL-TO-REFRESH INDICATOR — surfaces at the very top of the home
+          screen so the gesture works regardless of where the user starts
+          the pull (dark hero or white transactions list). The halo + pill
+          fade and scale with pull progress; the arrow rotates 180° at the
+          threshold and swaps for a spinning loader during the refetch.
+         ══════════════════════════════════════════════════════════════════ */}
+      {onRefresh && (
+        <div
+          aria-hidden={!ptrActive}
+          className="pointer-events-none absolute left-0 right-0 top-0 z-[60] flex items-end justify-center"
+          style={{
+            height: `${ptrOverlayHeight}px`,
+            transition: ptrTransition,
+            willChange: 'height',
+          }}
+        >
+          {/* Soft halo glow — uses a light tint so it reads against the
+              dark hero background. */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 rounded-full blur-2xl"
+            style={{
+              width: 200,
+              height: 200,
+              top: -60,
+              background:
+                'radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(167,180,255,0.28) 38%, rgba(167,180,255,0) 72%)',
+              opacity: Math.min(ptrProgress, 1) * 0.9,
+              transform: `scale(${0.55 + Math.min(ptrProgress, 1) * 0.7})`,
+              transition: ptrTransition,
+            }}
+          />
+          {/* Spinner pill — bg is white so it reads on the dark hero. */}
+          <div
+            className="relative mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-white"
+            style={{
+              transform: `scale(${ptrIndicatorScale}) rotate(${ptrIndicatorRotation}deg)`,
+              opacity: Math.min(0.2 + ptrProgress * 0.9, 1),
+              transition: ptrTransition,
+              boxShadow: `0 8px 24px -6px rgba(0,0,0,0.45), 0 0 ${28 * Math.min(ptrProgress, 1)}px rgba(167,180,255,${0.45 * Math.min(ptrProgress, 1)})`,
+              border: '1px solid rgba(255,255,255,0.85)',
+            }}
+          >
+            {ptrRefreshing ? (
+              <Loader2 className="h-[18px] w-[18px] animate-spin text-zinc-800" />
+            ) : (
+              <ArrowDown
+                className="h-[18px] w-[18px] text-zinc-800"
+                style={{
+                  transform: `rotate(${ptrStatus === 'ready' ? 180 : 0}deg)`,
+                  transition: 'transform 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating status label below the spinner */}
+      {onRefresh && ptrActive && (
+        <div
+          className="pointer-events-none absolute left-0 right-0 z-[60] flex justify-center"
+          style={{
+            top: Math.max(ptrOverlayHeight - 20, -20),
+            opacity: Math.min(ptrProgress * 1.4, 1),
+            transition: ptrTransition,
+          }}
+        >
+          <span
+            className="rounded-full px-3 py-[3px] text-[10.5px] font-semibold tracking-wide text-white shadow-sm backdrop-blur-md"
+            style={{ background: 'rgba(15,23,42,0.78)' }}
+          >
+            {ptrLabel}
+          </span>
+        </div>
+      )}
+
 
       {/* ══════════════════════════════════════════════
           HERO CARD — premium dark "card" surface,
@@ -1006,85 +1090,6 @@ export const HomeScreen = ({
           ['--accent-text' as any]: '#ffffff',
         }}
       >
-        {/* ── Pull-to-refresh indicator overlay ─────────────────────────── */}
-        {onRefresh && (
-          <>
-            <div
-              aria-hidden={!ptrActive}
-              className="pointer-events-none sticky top-0 left-0 right-0 z-30 flex items-end justify-center"
-              style={{
-                height: `${ptrOverlayHeight}px`,
-                marginBottom: `-${ptrOverlayHeight}px`,
-                transition: ptrTransition,
-                willChange: 'height',
-              }}
-            >
-              {/* Soft halo glow — fades in with pull progress */}
-              <div
-                className="absolute left-1/2 -translate-x-1/2 rounded-full blur-2xl"
-                style={{
-                  width: 180,
-                  height: 180,
-                  top: -50,
-                  background:
-                    'radial-gradient(circle, rgba(99,102,241,0.30) 0%, rgba(99,102,241,0.12) 38%, rgba(99,102,241,0) 72%)',
-                  opacity: Math.min(ptrProgress, 1) * 0.85,
-                  transform: `scale(${0.55 + Math.min(ptrProgress, 1) * 0.7})`,
-                  transition: ptrTransition,
-                }}
-              />
-              {/* Spinner pill */}
-              <div
-                className="relative mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-md"
-                style={{
-                  transform: `scale(${ptrIndicatorScale}) rotate(${ptrIndicatorRotation}deg)`,
-                  opacity: Math.min(0.2 + ptrProgress * 0.9, 1),
-                  transition: ptrTransition,
-                  boxShadow: `0 6px 22px -6px rgba(15,23,42,0.20), 0 0 ${24 * Math.min(ptrProgress, 1)}px rgba(99,102,241,${0.35 * Math.min(ptrProgress, 1)})`,
-                  border: '1px solid rgba(15,23,42,0.06)',
-                }}
-              >
-                {ptrRefreshing ? (
-                  <Loader2 className="h-[18px] w-[18px] animate-spin text-zinc-700" />
-                ) : (
-                  <ArrowDown
-                    className="h-[18px] w-[18px] text-zinc-700"
-                    style={{
-                      transform: `rotate(${ptrStatus === 'ready' ? 180 : 0}deg)`,
-                      transition: 'transform 220ms cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* Floating status label */}
-            {ptrActive && (
-              <div
-                className="pointer-events-none sticky left-0 right-0 z-30 flex justify-center"
-                style={{
-                  top: Math.max(ptrOverlayHeight - 22, -22),
-                  marginBottom: 0,
-                  opacity: Math.min(ptrProgress * 1.4, 1),
-                  transition: ptrTransition,
-                }}
-              >
-                <span className="rounded-full bg-zinc-900/80 px-3 py-[3px] text-[10.5px] font-semibold tracking-wide text-white shadow-sm backdrop-blur-md">
-                  {ptrLabel}
-                </span>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Content shifts with the pull for a tactile, native-app feel. */}
-        <div
-          style={{
-            transform: onRefresh ? `translate3d(0, ${ptrPull}px, 0)` : undefined,
-            transition: onRefresh ? ptrTransition : undefined,
-            willChange: onRefresh ? 'transform' : undefined,
-          }}
-        >
         <div className={`${maxW} mx-auto px-5 pt-2`}>
 
           {/* Section title — sticky so it stays visible while rows scroll under it */}
@@ -1168,7 +1173,6 @@ export const HomeScreen = ({
               <p className="text-[11px] text-text-tertiary">Your trades will appear here</p>
             </motion.div>
           )}
-        </div>
         </div>
       </motion.div>
 
