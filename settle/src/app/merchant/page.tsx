@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Bell, Plus, Loader2, History, X } from "lucide-react";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
+import { getNotifPrefs } from "@/hooks/useNotifPrefs";
 import { useWebSocketChat } from "@/hooks/useWebSocketChat";
 // useDirectChat removed — replaced by order-based chat via useMerchantConversations
 import {
@@ -60,6 +61,18 @@ export default function MerchantDashboard() {
   const merchantInfo = useMerchantStore((s) => s.merchantInfo);
   const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
   const isLoading = useMerchantStore((s) => s.isLoading);
+
+  // Hydrate sound pref from localStorage on boot. The settings page persists
+  // `blip_sound_enabled`, but useSounds gates on merchantStore.soundEnabled —
+  // without this one-shot sync the saved pref was ignored after every reload.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("blip_sound_enabled");
+      if (saved !== null) {
+        useMerchantStore.getState().setSoundEnabled(saved === "true");
+      }
+    } catch {}
+  }, []);
 
   // Onboarding tour — env-controlled, shows once per merchant on first login.
   // Pass DB completion timestamp so the hook can suppress the tour across
@@ -387,9 +400,13 @@ export default function MerchantDashboard() {
       chatId?: string,
       message?: { from: string; text: string },
     ) => {
-      playSound("message");
+      // Conversation refresh always runs — that's data state, not an alert.
+      // Sound + toast are the merchant-visible alert and respect the
+      // "Chat Messages" pref (default true → unchanged behavior).
+      const { chatMessages } = getNotifPrefs();
+      if (chatMessages) playSound("message");
       fetchOrderConversationsRef.current?.();
-      if (message && message.from !== "me") {
+      if (message && message.from !== "me" && chatMessages) {
         toast.showNewMessage("User", message.text?.substring(0, 80));
       }
     },

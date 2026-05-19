@@ -388,18 +388,29 @@ export default function MerchantSettingsPage({
     fetchMerchant();
   }, [fetchMerchant]);
 
-  // Load notification settings from localStorage
+  // Load notification settings from localStorage and sync sound pref into
+  // the runtime store. Without the store sync, useSounds (which gates on
+  // merchantStore.soundEnabled) ignored the saved preference entirely.
   useEffect(() => {
+    let soundFromSaved: boolean | null = null;
     const saved = localStorage.getItem("blip_notif_settings");
     if (saved) {
       try {
-        setNotifSettings(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        setNotifSettings(parsed);
+        if (typeof parsed?.sound === "boolean") soundFromSaved = parsed.sound;
       } catch {}
     }
 
     const soundPref = localStorage.getItem("blip_sound_enabled");
     if (soundPref !== null) {
-      setNotifSettings((prev) => ({ ...prev, sound: soundPref === "true" }));
+      const v = soundPref === "true";
+      setNotifSettings((prev) => ({ ...prev, sound: v }));
+      soundFromSaved = v;
+    }
+
+    if (soundFromSaved !== null) {
+      useMerchantStore.getState().setSoundEnabled(soundFromSaved);
     }
   }, []);
 
@@ -655,6 +666,9 @@ export default function MerchantSettingsPage({
   const handleSaveNotifications = () => {
     localStorage.setItem("blip_notif_settings", JSON.stringify(notifSettings));
     localStorage.setItem("blip_sound_enabled", String(notifSettings.sound));
+    // Apply sound pref to the runtime store immediately so the change
+    // takes effect without a page reload.
+    useMerchantStore.getState().setSoundEnabled(notifSettings.sound);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
   };
