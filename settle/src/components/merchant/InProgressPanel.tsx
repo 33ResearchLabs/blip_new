@@ -494,9 +494,9 @@ const STATUS_FILTERS: { value: FilterValue; label: string }[] = [
   { value: 'accepted', label: 'Accepted' },
   { value: 'escrowed', label: 'Escrowed' },
   { value: 'payment_sent', label: 'Paid' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'disputed', label: 'Disputed' },
   { value: 'cancel_requested', label: 'Cancel Req' },
-  { value: 'cancelled', label: 'Cancel' },
-  { value: 'disputed', label: 'Dispute' },
 ];
 
 export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId, lockingEscrowOrderId, confirmingOrderId, markingDone, acceptingOrderId, cancellingOrderId }: InProgressPanelProps) {
