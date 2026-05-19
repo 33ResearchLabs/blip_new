@@ -48,13 +48,13 @@ const fade = {
   animate: { opacity: 1 },
   exit: { opacity: 1 },
   transition: { duration: 0 },
-};
+} as const;
 const slide = {
   initial: { opacity: 0, x: '8%' },
   animate: { opacity: 1, x: 0 },
   exit: { opacity: 0, x: '-8%' },
-  transition: { duration: 0.26, ease: [0.22, 1, 0.36, 1] },
-};
+  transition: { duration: 0.26, ease: [0.22, 1, 0.36, 1] as const },
+} as const;
 const darkBg = { background: "#080810" } as const;
 const lightPanelBg = { background: "#ffffff" } as const;
 function Panel({
