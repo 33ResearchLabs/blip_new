@@ -5,7 +5,6 @@ import {
   AlertCircle,
   ChevronRight,
   Computer,
-  CreditCard,
   Fingerprint,
   Key,
   Loader2,
@@ -25,12 +24,6 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface AppLockSettingsCardProps {
   userId: string | null;
-  /** Number of payment methods configured (banks + UPI etc.). Drives the
-   *  "N Added" status pill on the Payment Methods row. */
-  paymentMethodCount?: number;
-  /** Tap handler for the Payment Methods row. Parent typically scrolls
-   *  to or expands its existing PaymentMethodSelector section. */
-  onOpenPaymentMethods?: () => void;
 }
 
 type LockModal =
@@ -58,8 +51,6 @@ type DetailSheet = 'trusted-devices' | 'change-password' | null;
  */
 export function AppLockSettingsCard({
   userId,
-  paymentMethodCount = 0,
-  onOpenPaymentMethods,
 }: AppLockSettingsCardProps) {
   const settings = useAppPinSettings(userId);
   const { refreshPinStatus, lock: forceLock } = useAppLock();
@@ -146,11 +137,6 @@ export function AppLockSettingsCard({
       ? { label: 'Active', tone: 'on' as const }
       : { label: 'Off', tone: 'off' as const };
 
-  const pmStatus =
-    paymentMethodCount > 0
-      ? { label: `${paymentMethodCount} Added`, tone: 'on' as const }
-      : { label: 'None', tone: 'off' as const };
-
   const deviceStatus =
     deviceCount === null
       ? { label: 'Loading', tone: 'muted' as const }
@@ -232,16 +218,7 @@ export function AppLockSettingsCard({
           errorText={bioError || undefined}
         />
 
-        {/* 3 — Payment Methods ───────────────────────────────────────── */}
-        <SecurityRow
-          icon={<CreditCard className="w-[15px] h-[15px]" />}
-          title="Payment Methods"
-          subtitle="Manage bank accounts and UPI"
-          status={pmStatus}
-          onClick={() => onOpenPaymentMethods?.()}
-        />
-
-        {/* 4 — Trusted Devices ──────────────────────────────────────── */}
+        {/* 3 — Trusted Devices ──────────────────────────────────────── */}
         <SecurityRow
           icon={<Smartphone className="w-[15px] h-[15px]" />}
           title="Trusted Devices"
@@ -250,7 +227,7 @@ export function AppLockSettingsCard({
           onClick={() => setSheet('trusted-devices')}
         />
 
-        {/* 5 — Change Password ──────────────────────────────────────── */}
+        {/* 4 — Change Password ──────────────────────────────────────── */}
         <SecurityRow
           icon={<Key className="w-[15px] h-[15px]" />}
           title="Change Password"

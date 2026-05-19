@@ -24,6 +24,10 @@ export interface PaymentMethodItem {
   label: string;
   details: Record<string, string>;
   is_active: boolean;
+  /** True for the user's primary method (migration 127). Pickers should
+   *  preselect this; managers should pin it to the top with a "Default"
+   *  pill. Older API responses may omit this field — treat as false. */
+  is_default?: boolean;
 }
 
 interface PaymentMethodSelectorProps {
@@ -97,9 +101,11 @@ export const PaymentMethodSelector = ({
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
           setMethods(data.data);
-          // Auto-select first if nothing selected
+          // Auto-select the user's default if nothing selected — falls back
+          // to the first row (API already returns is_default DESC, created_at DESC).
           if (!selectedId && data.data.length > 0) {
-            onSelect(data.data[0]);
+            const def = data.data.find((m: PaymentMethodItem) => m.is_default) ?? data.data[0];
+            onSelect(def);
           }
         }
       })
