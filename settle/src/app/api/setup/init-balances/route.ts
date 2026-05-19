@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
+import { requireAdminAuth } from '@/lib/middleware/auth';
 
 /**
  * POST /api/setup/init-balances
@@ -8,9 +9,22 @@ import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
  * Only works in MOCK_MODE
  */
 export async function POST(request: NextRequest) {
+  // Block in production regardless of MOCK_MODE. MOCK_MODE alone is too
+  // weak a gate — a single env-var misconfig flips it on and turns this
+  // into an unauthenticated "set every user's balance to N" button.
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'This endpoint is disabled in production' },
+      { status: 403 }
+    );
+  }
   if (!MOCK_MODE) {
     return NextResponse.json({ error: 'Only available in mock mode' }, { status: 403 });
   }
+  // Admin auth REQUIRED. This route rewrites every balance in the DB —
+  // even in dev/mock it must not be reachable without an admin token.
+  const authError = await requireAdminAuth(request);
+  if (authError) return authError;
 
   try {
 

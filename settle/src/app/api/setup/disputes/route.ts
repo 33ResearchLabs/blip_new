@@ -8,11 +8,10 @@ export async function GET(request: NextRequest) {
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ success: false, error: 'Disabled in production' }, { status: 403 });
   }
-  // Require admin auth if configured
-  if (process.env.ADMIN_SECRET) {
-    const authError = await requireAdminAuth(request);
-    if (authError) return authError;
-  }
+  // Admin auth REQUIRED unconditionally — see clear-orders/route.ts for
+  // rationale. requireAdminAuth fails closed when ADMIN_SECRET is unset.
+  const authError = await requireAdminAuth(request);
+  if (authError) return authError;
   const results: string[] = [];
 
   try {

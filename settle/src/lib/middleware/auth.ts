@@ -571,8 +571,17 @@ export async function getVerifiedAuthContext(
             console.warn('[AUTH] Rejecting header auth — refresh cookie session invalid', { actorId: auth.actorId });
             return null;
           }
-        } catch {
-          // If session check fails, allow the request (don't break dev)
+        } catch (err) {
+          // SECURITY: previously this catch silently fell through, allowing
+          // the request to proceed with header-derived identity whenever the
+          // cookie session check threw (DB blip, import failure, etc.).
+          // That turned any transient infra hiccup into an unauthenticated
+          // takeover window in any env with ALLOW_HEADER_AUTH on. Fail closed.
+          console.warn('[AUTH] Rejecting header auth — session check threw', {
+            actorId: auth.actorId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
         }
       }
     }
@@ -689,8 +698,15 @@ export async function requireTokenAuth(
   //
   // Pre-cookie-migration this check only recognised (1); rejecting (2) here
   // would 401 every browser-issued sensitive call right after login.
+  //
+  // SECURITY: previously `hasAccessCookie` was just `!!cookie.value` —
+  // any non-empty string like `blip_access_token=x` satisfied the gate.
+  // Combined with a header-derived `auth` (dev ALLOW_HEADER_AUTH path),
+  // this let forged-header callers pass the strict-token gate with a
+  // junk cookie. Now we HMAC-verify the cookie value here too.
   const hasBearer = !!request.headers.get('authorization')?.startsWith('Bearer ');
-  const hasAccessCookie = !!request.cookies.get('blip_access_token')?.value;
+  const accessCookieValue = request.cookies.get('blip_access_token')?.value;
+  const hasAccessCookie = !!accessCookieValue && !!verifySessionToken(accessCookieValue);
   const hasValidToken = hasBearer || hasAccessCookie;
 
   if (hasValidToken) {

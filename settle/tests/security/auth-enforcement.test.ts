@@ -24,11 +24,15 @@ function mockRequest(path: string, headers: Record<string, string | null> = {}):
 }
 
 describe('Suite 1: Token System', () => {
-  test('T1: Legacy token gen+verify', () => {
+  test('T1: Legacy 4-part token is REJECTED (Phase B — generator kept, verifier drops 4-part)', () => {
+    // Pre-Phase-B this asserted legacy tokens verified. The 4-part branch
+    // was a stealable Bearer credential surface for up to 7 days. Phase A
+    // stopped minting them; Phase B drops the verifier branch entirely.
+    // The generator (`generateSessionToken`) is kept so this regression
+    // test can prove that a tokens-of-that-shape no longer authenticate.
     const token = generateSessionToken({ actorId: 'merch-1', actorType: 'merchant' })!;
-    const payload = verifySessionToken(token);
-    expect(payload?.actorId).toBe('merch-1');
-    expect(payload?.actorType).toBe('merchant');
+    expect(token).toBeTruthy();
+    expect(verifySessionToken(token)).toBeNull();
   });
 
   test('T2: Access token gen+verify', () => {
@@ -144,11 +148,15 @@ describe('Suite 2: Auth Middleware (Production Mode)', () => {
     expect(ctx?.merchantId).toBe('merch-789'); // supplementary, not identity
   });
 
-  test('T7: Legacy 7-day token still accepted', () => {
+  test('T7: Legacy 4-part token is REJECTED (Phase B — no longer accepted)', () => {
+    // Pre-Phase-A `data.token` was a 7-day HMAC Bearer; Phase A stopped
+    // minting them and Phase B drops the verifier branch. Any 4-part
+    // Bearer presented to the auth layer now returns null, eliminating
+    // replay of pre-Phase-A tokens lifted from logs / stored state.
     const token = generateSessionToken({ actorId: 'legacy-merch', actorType: 'merchant' })!;
     const req = mockRequest('/api/merchant/orders', { 'authorization': `Bearer ${token}` });
     const ctx = getAuthContext(req);
-    expect(ctx?.actorId).toBe('legacy-merch');
+    expect(ctx).toBeNull();
   });
 
   test('T8: Compliance token with merchant context', () => {

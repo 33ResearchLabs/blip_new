@@ -12,11 +12,11 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Require admin auth even in dev (unless ADMIN_SECRET not set)
-  if (process.env.ADMIN_SECRET) {
-    const authError = await requireAdminAuth(request);
-    if (authError) return authError;
-  }
+  // Admin auth REQUIRED unconditionally — the previous "only if
+  // ADMIN_SECRET is set" gate left this open whenever the env var was
+  // missing. requireAdminAuth fails closed when ADMIN_SECRET is unset.
+  const authError = await requireAdminAuth(request);
+  if (authError) return authError;
 
   const results: string[] = [];
 

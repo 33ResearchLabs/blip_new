@@ -143,6 +143,25 @@ let refreshPromise: Promise<RefreshResult> | null = null;
 // loop until the window resets (~60s) — the symptom that motivated this.
 let refreshBackoffUntilMs = 0;
 
+// Consecutive-401 tracking.
+//
+// Background: when /api/auth/refresh fails with a *non-401/403* status
+// (5xx, 429, network) we classify it `revoked: false` and intentionally
+// DO NOT force-logout — a single transient infra blip shouldn't eject a
+// valid user. Cost of that policy alone: if cookies are genuinely dead
+// but refresh keeps returning transient failures (or `hadToken` is false
+// so refresh is skipped entirely), every subsequent API call 401s, the
+// UI never recovers, and the user sees a zombie "still logged in"
+// dashboard with no data — the bug shown in the screenshot.
+//
+// Fix: count consecutive 401s on protected routes. If the count crosses
+// AUTH_FAILURE_LOGOUT_THRESHOLD before any 2xx resets it, we treat the
+// session as effectively dead and force logout. Three is a deliberate
+// balance — high enough to absorb one bad 5xx, low enough that a real
+// session-loss is a short stuck-state, not a permanent one.
+const AUTH_FAILURE_LOGOUT_THRESHOLD = 3;
+let consecutiveAuthFailures = 0;
+
 async function refreshAccessToken(): Promise<RefreshResult> {
   // If a refresh is already in-flight, piggyback on it
   if (refreshPromise) return refreshPromise;
@@ -714,6 +733,13 @@ async function executeWithRefresh(
       const bodyPeek = await peekBody(response);
       void logApiFailure(url, method, response.status, bodyPeek);
     }
+    // Any 2xx on a protected-path call clears the consecutive-401 counter —
+    // the session is demonstrably alive. Status >= 400 from a non-auth
+    // endpoint without 401 (e.g. 403, 422) does NOT reset the counter
+    // because it doesn't prove the session is valid.
+    if (response.ok && shouldForceLogoutOn401(url)) {
+      consecutiveAuthFailures = 0;
+    }
     return response;
   }
 
@@ -724,18 +750,38 @@ async function executeWithRefresh(
   // longer attach that header. Cookies aren't readable from JS by design,
   // so the in-memory mirror is the only proxy we have.
   const hadToken = !!useMerchantStore.getState().sessionToken;
-  if (!hadToken) return response;
+  if (!hadToken) {
+    // 401 on a protected route with no in-memory session = strongly
+    // suggestive of a zombie state (cookies dead, mirror cleared, but the
+    // UI still rendering logged-in chrome from cached state). Count it
+    // toward the threshold; force-logout when we cross it. See
+    // AUTH_FAILURE_LOGOUT_THRESHOLD comment for the rationale.
+    if (shouldForceLogoutOn401(url)) {
+      consecutiveAuthFailures += 1;
+      if (consecutiveAuthFailures >= AUTH_FAILURE_LOGOUT_THRESHOLD) {
+        forceLogoutAndRedirect();
+      }
+    }
+    return response;
+  }
 
   // Attempt silent refresh
   const refreshRes = await refreshAccessToken();
   if (!refreshRes.ok) {
-    // Only force logout when the server EXPLICITLY revoked the session.
-    // Transient failures (429 from the per-IP bucket under multi-tab use,
-    // 5xx, network blips) must not eject the user — they should keep
-    // working with the cookie they already have, and we'll retry refresh
-    // on the next 401-triggering action.
-    if (refreshRes.revoked && shouldForceLogoutOn401(url)) {
-      forceLogoutAndRedirect();
+    // Force logout when the server EXPLICITLY revoked the session OR when
+    // we've accumulated enough non-revoked failures that the session is
+    // effectively dead. The transient case (1-2 failures) still rides on
+    // the user's existing cookie — but persistent failure is no longer a
+    // zombie state.
+    if (shouldForceLogoutOn401(url)) {
+      if (refreshRes.revoked) {
+        forceLogoutAndRedirect();
+      } else {
+        consecutiveAuthFailures += 1;
+        if (consecutiveAuthFailures >= AUTH_FAILURE_LOGOUT_THRESHOLD) {
+          forceLogoutAndRedirect();
+        }
+      }
     }
     return response;
   }
@@ -774,6 +820,11 @@ async function executeWithRefresh(
   // rejected — the session was revoked between refresh and retry. Force logout.
   if (retryResponse.status === 401 && shouldForceLogoutOn401(url)) {
     forceLogoutAndRedirect();
+  } else if (retryResponse.ok && shouldForceLogoutOn401(url)) {
+    // Successful retry on a protected route → session is demonstrably
+    // alive. Reset the counter so a future transient blip doesn't
+    // inherit accumulated failures.
+    consecutiveAuthFailures = 0;
   }
 
   return retryResponse;

@@ -145,72 +145,27 @@ const PARTICIPANT_ONLY_EVENTS = new Set([
 ]);
 
 /**
- * Broadcast an order event to relevant subscribers.
+ * Broadcast an order event.
  *
- * Determines targets based on userId/merchantId.
- * For ORDER_CREATED/ACCEPTED/CANCELLED/EXPIRED: broadcasts to ALL merchants.
+ * SECURITY: this used to broadcast to per-actor subscribers on the
+ * unauthenticated /ws/orders socket — anyone who knew an actorId could
+ * `{type:'subscribe', actorType, actorId}` and receive that actor's order
+ * events (counterparty IDs, amounts, statuses) in real time. The fix:
+ * stop emitting order events on /ws/orders entirely. All authenticated
+ * order-event delivery flows over Pusher (auth-gated private channels)
+ * via `broadcastOrderToPusher`, which every caller invokes alongside
+ * this function. The client (`settle/src/hooks/useRealtimeOrders.ts`)
+ * already ignores order_event messages from this socket — it only
+ * consumes `price_update`. So this change is observable to attackers
+ * (the leak stops) and invisible to legitimate clients.
+ *
+ * Kept as a no-op (rather than deleted) so that call sites in workers
+ * and event listeners continue to compile and run unchanged.
  */
-export function broadcastOrderEvent(payload: BroadcastPayload): void {
-  if (!wss) return;
-
-  const message = JSON.stringify({
-    type: 'order_event',
-    event_type: payload.event_type,
-    order_id: payload.order_id,
-    status: payload.status,
-    minimal_status: payload.minimal_status,
-    order_version: payload.order_version,
-    previousStatus: payload.previousStatus,
-    buyer_merchant_id: payload.buyerMerchantId,
-    merchant_id: payload.merchantId,
-    expires_at: payload.expires_at,
-    seconds_remaining: payload.seconds_remaining,
-  });
-
-  const targets = new Set<WebSocket>();
-
-  // Send to involved user
-  if (payload.userId) {
-    actorIndex.get(`user:${payload.userId}`)?.forEach((ws) => targets.add(ws));
-  }
-  // Send to involved merchant
-  if (payload.merchantId) {
-    actorIndex.get(`merchant:${payload.merchantId}`)?.forEach((ws) => targets.add(ws));
-  }
-  // M2M buyer merchant
-  if (payload.buyerMerchantId) {
-    actorIndex.get(`merchant:${payload.buyerMerchantId}`)?.forEach((ws) => targets.add(ws));
-  }
-
-  // For create/accept/cancel/expire: broadcast to ALL merchants. Participant-only
-  // events (e.g. EXPIRY_WARNING, INACTIVITY_WARNING) are excluded by construction
-  // — they must never leak to non-involved merchants.
-  const broadcastToAll = ['ORDER_CREATED', 'ORDER_ACCEPTED', 'ORDER_CANCELLED', 'ORDER_EXPIRED'];
-  if (
-    broadcastToAll.includes(payload.event_type) &&
-    !PARTICIPANT_ONLY_EVENTS.has(payload.event_type)
-  ) {
-    for (const [key, wsSet] of actorIndex) {
-      if (key.startsWith('merchant:')) {
-        wsSet.forEach((ws) => targets.add(ws));
-      }
-    }
-  }
-
-  let sent = 0;
-  targets.forEach((ws) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      try { ws.send(message); sent++; } catch { /* dead socket, heartbeat will clean */ }
-    }
-  });
-
-  if (sent > 0) {
-    logger.info('[WS] Broadcast sent', {
-      event: payload.event_type,
-      orderId: payload.order_id,
-      recipients: sent,
-    });
-  }
+export function broadcastOrderEvent(_payload: BroadcastPayload): void {
+  // intentional no-op — see comment above
+  void _payload;
+  void PARTICIPANT_ONLY_EVENTS;
 }
 
 /**

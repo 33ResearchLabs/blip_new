@@ -206,8 +206,12 @@ const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 function csrfCheck(request: NextRequest): NextResponse | null {
   if (!STATE_CHANGING_METHODS.has(request.method)) return null;
 
-  // Skip if api-key present (server-to-server)
-  if (request.headers.get('x-api-key')) return null;
+  // NOTE: a previous `if (request.headers.get('x-api-key')) return null;`
+  // bypass was removed. It had no allowlist and no value check — any caller
+  // setting an arbitrary `x-api-key` header skipped CSRF entirely. No route
+  // in the codebase consumes `x-api-key`, so removing the bypass closes the
+  // hole with zero regression. For server-to-server callers use the signed
+  // `x-actor-id` header path (verified in core-api) instead.
 
   const origin = request.headers.get('origin');
   const referer = request.headers.get('referer');
@@ -397,6 +401,33 @@ export function middleware(request: NextRequest) {
   // (Previously short-circuited without security headers, so pages got NO CSP.
   //  That's the very surface XSS lives on — it must carry the strict CSP.)
   if (!pathname.startsWith('/api/')) {
+    // ── Page-level auth gate for admin sub-routes ─────────────────────
+    // /admin itself hosts the login form and must stay public. Every
+    // sub-route (/admin/users, /admin/disputes, /admin/merchants, …)
+    // serves the post-login dashboard and must require an admin session.
+    // Without this gate the React bundle (containing nav labels, route
+    // names, field structures) was reachable by anonymous HTML fetches.
+    //
+    // Signal: the httpOnly `blip_admin_session` cookie set by
+    // POST /api/auth/admin. We check presence here; the page itself
+    // still re-validates server-side via the layout's `/api/auth/admin`
+    // probe — this gate is a fast-fail bouncer, not the source of truth.
+    //
+    // Behavior change vs. before: previously the bundle loaded then the
+    // client redirected to /admin if no admin token was found. Now the
+    // redirect happens at the edge before any HTML ships. Same final
+    // destination, just earlier — no functional regression for legit
+    // logged-in admins (their cookie is present, request passes through).
+    if (pathname.startsWith('/admin/') && pathname !== '/admin') {
+      const hasAdminSession = !!request.cookies.get('blip_admin_session')?.value;
+      if (!hasAdminSession) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/admin';
+        url.search = '';
+        return NextResponse.redirect(url);
+      }
+    }
+
     const response = NextResponse.next({ request: { headers: requestHeaders } });
     return applySecurityHeaders(response, nonce);
   }

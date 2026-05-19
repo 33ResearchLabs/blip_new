@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { requireTokenAuth } from '@/lib/middleware/auth';
@@ -102,31 +102,43 @@ export async function GET(request: NextRequest) {
         return blockedResponse;
       }
 
+      // SECURITY: identity must come from the refresh cookie, never from
+      // the query param. Without a valid pre-existing session this route
+      // used to mint fresh cookies for whoever the query param named —
+      // full merchant takeover by anyone who knew a merchant UUID.
+      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+      if (!refreshCookie) {
+        return NextResponse.json({ success: true, data: { valid: false } });
+      }
+
+      let checkSessionId: string | null = null;
+      try {
+        checkSessionId = await getSessionIdFromRefreshCookie(refreshCookie);
+      } catch { /* treat as invalid */ }
+      if (!checkSessionId) {
+        return NextResponse.json({ success: true, data: { valid: false } });
+      }
+
+      // Cross-check: the cookie's session must belong to this merchant
+      // and to a `merchant` actor type. Stops a cookie from one actor
+      // being used to mint tokens for another actor on a shared device.
+      const sessionRow = await queryOne<{ entity_id: string; entity_type: string }>(
+        'SELECT entity_id, entity_type FROM sessions WHERE id = $1 AND is_revoked = false AND expires_at > NOW()',
+        [checkSessionId]
+      );
+      if (!sessionRow || sessionRow.entity_type !== 'merchant' || sessionRow.entity_id !== merchant.id) {
+        return NextResponse.json({ success: true, data: { valid: false } });
+      }
+
       // Set merchant online when session is validated (critical for order matching!)
       await updateMerchantOnlineStatus(merchant.id, true);
 
       const payload = { actorId: merchant.id, actorType: 'merchant' as const };
-
-      // Look up existing session from refresh cookie to embed sessionId in v2 token.
-      // If no refresh cookie, create a new session (ensures session exists for revocation).
-      let checkSessionId: string | undefined;
-      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
-      if (refreshCookie) {
-        try {
-          const existingSessionId = await getSessionIdFromRefreshCookie(refreshCookie);
-          if (existingSessionId) checkSessionId = existingSessionId;
-        } catch { /* proceed without sessionId */ }
-      }
-      // If no valid refresh cookie session, create a new one
-      let checkRefreshToken: string | null = null;
-      if (!checkSessionId) {
-        try {
-          const sess = await createSession(payload, request as any);
-          if (sess) { checkSessionId = sess.sessionId; checkRefreshToken = sess.refreshToken; }
-        } catch { /* proceed without session tracking */ }
-      }
-
-      const sessionToken = generateSessionToken(payload);
+      // SECURITY: see user/route.ts first generateSessionToken site for full
+      // rationale — this used to mint a real 7-day HMAC legacy token; clients
+      // only use the value as a "logged-in" truthy sentinel. Static string is
+      // safe and behavior-identical.
+      const sessionToken = 'cookie-session';
       const accessToken = generateAccessToken({ ...payload, sessionId: checkSessionId });
 
       const checkResponse = NextResponse.json({
@@ -138,8 +150,9 @@ export async function GET(request: NextRequest) {
           ...(accessToken && { accessToken }),
         },
       });
-      // Set new refresh cookie if we created a new session
-      if (checkRefreshToken) checkResponse.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshToken, REFRESH_COOKIE_OPTIONS);
+      // Refresh ONLY the short-lived access cookie. The long-lived refresh
+      // cookie is left untouched — rotation belongs to /api/auth/refresh,
+      // not to a session-check probe.
       if (accessToken) checkResponse.cookies.set(ACCESS_TOKEN_COOKIE, accessToken, ACCESS_COOKIE_OPTIONS);
       return checkResponse;
     }
@@ -299,7 +312,7 @@ export async function POST(request: NextRequest) {
         }
 
         const walletPayload = { actorId: merchant.id, actorType: 'merchant' as const };
-        const token = generateSessionToken(walletPayload);
+        const token = 'cookie-session'; // sentinel — see comment at line ~137
 
         // Create session first to get sessionId for v2 access token
         let walletSessionId: string | undefined;
@@ -441,7 +454,7 @@ export async function POST(request: NextRequest) {
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
 
       const createPayload = { actorId: merchant.id, actorType: 'merchant' as const };
-      const createToken = generateSessionToken(createPayload);
+      const createToken = 'cookie-session'; // sentinel — see comment at line ~137
 
       // Create session first to get sessionId for v2 access token
       let createSessionId: string | undefined;
@@ -800,7 +813,7 @@ export async function POST(request: NextRequest) {
       }
 
       const emailPayload = { actorId: merchant.id, actorType: 'merchant' as const };
-      const emailLoginToken = generateSessionToken(emailPayload);
+      const emailLoginToken = 'cookie-session'; // sentinel — see comment at line ~137
 
       // Create session first to get sessionId for v2 access token
       let emailSessionId: string | undefined;

@@ -19,8 +19,29 @@ const path = require('path');
 try { require('dotenv').config({ path: path.join(__dirname, '..', 'settle', '.env.local') }); } catch {}
 
 const DATABASE_URL = process.env.DATABASE_URL;
+
+// TLS verification posture — mirrors settle/src/lib/db/index.ts. Default is
+// permissive (rejectUnauthorized=false) for backwards compatibility with
+// existing deploys where the managed Postgres serves a self-signed chain.
+// Set PG_TLS_VERIFY=true (and optionally PG_TLS_CA_PATH=/path/to/ca.pem)
+// in production to enable full verification.
+function buildPgSsl() {
+  if (process.env.PG_TLS_VERIFY !== 'true') {
+    return { rejectUnauthorized: false };
+  }
+  const caPath = process.env.PG_TLS_CA_PATH;
+  if (caPath) {
+    try {
+      return { rejectUnauthorized: true, ca: fs.readFileSync(caPath, 'utf8') };
+    } catch (err) {
+      console.error('[migrations] PG_TLS_CA_PATH set but unreadable, using system CA', err);
+    }
+  }
+  return { rejectUnauthorized: true };
+}
+
 const dbConfig = DATABASE_URL
-  ? { connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } }
+  ? { connectionString: DATABASE_URL, ssl: buildPgSsl() }
   : {
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),

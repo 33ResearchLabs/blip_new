@@ -525,10 +525,38 @@ export function useDashboardAuth({
             return;
           }
         }
-        // 401 / non-merchant actor / shape mismatch → not logged in. No
-        // local state to clean up because we no longer keep any.
+        // 401 / non-merchant actor / shape mismatch → not logged in.
+        //
+        // SECURITY/UX: previously this branch did `setIsLoading(false)` and
+        // walked away, leaving the persisted Zustand `merchantInfo` (and
+        // its localStorage shadow) intact. Net effect: cookies are dead
+        // but the dashboard chrome still renders, every API call 401s,
+        // and the user sees a zombie "logged-in" UI. The user-side flow
+        // (useUserAuth) already calls clearAuthStorageOnLogout() here —
+        // mirroring that pattern. After the sweep the merchant page
+        // renders the not-logged-in state path on its own; no redirect
+        // needed.
+        try {
+          setIsLoggedIn(false);
+          setMerchantId(null as any);
+          setMerchantInfo(null as any);
+          setSessionToken(null);
+        } catch {
+          /* store mid-hydration — best effort */
+        }
       } catch (err) {
         console.error('[Merchant] Failed to restore session:', err);
+        // Same cleanup on thrown error path — the only difference between
+        // "401 from server" and "fetch threw" should be log verbosity,
+        // not whether we leak a zombie session.
+        try {
+          setIsLoggedIn(false);
+          setMerchantId(null as any);
+          setMerchantInfo(null as any);
+          setSessionToken(null);
+        } catch {
+          /* store mid-hydration */
+        }
       }
       setIsLoading(false);
     };

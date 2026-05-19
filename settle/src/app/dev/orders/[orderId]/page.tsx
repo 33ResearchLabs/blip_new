@@ -99,8 +99,10 @@ export default async function DevOrderDetailPage({
   const queryParams = await searchParams;
   const debugKey = getDebugKey();
 
-  // Validate debug key
-  if (debugKey && queryParams.debug_key !== debugKey) {
+  // SECURITY: require DEV_DEBUG_KEY to be SET *and* to match. Without the
+  // !debugKey guard, an unset DEV_DEBUG_KEY in any non-prod env exposes
+  // the entire order-details page publicly.
+  if (!debugKey || queryParams.debug_key !== debugKey) {
     notFound();
   }
 

@@ -102,7 +102,10 @@ export async function POST(request: NextRequest) {
         if (sess) { cwSessionId = sess.sessionId; cwRefreshToken = sess.refreshToken; }
       } catch { /* proceed without session tracking */ }
 
-      const walletToken = generateSessionToken(cwPayload);
+      // SECURITY: see user/route.ts first generateSessionToken site for full
+      // rationale. Static sentinel keeps client-side `!!data.token` truthy
+      // gate working while eliminating the long-lived stealable credential.
+      const walletToken = 'cookie-session';
       const cwAccessTk = generateAccessToken({ ...cwPayload, sessionId: cwSessionId });
 
       const cwResponse = NextResponse.json({
@@ -193,7 +196,7 @@ export async function POST(request: NextRequest) {
         if (sess) { ceSessionId = sess.sessionId; ceRefreshToken = sess.refreshToken; }
       } catch { /* proceed without session tracking */ }
 
-      const emailToken = generateSessionToken(cePayload);
+      const emailToken = 'cookie-session'; // sentinel — see comment at line ~105
       const ceAccessTk = generateAccessToken({ ...cePayload, sessionId: ceSessionId });
 
       const ceResponse = NextResponse.json({

@@ -12,11 +12,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Require admin auth even in dev (unless ADMIN_SECRET not set)
-  if (process.env.ADMIN_SECRET) {
-    const authError = await requireAdminAuth(request);
-    if (authError) return authError;
-  }
+  // Admin auth is REQUIRED unconditionally. The previous "only if
+  // ADMIN_SECRET is set" gate was a misconfig footgun: forgetting the env
+  // var on a preview/staging deploy turned this endpoint into an open
+  // data-wipe. requireAdminAuth fails closed if ADMIN_SECRET is missing.
+  const authError = await requireAdminAuth(request);
+  if (authError) return authError;
 
   try {
     // Delete related records first (foreign key constraints)
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Also support GET for easy browser access
-export async function GET(request: NextRequest) {
-  return POST(request);
-}
+// Intentionally no GET handler. Destructive operations on a GET endpoint
+// are triggerable by an attacker-supplied <img src> or link click while a
+// privileged session cookie is active (CSRF). Force callers to use POST,
+// which is gated by the CSRF origin/referer check in middleware.

@@ -94,13 +94,27 @@ function assertProductionSecurityEnv(opts) {
   const log = opts.logger || console;
   const env = opts.env || process.env;
 
+  // The bypass exists for smoke-test scenarios where the production build is
+  // run locally without prod-grade secrets. It MUST NOT disable security
+  // checks in an actual production environment — if NODE_ENV=production, we
+  // refuse to honor the bypass regardless of the flag's value. This closes
+  // the path where a leaked deploy template accidentally carries the flag.
   if (env.SKIP_PRODUCTION_ENV_CHECK === 'true') {
-    if (typeof log.warn === 'function') {
-      log.warn(
-        '[security][startup] SKIP_PRODUCTION_ENV_CHECK=true — production env validation BYPASSED. Never use this in a real production deploy.'
-      );
+    if (env.NODE_ENV === 'production') {
+      if (typeof log.error === 'function') {
+        log.error(
+          '[security][startup] SKIP_PRODUCTION_ENV_CHECK=true detected with NODE_ENV=production — IGNORING bypass and running checks anyway. Remove the flag from your prod env.'
+        );
+      }
+      // fall through to the real check below
+    } else {
+      if (typeof log.warn === 'function') {
+        log.warn(
+          '[security][startup] SKIP_PRODUCTION_ENV_CHECK=true — production env validation BYPASSED (non-prod env). Never use this in a real production deploy.'
+        );
+      }
+      return { ok: true, failures: [], skipped: true };
     }
-    return { ok: true, failures: [], skipped: true };
   }
 
   const result = checkProductionSecurityEnv(env);

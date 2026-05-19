@@ -209,8 +209,11 @@ export default async function DevOrdersPage({
   const params = await searchParams;
   const debugKey = getDebugKey();
 
-  // Validate debug key
-  if (debugKey && params.debug_key !== debugKey) {
+  // SECURITY: require DEV_DEBUG_KEY to be SET *and* to match. The previous
+  // `if (debugKey && params.debug_key !== debugKey)` allowed access when
+  // DEV_DEBUG_KEY was unset in any non-production env (preview, staging,
+  // dev) — making the entire orders table publicly browsable.
+  if (!debugKey || params.debug_key !== debugKey) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

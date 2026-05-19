@@ -30,7 +30,14 @@ import { logger } from '@/lib/logger';
 
 const KEY = (jti: string): string => `admin:revoked:${jti}`;
 
-const FAIL_OPEN = process.env.ADMIN_AUTH_REVOCATION_FAIL_OPEN === 'true';
+// FAIL_OPEN is the operator escape hatch for Redis maintenance windows.
+// It MUST NOT take effect in production — a leaked deploy template that
+// sets it on would silently disable admin-token revocation in prod. The
+// flag is honored only when NODE_ENV !== 'production'. Production always
+// fails CLOSED if Redis is unreachable, regardless of the env var.
+const FAIL_OPEN =
+  process.env.ADMIN_AUTH_REVOCATION_FAIL_OPEN === 'true' &&
+  process.env.NODE_ENV !== 'production';
 
 /**
  * Mark a jti as revoked. TTL is clamped to >=60s so the marker

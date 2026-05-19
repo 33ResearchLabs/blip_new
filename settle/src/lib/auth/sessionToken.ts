@@ -130,10 +130,23 @@ export function verifySessionToken(token: string): TokenPayload | null {
       return null;
     }
 
-    // Legacy format: actorType:actorId:ts:sig (4 parts)
-    if (parts.length === 4) {
-      return verifyTokenInternal(token, 'legacy', LEGACY_TOKEN_MAX_AGE);
-    }
+    // Legacy 4-part format (actorType:actorId:ts:sig) is NO LONGER ACCEPTED.
+    //
+    // Background: pre-cookie-migration, /api/auth/* responses returned a
+    // 7-day HMAC token in `data.token`. That value was a stealable Bearer
+    // credential for up to 7 days. Phase A (an earlier change in this PR
+    // series) stopped minting new legacy tokens — `data.token` now ships
+    // a fixed sentinel string instead.
+    //
+    // Phase B (this change) closes the verifier: any 4-part Bearer is
+    // rejected, eliminating replay of pre-Phase-A tokens that might have
+    // been stolen from logs, proxies, or stored client state.
+    //
+    // Production impact: ZERO. Every browser client uses the access cookie
+    // (5- or 6-part) and only reads `data.token` as a truthy "logged-in"
+    // sentinel — never as a Bearer. Server-to-server callers use signed
+    // x-actor-id headers, not legacy tokens. No production code path
+    // presented a 4-part Bearer to this function.
 
     return null;
   } catch {
