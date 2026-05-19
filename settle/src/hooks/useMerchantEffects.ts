@@ -14,6 +14,7 @@ import {
   requestNotificationPermission,
   notificationPermission,
 } from '@/lib/notifications/attention';
+import { getNotifPrefs } from '@/hooks/useNotifPrefs';
 
 interface UseMerchantEffectsParams {
   isMockMode: boolean;
@@ -127,15 +128,19 @@ export function useMerchantEffects({
         debouncedFetchOrders();
         debouncedFetchConversations();
 
-        if (newStatus === 'payment_sent') { playSound('notification'); }
-        else if (newStatus === 'completed') { playSound('order_complete'); refreshBalance(); }
+        // Gate order-event sounds on the merchant's notification pref.
+        // Default (no saved pref) is true → unchanged behavior.
+        // refreshBalance() is NOT gated — that's data freshness, not an alert.
+        const { orderAlerts } = getNotifPrefs();
+        if (newStatus === 'payment_sent') { if (orderAlerts) playSound('notification'); }
+        else if (newStatus === 'completed') { if (orderAlerts) playSound('order_complete'); refreshBalance(); }
       } else if (event.type === 'order:cancelled') {
         if (data.orderId) refetchSingleOrder(data.orderId);
         debouncedFetchOrders();
-        playSound('error');
+        if (getNotifPrefs().orderAlerts) playSound('error');
       } else if (event.type === 'order:created') {
         debouncedFetchOrders();
-        playSound('new_order');
+        if (getNotifPrefs().orderAlerts) playSound('new_order');
       }
     });
 

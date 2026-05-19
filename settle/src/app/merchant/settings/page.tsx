@@ -216,6 +216,10 @@ export default function MerchantSettingsPage({
   >({ kind: "idle" });
   const [usernameSaving, setUsernameSaving] = useState(false);
   const [usernameError, setUsernameError] = useState<string | null>(null);
+  // Flips the read-only username row (text + pen icon) into the editable
+  // input + Save form. Default false so a username already on file renders
+  // as a quiet read-only row by default — matching the Display Name pattern.
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
 
   useEffect(() => {
     const trimmed = usernameInput.trim();
@@ -292,6 +296,8 @@ export default function MerchantSettingsPage({
       );
       setUsernameInput("");
       setUsernameAvailability({ kind: "idle" });
+      // Drop back to the read-only display once the new value is committed.
+      setIsEditingUsername(false);
     } catch {
       setUsernameError("Network error — try again.");
     } finally {
@@ -388,18 +394,29 @@ export default function MerchantSettingsPage({
     fetchMerchant();
   }, [fetchMerchant]);
 
-  // Load notification settings from localStorage
+  // Load notification settings from localStorage and sync sound pref into
+  // the runtime store. Without the store sync, useSounds (which gates on
+  // merchantStore.soundEnabled) ignored the saved preference entirely.
   useEffect(() => {
+    let soundFromSaved: boolean | null = null;
     const saved = localStorage.getItem("blip_notif_settings");
     if (saved) {
       try {
-        setNotifSettings(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        setNotifSettings(parsed);
+        if (typeof parsed?.sound === "boolean") soundFromSaved = parsed.sound;
       } catch {}
     }
 
     const soundPref = localStorage.getItem("blip_sound_enabled");
     if (soundPref !== null) {
-      setNotifSettings((prev) => ({ ...prev, sound: soundPref === "true" }));
+      const v = soundPref === "true";
+      setNotifSettings((prev) => ({ ...prev, sound: v }));
+      soundFromSaved = v;
+    }
+
+    if (soundFromSaved !== null) {
+      useMerchantStore.getState().setSoundEnabled(soundFromSaved);
     }
   }, []);
 
@@ -655,6 +672,9 @@ export default function MerchantSettingsPage({
   const handleSaveNotifications = () => {
     localStorage.setItem("blip_notif_settings", JSON.stringify(notifSettings));
     localStorage.setItem("blip_sound_enabled", String(notifSettings.sound));
+    // Apply sound pref to the runtime store immediately so the change
+    // takes effect without a page reload.
+    useMerchantStore.getState().setSoundEnabled(notifSettings.sound);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
   };
@@ -1059,7 +1079,10 @@ export default function MerchantSettingsPage({
                     usernameClaimed (from onboarding status) is false, even
                     if `merchant.username` already has a value — otherwise
                     the merchant can never tick step 1 complete. */}
-                {merchant?.username && usernameClaimed ? (
+                {merchant?.username && !isEditingUsername ? (
+                  // Read-only row — matches the Display Name pattern: label,
+                  // value, copy, edit pen. Tapping the pen seeds the input
+                  // with the current value and flips into edit mode.
                   <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
                     <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
                       <AtSign className="w-4 h-4 text-white/60" />
@@ -1080,6 +1103,17 @@ export default function MerchantSettingsPage({
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}
+                    </button>
+                    <button
+                      aria-label="Edit username"
+                      onClick={() => {
+                        setUsernameInput(merchant.username);
+                        setUsernameError(null);
+                        setIsEditingUsername(true);
+                      }}
+                      className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ) : (
@@ -1145,20 +1179,37 @@ export default function MerchantSettingsPage({
                           )}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void saveUsername()}
-                        disabled={
-                          usernameSaving ||
-                          usernameAvailability.kind !== "available"
-                        }
-                        className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold rounded-lg bg-white text-black disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                      >
-                        {usernameSaving && (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isEditingUsername && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingUsername(false);
+                              setUsernameInput("");
+                              setUsernameError(null);
+                              setUsernameAvailability({ kind: "idle" });
+                            }}
+                            disabled={usernameSaving}
+                            className="inline-flex items-center px-3 py-2 text-[12px] font-medium rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/70 disabled:opacity-40"
+                          >
+                            Cancel
+                          </button>
                         )}
-                        Save
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => void saveUsername()}
+                          disabled={
+                            usernameSaving ||
+                            usernameAvailability.kind !== "available"
+                          }
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold rounded-lg bg-white text-black disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {usernameSaving && (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          )}
+                          Save
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
