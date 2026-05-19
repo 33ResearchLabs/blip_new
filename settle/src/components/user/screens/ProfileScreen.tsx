@@ -15,6 +15,9 @@ import {
   Shield,
   RefreshCw,
   Sliders,
+  LifeBuoy,
+  HelpCircle,
+  Mail,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
@@ -509,6 +512,22 @@ export const ProfileScreen = ({
                 />
               </span>
             }
+          />
+        </SettingsGroup>
+
+        {/* ── 5. Help & Support ── */}
+        <SettingsGroup label="Help & Support" icon={<LifeBuoy className="w-3.5 h-3.5" />}>
+          <SettingsRow
+            href="/faq"
+            icon={<HelpCircle className="w-[15px] h-[15px]" />}
+            title="FAQs"
+            subtitle="Common questions answered"
+          />
+          <SettingsRow
+            icon={<Mail className="w-[15px] h-[15px]" />}
+            title="Contact Support"
+            subtitle="Get help from our team"
+            trailing={<StatusPill label="Coming soon" tone="muted" />}
           />
         </SettingsGroup>
 
