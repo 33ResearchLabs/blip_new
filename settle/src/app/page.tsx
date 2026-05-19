@@ -252,8 +252,6 @@ export default function Home() {
   >("active");
   const [copied, setCopied] = useState(false);
   const [rating, setRating] = useState(0);
-  const [showAddBank, setShowAddBank] = useState(false);
-  const [newBank, setNewBank] = useState({ bank: "", iban: "", name: "" });
   const [timedOutOrders, setTimedOutOrders] = useState<any[]>([]);
   const [pendingTradeData, setPendingTradeData] = useState<{
     amount: string;
@@ -263,18 +261,21 @@ export default function Home() {
   } | null>(null);
   const extensionRequestSetterRef = useRef<(req: any) => void>(() => {});
 
-  // Data fetching
+  // Data fetching. bankAccounts / addBankAccount / fetchBankAccounts /
+  // setBankAccounts are still destructured because useUserAuth wires them
+  // into the legacy /api/users/[id]/bank-accounts endpoint that
+  // BankAccountSelector (EscrowLockScreen fallback) still calls. They are
+  // intentionally not threaded into ProfileScreen anymore — the new
+  // PaymentMethodSelector owns that surface.
   const {
     orders,
     setOrders,
-    bankAccounts,
     setBankAccounts,
     resolvedDisputes,
     setResolvedDisputes,
     fetchOrders,
     fetchBankAccounts,
     fetchResolvedDisputes,
-    addBankAccount,
   } = useUserDataFetching();
 
   // Auth
@@ -458,14 +459,6 @@ export default function Home() {
     await copyToClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleAddBankAccount = async () => {
-    const success = await addBankAccount(newBank, auth.userId);
-    if (success) {
-      setNewBank({ bank: "", iban: "", name: "" });
-      setShowAddBank(false);
-    }
   };
 
   const maxW = "max-w-[440px] mx-auto";
@@ -832,12 +825,6 @@ export default function Home() {
               setShowWalletUnlock={auth.setShowWalletUnlock}
               copied={copied}
               setCopied={setCopied}
-              bankAccounts={bankAccounts}
-              showAddBank={showAddBank}
-              setShowAddBank={setShowAddBank}
-              newBank={newBank}
-              setNewBank={setNewBank}
-              addBankAccount={handleAddBankAccount}
               resolvedDisputes={resolvedDisputes}
               theme={theme}
               toggleTheme={toggleTheme}
@@ -850,7 +837,6 @@ export default function Home() {
               setUserName={auth.setUserName}
               setUserBalance={auth.setUserBalance}
               setOrders={setOrders}
-              setBankAccounts={setBankAccounts}
               setResolvedDisputes={setResolvedDisputes}
               setLoginError={auth.setLoginError}
               setLoginForm={auth.setLoginForm}

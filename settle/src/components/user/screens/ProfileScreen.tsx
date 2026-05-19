@@ -1,34 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
+  Activity,
   Check,
   Copy,
-  User,
-  Plus,
   Wallet,
   Sun,
   Moon,
-  X,
   TrendingUp,
   ChevronRight,
   LogOut,
-  Currency,
-  Pencil,
-  Trash2,
-  Loader2,
   Shield,
   RefreshCw,
+  Sliders,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
-import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { BottomNav } from "./BottomNav";
-import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
+import { PaymentMethodsManager } from "../PaymentMethodsManager";
 import { AppLockSettingsCard } from "@/components/app-lock/AppLockSettingsCard";
-import type { Screen, Order, BankAccount } from "./types";
+import { SettingsGroup } from "@/components/settings/SettingsGroup";
+import { SettingsRow } from "@/components/settings/SettingsRow";
+import { StatusPill } from "@/components/settings/StatusPill";
+import type { Screen, Order } from "./types";
 import { networkLabel } from "@/lib/solana/networkLabel";
 import type { MutableRefObject } from "react";
 
@@ -73,13 +69,6 @@ export interface ProfileScreenProps {
   // Copy
   copied: boolean;
   setCopied: (v: boolean) => void;
-  // Banks
-  bankAccounts: BankAccount[];
-  showAddBank: boolean;
-  setShowAddBank: (v: boolean) => void;
-  newBank: { bank: string; iban: string; name: string };
-  setNewBank: React.Dispatch<React.SetStateAction<{ bank: string; iban: string; name: string }>>;
-  addBankAccount: () => void;
   // Disputes
   resolvedDisputes: Array<{
     id: string;
@@ -103,7 +92,6 @@ export interface ProfileScreenProps {
   setUserName: (v: string) => void;
   setUserBalance: (v: number) => void;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
-  setBankAccounts: React.Dispatch<React.SetStateAction<BankAccount[]>>;
   setResolvedDisputes: React.Dispatch<React.SetStateAction<any[]>>;
   setLoginError: (v: string) => void;
   setLoginForm: (v: { username: string; password: string; email: string }) => void;
@@ -124,12 +112,6 @@ export const ProfileScreen = ({
   setShowWalletUnlock,
   copied,
   setCopied,
-  bankAccounts,
-  showAddBank,
-  setShowAddBank,
-  newBank,
-  setNewBank,
-  addBankAccount,
   resolvedDisputes,
   theme,
   toggleTheme,
@@ -142,119 +124,12 @@ export const ProfileScreen = ({
   setUserName,
   setUserBalance,
   setOrders,
-  setBankAccounts,
   setResolvedDisputes,
   setLoginError,
   setLoginForm,
   maxW,
 }: ProfileScreenProps) => {
   const router = useRouter();
-  // Local "selected" state for the PaymentMethodSelector — in profile context
-  // there's no trade to attach a method to, so this is purely a visual hint
-  // for which method is currently shown as the trigger card.
-  const [profilePaymentMethodId, setProfilePaymentMethodId] = useState<string | null>(null);
-
-  // Payment Methods stays collapsible — the new Security card already
-  // surfaces a "Payment Methods" row that toggles this open, so the
-  // header below still needs the open/closed state.
-  const [paymentExpanded, setPaymentExpanded] = useState(false);
-
-  // Inline edit state for the legacy Bank Accounts list. Edits the row's
-  // bank/name/iban via PUT /api/users/[id]/bank-accounts/[accountId]; delete
-  // uses DELETE on the same path. Two-tap delete pattern (arm → confirm) so
-  // we don't need a modal.
-  const [editingBankId, setEditingBankId] = useState<string | null>(null);
-  const [editBank, setEditBank] = useState({ bank: "", name: "", iban: "" });
-  const [editBankError, setEditBankError] = useState<string | null>(null);
-  const [isSavingBankEdit, setIsSavingBankEdit] = useState(false);
-  const [confirmDeleteBankId, setConfirmDeleteBankId] = useState<string | null>(null);
-  const [deletingBankId, setDeletingBankId] = useState<string | null>(null);
-
-  // Auto-disarm the delete confirmation after 4s so a forgotten arm doesn't
-  // fire on a stray tap minutes later. Same pattern as PaymentMethodSelector.
-  useEffect(() => {
-    if (!confirmDeleteBankId) return;
-    const id = setTimeout(() => setConfirmDeleteBankId(null), 4000);
-    return () => clearTimeout(id);
-  }, [confirmDeleteBankId]);
-
-  const startEditBank = (acc: BankAccount) => {
-    setEditingBankId(acc.id);
-    setEditBank({ bank: acc.bank, name: acc.name, iban: acc.iban });
-    setEditBankError(null);
-  };
-  const cancelEditBank = () => {
-    setEditingBankId(null);
-    setEditBankError(null);
-  };
-  const saveEditBank = async (accountId: string) => {
-    if (!userId) return;
-    setIsSavingBankEdit(true);
-    setEditBankError(null);
-    try {
-      const bank_name = editBank.bank.trim();
-      const account_name = editBank.name.trim();
-      const iban = editBank.iban.trim();
-      if (!bank_name) throw new Error("Bank name is required");
-      if (!account_name) throw new Error("Account holder name is required");
-      if (iban.length < 15 || iban.length > 34) throw new Error("IBAN must be 15–34 characters");
-
-      const res = await fetchWithAuth(
-        `/api/users/${userId}/bank-accounts/${accountId}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bank_name, account_name, iban }),
-        },
-      );
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(
-          json.error ||
-            (Array.isArray(json.errors) ? json.errors.join(", ") : "Failed to update"),
-        );
-      }
-      const saved = json.data;
-      // Repository returns DB-shaped row (snake_case). The local list uses
-      // the lighter BankAccount shape — map it explicitly to avoid drift.
-      setBankAccounts((prev) =>
-        prev.map((a) =>
-          a.id === accountId
-            ? {
-                ...a,
-                bank: saved.bank_name,
-                name: saved.account_name,
-                iban: saved.iban,
-              }
-            : a,
-        ),
-      );
-      setEditingBankId(null);
-    } catch (err) {
-      setEditBankError(err instanceof Error ? err.message : "Failed to update bank account");
-    } finally {
-      setIsSavingBankEdit(false);
-    }
-  };
-
-  const deleteBankAccount = async (accountId: string) => {
-    if (!userId) return;
-    setDeletingBankId(accountId);
-    try {
-      const res = await fetchWithAuth(
-        `/api/users/${userId}/bank-accounts/${accountId}`,
-        { method: "DELETE" },
-      );
-      if (res.ok) {
-        setBankAccounts((prev) => prev.filter((a) => a.id !== accountId));
-      }
-    } catch {
-      // Best-effort — leave the row in place if the API call failed.
-    } finally {
-      setDeletingBankId(null);
-      setConfirmDeleteBankId(null);
-    }
-  };
 
   // Derived identity metrics — kept at render-top so header + identity card
   // can reference the same numbers without re-deriving them inline.
@@ -533,211 +408,51 @@ export const ProfileScreen = ({
           )}
         </div>
 
-        {/* Security — premium always-visible card with Payment PIN, App
-            Lock PIN, Biometric Unlock, Payment Methods, Trusted Devices
-            and Change Password rows. Each row is a single tap target;
-            destructive actions are surfaced one tier in. */}
-        <div className="flex items-center justify-between mb-2.5">
-          <span className={SECTION_LABEL}>Security</span>
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-[0.18em] uppercase text-text-tertiary">
-            <Shield size={11} className="text-text-tertiary" />
+        {/* ── 1. Payment Methods (own card, always-visible list) ── */}
+        <PaymentMethodsManager userId={userId} />
+
+        {/* ── 2. Security & Privacy ── */}
+        <div className="flex items-center justify-between mb-2 px-1">
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-white/40" />
+            <span className={SECTION_LABEL}>Security &amp; Privacy</span>
+          </div>
+          <span className="inline-flex items-center gap-1 text-[9.5px] font-bold tracking-[0.16em] uppercase text-text-tertiary">
             Protected
           </span>
         </div>
-        <div className="mb-4">
-          <AppLockSettingsCard
-            userId={userId}
-            paymentMethodCount={bankAccounts.length}
-            onOpenPaymentMethods={() => setPaymentExpanded(true)}
-          />
+        <div className="mb-6">
+          <AppLockSettingsCard userId={userId} />
         </div>
 
-        {/* Payment Methods — collapsible. Same pattern as Lock & Security:
-            tap to expand and reveal the PaymentMethodSelector rows + legacy
-            bank-account rows in a unified group container. */}
-        <div className="flex items-center justify-between mb-2">
-          <button
-            type="button"
-            onClick={() => setPaymentExpanded((v) => !v)}
-            aria-expanded={paymentExpanded}
-            className="flex-1 flex items-center gap-1.5 text-left"
-          >
-            <span className={SECTION_LABEL}>Payment Methods</span>
-            <ChevronRight
-              size={14}
-              className={`text-text-tertiary transition-transform ${paymentExpanded ? "rotate-90" : ""}`}
-            />
-          </button>
-          {paymentExpanded && (
-            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(true)}
-              className="w-8 h-8 rounded-[10px] flex items-center justify-center bg-surface-raised border border-border-subtle"
-              aria-label="Add bank account">
-              <Plus size={15} className="text-text-secondary" />
-            </motion.button>
-          )}
-        </div>
-        <AnimatePresence initial={false}>
-          {paymentExpanded && (
-            <motion.div
-              key="payment-section"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="overflow-hidden"
-            >
-              <div className="mb-3 rounded-xl bg-white/[0.02] border border-white/[0.06] p-3 space-y-3">
-                <PaymentMethodSelector
-                  userId={userId}
-                  selectedId={profilePaymentMethodId}
-                  onSelect={(m) => setProfilePaymentMethodId(m?.id ?? null)}
-                  hideHeader
-                  groupContainer
+        {/* ── 3. Activity ── */}
+        <SettingsGroup label="Activity" icon={<Activity className="w-3.5 h-3.5" />}>
+          <SettingsRow
+            href="/console"
+            icon={<TrendingUp className="w-[15px] h-[15px]" />}
+            title="Console"
+            subtitle="Timeouts & analytics"
+            trailing={
+              timedOutOrders.length > 0 ? (
+                <StatusPill
+                  label={`${timedOutOrders.length} timeout${timedOutOrders.length !== 1 ? 's' : ''}`}
+                  tone="error"
                 />
-                {bankAccounts.length > 0 && (
-                  <div className="border-t border-white/[0.05] pt-3 -mx-3 px-3" />
-                )}
-        <div className="flex flex-col gap-2">
-          {bankAccounts.map(acc => {
-            const isEditing = editingBankId === acc.id;
-            const armed = confirmDeleteBankId === acc.id;
-            const deleting = deletingBankId === acc.id;
-            return (
-              <div key={acc.id} className={`flex items-start gap-3 rounded-2xl px-4 py-3 ${CARD}`}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-active text-[18px]">
-                  {'\uD83C\uDFE6'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {isEditing ? (
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        value={editBank.bank}
-                        maxLength={100}
-                        onChange={(e) => setEditBank((p) => ({ ...p, bank: e.target.value }))}
-                        placeholder="Bank Name"
-                        className="w-full px-3 py-2 rounded-lg text-[13px] text-text-primary bg-surface-raised border border-border-subtle focus:outline-none focus:border-border-strong"
-                      />
-                      <input
-                        type="text"
-                        value={editBank.name}
-                        maxLength={100}
-                        onChange={(e) => setEditBank((p) => ({ ...p, name: e.target.value }))}
-                        placeholder="Account Holder Name"
-                        className="w-full px-3 py-2 rounded-lg text-[13px] text-text-primary bg-surface-raised border border-border-subtle focus:outline-none focus:border-border-strong"
-                      />
-                      <input
-                        type="text"
-                        value={editBank.iban}
-                        maxLength={34}
-                        onChange={(e) => setEditBank((p) => ({ ...p, iban: e.target.value.toUpperCase() }))}
-                        placeholder="IBAN"
-                        className="w-full px-3 py-2 rounded-lg text-[13px] text-text-primary font-mono bg-surface-raised border border-border-subtle focus:outline-none focus:border-border-strong"
-                      />
-                      {editBankError && (
-                        <p className="text-[11px] text-error">{editBankError}</p>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={cancelEditBank}
-                          disabled={isSavingBankEdit}
-                          className="flex-1 px-3 py-1.5 bg-surface-raised border border-border-subtle rounded-lg text-[11px] text-text-secondary font-medium disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => saveEditBank(acc.id)}
-                          disabled={isSavingBankEdit}
-                          className="flex-1 px-3 py-1.5 bg-accent text-accent-text rounded-lg text-[11px] font-bold disabled:opacity-50 flex items-center justify-center gap-1.5"
-                        >
-                          {isSavingBankEdit ? (
-                            <><Loader2 className="w-3 h-3 animate-spin" /> Saving</>
-                          ) : (
-                            <><Check className="w-3 h-3" /> Save</>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em] truncate">{acc.bank}</p>
-                        {acc.isDefault && (
-                          <span className="text-[8px] font-bold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-text">
-                            Default
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-text-tertiary font-mono truncate">{acc.iban}</p>
-                    </>
-                  )}
-                </div>
-                {!isEditing && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <motion.button
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => startEditBank(acc)}
-                      aria-label="Edit bank account"
-                      className="w-8 h-8 rounded-[10px] flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-surface-raised transition-colors"
-                    >
-                      <Pencil size={14} />
-                    </motion.button>
-                    <motion.button
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => {
-                        if (armed) deleteBankAccount(acc.id);
-                        else setConfirmDeleteBankId(acc.id);
-                      }}
-                      disabled={deleting}
-                      aria-label={armed ? "Confirm delete" : "Delete bank account"}
-                      className={`h-8 px-2 rounded-[10px] flex items-center justify-center gap-1 transition-colors text-[11px] font-semibold ${
-                        armed
-                          ? "bg-error-dim text-error border border-error-border"
-                          : "text-text-tertiary hover:text-error hover:bg-error-dim"
-                      }`}
-                    >
-                      {deleting ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : armed ? (
-                        "Confirm"
-                      ) : (
-                        <Trash2 size={14} />
-                      )}
-                    </motion.button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              ) : undefined
+            }
+          />
+        </SettingsGroup>
 
-        {/* Console & Analytics */}
-        <p className={`${SECTION_LABEL} block mb-2`}>Analytics</p>
-        <a href="/console" className={`flex items-center gap-3 rounded-[16px] px-4 py-3 mb-3 ${CARD}`}>
-          <div className="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 bg-surface-active">
-            <TrendingUp size={16} className="text-text-secondary" />
-          </div>
-          <div className="flex-1">
-            <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em]">Console</p>
-            <p className="text-[10px] font-semibold text-text-tertiary tracking-[0.1em] uppercase">Timeouts & Analytics</p>
-          </div>
-          {timedOutOrders.length > 0 && (
-            <span className="text-[10px] font-bold px-2 py-[3px] rounded-full bg-error-dim border border-error-border text-error">
-              {timedOutOrders.length} timeout{timedOutOrders.length !== 1 ? 's' : ''}
-            </span>
-          )}
-          <ChevronRight size={15} className="text-text-quaternary" />
-        </a>
-
-        {/* Resolved Disputes */}
+        {/* Resolved Disputes — rich list kept inline so each card retains
+            its existing layout (orderNumber, won/lost/split badge, amount,
+            counterparty). Only rendered when there's at least one. */}
         {resolvedDisputes.length > 0 && (
-          <>
-            <p className={`${SECTION_LABEL} block mb-2`}>Resolved Disputes</p>
-            <div className="flex flex-col gap-2 mb-3">
+          <section className="mb-6">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className={SECTION_LABEL}>Resolved Disputes</span>
+              <StatusPill label={`${resolvedDisputes.length}`} tone="muted" />
+            </div>
+            <div className="flex flex-col gap-2">
               {resolvedDisputes.map(dispute => {
                 const badgeClass =
                   dispute.resolvedInFavorOf === 'user'
@@ -769,30 +484,33 @@ export const ProfileScreen = ({
                 );
               })}
             </div>
-          </>
+          </section>
         )}
 
-        {/* Theme Toggle */}
-        <p className={`${SECTION_LABEL} block mb-2`}>Appearance</p>
-        <div className={`rounded-[16px] px-4 py-3 flex items-center justify-between mb-3 ${CARD}`}>
-          <div className="flex items-center gap-3">
-            {theme === 'dark' ? (
-              <Moon size={16} className="text-text-secondary" />
-            ) : (
-              <Sun size={16} className="text-text-secondary" />
-            )}
-            <span className="text-[14px] font-bold text-text-primary">
-              {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
-            </span>
-          </div>
-          <button onClick={toggleTheme}>
-            <div className="w-12 h-7 rounded-[14px] p-0.5 flex items-center transition-colors duration-200 bg-accent">
-              <div className={`w-6 h-6 rounded-full bg-surface-base transition-transform duration-200 ${
-                theme === 'light' ? 'translate-x-5' : 'translate-x-0'
-              }`} />
-            </div>
-          </button>
-        </div>
+        {/* ── 4. Preferences ── */}
+        <SettingsGroup label="Preferences" icon={<Sliders className="w-3.5 h-3.5" />}>
+          <SettingsRow
+            icon={theme === 'dark' ? <Moon className="w-[15px] h-[15px]" /> : <Sun className="w-[15px] h-[15px]" />}
+            title="Appearance"
+            subtitle={theme === 'dark' ? 'Dark mode' : 'Light mode'}
+            hideChevron
+            onClick={toggleTheme}
+            trailing={
+              <span
+                role="switch"
+                aria-checked={theme === 'light'}
+                aria-label="Toggle light mode"
+                className="w-11 h-6 rounded-full p-0.5 flex items-center transition-colors duration-200 bg-accent shrink-0"
+              >
+                <span
+                  className={`w-5 h-5 rounded-full bg-surface-base transition-transform duration-200 ${
+                    theme === 'light' ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </span>
+            }
+          />
+        </SettingsGroup>
 
         {/* Logout */}
         <motion.button whileTap={{ scale: 0.97 }}
@@ -812,7 +530,6 @@ export const ProfileScreen = ({
             setUserName('Guest');
             setUserBalance(0);
             setOrders([]);
-            setBankAccounts([]);
             setResolvedDisputes([]);
             setLoginError('');
             setLoginForm({ username: '', password: '', email: '' });
@@ -831,83 +548,6 @@ export const ProfileScreen = ({
           Sign Out
         </motion.button>
       </div>
-
-      {/* Add Bank Modal */}
-      <AnimatePresence>
-        {showAddBank && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 z-40"
-              onClick={() => setShowAddBank(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed inset-0 z-50 flex items-center justify-center px-5 py-8"
-              onClick={() => setShowAddBank(false)}
-            >
-              <div
-                className={`w-full ${maxW} rounded-2xl shadow-2xl bg-surface-base border border-border-medium`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-                  <p className="text-[17px] font-bold text-text-primary tracking-[-0.02em]">Add Bank Account</p>
-                  <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(false)}
-                    className="w-8 h-8 rounded-[10px] flex items-center justify-center bg-surface-hover">
-                    <X size={15} className="text-text-tertiary" />
-                  </motion.button>
-                </div>
-                <div className="px-5 py-4 flex flex-col gap-3">
-                  <div>
-                    <p className={`${CARD_LABEL} block mb-1.5`}>Bank Name</p>
-                    <input
-                      value={newBank.bank}
-                      onChange={(e) => setNewBank(p => ({ ...p, bank: e.target.value }))}
-                      placeholder="Emirates NBD"
-                      className="w-full bg-surface-hover border border-border-medium rounded-[12px] px-3.5 py-2.5 text-[14px] font-semibold text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-strong"
-                    />
-                  </div>
-                  <div>
-                    <p className={`${CARD_LABEL} block mb-1.5`}>IBAN</p>
-                    <input
-                      value={newBank.iban}
-                      onChange={(e) => setNewBank(p => ({ ...p, iban: e.target.value }))}
-                      placeholder="AE12 0345 0000 0012 3456 789"
-                      className="w-full bg-surface-hover border border-border-medium rounded-[12px] px-3.5 py-2.5 text-[14px] font-semibold text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-strong"
-                    />
-                  </div>
-                  <div>
-                    <p className={`${CARD_LABEL} block mb-1.5`}>Account Name</p>
-                    <input
-                      value={newBank.name}
-                      onChange={(e) => setNewBank(p => ({ ...p, name: e.target.value }))}
-                      placeholder="John Doe"
-                      className="w-full bg-surface-hover border border-border-medium rounded-[12px] px-3.5 py-2.5 text-[14px] font-semibold text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-strong"
-                    />
-                  </div>
-                </div>
-                <div className="px-5 pb-5 pt-1">
-                  <motion.button whileTap={{ scale: 0.97 }}
-                    onClick={addBankAccount}
-                    disabled={!newBank.bank || !newBank.iban || !newBank.name}
-                    className={`w-full h-12 rounded-[14px] text-[14px] font-bold tracking-[-0.01em] ${
-                      newBank.bank && newBank.iban && newBank.name
-                        ? 'bg-accent text-accent-text'
-                        : 'bg-surface-hover text-text-quaternary'
-                    }`}>
-                    Add Account
-                  </motion.button>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
     </div>
