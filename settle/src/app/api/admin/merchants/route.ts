@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { requireAdminAuth } from '@/lib/middleware/auth';
+import { requireAdminAuth, readAdminTokenFromRequest, verifyAdminToken } from '@/lib/middleware/auth';
 
 interface MerchantRow {
   id: string;
@@ -345,6 +345,11 @@ export async function GET(request: NextRequest) {
 
 // PATCH /api/admin/merchants - Toggle merchant access flags
 // Body: { merchantId: string, hasOpsAccess?: boolean, hasComplianceAccess?: boolean }
+//
+// Every toggle is written to `permission_audit_log` (migration 128) with
+// the admin username (decoded from the bearer token), previous value, new
+// value, and request metadata. The trigger on that table makes the log
+// immutable — any later attempt to UPDATE/DELETE these rows fails.
 export async function PATCH(request: NextRequest) {
   const authError = await requireAdminAuth(request);
   if (authError) return authError;
@@ -359,6 +364,19 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Read current values BEFORE the UPDATE so the audit row records the
+    // real "previous" state. queryOne returns null if merchant is missing —
+    // we let the UPDATE return-null path handle that as 404 below to keep
+    // the existing response shape.
+    const previous = await queryOne<{ has_ops_access: boolean; has_compliance_access: boolean }>(
+      `SELECT
+         COALESCE(has_ops_access, false) AS has_ops_access,
+         COALESCE(has_compliance_access, false) AS has_compliance_access
+       FROM merchants
+       WHERE id = $1`,
+      [merchantId]
+    );
 
     // Build dynamic SET clause
     const setClauses: string[] = ['updated_at = NOW()'];
@@ -398,6 +416,56 @@ export async function PATCH(request: NextRequest) {
         { success: false, error: 'Merchant not found' },
         { status: 404 }
       );
+    }
+
+    // Write the audit trail. We extract the admin username from the bearer
+    // token (already validated by requireAdminAuth above, so re-verifying
+    // is cheap). Audit failure must not fail the user-visible action — log
+    // a loud warning instead. This trade-off matches the existing pattern
+    // in financial_audit_log writes elsewhere in the codebase.
+    try {
+      const adminToken = readAdminTokenFromRequest(request);
+      const adminPayload = adminToken ? verifyAdminToken(adminToken) : { valid: false } as const;
+      const adminUsername = adminPayload.valid ? adminPayload.username : 'unknown';
+      const ipAddress =
+        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+        request.headers.get('x-real-ip') ||
+        null;
+      const userAgent = request.headers.get('user-agent') || null;
+
+      const auditRows: Array<[string, boolean | null, boolean]> = [];
+      if (typeof hasOpsAccess === 'boolean' && previous?.has_ops_access !== hasOpsAccess) {
+        auditRows.push(['has_ops_access', previous?.has_ops_access ?? null, hasOpsAccess]);
+      }
+      if (typeof hasComplianceAccess === 'boolean' && previous?.has_compliance_access !== hasComplianceAccess) {
+        auditRows.push(['has_compliance_access', previous?.has_compliance_access ?? null, hasComplianceAccess]);
+      }
+
+      for (const [permission, prevValue, newValue] of auditRows) {
+        await query(
+          `INSERT INTO permission_audit_log
+             (target_type, target_id, permission, previous_value, new_value,
+              changed_by_type, changed_by_id, ip_address, user_agent, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            'merchant',
+            merchantId,
+            permission,
+            prevValue,
+            newValue,
+            'admin',
+            adminUsername,
+            ipAddress,
+            userAgent,
+            JSON.stringify({ businessName: updated.business_name }),
+          ]
+        );
+      }
+    } catch (auditErr) {
+      console.error('[admin/merchants] Failed to write permission_audit_log entry', {
+        merchantId,
+        error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+      });
     }
 
     return NextResponse.json({

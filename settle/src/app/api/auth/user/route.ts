@@ -10,6 +10,7 @@ import {
   getUserByUsername,
   linkWalletToUser,
 } from '@/lib/db/repositories/users';
+import { queryOne } from '@/lib/db';
 import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { validateUsername } from '@/lib/validation/username';
@@ -145,7 +146,15 @@ export async function POST(request: NextRequest) {
       }
 
       const userPayload = { actorId: user.id, actorType: 'user' as const };
-      const token = generateSessionToken(userPayload);
+      // SECURITY: previously emitted a real 7-day HMAC legacy token. The
+      // value escapes via JSON to the client store + any error logs and
+      // could be replayed as a Bearer credential for the full 7 days.
+      // Clients only use this field as a "logged-in" truthy sentinel
+      // (`!!data.token` gates silent refresh in fetchWithAuth) — no code
+      // path puts this value into an Authorization header. Replacing with
+      // a fixed sentinel keeps the client behavior identical while
+      // eliminating the long-lived stealable credential.
+      const token = 'cookie-session';
 
       let walletSessionId: string | null = null;
       let walletRefreshToken: string | null = null;
@@ -258,7 +267,7 @@ export async function POST(request: NextRequest) {
       }
 
       const setUnPayload = { actorId: user.id, actorType: 'user' as const };
-      const setUsernameToken = generateSessionToken(setUnPayload);
+      const setUsernameToken = 'cookie-session'; // sentinel — see comment on first occurrence
 
       let setUnSessionId: string | null = null;
       let setUnRefreshToken: string | null = null;
@@ -360,7 +369,7 @@ export async function POST(request: NextRequest) {
       }
 
       const loginPayload = { actorId: user.id, actorType: 'user' as const };
-      const loginToken = generateSessionToken(loginPayload);
+      const loginToken = 'cookie-session'; // sentinel — see comment on first occurrence
 
       let loginSessionId: string | null = null;
       let loginRefreshToken: string | null = null;
@@ -441,7 +450,7 @@ export async function POST(request: NextRequest) {
       trackRequest(request, { entityId: user.id, entityType: 'user', action: 'signup' }).catch(() => {});
 
       const regPayload = { actorId: user.id, actorType: 'user' as const };
-      const registerToken = generateSessionToken(regPayload);
+      const registerToken = 'cookie-session'; // sentinel — see comment on first occurrence
 
       let regSessionId: string | null = null;
       let regRefreshToken: string | null = null;
@@ -624,35 +633,41 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // SECURITY: identity must come from the refresh cookie, never from
+      // the query param. Without a valid pre-existing session this route
+      // used to mint fresh cookies for whoever the query param named —
+      // full account takeover by anyone who knew a UUID.
+      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+      if (!refreshCookie) {
+        return NextResponse.json({ success: true, data: { valid: false } });
+      }
+
+      let checkSessionId: string | null = null;
+      try {
+        checkSessionId = await getSessionIdFromRefreshCookie(refreshCookie);
+      } catch { /* treat as invalid */ }
+      if (!checkSessionId) {
+        return NextResponse.json({ success: true, data: { valid: false } });
+      }
+
+      // Cross-check: the cookie's session must belong to this user and to
+      // a `user` actor type. Stops a cookie from one actor being used to
+      // mint tokens for another actor on a shared device.
+      const sessionRow = await queryOne<{ entity_id: string; entity_type: string }>(
+        'SELECT entity_id, entity_type FROM sessions WHERE id = $1 AND is_revoked = false AND expires_at > NOW()',
+        [checkSessionId]
+      );
+      if (!sessionRow || sessionRow.entity_type !== 'user' || sessionRow.entity_id !== userId) {
+        return NextResponse.json({ success: true, data: { valid: false } });
+      }
+
       const user = await getUserById(userId);
       if (!user) {
-        return NextResponse.json({
-          success: true,
-          data: { valid: false },
-        });
+        return NextResponse.json({ success: true, data: { valid: false } });
       }
 
       const checkPayload = { actorId: user.id, actorType: 'user' as const };
-
-      // Look up existing session from refresh cookie for v2 token
-      let checkSessionId: string | undefined;
-      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
-      if (refreshCookie) {
-        try {
-          const existingId = await getSessionIdFromRefreshCookie(refreshCookie);
-          if (existingId) checkSessionId = existingId;
-        } catch { /* proceed without sessionId */ }
-      }
-      // No valid refresh session → create one
-      let checkRefreshToken: string | null = null;
-      if (!checkSessionId) {
-        try {
-          const sess = await createSession(checkPayload, request as any);
-          if (sess) { checkSessionId = sess.sessionId; checkRefreshToken = sess.refreshToken; }
-        } catch { /* proceed without session tracking */ }
-      }
-
-      const checkToken = generateSessionToken(checkPayload);
+      const checkToken = 'cookie-session'; // sentinel — see comment on first occurrence
       const checkAccessTk = generateAccessToken({ ...checkPayload, sessionId: checkSessionId });
 
       const checkResponse = NextResponse.json({
@@ -664,7 +679,9 @@ export async function GET(request: NextRequest) {
           ...(checkAccessTk && { accessToken: checkAccessTk }),
         },
       });
-      if (checkRefreshToken) checkResponse.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshToken, REFRESH_COOKIE_OPTIONS);
+      // Refresh ONLY the short-lived access cookie. The long-lived refresh
+      // cookie is left untouched — rotation belongs to /api/auth/refresh,
+      // not to a session-check probe.
       if (checkAccessTk) checkResponse.cookies.set(ACCESS_TOKEN_COOKIE, checkAccessTk, ACCESS_COOKIE_OPTIONS);
       return checkResponse;
     }

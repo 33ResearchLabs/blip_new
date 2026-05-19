@@ -23,12 +23,39 @@ const CONNECTION_TIMEOUT_MS = parseInt(
   10,
 );
 
+// TLS verification posture for the Postgres connection.
+//   - Default: rejectUnauthorized=false (matches historical behavior; some
+//     managed Postgres providers serve a self-signed chain on the public
+//     proxy that the system CA bundle does not trust).
+//   - Opt-in strict: PG_TLS_VERIFY=true + PG_TLS_CA_PATH=/path/to/ca.pem
+//     pins the provider's CA and enables full verification, defeating an
+//     on-path MITM between app pods and the DB proxy.
+// The default is left permissive ONLY to avoid breaking existing deploys.
+// Production environments MUST set PG_TLS_VERIFY=true once the provider's
+// CA bundle has been provisioned.
+function buildPgSslConfig(): { rejectUnauthorized: boolean; ca?: string } {
+  if (process.env.PG_TLS_VERIFY !== 'true') {
+    return { rejectUnauthorized: false };
+  }
+  const caPath = process.env.PG_TLS_CA_PATH;
+  if (caPath) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const fs = require('fs') as typeof import('fs');
+      return { rejectUnauthorized: true, ca: fs.readFileSync(caPath, 'utf8') };
+    } catch (err) {
+      console.error('[db] PG_TLS_CA_PATH set but unreadable, falling back to system CA', err);
+    }
+  }
+  return { rejectUnauthorized: true };
+}
+
 const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
       // Railway (and most managed Postgres) require SSL on the public proxy.
       // Enable SSL whenever a DATABASE_URL is supplied, regardless of NODE_ENV.
-      ssl: { rejectUnauthorized: false },
+      ssl: buildPgSslConfig(),
       max: parseInt(process.env.DB_POOL_MAX || defaultPoolMax),
       idleTimeoutMillis: isProduction ? 10000 : 30000,
       connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,

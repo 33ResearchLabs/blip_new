@@ -95,7 +95,10 @@ export async function POST(request: NextRequest) {
       if (sess) { sessionId = sess.sessionId; refreshToken = sess.refreshToken; }
     } catch { /* proceed without session tracking */ }
 
-    const token = generateSessionToken(payload);
+    // SECURITY: see auth/user/route.ts first generateSessionToken site for
+    // full rationale. Static sentinel keeps client-side `!!data.token`
+    // truthy gate working while eliminating the long-lived stealable credential.
+    const token = 'cookie-session';
     const accessToken = generateAccessToken({ ...payload, sessionId });
 
     // Get actor profile for response
