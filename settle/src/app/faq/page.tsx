@@ -15,6 +15,60 @@ import {
   Coins,
   LifeBuoy,
 } from 'lucide-react';
+import { useUserTheme } from '@/hooks/useUserTheme';
+
+// Theme tokens — `T` switches between dark/light below. All colors on this
+// page route through this map so the page flips with the user's theme
+// (Profile → Preferences → Appearance) instead of staying dark forever.
+const TOKENS_DARK = {
+  pageBg: '#000000',
+  text: 'rgba(255,255,255,0.95)',
+  textMd: 'rgba(255,255,255,0.65)',
+  textLo: 'rgba(255,255,255,0.45)',
+  textXl: 'rgba(255,255,255,0.30)',
+  iconLo: 'rgba(255,255,255,0.40)',
+  iconHi: 'rgba(255,255,255,0.75)',
+  headerBg: 'rgba(0,0,0,0.95)',
+  border: 'rgba(255,255,255,0.06)',
+  borderStrong: 'rgba(255,255,255,0.07)',
+  borderFocus: 'rgba(255,255,255,0.18)',
+  divider: 'rgba(255,255,255,0.05)',
+  inputBg: 'rgba(255,255,255,0.04)',
+  surface: 'rgba(255,255,255,0.02)',
+  hoverBg: 'rgba(255,255,255,0.025)',
+  activeBg: 'rgba(255,255,255,0.04)',
+  ambient1: 'rgba(255,255,255,0.03)',
+  ambient2: 'rgba(255,255,255,0.02)',
+  cardGradient:
+    'linear-gradient(180deg,rgba(255,255,255,0.025) 0%,rgba(255,255,255,0.015) 100%)',
+  cardShadow:
+    '0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px -12px rgba(0,0,0,0.6)',
+} as const;
+
+const TOKENS_LIGHT = {
+  pageBg: '#ffffff',
+  text: 'rgba(15,23,42,0.95)',
+  textMd: 'rgba(15,23,42,0.65)',
+  textLo: 'rgba(15,23,42,0.50)',
+  textXl: 'rgba(15,23,42,0.32)',
+  iconLo: 'rgba(15,23,42,0.45)',
+  iconHi: 'rgba(15,23,42,0.75)',
+  headerBg: 'rgba(255,255,255,0.95)',
+  border: 'rgba(15,23,42,0.08)',
+  borderStrong: 'rgba(15,23,42,0.10)',
+  borderFocus: 'rgba(15,23,42,0.25)',
+  divider: 'rgba(15,23,42,0.06)',
+  inputBg: 'rgba(15,23,42,0.04)',
+  surface: 'rgba(15,23,42,0.025)',
+  hoverBg: 'rgba(15,23,42,0.04)',
+  activeBg: 'rgba(15,23,42,0.06)',
+  ambient1: 'rgba(15,23,42,0.04)',
+  ambient2: 'rgba(15,23,42,0.03)',
+  cardGradient:
+    'linear-gradient(180deg,rgba(15,23,42,0.03) 0%,rgba(15,23,42,0.015) 100%)',
+  cardShadow:
+    '0 1px 0 rgba(255,255,255,0.6) inset, 0 8px 24px -14px rgba(15,23,42,0.18)',
+} as const;
 
 /**
  * FAQ
@@ -179,6 +233,10 @@ const CATEGORIES: Category[] = [
 ];
 
 export default function FaqPage() {
+  const { theme } = useUserTheme();
+  const isLight = theme === 'light';
+  const T = isLight ? TOKENS_LIGHT : TOKENS_DARK;
+
   const [query, setQuery] = useState('');
   // Per-category open index — only one item open per category to keep the
   // page short on mobile. Map keys are category ids.
@@ -204,50 +262,73 @@ export default function FaqPage() {
     }));
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Ambient background — same pattern as /console */}
+    <div className="min-h-screen" style={{ background: T.pageBg, color: T.text }}>
+      {/* Ambient background — tint follows the theme */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.03] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-white/[0.02] rounded-full blur-[150px]" />
+        <div
+          className="absolute top-0 right-1/3 w-[600px] h-[400px] rounded-full blur-[150px]"
+          style={{ background: T.ambient1 }}
+        />
+        <div
+          className="absolute bottom-0 left-1/4 w-[500px] h-[300px] rounded-full blur-[150px]"
+          style={{ background: T.ambient2 }}
+        />
       </div>
 
-      <header className="sticky top-0 z-50 bg-black/95 backdrop-blur-sm border-b border-white/[0.04]">
+      <header
+        className="sticky top-0 z-50 backdrop-blur-sm"
+        style={{ background: T.headerBg, borderBottom: `1px solid ${T.border}` }}
+      >
         <div className="px-4 h-14 flex items-center gap-3 max-w-[480px] mx-auto">
           <Link
             href="/"
-            className="p-2 -ml-2 hover:bg-white/5 rounded-lg transition-colors"
+            className="p-2 -ml-2 rounded-lg transition-colors"
+            style={{ color: T.iconHi }}
             aria-label="Back"
           >
-            <ArrowLeft className="w-5 h-5 text-white/70" />
+            <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1">
-            <h1 className="text-sm font-semibold text-white/95">FAQs</h1>
-            <p className="text-[10px] text-white/45">Frequently asked questions</p>
+            <h1 className="text-sm font-semibold" style={{ color: T.text }}>FAQs</h1>
+            <p className="text-[10px]" style={{ color: T.textLo }}>Frequently asked questions</p>
           </div>
-          <LifeBuoy className="w-4 h-4 text-white/35" />
+          <LifeBuoy className="w-4 h-4" style={{ color: T.textXl }} />
         </div>
       </header>
 
       <main className="relative z-10 px-4 py-5 pb-24 max-w-[480px] mx-auto">
         {/* Search */}
         <div className="relative mb-5">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
+            style={{ color: T.textXl }}
+          />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search questions"
             maxLength={100}
-            className="w-full h-11 pl-9 pr-3 rounded-[12px] bg-white/[0.04] border border-white/[0.06] text-[13px] text-white/95 placeholder:text-white/30 outline-none focus:border-white/[0.18] transition"
+            className="w-full h-11 pl-9 pr-3 rounded-[12px] text-[13px] outline-none transition"
+            style={{
+              background: T.inputBg,
+              border: `1px solid ${T.border}`,
+              color: T.text,
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = T.borderFocus; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }}
           />
         </div>
 
         {filtered.length === 0 && (
-          <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.02] p-6 text-center">
-            <p className="text-[13px] text-white/55">
+          <div
+            className="rounded-[16px] p-6 text-center"
+            style={{ background: T.surface, border: `1px solid ${T.border}` }}
+          >
+            <p className="text-[13px]" style={{ color: T.textMd }}>
               No results for &ldquo;{query}&rdquo;.
             </p>
-            <p className="mt-1 text-[11px] text-white/35">
+            <p className="mt-1 text-[11px]" style={{ color: T.textXl }}>
               Try a different keyword or contact support.
             </p>
           </div>
@@ -259,30 +340,52 @@ export default function FaqPage() {
           return (
             <section key={cat.id} className="mb-6">
               <div className="flex items-center gap-1.5 mb-2 px-1">
-                <Icon className="w-3.5 h-3.5 text-white/40" />
-                <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-white/45">
+                <Icon className="w-3.5 h-3.5" style={{ color: T.iconLo }} />
+                <span
+                  className="text-[10px] font-bold tracking-[0.22em] uppercase"
+                  style={{ color: T.textLo }}
+                >
                   {cat.label}
                 </span>
               </div>
 
-              <div className="rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.025)_0%,rgba(255,255,255,0.015)_100%)] border border-white/[0.07] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_8px_24px_-12px_rgba(0,0,0,0.6)] divide-y divide-white/[0.05]">
-                {cat.items.map((item, idx) => {
+              <div
+                className="rounded-[20px] overflow-hidden"
+                style={{
+                  background: T.cardGradient,
+                  border: `1px solid ${T.borderStrong}`,
+                  boxShadow: T.cardShadow,
+                }}
+              >
+                {cat.items.map((item, idx, arr) => {
                   const isOpen = open === idx;
                   return (
-                    <div key={item.q}>
+                    <div
+                      key={item.q}
+                      style={{
+                        borderBottom:
+                          idx < arr.length - 1 ? `1px solid ${T.divider}` : undefined,
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => toggle(cat.id, idx)}
                         aria-expanded={isOpen}
-                        className="w-full px-4 py-3.5 flex items-start gap-3 text-left hover:bg-white/[0.025] active:bg-white/[0.04] transition"
+                        className="w-full px-4 py-3.5 flex items-start gap-3 text-left transition"
+                        onMouseEnter={(e) => { e.currentTarget.style.background = T.hoverBg; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
-                        <span className="flex-1 min-w-0 text-[13.5px] font-semibold tracking-[-0.01em] text-white/95 leading-snug">
+                        <span
+                          className="flex-1 min-w-0 text-[13.5px] font-semibold tracking-[-0.01em] leading-snug"
+                          style={{ color: T.text }}
+                        >
                           {item.q}
                         </span>
                         <ChevronDown
-                          className={`w-4 h-4 mt-0.5 text-white/35 shrink-0 transition-transform duration-200 ${
-                            isOpen ? 'rotate-180 text-white/75' : ''
+                          className={`w-4 h-4 mt-0.5 shrink-0 transition-transform duration-200 ${
+                            isOpen ? 'rotate-180' : ''
                           }`}
+                          style={{ color: isOpen ? T.iconHi : T.textXl }}
                         />
                       </button>
                       <AnimatePresence initial={false}>
@@ -295,7 +398,10 @@ export default function FaqPage() {
                             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                             className="overflow-hidden"
                           >
-                            <p className="px-4 pb-4 -mt-1 text-[12.5px] text-white/65 leading-relaxed">
+                            <p
+                              className="px-4 pb-4 -mt-1 text-[12.5px] leading-relaxed"
+                              style={{ color: T.textMd }}
+                            >
                               {item.a}
                             </p>
                           </motion.div>
@@ -309,7 +415,7 @@ export default function FaqPage() {
           );
         })}
 
-        <p className="mt-6 text-center text-[11px] text-white/35">
+        <p className="mt-6 text-center text-[11px]" style={{ color: T.textXl }}>
           Can&apos;t find what you need? Tap Contact Support from your profile.
         </p>
       </main>

@@ -262,7 +262,11 @@ function WalletBalanceSection({
     : null;
 
   return (
-    <>
+    <div className="flex flex-col flex-1 min-h-0">
+      {/* ── Top group: live-rate pill + balance, vertically centered in the
+              remaining hero height so the empty/ready states feel anchored
+              rather than floating with dead space below. ── */}
+      <div className="flex-1 flex flex-col justify-center min-h-0">
       {/* ── Centered live-rate pill (Phantom-style) ── */}
       <div className="flex items-center justify-center mb-2">
         <div
@@ -380,15 +384,19 @@ function WalletBalanceSection({
 
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-3" style={{ textAlign: 'center', marginTop: 18 }}>
+        <div className="flex flex-col items-center gap-4" style={{ textAlign: 'center' }}>
+          {/* Compact dash placeholder — kept small (font-size 32, not 60)
+              so the stack stays short enough to fit inside the flex-1
+              centered area on mobile viewports without overflowing into
+              the action-tile row below. */}
           <span style={{
-            fontSize: 60, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1,
-            color: 'rgba(255,255,255,0.18)',
+            fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1,
+            color: 'rgba(255,255,255,0.22)',
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
           }}>
-            ——
+            ---
           </span>
-          <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1.4, maxWidth: 240 }}>
             {IS_EMBEDDED_WALLET
               ? embeddedWallet?.state === 'locked' ? 'Unlock your wallet to view balance' : 'Set up a wallet to start trading'
               : 'Connect your Solana wallet to trade'}
@@ -401,7 +409,7 @@ function WalletBalanceSection({
               } else { setShowWalletModal(true); }
             }}
             style={{
-              padding: '10px 22px', borderRadius: 14,
+              padding: '11px 26px', borderRadius: 14,
               background: '#ffffff', color: '#0B0F14',
               fontSize: 14, fontWeight: 800, letterSpacing: '-0.005em',
             }}>
@@ -412,11 +420,21 @@ function WalletBalanceSection({
         </div>
       )}
 
+      </div>
+
+      {/* ── Bottom group: action tiles + Beat-any-rate. Pinned to the bottom
+              of the hero card so the dark surface terminates with the CTA
+              row sitting just above the curved bottom edge. `pt-5` enforces
+              a minimum 20px gap from whatever sits in the centered group
+              above (especially the Create Wallet CTA in the not-ready state,
+              which would otherwise collide with the action tiles when the
+              viewport leaves little flex slack to distribute). ── */}
+      <div className="shrink-0 pt-5">
       {/* ── Action buttons — bigger Phantom-style square tiles ── */}
       <motion.div
         initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
         className="grid grid-cols-4 gap-2.5"
-        style={{ marginTop: 12 }}
+        style={{ marginTop: 0 }}
       >
         {([
           { label: 'Pay',      Icon: QrCode,        primary: false, comingSoon: false, fn: onPay },
@@ -598,7 +616,8 @@ function WalletBalanceSection({
           <ExternalLink size={12} strokeWidth={2.6} style={{ color: 'rgba(15,23,42,0.75)' }} />
         </div>
       </motion.a>
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -825,19 +844,17 @@ export const HomeScreen = ({
       {/* ══════════════════════════════════════════════
           HERO CARD — premium dark "card" surface,
           stays dark in BOTH themes, curved bottom rests on white body.
-          Always 60svh tall — body below gets the remaining 40svh.
+          Always 60dvh tall — body below gets the remaining 40dvh, so the
+          two sections together fill the viewport without overflow.
+          Inner content uses flex-column so the balance area centers in
+          remaining space and the CTA row pins to the bottom edge.
          ══════════════════════════════════════════════ */}
       <div
-        className="relative shrink-0 pb-3 h-[65dvh] md:h-[60dvh]  "
+        className="relative shrink-0 h-[60dvh] flex flex-col"
         style={{
           background: 'linear-gradient(180deg, #161B26 0%, #0B0F17 55%, #07090F 100%)',
           borderBottomLeftRadius: 44,
           borderBottomRightRadius: 44,
-          // boxShadow:
-            // '0 30px 40px -28px rgba(0,0,0,0.45), 0 18px 22px -16px rgba(0,0,0,0.30)',
-          // Fixed 60% of viewport — leaves 40% for the white transactions
-          // section below. Inner content scrolls if it overflows.
-          // height: '65dvh',
         }}
       >
 
@@ -878,9 +895,9 @@ export const HomeScreen = ({
           />
         </div>
 
-        {/* ── Header ── */}
-        <div className={`${maxW} mx-auto relative z-10 px-6 pt-4`}>
-          <div className="flex items-center justify-between mb-4">
+        {/* ── Header + balance + CTA (flex column fills the hero height) ── */}
+        <div className={`${maxW} w-full mx-auto relative z-10 px-6 pt-4 pb-5 flex flex-col flex-1 min-h-0`}>
+          <div className="flex items-center justify-between mb-2 shrink-0">
 
             {/* Avatar + name + wallet — white text locked in for dark hero */}
             <div className="flex items-center gap-3">
@@ -967,8 +984,7 @@ export const HomeScreen = ({
             </div>
           </div>
 
-          {/* ── Balance section ── */}
-          <div className="mt-4" />
+          {/* ── Balance section (fills remaining hero space) ── */}
           <WalletBalanceSection
             displayBalance={displayBalance}
             isWalletReady={isWalletReady}

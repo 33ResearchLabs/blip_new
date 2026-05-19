@@ -263,8 +263,17 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
         style={{
           background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`,
           border: `1px solid ${colors.border.subtle}`,
-          minHeight: 'min(720px, 90vh)',
-          maxHeight: '95vh',
+          // Use `dvh` so the modal respects the actual viewport height
+          // (accounting for mobile browser chrome). `vh` on iOS Safari
+          // and some Android browsers reports the full screen height even
+          // when the URL bar is visible, which was clipping the dial pad
+          // on the Import tab. Allow the content to scroll if it still
+          // exceeds the available space (long press, large text, etc).
+          minHeight: 'min(560px, 90dvh)',
+          maxHeight: '95dvh',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
           paddingTop: 'max(1.5rem, env(safe-area-inset-top))',
           paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
         }}

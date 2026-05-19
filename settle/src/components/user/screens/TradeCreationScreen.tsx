@@ -413,7 +413,7 @@ export const TradeCreationScreen = ({
       </header>
 
       {/* ── Hero amount stack ── */}
-      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 flex flex-col items-center justify-start pt-6">
+      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 flex flex-col items-center justify-start pt-2">
         {/* Animated You Buy / You Sell label */}
         <AnimatePresence mode="wait">
           <motion.p
@@ -601,7 +601,7 @@ export const TradeCreationScreen = ({
         </div>
 
         {/* Buy/Sell — active = white tile */}
-        <div className="grid grid-cols-2 w-full" style={{ gap: 10, marginTop: 28 }}>
+        <div className="grid grid-cols-2 w-full  " style={{ gap: 10, marginTop: 20 }}>
           {(
             [
               {
@@ -670,7 +670,7 @@ export const TradeCreationScreen = ({
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ ...SOFT_SPRING, delay: 0.1 }}
-        className="relative z-10 max-w-[440px] mx-auto w-full"
+        className="relative z-10 max-w-[440px] mx-auto w-full "
         style={{
           marginTop: 24,
           padding: "18px 18px calc(env(safe-area-inset-bottom, 12px) + 90px)",
@@ -684,7 +684,7 @@ export const TradeCreationScreen = ({
         }}
       >
         {/* Pulled-handle pip */}
-        <div className="flex justify-center mb-3">
+        <div className="flex justify-center mb-3 ">
           <span
             style={{
               width: 36,
@@ -788,7 +788,7 @@ export const TradeCreationScreen = ({
         </AnimatePresence>
 
         {/* Payment method header — label + inline "Add payment method" link */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <p
             style={{
               fontSize: 9,
@@ -845,15 +845,23 @@ export const TradeCreationScreen = ({
                     key={method}
                     whileTap={{ scale: 0.97 }}
                     onClick={() => setPaymentMethod(method)}
+                    animate={{
+                      background: on ? T.activeTileBg : T.surface4,
+                      borderColor: on ? T.activeTileBorder : T.border2,
+                      boxShadow: on
+                        ? isLight
+                          ? "0 6px 14px -8px rgba(15,23,42,0.25)"
+                          : "0 6px 14px -8px rgba(255,255,255,0.35)"
+                        : "none",
+                    }}
+                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                     className="flex items-center"
                     style={{
                       padding: "11px 12px",
                       borderRadius: 14,
+                      borderWidth: 1,
+                      borderStyle: "solid",
                       gap: 10,
-                      background: on ? T.surface3 : T.surface4,
-                      border: on
-                        ? `1px solid ${T.borderStrong}`
-                        : `1px solid ${T.border2}`,
                     }}
                   >
                     <div
@@ -862,7 +870,13 @@ export const TradeCreationScreen = ({
                         width: 26,
                         height: 26,
                         borderRadius: 9,
-                        background: on ? T.activeTileBg : T.surface3,
+                        // When the tile is active (white), use a subtle dark
+                        // tint for the icon container so it remains visible on
+                        // the white surface; otherwise keep the original
+                        // raised-surface look.
+                        background: on
+                          ? "rgba(11,15,20,0.08)"
+                          : T.surface3,
                       }}
                     >
                       <Icon
@@ -877,7 +891,7 @@ export const TradeCreationScreen = ({
                           fontSize: 12,
                           fontWeight: 800,
                           letterSpacing: "-0.005em",
-                          color: T.hi,
+                          color: on ? T.activeTileText : T.hi,
                         }}
                       >
                         {label}
@@ -886,7 +900,7 @@ export const TradeCreationScreen = ({
                         style={{
                           fontSize: 9.5,
                           fontWeight: 600,
-                          color: T.lo,
+                          color: on ? T.activeTileSubText : T.lo,
                           marginTop: 1,
                         }}
                       >
@@ -1030,14 +1044,14 @@ export const TradeCreationScreen = ({
             letterSpacing: "0.22em",
             color: T.lo,
             textTransform: "uppercase",
-            marginBottom: 8,
+            marginBottom: 2,
           }}
         >
           Priority
         </p>
         <LayoutGroup>
           <div
-            className="relative grid grid-cols-3 mb-5"
+            className="relative grid grid-cols-3 mb-3"
             style={{
               gap: 4,
               padding: 4,
@@ -1124,7 +1138,7 @@ export const TradeCreationScreen = ({
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           className="w-full flex items-center justify-center"
           style={{
-            gap: 8,
+            gap: 4,
             minHeight: 56,
             borderRadius: 18,
             borderWidth: 1,

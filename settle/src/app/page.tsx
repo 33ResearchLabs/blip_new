@@ -30,21 +30,31 @@ import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import type { Screen } from "@/components/user/screens/types";
 import { FEE_CONFIG } from "@/components/user/screens/helpers";
 
-// Transform-only animations — no opacity. Opacity crossfades blend the two
-// panels' colors mid-transition, which reads as flicker. Pure transform
-// keeps both panels fully opaque the entire time, so the entering panel
-// simply slides on top of the exiting one. Solid bg on Panel is required.
+// `fade` is the default Panel animation and is a deliberate no-op
+// (opacity stays at 1, transition duration 0) — used for the 5 BottomNav
+// tab screens (home / trade / chats / orders / profile) plus the welcome
+// screen. Previously these used an opacity crossfade (0→1 entering, 1→0
+// exiting) with AnimatePresence in concurrent mode, which left both panels
+// at intermediate opacity at the midpoint — the blend showed through as
+// visible flashing/flickering when switching tabs. With opacity locked at
+// 1, the entering panel (rendered after the exiting one in DOM order)
+// fully covers the exiting one the moment it mounts, so the tab change is
+// instant and reads cleanly — matching iOS/Material tab-bar conventions.
+//
+// `slide` keeps its push-navigation feel for transient overlays (escrow /
+// order / chat-view / create-offer etc.) where motion is expected.
 const fade = {
-  initial: { opacity: 0, scale: 0.985 },
-  animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 0.985 },
+  initial: { opacity: 1 },
+  animate: { opacity: 1 },
+  exit: { opacity: 1 },
+  transition: { duration: 0 },
 };
 const slide = {
   initial: { opacity: 0, x: '8%' },
   animate: { opacity: 1, x: 0 },
   exit: { opacity: 0, x: '-8%' },
+  transition: { duration: 0.26, ease: [0.22, 1, 0.36, 1] },
 };
-const PANEL_TRANSITION = { duration: 0.26, ease: [0.22, 1, 0.36, 1] } as const;
 const darkBg = { background: "#080810" } as const;
 const lightPanelBg = { background: "#ffffff" } as const;
 function Panel({
@@ -64,7 +74,10 @@ function Panel({
     <motion.div
       key={k}
       {...anim}
-      transition={PANEL_TRANSITION}
+      // `transition` is spread in from `anim` (fade → duration 0, slide →
+      // 0.26s) — see the comments above the `fade`/`slide` constants for
+      // the rationale behind the per-anim transition timing.
+      //
       // Absolute-positioned + horizontally centered so the entering and
       // exiting screens overlap during the transition. Solid background
       // (falls back to var(--user-frame) when no `style` is provided) makes
