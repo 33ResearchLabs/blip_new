@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, Eye, EyeOff, Loader2, Mail, Store } from "lucide-react";
+import { CheckCircle2, ChevronLeft, Eye, EyeOff, Loader2, Mail, ShieldCheck, Store } from "lucide-react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { useDashboardAuth } from "@/hooks/useDashboardAuth";
@@ -128,66 +128,112 @@ export default function MerchantLoginPage() {
               {/* Post-signup verification gate. Registration is NOT
                   complete until the merchant clicks the link in the email
                   we just sent — the form is replaced with a check-your-inbox
-                  panel so they can't proceed without verifying. */}
+                  panel so they can't proceed without verifying. The same
+                  panel swaps body to a "verified!" success card the moment
+                  the poller in useDashboardAuth flips
+                  pendingVerificationVerified true (link clicked on this
+                  device, another device, or scanned by an email proxy —
+                  any of them resolve the gate). */}
               {auth.pendingVerificationEmail ? (
-                <>
-                  <div className="rounded-xl p-4 flex gap-3 bg-success-dim border border-success-border">
-                    <div className="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center flex-shrink-0">
-                      <Mail className="w-4 h-4 text-success" />
+                auth.pendingVerificationVerified ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="space-y-5 py-2"
+                  >
+                    <div className="flex justify-center">
+                      <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center">
+                        <CheckCircle2 className="w-8 h-8 text-success" />
+                      </div>
                     </div>
-                    <div className="text-[13px] leading-relaxed text-text-primary">
-                      <p>
-                        We sent a verification link to{" "}
-                        <span className="font-semibold break-all">
+                    <div className="text-center space-y-2">
+                      <p className="text-base font-semibold text-text-primary">
+                        Business email verified
+                      </p>
+                      <p className="text-xs text-text-secondary leading-relaxed">
+                        <span className="font-semibold break-all text-text-primary">
                           {auth.pendingVerificationEmail}
-                        </span>
-                        .
-                      </p>
-                      <p className="mt-1 text-text-secondary">
-                        Click the link in that email to activate your account.
-                        Your registration is not complete until your email is
-                        verified.
+                        </span>{" "}
+                        is confirmed. Your merchant account is ready.
                       </p>
                     </div>
-                  </div>
 
-                  <p className="text-[12px] text-text-tertiary">
-                    Already clicked the link? Tap the button below to sign in.
-                    The dashboard doesn&apos;t auto-detect verification across
-                    browser tabs.
-                  </p>
+                    <div className="rounded-xl px-4 py-3 flex items-start gap-3 bg-success-dim border border-success-border">
+                      <ShieldCheck className="w-4 h-4 text-success shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-text-secondary leading-relaxed">
+                        A verified business email lets us reach you for
+                        compliance checks and protects your account from
+                        impersonation.
+                      </p>
+                    </div>
 
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      auth.clearPendingVerification();
-                      auth.setAuthTab("signin");
-                    }}
-                    className="w-full py-3 rounded-xl text-sm font-bold bg-white text-[#0B0F14]"
-                  >
-                    I&apos;ve verified my email — Sign in
-                  </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        auth.clearPendingVerification();
+                        auth.setAuthTab("signin");
+                      }}
+                      className="w-full py-3 rounded-xl text-sm font-bold bg-white text-[#0B0F14]"
+                    >
+                      Continue to sign in
+                    </motion.button>
+                  </motion.div>
+                ) : (
+                  <>
+                    <div className="rounded-xl p-4 flex gap-3 bg-success-dim border border-success-border">
+                      <div className="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center flex-shrink-0">
+                        <Mail className="w-4 h-4 text-success" />
+                      </div>
+                      <div className="text-[13px] leading-relaxed text-text-primary">
+                        <p>
+                          We sent a verification link to{" "}
+                          <span className="font-semibold break-all">
+                            {auth.pendingVerificationEmail}
+                          </span>
+                          .
+                        </p>
+                        <p className="mt-1 text-text-secondary">
+                          Click the link in that email to activate your account.
+                          This screen updates automatically as soon as we
+                          detect the verification.
+                        </p>
+                      </div>
+                    </div>
 
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={auth.resendVerificationEmail}
-                    disabled={auth.isResendingVerification}
-                    className="w-full py-3 rounded-xl text-sm font-bold bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {auth.isResendingVerification ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Sending…
-                      </>
-                    ) : (
-                      "Resend verification email"
-                    )}
-                  </motion.button>
+                    <p className="text-[12px] text-text-tertiary flex items-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-text-tertiary" />
+                      Waiting for verification…
+                    </p>
 
-                  <p className="text-[11px] text-text-tertiary text-center">
-                    Didn&apos;t get it? Check spam. Links expire after 24 hours.
-                  </p>
-                </>
+                    {/* Resend stays — covers the case where the email never
+                        arrived or got lost. The "I've verified, take me
+                        to sign-in" button was removed: the poller (every
+                        4–12s plus on window focus) auto-converts this
+                        panel into the success card the moment the click
+                        is detected, so the manual escape hatch is no
+                        longer needed. */}
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={auth.resendVerificationEmail}
+                      disabled={auth.isResendingVerification}
+                      className="w-full py-3 rounded-xl text-sm font-bold bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {auth.isResendingVerification ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Sending…
+                        </>
+                      ) : (
+                        "Resend verification email"
+                      )}
+                    </motion.button>
+
+                    <p className="text-[11px] text-text-tertiary text-center">
+                      Didn&apos;t get it? Check spam. Links expire after 24 hours.
+                    </p>
+                  </>
+                )
               ) : (
               <>
               {/* Verification-success banner. Same trigger as the dashboard
@@ -209,9 +255,15 @@ export default function MerchantLoginPage() {
                   </button>
                 </div>
               )}
-              {auth.loginError && (
+              {auth.loginError && !auth.verificationSuccessNotice && (
                 <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
-                  {auth.loginError}
+                  {/* The hook stores EMAIL_NOT_VERIFIED as a sentinel for
+                      the LoginScreen modal flow. On this page we render
+                      it as friendly copy so users don't see the raw
+                      constant. */}
+                  {auth.loginError === "EMAIL_NOT_VERIFIED"
+                    ? "Please verify your email before signing in. Check your inbox for the verification link."
+                    : auth.loginError}
                 </div>
               )}
 

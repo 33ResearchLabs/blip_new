@@ -2,8 +2,17 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { Zap, Eye, EyeOff, CheckCircle, Loader2, AlertCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Zap,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  Lock,
+  ShieldCheck,
+} from "lucide-react";
 import Link from "next/link";
 
 // Reads ?token=xxx&id=xxx from the password-reset email link the
@@ -29,25 +38,31 @@ function ResetPasswordForm() {
 
   if (!token || !userId) {
     return (
-      <div className="text-center py-6 space-y-4">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22 }}
+        className="text-center py-6 space-y-5"
+      >
         <div className="flex justify-center">
           <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center">
             <AlertCircle className="w-8 h-8 text-red-400" />
           </div>
         </div>
-        <div>
-          <p className="text-sm text-white mb-1">Invalid Reset Link</p>
-          <p className="text-xs text-foreground/35">
-            This link is invalid or has expired. Please request a new password reset.
+        <div className="space-y-2">
+          <p className="text-base font-semibold text-white">Invalid reset link</p>
+          <p className="text-xs text-foreground/40 leading-relaxed">
+            This link is invalid or has expired. Reset links are good for 15
+            minutes — please request a fresh one.
           </p>
         </div>
         <Link
           href="/user/forgot-password"
-          className="inline-block text-xs text-white/50 hover:text-foreground transition-colors"
+          className="block w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors"
         >
           Request new reset link
         </Link>
-      </div>
+      </motion.div>
     );
   }
 
@@ -81,105 +96,129 @@ function ResetPasswordForm() {
 
   if (success) {
     return (
-      <div className="text-center py-6 space-y-4">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22 }}
+        className="text-center py-4 space-y-5"
+      >
         <div className="flex justify-center">
           <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
-            <CheckCircle className="w-8 h-8 text-emerald-400" />
+            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
           </div>
         </div>
-        <div>
-          <p className="text-sm text-white mb-1">Password Reset!</p>
-          <p className="text-xs text-foreground/35">
-            Your password has been updated. Redirecting to sign in...
+        <div className="space-y-2">
+          <p className="text-base font-semibold text-white">Password updated</p>
+          <p className="text-xs text-foreground/40 leading-relaxed">
+            Your new password is ready. Redirecting you to sign in…
           </p>
         </div>
+
+        <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl px-4 py-3 flex items-start gap-3 text-left">
+          <ShieldCheck className="w-4 h-4 text-emerald-400/80 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-foreground/45 leading-relaxed">
+            For your safety, we&apos;ve signed you out of every device. Use
+            your new password to sign back in.
+          </p>
+        </div>
+
         <Link
           href="/"
           className="inline-block text-xs text-white/50 hover:text-foreground transition-colors"
         >
           Go to sign in
         </Link>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <>
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
-          {error}
-        </div>
-      )}
-
-      <div>
-        <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
-          New Password
-        </label>
-        <div className="relative">
-          <input
-            type={showPassword ? "text" : "password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Min. 6 characters"
-            maxLength={24}
-            className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground transition-colors"
-          >
-            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
-        {password && password.length < 6 && (
-          <p className="text-[11px] text-red-400 mt-1">Must be at least 6 characters</p>
-        )}
-      </div>
-
-      <div>
-        <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
-          Confirm Password
-        </label>
-        <div className="relative">
-          <input
-            type={showConfirm ? "text" : "password"}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Re-enter password"
-            maxLength={24}
-            className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          />
-          <button
-            type="button"
-            onClick={() => setShowConfirm(!showConfirm)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground transition-colors"
-          >
-            {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
-        {confirmPassword && password !== confirmPassword && (
-          <p className="text-[11px] text-red-400 mt-1">Passwords don&apos;t match</p>
-        )}
-      </div>
-
-      <motion.button
-        whileTap={{ scale: 0.98 }}
-        onClick={handleSubmit}
-        disabled={isSubmitting || !isValid}
-        className="w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+    <AnimatePresence>
+      <motion.div
+        key="form"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22 }}
+        className="space-y-4"
       >
-        {isSubmitting ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Resetting...
-          </>
-        ) : (
-          "Reset Password"
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
+            {error}
+          </div>
         )}
-      </motion.button>
-    </>
+
+        <div>
+          <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
+            New Password
+          </label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Min. 6 characters"
+              maxLength={24}
+              className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pl-10 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground transition-colors"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          {password && password.length < 6 && (
+            <p className="text-[11px] text-red-400 mt-1">Must be at least 6 characters</p>
+          )}
+        </div>
+
+        <div>
+          <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
+            Confirm Password
+          </label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+            <input
+              type={showConfirm ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter password"
+              maxLength={24}
+              className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pl-10 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm(!showConfirm)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground transition-colors"
+            >
+              {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          {confirmPassword && password !== confirmPassword && (
+            <p className="text-[11px] text-red-400 mt-1">Passwords don&apos;t match</p>
+          )}
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={handleSubmit}
+          disabled={isSubmitting || !isValid}
+          className="w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Resetting...
+            </>
+          ) : (
+            "Reset Password"
+          )}
+        </motion.button>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 

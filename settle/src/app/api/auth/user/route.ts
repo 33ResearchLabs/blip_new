@@ -10,7 +10,8 @@ import {
   getUserByUsername,
   linkWalletToUser,
 } from '@/lib/db/repositories/users';
-import { queryOne } from '@/lib/db';
+import { query, queryOne, transaction } from '@/lib/db';
+import crypto from 'crypto';
 import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { validateUsername } from '@/lib/validation/username';
@@ -401,7 +402,11 @@ export async function POST(request: NextRequest) {
       return loginRes;
     }
 
-    // Register with username + PIN. No email collected.
+    // Register with username + PIN + email. Email is REQUIRED so we can
+    // run a verification gate identical to the merchant flow: the row is
+    // created with email_verified=false, a token is mailed, and no auth
+    // cookies are issued on this response — registration is not complete
+    // until the user clicks the verification link.
     if (action === 'register') {
       const usernameError = validateUserUsername(username || '');
       if (usernameError) {
@@ -418,6 +423,74 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const rawEmail: unknown = body?.email;
+      if (typeof rawEmail !== 'string' || !rawEmail.trim()) {
+        return NextResponse.json(
+          { success: false, error: 'Email is required' },
+          { status: 400 }
+        );
+      }
+      const normalizedEmail = rawEmail.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(normalizedEmail)) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid email format' },
+          { status: 400 }
+        );
+      }
+
+      // Option A overwrite logic — mirrors merchant register:
+      //   verified row           → reject (real account)
+      //   unverified, fresh (<60s) → cooldown reject
+      //   unverified, stale      → atomically sweep old row + tokens + sessions
+      const UNVERIFIED_OVERWRITE_COOLDOWN_SECONDS = 60;
+      const existingByEmail = await queryOne<{
+        id: string;
+        email_verified: boolean | null;
+        seconds_since_signup: number;
+      }>(
+        `SELECT
+           id,
+           email_verified,
+           EXTRACT(EPOCH FROM (NOW() - created_at))::int AS seconds_since_signup
+         FROM users
+         WHERE LOWER(email) = $1
+         LIMIT 1`,
+        [normalizedEmail]
+      );
+
+      if (existingByEmail) {
+        const isVerified = existingByEmail.email_verified === true;
+        if (isVerified) {
+          return NextResponse.json(
+            { success: false, error: 'Email already registered' },
+            { status: 409 }
+          );
+        }
+        if (existingByEmail.seconds_since_signup < UNVERIFIED_OVERWRITE_COOLDOWN_SECONDS) {
+          const wait = UNVERIFIED_OVERWRITE_COOLDOWN_SECONDS - existingByEmail.seconds_since_signup;
+          return NextResponse.json(
+            {
+              success: false,
+              error: `A verification email was just sent to this address. Check your inbox, or try again in ${wait}s.`,
+            },
+            { status: 429 }
+          );
+        }
+        // Stale unverified row → sweep so the new registration can proceed.
+        // user_email_verification_tokens + user_password_reset_tokens are
+        // declared ON DELETE CASCADE in migration 110, so the merchants
+        // table's explicit-delete dance isn't needed here. Still wrapped
+        // in a transaction so a failure can't leave half-deleted state.
+        await transaction(async (client) => {
+          await client.query(
+            `DELETE FROM sessions WHERE entity_id = $1 AND entity_type = 'user'`,
+            [existingByEmail.id]
+          );
+          await client.query(`DELETE FROM users WHERE id = $1`, [existingByEmail.id]);
+        });
+      }
+
       const available = await checkUsernameAvailable(username);
       if (!available) {
         return NextResponse.json(
@@ -432,12 +505,19 @@ export async function POST(request: NextRequest) {
           username,
           password,
           name: username,
-          email_verified: true,
+          email: normalizedEmail,
+          email_verified: false,
         });
       } catch (createErr: any) {
         if (createErr?.message === 'Username already taken') {
           return NextResponse.json(
             { success: false, error: 'Username already taken' },
+            { status: 409 }
+          );
+        }
+        if (createErr?.message === 'Email already registered') {
+          return NextResponse.json(
+            { success: false, error: 'Email already registered' },
             { status: 409 }
           );
         }
@@ -449,38 +529,43 @@ export async function POST(request: NextRequest) {
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: user.id, entityType: 'user', action: 'signup' }).catch(() => {});
 
-      const regPayload = { actorId: user.id, actorType: 'user' as const };
-      const registerToken = 'cookie-session'; // sentinel — see comment on first occurrence
-
-      let regSessionId: string | null = null;
-      let regRefreshToken: string | null = null;
+      // Issue verification token + send the link. Same shape as the
+      // merchant register flow.
       try {
-        const sessionResult = await createSession(regPayload, request as any);
-        if (sessionResult) {
-          regSessionId = sessionResult.sessionId;
-          regRefreshToken = sessionResult.refreshToken;
-        }
-      } catch { /* session creation failed, proceed without sessionId */ }
+        const verifyToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
 
-      const regAccessTk = generateAccessToken({ ...regPayload, ...(regSessionId && { sessionId: regSessionId }) });
+        await query(
+          `INSERT INTO user_email_verification_tokens (user_id, token_hash, expires_at)
+           VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
+          [user.id, tokenHash]
+        );
 
-      const regRes = NextResponse.json({
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const verifyLink = `${appUrl}/user/verify-email?token=${verifyToken}&id=${user.id}`;
+
+        const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
+        const emailContent = emailVerificationEmail(verifyLink, user.username || user.name || 'there');
+        sendEmail({ to: normalizedEmail, ...emailContent })
+          .catch(err => console.error('[user register] Verification email failed:', err));
+      } catch (emailErr) {
+        console.error('[user register] Failed to create verification token:', emailErr);
+      }
+
+      // Defense in depth: an unverified user must NOT be authenticated.
+      // Strip any pre-existing refresh/access cookies so a stale session
+      // from a prior account can't grant access under the new identity.
+      const regResponse = NextResponse.json({
         success: true,
         data: {
           user,
-          needsWallet: true,
-          message: 'Account created!',
-          ...(registerToken && { token: registerToken }),
-          ...(regAccessTk && { accessToken: regAccessTk }),
+          requiresEmailVerification: true,
+          message: 'Account created! Please check your email to verify your account.',
         },
       });
-      if (regRefreshToken) {
-        regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshToken, REFRESH_COOKIE_OPTIONS);
-      }
-      if (regAccessTk) {
-        regRes.cookies.set(ACCESS_TOKEN_COOKIE, regAccessTk, ACCESS_COOKIE_OPTIONS);
-      }
-      return regRes;
+      regResponse.cookies.set(REFRESH_TOKEN_COOKIE, '', { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 });
+      regResponse.cookies.set(ACCESS_TOKEN_COOKIE, '', { ...ACCESS_COOKIE_OPTIONS, maxAge: 0 });
+      return regResponse;
     }
 
     // Link wallet to existing user account

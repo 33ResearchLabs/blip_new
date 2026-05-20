@@ -445,11 +445,11 @@ export default function AdminConsolePage() {
               <button
                 onClick={handleAdminLogin}
                 disabled={isAdminLoggingIn || !adminLoginForm.username || !adminLoginForm.password}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-primary text-foreground text-sm font-bold hover:from-primary/90 hover:to-primary transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-primary text-background text-sm font-bold hover:from-primary/90 hover:to-primary transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
               >
                 {isAdminLoggingIn ? (
                   <span className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
                     Signing in...
                   </span>
                 ) : (

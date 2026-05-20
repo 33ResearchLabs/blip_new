@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, transaction } from '@/lib/db';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
 import { revokeAllSessions } from '@/lib/auth/sessions';
 import crypto from 'crypto';
@@ -79,28 +79,27 @@ export async function POST(request: NextRequest) {
     const passwordHash = hashPassword(newPassword);
 
     // Atomic — password update + token burn must succeed or fail together.
-    await query('BEGIN');
-    try {
-      await query(
+    // Must use the transaction helper (single PoolClient) — calling
+    // query('BEGIN') here would leak the transaction onto an arbitrary
+    // pool connection and the follow-up UPDATEs would land outside the
+    // txn, exhausting the pool and stalling the request for minutes.
+    await transaction(async (client) => {
+      await client.query(
         `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
         [passwordHash, userId]
       );
-      await query(
+      await client.query(
         `UPDATE user_password_reset_tokens SET used_at = NOW() WHERE id = $1`,
         [resetToken.id]
       );
       // Invalidate every other unused token for this user — defence in
       // depth in case the user requested several resets back-to-back.
-      await query(
+      await client.query(
         `UPDATE user_password_reset_tokens SET used_at = NOW()
          WHERE user_id = $1 AND used_at IS NULL`,
         [userId]
       );
-      await query('COMMIT');
-    } catch (txError) {
-      await query('ROLLBACK');
-      throw txError;
-    }
+    });
 
     // Revoke every active session for this user. A password reset is the
     // canonical "I think my account is compromised" signal — letting an

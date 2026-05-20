@@ -8,8 +8,10 @@ import {
   EyeOff,
   Zap,
   Shield,
+  ShieldCheck,
   TrendingUp,
   Check,
+  CheckCircle2,
   ArrowRight,
   Mail,
 } from "lucide-react";
@@ -59,6 +61,10 @@ interface LoginScreenProps {
   verificationSuccessNotice?: boolean;
   /** Dismiss the success banner. */
   onDismissVerificationSuccess?: () => void;
+  /** When true AND pendingVerificationEmail is set, the check-your-inbox
+   *  panel swaps in place to a "Email verified" success card so the user
+   *  sees a clear confirmation that polling detected their click. */
+  pendingVerificationVerified?: boolean;
   /** When true, skips the welcome page and goes straight to the login form. */
   skipWelcome?: boolean;
 }
@@ -83,6 +89,7 @@ export function LoginScreen({
   onBackToSignIn,
   verificationSuccessNotice,
   onDismissVerificationSuccess,
+  pendingVerificationVerified,
   skipWelcome = false,
 }: LoginScreenProps) {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -232,10 +239,12 @@ export function LoginScreen({
               {pendingVerificationEmail ? (
                 <>
                   <h1 className="text-2xl md:text-[28px] font-bold text-white mb-1.5 leading-tight">
-                    Check your inbox
+                    {pendingVerificationVerified ? "Email verified" : "Check your inbox"}
                   </h1>
                   <p className="text-white/50 mb-4 text-[13px] leading-relaxed">
-                    One more step before you can sign in.
+                    {pendingVerificationVerified
+                      ? "Your merchant account is ready."
+                      : "One more step before you can sign in."}
                   </p>
                 </>
               ) : authTab === "signin" ? (
@@ -265,67 +274,104 @@ export function LoginScreen({
                   verification link, sign in, and be issued real session
                   cookies. */}
               {pendingVerificationEmail && (
-                <div className="space-y-3.5">
-                  <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 flex gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
-                      <Mail className="w-4 h-4 text-emerald-400" />
+                pendingVerificationVerified ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="space-y-4 py-2"
+                  >
+                    <div className="flex justify-center">
+                      <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                      </div>
                     </div>
-                    <div className="text-[13px] leading-relaxed text-white/80">
-                      <p>
-                        We sent a verification link to{" "}
-                        <span className="font-semibold text-white break-all">
+                    <div className="text-center space-y-2">
+                      <p className="text-base font-semibold text-white">
+                        Business email verified
+                      </p>
+                      <p className="text-[13px] text-white/55 leading-relaxed">
+                        <span className="font-semibold break-all text-white">
                           {pendingVerificationEmail}
-                        </span>
-                        .
-                      </p>
-                      <p className="mt-1 text-white/55">
-                        Click the link in that email to activate your account.
-                        Your registration is not complete until your email is
-                        verified.
+                        </span>{" "}
+                        is confirmed. Your merchant account is ready to
+                        accept trades.
                       </p>
                     </div>
+
+                    <div className="rounded-xl px-4 py-3 flex items-start gap-3 bg-emerald-500/[0.06] border border-emerald-500/20">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-white/55 leading-relaxed">
+                        A verified business email lets us reach you for
+                        compliance checks and protects your account from
+                        impersonation.
+                      </p>
+                    </div>
+
+                    {onBackToSignIn && (
+                      <button
+                        onClick={onBackToSignIn}
+                        className="w-full py-2.5 rounded-lg text-[13px] font-bold bg-white hover:bg-neutral-200 text-black transition-colors"
+                      >
+                        Continue to sign in
+                      </button>
+                    )}
+                  </motion.div>
+                ) : (
+                  <div className="space-y-3.5">
+                    <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 flex gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                        <Mail className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="text-[13px] leading-relaxed text-white/80">
+                        <p>
+                          We sent a verification link to{" "}
+                          <span className="font-semibold text-white break-all">
+                            {pendingVerificationEmail}
+                          </span>
+                          .
+                        </p>
+                        <p className="mt-1 text-white/55">
+                          Click the link in that email to activate your account.
+                          This screen updates automatically as soon as we detect
+                          the verification.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-[12px] text-white/50 flex items-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white/40" />
+                      Waiting for verification…
+                    </div>
+
+                    {/* Resend covers undelivered links. The manual
+                        "I've verified — sign in" button was removed: the
+                        poller (every 4–12s plus on window focus) flips
+                        this panel into the success card the moment the
+                        verification is detected, so the manual escape
+                        hatch is no longer needed. */}
+                    {onResendVerification && (
+                      <button
+                        onClick={onResendVerification}
+                        disabled={isResendingVerification}
+                        className="w-full py-2.5 rounded-lg text-[13px] font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/[0.10] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {isResendingVerification ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Sending…
+                          </>
+                        ) : (
+                          "Resend verification email"
+                        )}
+                      </button>
+                    )}
+
+                    <p className="text-[11px] text-white/35 text-center">
+                      Didn&apos;t get it? Check spam. Links expire after 24 hours.
+                    </p>
                   </div>
-
-                  <div className="text-[12px] text-white/50">
-                    Already clicked the link? Tap the button below to sign in.
-                    The dashboard doesn&apos;t auto-detect verification across
-                    browser tabs.
-                  </div>
-
-                  {/* Primary CTA — what almost every user wants next. The
-                      panel is only ever reached after a successful POST to
-                      register, so the merchant either just clicked the link
-                      and is back, or is about to. Either way: sign-in. */}
-                  {onBackToSignIn && (
-                    <button
-                      onClick={onBackToSignIn}
-                      className="w-full py-2.5 rounded-lg text-[13px] font-bold bg-white hover:bg-neutral-200 text-black transition-colors"
-                    >
-                      I&apos;ve verified my email — Sign in
-                    </button>
-                  )}
-
-                  {onResendVerification && (
-                    <button
-                      onClick={onResendVerification}
-                      disabled={isResendingVerification}
-                      className="w-full py-2.5 rounded-lg text-[13px] font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/[0.10] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {isResendingVerification ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Sending…
-                        </>
-                      ) : (
-                        "Resend verification email"
-                      )}
-                    </button>
-                  )}
-
-                  <p className="text-[11px] text-white/35 text-center">
-                    Didn&apos;t get it? Check spam. Links expire after 24 hours.
-                  </p>
-                </div>
+                )
               )}
 
               {/* Error banner — suppressed while the post-signup

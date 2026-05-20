@@ -53,6 +53,13 @@ export function useDashboardAuth({
   // via ?verified=true on this tab, or via a storage event from a sibling
   // tab that just landed on the verify redirect).
   const [verificationSuccessNotice, setVerificationSuccessNotice] = useState(false);
+  // While the post-signup "check your inbox" panel is open and our poller
+  // detects the verification has completed (link clicked on this device or
+  // another), we flip this to `true` so the panel can swap its body in
+  // place for a "Email verified" success card instead of silently jumping
+  // back to the sign-in form. The user clicks "Continue to sign in" to
+  // dismiss it, which is what then runs clearPendingVerification.
+  const [pendingVerificationVerified, setPendingVerificationVerified] = useState(false);
 
   // 2FA state
   const [pending2FA, setPending2FA] = useState<{ pendingToken: string; merchantName: string } | null>(null);
@@ -350,6 +357,7 @@ export function useDashboardAuth({
   const clearPendingVerification = useCallback(() => {
     setPendingVerificationEmail(null);
     setUnverifiedMerchantId(null);
+    setPendingVerificationVerified(false);
     setLoginError('');
   }, []);
 
@@ -379,13 +387,23 @@ export function useDashboardAuth({
     const advanceOnVerified = () => {
       if (cancelled) return;
       // Pre-fill the sign-in email so the merchant only has to type their
-      // password. Identity has already been confirmed server-side; this
-      // is purely a convenience.
+      // password once they click through. Identity has already been
+      // confirmed server-side; this is purely a convenience.
       setLoginForm(p => ({ ...p, email: pendingVerificationEmail }));
-      setPendingVerificationEmail(null);
-      setUnverifiedMerchantId(null);
+      // Flip the in-panel "verified!" state instead of unmounting the
+      // check-your-inbox panel immediately. The panel renders a success
+      // card while this flag is true; the user's explicit click on
+      // "Continue to sign in" is what then calls clearPendingVerification.
+      // Rationale: jumping straight to the sign-in form with only a tiny
+      // banner felt jarring and easy to miss — users couldn't tell that
+      // their click on the email link had actually worked.
+      setPendingVerificationVerified(true);
       setAuthTab('signin');
       setVerificationSuccessNotice(true);
+      // Drop any stale login error (most commonly the EMAIL_NOT_VERIFIED
+      // sentinel from the attempt that triggered this verify flow). Without
+      // this the success state and the red error would render side by side.
+      setLoginError('');
     };
 
     const checkOnce = async () => {
@@ -586,6 +604,7 @@ export function useDashboardAuth({
     // Email verification state
     unverifiedMerchantId, isResendingVerification, resendVerificationEmail,
     pendingVerificationEmail, clearPendingVerification,
+    pendingVerificationVerified,
     verificationSuccessNotice, dismissVerificationSuccess,
 
     // 2FA state
