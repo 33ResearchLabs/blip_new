@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { formatCount, formatPercentage, formatFiat, PLACEHOLDER } from "@/lib/format";
 
 // ============================================
 // TYPES (mirrors FullRiskProfile from backend)
@@ -141,10 +142,14 @@ const fmtAgo = (d: string | null) => {
   return `${Math.floor(hrs / 24)}d ago`;
 };
 
-const fmtVol = (v: number) => {
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
-  return `$${v.toFixed(0)}`;
+// Compact $ volume formatter. Defensive: pg returns numeric columns as
+// strings, so coerce before any toFixed/comparison.
+const fmtVol = (v: unknown) => {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return PLACEHOLDER;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+  return formatFiat(n, "USD");
 };
 
 // ============================================
@@ -270,9 +275,9 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
 
           {/* Risk Score */}
           <div className={`w-full md:w-64 border rounded-xl p-5 flex flex-col items-center justify-center ${riskBg(r.risk_level)}`}>
-            <div className={`text-4xl font-bold font-mono tabular-nums ${riskColor(r.risk_level)}`}>{r.risk_score}</div>
+            <div className={`text-4xl font-bold font-mono tabular-nums ${riskColor(r.risk_level)}`}>{formatCount(r.risk_score)}</div>
             <div className={`text-[11px] font-mono font-bold uppercase tracking-widest mt-1 ${riskColor(r.risk_level)}`}>{r.risk_level}</div>
-            <div className="text-[9px] font-mono text-foreground/25 mt-2">{r.total_risk_events} events</div>
+            <div className="text-[9px] font-mono text-foreground/25 mt-2">{formatCount(r.total_risk_events)} events</div>
             {r.last_risk_event && (
               <div className="text-[8px] font-mono text-foreground/20 mt-0.5">{r.last_risk_event.type} &middot; {fmtAgo(r.last_risk_event.at)}</div>
             )}
@@ -300,12 +305,12 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
           {/* Behavioral */}
           <Card title="Behavioral Stats" icon={Activity}>
             <div className="grid grid-cols-3 gap-4">
-              <Stat label="Orders" value={bs.total_orders} />
-              <Stat label="Completed" value={bs.completed_orders} color="text-[var(--color-success)]/70" />
-              <Stat label="Success" value={`${bs.success_rate}%`} color={bs.success_rate < 70 ? "text-[var(--color-error)]" : "text-[var(--color-success)]/70"} />
-              <Stat label="Cancelled" value={bs.cancelled_orders} color={bs.cancelled_orders > 0 ? "text-primary/70" : undefined} />
-              <Stat label="Disputes" value={bs.dispute_count} color={bs.dispute_count > 0 ? "text-[var(--color-error)]" : undefined} />
-              <Stat label="Avg Time" value={bs.avg_completion_time_ms ? `${Math.round(bs.avg_completion_time_ms / 60000)}m` : "—"} />
+              <Stat label="Orders" value={formatCount(bs.total_orders)} />
+              <Stat label="Completed" value={formatCount(bs.completed_orders)} color="text-[var(--color-success)]/70" />
+              <Stat label="Success" value={formatPercentage(bs.success_rate)} color={Number(bs.success_rate) < 70 ? "text-[var(--color-error)]" : "text-[var(--color-success)]/70"} />
+              <Stat label="Cancelled" value={formatCount(bs.cancelled_orders)} color={Number(bs.cancelled_orders) > 0 ? "text-primary/70" : undefined} />
+              <Stat label="Disputes" value={formatCount(bs.dispute_count)} color={Number(bs.dispute_count) > 0 ? "text-[var(--color-error)]" : undefined} />
+              <Stat label="Avg Time" value={bs.avg_completion_time_ms != null ? `${formatCount(Math.round(Number(bs.avg_completion_time_ms) / 60000))}m` : PLACEHOLDER} />
             </div>
           </Card>
 
@@ -322,10 +327,10 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
           {/* Sessions */}
           <Card title="Session Insights" icon={Clock}>
             <div className="grid grid-cols-2 gap-4">
-              <Stat label="Active Now" value={si.active_sessions} />
-              <Stat label="30d Sessions" value={si.total_sessions_30d} />
-              <Stat label="Avg Duration" value={si.avg_session_duration_hours ? `${si.avg_session_duration_hours}h` : "—"} />
-              <Stat label="Logins (7d)" value={si.login_frequency_7d} />
+              <Stat label="Active Now" value={formatCount(si.active_sessions)} />
+              <Stat label="30d Sessions" value={formatCount(si.total_sessions_30d)} />
+              <Stat label="Avg Duration" value={si.avg_session_duration_hours != null ? `${si.avg_session_duration_hours}h` : PLACEHOLDER} />
+              <Stat label="Logins (7d)" value={formatCount(si.login_frequency_7d)} />
             </div>
           </Card>
         </div>
@@ -333,10 +338,10 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
         {/* ── Devices + Network ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Devices */}
-          <Card title={`Device Intelligence (${di.total_devices})`} icon={Monitor}>
+          <Card title={`Device Intelligence (${formatCount(di.total_devices)})`} icon={Monitor}>
             <div className="flex gap-3 mb-3 text-[9px] font-mono">
-              <span className="text-foreground/25">Trusted: <span className="text-[var(--color-success)] font-bold">{di.trusted_devices}</span></span>
-              <span className="text-foreground/25">New (7d): <span className="text-primary font-bold">{di.new_devices_7d}</span></span>
+              <span className="text-foreground/25">Trusted: <span className="text-[var(--color-success)] font-bold">{formatCount(di.trusted_devices)}</span></span>
+              <span className="text-foreground/25">New (7d): <span className="text-primary font-bold">{formatCount(di.new_devices_7d)}</span></span>
             </div>
             {di.devices.length === 0 ? (
               <p className="text-[10px] text-foreground/20 font-mono">No devices tracked yet</p>
@@ -350,7 +355,7 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
                       <span className={`text-[8px] font-mono font-bold ${d.linked_accounts_count > 3 ? "text-[var(--color-error)]" : "text-foreground/30"}`}>
-                        {d.linked_accounts_count} accts
+                        {formatCount(d.linked_accounts_count)} accts
                       </span>
                       <span className={`w-1.5 h-1.5 rounded-full ${d.is_trusted ? "bg-[var(--color-success)]" : "bg-primary"}`} />
                     </div>
@@ -361,9 +366,9 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
           </Card>
 
           {/* Network */}
-          <Card title={`Network Intelligence (${ni.unique_ip_count} IPs)`} icon={Globe}>
+          <Card title={`Network Intelligence (${formatCount(ni.unique_ip_count)} IPs)`} icon={Globe}>
             <div className="flex gap-3 mb-3 text-[9px] font-mono">
-              <span className="text-foreground/25">Unique IPs: <span className="font-bold text-foreground/50">{ni.unique_ip_count}</span></span>
+              <span className="text-foreground/25">Unique IPs: <span className="font-bold text-foreground/50">{formatCount(ni.unique_ip_count)}</span></span>
               {ni.ip_clusters_flag && (
                 <span className="text-[var(--color-error)] font-bold flex items-center gap-1">
                   <AlertTriangle className="w-2.5 h-2.5" /> CLUSTER DETECTED
@@ -392,7 +397,7 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Events Timeline */}
           <div className="md:col-span-2">
-            <Card title={`Risk Events (${r.total_risk_events})`} icon={AlertTriangle}>
+            <Card title={`Risk Events (${formatCount(r.total_risk_events)})`} icon={AlertTriangle}>
               {p.risk_events.length === 0 ? (
                 <p className="text-[10px] text-foreground/20 font-mono">No risk events recorded</p>
               ) : (
