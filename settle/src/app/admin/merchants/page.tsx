@@ -498,8 +498,12 @@ export default function MerchantsPage() {
                 <button onClick={() => { setSortBy("trades"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
                   Trades {sortBy === "trades" && <ChevronDown className="w-2.5 h-2.5" />}
                 </button>
-                <button onClick={() => { setSortBy("completed"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
-                  Done {sortBy === "completed" && <ChevronDown className="w-2.5 h-2.5" />}
+                <button
+                  onClick={() => { setSortBy("completed"); setPage(0); }}
+                  title="Percentage of this merchant's trades that ended in 'completed'. completed / total_trades * 100."
+                  className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5"
+                >
+                  Completion {sortBy === "completed" && <ChevronDown className="w-2.5 h-2.5" />}
                 </button>
                 <button onClick={() => { setSortBy("cancelled"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
                   Cancel {sortBy === "cancelled" && <ChevronDown className="w-2.5 h-2.5" />}
@@ -578,13 +582,26 @@ export default function MerchantsPage() {
                         </span>
                       </div>
 
-                      {/* Rating */}
+                      {/* Rating — only render a number when there's at
+                          least one rating on file. A merchant with
+                          rating_count=0 used to render "5.0 (0)" because
+                          the seed value of merchants.rating is 5.0; that
+                          read as if they had a perfect score with zero
+                          reviews, which misleads the admin reviewer. */}
                       <div className="flex items-center gap-1">
-                        <Star className="w-3 h-3 text-[var(--color-warning)] fill-[var(--color-warning)]" />
-                        <span className="text-[11px] font-medium text-foreground/80 tabular-nums">
-                          {m.rating > 0 ? formatCrypto(m.rating, { decimals: 1 }) : "5.0"}
-                        </span>
-                        <span className="text-[9px] text-foreground/35 font-mono tabular-nums">({formatCount(m.ratingCount)})</span>
+                        {m.ratingCount > 0 ? (
+                          <>
+                            <Star className="w-3 h-3 text-[var(--color-warning)] fill-[var(--color-warning)]" />
+                            <span className="text-[11px] font-medium text-foreground/80 tabular-nums">
+                              {formatCrypto(m.rating, { decimals: 1 })}
+                            </span>
+                            <span className="text-[9px] text-foreground/35 font-mono tabular-nums">
+                              ({formatCount(m.ratingCount)})
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-foreground/25 font-mono">No ratings</span>
+                        )}
                       </div>
 
                       {/* Volume */}

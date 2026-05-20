@@ -191,33 +191,56 @@ export async function GET(request: NextRequest) {
         m.is_online,
         COALESCE(m.rating, 0)::text as rating,
         COALESCE(m.rating_count, 0)::text as rating_count,
-        COALESCE(m.total_trades, 0)::text as total_trades,
+        -- All count/volume aggregates below intentionally OR
+        -- merchant_id and buyer_merchant_id. A merchant can be the
+        -- "seller" (merchant_id) OR the M2M "buyer" (buyer_merchant_id)
+        -- on the same order; counting only merchant_id silently dropped
+        -- the buyer-side trades from the admin list (volume under-
+        -- reported by ~half for active M2M desks).
+        (SELECT COUNT(*) FROM orders
+          WHERE (merchant_id = m.id OR buyer_merchant_id = m.id))::text as total_trades,
         COALESCE(
-          (SELECT SUM(crypto_amount) FROM orders WHERE merchant_id = m.id AND status = 'completed'),
+          (SELECT SUM(crypto_amount) FROM orders
+            WHERE (merchant_id = m.id OR buyer_merchant_id = m.id)
+              AND status = 'completed'),
           0
         )::text as total_volume,
         COALESCE(
-          (SELECT COUNT(*) FROM orders WHERE merchant_id = m.id AND status = 'completed'),
+          (SELECT COUNT(*) FROM orders
+            WHERE (merchant_id = m.id OR buyer_merchant_id = m.id)
+              AND status = 'completed'),
           0
         )::text as completed_count,
         COALESCE(
-          (SELECT COUNT(*) FROM orders WHERE merchant_id = m.id AND status = 'cancelled'),
+          (SELECT COUNT(*) FROM orders
+            WHERE (merchant_id = m.id OR buyer_merchant_id = m.id)
+              AND status = 'cancelled'),
           0
         )::text as cancelled_count,
         COALESCE(
-          (SELECT COUNT(*) FROM orders WHERE merchant_id = m.id AND status = 'disputed'),
+          (SELECT COUNT(*) FROM orders
+            WHERE (merchant_id = m.id OR buyer_merchant_id = m.id)
+              AND status = 'disputed'),
           0
         )::text as disputed_count,
         COALESCE(
-          (SELECT COUNT(*) FROM orders WHERE merchant_id = m.id AND disputed_at IS NOT NULL),
+          (SELECT COUNT(*) FROM orders
+            WHERE (merchant_id = m.id OR buyer_merchant_id = m.id)
+              AND disputed_at IS NOT NULL),
           0
         )::text as disputes_total,
         COALESCE(
-          (SELECT COUNT(*) FROM orders WHERE merchant_id = m.id AND disputed_at IS NOT NULL AND disputed_by = 'merchant'),
+          (SELECT COUNT(*) FROM orders
+            WHERE (merchant_id = m.id OR buyer_merchant_id = m.id)
+              AND disputed_at IS NOT NULL
+              AND disputed_by = 'merchant'),
           0
         )::text as disputes_raised_by_merchant,
         COALESCE(
-          (SELECT COUNT(*) FROM orders WHERE merchant_id = m.id AND disputed_at IS NOT NULL AND (disputed_by = 'user' OR disputed_by IS NULL)),
+          (SELECT COUNT(*) FROM orders
+            WHERE (merchant_id = m.id OR buyer_merchant_id = m.id)
+              AND disputed_at IS NOT NULL
+              AND (disputed_by = 'user' OR disputed_by IS NULL)),
           0
         )::text as disputes_against_merchant,
         COALESCE(m.avg_response_time_mins, 0)::text as avg_response_time_mins,
@@ -249,7 +272,12 @@ export async function GET(request: NextRequest) {
       params.slice(0, params.length - 2) // exclude limit/offset
     );
 
-    // Aggregate platform stats (unfiltered, for the summary cards)
+    // Aggregate platform stats (unfiltered, for the summary cards).
+    // total_volume / total_trades sourced from the orders table directly
+    // — summing the denormalized merchants.total_volume / total_trades
+    // columns would double-count M2M trades (both merchants on each side
+    // get the trade booked to their counter). The orders table is the
+    // single source of truth and gives a clean per-platform aggregate.
     const summary = await queryOne<{
       total_merchants: string;
       online_merchants: string;
@@ -261,15 +289,14 @@ export async function GET(request: NextRequest) {
       total_trades_prev: string;
     }>(`
       SELECT
-        COUNT(*)::text as total_merchants,
-        COUNT(*) FILTER (WHERE is_online = true)::text as online_merchants,
-        COUNT(*) FILTER (WHERE verification_level >= 1 AND status = 'active')::text as verified_merchants,
-        COALESCE(SUM(total_volume), 0)::text as total_volume,
-        COALESCE(SUM(total_trades), 0)::text as total_trades,
-        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '30 days')::text as total_merchants_prev,
-        COALESCE(SUM(total_volume) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_volume_prev,
-        COALESCE(SUM(total_trades) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_trades_prev
-      FROM merchants
+        (SELECT COUNT(*) FROM merchants)::text as total_merchants,
+        (SELECT COUNT(*) FROM merchants WHERE is_online = true)::text as online_merchants,
+        (SELECT COUNT(*) FROM merchants WHERE verification_level >= 1 AND status = 'active')::text as verified_merchants,
+        COALESCE((SELECT SUM(crypto_amount) FROM orders WHERE status = 'completed'), 0)::text as total_volume,
+        (SELECT COUNT(*) FROM orders WHERE status = 'completed')::text as total_trades,
+        (SELECT COUNT(*) FROM merchants WHERE created_at < NOW() - INTERVAL '30 days')::text as total_merchants_prev,
+        COALESCE((SELECT SUM(crypto_amount) FROM orders WHERE status = 'completed' AND created_at < NOW() - INTERVAL '30 days'), 0)::text as total_volume_prev,
+        (SELECT COUNT(*) FROM orders WHERE status = 'completed' AND created_at < NOW() - INTERVAL '30 days')::text as total_trades_prev
     `);
 
     const calcDelta = (current: number, prev: number) =>
