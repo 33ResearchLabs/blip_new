@@ -545,7 +545,10 @@ export async function POST(request: NextRequest) {
         const verifyLink = `${appUrl}/user/verify-email?token=${verifyToken}&id=${user.id}`;
 
         const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
-        const emailContent = emailVerificationEmail(verifyLink, user.username || user.name || 'there');
+        // The User type only declares `username`; `name` exists as a
+        // DB column but isn't on the typed shape. Username is always
+        // set during register, so we don't need a name fallback here.
+        const emailContent = emailVerificationEmail(verifyLink, user.username || 'there');
         sendEmail({ to: normalizedEmail, ...emailContent })
           .catch(err => console.error('[user register] Verification email failed:', err));
       } catch (emailErr) {
