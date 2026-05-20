@@ -826,12 +826,25 @@ export async function getRiskProfile(
     ? riskScoreResult.value
     : { risk_score: 0, risk_level: 'low' as const, event_count: 0, last_event_type: null, last_event_at: null };
 
-  const behavioral = behavioralResult.status === 'fulfilled' && behavioralResult.value
+  // pg returns numeric/decimal columns as strings — coerce so downstream
+  // .toFixed() and arithmetic on financial_stats fields don't blow up.
+  const toNum = (v: unknown): number => {
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const behavioralRaw = behavioralResult.status === 'fulfilled' && behavioralResult.value
     ? behavioralResult.value
     : { total_trades: 0, total_volume: 0, cancelled_orders: 0, dispute_count: 0, avg_completion_time_ms: null };
+  const behavioral = {
+    total_trades: toNum(behavioralRaw.total_trades),
+    total_volume: toNum(behavioralRaw.total_volume),
+    cancelled_orders: toNum(behavioralRaw.cancelled_orders),
+    dispute_count: toNum(behavioralRaw.dispute_count),
+    avg_completion_time_ms: behavioralRaw.avg_completion_time_ms == null ? null : toNum(behavioralRaw.avg_completion_time_ms),
+  };
 
   const financial = financialResult.status === 'fulfilled'
-    ? financialResult.value
+    ? { volume_24h: toNum(financialResult.value.volume_24h), volume_7d: toNum(financialResult.value.volume_7d) }
     : { volume_24h: 0, volume_7d: 0 };
 
   const devices = devicesResult.status === 'fulfilled' ? devicesResult.value : [];
