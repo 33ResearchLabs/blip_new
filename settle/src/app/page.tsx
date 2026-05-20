@@ -555,6 +555,9 @@ export default function Home() {
                 isResendingVerification={auth.isResendingVerification}
                 verificationSuccessNotice={auth.verificationSuccessNotice}
                 onDismissVerificationSuccess={auth.dismissVerificationSuccess}
+                pendingVerificationVerified={auth.pendingVerificationVerified}
+                registerEmail={auth.registerEmail}
+                setRegisterEmail={auth.setRegisterEmail}
                 skipWelcome={skipWelcome}
               />
             );

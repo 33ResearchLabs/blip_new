@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, transaction } from '@/lib/db';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
 import { revokeAllSessions } from '@/lib/auth/sessions';
 import crypto from 'crypto';
@@ -66,30 +66,28 @@ export async function POST(request: NextRequest) {
     // Hash new password
     const passwordHash = hashPassword(newPassword);
 
-    // Update password and mark token as used — in a transaction
-    await query('BEGIN');
-    try {
-      await query(
+    // Update password and burn tokens atomically. Must use the transaction
+    // helper (single PoolClient) — calling query('BEGIN') here would leak
+    // the transaction onto an arbitrary pool connection and the follow-up
+    // UPDATEs would land outside the txn, exhausting the pool and stalling
+    // the request for minutes.
+    await transaction(async (client) => {
+      await client.query(
         `UPDATE merchants SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
         [passwordHash, merchantId]
       );
 
-      await query(
+      await client.query(
         `UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`,
         [resetToken.id]
       );
 
       // Invalidate all other tokens for this merchant
-      await query(
+      await client.query(
         `UPDATE password_reset_tokens SET used_at = NOW() WHERE merchant_id = $1 AND used_at IS NULL`,
         [merchantId]
       );
-
-      await query('COMMIT');
-    } catch (txError) {
-      await query('ROLLBACK');
-      throw txError;
-    }
+    });
 
     // Revoke every active session for this merchant. A password reset is
     // the canonical "I think my account is compromised" signal — letting

@@ -43,6 +43,10 @@ export function useUserAuth({
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  // Register-only field. Lives outside loginForm so the login tab doesn't
+  // need to render it and so it gets cleared independently when the user
+  // toggles tabs.
+  const [registerEmail, setRegisterEmail] = useState<string>("");
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -60,6 +64,13 @@ export function useUserAuth({
   // sign-in form once polling (or the manual "I've verified" button)
   // detects the email is verified.
   const [verificationSuccessNotice, setVerificationSuccessNotice] = useState(false);
+  // While the post-signup "check your inbox" panel is open and our poller
+  // detects the verification has completed (link clicked on this device or
+  // another), we flip this to `true` so the panel can swap its body in
+  // place for a "Email verified" success card instead of silently jumping
+  // back to the sign-in form. The user clicks "Continue to sign in" to
+  // dismiss it, which then runs clearPendingVerification.
+  const [pendingVerificationVerified, setPendingVerificationVerified] = useState(false);
 
   // Solana wallet state
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -279,6 +290,13 @@ export function useUserAuth({
     // a password (PIN passes the 6-char min, no-space rules) so no API change.
     const passwordErr = validateUserPin(loginForm.password);
     if (passwordErr) { setLoginError(passwordErr); return; }
+    // Email is required at registration so the verification gate has
+    // something to verify. Format check mirrors the backend regex.
+    const trimmedEmail = registerEmail.trim().toLowerCase();
+    if (!trimmedEmail) { setLoginError('Email is required'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setLoginError('Invalid email format'); return;
+    }
 
     setIsLoggingIn(true);
     setLoginError("");
@@ -290,6 +308,7 @@ export function useUserAuth({
         body: JSON.stringify({
           username: loginForm.username.trim(),
           password: loginForm.password,
+          email: trimmedEmail,
           action: 'register',
         }),
       });
@@ -306,12 +325,13 @@ export function useUserAuth({
         // your-inbox panel instead, and capture the user id so polling
         // (and the resend button) can target this account.
         if (data.data.requiresEmailVerification) {
-          setPendingVerificationEmail(loginForm.username.trim().toLowerCase());
+          setPendingVerificationEmail(trimmedEmail);
           setUnverifiedUserId(data.data.user.id);
           setLoginError('');
-          // Clear the password so it doesn't linger in memory while the
-          // user goes to check their inbox.
+          // Clear the password and email so they don't linger in memory
+          // while the user goes to check their inbox.
           setLoginForm(p => ({ ...p, password: '' }));
+          setRegisterEmail('');
           return;
         }
         // Fallback path: backend chose not to require email verification
@@ -342,6 +362,7 @@ export function useUserAuth({
   const clearPendingVerification = useCallback(() => {
     setPendingVerificationEmail(null);
     setUnverifiedUserId(null);
+    setPendingVerificationVerified(false);
     setLoginError('');
   }, []);
 
@@ -373,13 +394,23 @@ export function useUserAuth({
     const advanceOnVerified = () => {
       if (cancelled) return;
       // Pre-fill the sign-in identifier so the user only has to type
-      // their password. Identity is already confirmed server-side; this
-      // is purely a convenience.
+      // their password once they click through. Identity is already
+      // confirmed server-side; this is purely a convenience.
       setLoginForm(p => ({ ...p, username: p.username }));
-      setPendingVerificationEmail(null);
-      setUnverifiedUserId(null);
+      // Flip the in-panel "verified!" state instead of unmounting the
+      // check-your-inbox panel immediately. The panel renders a success
+      // card while this flag is true; the user's explicit click on
+      // "Continue to sign in" is what then calls clearPendingVerification.
+      // Rationale: jumping straight back to the sign-in form with only a
+      // tiny banner was easy to miss — users couldn't tell that their
+      // click on the email link had actually worked.
+      setPendingVerificationVerified(true);
       setAuthMode('login');
       setVerificationSuccessNotice(true);
+      // Drop any stale login error (most commonly the EMAIL_NOT_VERIFIED
+      // sentinel from the attempt that triggered this verify flow). Without
+      // this the success state and the red error render side by side.
+      setLoginError('');
     };
 
     const checkOnce = async () => {
@@ -509,8 +540,12 @@ export function useUserAuth({
     // verification (or the user dismisses manually).
     pendingVerificationEmail,
     clearPendingVerification,
+    pendingVerificationVerified,
     verificationSuccessNotice,
     dismissVerificationSuccess,
+    // Register-only email field. Lives outside loginForm so toggling tabs
+    // doesn't smuggle email values into the sign-in submit.
+    registerEmail, setRegisterEmail,
     showWalletModal, setShowWalletModal,
     showUsernameModal, setShowUsernameModal,
     walletUsername, setWalletUsername,

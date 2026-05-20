@@ -1,13 +1,21 @@
 /**
  * GET /api/auth/merchant/verify-email?token=xxx&id=xxx
  *
- * Verifies merchant email address using the token from the verification email.
- * Sets email_verified = true on success.
+ * Verifies a merchant's email address using the token from the verification
+ * email (issued at register or by resend-verification). Single-use:
+ * `used_at` is stamped on success so the same link can't be replayed.
+ *
+ * Returns JSON so the /merchant/verify-email page can render proper
+ * success / error / already-verified states (rather than chasing an
+ * opaque-redirect — which the previous implementation did and would treat
+ * even invalid tokens as success).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import crypto from 'crypto';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,38 +31,55 @@ export async function GET(request: NextRequest) {
 
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Find valid token
     const tokenRow = await queryOne<{ id: string; merchant_id: string }>(
       `SELECT id, merchant_id FROM email_verification_tokens
-       WHERE token_hash = $1 AND merchant_id = $2 AND used_at IS NULL AND expires_at > NOW()`,
+        WHERE token_hash = $1
+          AND merchant_id = $2
+          AND used_at IS NULL
+          AND expires_at > NOW()`,
       [tokenHash, merchantId]
     );
 
     if (!tokenRow) {
-      // Redirect to merchant page with error
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      return NextResponse.redirect(`${appUrl}/merchant?error=invalid_or_expired_token`);
+      // If the merchant is already verified, treat a stale link as success
+      // — the merchant clicked an old email but the underlying state is
+      // correct. Avoids showing a scary error after a successful verify.
+      const alreadyVerified = await queryOne<{ email_verified: boolean }>(
+        `SELECT COALESCE(email_verified, false) AS email_verified
+           FROM merchants WHERE id = $1`,
+        [merchantId]
+      );
+      if (alreadyVerified?.email_verified) {
+        return NextResponse.json({
+          success: true,
+          data: { alreadyVerified: true, message: 'Email already verified.' },
+        });
+      }
+
+      return NextResponse.json(
+        { success: false, error: 'This verification link is invalid or has expired.' },
+        { status: 400 }
+      );
     }
 
-    // Mark token as used
     await query(
       `UPDATE email_verification_tokens SET used_at = NOW() WHERE id = $1`,
       [tokenRow.id]
     );
 
-    // Set email_verified = true
     await query(
       `UPDATE merchants SET email_verified = true WHERE id = $1`,
       [merchantId]
     );
 
-    // Redirect to login with success message
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    return NextResponse.redirect(`${appUrl}/merchant?verified=true`);
+    return NextResponse.json({
+      success: true,
+      data: { message: 'Your business email has been verified.' },
+    });
   } catch (error) {
-    console.error('[Verify Email] Error:', error);
+    console.error('[merchant verify-email] error:', error);
     return NextResponse.json(
-      { success: false, error: 'Verification failed' },
+      { success: false, error: 'Verification failed. Please try again.' },
       { status: 500 }
     );
   }

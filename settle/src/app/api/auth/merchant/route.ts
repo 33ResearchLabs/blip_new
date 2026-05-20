@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne } from '@/lib/db';
+import { query, queryOne, transaction } from '@/lib/db';
 import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { requireTokenAuth } from '@/lib/middleware/auth';
@@ -970,17 +970,76 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check if email already exists
-      const existingMerchant = await query(
-        `SELECT id FROM merchants WHERE email = $1`,
+      // Check if email already exists. Branch on verification state:
+      //
+      //   verified row           → reject (real account, owner controls it)
+      //   unverified row, fresh  → reject with a cooldown message so a fast
+      //                            re-submit can't blow away an in-flight
+      //                            verification email
+      //   unverified row, stale  → delete the abandoned row + its tokens +
+      //                            sessions, then fall through to INSERT
+      //
+      // Rationale: a user who registered, never clicked the link, and is
+      // trying again should be able to start over rather than being
+      // permanently locked out of their own email. The cooldown is the
+      // anti-abuse mitigation — without it an attacker could spam
+      // registrations and keep nuking the legitimate owner's tokens.
+      const UNVERIFIED_OVERWRITE_COOLDOWN_SECONDS = 60;
+      const existingMerchant = await queryOne<{
+        id: string;
+        email_verified: boolean | null;
+        seconds_since_signup: number;
+      }>(
+        `SELECT
+           id,
+           email_verified,
+           EXTRACT(EPOCH FROM (NOW() - created_at))::int AS seconds_since_signup
+         FROM merchants
+         WHERE LOWER(email) = $1
+         LIMIT 1`,
         [normalizedEmail]
       );
 
-      if (existingMerchant.length > 0) {
-        return NextResponse.json(
-          { success: false, error: 'Email already registered' },
-          { status: 409 }
-        );
+      if (existingMerchant) {
+        const isVerified = existingMerchant.email_verified === true;
+        if (isVerified) {
+          return NextResponse.json(
+            { success: false, error: 'Email already registered' },
+            { status: 409 }
+          );
+        }
+        if (existingMerchant.seconds_since_signup < UNVERIFIED_OVERWRITE_COOLDOWN_SECONDS) {
+          const wait = UNVERIFIED_OVERWRITE_COOLDOWN_SECONDS - existingMerchant.seconds_since_signup;
+          return NextResponse.json(
+            {
+              success: false,
+              error: `A verification email was just sent to this address. Check your inbox, or try again in ${wait}s.`,
+            },
+            { status: 429 }
+          );
+        }
+
+        // Clean overwrite. CASCADE FKs (merchant_offers, merchant_contacts,
+        // merchant_metrics, merchant_onboarding, merchant_payment_methods,
+        // merchant_quotes) are handled by the DB. The non-CASCADE refs that
+        // actually accumulate on an unverified merchant — email_verification_tokens,
+        // password_reset_tokens, and sessions — are deleted explicitly here.
+        // All in one transaction so a failure can't leave a half-deleted row.
+        await transaction(async (client) => {
+          await client.query(
+            `DELETE FROM email_verification_tokens WHERE merchant_id = $1`,
+            [existingMerchant.id]
+          );
+          await client.query(
+            `DELETE FROM password_reset_tokens WHERE merchant_id = $1`,
+            [existingMerchant.id]
+          );
+          await client.query(
+            `DELETE FROM sessions WHERE entity_id = $1 AND entity_type = 'merchant'`,
+            [existingMerchant.id]
+          );
+          await client.query(`DELETE FROM merchants WHERE id = $1`, [existingMerchant.id]);
+        });
       }
 
       // Full name (business_name) is allowed to duplicate — two merchants

@@ -20,9 +20,9 @@ function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<VerifyState>("verifying");
   const [errorMsg, setErrorMsg] = useState("");
-  // Guard against React StrictMode double-invocation in dev so we don't
-  // hit the API twice (the second call would 400 on an already-used token
-  // and flip a successful verify to "error").
+  // Guard against React 18 StrictMode double-invocation in dev, which would
+  // otherwise hit the API twice — the second call hits an already-used token
+  // and flips the screen to "error" after the first call succeeded.
   const ran = useRef(false);
 
   useEffect(() => {
@@ -41,7 +41,7 @@ function VerifyEmailContent() {
     (async () => {
       try {
         const res = await fetch(
-          `/api/auth/merchant/verify-email?token=${encodeURIComponent(
+          `/api/auth/user/verify-email?token=${encodeURIComponent(
             token
           )}&id=${encodeURIComponent(id)}`,
           { method: "GET", credentials: "include" }
@@ -97,27 +97,25 @@ function VerifyEmailContent() {
 
           <div className="space-y-2">
             <p className="text-base font-semibold text-white">
-              {state === "already"
-                ? "Already verified"
-                : "Business email verified"}
+              {state === "already" ? "Already verified" : "Email verified"}
             </p>
             <p className="text-xs text-foreground/40 leading-relaxed">
               {state === "already"
-                ? "Your business email is already confirmed. You can sign in to your merchant dashboard any time."
-                : "Your business email has been verified successfully. Your merchant account is ready to accept trades."}
+                ? "Your email is already confirmed on this account. You can sign in any time."
+                : "Your email has been verified successfully. Your account is now ready to use."}
             </p>
           </div>
 
           <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl px-4 py-3 flex items-center gap-3 text-left">
             <ShieldCheck className="w-4 h-4 text-emerald-400/80 shrink-0" />
             <p className="text-[11px] text-foreground/45 leading-relaxed">
-              A verified business email lets us reach you for compliance
-              checks and protects your account from impersonation.
+              Verified emails help us protect your funds and recover access if
+              you ever lose your device.
             </p>
           </div>
 
           <Link
-            href="/merchant"
+            href="/"
             className="block w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors"
           >
             Continue to sign in
@@ -150,13 +148,13 @@ function VerifyEmailContent() {
           <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl px-4 py-3 flex items-start gap-3 text-left">
             <Mail className="w-4 h-4 text-white/40 shrink-0 mt-0.5" />
             <p className="text-[11px] text-foreground/45 leading-relaxed">
-              Verification links expire 24 hours after they&apos;re sent. Sign
-              in to your merchant account and request a fresh link.
+              Verification links expire 24 hours after they are sent. Sign in
+              and we&apos;ll send you a fresh link.
             </p>
           </div>
 
           <Link
-            href="/merchant"
+            href="/"
             className="block w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors"
           >
             Back to sign in
@@ -167,7 +165,7 @@ function VerifyEmailContent() {
   );
 }
 
-export default function MerchantVerifyEmailPage() {
+export default function UserVerifyEmailPage() {
   return (
     <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -183,7 +181,7 @@ export default function MerchantVerifyEmailPage() {
               <span className="italic text-white/90">money</span>
             </span>
           </div>
-          <h1 className="text-xl font-bold mb-2">Confirm your business email</h1>
+          <h1 className="text-xl font-bold mb-2">Confirm your email</h1>
           <p className="text-sm text-foreground/35">
             We&apos;re checking your verification link.
           </p>
@@ -203,7 +201,7 @@ export default function MerchantVerifyEmailPage() {
 
         <div className="mt-6 text-center">
           <Link
-            href="/merchant"
+            href="/"
             className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-foreground/60 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
