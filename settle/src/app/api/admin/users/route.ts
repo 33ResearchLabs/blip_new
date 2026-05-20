@@ -151,8 +151,16 @@ export async function GET(request: NextRequest) {
         u.phone,
         u.kyc_status::text,
         COALESCE(u.kyc_level, 0)::text as kyc_level,
-        COALESCE(u.total_trades, 0)::text as total_trades,
-        COALESCE(u.total_volume, 0)::text as total_volume,
+        -- total_trades and total_volume sourced from orders directly,
+        -- not from the denormalized u.total_trades / u.total_volume
+        -- counters which had drifted in prod (e.g. Alfa: stored=5 vs
+        -- live=12 — that drift made the Completion ratio render as
+        -- 120% because completed_count was already from the live count).
+        (SELECT COUNT(*) FROM orders WHERE user_id = u.id)::text as total_trades,
+        COALESCE(
+          (SELECT SUM(crypto_amount) FROM orders WHERE user_id = u.id AND status = 'completed'),
+          0
+        )::text as total_volume,
         COALESCE(u.rating, 0)::text as rating,
         COALESCE(u.rating_count, 0)::text as rating_count,
         COALESCE(u.balance, 0)::text as balance,
@@ -204,18 +212,32 @@ export async function GET(request: NextRequest) {
       total_trades_prev: string;
     }>(`
       SELECT
-        COUNT(*)::text as total_users,
-        COUNT(*) FILTER (WHERE updated_at >= NOW() - INTERVAL '30 days')::text as active_users,
-        COUNT(*) FILTER (WHERE kyc_status = 'verified')::text as verified_users,
-        COALESCE(SUM(total_volume), 0)::text as total_volume,
-        COALESCE(SUM(total_trades), 0)::text as total_trades,
-        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '30 days')::text as total_users_prev,
-        COALESCE(SUM(total_volume) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_volume_prev,
-        COALESCE(SUM(total_trades) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_trades_prev
-      FROM users
-      WHERE username IS NOT NULL
-        AND username NOT LIKE 'open_order_%'
-        AND username NOT LIKE 'm2m_%'
+        (SELECT COUNT(*) FROM users
+          WHERE username IS NOT NULL
+            AND username NOT LIKE 'open_order_%'
+            AND username NOT LIKE 'm2m_%')::text as total_users,
+        (SELECT COUNT(*) FROM users
+          WHERE username IS NOT NULL
+            AND username NOT LIKE 'open_order_%'
+            AND username NOT LIKE 'm2m_%'
+            AND updated_at >= NOW() - INTERVAL '30 days')::text as active_users,
+        (SELECT COUNT(*) FROM users
+          WHERE username IS NOT NULL
+            AND username NOT LIKE 'open_order_%'
+            AND username NOT LIKE 'm2m_%'
+            AND kyc_status = 'verified')::text as verified_users,
+        -- Platform aggregates from orders directly. Summing the
+        -- denormalized per-user counters double-counted (user_id +
+        -- merchant_id rows) and the counters were drifting anyway.
+        COALESCE((SELECT SUM(crypto_amount) FROM orders WHERE status = 'completed'), 0)::text as total_volume,
+        (SELECT COUNT(*) FROM orders WHERE status = 'completed')::text as total_trades,
+        (SELECT COUNT(*) FROM users
+          WHERE username IS NOT NULL
+            AND username NOT LIKE 'open_order_%'
+            AND username NOT LIKE 'm2m_%'
+            AND created_at < NOW() - INTERVAL '30 days')::text as total_users_prev,
+        COALESCE((SELECT SUM(crypto_amount) FROM orders WHERE status = 'completed' AND created_at < NOW() - INTERVAL '30 days'), 0)::text as total_volume_prev,
+        (SELECT COUNT(*) FROM orders WHERE status = 'completed' AND created_at < NOW() - INTERVAL '30 days')::text as total_trades_prev
     `);
 
     const calcDelta = (current: number, prev: number) =>
