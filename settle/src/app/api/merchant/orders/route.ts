@@ -28,6 +28,12 @@ import { query } from '@/lib/db';
 import { gateOnboardingComplete } from '@/lib/db/repositories/merchantOnboarding';
 import { signPriceProof } from '@/lib/price/priceProof';
 import { getFinalPrice } from '@/lib/price/usdtInrPrice';
+// Canonical fee rate. Mirrors the on-chain ProtocolConfig.fee_bps the
+// Anchor program uses when releasing escrow, so app-recorded fees match
+// what actually transfers to the treasury wallet. See Bug 1 in
+// docs/REPUTATION_DATA_INVENTORY (and the on-chain treasury reconciliation
+// of 2026-05-21 for context).
+import { FEE_BPS_DEFAULT } from '@/lib/solana/v2/config';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
 
 // Prevent Next.js from caching this route - orders must always be fresh
@@ -383,11 +389,27 @@ export async function POST(request: NextRequest) {
 
     const fiatAmount = crypto_amount * effectiveRate;
 
-    // Protocol fee
-    const baseFee = spread_preference === 'best' ? 2.00
-      : spread_preference === 'fastest' ? 2.50
-      : 1.50;
-    const protocolFeePercentage = baseFee + (priority_fee || 0);
+    // Protocol fee — MUST match the on-chain rate the Anchor program will
+    // actually transfer to the treasury on release, or the app's accounting
+    // drifts (every drift cent is "ghost revenue": recorded but never
+    // transferred).
+    //
+    // Source of truth: FEE_BPS_DEFAULT (from src/lib/solana/v2/config.ts,
+    // configurable via NEXT_PUBLIC_FEE_BPS_DEFAULT) — currently 200 bps =
+    // 2.00% on mainnet, set in the on-chain ProtocolConfig at deploy.
+    //
+    // The deployed v2 program transfers a single flat rate from ProtocolConfig
+    // on release. The previous per-tier values that lived here
+    // (best=2.00 / fastest=2.50 / balanced=1.50) plus `priority_fee` were
+    // therefore ghost revenue — recorded on orders but never actually
+    // transferred to treasury. They produced ~$23 of drift over 44 orders
+    // before this fix.
+    //
+    // `spread_preference` and `priority_fee` are still accepted in the
+    // request body and persisted on the order row (analytics + auction
+    // bump signal — see `premium_bps_cap` / `auto_bump_enabled` below);
+    // they no longer influence the recorded protocol fee.
+    const protocolFeePercentage = FEE_BPS_DEFAULT / 100;
     const protocolFeeAmount = crypto_amount * (protocolFeePercentage / 100);
 
     // Bump/decay fields
