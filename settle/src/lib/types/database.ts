@@ -62,9 +62,19 @@ export interface User {
   cancelled_orders: number;
   dispute_count: number;
   avg_completion_time_ms: number | null;
+  // Waitlist (migration 131). Existing rows default to 'active'.
+  waitlist_status?: WaitlistStatus;
+  waitlist_joined_at?: Date | null;
+  waitlist_source?: string | null;
+  blip_points?: number;
+  referral_code?: string | null;
+  referred_by_user_id?: string | null;
+  referred_by_merchant_id?: string | null;
   created_at: Date;
   updated_at: Date;
 }
+
+export type WaitlistStatus = 'waitlisted' | 'active' | 'rejected';
 
 export interface Merchant {
   id: string;
@@ -99,8 +109,75 @@ export interface Merchant {
    *  timestamp when the merchant dismisses / finishes the tour.
    *  Null-safe by design — see migration 096. */
   tour_completed_at: string | null;
+  // Waitlist (migration 131). Existing rows default to 'active'.
+  waitlist_status?: WaitlistStatus;
+  waitlist_joined_at?: Date | null;
+  waitlist_source?: string | null;
+  blip_points?: number;
+  referral_code?: string | null;
+  referred_by_user_id?: string | null;
+  referred_by_merchant_id?: string | null;
+  business_category?: string | null;
+  expected_monthly_volume_usd?: number | null;
+  country_code?: string | null;
   created_at: Date;
   updated_at: Date;
+}
+
+export type WaitlistActorType = 'user' | 'merchant';
+
+export type BlipPointEvent =
+  | 'REGISTER'
+  | 'MERCHANT_REGISTER'
+  | 'TWITTER_FOLLOW'
+  | 'TELEGRAM_JOIN'
+  | 'DISCORD_JOIN'
+  | 'RETWEET'
+  | 'WHITEPAPER_READ'
+  | 'CROSS_BORDER_SWAP'
+  | 'REFERRAL_BONUS_EARNED'
+  | 'REFERRAL_BONUS_RECEIVED'
+  | 'TASK_VERIFIED'
+  | 'MANUAL_CREDIT'
+  | 'MANUAL_DEBIT';
+
+export type WaitlistTaskType = 'TWITTER' | 'TELEGRAM' | 'DISCORD' | 'QUIZ' | 'WHITEPAPER' | 'CUSTOM';
+export type WaitlistTaskStatus = 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
+
+export interface BlipPointLogEntry {
+  id: string;
+  actor_id: string;
+  actor_type: WaitlistActorType;
+  event: BlipPointEvent;
+  bonus_points: number;
+  total_points: number | null;
+  metadata: Record<string, unknown>;
+  created_at: Date;
+}
+
+export interface WaitlistTask {
+  id: string;
+  actor_id: string;
+  actor_type: WaitlistActorType;
+  task_type: WaitlistTaskType;
+  status: WaitlistTaskStatus;
+  proof_data: Record<string, unknown>;
+  points_awarded: number;
+  completed_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface WaitlistReferral {
+  id: string;
+  referrer_id: string;
+  referrer_type: WaitlistActorType;
+  referred_id: string;
+  referred_type: WaitlistActorType;
+  referral_code: string;
+  reward_status: 'pending' | 'credited' | 'failed';
+  reward_amount: number;
+  created_at: Date;
 }
 
 export interface MerchantOffer {

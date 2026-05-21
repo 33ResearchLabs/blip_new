@@ -23,6 +23,7 @@ import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRES
 import { createSession, getSessionIdFromRefreshCookie, revokeAllSessionsExcept } from '@/lib/auth/sessions';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 import { requireTokenAuth } from '@/lib/middleware/auth';
+import { setupWaitlistForActor } from '@/lib/waitlist/signup';
 
 /**
  * POST /api/auth/user
@@ -526,6 +527,24 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] New user registered:', user.id, user.username);
 
+      // Waitlist activation (opt-in via body.waitlist=true). Non-invasive:
+      // when the flag is absent, the user row stays at the schema default
+      // 'active' and no points are credited.
+      let waitlistInfo: Awaited<ReturnType<typeof setupWaitlistForActor>> | null = null;
+      if (body?.waitlist === true) {
+        try {
+          waitlistInfo = await setupWaitlistForActor({
+            actorId: user.id,
+            actorType: 'user',
+            source: typeof body?.source === 'string' ? body.source : 'waitlist_page',
+            referralCode: typeof body?.referral_code === 'string' ? body.referral_code.trim() : undefined,
+          });
+        } catch (waitlistErr) {
+          console.error('[user register] waitlist setup failed:', waitlistErr);
+          // Account already created; surface a non-fatal warning but proceed.
+        }
+      }
+
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: user.id, entityType: 'user', action: 'signup' }).catch(() => {});
 
@@ -564,6 +583,13 @@ export async function POST(request: NextRequest) {
           user,
           requiresEmailVerification: true,
           message: 'Account created! Please check your email to verify your account.',
+          waitlist: waitlistInfo
+            ? {
+                referral_code: waitlistInfo.referralCode,
+                blip_points: waitlistInfo.totalPoints,
+                referral_applied: waitlistInfo.referralApplied,
+              }
+            : undefined,
         },
       });
       regResponse.cookies.set(REFRESH_TOKEN_COOKIE, '', { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 });

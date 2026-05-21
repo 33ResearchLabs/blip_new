@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 import { defaultAvatarUrl } from '@/lib/avatars';
+import { setupWaitlistForActor } from '@/lib/waitlist/signup';
 
 // Password hashing — PBKDF2 with 100k iterations (OWASP minimum for SHA-512)
 const PBKDF2_ITERATIONS = 100_000;
@@ -1054,6 +1055,16 @@ export async function POST(request: NextRequest) {
       // Hash password
       const passwordHash = hashPassword(password);
 
+      // Optional waitlist-only business profile fields. Captured at signup
+      // so the admin view shows them without a follow-up form. NULL by
+      // default — has zero effect on non-waitlist registers.
+      const businessCategory = typeof body?.business_category === 'string' ? body.business_category.trim() : null;
+      const expectedVolumeRaw = body?.expected_monthly_volume_usd;
+      const expectedVolume = typeof expectedVolumeRaw === 'number' && Number.isFinite(expectedVolumeRaw)
+        ? expectedVolumeRaw
+        : null;
+      const countryCode = typeof body?.country_code === 'string' ? body.country_code.trim().toUpperCase().slice(0, 8) : null;
+
       // Create merchant (auto-funded in mock mode, email NOT verified)
       const regBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
       const result = await query(
@@ -1066,10 +1077,23 @@ export async function POST(request: NextRequest) {
           is_online,
           balance,
           email_verified,
-          avatar_url
-        ) VALUES ($1, $2, $3, $4, 'active', true, $5, false, $6)
+          avatar_url,
+          business_category,
+          expected_monthly_volume_usd,
+          country_code
+        ) VALUES ($1, $2, $3, $4, 'active', true, $5, false, $6, $7, $8, $9)
         RETURNING id, username, display_name, business_name, wallet_address, email, rating, total_trades`,
-        [normalizedEmail, passwordHash, normalizedBusinessName, normalizedBusinessName, regBalance, defaultAvatarUrl(normalizedEmail)]
+        [
+          normalizedEmail,
+          passwordHash,
+          normalizedBusinessName,
+          normalizedBusinessName,
+          regBalance,
+          defaultAvatarUrl(normalizedEmail),
+          businessCategory,
+          expectedVolume,
+          countryCode,
+        ]
       );
 
       const merchant = result[0] as {
@@ -1082,6 +1106,23 @@ export async function POST(request: NextRequest) {
         rating: number;
         total_trades: number;
       };
+
+      // Waitlist activation (opt-in via body.waitlist=true). When the flag
+      // is absent, the merchant row stays at the schema default 'active'
+      // and no points are credited.
+      let waitlistInfo: Awaited<ReturnType<typeof setupWaitlistForActor>> | null = null;
+      if (body?.waitlist === true) {
+        try {
+          waitlistInfo = await setupWaitlistForActor({
+            actorId: merchant.id,
+            actorType: 'merchant',
+            source: typeof body?.source === 'string' ? body.source : 'waitlist_page',
+            referralCode: typeof body?.referral_code === 'string' ? body.referral_code.trim() : undefined,
+          });
+        } catch (waitlistErr) {
+          console.error('[merchant register] waitlist setup failed:', waitlistErr);
+        }
+      }
 
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
@@ -1117,6 +1158,13 @@ export async function POST(request: NextRequest) {
           merchant: { ...serializeMerchant(merchant), balance: regBalance },
           requiresEmailVerification: true,
           message: 'Account created! Please check your email to verify your account.',
+          waitlist: waitlistInfo
+            ? {
+                referral_code: waitlistInfo.referralCode,
+                blip_points: waitlistInfo.totalPoints,
+                referral_applied: waitlistInfo.referralApplied,
+              }
+            : undefined,
         },
       });
       registerResponse.cookies.set(REFRESH_TOKEN_COOKIE, '', { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 });
