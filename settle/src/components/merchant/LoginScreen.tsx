@@ -49,6 +49,9 @@ interface LoginScreenProps {
   onRegister: () => void;
   onResendVerification?: () => void;
   isResendingVerification?: boolean;
+  /** Seconds remaining on the server-side resend throttle. >0 means the
+   *  resend button is disabled and a countdown is rendered. */
+  verificationCooldownSeconds?: number;
   /** Email a fresh registration just sent its verification link to. When
    *  set, the form is replaced by a check-your-inbox panel — registration is
    *  not considered complete until the merchant clicks the link. */
@@ -85,6 +88,7 @@ export function LoginScreen({
   onRegister,
   onResendVerification,
   isResendingVerification,
+  verificationCooldownSeconds = 0,
   pendingVerificationEmail,
   onBackToSignIn,
   verificationSuccessNotice,
@@ -353,7 +357,7 @@ export function LoginScreen({
                     {onResendVerification && (
                       <button
                         onClick={onResendVerification}
-                        disabled={isResendingVerification}
+                        disabled={isResendingVerification || verificationCooldownSeconds > 0}
                         className="w-full py-2.5 rounded-lg text-[13px] font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/[0.10] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {isResendingVerification ? (
@@ -361,6 +365,8 @@ export function LoginScreen({
                             <Loader2 className="w-4 h-4 animate-spin" />
                             Sending…
                           </>
+                        ) : verificationCooldownSeconds > 0 ? (
+                          `Resend available in ${verificationCooldownSeconds}s`
                         ) : (
                           "Resend verification email"
                         )}
@@ -388,11 +394,13 @@ export function LoginScreen({
                   {onResendVerification && (
                     <button
                       onClick={onResendVerification}
-                      disabled={isResendingVerification}
+                      disabled={isResendingVerification || verificationCooldownSeconds > 0}
                       className="w-full py-1.5 rounded-lg text-xs font-medium bg-amber-500/15 border border-amber-500/25 text-amber-400 hover:bg-amber-500/25 transition-colors disabled:opacity-50"
                     >
                       {isResendingVerification
                         ? "Sending..."
+                        : verificationCooldownSeconds > 0
+                        ? `Resend available in ${verificationCooldownSeconds}s`
                         : "Resend Verification Email"}
                     </button>
                   )}
@@ -685,11 +693,13 @@ export function LoginScreen({
               <button
                 type="button"
                 onClick={onResendVerification}
-                disabled={isResendingVerification}
+                disabled={isResendingVerification || verificationCooldownSeconds > 0}
                 className="mt-8 w-full py-3.5 rounded-xl text-sm font-bold bg-white text-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isResendingVerification ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>
+                ) : verificationCooldownSeconds > 0 ? (
+                  `Resend available in ${verificationCooldownSeconds}s`
                 ) : 'Resend verification email'}
               </button>
             )}

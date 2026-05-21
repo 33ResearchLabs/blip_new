@@ -216,7 +216,7 @@ export default function MerchantLoginPage() {
                     <motion.button
                       whileTap={{ scale: 0.98 }}
                       onClick={auth.resendVerificationEmail}
-                      disabled={auth.isResendingVerification}
+                      disabled={auth.isResendingVerification || auth.verificationCooldownSeconds > 0}
                       className="w-full py-3 rounded-xl text-sm font-bold bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {auth.isResendingVerification ? (
@@ -224,6 +224,8 @@ export default function MerchantLoginPage() {
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Sending…
                         </>
+                      ) : auth.verificationCooldownSeconds > 0 ? (
+                        `Resend available in ${auth.verificationCooldownSeconds}s`
                       ) : (
                         "Resend verification email"
                       )}
@@ -255,17 +257,35 @@ export default function MerchantLoginPage() {
                   </button>
                 </div>
               )}
-              {auth.loginError && !auth.verificationSuccessNotice && (
-                <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
-                  {/* The hook stores EMAIL_NOT_VERIFIED as a sentinel for
-                      the LoginScreen modal flow. On this page we render
-                      it as friendly copy so users don't see the raw
-                      constant. */}
-                  {auth.loginError === "EMAIL_NOT_VERIFIED"
-                    ? "Please verify your email before signing in. Check your inbox for the verification link."
-                    : auth.loginError}
+              {auth.loginError === "EMAIL_NOT_VERIFIED" && !auth.verificationSuccessNotice ? (
+                <div className="rounded-xl p-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-2">
+                  <p className="font-medium">
+                    Verify your email before signing in.
+                  </p>
+                  <p className="text-xs text-amber-200/80">
+                    We just sent a fresh verification link to your inbox.
+                    Click it, then come back to sign in.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={auth.resendVerificationEmail}
+                    disabled={auth.isResendingVerification || auth.verificationCooldownSeconds > 0}
+                    className="mt-1 w-full py-2 rounded-lg text-xs font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {auth.isResendingVerification ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+                    ) : auth.verificationCooldownSeconds > 0 ? (
+                      `Resend available in ${auth.verificationCooldownSeconds}s`
+                    ) : (
+                      "Resend verification email"
+                    )}
+                  </button>
                 </div>
-              )}
+              ) : auth.loginError && !auth.verificationSuccessNotice ? (
+                <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
+                  {auth.loginError}
+                </div>
+              ) : null}
 
               {!isSignIn && (
                 <div>

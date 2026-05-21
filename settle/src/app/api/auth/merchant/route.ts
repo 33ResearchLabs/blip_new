@@ -775,13 +775,21 @@ export async function POST(request: NextRequest) {
         await query('UPDATE merchants SET password_hash = $1 WHERE id = $2', [newHash, merchant.id]);
       }
 
-      // Email verification gate
+      // Email verification gate. Auto-resends the verification link
+      // (with a 60s per-account throttle) before returning the 403 so
+      // the merchant gets a fresh email without having to click the
+      // manual "Resend" button. `cooldownSeconds` is forwarded so the
+      // UI can render a countdown next to the resend control.
       if (!merchant.email_verified) {
+        const { resendMerchantVerificationEmail } = await import('@/lib/auth/verification');
+        const resend = await resendMerchantVerificationEmail(merchant.id);
         return NextResponse.json({
           success: false,
           error: 'Please verify your email before logging in. Check your inbox for a verification link.',
           code: 'EMAIL_NOT_VERIFIED',
           merchantId: merchant.id,
+          cooldownSeconds: resend.cooldownSeconds,
+          emailResent: resend.sent,
         }, { status: 403 });
       }
 

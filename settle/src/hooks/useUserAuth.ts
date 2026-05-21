@@ -55,6 +55,13 @@ export function useUserAuth({
   // having to re-submit the password to identify the account.
   const [unverifiedUserId, setUnverifiedUserId] = useState<string | null>(null);
   const [isResendingVerification, setIsResendingVerification] = useState(false);
+  // Resend cooldown timer. The login route returns `cooldownSeconds`
+  // with EMAIL_NOT_VERIFIED to indicate when the user may request
+  // another verification email; we store the absolute deadline so
+  // tab/visibility changes don't desync the countdown, and project a
+  // live `verificationCooldownSeconds` view via the tick effect below.
+  const [verificationCooldownUntil, setVerificationCooldownUntil] = useState<number | null>(null);
+  const [verificationCooldownSeconds, setVerificationCooldownSeconds] = useState(0);
   // Set after a successful registration response while the user has not
   // yet clicked the verification link. The home screen refuses to mount
   // until it's cleared; the LandingPage renders a "check your inbox"
@@ -85,6 +92,27 @@ export function useUserAuth({
   // Embedded wallet UI state
   const [showWalletSetup, setShowWalletSetup] = useState(false);
   const [showWalletUnlock, setShowWalletUnlock] = useState(false);
+
+  // Tick the verification-resend countdown once per second while a
+  // deadline is active. Computes from absolute `Until` rather than
+  // decrementing so backgrounded tabs catch up correctly on resume.
+  useEffect(() => {
+    if (verificationCooldownUntil == null) {
+      setVerificationCooldownSeconds(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil((verificationCooldownUntil - Date.now()) / 1000),
+      );
+      setVerificationCooldownSeconds(remaining);
+      if (remaining === 0) setVerificationCooldownUntil(null);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [verificationCooldownUntil]);
 
   const connectWallet = useCallback(async (walletAddress: string, name?: string) => {
     try {
@@ -246,9 +274,15 @@ export function useUserAuth({
         setScreen('home');
       } else if (data.code === 'EMAIL_NOT_VERIFIED') {
         // Surface the sentinel so the login screen pops the
-        // "Email not verified" modal with a resend button.
+        // "Email not verified" modal with a resend button. The server
+        // already kicked off the resend (with a 60s per-account
+        // throttle); we mirror its `cooldownSeconds` into the timer so
+        // the UI can disable the manual resend until the throttle
+        // expires.
         setLoginError('EMAIL_NOT_VERIFIED');
         setUnverifiedUserId(data.userId || null);
+        const cd = typeof data.cooldownSeconds === 'number' ? data.cooldownSeconds : 60;
+        setVerificationCooldownUntil(cd > 0 ? Date.now() + cd * 1000 : null);
       } else {
         setLoginError(data.error || 'Login failed');
         setUnverifiedUserId(null);
@@ -269,7 +303,15 @@ export function useUserAuth({
   const handleResendVerification = useCallback(async () => {
     const targetId = unverifiedUserId;
     if (!targetId) return;
+    // Block double-fires while a server-side throttle window is still
+    // open. The visible button is also disabled, but the keyboard could
+    // still trigger the handler — short-circuit before hitting the API.
+    if (verificationCooldownUntil && verificationCooldownUntil > Date.now()) return;
     setIsResendingVerification(true);
+    // Optimistically arm the 60s countdown so the user gets immediate
+    // feedback. The server enforces the same 60s throttle, so even if
+    // they bypass the UI the email won't actually go twice.
+    setVerificationCooldownUntil(Date.now() + 60_000);
     try {
       await fetchWithAuth('/api/auth/user/resend-verification', {
         method: 'POST',
@@ -281,7 +323,7 @@ export function useUserAuth({
     } finally {
       setIsResendingVerification(false);
     }
-  }, [unverifiedUserId]);
+  }, [unverifiedUserId, verificationCooldownUntil]);
 
   const handleUserRegister = useCallback(async () => {
     const usernameErr = validateUserUsername(loginForm.username);
@@ -534,6 +576,9 @@ export function useUserAuth({
     unverifiedUserId,
     isResendingVerification,
     handleResendVerification,
+    // Live "wait Ns before resending" countdown. `0` means the resend
+    // button should be enabled; >0 means render the timer + disable.
+    verificationCooldownSeconds,
     // Post-signup verification gate — set when registration succeeds but
     // the user has not yet clicked the email link. LandingPage renders a
     // "check your inbox" panel until the polling effect detects

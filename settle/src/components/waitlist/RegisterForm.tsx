@@ -24,6 +24,7 @@ import {
   User as UserIcon,
   Check,
 } from "lucide-react";
+import { rememberRole } from "@/lib/waitlist/roleCache";
 
 interface RegisterFormProps {
   role: "user" | "merchant";
@@ -150,6 +151,8 @@ export default function RegisterForm({ role }: RegisterFormProps) {
         return;
       }
 
+      // Stamp the actor type for the post-verification login flow.
+      rememberRole(role);
       router.push(
         `/waitlist/check-email?email=${encodeURIComponent(email.trim())}&role=${role}`,
       );

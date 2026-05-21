@@ -9,10 +9,11 @@
 // scope — those re-use the existing /api/2fa/verify-login flow on the main
 // app once the user is activated.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
+import { rememberRole } from "@/lib/waitlist/roleCache";
 
 interface LoginFormProps {
   role: "user" | "merchant";
@@ -31,6 +32,72 @@ export default function LoginForm({ role }: LoginFormProps) {
   );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showExpired, setShowExpired] = useState(false);
+  // EMAIL_NOT_VERIFIED state: the API returned a 403 because the account
+  // exists but hasn't clicked the verification link yet. The server has
+  // already auto-resent a fresh email (with a 60s per-account throttle);
+  // we surface a banner + countdown + manual resend so the user knows
+  // what to do and isn't blocked silently.
+  const [unverifiedActorId, setUnverifiedActorId] = useState<string | null>(null);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [verificationCooldownUntil, setVerificationCooldownUntil] = useState<number | null>(null);
+  const [verificationCooldownSeconds, setVerificationCooldownSeconds] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+  const [resentNotice, setResentNotice] = useState(false);
+
+  // Show "your session expired" banner when /waitlist/dashboard kicked the
+  // user back here after a 401. Reads window.location.search inside an effect
+  // to avoid the Suspense bailout that useSearchParams would trigger on a
+  // statically-prerenderable page.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setShowExpired(new URLSearchParams(window.location.search).get("expired") === "1");
+  }, []);
+
+  // Tick the resend-verification countdown. Computes from the absolute
+  // deadline so a backgrounded tab catches up correctly on resume.
+  useEffect(() => {
+    if (verificationCooldownUntil == null) {
+      setVerificationCooldownSeconds(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil((verificationCooldownUntil - Date.now()) / 1000),
+      );
+      setVerificationCooldownSeconds(remaining);
+      if (remaining === 0) setVerificationCooldownUntil(null);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [verificationCooldownUntil]);
+
+  async function handleResend() {
+    if (!unverifiedActorId) return;
+    if (verificationCooldownUntil && verificationCooldownUntil > Date.now()) return;
+    setIsResending(true);
+    setResentNotice(false);
+    // Optimistically arm the 60s timer — server enforces the same window.
+    setVerificationCooldownUntil(Date.now() + 60_000);
+    try {
+      const endpoint = isMerchant
+        ? "/api/auth/merchant/resend-verification"
+        : "/api/auth/user/resend-verification";
+      const idField = isMerchant ? "merchantId" : "userId";
+      await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [idField]: unverifiedActorId }),
+      });
+      setResentNotice(true);
+    } catch (err) {
+      console.error("resend verification failed", err);
+    } finally {
+      setIsResending(false);
+    }
+  }
 
   function validate(): boolean {
     const next: typeof errors = {};
@@ -46,6 +113,8 @@ export default function LoginForm({ role }: LoginFormProps) {
     e.preventDefault();
     if (!validate()) return;
     setSubmitError(null);
+    setUnverifiedActorId(null);
+    setResentNotice(false);
     setIsLoading(true);
     try {
       const endpoint = isMerchant ? "/api/auth/merchant" : "/api/auth/user";
@@ -60,9 +129,24 @@ export default function LoginForm({ role }: LoginFormProps) {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
+        // The login route returns 403 + code='EMAIL_NOT_VERIFIED' (plus
+        // userId/merchantId + cooldownSeconds) when the account exists
+        // but the email hasn't been verified. Surface the dedicated
+        // banner + countdown rather than the generic red error.
+        if (data?.code === "EMAIL_NOT_VERIFIED") {
+          const actorId = isMerchant ? data.merchantId : data.userId;
+          setUnverifiedActorId(typeof actorId === "string" ? actorId : null);
+          setUnverifiedEmail(email.trim());
+          const cd = typeof data.cooldownSeconds === "number" ? data.cooldownSeconds : 60;
+          setVerificationCooldownUntil(cd > 0 ? Date.now() + cd * 1000 : null);
+          return;
+        }
         setSubmitError(data.error ?? "Sign in failed");
         return;
       }
+      // Stamp the actor type so a future 401 on the dashboard can redirect
+      // back to the matching login page.
+      rememberRole(role);
       router.push("/waitlist/dashboard");
     } catch (err) {
       console.error(err);
@@ -75,6 +159,12 @@ export default function LoginForm({ role }: LoginFormProps) {
   return (
     <div className="flex">
       <div className="w-full max-w-lg">
+        {showExpired && (
+          <div className="mb-5 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-3">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>Your session expired. Sign in again to continue.</span>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-2">
           {/* Email */}
           <div>
@@ -169,11 +259,46 @@ export default function LoginForm({ role }: LoginFormProps) {
             )}
           </div>
 
-          {submitError && (
+          {unverifiedActorId ? (
+            <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-medium">Verify your email before signing in.</p>
+                  <p className="mt-1 text-[11px] text-amber-700/80 dark:text-amber-300/70">
+                    We just sent a fresh verification link
+                    {unverifiedEmail ? (
+                      <> to <span className="font-semibold break-all">{unverifiedEmail}</span></>
+                    ) : null}.
+                    Click it from your inbox, then come back to sign in.
+                  </p>
+                </div>
+              </div>
+              {resentNotice && (
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                  Verification email sent. Check your inbox.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={isResending || verificationCooldownSeconds > 0}
+                className="w-full py-2 rounded-lg text-[11px] font-semibold bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isResending ? (
+                  <><Loader2 className="w-3 h-3 animate-spin" /> Sending…</>
+                ) : verificationCooldownSeconds > 0 ? (
+                  `Resend available in ${verificationCooldownSeconds}s`
+                ) : (
+                  "Resend verification email"
+                )}
+              </button>
+            </div>
+          ) : submitError ? (
             <div className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl p-3">
               {submitError}
             </div>
-          )}
+          ) : null}
 
           <div className="pt-1">
             <button

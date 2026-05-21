@@ -43,6 +43,12 @@ export function useDashboardAuth({
   // Email verification state
   const [unverifiedMerchantId, setUnverifiedMerchantId] = useState<string | null>(null);
   const [isResendingVerification, setIsResendingVerification] = useState(false);
+  // Resend cooldown. Mirrors useUserAuth — login route returns
+  // `cooldownSeconds`; we store the absolute deadline (epoch ms) so a
+  // backgrounded tab catches up correctly on resume, and project it as
+  // `verificationCooldownSeconds` via the tick effect below.
+  const [verificationCooldownUntil, setVerificationCooldownUntil] = useState<number | null>(null);
+  const [verificationCooldownSeconds, setVerificationCooldownSeconds] = useState(0);
   // Set after a successful registration response while the merchant has not
   // yet clicked the verification link. The dashboard refuses to mount until
   // it's cleared; the LoginScreen renders a "check your inbox" panel instead
@@ -65,6 +71,27 @@ export function useDashboardAuth({
   const [pending2FA, setPending2FA] = useState<{ pendingToken: string; merchantName: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [isVerifying2FA, setIsVerifying2FA] = useState(false);
+
+  // Tick the resend-verification countdown once per second. Mirrors
+  // useUserAuth — computes from the absolute deadline so a backgrounded
+  // tab catches up correctly on resume.
+  useEffect(() => {
+    if (verificationCooldownUntil == null) {
+      setVerificationCooldownSeconds(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil((verificationCooldownUntil - Date.now()) / 1000),
+      );
+      setVerificationCooldownSeconds(remaining);
+      if (remaining === 0) setVerificationCooldownUntil(null);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [verificationCooldownUntil]);
 
   const handleMerchantUsername = useCallback(async (username: string) => {
     if (!solanaWallet.connected || !solanaWallet.walletAddress) {
@@ -192,9 +219,14 @@ export function useDashboardAuth({
       } else {
         if (data.code === 'EMAIL_NOT_VERIFIED') {
           // Surface the sentinel so the login screen pops the
-          // "Email not verified" modal with a resend button.
+          // "Email not verified" modal with a resend button. The server
+          // already kicked off a resend (60s per-account throttle);
+          // mirror its `cooldownSeconds` so the UI can show a countdown
+          // and disable the manual "Resend" button until it expires.
           setLoginError('EMAIL_NOT_VERIFIED');
           setUnverifiedMerchantId(data.merchantId || null);
+          const cd = typeof data.cooldownSeconds === 'number' ? data.cooldownSeconds : 60;
+          setVerificationCooldownUntil(cd > 0 ? Date.now() + cd * 1000 : null);
         } else if (res.status === 401) {
           setLoginError('Incorrect email/username or password. Please try again.');
         } else if (res.status === 404) {
@@ -270,7 +302,14 @@ export function useDashboardAuth({
 
   const resendVerificationEmail = useCallback(async () => {
     if (!unverifiedMerchantId) return;
+    // Block during the 60s server throttle window (the button is also
+    // disabled, but keyboard activation could still fire the handler).
+    if (verificationCooldownUntil && verificationCooldownUntil > Date.now()) return;
     setIsResendingVerification(true);
+    // Optimistically arm the 60s countdown — matches the server-side
+    // throttle, so even if a user bypasses the UI the email won't
+    // actually go twice.
+    setVerificationCooldownUntil(Date.now() + 60_000);
     try {
       await fetchWithAuth('/api/auth/merchant/resend-verification', {
         method: 'POST',
@@ -284,7 +323,7 @@ export function useDashboardAuth({
     } finally {
       setIsResendingVerification(false);
     }
-  }, [unverifiedMerchantId]);
+  }, [unverifiedMerchantId, verificationCooldownUntil]);
 
   const handleRegister = useCallback(async () => {
     if (registerForm.password !== registerForm.confirmPassword) {
@@ -603,6 +642,8 @@ export function useDashboardAuth({
 
     // Email verification state
     unverifiedMerchantId, isResendingVerification, resendVerificationEmail,
+    // Live "wait Ns before resending" countdown. `0` = enable button.
+    verificationCooldownSeconds,
     pendingVerificationEmail, clearPendingVerification,
     pendingVerificationVerified,
     verificationSuccessNotice, dismissVerificationSuccess,

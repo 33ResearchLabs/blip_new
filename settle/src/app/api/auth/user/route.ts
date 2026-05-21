@@ -334,11 +334,20 @@ export async function POST(request: NextRequest) {
       // them through anyway, so we cast at the read site.
       const userRow = user as typeof user & { email?: string | null; email_verified?: boolean };
       if (userRow.email && userRow.email_verified === false) {
+        // Best-effort: auto-resend the verification email so the user
+        // doesn't have to find the manual "Resend" button. Helper has a
+        // 60s per-account throttle to prevent abuse from repeated login
+        // attempts; the returned `cooldownSeconds` is forwarded to the
+        // client so the resend button can render a countdown.
+        const { resendUserVerificationEmail } = await import('@/lib/auth/verification');
+        const resend = await resendUserVerificationEmail(user.id);
         return NextResponse.json({
           success: false,
           error: 'Please verify your email before logging in. Check your inbox for a verification link.',
           code: 'EMAIL_NOT_VERIFIED',
           userId: user.id,
+          cooldownSeconds: resend.cooldownSeconds,
+          emailResent: resend.sent,
         }, { status: 403 });
       }
 
