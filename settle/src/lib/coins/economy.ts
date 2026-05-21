@@ -339,7 +339,11 @@ export async function sweepEligibleUnlocks(
 ): Promise<{ unlocked: number }> {
   const table = actorType === 'merchant' ? 'merchants' : 'users';
 
-  return transaction(async (client) => {
+  // Graceful no-op when the locks table doesn't exist yet (e.g.
+  // migration 132 not run on a dev DB). The denormalized balance
+  // column still lets the UI render; locks are an additive feature.
+  try {
+    return await transaction(async (client) => {
     const dueRes = await client.query<{ id: string; amount: number }>(
       `SELECT id, amount FROM blip_coin_locks
        WHERE actor_type = $1 AND actor_id = $2
@@ -377,7 +381,13 @@ export async function sweepEligibleUnlocks(
     );
 
     return { unlocked: total };
-  });
+    });
+  } catch (err) {
+    if (String(err).includes('relation "blip_coin_locks" does not exist')) {
+      return { unlocked: 0 };
+    }
+    throw err;
+  }
 }
 
 export interface CoinBalanceSnapshot {
@@ -399,11 +409,27 @@ export async function getCoinBalance(
 ): Promise<CoinBalanceSnapshot> {
   await sweepEligibleUnlocks(actorId, actorType);
 
+  // Read denormalized balance. `locked_blip_points` may not exist on
+  // older DBs (migration 132 unrun) — fall back to a non-locked read
+  // so the UI still gets a balance.
   const table = actorType === 'merchant' ? 'merchants' : 'users';
-  const row = await queryOne<{ blip_points: number; locked_blip_points: number }>(
-    `SELECT blip_points, locked_blip_points FROM ${table} WHERE id = $1`,
-    [actorId],
-  );
+  let row: { blip_points: number; locked_blip_points: number } | null = null;
+  try {
+    row = await queryOne<{ blip_points: number; locked_blip_points: number }>(
+      `SELECT blip_points, locked_blip_points FROM ${table} WHERE id = $1`,
+      [actorId],
+    );
+  } catch (err) {
+    if (String(err).includes('column "locked_blip_points" does not exist')) {
+      const fallback = await queryOne<{ blip_points: number }>(
+        `SELECT blip_points FROM ${table} WHERE id = $1`,
+        [actorId],
+      );
+      row = fallback ? { blip_points: fallback.blip_points, locked_blip_points: 0 } : null;
+    } else {
+      throw err;
+    }
+  }
   const balance = row?.blip_points ?? 0;
   const locked = row?.locked_blip_points ?? 0;
 
