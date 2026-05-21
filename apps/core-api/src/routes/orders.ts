@@ -26,6 +26,25 @@ import {
 // Fire-and-forget helper — logs errors but never blocks
 const bgQuery = (sql: string, params: unknown[]) => dbQuery(sql, params).catch(() => {});
 
+// Protocol fee rate passed into `release_order_v1` so the stored proc and
+// the on-chain Anchor program use the same number.
+//
+// Source of truth on the settle side: `FEE_BPS_DEFAULT` in
+// settle/src/lib/solana/v2/config.ts (which itself reads
+// NEXT_PUBLIC_FEE_BPS_DEFAULT). core-api can't import from settle, so
+// we re-read the same env var here and keep both binaries in lockstep
+// with one config knob.
+//
+// Default 200 bps = 2.00% — matches the on-chain ProtocolConfig.fee_bps
+// in the deployed v2 program on mainnet. Clamped to [0, 1000] (10%) to
+// match the on-chain hard cap and prevent fat-finger overcharges.
+const PROTOCOL_FEE_BPS = (() => {
+  const raw = process.env.NEXT_PUBLIC_FEE_BPS_DEFAULT || process.env.PROTOCOL_FEE_BPS;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(n) || n < 0 || n > 1000) return 200;
+  return n;
+})();
+
 // Persist timing breakdowns into error_logs so we can compare before/after.
 // Fire-and-forget — never blocks the response. Writes once per top-level action.
 function recordTiming(type: string, orderId: string, breakdown: Record<string, number>): void {
@@ -1088,10 +1107,13 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           }
 
           const __relT1 = Date.now();
-          // Single stored procedure: FOR UPDATE + update + credit balance (1 round-trip)
+          // Single stored procedure: FOR UPDATE + update + credit balance +
+          // protocol-fee accounting (1 round-trip). Migration 130 added the
+          // fee-recording branch; PROTOCOL_FEE_BPS is passed as the 4th arg
+          // so the proc and the on-chain Anchor program use the same rate.
           const procResult = await queryOne<{ release_order_v1: any }>(
-            'SELECT release_order_v1($1,$2,$3)',
-            [id, tx_hash, MOCK_MODE]
+            'SELECT release_order_v1($1,$2,$3,$4)',
+            [id, tx_hash, MOCK_MODE, PROTOCOL_FEE_BPS]
           );
           const releaseData = procResult!.release_order_v1;
           if (!releaseData.success) {
