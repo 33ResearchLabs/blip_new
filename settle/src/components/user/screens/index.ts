@@ -11,6 +11,8 @@ export { CashConfirmScreen } from './CashConfirmScreen';
 export { MatchingScreen } from './MatchingScreen';
 export { WalletScreen } from './WalletScreen';
 export { NotificationsScreen } from './NotificationsScreen';
+export { SupportScreen } from './SupportScreen';
+export { RewardsScreen } from './RewardsScreen';
 export { BottomNav } from './BottomNav';
 export { HomeSparkline, HomeAmbientGlow } from './HomeDecorations';
 export { mapDbStatusToUI, mapDbOrderToUI, FEE_CONFIG } from './helpers';

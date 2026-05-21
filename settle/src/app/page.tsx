@@ -103,6 +103,8 @@ import {
   MatchingScreen,
   WalletScreen,
   NotificationsScreen,
+  SupportScreen,
+  RewardsScreen,
 } from "@/components/user/screens";
 
 export default function Home() {
@@ -792,6 +794,37 @@ export default function Home() {
               completedOrders={completedOrders}
               cancelledOrders={cancelledOrders}
               maxW={maxW}
+            />
+          </Panel>
+        )}
+
+        {screen === "support" && (
+          <Panel
+            k="support"
+            anim={slide}
+            style={theme === "light" ? lightPanelBg : darkBg}
+          >
+            <SupportScreen
+              setScreen={setScreen}
+              previousScreen={previousScreen}
+            />
+          </Panel>
+        )}
+
+        {screen === "rewards" && (
+          <Panel
+            k="rewards"
+            anim={slide}
+            style={theme === "light" ? lightPanelBg : darkBg}
+          >
+            <RewardsScreen
+              setScreen={setScreen}
+              previousScreen={previousScreen}
+              referralCode={
+                auth.userId
+                  ? auth.userId.replace(/-/g, "").slice(0, 8).toUpperCase()
+                  : "—"
+              }
             />
           </Panel>
         )}

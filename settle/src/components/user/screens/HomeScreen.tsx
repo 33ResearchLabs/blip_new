@@ -263,12 +263,12 @@ function WalletBalanceSection({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* ── Top group: live-rate pill + balance, vertically centered in the
-              remaining hero height so the empty/ready states feel anchored
-              rather than floating with dead space below. ── */}
-      <div className="flex-1 flex flex-col justify-center min-h-0">
-      {/* ── Centered live-rate pill (Phantom-style) ── */}
-      <div className="flex items-center justify-center mb-2">
+      {/* ── Live-rate pill (Phantom-style) — pinned to top with its own row
+              so it cannot get vertically squished into the header on short
+              responsive viewports. Previously it lived inside the
+              justify-center group below and would overflow upward into the
+              wallet-address row when the centered area got tight. ── */}
+      <div className="shrink-0 flex items-center justify-center mt-1 mb-2">
         <div
           className="flex items-center gap-1.5"
           style={{
@@ -297,9 +297,14 @@ function WalletBalanceSection({
         </div>
       </div>
 
+      {/* ── Top group: balance, vertically centered in remaining hero height
+              so the empty/ready states feel anchored rather than floating
+              with dead space below. ── */}
+      <div className="flex-1 flex flex-col justify-center min-h-0">
+
       {/* ── Big centered balance + Apple-style page-dot token switcher ── */}
       {isWalletReady ? (
-        <div style={{ marginTop: 20, marginBottom: 8, textAlign: 'center' }}>
+        <div  style={{ marginTop: 12, marginBottom: 8, textAlign: 'center' }}>
           <motion.div
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}

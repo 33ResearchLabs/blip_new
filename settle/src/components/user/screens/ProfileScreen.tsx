@@ -18,6 +18,7 @@ import {
   LifeBuoy,
   HelpCircle,
   Mail,
+  Gift,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
@@ -515,7 +516,17 @@ export const ProfileScreen = ({
           />
         </SettingsGroup>
 
-        {/* ── 5. Help & Support ── */}
+        {/* ── 5. Rewards ── */}
+        <SettingsGroup label="Rewards" icon={<Gift className="w-3.5 h-3.5" />}>
+          <SettingsRow
+            icon={<Gift className="w-[15px] h-[15px]" />}
+            title="Invite friends"
+            subtitle="Earn USDT when they trade"
+            onClick={() => setScreen("rewards")}
+          />
+        </SettingsGroup>
+
+        {/* ── 6. Help & Support ── */}
         <SettingsGroup label="Help & Support" icon={<LifeBuoy className="w-3.5 h-3.5" />}>
           <SettingsRow
             href="/faq"
@@ -526,8 +537,8 @@ export const ProfileScreen = ({
           <SettingsRow
             icon={<Mail className="w-[15px] h-[15px]" />}
             title="Contact Support"
-            subtitle="Get help from our team"
-            trailing={<StatusPill label="Coming soon" tone="muted" />}
+            subtitle="DM us on Telegram · replies in 10 min"
+            onClick={() => setScreen("support")}
           />
         </SettingsGroup>
 
