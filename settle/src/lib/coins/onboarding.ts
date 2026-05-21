@@ -21,8 +21,10 @@ export async function bootstrapNewActor(
   if (!actorId) return;
 
   // ----- 1) Seed default reputation row at 500. ON CONFLICT keeps the
-  //          existing row if one already exists (e.g. from migration
-  //          133's bulk seed) — we never overwrite real scores.
+  //          existing row if one already exists. We then bump any
+  //          stale sub-300 score (pre-rebase rows that escaped
+  //          migration 133, or rows from before the rebase landed) up
+  //          to the New-tier baseline so users don't see "0 Rep".
   try {
     await query(
       `INSERT INTO reputation_scores
@@ -33,6 +35,15 @@ export async function bootstrapNewActor(
                NOW(), NOW(), NOW())
        ON CONFLICT DO NOTHING`,
       [actorId, actorType, STARTER_REP],
+    );
+    // Belt-and-braces: rescale any legacy 0-1000 row to the 300-900
+    // scale. Idempotent — leaves real scores >= 300 alone. Real recomputes
+    // from the daily worker land later and override this default.
+    await query(
+      `UPDATE reputation_scores
+          SET total_score = $1, tier = 'newcomer', updated_at = NOW()
+        WHERE entity_id = $2 AND entity_type = $3 AND total_score < 300`,
+      [STARTER_REP, actorId, actorType],
     );
   } catch (err) {
     // Non-fatal — the daily worker will compute a real score later.

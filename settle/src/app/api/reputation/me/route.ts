@@ -43,10 +43,18 @@ export async function GET(request: NextRequest) {
         is_default: true,
       });
     }
+    // Legacy rows can carry pre-rebase total_score values (0–1000).
+    // Surface the 500 "New" default until the daily worker rescores
+    // them properly. The DB row stays untouched here — onboarding
+    // takes care of updating it on next login.
+    const score = rep.total_score < 300 ? 500 : rep.total_score;
+    const tier = rep.total_score < 300 ? 'newcomer' : rep.tier;
     return successResponse({
       ...rep,
-      tier_info: TIER_INFO[rep.tier] ?? TIER_INFO.newcomer,
-      is_default: false,
+      total_score: score,
+      tier,
+      tier_info: TIER_INFO[tier] ?? TIER_INFO.newcomer,
+      is_default: rep.total_score < 300,
     });
   } catch (err) {
     console.error('[reputation/me] failed', err);
