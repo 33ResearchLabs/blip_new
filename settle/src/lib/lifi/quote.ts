@@ -162,11 +162,14 @@ export async function getCrossChainQuote(
     const blipFeeUsd = 0; // intentionally hidden in the UI
 
     const txReq = json.transactionRequest;
-    const transactionRequest = txReq && txReq.to && txReq.data && txReq.value
+    // Tron quotes may omit `value` (TRC20 transfers carry no native
+    // value). Require only `to` + `data`; default value to "0x0" for
+    // the EVM path's downstream consumers.
+    const transactionRequest = txReq && txReq.to && txReq.data
       ? {
           to: txReq.to,
           data: txReq.data,
-          value: txReq.value,
+          value: txReq.value ?? "0x0",
           gasLimit: txReq.gasLimit,
           gasPrice: txReq.gasPrice,
           chainId: txReq.chainId,

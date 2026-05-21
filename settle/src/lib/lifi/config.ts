@@ -50,9 +50,9 @@ export const SOURCE_CHAINS: ChainOption[] = [
   { id: 137,        label: 'Polygon',   symbol: 'MATIC',flag: '🟣', etaLabel: '~1 min' },
   { id: 56,         label: 'BSC',       symbol: 'BNB',  flag: '🟡', etaLabel: '~1 min' },
   { id: 43114,      label: 'Avalanche', symbol: 'AVAX', flag: '🔺', etaLabel: '~1 min' },
-  // TRON: LI.FI routes through Allbridge under the hood. Disabled in v1
-  // until the TronLink wallet adapter is integrated on the source side.
-  { id: 'TRX',      label: 'TRON',      symbol: 'TRX',  flag: '🔴', etaLabel: '~1–5 min', comingSoon: true },
+  // TRON: LI.FI routes through Allbridge under the hood. Source-side
+  // signing handled by lib/lifi/tronWallet.ts (TronLink + TronWeb).
+  { id: 'TRX',      label: 'TRON',      symbol: 'TRX',  flag: '🔴', etaLabel: '~1–5 min' },
 ];
 
 /** Solana chain id in LI.FI's catalog. */

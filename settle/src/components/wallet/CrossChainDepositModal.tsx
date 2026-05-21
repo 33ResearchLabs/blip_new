@@ -49,6 +49,14 @@ import {
   readErc20Allowance,
   hasInjectedWallet,
 } from "@/lib/lifi/evmWallet";
+import {
+  connectTron,
+  getConnectedTronAddress,
+  readTrc20Allowance,
+  approveTrc20,
+  sendTronBridgeTx,
+  hasTronLink,
+} from "@/lib/lifi/tronWallet";
 import { recordDeposit, type DepositRecord } from "@/lib/wallet/depositHistory";
 
 interface CrossChainDepositModalProps {
@@ -109,6 +117,10 @@ export function CrossChainDepositModal({
     [],
   );
   const [selectedChain, setSelectedChain] = useState<ChainOption>(availableChains[0]);
+  // Source chain dispatch: anything with a string id is treated as a
+  // non-EVM chain. Today that's just Tron (id 'TRX'); future non-EVM
+  // chains (e.g. BTC) would follow the same pattern.
+  const isTron = selectedChain.id === "TRX";
   const [chainPickerOpen, setChainPickerOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<CrossChainQuote | null>(null);
@@ -140,13 +152,16 @@ export function CrossChainDepositModal({
       setFinalReceived(null);
       // Surface any previously-granted wallet permission silently — no
       // popup, just enables the "send" CTA if a wallet is already
-      // connected from a prior session.
-      void getConnectedAddress().then((a) => {
-        if (a) setEvmAddress(a);
-        return getCurrentChainId();
-      }).then((c) => {
-        if (c) setWalletChainId(c);
-      });
+      // connected from a prior session. We probe both EVM and Tron so
+      // the right address shows up after the user switches source chain.
+      void (async () => {
+        const tronAddr = await getConnectedTronAddress().catch(() => null);
+        const evmAddr = !tronAddr ? await getConnectedAddress().catch(() => null) : null;
+        if (tronAddr) setEvmAddress(tronAddr);
+        else if (evmAddr) setEvmAddress(evmAddr);
+        const cid = await getCurrentChainId().catch(() => null);
+        if (cid) setWalletChainId(cid);
+      })();
     }
   }, [isOpen, availableChains]);
 
@@ -198,10 +213,16 @@ export function CrossChainDepositModal({
     setError(null);
     setPhase("connecting");
     try {
-      const addr = await connectEvm();
-      setEvmAddress(addr);
-      const cid = await getCurrentChainId();
-      setWalletChainId(cid);
+      if (isTron) {
+        const addr = await connectTron();
+        setEvmAddress(addr);
+        setWalletChainId(null); // N/A for Tron
+      } else {
+        const addr = await connectEvm();
+        setEvmAddress(addr);
+        const cid = await getCurrentChainId();
+        setWalletChainId(cid);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't connect wallet");
     } finally {
@@ -210,9 +231,12 @@ export function CrossChainDepositModal({
   };
 
   // True when the wallet is on the wrong chain for the selected
-  // source. Solana (string id) is N/A — only EVM rows need switching.
+  // source. Tron has no EVM-style chain switching, so it's never
+  // considered "wrong chain" here — the tronWallet module guards
+  // mainnet separately at send time.
   const wrongChain =
     !!evmAddress &&
+    !isTron &&
     typeof selectedChain.id === "number" &&
     walletChainId !== selectedChain.id;
 
@@ -238,51 +262,82 @@ export function CrossChainDepositModal({
     setDestTxHash(null);
 
     try {
-      // 1) Approval check. USDT is an ERC20, so the bridge contract
-      // can only pull the user's tokens if they've granted enough
-      // allowance. Skip the popup when allowance >= amount.
+      // 1) Approval check. USDT is an ERC20/TRC20, so the bridge
+      // contract can only pull the user's tokens if they've granted
+      // enough allowance. Skip the popup when allowance >= amount.
       if (quote.approvalAddress) {
         const need = BigInt(quote.fromAmountBase);
-        const have = await readErc20Allowance({
-          token: quote.fromTokenAddress,
-          owner: evmAddress,
-          spender: quote.approvalAddress,
-        });
-        if (have < need) {
-          setPhase("approving");
-          setPhaseMessage("Approve USDT in your wallet…");
-          // approve(spender, MAX_UINT256) so they only do this once
-          const spender = quote.approvalAddress.replace(/^0x/, "").padStart(64, "0");
-          const data =
-            ERC20_APPROVE_SELECTOR +
-            spender +
-            MAX_UINT256.replace(/^0x/, "");
-          await sendTransaction({
-            from: evmAddress,
-            to: quote.fromTokenAddress,
-            data,
-            value: "0x0",
+        if (isTron) {
+          const have = await readTrc20Allowance({
+            token: quote.fromTokenAddress,
+            owner: evmAddress,
+            spender: quote.approvalAddress,
           });
-          // Don't need to wait for confirmation — LI.FI's tx will
-          // revert if it lands before the approval, but on modern
-          // wallets the next eth_sendTransaction respects the local
-          // mempool ordering. We surface "Approving…" briefly so the
-          // user sees it; if the bridge tx fails, the polled status
-          // will say so.
+          if (have < need) {
+            setPhase("approving");
+            setPhaseMessage("Approve USDT in TronLink…");
+            // Approve exactly what's needed — TRC20 best practice on Tron
+            // is amount-bound approval (not max uint), since some Tron
+            // tokens reject changing a non-zero allowance to non-zero.
+            await approveTrc20({
+              token: quote.fromTokenAddress,
+              owner: evmAddress,
+              spender: quote.approvalAddress,
+              amount: quote.fromAmountBase,
+            });
+          }
+        } else {
+          const have = await readErc20Allowance({
+            token: quote.fromTokenAddress,
+            owner: evmAddress,
+            spender: quote.approvalAddress,
+          });
+          if (have < need) {
+            setPhase("approving");
+            setPhaseMessage("Approve USDT in your wallet…");
+            // approve(spender, MAX_UINT256) so they only do this once
+            const spender = quote.approvalAddress.replace(/^0x/, "").padStart(64, "0");
+            const data =
+              ERC20_APPROVE_SELECTOR +
+              spender +
+              MAX_UINT256.replace(/^0x/, "");
+            await sendTransaction({
+              from: evmAddress,
+              to: quote.fromTokenAddress,
+              data,
+              value: "0x0",
+            });
+            // Don't need to wait for confirmation — LI.FI's tx will
+            // revert if it lands before the approval, but on modern
+            // wallets the next eth_sendTransaction respects the local
+            // mempool ordering. We surface "Approving…" briefly so the
+            // user sees it; if the bridge tx fails, the polled status
+            // will say so.
+          }
         }
       }
 
       // 2) Submit the bridge tx itself.
       setPhase("sending");
-      setPhaseMessage("Confirm the bridge in your wallet…");
+      setPhaseMessage(isTron ? "Confirm the bridge in TronLink…" : "Confirm the bridge in your wallet…");
       const tx = quote.transactionRequest;
-      const hash = await sendTransaction({
-        from: evmAddress,
-        to: tx.to,
-        data: tx.data,
-        value: tx.value,
-        gasLimit: tx.gasLimit,
-      });
+      let hash: string;
+      if (isTron) {
+        // LI.FI may return either a pre-built Tron tx object on the
+        // top-level quote (preferred) or the EVM-style wrapper inside
+        // `transactionRequest`. tronWallet handles both shapes.
+        const rawTronTx =
+          (quote.raw as { transactionRequest?: unknown })?.transactionRequest ?? tx;
+        hash = await sendTronBridgeTx(rawTronTx, evmAddress);
+      } else {
+        hash = await sendTransaction({
+          from: evmAddress,
+          to: tx.to,
+          data: tx.data,
+          value: tx.value,
+          gasLimit: tx.gasLimit,
+        });
+      }
       setSourceTxHash(hash);
 
       // 3) Poll LI.FI status until the destination is credited.
@@ -430,13 +485,13 @@ export function CrossChainDepositModal({
               <span className="flex items-center gap-2 min-w-0">
                 <Wallet className={`w-4 h-4 shrink-0 ${evmAddress ? "text-emerald-400" : "text-foreground/40"}`} />
                 <span className="text-[12px] font-medium text-foreground truncate">
-                  {evmAddress ? short(evmAddress) : "EVM wallet not connected"}
+                  {evmAddress ? short(evmAddress) : isTron ? "TronLink not connected" : "EVM wallet not connected"}
                 </span>
               </span>
               {!evmAddress ? (
                 <button
                   onClick={handleConnect}
-                  disabled={!hasInjectedWallet() || phase === "connecting"}
+                  disabled={(isTron ? !hasTronLink() : !hasInjectedWallet()) || phase === "connecting"}
                   className="text-[11px] font-semibold text-primary hover:text-primary/80 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {phase === "connecting" ? "Connecting…" : "Connect"}
@@ -580,10 +635,12 @@ export function CrossChainDepositModal({
               >
                 {phase === "connecting" ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Connecting…</>
-                ) : !hasInjectedWallet() ? (
+                ) : isTron && !hasTronLink() ? (
+                  "Install TronLink"
+                ) : !isTron && !hasInjectedWallet() ? (
                   "Install a browser wallet"
                 ) : (
-                  <><Wallet className="w-4 h-4" /> Connect wallet</>
+                  <><Wallet className="w-4 h-4" /> Connect {isTron ? "TronLink" : "wallet"}</>
                 )}
               </button>
             ) : wrongChain ? (
