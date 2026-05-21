@@ -419,6 +419,25 @@ export default function Home() {
     }
   }, [auth.userId]);
 
+  // Consume ?reason=session_expired exactly once on mount, then strip it
+  // from the URL so a refresh doesn't re-display the banner. Runs even
+  // when the user is unauthenticated (the cleanup above gates on userId,
+  // so without this the param sticks on the login screen forever and the
+  // banner reappears on every render of <LandingPage />).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("reason") !== "session_expired") return;
+    auth.setLoginError("Your session expired. Please sign in again.");
+    url.searchParams.delete("reason");
+    const clean =
+      url.pathname +
+      (url.searchParams.toString() ? `?${url.searchParams}` : "") +
+      url.hash;
+    window.history.replaceState(null, "", clean);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const pendingOrders = orders.filter(
     (o) => !["complete", "cancelled", "expired", "disputed"].includes(o.status),
   );
@@ -519,27 +538,16 @@ export default function Home() {
       <AnimatePresence>
         {screen === "welcome" &&
           (() => {
-            // Parse query params for login route redirects
+            // Parse query params for login route redirects. The
+            // session-expired banner is wired up by a one-shot mount
+            // effect above (it also strips ?reason so refresh is clean);
+            // here we only read ?welcome=skip to decide whether to skip
+            // the welcome splash and jump straight to the sign-in form.
             const params =
               typeof window !== "undefined"
                 ? new URLSearchParams(window.location.search)
                 : null;
             const skipWelcome = params?.get("welcome") === "skip";
-            const reason = params?.get("reason");
-            // Show "session expired" banner by pre-filling loginError once on mount
-            if (
-              skipWelcome &&
-              reason === "session_expired" &&
-              !auth.loginError
-            ) {
-              setTimeout(
-                () =>
-                  auth.setLoginError(
-                    "Your session expired. Please sign in again.",
-                  ),
-                0,
-              );
-            }
             return (
               <LandingPage
                 loginForm={auth.loginForm}
