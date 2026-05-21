@@ -383,7 +383,14 @@ export async function sweepEligibleUnlocks(
     return { unlocked: total };
     });
   } catch (err) {
-    if (String(err).includes('relation "blip_coin_locks" does not exist')) {
+    // pg undefined_table (42P01) or relation-not-found — happens when
+    // migration 132 hasn't been applied. Treat as a no-op so the
+    // balance read can still complete.
+    const code = (err as { code?: string }).code;
+    if (
+      code === '42P01' ||
+      String((err as { message?: string }).message ?? err).toLowerCase().includes('does not exist')
+    ) {
       return { unlocked: 0 };
     }
     throw err;
@@ -420,7 +427,9 @@ export async function getCoinBalance(
       [actorId],
     );
   } catch (err) {
-    if (String(err).includes('column "locked_blip_points" does not exist')) {
+    const code = (err as { code?: string }).code;
+    const msg = String((err as { message?: string }).message ?? err).toLowerCase();
+    if (code === '42703' || msg.includes('does not exist')) {
       const fallback = await queryOne<{ blip_points: number }>(
         `SELECT blip_points FROM ${table} WHERE id = $1`,
         [actorId],
