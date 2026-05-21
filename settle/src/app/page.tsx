@@ -563,6 +563,7 @@ export default function Home() {
                 onClearPendingVerification={auth.clearPendingVerification}
                 onResendVerification={auth.handleResendVerification}
                 isResendingVerification={auth.isResendingVerification}
+                verificationCooldownSeconds={auth.verificationCooldownSeconds}
                 verificationSuccessNotice={auth.verificationSuccessNotice}
                 onDismissVerificationSuccess={auth.dismissVerificationSuccess}
                 pendingVerificationVerified={auth.pendingVerificationVerified}

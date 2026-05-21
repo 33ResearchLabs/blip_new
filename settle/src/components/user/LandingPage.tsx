@@ -35,6 +35,9 @@ interface LandingPageProps {
    *  EMAIL_NOT_VERIFIED login banner. */
   onResendVerification?: () => void;
   isResendingVerification?: boolean;
+  /** Seconds remaining on the server-side resend throttle. When >0 the
+   *  resend button is disabled and a countdown is shown instead. */
+  verificationCooldownSeconds?: number;
   /** True once polling (or the manual "I've verified" button) detects the
    *  email is verified. Renders a green banner above the sign-in form. */
   verificationSuccessNotice?: boolean;
@@ -58,6 +61,7 @@ export function LandingPage({
   onClearPendingVerification,
   onResendVerification,
   isResendingVerification,
+  verificationCooldownSeconds = 0,
   verificationSuccessNotice,
   onDismissVerificationSuccess,
   pendingVerificationVerified,
@@ -625,7 +629,7 @@ export function LandingPage({
                   {onResendVerification && (
                     <button
                       onClick={onResendVerification}
-                      disabled={isResendingVerification}
+                      disabled={isResendingVerification || verificationCooldownSeconds > 0}
                       className="w-full py-2.5 rounded-lg text-[13px] font-medium bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {isResendingVerification ? (
@@ -633,6 +637,8 @@ export function LandingPage({
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Sending…
                         </>
+                      ) : verificationCooldownSeconds > 0 ? (
+                        `Resend available in ${verificationCooldownSeconds}s`
                       ) : (
                         "Resend verification email"
                       )}
@@ -646,11 +652,40 @@ export function LandingPage({
               )
             ) : (
               <>
-            {loginError && (
+            {loginError === 'EMAIL_NOT_VERIFIED' ? (
+              <div className="rounded-xl p-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-2">
+                <p className="font-medium">
+                  Verify your email before signing in.
+                </p>
+                <p className="text-xs text-amber-200/80">
+                  We just sent a fresh verification link
+                  {loginForm.username.includes('@')
+                    ? <> to <span className="font-semibold break-all">{loginForm.username.trim()}</span></>
+                    : null}.
+                  Click it from your inbox, then come back to sign in.
+                </p>
+                {onResendVerification && (
+                  <button
+                    type="button"
+                    onClick={onResendVerification}
+                    disabled={isResendingVerification || verificationCooldownSeconds > 0}
+                    className="mt-1 w-full py-2 rounded-lg text-xs font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isResendingVerification ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+                    ) : verificationCooldownSeconds > 0 ? (
+                      <>Resend available in {verificationCooldownSeconds}s</>
+                    ) : (
+                      'Resend verification email'
+                    )}
+                  </button>
+                )}
+              </div>
+            ) : loginError ? (
               <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
                 {loginError}
               </div>
-            )}
+            ) : null}
 
             <div>
               <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">
