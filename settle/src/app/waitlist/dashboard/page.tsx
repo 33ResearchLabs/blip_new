@@ -28,6 +28,7 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { formatCount } from '@/lib/format';
 import { USER_BLIP_POINTS, MERCHANT_BLIP_POINTS } from '@/lib/waitlist/blipPoints';
+import { readRole, forgetRole, rememberRole, loginPathForRole } from '@/lib/waitlist/roleCache';
 import XFollowVerificationModal from '@/components/waitlist/XFollowVerificationModal';
 import TelegramVerificationModal from '@/components/waitlist/TelegramVerificationModal';
 import TweetCampaignModal from '@/components/waitlist/TweetCampaignModal';
@@ -103,7 +104,15 @@ export default function WaitlistDashboardPage() {
         fetch('/api/waitlist/me'),
         fetch('/api/waitlist/leaderboard?limit=10'),
       ]);
-      if (meRes.status === 401) { router.push('/waitlist/login'); return; }
+      if (meRes.status === 401) {
+        // Session expired — bounce to whichever login page matches the cached
+        // actor type (set when they signed in / registered). On unknown role,
+        // falls back to the user login; the page itself has a "Sign in as
+        // merchant" cross-link.
+        const dest = loginPathForRole(readRole());
+        router.push(`${dest}?expired=1`);
+        return;
+      }
 
       const meText = await meRes.text();
       let meData: { success?: boolean; data?: WaitlistMe; error?: string } | null = null;
@@ -117,6 +126,9 @@ export default function WaitlistDashboardPage() {
         return;
       }
       setMe(meData.data);
+      // Refresh the cached role so a later 401 routes back to the right login
+      // even if the user cleared storage or arrived via cookie alone.
+      rememberRole(meData.data.actor.type);
 
       try {
         const lb = JSON.parse(await lbRes.text());
@@ -134,6 +146,7 @@ export default function WaitlistDashboardPage() {
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    forgetRole();
     router.push('/waitlist');
   }
 
