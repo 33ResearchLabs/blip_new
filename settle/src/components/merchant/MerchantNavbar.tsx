@@ -590,8 +590,12 @@ export function MerchantNavbar({
  * labels for the mobile cluster where space is tight.
  */
 function NavbarRepCoins({ compact = false }: { compact?: boolean }) {
-  const [score, setScore] = useState<number | null>(null);
-  const [coins, setCoins] = useState<number | null>(null);
+  // Initialize with the safe defaults (500 rep / 100 coins) so the
+  // chip always renders SOMETHING readable even if the API hasn't
+  // responded yet or errors out. The real numbers replace these as
+  // soon as fetch resolves.
+  const [score, setScore] = useState<number>(500);
+  const [coins, setCoins] = useState<number>(100);
 
   useEffect(() => {
     let cancelled = false;
@@ -612,19 +616,19 @@ function NavbarRepCoins({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-1">
       <span
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.06] text-[11px] font-semibold text-foreground/80"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-[11px] font-semibold text-emerald-300"
         title="Reputation score (300–900)"
       >
-        <Shield className="w-3 h-3 text-foreground/55" />
-        <span className="tabular-nums">{score ?? "—"}</span>
-        {!compact && <span className="text-foreground/40 text-[10px]">Rep</span>}
+        <Shield className="w-3 h-3 text-emerald-400" />
+        <span className="tabular-nums">{score}</span>
+        {!compact && <span className="text-emerald-300/70 text-[10px]">Rep</span>}
       </span>
       <span
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-[11px] font-semibold text-amber-300"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/25 text-[11px] font-semibold text-amber-300"
         title="Blip Points"
       >
         <Coins className="w-3 h-3" />
-        <span className="tabular-nums">{coins != null ? coins.toLocaleString("en-US") : "—"}</span>
+        <span className="tabular-nums">{coins.toLocaleString("en-US")}</span>
         {!compact && <span className="text-amber-300/70 text-[10px]">Blip Points</span>}
       </span>
     </div>
