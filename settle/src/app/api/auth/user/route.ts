@@ -177,6 +177,13 @@ export async function POST(request: NextRequest) {
         await captureDeviceForActor({ request, actorId: user.id, actorType: 'user' });
       } catch { /* swallow */ }
 
+      // Bootstrap rep (500) + starter coins (100) on first sight.
+      // Idempotent — re-runs after the first signup are no-ops.
+      try {
+        const { bootstrapNewActor } = await import('@/lib/coins/onboarding');
+        await bootstrapNewActor(user.id, 'user');
+      } catch { /* swallow */ }
+
       const walletRes = NextResponse.json({
         success: true,
         data: {
@@ -405,6 +412,13 @@ export async function POST(request: NextRequest) {
       try {
         const { captureDeviceForActor } = await import('@/lib/security/deviceCapture');
         await captureDeviceForActor({ request, actorId: loginPayload.actorId, actorType: 'user' });
+      } catch { /* swallow */ }
+
+      // Bootstrap idempotently — covers legacy users who never went
+      // through the new signup path (they hit login first).
+      try {
+        const { bootstrapNewActor } = await import('@/lib/coins/onboarding');
+        await bootstrapNewActor(loginPayload.actorId, 'user');
       } catch { /* swallow */ }
 
       const loginRes = NextResponse.json({

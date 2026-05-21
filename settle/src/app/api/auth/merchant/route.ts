@@ -334,6 +334,11 @@ export async function POST(request: NextRequest) {
           await captureDeviceForActor({ request, actorId: walletPayload.actorId, actorType: 'merchant' });
         } catch { /* swallow */ }
 
+        try {
+          const { bootstrapNewActor } = await import('@/lib/coins/onboarding');
+          await bootstrapNewActor(walletPayload.actorId, 'merchant');
+        } catch { /* swallow */ }
+
         const walletResponse = NextResponse.json({
           success: true,
           data: {
@@ -480,6 +485,11 @@ export async function POST(request: NextRequest) {
       try {
         const { captureDeviceForActor } = await import('@/lib/security/deviceCapture');
         await captureDeviceForActor({ request, actorId: createPayload.actorId, actorType: 'merchant' });
+      } catch { /* swallow */ }
+
+      try {
+        const { bootstrapNewActor } = await import('@/lib/coins/onboarding');
+        await bootstrapNewActor(createPayload.actorId, 'merchant');
       } catch { /* swallow */ }
 
       const createResponse = NextResponse.json({
@@ -854,6 +864,11 @@ export async function POST(request: NextRequest) {
       try {
         const { captureDeviceForActor } = await import('@/lib/security/deviceCapture');
         await captureDeviceForActor({ request, actorId: emailPayload.actorId, actorType: 'merchant' });
+      } catch { /* swallow */ }
+
+      try {
+        const { bootstrapNewActor } = await import('@/lib/coins/onboarding');
+        await bootstrapNewActor(emailPayload.actorId, 'merchant');
       } catch { /* swallow */ }
 
       const emailResponse = NextResponse.json({
