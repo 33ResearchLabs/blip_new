@@ -28,6 +28,7 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { formatCount } from '@/lib/format';
 import { USER_BLIP_POINTS, MERCHANT_BLIP_POINTS } from '@/lib/waitlist/blipPoints';
+import { ReputationCoinBadge } from '@/components/shared/ReputationCoinBadge';
 import { readRole, forgetRole, rememberRole, loginPathForRole } from '@/lib/waitlist/roleCache';
 import XFollowVerificationModal from '@/components/waitlist/XFollowVerificationModal';
 import TelegramVerificationModal from '@/components/waitlist/TelegramVerificationModal';
@@ -450,6 +451,11 @@ export default function WaitlistDashboardPage() {
                   Next Milestone: <span className={`font-bold ${txt}`}>{formatCount(nextMilestone)} pts</span>
                 </p>
               </div>
+              {/* In-app rep + coin badge — surfaces the rebased 300–900
+                  score and the live coin balance alongside the waitlist
+                  points. The waitlist points are pre-launch hype; rep +
+                  coins are the production economy. */}
+              <ReputationCoinBadge variant="card" className="my-2" />
               <div className={`pt-2 border-t ${divider} space-y-0.5`}>
                 {milestones.map((m) => {
                   const achieved = blipPoints >= m;

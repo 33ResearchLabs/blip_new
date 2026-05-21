@@ -19,7 +19,9 @@ import {
   Bell,
   BarChart3,
   Bug,
+  Coins,
 } from "lucide-react";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { openIssueReporter } from "@/plugins/issue-reporter/IssueReporter";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
@@ -256,6 +258,11 @@ export function MerchantNavbar({
                 <Bug className="w-4 h-4" />
               </button>
 
+              {/* Reputation + Blip Points — inline navbar stats. Sits
+                  to the left of the avatar so they read as the user's
+                  scoreboard at a glance. */}
+              <NavbarRepCoins />
+
               <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => setMenuOpen((prev) => !prev)}
@@ -390,6 +397,10 @@ export function MerchantNavbar({
                   narrower mobile navbar. Sits left of the bell so the
                   reminder is in the same visual zone as notifications. */}
               <OnboardingSetupChip compact />
+
+              {/* Rep + Coins — mobile inline. Same component as desktop;
+                  the compact prop drops the labels and shows numbers only. */}
+              <NavbarRepCoins compact />
               {onOpenNotifications && (
                 <button
                   onClick={onOpenNotifications}
@@ -569,5 +580,53 @@ export function MerchantNavbar({
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+
+/**
+ * Compact rep + Blip Points display for the navbar. Two side-by-side
+ * pills: shield+score and coin+balance. `compact` drops the verbose
+ * labels for the mobile cluster where space is tight.
+ */
+function NavbarRepCoins({ compact = false }: { compact?: boolean }) {
+  const [score, setScore] = useState<number | null>(null);
+  const [coins, setCoins] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [repRes, coinRes] = await Promise.all([
+          fetchWithAuth("/api/reputation/me").then((r) => (r.ok ? r.json() : null)),
+          fetchWithAuth("/api/coins/me").then((r) => (r.ok ? r.json() : null)),
+        ]);
+        if (cancelled) return;
+        if (repRes?.data && typeof repRes.data.total_score === "number") setScore(repRes.data.total_score);
+        if (coinRes?.data && typeof coinRes.data.balance === "number") setCoins(coinRes.data.balance);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <div className="flex items-center gap-1">
+      <span
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.06] text-[11px] font-semibold text-foreground/80"
+        title="Reputation score (300–900)"
+      >
+        <Shield className="w-3 h-3 text-foreground/55" />
+        <span className="tabular-nums">{score ?? "—"}</span>
+        {!compact && <span className="text-foreground/40 text-[10px]">Rep</span>}
+      </span>
+      <span
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-[11px] font-semibold text-amber-300"
+        title="Blip Points"
+      >
+        <Coins className="w-3 h-3" />
+        <span className="tabular-nums">{coins != null ? coins.toLocaleString("en-US") : "—"}</span>
+        {!compact && <span className="text-amber-300/70 text-[10px]">Blip Points</span>}
+      </span>
+    </div>
   );
 }

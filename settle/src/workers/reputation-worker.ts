@@ -13,6 +13,8 @@
 import { query } from '@/lib/db';
 import { updateReputationScore } from '@/lib/reputation/repository';
 import { logger } from '@/lib/logger';
+import { sweepCompletedOrders } from '@/lib/coins/awards';
+import { runStreakWorker } from '@/lib/coins/streakWorker';
 
 const WORKER_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -66,6 +68,28 @@ async function recalculateAllScores(): Promise<void> {
           error: err instanceof Error ? err.message : String(err),
         });
       }
+    }
+
+    // Coin economy sweeps — idempotent via source_ref so a worker
+    // restart mid-run is safe. We run AFTER rep recompute so any new
+    // coin events also influence the next rep-input pull (rep reads
+    // blip_point_log via the task-completion bonus path).
+    try {
+      const coinSweep = await sweepCompletedOrders(48);
+      logger.info('[ReputationWorker] Coin sweep done', { ...coinSweep });
+    } catch (err) {
+      logger.error('[ReputationWorker] Coin sweep failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    try {
+      const streakStats = await runStreakWorker();
+      logger.info('[ReputationWorker] Streak/dispute-free sweep done', { ...streakStats });
+    } catch (err) {
+      logger.error('[ReputationWorker] Streak sweep failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
   } catch (error) {

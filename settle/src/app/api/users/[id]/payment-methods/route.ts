@@ -97,6 +97,16 @@ export async function POST(
       details,
     });
 
+    // PM dedup signal — see merchant route for rationale.
+    try {
+      const { recordPmLink } = await import('@/lib/security/pmHash');
+      await recordPmLink({
+        actorId: id,
+        actorType: 'user',
+        pm: { type, details: typeof details === 'string' ? details : JSON.stringify(details) },
+      });
+    } catch { /* swallow */ }
+
     logger.info('Payment method added', { userId: id, methodId: method.id, type });
     return successResponse(method, 201);
   } catch (error) {

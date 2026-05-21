@@ -356,8 +356,14 @@ export function calculateReputationScore(stats: EntityStats): ReputationScore {
   // Deduplicate flags
   const uniqueFlags = [...new Set(flags)];
 
-  // Determine tier (force risky if gated)
-  totalScore = Math.max(0, Math.round(totalScore));
+  // CIBIL-style rebase: internal 0–1000 → external 300–900.
+  // Linear map: external = 300 + (internal/1000) * 600.
+  // - Internal 0    → external 300 (floor, Restricted)
+  // - Internal ~333 → external 500 (New, default for fresh accounts)
+  // - Internal 1000 → external 900 (cap, Platinum)
+  // Forced "risky" overrides land at floor 300.
+  totalScore = Math.max(0, Math.min(1000, Math.round(totalScore)));
+  totalScore = Math.round(300 + (totalScore / 1000) * 600);
   const tier = forceRisky ? 'risky' : getTierFromScore(totalScore);
 
   // Calculate badges

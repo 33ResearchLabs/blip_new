@@ -176,16 +176,25 @@ export const REPUTATION_WEIGHTS = {
 } as const;
 
 /**
- * Tier thresholds (total score out of 1000)
+ * Tier thresholds — CIBIL-style 300–900 scale (rebased in migration 133).
+ *
+ * Defaults:
+ *   - New accounts spawn at 500 (matches the "New" tier base).
+ *   - Floor 300 (Restricted); cap 900 (Platinum).
+ *
+ * Tier keys are unchanged for backwards-compat with existing reputation
+ * UI components and queries; only the threshold ranges + display labels
+ * (see TIER_INFO) have been rebased. `diamond` is kept as an unreachable
+ * alias of `platinum` so existing references don't crash.
  */
 export const TIER_THRESHOLDS = {
-  risky: 0,
-  newcomer: 0,
-  bronze: 200,
-  silver: 400,
-  gold: 600,
-  platinum: 800,
-  diamond: 900,
+  risky: 300,      // Restricted: 300–449
+  newcomer: 450,   // New:        450–549
+  bronze: 550,     // Bronze:     550–649
+  silver: 650,     // Silver:     650–749
+  gold: 750,       // Gold:       750–849
+  platinum: 850,   // Platinum:   850–900
+  diamond: 901,    // Unreachable — preserved only for symbol compat.
 } as const;
 
 /**
@@ -193,39 +202,39 @@ export const TIER_THRESHOLDS = {
  */
 export const TIER_INFO: Record<ReputationTier, { name: string; color: string; description: string }> = {
   risky: {
-    name: 'Risky',
+    name: 'Restricted',
     color: '#EF4444',
-    description: 'Low reliability or trust — trade with caution'
+    description: 'Below 450 — limited access until reputation recovers'
   },
   newcomer: {
-    name: 'Newcomer',
+    name: 'New',
     color: '#9CA3AF',
-    description: 'Just getting started'
+    description: '450–549 — default for fresh accounts'
   },
   bronze: {
     name: 'Bronze',
     color: '#CD7F32',
-    description: 'Building reputation'
+    description: '550–649 — building reputation'
   },
   silver: {
     name: 'Silver',
     color: '#C0C0C0',
-    description: 'Established trader'
+    description: '650–749 — established trader'
   },
   gold: {
     name: 'Gold',
     color: '#FFD700',
-    description: 'Trusted member'
+    description: '750–849 — trusted member'
   },
   platinum: {
     name: 'Platinum',
     color: '#E5E4E2',
-    description: 'Elite trader'
+    description: '850–900 — top tier, very rare'
   },
   diamond: {
-    name: 'Diamond',
-    color: '#B9F2FF',
-    description: 'Top performer'
+    name: 'Platinum',
+    color: '#E5E4E2',
+    description: 'Alias of Platinum — preserved for backwards-compat only'
   },
 };
 
@@ -354,12 +363,14 @@ export const MIN_REQUIREMENTS = {
  * Get tier from total score
  */
 export function getTierFromScore(score: number): ReputationTier {
-  if (score >= TIER_THRESHOLDS.diamond) return 'diamond';
+  // diamond is unreachable post-rebase (threshold 901) — kept only for
+  // symbol compat. platinum is the top achievable tier.
   if (score >= TIER_THRESHOLDS.platinum) return 'platinum';
   if (score >= TIER_THRESHOLDS.gold) return 'gold';
   if (score >= TIER_THRESHOLDS.silver) return 'silver';
   if (score >= TIER_THRESHOLDS.bronze) return 'bronze';
-  return 'newcomer';
+  if (score >= TIER_THRESHOLDS.newcomer) return 'newcomer';
+  return 'risky'; // below 450 — Restricted
 }
 
 /**

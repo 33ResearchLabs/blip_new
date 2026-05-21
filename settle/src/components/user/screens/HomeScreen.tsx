@@ -28,6 +28,7 @@ import { BottomNav } from "./BottomNav";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ArrowDown } from "lucide-react";
 import type { Screen, Order } from "./types";
+import { ReputationCoinBadge } from "@/components/shared/ReputationCoinBadge";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 const IS_MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
@@ -295,6 +296,13 @@ function WalletBalanceSection({
             {currentRate.toFixed(2)} {fiatLabel}
           </span>
         </div>
+      </div>
+
+      {/* Reputation + coin pill — small, sits below the live-rate pill so
+          it doesn't compete with the hero balance. Same widget as the
+          merchant + waitlist surfaces. */}
+      <div className="shrink-0 flex items-center justify-center mb-2">
+        <ReputationCoinBadge variant="pill" />
       </div>
 
       {/* ── Top group: balance, vertically centered in remaining hero height

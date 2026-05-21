@@ -170,6 +170,13 @@ export async function POST(request: NextRequest) {
 
       const userAccessTk = generateAccessToken({ ...userPayload, ...(walletSessionId && { sessionId: walletSessionId }) });
 
+      // Capture device fingerprint for fraud detection. Non-blocking;
+      // failure here never breaks the auth response.
+      try {
+        const { captureDeviceForActor } = await import('@/lib/security/deviceCapture');
+        await captureDeviceForActor({ request, actorId: user.id, actorType: 'user' });
+      } catch { /* swallow */ }
+
       const walletRes = NextResponse.json({
         success: true,
         data: {
@@ -393,6 +400,12 @@ export async function POST(request: NextRequest) {
       } catch { /* session creation failed, proceed without sessionId */ }
 
       const loginAccessTk = generateAccessToken({ ...loginPayload, ...(loginSessionId && { sessionId: loginSessionId }) });
+
+      // Device fingerprint capture (non-blocking, fraud signal only).
+      try {
+        const { captureDeviceForActor } = await import('@/lib/security/deviceCapture');
+        await captureDeviceForActor({ request, actorId: loginPayload.actorId, actorType: 'user' });
+      } catch { /* swallow */ }
 
       const loginRes = NextResponse.json({
         success: true,

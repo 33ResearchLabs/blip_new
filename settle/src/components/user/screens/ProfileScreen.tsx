@@ -19,7 +19,56 @@ import {
   HelpCircle,
   Mail,
   Gift,
+  Coins,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+
+/**
+ * Compact stats row shown in the profile header next to the avatar.
+ * Surfaces the two numbers a user cares about most at a glance:
+ *   - "{n} Blip Points" with the coin glyph
+ *   - reputation score (300–900)
+ */
+function ProfileHeaderStats() {
+  const [coins, setCoins] = useState<number | null>(null);
+  const [repScore, setRepScore] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [coinsRes, repRes] = await Promise.all([
+          fetchWithAuth('/api/coins/me').then((r) => (r.ok ? r.json() : null)),
+          fetchWithAuth('/api/reputation/me').then((r) => (r.ok ? r.json() : null)),
+        ]);
+        if (cancelled) return;
+        if (coinsRes?.data && typeof coinsRes.data.balance === 'number') {
+          setCoins(coinsRes.data.balance);
+        }
+        if (repRes?.data && typeof repRes.data.total_score === 'number') {
+          setRepScore(repRes.data.total_score);
+        }
+      } catch { /* swallow */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 mb-2 flex-wrap">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-semibold">
+        <Coins size={11} />
+        <span className="tabular-nums">{coins != null ? coins.toLocaleString('en-US') : '—'}</span>
+        <span className="text-amber-300/70">Blip Points</span>
+      </span>
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-raised border border-border-subtle text-text-secondary text-[11px] font-semibold">
+        <Shield size={11} />
+        <span className="tabular-nums text-text-primary">{repScore != null ? repScore : '—'}</span>
+        <span className="text-text-tertiary">Rep</span>
+      </span>
+    </div>
+  );
+}
 import { copyToClipboard } from "@/lib/clipboard";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { BottomNav } from "./BottomNav";
@@ -202,14 +251,13 @@ export const ProfileScreen = ({
             />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[22px] font-bold tracking-[-0.03em] text-text-primary leading-none truncate mb-1">
+            <p className="text-[22px] font-bold tracking-[-0.03em] text-text-primary leading-none truncate mb-1.5">
               {userName || 'User'}
             </p>
-            {tier && (
-              <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-text-secondary mb-2">
-                {tier}
-              </p>
-            )}
+            {/* Rep score + Blip Points chip row — sits directly below
+                the user name so the most important "who am I worth"
+                signals are immediately legible next to the avatar. */}
+            <ProfileHeaderStats />
             {solanaWallet.connected && solanaWallet.walletAddress ? (
               <motion.button
                 whileTap={{ scale: 0.96 }}

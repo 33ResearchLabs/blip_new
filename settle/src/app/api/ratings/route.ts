@@ -168,6 +168,24 @@ export async function POST(request: NextRequest) {
       review_text,
     });
 
+    // Coin reward — 5-star ratings credit the rated party. Awarder is
+    // idempotent on (rated, event, rating_id) so a retry of this route
+    // can't double-credit.
+    if (rating === 5 && newRating?.id) {
+      try {
+        const { awardFiveStar } = await import('@/lib/coins/awards');
+        await awardFiveStar({
+          ratedId: rated_id,
+          ratedType: rated_type as 'user' | 'merchant',
+          ratingId: newRating.id,
+        });
+      } catch (err) {
+        // Non-fatal — log and continue. The rating row is the source
+        // of truth; the coin sweep can re-attempt later.
+        console.error('[ratings] 5-star coin award failed', err);
+      }
+    }
+
     return successResponse(newRating, 201);
   } catch (error) {
     console.error('Error creating rating:', error);

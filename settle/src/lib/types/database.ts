@@ -127,6 +127,7 @@ export interface Merchant {
 export type WaitlistActorType = 'user' | 'merchant';
 
 export type BlipPointEvent =
+  // Waitlist + onboarding (migration 131)
   | 'REGISTER'
   | 'MERCHANT_REGISTER'
   | 'TWITTER_FOLLOW'
@@ -139,7 +140,22 @@ export type BlipPointEvent =
   | 'REFERRAL_BONUS_RECEIVED'
   | 'TASK_VERIFIED'
   | 'MANUAL_CREDIT'
-  | 'MANUAL_DEBIT';
+  | 'MANUAL_DEBIT'
+  // In-app coin economy (migration 132)
+  | 'FIRST_TRADE'
+  | 'TRADE_COMPLETED'
+  | 'VOLUME_BONUS'
+  | 'STREAK_7'
+  | 'STREAK_30'
+  | 'DISPUTE_FREE_MONTH'
+  | 'FIVE_STAR_RECEIVED'
+  | 'REFERRAL_TRADE_CREDITED'
+  | 'KYC_COMPLETED'
+  | 'COIN_LOCK'
+  | 'COIN_UNLOCK'
+  | 'COIN_VOID'
+  | 'LIMIT_BUMP_BURN'
+  | 'PERK_BURN';
 
 export type WaitlistTaskType = 'TWITTER' | 'TELEGRAM' | 'DISCORD' | 'QUIZ' | 'WHITEPAPER' | 'CUSTOM';
 export type WaitlistTaskStatus = 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';

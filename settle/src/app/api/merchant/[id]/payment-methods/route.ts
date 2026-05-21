@@ -129,6 +129,18 @@ export async function POST(
       is_default: !!is_default,
     });
 
+    // PM dedup signal — hashed identity recorded so the daily fraud
+    // sweep can flag merchants reusing the same bank/UPI/wallet across
+    // multiple accounts. Non-blocking; fraud signal only.
+    try {
+      const { recordPmLink } = await import('@/lib/security/pmHash');
+      await recordPmLink({
+        actorId: id,
+        actorType: 'merchant',
+        pm: { type, details: detailsStr },
+      });
+    } catch { /* swallow */ }
+
     logger.info('Merchant payment method added', { merchantId: id, methodId: method.id, type });
     return successResponse(method, 201);
   } catch (error: any) {

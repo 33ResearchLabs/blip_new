@@ -257,6 +257,28 @@ export async function POST(request: NextRequest) {
 
       const fiatAmount = crypto_amount * sellRate;
 
+      // Trade-limit guard — checks base limits + reputation tier
+      // multiplier + active coin-burn unlock. Soft 402 with the unlock
+      // tier the user could buy to proceed; UI surfaces a CTA.
+      const { checkTradeAgainstLimits } = await import('@/lib/coins/limits');
+      const limitCheck = await checkTradeAgainstLimits({
+        actorId: user_id,
+        actorType: 'user',
+        fiatAmountUsd: fiatAmount,
+      });
+      if (!limitCheck.allowed) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'TRADE_LIMIT_EXCEEDED',
+            reason: limitCheck.reason,
+            limits: limitCheck.limits,
+            trailing_24h_usd: limitCheck.trailing24hUsd,
+          },
+          { status: 402 },
+        );
+      }
+
       // Build user bank details for payment
       let parsedUserBank: Record<string, string> | string | undefined;
       if (user_bank_account) {
@@ -344,6 +366,26 @@ export async function POST(request: NextRequest) {
     }
 
     const fiatAmount = crypto_amount * buyRate;
+
+    // Same trade-limit guard for the buy branch.
+    const { checkTradeAgainstLimits: checkTradeAgainstLimitsBuy } = await import('@/lib/coins/limits');
+    const limitCheckBuy = await checkTradeAgainstLimitsBuy({
+      actorId: user_id,
+      actorType: 'user',
+      fiatAmountUsd: fiatAmount,
+    });
+    if (!limitCheckBuy.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'TRADE_LIMIT_EXCEEDED',
+          reason: limitCheckBuy.reason,
+          limits: limitCheckBuy.limits,
+          trailing_24h_usd: limitCheckBuy.trailing24hUsd,
+        },
+        { status: 402 },
+      );
+    }
 
     const idempResult = await withIdempotency(
       idempotencyKey,

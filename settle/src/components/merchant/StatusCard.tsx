@@ -21,6 +21,7 @@ import {
   ArrowLeftRight,
   ArrowUpFromLine,
   ArrowDownToLine,
+  Coins,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
@@ -243,6 +244,22 @@ export const StatusCard = memo(function StatusCard({
       .catch(() => {});
   }, [merchantId]);
 
+  // Coin balance — same one-shot fetch pattern as reputation. The
+  // live-ticker strip surfaces the balance inline next to WIN/FILL so
+  // it reads as a stat, not a CTA.
+  const [coinBalance, setCoinBalance] = useState<number | null>(null);
+  useEffect(() => {
+    if (!merchantId) return;
+    fetchWithAuth(`/api/coins/me`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.success && typeof data.data?.balance === 'number') {
+          setCoinBalance(data.data.balance);
+        }
+      })
+      .catch(() => {});
+  }, [merchantId]);
+
   const fetchCorridorData = async () => {
     try {
       const res = await fetchWithAuth("/api/corridor/dynamic-rate");
@@ -413,36 +430,20 @@ export const StatusCard = memo(function StatusCard({
       >
         <div className="absolute inset-0 shimmer pointer-events-none" />
         <div className="flex items-center gap-4 relative z-10">
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
-            <span className="text-primary/80 font-bold tracking-wide">
-              LIVE
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            {reputationTier && (
-              <span className="flex items-center gap-0.5">
-                <Shield className="w-2.5 h-2.5 text-primary/60" />
-                <span className="text-primary/70 font-bold uppercase">
-                  {reputationTier.name}
-                </span>
-              </span>
-            )}
-            <span className="text-foreground/25">
-              WIN{" "}
-              <span className="text-foreground/70 font-bold">
-                {winRate > 0 ? `${winRate.toFixed(0)}%` : "—"}
+          {reputationTier && (
+            <span className="flex items-center gap-1">
+              <Shield className="w-2.5 h-2.5 text-primary/60" />
+              <span className="text-foreground/70 font-bold tabular-nums">
+                {reputationTier.score}
               </span>
             </span>
-            <span className="text-foreground/25">
-              FILL{" "}
-              <span className="text-foreground/70 font-bold">
-                {corridor?.avg_fill_time_sec
-                  ? `${corridor.avg_fill_time_sec}s`
-                  : "—"}
-              </span>
+          )}
+          <span className="flex items-center gap-1">
+            <Coins className="w-2.5 h-2.5 text-amber-400/80" />
+            <span className="text-foreground/70 font-bold tabular-nums">
+              {coinBalance != null ? coinBalance.toLocaleString('en-US') : "—"}
             </span>
-          </div>
+          </span>
         </div>
         {/* Active toggle */}
         <button
@@ -625,57 +626,44 @@ export const StatusCard = memo(function StatusCard({
 
       {/* Bottom section — corridor + secondary balances + rate */}
       <div className="px-3 pb-2.5 space-y-1.5">
-        {/* Active Corridor Selector */}
-        <div className="glass-card rounded-lg p-2" data-tour="corridor-pair">
-          <span className="text-[9px] text-foreground/25 font-mono uppercase tracking-wider mb-1.5 flex items-center gap-1">
-            Corridor Pair
-            <InfoTooltip
-              side="bottom"
-              title="Corridor Pair"
-              description="The crypto ↔ fiat trading route you want to operate in. Pick the corridor that matches your bank and preferred currency."
-              items={[
-                { label: 'USDT/AED', value: 'USDT ↔ UAE Dirham' },
-                { label: 'USDT/INR', value: 'USDT ↔ Indian Rupee' },
-              ]}
-            />
-          </span>
-          <div className="flex gap-1.5">
-            {CORRIDORS.map((c) => {
-              const isActive = activeCorridor === c.id;
-              const price = corridorPrices[c.id];
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => onCorridorChange?.(c.id)}
-                  className={`flex-1 py-2 px-2 rounded-lg text-center transition-all border ${
-                    isActive
-                      ? "bg-primary/[0.08] border-primary/25 ring-1 ring-primary/10"
-                      : "bg-foreground/[0.02] border-foreground/[0.06] hover:bg-foreground/[0.05]"
+        {/* Active Corridor Selector — minimal segmented control */}
+        <div
+          className="inline-flex w-full rounded-lg bg-foreground/[0.03] border border-foreground/[0.05] p-0.5"
+          data-tour="corridor-pair"
+        >
+          {CORRIDORS.map((c) => {
+            const isActive = activeCorridor === c.id;
+            const price = corridorPrices[c.id];
+            return (
+              <button
+                key={c.id}
+                onClick={() => onCorridorChange?.(c.id)}
+                className={`flex-1 py-1.5 px-2 rounded-md flex items-center justify-center gap-2 transition-all ${
+                  isActive
+                    ? "bg-foreground/[0.07] text-foreground"
+                    : "text-foreground/40 hover:text-foreground/65"
+                }`}
+              >
+                <span className="text-[11px] font-medium tracking-tight">
+                  USDT/{c.fiat}
+                </span>
+                <span
+                  className={`text-[10px] font-mono tabular-nums ${
+                    isActive ? "text-foreground/55" : "text-foreground/30"
                   }`}
                 >
-                  <span
-                    className={`text-[10px] font-bold font-mono block ${isActive ? "text-primary" : "text-foreground/35"}`}
-                  >
-                    USDT / {c.fiat}
-                  </span>
-                  {price ? (
-                    <span
-                      className={`text-[13px] font-black font-mono tabular-nums block mt-0.5 ${isActive ? "text-foreground" : "text-foreground/25"}`}
-                    >
-                      {c.fiat === "INR" ? "₹" : ""}
-                      {price.toFixed(2)}
-                      {c.fiat === "AED" ? " AED" : ""}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-foreground/15 font-mono block mt-0.5">
-                      —
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                  {price
+                    ? `${c.fiat === "INR" ? "₹" : ""}${price.toFixed(2)}${c.fiat === "AED" ? " AED" : ""}`
+                    : "—"}
+                </span>
+              </button>
+            );
+          })}
         </div>
+
+        {/* (Rep tier + coin balance are surfaced in the LIVE ticker
+            strip at the top of this card — no separate badge here, to
+            avoid duplication.) */}
 
         {/* Cash & Market — collapsible */}
         <button

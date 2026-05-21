@@ -328,6 +328,12 @@ export async function POST(request: NextRequest) {
 
         const walletAccessToken = generateAccessToken({ ...walletPayload, sessionId: walletSessionId });
 
+        // Device fingerprint capture (wallet-auth path).
+        try {
+          const { captureDeviceForActor } = await import('@/lib/security/deviceCapture');
+          await captureDeviceForActor({ request, actorId: walletPayload.actorId, actorType: 'merchant' });
+        } catch { /* swallow */ }
+
         const walletResponse = NextResponse.json({
           success: true,
           data: {
@@ -469,6 +475,13 @@ export async function POST(request: NextRequest) {
       } catch { /* fallback: no sessionId */ }
 
       const createAccessTk = generateAccessToken({ ...createPayload, sessionId: createSessionId });
+
+      // Device fingerprint capture for fraud detection.
+      try {
+        const { captureDeviceForActor } = await import('@/lib/security/deviceCapture');
+        await captureDeviceForActor({ request, actorId: createPayload.actorId, actorType: 'merchant' });
+      } catch { /* swallow */ }
+
       const createResponse = NextResponse.json({
         success: true,
         data: {
@@ -836,6 +849,12 @@ export async function POST(request: NextRequest) {
       } catch { /* fallback: no sessionId */ }
 
       const emailAccessTk = generateAccessToken({ ...emailPayload, sessionId: emailSessionId });
+
+      // Device fingerprint capture (email-login path).
+      try {
+        const { captureDeviceForActor } = await import('@/lib/security/deviceCapture');
+        await captureDeviceForActor({ request, actorId: emailPayload.actorId, actorType: 'merchant' });
+      } catch { /* swallow */ }
 
       const emailResponse = NextResponse.json({
         success: true,
