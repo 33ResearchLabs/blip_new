@@ -569,36 +569,36 @@ export const StatusCard = memo(function StatusCard({
           <WalletAddressRow onOpenDeposit={onOpenDeposit} />
         )}
 
-        {/* Quick actions — Swap / Send / Deposit. Mirrors the mobile
-            home card so desktop merchants don't have to drill into a
-            separate wallet page for everyday transfers. */}
+        {/* Quick actions — Swap / Send / Deposit. Full-width, taller
+            buttons with side-by-side icon + label so they feel like
+            primary actions, not afterthought icons. */}
         {(onOpenSwap || onOpenSend || onOpenDeposit) && (
-          <div className="mt-3 grid grid-cols-3 gap-2 relative z-10">
+          <div className="mt-3 grid grid-cols-3 gap-1.5 relative z-10">
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
-                className="flex flex-col items-center gap-1 py-2 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.06] text-foreground/80 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
-                <ArrowLeftRight className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">Swap</span>
+                <ArrowLeftRight className="w-4 h-4" />
+                <span className="text-[11px] font-bold uppercase tracking-wider">Swap</span>
               </button>
             )}
             {onOpenSend && (
               <button
                 onClick={onOpenSend}
-                className="flex flex-col items-center gap-1 py-2 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.06] text-foreground/80 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
-                <ArrowUpFromLine className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">Send</span>
+                <ArrowUpFromLine className="w-4 h-4" />
+                <span className="text-[11px] font-bold uppercase tracking-wider">Send</span>
               </button>
             )}
             {onOpenDeposit && (
               <button
                 onClick={onOpenDeposit}
-                className="flex flex-col items-center gap-1 py-2 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.06] text-foreground/80 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
-                <ArrowDownToLine className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">Deposit</span>
+                <ArrowDownToLine className="w-4 h-4" />
+                <span className="text-[11px] font-bold uppercase tracking-wider">Deposit</span>
               </button>
             )}
           </div>

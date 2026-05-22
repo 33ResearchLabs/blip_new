@@ -16,7 +16,7 @@ export const Logo = memo(function Logo({
   href = "/",
   className = "",
   onDark = false,
-  ariaLabel = "Blip Money home",
+  ariaLabel = "Blip Market home",
   onClick,
 }: LogoProps) {
   return (
@@ -52,7 +52,7 @@ export const Logo = memo(function Logo({
         <span
           className={`relative ml-1 italic ${onDark ? "text-white" : "text-black dark:text-white"}`}
         >
-          money
+          market
         </span>
       </motion.span>
     </Link>

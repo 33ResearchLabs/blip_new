@@ -975,7 +975,7 @@ export default function HomePage() {
               </div>
               <span className="text-[15px] font-semibold tracking-tight text-foreground">BlipScan</span>
             </div>
-            <p className="text-foreground/45 text-[12px] leading-relaxed">The explorer for Blip Money — Solana&apos;s P2P escrow protocol.</p>
+            <p className="text-foreground/45 text-[12px] leading-relaxed">The explorer for Blip Market — Solana&apos;s P2P escrow protocol.</p>
           </div>
           <div>
             <p className="text-caption text-foreground/45 mb-3">Explore</p>
@@ -1005,7 +1005,7 @@ export default function HomePage() {
         </div>
         <div className="border-t border-white/[0.06]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-foreground/40">
-            <span>© {new Date().getFullYear()} Blip Money. All rights reserved.</span>
+            <span>© {new Date().getFullYear()} Blip Market. All rights reserved.</span>
             <span>Built on Solana</span>
           </div>
         </div>

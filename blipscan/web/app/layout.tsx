@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'BlipScan - Solana P2P Escrow Explorer',
-  description: 'Blockchain explorer for Blip Money P2P escrow protocol on Solana',
+  description: 'Blockchain explorer for Blip Market P2P escrow protocol on Solana',
 };
 
 // Force dynamic rendering for every route under this layout, so the

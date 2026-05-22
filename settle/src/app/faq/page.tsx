@@ -98,8 +98,8 @@ const CATEGORIES: Category[] = [
     Icon: Wallet,
     items: [
       {
-        q: 'What is Blip Money?',
-        a: 'Blip Money is a peer-to-peer (P2P) marketplace where you can buy and sell USDT (Tether) for fiat currency. Orders are matched between users and merchants, and crypto is held in an on-chain escrow until the fiat payment is confirmed.',
+        q: 'What is Blip Market?',
+        a: 'Blip Market is a peer-to-peer (P2P) marketplace where you can buy and sell USDT (Tether) for fiat currency. Orders are matched between users and merchants, and crypto is held in an on-chain escrow until the fiat payment is confirmed.',
       },
       {
         q: 'How do I create an account?',
@@ -107,7 +107,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'Do I need a Solana wallet?',
-        a: 'Yes — every Blip Money account is tied to a Solana wallet so escrow can lock and release USDT on-chain. You can either connect an external wallet (Phantom, Backpack, Solflare) or create an embedded wallet inside the app.',
+        a: 'Yes — every Blip Market account is tied to a Solana wallet so escrow can lock and release USDT on-chain. You can either connect an external wallet (Phantom, Backpack, Solflare) or create an embedded wallet inside the app.',
       },
       {
         q: 'How do I switch between dark and light mode?',

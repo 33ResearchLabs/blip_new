@@ -267,7 +267,7 @@ export default function WaitlistDashboardPage() {
     { id: 'TELEGRAM',   title: 'Follow Us on Telegram', reward: POINTS.TELEGRAM, icon: UsersIcon,
       description: 'Join our Telegram channel and verify membership.' },
     { id: 'CUSTOM',     title: 'Retweet a Post',        reward: POINTS.RETWEET,  icon: Repeat2,
-      description: 'Post about Blip Money on X with the campaign message.' },
+      description: 'Post about Blip Market on X with the campaign message.' },
     { id: 'WHITEPAPER', title: 'Share Referral Link',   reward: POINTS.REFERRAL, icon: Send,
       description: `Invite ${isMerchant ? 'merchants' : 'friends'} with your referral link to earn BLIP.` },
   ];
@@ -307,7 +307,7 @@ export default function WaitlistDashboardPage() {
                     <span className="text-[#ff6b35]">Earn More.</span>
                   </h1>
                   <p className={`text-sm ${muted} mb-5 max-w-md leading-relaxed`}>
-                    Invite your friends to Blip Money and earn{' '}
+                    Invite your friends to Blip Market and earn{' '}
                     <span className={`font-bold ${txt}`}>{formatCount(referralUnit)} pts</span> for each successful referral.
                     There&apos;s no limit to how much you can earn!
                   </p>
@@ -472,7 +472,7 @@ export default function WaitlistDashboardPage() {
               <div className="grid grid-cols-3 gap-2">
                 <ShareButton href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join me on @blip_money — use my referral code ${referralCode || ''}: ${referralLink}`)}`}
                   icon={<Twitter className="w-3.5 h-3.5" />} label="X (Twitter)" />
-                <ShareButton href={`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join me on Blip Money')}`}
+                <ShareButton href={`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join me on Blip Market')}`}
                   icon={<MessageCircle className="w-3.5 h-3.5" />} label="Telegram" />
                 <ShareButton onClick={() => setReferralOpen(true)} icon={<MoreHorizontal className="w-3.5 h-3.5" />} label="More" />
               </div>

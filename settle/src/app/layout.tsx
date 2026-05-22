@@ -34,13 +34,13 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Blip Money",
+  title: "Blip Market",
   description: "P2P settlement. Send crypto to anyone.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Blip Money",
+    title: "Blip Market",
   },
 };
 

@@ -61,7 +61,7 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams): P
 }
 
 export function emailVerificationEmail(verifyLink: string, merchantName: string): { subject: string; html: string; text: string } {
-  const subject = 'Verify your Blip Money email';
+  const subject = 'Verify your Blip Market email';
 
   const html = `
 <!DOCTYPE html>
@@ -77,7 +77,7 @@ export function emailVerificationEmail(verifyLink: string, merchantName: string)
         <table width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
           <tr>
             <td style="padding:32px 32px 0;text-align:center;">
-              <h1 style="margin:0;color:#000000;font-size:24px;font-weight:700;">Blip Money</h1>
+              <h1 style="margin:0;color:#000000;font-size:24px;font-weight:700;">Blip Market</h1>
             </td>
           </tr>
           <tr>
@@ -87,7 +87,7 @@ export function emailVerificationEmail(verifyLink: string, merchantName: string)
                 Hi <strong style="color:#000000;">${merchantName}</strong>,
               </p>
               <p style="margin:0 0 24px;color:#000000;font-size:14px;line-height:1.6;">
-                Welcome to Blip Money! Please verify your email address to activate your merchant account. This link expires in <strong style="color:#000000;">24 hours</strong>.
+                Welcome to Blip Market! Please verify your email address to activate your merchant account. This link expires in <strong style="color:#000000;">24 hours</strong>.
               </p>
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
@@ -99,7 +99,7 @@ export function emailVerificationEmail(verifyLink: string, merchantName: string)
                 </tr>
               </table>
               <p style="margin:0 0 8px;color:#000000;font-size:12px;">
-                If you didn't create a Blip Money account, you can safely ignore this email.
+                If you didn't create a Blip Market account, you can safely ignore this email.
               </p>
               <p style="margin:0;color:#000000;font-size:12px;word-break:break-all;">
                 Link: ${verifyLink}
@@ -109,7 +109,7 @@ export function emailVerificationEmail(verifyLink: string, merchantName: string)
           <tr>
             <td style="padding:16px 32px 24px;border-top:1px solid #e5e7eb;text-align:center;">
               <p style="margin:0;color:#000000;font-size:11px;">
-                &copy; ${new Date().getFullYear()} Blip Money. All rights reserved.
+                &copy; ${new Date().getFullYear()} Blip Market. All rights reserved.
               </p>
             </td>
           </tr>
@@ -120,13 +120,13 @@ export function emailVerificationEmail(verifyLink: string, merchantName: string)
 </body>
 </html>`;
 
-  const text = `Hi ${merchantName},\n\nWelcome to Blip Money! Please verify your email address.\n\nVerify: ${verifyLink}\n\nThis link expires in 24 hours.\n\n— Blip Money`;
+  const text = `Hi ${merchantName},\n\nWelcome to Blip Market! Please verify your email address.\n\nVerify: ${verifyLink}\n\nThis link expires in 24 hours.\n\n— Blip Market`;
 
   return { subject, html, text };
 }
 
 export function passwordResetEmail(resetLink: string, merchantName: string): { subject: string; html: string; text: string } {
-  const subject = 'Reset your Blip Money password';
+  const subject = 'Reset your Blip Market password';
 
   const html = `
 <!DOCTYPE html>
@@ -143,7 +143,7 @@ export function passwordResetEmail(resetLink: string, merchantName: string): { s
           <!-- Header -->
           <tr>
             <td style="padding:32px 32px 0;text-align:center;">
-              <h1 style="margin:0;color:#000000;font-size:24px;font-weight:700;">Blip Money</h1>
+              <h1 style="margin:0;color:#000000;font-size:24px;font-weight:700;">Blip Market</h1>
             </td>
           </tr>
           <!-- Body -->
@@ -177,7 +177,7 @@ export function passwordResetEmail(resetLink: string, merchantName: string): { s
           <tr>
             <td style="padding:16px 32px 24px;border-top:1px solid #e5e7eb;text-align:center;">
               <p style="margin:0;color:#000000;font-size:11px;">
-                &copy; ${new Date().getFullYear()} Blip Money. All rights reserved.
+                &copy; ${new Date().getFullYear()} Blip Market. All rights reserved.
               </p>
             </td>
           </tr>
@@ -188,7 +188,7 @@ export function passwordResetEmail(resetLink: string, merchantName: string): { s
 </body>
 </html>`;
 
-  const text = `Hi ${merchantName},\n\nWe received a request to reset your Blip Money password.\n\nReset your password: ${resetLink}\n\nThis link expires in 15 minutes.\n\nIf you didn't request this, ignore this email.\n\n— Blip Money`;
+  const text = `Hi ${merchantName},\n\nWe received a request to reset your Blip Market password.\n\nReset your password: ${resetLink}\n\nThis link expires in 15 minutes.\n\nIf you didn't request this, ignore this email.\n\n— Blip Market`;
 
   return { subject, html, text };
 }

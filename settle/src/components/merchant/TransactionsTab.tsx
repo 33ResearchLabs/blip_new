@@ -214,11 +214,15 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
         ) : (
           <div className="px-1.5 py-1">
             {grouped.map((group) => (
-              <div key={group.label} className="mb-1">
+              <div key={group.label} className="mb-2">
                 {/* Sticky day header */}
-                <div className="sticky top-0 z-[1] px-2 py-1 bg-background/95 backdrop-blur-sm">
-                  <span className="text-[9px] font-bold font-mono text-foreground/40 uppercase tracking-wider">
+                <div className="sticky top-0 z-[1] px-2 py-1.5 bg-background/90 backdrop-blur-md flex items-center gap-2">
+                  <span className="text-[9px] font-bold font-mono text-foreground/50 uppercase tracking-[0.14em]">
                     {group.label}
+                  </span>
+                  <div className="flex-1 h-px bg-gradient-to-r from-foreground/10 to-transparent" />
+                  <span className="text-[9px] font-mono text-foreground/25 tabular-nums">
+                    {group.items.length}
                   </span>
                 </div>
 
@@ -238,11 +242,12 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                       return (
                         <div
                           key={entry.id}
-                          className="flex items-center gap-2.5 px-2 py-2.5 rounded-lg hover:bg-foreground/[0.04] transition-colors cursor-pointer"
+                          className="group relative flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl border border-foreground/[0.05] bg-foreground/[0.015] hover:bg-foreground/[0.04] hover:border-foreground/[0.08] transition-all cursor-pointer overflow-hidden"
                           onClick={() => entry.related_order_id && onSelectOrder?.(entry.related_order_id)}
                         >
-                          <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border bg-foreground/5 border-foreground/10">
-                            <XCircle className="w-3.5 h-3.5 text-foreground/30" />
+                          <div className="absolute inset-y-0 left-0 w-[2px] bg-foreground/15" />
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border bg-foreground/5 border-foreground/10">
+                            <XCircle className="w-4 h-4 text-foreground/30" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[12px] font-semibold text-foreground/50">Order Cancelled</p>
@@ -250,7 +255,7 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                               {entry.order_number ? `#${entry.order_number}` : ''}{entry.counterparty_name ? ` · ${entry.counterparty_name}` : ''}
                             </p>
                           </div>
-                          <span className="text-[12px] font-mono text-foreground/35 tabular-nums shrink-0">
+                          <span className="text-[12px] font-mono text-foreground/35 tabular-nums shrink-0 line-through decoration-foreground/20">
                             {absAmount} {asset}
                           </span>
                         </div>
@@ -267,55 +272,63 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                     return (
                       <div
                         key={entry.id}
-                        className="flex items-start gap-2.5 px-2 py-2.5 rounded-lg hover:bg-foreground/[0.04] transition-colors cursor-pointer"
+                        className={`group relative flex items-center gap-3 px-2.5 py-2.5 rounded-xl border transition-all cursor-pointer overflow-hidden ${
+                          isIncoming
+                            ? "border-[var(--color-success)]/[0.08] bg-gradient-to-r from-[var(--color-success)]/[0.04] to-transparent hover:from-[var(--color-success)]/[0.08] hover:border-[var(--color-success)]/20"
+                            : "border-[var(--color-error)]/[0.08] bg-gradient-to-r from-[var(--color-error)]/[0.04] to-transparent hover:from-[var(--color-error)]/[0.08] hover:border-[var(--color-error)]/20"
+                        }`}
                         onClick={() => entry.related_order_id && onSelectOrder?.(entry.related_order_id)}
                       >
-                        {/* Direction icon */}
+                        {/* Left accent stripe */}
+                        <div className={`absolute inset-y-0 left-0 w-[2px] ${
+                          isIncoming ? "bg-[var(--color-success)]/60" : "bg-[var(--color-error)]/60"
+                        }`} />
+
+                        {/* Direction icon with glow */}
                         <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 border ${
+                          className={`relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
                             isIncoming
-                              ? "bg-[var(--color-success)]/10 border-[var(--color-success)]/20"
-                              : "bg-[var(--color-error)]/10 border-[var(--color-error)]/20"
+                              ? "bg-[var(--color-success)]/10 border-[var(--color-success)]/25 shadow-[0_0_12px_-2px_var(--color-success)]/30"
+                              : "bg-[var(--color-error)]/10 border-[var(--color-error)]/25 shadow-[0_0_12px_-2px_var(--color-error)]/30"
                           }`}
                         >
                           {isIncoming ? (
-                            <ArrowDownRight className="w-3.5 h-3.5 text-[var(--color-success)]" />
+                            <ArrowDownRight className="w-4 h-4 text-[var(--color-success)]" strokeWidth={2.5} />
                           ) : (
-                            <ArrowUpRight className="w-3.5 h-3.5 text-[var(--color-error)]" />
+                            <ArrowUpRight className="w-4 h-4 text-[var(--color-error)]" strokeWidth={2.5} />
                           )}
                         </div>
 
                         {/* Body */}
                         <div className="flex-1 min-w-0">
-                          {/* Row 1: Got/Paid label + amount on right */}
-                          <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                            <span className="text-[12px] font-semibold text-foreground/85 truncate">
-                              {isIncoming ? (
-                                <><span className="text-[var(--color-success)]">{gotLabel}</span> {cryptoAmount} {asset}</>
-                              ) : (
-                                <><span className="text-[var(--color-error)]">{paidLabel}</span> {cryptoAmount} {asset}</>
-                              )}
-                            </span>
-                            <span className="text-[12px] font-bold font-mono tabular-nums shrink-0 text-foreground">
-                              {isIncoming ? "+" : ""}{Number(entry.amount).toFixed(2)}
+                          <div className="flex items-baseline justify-between gap-2 mb-1">
+                            <div className="flex items-baseline gap-1.5 min-w-0">
+                              <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                isIncoming ? "text-[var(--color-success)]" : "text-[var(--color-error)]"
+                              }`}>
+                                {isIncoming ? gotLabel : paidLabel}
+                              </span>
+                              <span className="text-[13px] font-bold text-foreground/90 tabular-nums truncate">
+                                {cryptoAmount}
+                              </span>
+                              <span className="text-[10px] font-mono text-foreground/40 truncate">{asset}</span>
+                            </div>
+                            <span className={`text-[13px] font-bold font-mono tabular-nums shrink-0 ${
+                              isIncoming ? "text-[var(--color-success)]" : "text-[var(--color-error)]"
+                            }`}>
+                              {isIncoming ? "+" : "−"}{Math.abs(Number(entry.amount)).toFixed(2)}
                             </span>
                           </div>
 
-                          {/* Row 2: status dot · order # · counterparty · time */}
-                          <div className="flex items-center gap-1 text-[10px] text-foreground/35 font-mono truncate">
-                            <StatusIcon className={`w-2.5 h-2.5 shrink-0 ${
-                              status === 'completed' ? 'text-[var(--color-success)]'
-                              : status === 'failed' || status === 'cancelled' ? 'text-[var(--color-error)]'
-                              : 'text-foreground/30'
-                            }`} />
-                            <span className={`shrink-0 ${
-                              status === 'completed' ? 'text-[var(--color-success)]'
-                              : status === 'failed' || status === 'cancelled' ? 'text-[var(--color-error)]'
-                              : 'text-foreground/40'
-                            }`}>{badge.label}</span>
-                            {entry.order_number && <span>· #{entry.order_number}</span>}
-                            {entry.counterparty_name && <span>· {entry.counterparty_name}</span>}
-                            <span>· {formatTimestamp(entry.created_at, new Date())}</span>
+                          {/* Meta row */}
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono truncate">
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded-md border shrink-0 ${badge.cls}`}>
+                              <StatusIcon className="w-2.5 h-2.5" />
+                              <span className="text-[9px] font-bold uppercase tracking-wider">{badge.label}</span>
+                            </span>
+                            {entry.order_number && <span className="text-foreground/30 shrink-0">#{entry.order_number}</span>}
+                            {entry.counterparty_name && <span className="text-foreground/40 truncate">· {entry.counterparty_name}</span>}
+                            <span className="text-foreground/25 ml-auto shrink-0">{formatTimestamp(entry.created_at, new Date())}</span>
                           </div>
                         </div>
                       </div>

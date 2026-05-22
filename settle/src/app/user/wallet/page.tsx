@@ -356,7 +356,7 @@ export default function UserWalletPage() {
       : "";
     const blob = new Blob(
       [
-        `Blip Money — Wallet Backup\n\nPublic Key: ${pendingKeypair.publicKey.toBase58()}\n\n${mnemonicBlock}Private Key: ${key}\n\nKeep this file safe. Anyone with the recovery phrase or private key can access your funds.\nGenerated: ${new Date().toISOString()}\n`,
+        `Blip Market — Wallet Backup\n\nPublic Key: ${pendingKeypair.publicKey.toBase58()}\n\n${mnemonicBlock}Private Key: ${key}\n\nKeep this file safe. Anyone with the recovery phrase or private key can access your funds.\nGenerated: ${new Date().toISOString()}\n`,
       ],
       { type: "text/plain" },
     );
@@ -594,7 +594,7 @@ export default function UserWalletPage() {
         const key = exportPrivateKey(kp);
         const blob = new Blob(
           [
-            `Blip Money — Wallet Export\n\nPublic Key: ${kp.publicKey.toBase58()}\nPrivate Key: ${key}\n\nKeep this file safe.\nExported: ${new Date().toISOString()}\n`,
+            `Blip Market — Wallet Export\n\nPublic Key: ${kp.publicKey.toBase58()}\nPrivate Key: ${key}\n\nKeep this file safe.\nExported: ${new Date().toISOString()}\n`,
           ],
           { type: "text/plain" },
         );
