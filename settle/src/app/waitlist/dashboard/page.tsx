@@ -212,7 +212,12 @@ export default function WaitlistDashboardPage() {
   };
 
   const referralCount = me.referrals.length;
-  const questsCompleted = me.tasks.filter((t) => t.status === 'VERIFIED').length;
+  // Quest count includes the referral quest when the user has at least one
+  // referral (see synthetic-existing logic in the quest map below). Without
+  // this, the stats tile reads "3 of 4" while the referral tile shows
+  // "Redeemed" — visibly inconsistent.
+  const questsCompleted = me.tasks.filter((t) => t.status === 'VERIFIED').length
+    + (referralCount > 0 ? 1 : 0);
   const totalEarnedFromQuestsAndRef = me.tasks.filter((t) => t.status === 'VERIFIED').reduce((s, t) => s + (t.points_awarded || 0), 0)
     + me.referrals.filter((r) => r.reward_status === 'credited').reduce((s, r) => s + r.reward_amount, 0);
   const pendingPoints = me.referrals.filter((r) => r.reward_status === 'pending').length * (isMerchant ? MERCHANT_BLIP_POINTS.REFERRAL : USER_BLIP_POINTS.REFERRAL);
@@ -357,11 +362,29 @@ export default function WaitlistDashboardPage() {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {quests.map((q) => (
-                  <QuestCard key={q.id} quest={q}
-                    existing={me.tasks.find((t) => t.task_type === q.id)}
-                    onUpdate={load} onShareReferral={() => setReferralOpen(true)} />
-                ))}
+                {quests.map((q) => {
+                  // The "Share Referral Link" tile lives under task_type=WHITEPAPER
+                  // (legacy naming), but applyReferral only writes to
+                  // waitlist_referrals — there's no waitlist_tasks row that ever
+                  // flips to VERIFIED. Synthesise a verified task from the
+                  // referrals count so the tile flips to "Redeemed" the moment
+                  // the user has at least one successful referral. Without this,
+                  // the tile sticks on "Start" forever even after several
+                  // referrals land.
+                  const existing = q.id === 'WHITEPAPER' && referralCount > 0
+                    ? {
+                        id: 'referral-synth',
+                        task_type: 'WHITEPAPER' as TaskType,
+                        status: 'VERIFIED' as TaskStatus,
+                        points_awarded: totalEarnedFromQuestsAndRef,
+                      }
+                    : me.tasks.find((t) => t.task_type === q.id);
+                  return (
+                    <QuestCard key={q.id} quest={q}
+                      existing={existing}
+                      onUpdate={load} onShareReferral={() => setReferralOpen(true)} />
+                  );
+                })}
               </div>
             </div>
 
