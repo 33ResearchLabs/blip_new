@@ -23,16 +23,18 @@ import {
   Loader2, LogOut, Copy, Check, Crown, Twitter, Send, Repeat2, Users as UsersIcon,
   CheckCircle2, Store, Settings, Menu, ExternalLink, FileText,
   Plus, Lock, Share2, MoreHorizontal, MessageCircle, Trophy, HelpCircle,
-  CircleCheck, Target, Award, Hourglass, UserPlus, Zap,
+  CircleCheck, Target, Award, Hourglass, UserPlus,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { formatCount } from '@/lib/format';
 import { USER_BLIP_POINTS, MERCHANT_BLIP_POINTS } from '@/lib/waitlist/blipPoints';
 import { ReputationCoinBadge } from '@/components/shared/ReputationCoinBadge';
 import { readRole, forgetRole, rememberRole, loginPathForRole } from '@/lib/waitlist/roleCache';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import XFollowVerificationModal from '@/components/waitlist/XFollowVerificationModal';
 import TelegramVerificationModal from '@/components/waitlist/TelegramVerificationModal';
 import TweetCampaignModal from '@/components/waitlist/TweetCampaignModal';
+import { Logo } from '@/components/shared/Logo';
 
 type ActorType = 'user' | 'merchant';
 type WaitlistStatus = 'waitlisted' | 'active' | 'rejected';
@@ -97,13 +99,20 @@ export default function WaitlistDashboardPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [referralOpen, setReferralOpen] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
     try {
+      // fetchWithAuth transparently calls /api/auth/refresh on a 401 and
+      // retries the original request once. Switching off raw fetch here
+      // means a routine 15-min access-token expiry no longer dumps the
+      // user back to the login page — they only land on login if the
+      // refresh cookie itself is dead (true session expiry).
       const [meRes, lbRes] = await Promise.all([
-        fetch('/api/waitlist/me'),
-        fetch('/api/waitlist/leaderboard?limit=10'),
+        fetchWithAuth('/api/waitlist/me'),
+        fetchWithAuth('/api/waitlist/leaderboard?limit=10'),
       ]);
       if (meRes.status === 401) {
         // Session expired — bounce to whichever login page matches the cached
@@ -145,10 +154,27 @@ export default function WaitlistDashboardPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function handleLogout() {
+  // Logout flow is two-step: the navbar button opens a confirmation modal,
+  // and confirmLogout does the real work. Prevents a stray click from
+  // dropping the session and forcing the user to sign in again.
+  function handleLogout() {
+    setLogoutConfirmOpen(true);
+  }
+
+  async function confirmLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    // Capture the role BEFORE clearing it — we need it to pick the right
+    // post-logout destination. Prefer the loaded actor type (server-confirmed)
+    // and fall back to the cached role for safety.
+    const role = me?.actor.type ?? readRole();
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     forgetRole();
-    router.push('/waitlist');
+    // Send user logouts → /waitlist/login, merchant logouts → /waitlist/merchant-login.
+    // The previous `/waitlist` redirect always landed on the user signup form
+    // (since /waitlist always rewrites to /waitlist/user) — that's why both
+    // roles appeared to share the user login page after logout.
+    router.push(loginPathForRole(role));
   }
 
   if (loading) {
@@ -192,8 +218,14 @@ export default function WaitlistDashboardPage() {
   const pendingPoints = me.referrals.filter((r) => r.reward_status === 'pending').length * (isMerchant ? MERCHANT_BLIP_POINTS.REFERRAL : USER_BLIP_POINTS.REFERRAL);
 
   const referralCode = actor.referral_code ?? '';
+  // Route the referral link straight to the signup form matching the
+  // referrer's actor type. The bare /waitlist redirector always rewrites
+  // to /waitlist/user, so a merchant sharing /waitlist?ref=X used to land
+  // their invitees on the user signup form — a friction point that also
+  // muddied referral attribution.
+  const referralSignupPath = isMerchant ? '/waitlist/merchant' : '/waitlist/user';
   const referralLink = typeof window !== 'undefined' && referralCode
-    ? `${window.location.origin}/waitlist?ref=${referralCode}`
+    ? `${window.location.origin}${referralSignupPath}?ref=${referralCode}`
     : '';
   const referralUnit = isMerchant ? MERCHANT_BLIP_POINTS.REFERRAL : USER_BLIP_POINTS.REFERRAL;
 
@@ -236,7 +268,6 @@ export default function WaitlistDashboardPage() {
     <div className="min-h-screen bg-black text-white">
       <Navbar
         balance={blipPoints}
-        wallet={actor.wallet_address ?? null}
         onLogout={handleLogout}
         actor={actor}
       />
@@ -529,13 +560,103 @@ export default function WaitlistDashboardPage() {
           onCopy={() => copyToClipboard(referralLink, 'link')} copied={copiedLink} />
       )}
       {howOpen && <HowItWorksModal onClose={() => setHowOpen(false)} referralUnit={referralUnit} />}
+      {logoutConfirmOpen && (
+        <LogoutConfirmModal
+          role={actor.type}
+          loading={loggingOut}
+          onCancel={() => setLogoutConfirmOpen(false)}
+          onConfirm={() => void confirmLogout()}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Logout confirmation modal ─────────────────────────────────────────
+// Lightweight inline component so we don't pull in the heavier app-wide
+// Modal — the waitlist dashboard is dark-themed and self-contained, and
+// this dialog is only ever rendered here.
+function LogoutConfirmModal({
+  role,
+  loading,
+  onCancel,
+  onConfirm,
+}: {
+  role: 'user' | 'merchant';
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  // Close on Esc; lock body scroll while the modal is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !loading) onCancel(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [loading, onCancel]);
+
+  const roleLabel = role === 'merchant' ? 'Merchant' : 'User';
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="logout-confirm-title"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+      onClick={() => { if (!loading) onCancel(); }}
+    >
+      <div
+        className={`${surface} border ${border} rounded-2xl shadow-2xl w-full max-w-sm p-6`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center shrink-0">
+            <LogOut className="w-5 h-5 text-red-400" />
+          </div>
+          <div className="flex-1">
+            <h3 id="logout-confirm-title" className={`text-base font-bold ${txt}`}>
+              Log out of {roleLabel} waitlist?
+            </h3>
+            <p className={`text-xs ${sub} mt-1 leading-relaxed`}>
+              You&apos;ll need to sign in again to see your referral code,
+              points, and leaderboard position.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className={`flex-1 py-2.5 rounded-lg border ${border} ${inputBg} text-xs font-semibold ${txt} ${hov} transition-colors disabled:opacity-50`}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 py-2.5 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+          >
+            {loading ? (
+              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Logging out…</>
+            ) : (
+              'Log out'
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ── Navbar ─────────────────────────────────────────────────────────────
-function Navbar({ balance, wallet, onLogout, actor }: {
-  balance: number; wallet: string | null; onLogout: () => void;
+function Navbar({ balance, onLogout, actor }: {
+  balance: number; onLogout: () => void;
   actor: WaitlistMe['actor'];
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -544,7 +665,7 @@ function Navbar({ balance, wallet, onLogout, actor }: {
       <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
         {/* Logo + Dashboard tab */}
         <div className="flex items-center gap-6 md:gap-10">
-          <Logo />
+          <Logo href="/waitlist" onDark />
           <nav className="hidden md:flex items-center gap-1 text-[13px] font-semibold">
             <button className={`relative px-3 py-1.5 ${txt} font-bold`}>
               Dashboard
@@ -562,16 +683,6 @@ function Navbar({ balance, wallet, onLogout, actor }: {
               <div className={`text-[11px] font-bold ${txt} leading-none`}>{formatCount(balance)} pts</div>
             </div>
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          </div>
-          {/* Wallet */}
-          <div className={`${inputBg} border ${border} rounded-md px-3 py-1.5 flex items-center gap-2.5`}>
-            <div className="text-left">
-              <div className={`text-[8px] font-black uppercase tracking-[0.18em] ${sub} leading-none mb-0.5`}>Wallet</div>
-              <div className={`text-[11px] font-bold ${txt} leading-none`}>
-                {wallet ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'Not Connected'}
-              </div>
-            </div>
-            <div className={`w-1.5 h-1.5 rounded-full ${wallet ? 'bg-emerald-500' : 'bg-red-500'}`} />
           </div>
           {/* Settings */}
           <button className={`w-9 h-9 rounded-md flex items-center justify-center border ${border} ${inputBg} ${hov} transition-all`} aria-label="Settings">
@@ -606,17 +717,6 @@ function Navbar({ balance, wallet, onLogout, actor }: {
         </button>
       </div>
     </header>
-  );
-}
-
-function Logo() {
-  // Matches the main-app MerchantNavbar logo:
-  // Lucide Zap (filled, #F97316 orange) + "Blip Money" wordmark.
-  return (
-    <div className="flex items-center gap-1.5" aria-label="Blip Money home">
-      <Zap className="w-6 h-6 text-[#F97316] fill-[#F97316]" />
-      <span className="text-[15px] font-bold tracking-tight text-white">Blip Money</span>
-    </div>
   );
 }
 
@@ -688,7 +788,7 @@ function QuestCard({ quest, existing, onUpdate, onShareReferral }: {
   async function ensureTaskId(): Promise<string | null> {
     if (existing?.id) return existing.id;
     try {
-      const res = await fetch('/api/waitlist/tasks', {
+      const res = await fetchWithAuth('/api/waitlist/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_type: quest.id }),
@@ -859,7 +959,7 @@ function UpgradeModal({ actorType, onClose, onSuccess }: {
             expected_monthly_volume_usd: volume ? Number(volume.replace(/[^\d.]/g, '')) : null,
             country_code: country.trim().toUpperCase() || null }
         : {};
-      const res = await fetch(endpoint, {
+      const res = await fetchWithAuth(endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });

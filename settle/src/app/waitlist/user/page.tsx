@@ -23,7 +23,7 @@ function Content() {
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-6">
           <AuthPageLayout
             badge="Get Started"
-            heading="Join User Waitlist"
+            heading="Join Waitlist"
             description="Join Blip Money and start earning rewards"
             variant="user"
           >

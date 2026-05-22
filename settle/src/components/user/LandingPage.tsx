@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { motion, type PanInfo } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Zap, Loader2, Eye, EyeOff, ChevronLeft, User, Store, ArrowRight, Check, X, Mail, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Loader2, Eye, EyeOff, ChevronLeft, User, Store, ArrowRight, Check, X, Mail, CheckCircle2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { InstallPWAButton } from "@/components/InstallPWAButton";
+import { Logo } from "@/components/shared/Logo";
 import { usePwaContext } from "@/hooks/usePwaContext";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import {
@@ -275,12 +276,9 @@ export function LandingPage({
           initial={{ opacity: 0, y: -6, filter: "blur(8px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="relative z-10 flex items-center gap-2.5 mb-2"
+          className="relative z-10 mb-2"
         >
-          <Zap className="w-7 h-7 text-white fill-current drop-shadow-[0_0_12px_rgba(168,247,98,0.5)]" />
-          <span className="text-[24px] leading-none font-semibold tracking-[-0.02em] text-white">
-            Blip <span className="italic font-light text-white/80">money</span>
-          </span>
+          <Logo onDark />
         </motion.div>
 
         <motion.p

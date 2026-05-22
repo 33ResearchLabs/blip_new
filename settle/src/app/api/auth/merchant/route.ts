@@ -871,6 +871,25 @@ export async function POST(request: NextRequest) {
         await bootstrapNewActor(emailPayload.actorId, 'merchant');
       } catch { /* swallow */ }
 
+      // Waitlist activation on login (opt-in via body.waitlist=true).
+      // Idempotent — setupWaitlistForActor uses COALESCE on referral_code and
+      // a unique partial index on the REGISTER event, so existing waitlist
+      // members are no-ops here. Lets a pre-waitlist merchant who signs in
+      // via /waitlist/merchant-login pick up a referral_code and the
+      // MERCHANT_REGISTER bonus the first time they land on the dashboard.
+      if (body?.waitlist === true) {
+        try {
+          await setupWaitlistForActor({
+            actorId: merchant.id,
+            actorType: 'merchant',
+            source: typeof body?.source === 'string' ? body.source : 'waitlist_merchant_login',
+            referralCode: typeof body?.referral_code === 'string' ? body.referral_code.trim() : undefined,
+          });
+        } catch (waitlistErr) {
+          console.error('[merchant login] waitlist setup failed:', waitlistErr);
+        }
+      }
+
       const emailResponse = NextResponse.json({
         success: true,
         data: {
@@ -1181,7 +1200,13 @@ export async function POST(request: NextRequest) {
         );
 
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-        const verifyLink = `${appUrl}/merchant/verify-email?token=${verifyToken}&id=${merchant.id}`;
+        // When the signup came from the waitlist flow, thread a `next` param
+        // through so the verify-email page can route the post-verify CTA
+        // back to /waitlist/merchant-login instead of the main-app /merchant
+        // entry. Without this, a freshly-verified waitlist merchant ends up
+        // on the wrong login surface.
+        const nextParam = body?.waitlist === true ? '&next=%2Fwaitlist%2Fmerchant-login' : '';
+        const verifyLink = `${appUrl}/merchant/verify-email?token=${verifyToken}&id=${merchant.id}${nextParam}`;
 
         const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
         const emailContent = emailVerificationEmail(verifyLink, merchant.display_name);

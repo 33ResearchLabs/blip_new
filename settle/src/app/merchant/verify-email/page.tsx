@@ -16,7 +16,17 @@ import Link from "next/link";
 
 type VerifyState = "verifying" | "success" | "already" | "error";
 
-function VerifyEmailContent() {
+// Allow-list for the `next` query param so a malicious link can't redirect
+// the user off-site (open-redirect protection). Anything not on this list
+// falls back to the main-app merchant login.
+const ALLOWED_NEXT = new Set(["/merchant", "/waitlist/merchant-login"]);
+
+function safeNext(raw: string | null): string {
+  if (raw && ALLOWED_NEXT.has(raw)) return raw;
+  return "/merchant";
+}
+
+function VerifyEmailContent({ nextHref }: { nextHref: string }) {
   const searchParams = useSearchParams();
   const [state, setState] = useState<VerifyState>("verifying");
   const [errorMsg, setErrorMsg] = useState("");
@@ -117,7 +127,7 @@ function VerifyEmailContent() {
           </div>
 
           <Link
-            href="/merchant"
+            href={nextHref}
             className="block w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors"
           >
             Continue to sign in
@@ -156,7 +166,7 @@ function VerifyEmailContent() {
           </div>
 
           <Link
-            href="/merchant"
+            href={nextHref}
             className="block w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors"
           >
             Back to sign in
@@ -164,6 +174,26 @@ function VerifyEmailContent() {
         </motion.div>
       )}
     </div>
+  );
+}
+
+function MerchantVerifyEmailInner() {
+  // The wrapper reads `next` from the URL inside Suspense so the search-params
+  // hook doesn't bail the whole page out of static rendering.
+  const nextHref = safeNext(useSearchParams().get("next"));
+  return (
+    <>
+      <VerifyEmailContent nextHref={nextHref} />
+      <div className="mt-6 text-center">
+        <Link
+          href={nextHref}
+          className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-foreground/60 transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to sign in
+        </Link>
+      </div>
+    </>
   );
 }
 
@@ -198,18 +228,8 @@ export default function MerchantVerifyEmailPage() {
             </div>
           }
         >
-          <VerifyEmailContent />
+          <MerchantVerifyEmailInner />
         </Suspense>
-
-        <div className="mt-6 text-center">
-          <Link
-            href="/merchant"
-            className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-foreground/60 transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to sign in
-          </Link>
-        </div>
       </div>
     </div>
   );

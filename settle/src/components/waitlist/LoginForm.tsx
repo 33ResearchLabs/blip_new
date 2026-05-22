@@ -119,9 +119,14 @@ export default function LoginForm({ role }: LoginFormProps) {
     try {
       const endpoint = isMerchant ? "/api/auth/merchant" : "/api/auth/user";
       // User login accepts `identifier` (email-or-username); merchant accepts `email`.
+      // `waitlist: true` opts the actor into the waitlist on this login: the
+      // server lazily runs setupWaitlistForActor (idempotent) so an existing
+      // pre-waitlist account that signs in here picks up a referral_code and
+      // the REGISTER bonus the first time, and is a no-op on subsequent
+      // logins. `source` tags the dashboard analytics.
       const body = isMerchant
-        ? { action: "login", email: email.trim(), password }
-        : { action: "login", identifier: email.trim(), password };
+        ? { action: "login", email: email.trim(), password, waitlist: true, source: "waitlist_merchant_login" }
+        : { action: "login", identifier: email.trim(), password, waitlist: true, source: "waitlist_user_login" };
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
