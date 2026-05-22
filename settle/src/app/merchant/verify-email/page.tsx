@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Zap,
@@ -18,15 +18,24 @@ type VerifyState = "verifying" | "success" | "already" | "error";
 
 // Allow-list for the `next` query param so a malicious link can't redirect
 // the user off-site (open-redirect protection). Anything not on this list
-// falls back to the main-app merchant login.
-const ALLOWED_NEXT = new Set(["/merchant", "/waitlist/merchant-login"]);
+// falls back to the main-app merchant login PAGE (not /merchant, which is
+// an auth-gated app root — landing there with no cookies kicks the user
+// through fetchWithAuth → forceLogoutAndRedirect, appending a spurious
+// ?reason=session_expired to the login URL).
+const ALLOWED_NEXT = new Set(["/merchant/login", "/waitlist/merchant-login"]);
 
 function safeNext(raw: string | null): string {
   if (raw && ALLOWED_NEXT.has(raw)) return raw;
-  return "/merchant";
+  return "/merchant/login";
 }
 
+// Delay before auto-redirecting on a successful verification — short
+// enough that it doesn't feel like a wait, long enough that the success
+// animation reads as confirmation rather than a flash.
+const AUTO_REDIRECT_MS = 2000;
+
 function VerifyEmailContent({ nextHref }: { nextHref: string }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [state, setState] = useState<VerifyState>("verifying");
   const [errorMsg, setErrorMsg] = useState("");
@@ -34,6 +43,15 @@ function VerifyEmailContent({ nextHref }: { nextHref: string }) {
   // hit the API twice (the second call would 400 on an already-used token
   // and flip a successful verify to "error").
   const ran = useRef(false);
+
+  // Auto-redirect to the matching login once the verify call resolves to a
+  // success (fresh confirmation OR already-verified). Error state stays put
+  // so the user can read the failure and act on it.
+  useEffect(() => {
+    if (state !== "success" && state !== "already") return;
+    const t = setTimeout(() => router.replace(nextHref), AUTO_REDIRECT_MS);
+    return () => clearTimeout(t);
+  }, [state, router, nextHref]);
 
   useEffect(() => {
     if (ran.current) return;
@@ -113,8 +131,8 @@ function VerifyEmailContent({ nextHref }: { nextHref: string }) {
             </p>
             <p className="text-xs text-foreground/40 leading-relaxed">
               {state === "already"
-                ? "Your business email is already confirmed. You can sign in to your merchant dashboard any time."
-                : "Your business email has been verified successfully. Your merchant account is ready to accept trades."}
+                ? "Your business email is already confirmed. Redirecting you to sign in…"
+                : "Your business email has been verified successfully. Redirecting you to sign in…"}
             </p>
           </div>
 

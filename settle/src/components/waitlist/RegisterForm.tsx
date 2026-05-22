@@ -461,55 +461,52 @@ function RecaptchaTile({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex justify-start">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => !disabled && onChange(!checked)}
+      onKeyDown={(e) => {
+        if (disabled) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onChange(!checked);
+        }
+      }}
+      className={`flex w-full items-center gap-3 px-4 py-2 rounded-md bg-white dark:bg-[#f9f9f9] border border-black/10 select-none cursor-pointer ${disabled ? "opacity-60 cursor-wait" : ""}`}
+    >
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => !disabled && onChange(!checked)}
-        onKeyDown={(e) => {
-          if (disabled) return;
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onChange(!checked);
-          }
-        }}
-        className={`inline-flex items-center gap-3 px-4 py-3 rounded-md bg-white dark:bg-[#f9f9f9] border border-black/10 select-none cursor-pointer ${disabled ? "opacity-60 cursor-wait" : ""}`}
-        style={{ minWidth: 304 }}
+        className={`w-5 h-5 rounded border ${checked ? "border-emerald-500 bg-white" : "border-black/30 bg-white"} flex items-center justify-center transition-colors shrink-0`}
       >
-        <div
-          className={`w-6 h-6 rounded border ${checked ? "border-emerald-500 bg-white" : "border-black/30 bg-white"} flex items-center justify-center transition-colors`}
+        {checked && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+      </div>
+      <span className="text-sm text-black/80 flex-1">
+        I&apos;m not a robot
+      </span>
+      <div className="flex flex-col items-center pl-2 border-l border-black/10 shrink-0">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 32 32"
+          aria-label="reCAPTCHA"
         >
-          {checked && <Check className="w-4 h-4 text-emerald-500" />}
-        </div>
-        <span className="text-sm text-black/80 flex-1">
-          I&apos;m not a robot
+          <circle
+            cx="16"
+            cy="16"
+            r="11"
+            fill="none"
+            stroke="#4285F4"
+            strokeWidth="2.5"
+            strokeDasharray="55 100"
+            transform="rotate(-90 16 16)"
+          />
+          <circle cx="16" cy="16" r="3.5" fill="#4285F4" />
+        </svg>
+        <span className="text-[7px] font-bold text-black/40 mt-0.5">
+          reCAPTCHA
         </span>
-        <div className="flex flex-col items-center pl-2 border-l border-black/10">
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 32 32"
-            aria-label="reCAPTCHA"
-          >
-            <circle
-              cx="16"
-              cy="16"
-              r="11"
-              fill="none"
-              stroke="#4285F4"
-              strokeWidth="2.5"
-              strokeDasharray="55 100"
-              transform="rotate(-90 16 16)"
-            />
-            <circle cx="16" cy="16" r="3.5" fill="#4285F4" />
-          </svg>
-          <span className="text-[8px] font-bold text-black/40 mt-0.5">
-            reCAPTCHA
-          </span>
-          <span className="text-[7px] text-black/30 leading-none">
-            Privacy&nbsp;-&nbsp;Terms
-          </span>
-        </div>
+        <span className="text-[6px] text-black/30 leading-none">
+          Privacy&nbsp;-&nbsp;Terms
+        </span>
       </div>
     </div>
   );

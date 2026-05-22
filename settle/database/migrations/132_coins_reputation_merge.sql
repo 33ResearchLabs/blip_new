@@ -162,10 +162,19 @@ BEGIN
   END IF;
 END$$;
 
--- "Does this actor have any active unlock right now?" — hot read on every order create.
+-- "Does this actor have any active unlock right now?" — hot read on every
+-- order create. Index can't be partial on `expires_at > NOW()` because
+-- NOW() is STABLE (not IMMUTABLE) and Postgres rejects volatile/stable
+-- functions in index predicates (42P17). We rely on the expires_at DESC
+-- sort instead: a query like
+--   WHERE actor_type=$1 AND actor_id=$2 AND expires_at > NOW()
+--   ORDER BY expires_at DESC LIMIT 1
+-- still uses this index efficiently — Postgres walks the leading actor
+-- tuples in DESC order and short-circuits on the first row > NOW().
+-- The cost of indexing the few expired rows that linger is negligible
+-- compared to the engineering complexity of a rolling re-creation job.
 CREATE INDEX IF NOT EXISTS idx_coin_limit_unlocks_active
-  ON coin_limit_unlocks (actor_type, actor_id, expires_at DESC)
-  WHERE expires_at > NOW();
+  ON coin_limit_unlocks (actor_type, actor_id, expires_at DESC);
 
 -- ----------------------------------------------------------------------------
 -- 5. device_accounts — sybil dedup. Captured on every successful auth event.
