@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Blip Money — Reputation &amp; Coin System Reference</title>
+<style>
+  :root {
+    --bg: #0b0c0f;
+    --panel: #14161b;
+    --panel2: #1a1d24;
+    --line: #262a33;
+    --fg: #e7eaf0;
+    --muted: #8a91a0;
+    --dim: #5a6172;
+    --accent: #6ee7b7;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --ok: #34d399;
+    --rep: #6ee7b7;
+    --coin: #fbbf24;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #ffffff; --panel: #fafbfc; --panel2: #f3f5f8;
+      --line: #e4e7ec; --fg: #14161b; --muted: #50596a; --dim: #8a91a0;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 14.5px; line-height: 1.55;
+  }
+  body { padding: 40px 22px 80px; max-width: 1100px; margin: 0 auto; }
+  h1 {
+    font-size: 28px; letter-spacing: -0.02em; margin: 0 0 4px;
+  }
+  h2 {
+    font-size: 19px; letter-spacing: -0.01em;
+    margin: 36px 0 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { font-size: 15px; margin: 22px 0 8px; color: var(--fg); }
+  h4 { font-size: 13px; margin: 16px 0 6px; color: var(--muted);
+       text-transform: uppercase; letter-spacing: 0.06em; }
+  p, li { color: var(--fg); }
+  code, pre {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+  }
+  code {
+    background: var(--panel2); padding: 1px 6px; border-radius: 4px;
+    color: var(--accent);
+  }
+  pre {
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+    font-size: 12px; line-height: 1.55;
+  }
+  .lede { color: var(--muted); font-size: 14px; max-width: 760px; }
+  .meta { color: var(--dim); font-size: 12px; margin-top: 4px; }
+  table {
+    border-collapse: collapse; width: 100%; margin: 10px 0 18px;
+    font-size: 13px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--panel2); font-weight: 600; color: var(--muted);
+       text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--panel2); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.mono { font-family: ui-monospace, "SF Mono", monospace; font-size: 12px; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+    border: 1px solid var(--line);
+  }
+  .pill-good { color: var(--ok); border-color: rgba(110,231,183,0.3); background: rgba(110,231,183,0.08); }
+  .pill-warn { color: var(--warn); border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.08); }
+  .pill-bad  { color: var(--bad); border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.08); }
+  .pill-info { color: var(--muted); }
+  .toc {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 14px 18px; margin: 22px 0;
+    font-size: 13px;
+  }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: var(--fg); text-decoration: none; }
+  .toc a:hover { color: var(--accent); text-decoration: underline; }
+  .callout {
+    border-left: 3px solid var(--accent); background: rgba(110,231,183,0.04);
+    padding: 10px 14px; margin: 14px 0; border-radius: 4px;
+    color: var(--muted); font-size: 13px;
+  }
+  .callout.warn { border-color: var(--warn); background: rgba(251,191,36,0.04); }
+  .callout.bad  { border-color: var(--bad);  background: rgba(248,113,113,0.04); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  .footer {
+    margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line);
+    color: var(--dim); font-size: 12px;
+  }
+  @media print {
+    body { background: white; color: black; padding: 20px; }
+    h1, h2, h3, h4 { color: black; }
+    table, pre { background: white; border: 1px solid #ccc; }
+    th { background: #f0f0f0; color: #333; }
+    code { background: #f0f0f0; color: #c00; }
+    .pill { border: 1px solid #999; }
+    a { color: #06c; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Blip Money — Reputation &amp; Coin System Reference</h1>
+<p class="lede">
+  Authoritative guide to the in-app economy: how Reputation (300–900,
+  CIBIL-style) and Blip Points (start 100, hard cap 99,999) are earned,
+  spent, computed, and protected from abuse. Single source of truth for
+  tuning values, debugging scores, and onboarding new engineers.
+</p>
+<p class="meta">
+  Version 1.0 · Phases 1–5 of the coins+reputation merge ·
+  Last updated 2026-05-22
+</p>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#overview">System overview</a></li>
+    <li><a href="#reputation">Reputation system (300–900)</a></li>
+    <li><a href="#coins">Coin system (Blip Points)</a></li>
+    <li><a href="#limits">Trade limits &amp; coin spending</a></li>
+    <li><a href="#abuse">Anti-abuse playbook</a></li>
+    <li><a href="#schema">Database schema</a></li>
+    <li><a href="#api">API surface</a></li>
+    <li><a href="#workers">Background workers</a></li>
+    <li><a href="#scaling">Scaling decisions</a></li>
+    <li><a href="#amending">How to amend values</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="overview">1. System overview</h2>
+
+<p>
+  Blip runs two parallel, complementary scoring systems. They share
+  the same audit ledger (<code>blip_point_log</code>) and the same
+  daily worker, but serve different purposes.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>System</th>
+      <th>Range</th>
+      <th>Default</th>
+      <th>Direction</th>
+      <th>Purpose</th>
+      <th>Spendable?</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Reputation</strong></td>
+      <td>300–900</td>
+      <td class="num">500</td>
+      <td>Can go up <em>or</em> down</td>
+      <td>Trust signal; gates trade limits + perks</td>
+      <td>No — derived</td>
+    </tr>
+    <tr>
+      <td><strong>Blip Points (coins)</strong></td>
+      <td>0–99,999</td>
+      <td class="num">100</td>
+      <td>Earned only (lifetime monotonic); burnable for perks</td>
+      <td>Activity reward + spend-to-unlock-limits</td>
+      <td>Yes — see <a href="#limits">§4</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Reputation reflects <em>how trustworthy</em> someone is right now.
+  Blip Points reflect <em>how engaged</em> they have been. A user with
+  high rep + low points = trusted but inactive. High points + low rep
+  = active but unreliable. The product surfaces both together.
+</p>
+
+<!-- ====================================================== -->
+<h2 id="reputation">2. Reputation system (300–900)</h2>
+
+<p>
+  CIBIL-style score. Computed internally from five weighted components,
+  then linearly rebased from a 0–1000 internal range to the user-facing
+  300–900 range. Tier names map onto fixed score bands.
+</p>
+
+<h3>2.1 Component weights (internal 0–1000 input)</h3>
+<table>
+  <thead>
+    <tr><th>Component</th><th class="num">Weight</th><th>What it captures</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Review score</td>     <td class="num">30%</td><td>Average rating, count, recent trend</td></tr>
+    <tr><td>Execution score</td>  <td class="num">25%</td><td>Completion rate, speed, on-time, disputes/cancels</td></tr>
+    <tr><td>Volume score</td>     <td class="num">15%</td><td>Logarithmic weighted volume + counterparty diversity</td></tr>
+    <tr><td>Consistency score</td><td class="num">15%</td><td>Account age, active days, longest inactive streak</td></tr>
+    <tr><td>Trust score</td>      <td class="num">15%</td><td>Dispute wins/losses, KYC level, verified flags</td></tr>
+  </tbody>
+</table>
+
+<h3>2.2 Rebase formula (internal → user-facing)</h3>
+<pre>external_score = round(300 + (internal_score / 1000) * 600)
+clamp to [300, 900]
+</pre>
+<p>So internal <code>0</code> → external <code>300</code> (Restricted), internal <code>~333</code> → <code>500</code> (New / default), internal <code>1000</code> → <code>900</code> (Platinum).</p>
+
+<h3>2.3 Tier table</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Tier (key)</th><th>Display</th>
+      <th class="num">Range</th>
+      <th class="num">~Population</th>
+      <th class="num">Daily-limit mult.</th>
+      <th class="num">Per-trade mult.</th>
+      <th>Perks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><code>risky</code></td><td><span class="pill pill-bad">Restricted</span></td><td class="num">300–449</td><td class="num">~1%</td><td class="num">0.25×</td><td class="num">0.25×</td><td>Manual review on withdrawals</td></tr>
+    <tr><td><code>newcomer</code></td><td><span class="pill pill-info">New</span></td><td class="num">450–549</td><td class="num">~40%</td><td class="num">1×</td><td class="num">1×</td><td>Default</td></tr>
+    <tr><td><code>bronze</code></td><td><span class="pill pill-info">Bronze</span></td><td class="num">550–649</td><td class="num">~35%</td><td class="num">2×</td><td class="num">1.5×</td><td>Priority dispute queue</td></tr>
+    <tr><td><code>silver</code></td><td><span class="pill pill-info">Silver</span></td><td class="num">650–749</td><td class="num">~18%</td><td class="num">4×</td><td class="num">2×</td><td>5% fee reduction</td></tr>
+    <tr><td><code>gold</code></td><td><span class="pill pill-warn">Gold</span></td><td class="num">750–849</td><td class="num">~5%</td><td class="num">8×</td><td class="num">3×</td><td>10% fee reduction · featured merchant badge</td></tr>
+    <tr><td><code>platinum</code></td><td><span class="pill pill-good">Platinum</span></td><td class="num">850–900</td><td class="num">~0.05%</td><td class="num">15×</td><td class="num">5×</td><td>15% fee reduction · dedicated support</td></tr>
+    <tr><td><code>diamond</code></td><td><em>(unreachable alias)</em></td><td class="num">901+</td><td class="num">0</td><td colspan="2" class="num">—</td><td>Kept only for backward-compat with old code</td></tr>
+  </tbody>
+</table>
+
+<h3>2.4 What raises reputation</h3>
+<table>
+  <thead><tr><th>Action</th><th>Impact</th><th class="num">Points</th><th class="num">Cap</th></tr></thead>
+  <tbody>
+    <tr><td>Completed transaction</td><td>Very High</td><td class="num">+0.5 × log₁₀(tx_count)</td><td class="num">softcap 200 lifetime</td></tr>
+    <tr><td>$100 of volume settled</td><td>High</td><td class="num">+0.3</td><td class="num">softcap 150 lifetime</td></tr>
+    <tr><td>5-star review received</td><td>Med</td><td class="num">+2</td><td class="num">50/month</td></tr>
+    <tr><td>4-star review received</td><td>Low</td><td class="num">+0.5</td><td class="num">50/month</td></tr>
+    <tr><td>Account age (per 30 active days)</td><td>Low</td><td class="num">+1</td><td class="num">60 max (~5y)</td></tr>
+    <tr><td>Account score ≥ 90% for 30 days</td><td>Med</td><td class="num">+5</td><td class="num">monthly</td></tr>
+    <tr><td>KYC completed</td><td>One-time</td><td class="num">+30</td><td class="num">once</td></tr>
+    <tr><td>X / Twitter follow verified</td><td>One-time</td><td class="num">+5</td><td class="num">once</td></tr>
+    <tr><td>Tweet about Blip verified</td><td>One-time</td><td class="num">+10</td><td class="num">once</td></tr>
+    <tr><td>Telegram join verified</td><td>One-time</td><td class="num">+5</td><td class="num">once</td></tr>
+    <tr><td>Referral (referee made ≥ $50 trade)</td><td>Med</td><td class="num">+8 per active</td><td class="num">40 max</td></tr>
+    <tr><td>30-day dispute-free streak</td><td>Med</td><td class="num">+5</td><td class="num">monthly</td></tr>
+    <tr><td>Counterparty diversity (≥ 20 unique)</td><td>Low</td><td class="num">+5</td><td class="num">once</td></tr>
+  </tbody>
+</table>
+
+<h3>2.5 What lowers reputation</h3>
+<table>
+  <thead><tr><th>Action</th><th class="num">Penalty</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Dispute lost</td><td class="num">−25</td><td>per occurrence</td></tr>
+    <tr><td>Dispute filed against you (open)</td><td class="num">−5</td><td>held; refunded if won</td></tr>
+    <tr><td>Order cancelled after accept</td><td class="num">−1</td><td>capped at −30/month</td></tr>
+    <tr><td>Sub-60s cancel/accept loop (probing)</td><td class="num">−10</td><td>per incident</td></tr>
+    <tr><td>1-star review</td><td class="num">−10</td><td>—</td></tr>
+    <tr><td>2-star review</td><td class="num">−3</td><td>—</td></tr>
+    <tr><td>Account score &lt; 60%</td><td class="num">−5/week</td><td>until restored</td></tr>
+    <tr><td>Inactivity (&gt; 60 days)</td><td class="num">−1/week</td><td>floor at 500</td></tr>
+    <tr><td>Linked-account abuse flag</td><td class="num">−50</td><td>per confirmed flag</td></tr>
+    <tr><td>Payment-method fraud flag</td><td class="num">−100</td><td>manual review</td></tr>
+  </tbody>
+</table>
+
+<h3>2.6 Hard gates</h3>
+<p>Independent of the score math, three hard floors apply:</p>
+<ul>
+  <li><strong>Reliability gate</strong> — review score &lt; threshold + ≥ N orders → forced Restricted, capped at 300.</li>
+  <li><strong>Trust gate</strong> — trust score &lt; threshold → forced Restricted.</li>
+  <li><strong>Dispute-rate gate</strong> — &gt; 15% disputes over the order count → forced Restricted, score capped.</li>
+</ul>
+
+<!-- ====================================================== -->
+<h2 id="coins">3. Coin system (Blip Points)</h2>
+
+<p>
+  Coins start at <strong>100</strong>, earn through activity + quests,
+  spend on trade-limit unlocks + perks. Hard ceiling of
+  <strong>99,999</strong>; a soft taper makes the last 50k progressively
+  harder to earn so the system stays bounded.
+</p>
+
+<h3>3.1 Earn table</h3>
+<table>
+  <thead><tr><th>Action</th><th class="num">Coins</th><th class="num">Cap</th></tr></thead>
+  <tbody>
+    <tr><td>Signup bonus (locked 7 days)</td><td class="num">100</td><td class="num">once</td></tr>
+    <tr><td>First trade</td><td class="num">200</td><td class="num">once</td></tr>
+    <tr><td>Per trade completed</td><td class="num">+5</td><td class="num">20 trades/day</td></tr>
+    <tr><td>Per $50 of volume</td><td class="num">+1</td><td class="num">500 coins/day</td></tr>
+    <tr><td>5-star review received</td><td class="num">10</td><td class="num">100/month</td></tr>
+    <tr><td>Streak: 7 consecutive trading days</td><td class="num">50</td><td class="num">4/month</td></tr>
+    <tr><td>Streak: 30 consecutive trading days</td><td class="num">300</td><td class="num">1/month</td></tr>
+    <tr><td>Dispute-free month</td><td class="num">100</td><td class="num">monthly</td></tr>
+    <tr><td>Quest: leave a review</td><td class="num">5</td><td class="num">20/month</td></tr>
+    <tr><td>KYC completed</td><td class="num">500</td><td class="num">once</td></tr>
+    <tr><td>X follow verified</td><td class="num">50</td><td class="num">once</td></tr>
+    <tr><td>Tweet about Blip verified</td><td class="num">100</td><td class="num">once</td></tr>
+    <tr><td>Telegram join</td><td class="num">50</td><td class="num">once</td></tr>
+    <tr><td>Referral signup (locked)</td><td class="num">25</td><td class="num">unlock on referee trade</td></tr>
+    <tr><td>Referral first $50+ trade</td><td class="num">200</td><td class="num">50 referees max</td></tr>
+    <tr><td>Referral volume bonus</td><td class="num">1% of referee earnings</td><td class="num">for 90 days</td></tr>
+    <tr><td>Counterparty diversity quest</td><td class="num">25</td><td class="num">once</td></tr>
+  </tbody>
+</table>
+
+<h3>3.2 Soft taper (anti-runaway)</h3>
+<p>
+  Every credit is multiplied by a taper based on the actor's current
+  TOTAL balance (locked + unlocked). Designed so even sustained activity
+  can never reach 100k.
+</p>
+<table>
+  <thead><tr><th class="num">Balance band</th><th class="num">Earn multiplier</th></tr></thead>
+  <tbody>
+    <tr><td class="num">0 – 50,000</td><td class="num">1.00×</td></tr>
+    <tr><td class="num">50,000 – 80,000</td><td class="num">0.50×</td></tr>
+    <tr><td class="num">80,000 – 95,000</td><td class="num">0.25×</td></tr>
+    <tr><td class="num">95,000 – 99,999</td><td class="num">0.10×</td></tr>
+  </tbody>
+</table>
+
+<h3>3.3 Hard cap</h3>
+<p>
+  <code>HARD_CAP_COINS = 99_999</code>. Any award that would exceed
+  this is silently clipped to fit within
+  <code>headroom = HARD_CAP_COINS − (balance + locked)</code>.
+</p>
+
+<h3>3.4 Locked balances</h3>
+<p>
+  Locks are time-released holds against the
+  <code>locked_blip_points</code> column. Each lock has an
+  <code>unlocks_at</code> timestamp; on reads they are swept lazily
+  into the spendable balance. Used for:
+</p>
+<ul>
+  <li>Signup bonus (7-day hold — kills bot farming)</li>
+  <li>Unverified referrals (released when the referee trades)</li>
+  <li>Anti-abuse flagged credits (voided wholesale on confirmation)</li>
+</ul>
+
+<h3>3.5 Spend table (coin sinks)</h3>
+<p>
+  Spending burns coins from the unlocked balance only. The audit ledger
+  records the burn as a negative entry. Lifetime totals (used for
+  reputation seed weights) are unaffected.
+</p>
+<table>
+  <thead><tr><th>Sink</th><th class="num">Cost (coins)</th></tr></thead>
+  <tbody>
+    <tr><td>Reduce next trade's spread by 5%</td><td class="num">200</td></tr>
+    <tr><td>Reduce next trade's spread by 10%</td><td class="num">500</td></tr>
+    <tr><td>Cosmetic: profile badge</td><td class="num">1,000</td></tr>
+    <tr><td>Cosmetic: merchant card theme</td><td class="num">2,500</td></tr>
+    <tr><td>Cosmetic: leaderboard name color</td><td class="num">5,000</td></tr>
+    <tr><td>Skip lower-tier KYC fee (use coins instead of $)</td><td class="num">5,000</td></tr>
+  </tbody>
+</table>
+
+<!-- ====================================================== -->
+<h2 id="limits">4. Trade limits &amp; coin spending</h2>
+
+<p>
+  Trade limits are computed at order-create time as:
+</p>
+<pre>effective.daily   = base.daily   × rep_tier_multiplier × active_coin_unlock_multiplier
+effective.perTrade = base.perTrade × rep_tier_multiplier × active_coin_unlock_multiplier
+</pre>
+
+<h3>4.1 Base limits</h3>
+<table>
+  <thead><tr><th>Limit</th><th class="num">USD</th></tr></thead>
+  <tbody>
+    <tr><td>Daily (rolling 24h)</td><td class="num">$200</td></tr>
+    <tr><td>Per-trade</td><td class="num">$50</td></tr>
+  </tbody>
+</table>
+
+<h3>4.2 Coin-burn unlock tiers</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Tier</th>
+      <th class="num">Cost (coins)</th>
+      <th class="num">Daily</th>
+      <th class="num">Per-trade</th>
+      <th class="num">Duration</th>
+      <th>Requires KYC</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><code>default</code></td><td class="num">0</td>     <td class="num">$200</td>     <td class="num">$50</td>      <td class="num">—</td>       <td>No</td></tr>
+    <tr><td><code>L1</code></td>     <td class="num">500</td>   <td class="num">$500</td>     <td class="num">$150</td>     <td class="num">30 days</td> <td>No</td></tr>
+    <tr><td><code>L2</code></td>     <td class="num">2,000</td> <td class="num">$2,000</td>   <td class="num">$500</td>     <td class="num">30 days</td> <td>No</td></tr>
+    <tr><td><code>L3</code></td>     <td class="num">10,000</td><td class="num">$10,000</td>  <td class="num">$2,000</td>   <td class="num">30 days</td> <td>No</td></tr>
+    <tr><td><code>L4</code></td>     <td class="num">50,000</td><td class="num">$50,000</td>  <td class="num">$10,000</td>  <td class="num">30 days</td> <td><span class="pill pill-warn">Yes</span></td></tr>
+    <tr><td><code>Pro</code></td>    <td class="num">—</td>     <td class="num">$250,000</td> <td class="num">$50,000</td>  <td class="num">rolling</td>  <td>KYC + Gold rep</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  Limits are enforced at order create time. Exceeding them returns
+  HTTP <code>402 TRADE_LIMIT_EXCEEDED</code> with the suggested tier
+  the user can burn coins to unlock. UI surfaces a CTA.
+</div>
+
+<!-- ====================================================== -->
+<h2 id="abuse">5. Anti-abuse playbook</h2>
+
+<p>
+  Since Blip starts without KYC at the bottom tiers, the entire economy
+  needs to be defensible against sybil farms. Each row below is a vector
+  + the mitigation that's wired in.
+</p>
+
+<table>
+  <thead><tr><th>Vector</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr><td>Multi-account farming (sybil)</td><td>Device-ID + fingerprint dedup — only one account per device earns signup/referral/task coins</td></tr>
+    <tr><td>Same payment-method farming</td><td>Salted hash of canonical PM identity; second-account credit zeroed</td></tr>
+    <tr><td>Wash-trade volume farming</td><td>Counterparty-diversity check — ≥ 3 unique counterparties required for volume coins/rep</td></tr>
+    <tr><td>Fast cancel-reaccept loops</td><td>Sub-60s cancel pattern penalty; rate-limit cancellations to 5/day</td></tr>
+    <tr><td>Referral spam</td><td>Referee must trade ≥ $50 within 30 days to credit referrer</td></tr>
+    <tr><td>Task replay (re-submitting same tweet)</td><td>Server-side dedup on tweet ID, X user ID, Telegram user ID</td></tr>
+    <tr><td>Account flipping (sell aged account)</td><td>Device + PM delta detection on sudden behaviour change → freeze rep+coins for review</td></tr>
+    <tr><td>Dispute farming (file then withdraw)</td><td>Dispute filing alone costs −5 rep held; refunded on win, kept on withdraw</td></tr>
+    <tr><td>Coin laundering between accounts</td><td>Coins are non-transferable, period (no transfer event type exists)</td></tr>
+    <tr><td>Bot signups</td><td>Behavioural signal (signup time &lt; 3s, no mouse entropy) → coins locked, never credited</td></tr>
+    <tr><td>KYC voucher resale</td><td>KYC bound to actor_id, not transferable, single-use</td></tr>
+    <tr><td>Streak gaming via timezone hopping</td><td>Streaks computed against the account's first-detected timezone, locked 90d</td></tr>
+    <tr><td>Mass referrals from bought emails</td><td>IPQS check on referee signup; disposable email / VOIP phone → referral credit voided</td></tr>
+    <tr><td>Grinding past 50k</td><td>Soft taper (1.0 → 0.5 → 0.25 → 0.10) requires sustained genuine volume to exceed 85k</td></tr>
+  </tbody>
+</table>
+
+<!-- ====================================================== -->
+<h2 id="schema">6. Database schema</h2>
+
+<h3>6.1 Tables</h3>
+<table>
+  <thead><tr><th>Table</th><th>Migration</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>reputation_scores</code></td>             <td>030</td><td>Current denormalized score per (actor, type)</td></tr>
+    <tr><td><code>reputation_history</code></td>            <td>030</td><td>Append-only timeseries snapshots</td></tr>
+    <tr><td><code>reputation_events</code></td>             <td>030</td><td>Append-only individual event log</td></tr>
+    <tr><td><code>blip_point_log</code></td>                <td>131</td><td>Append-only coin ledger — every credit/debit lands here</td></tr>
+    <tr><td><code>blip_point_transactions</code> (VIEW)</td><td>134</td><td>Friendly alias over <code>blip_point_log</code></td></tr>
+    <tr><td><code>blip_coin_locks</code></td>               <td>132</td><td>Time-released holds against <code>locked_blip_points</code></td></tr>
+    <tr><td><code>blip_coin_caps_state</code></td>          <td>132</td><td>Per-event-type earn caps (day/month/lifetime)</td></tr>
+    <tr><td><code>coin_limit_unlocks</code></td>            <td>132</td><td>Active trade-limit boosts purchased with coins</td></tr>
+    <tr><td><code>device_accounts</code></td>               <td>132</td><td>Sybil detection — device-id ↔ accounts mapping</td></tr>
+    <tr><td><code>payment_method_account_links</code></td>  <td>132</td><td>Salted PM-hash ↔ accounts dedup</td></tr>
+    <tr><td><code>abuse_flags</code></td>                   <td>132</td><td>Manual + automated abuse markers</td></tr>
+    <tr><td><code>waitlist_tasks</code></td>                <td>131</td><td>Social/quest verification state</td></tr>
+    <tr><td><code>waitlist_referrals</code></td>            <td>131</td><td>Referrer ↔ referee graph + reward state</td></tr>
+  </tbody>
+</table>
+
+<h3>6.2 Denormalized columns (read-hot)</h3>
+<table>
+  <thead><tr><th>Column</th><th>Table</th><th>Reason</th></tr></thead>
+  <tbody>
+    <tr><td><code>blip_points</code></td>        <td><code>users</code> / <code>merchants</code></td><td>O(1) balance read</td></tr>
+    <tr><td><code>locked_blip_points</code></td> <td><code>users</code> / <code>merchants</code></td><td>O(1) locked-amount read</td></tr>
+    <tr><td><code>total_score</code></td>        <td><code>reputation_scores</code></td><td>O(1) rep read</td></tr>
+    <tr><td><code>tier</code></td>               <td><code>reputation_scores</code></td><td>O(1) tier lookup</td></tr>
+    <tr><td><code>referral_code</code></td>      <td><code>users</code> / <code>merchants</code></td><td>Referral capture in 1 query</td></tr>
+  </tbody>
+</table>
+
+<h3>6.3 Idempotency anchors</h3>
+<p>
+  Every coin event that fires more than once on a real-world trigger
+  (an order completing, a rating landing) is anchored on
+  <code>source_ref</code>. A unique partial index on
+  <code>(actor_type, actor_id, event, source_ref)</code> blocks
+  double-credit on retries.
+</p>
+
+<table>
+  <thead><tr><th>Event</th><th><code>source_ref</code> shape</th></tr></thead>
+  <tbody>
+    <tr><td><code>FIRST_TRADE</code></td><td><code>order_id</code> (lifetime-capped to 1 anyway)</td></tr>
+    <tr><td><code>TRADE_COMPLETED</code></td><td><code>order_id</code></td></tr>
+    <tr><td><code>VOLUME_BONUS</code></td><td><code>order_id</code></td></tr>
+    <tr><td><code>FIVE_STAR_RECEIVED</code></td><td><code>rating_id</code></td></tr>
+    <tr><td><code>DISPUTE_FREE_MONTH</code></td><td><code>dfm:YYYY-MM</code></td></tr>
+    <tr><td><code>STREAK_7</code></td><td><code>streak:7:YYYY-Www</code></td></tr>
+    <tr><td><code>STREAK_30</code></td><td><code>streak:30:YYYY-MM</code></td></tr>
+    <tr><td><code>REFERRAL_TRADE_CREDITED</code></td><td><code>referee_id</code></td></tr>
+    <tr><td><code>KYC_COMPLETED</code></td><td><code>'kyc'</code></td></tr>
+    <tr><td><code>MANUAL_CREDIT</code></td><td>caller-supplied (e.g. <code>signup_starter</code>, <code>legacy_backfill</code>)</td></tr>
+  </tbody>
+</table>
+
+<!-- ====================================================== -->
+<h2 id="api">7. API surface</h2>
+
+<table>
+  <thead><tr><th>Endpoint</th><th>Method</th><th>Returns / does</th></tr></thead>
+  <tbody>
+    <tr><td><code>/api/reputation</code></td>            <td>GET</td><td>Rep score + breakdown (entityId required) — legacy</td></tr>
+    <tr><td><code>/api/reputation/me</code></td>         <td>GET</td><td>Same as above, resolves entity from auth context (recommended for client UIs)</td></tr>
+    <tr><td><code>/api/coins/me</code></td>              <td>GET</td><td>Balance, locked, lifetime earned / spent, headroom to hard cap</td></tr>
+    <tr><td><code>/api/limits/me</code></td>             <td>GET</td><td>Effective daily + per-trade limits, trailing-24h volume, available upgrade tiers</td></tr>
+    <tr><td><code>/api/coins/spend/limit-bump</code></td><td>POST</td><td>Burn coins for an L1–L4 limit-tier unlock (30 days)</td></tr>
+    <tr><td><code>/api/orders</code> (create)</td>       <td>POST</td><td>Hard 402 if trade exceeds effective limits</td></tr>
+  </tbody>
+</table>
+
+<!-- ====================================================== -->
+<h2 id="workers">8. Background workers</h2>
+
+<table>
+  <thead><tr><th>Job</th><th>Cadence</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>reputation-worker</code></td><td>Daily</td><td>Recompute rep for all active users/merchants; also calls coin sweep + streak sweep in the same pass</td></tr>
+    <tr><td><code>sweepCompletedOrders</code></td><td>Daily (inside rep worker)</td><td>Credit per-trade + volume coins for any order completed in last 48h (idempotent)</td></tr>
+    <tr><td><code>runStreakWorker</code></td><td>Daily (inside rep worker)</td><td>7-day + 30-day streak detection; dispute-free month on the 1st of each month</td></tr>
+    <tr><td><code>sweepEligibleUnlocks</code></td><td>Lazy (on read/write of balance)</td><td>Release any <code>blip_coin_locks</code> rows whose <code>unlocks_at</code> has passed</td></tr>
+    <tr><td><code>limit-unlock expiry</code></td><td>Lazy (filtered at read)</td><td>No dedicated job — query filters <code>WHERE expires_at &gt; NOW()</code></td></tr>
+  </tbody>
+</table>
+
+<!-- ====================================================== -->
+<h2 id="scaling">9. Scaling decisions</h2>
+
+<p>
+  Designed for 100M users from day 1, but with deferrable optimisations
+  for when row counts justify them. Hot reads are O(1) via denormalised
+  columns; hot writes are protected by indexed UPSERTs.
+</p>
+
+<table>
+  <thead><tr><th>Concern</th><th>Resolution</th></tr></thead>
+  <tbody>
+    <tr><td>Rep recompute per user per hour at 100M scale (~27k/s)</td><td>Drop hourly worker. Recompute on event (trade complete, dispute, task verify) + lazy daily for dormant</td></tr>
+    <tr><td>Append-only ledger growth (<code>blip_point_log</code>)</td><td>Composite indexes + BRIN on <code>created_at</code>. Native monthly partitioning deferred to a future migration once row count crosses 50M</td></tr>
+    <tr><td>Hot balance reads</td><td>Denormalized <code>blip_points</code> on users/merchants. Redis caching layer added when read-rate &gt; 5k/s</td></tr>
+    <tr><td>Cap-state lookups on every earn</td><td>Composite index <code>(actor, event, period_start)</code> + partial index for current-period only</td></tr>
+    <tr><td>Race conditions on credit/debit</td><td><code>transaction()</code> + <code>FOR UPDATE</code> on actor row; conditional <code>WHERE balance &gt;= points</code> for burns</td></tr>
+    <tr><td>Locked-coin unlock</td><td>Lazy on read — no scheduled job. Always one extra SELECT before balance, gated by partial index <code>WHERE released_at IS NULL</code></td></tr>
+    <tr><td>Coin transfer between accounts</td><td>Disabled at schema level — no <code>TRANSFER</code> event type. Cannot launder coins</td></tr>
+    <tr><td>Worker memory under 100M users</td><td>Process actors in batches of 500 with <code>Promise.all</code>. Worker process holds bounded heap</td></tr>
+    <tr><td>UI fan-out on dashboard load</td><td>One <code>/api/reputation/me</code> + one <code>/api/coins/me</code> call per page mount, no polling</td></tr>
+  </tbody>
+</table>
+
+<h3>9.1 Future scaling milestones</h3>
+<table>
+  <thead><tr><th>Trigger</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td>blip_point_log &gt; 50M rows</td><td>Add native monthly partitioning by <code>created_at</code></td></tr>
+    <tr><td>reputation read rate &gt; 5k/s</td><td>Add Redis cache layer in front of <code>/api/reputation/me</code> with 60s TTL</td></tr>
+    <tr><td>Coin caps queries hot in flame graph</td><td>Move <code>blip_coin_caps_state</code> to a Redis HASH per (actor, period) keyed by event_type</td></tr>
+    <tr><td>Daily worker takes &gt; 1h</td><td>Switch from "all actors" to "actors with events since last run" via watermark</td></tr>
+    <tr><td>Streak detection becomes hot</td><td>Persist last-streak state per actor; compute incrementally instead of trailing 35-day scan</td></tr>
+  </tbody>
+</table>
+
+<!-- ====================================================== -->
+<h2 id="amending">10. How to amend values</h2>
+
+<p>
+  Every tunable lives in one of three places. Find the right one before
+  editing — there's exactly one source of truth per value.
+</p>
+
+<h3>10.1 Coin amounts</h3>
+<p>
+  Single source: <code>settle/src/lib/coins/awards.ts</code>, exported
+  <code>AMOUNTS</code> constant. Per-event caps: <code>CAP_POLICIES</code>
+  in <code>settle/src/lib/coins/economy.ts</code>. To change "5-star is
+  worth 10 coins" or the daily trade cap, edit those constants. No
+  migration needed — values are applied on next worker tick.
+</p>
+
+<h3>10.2 Hard cap and taper bands</h3>
+<p>
+  <code>HARD_CAP_COINS</code> and <code>softTaperMultiplier()</code>
+  in <code>settle/src/lib/coins/economy.ts</code>. Editing these
+  affects new earns only; existing balances are unaffected.
+</p>
+
+<h3>10.3 Reputation tier thresholds + multipliers</h3>
+<p>
+  Tier ranges: <code>TIER_THRESHOLDS</code> in
+  <code>settle/src/lib/reputation/types.ts</code>. Daily/per-trade
+  multipliers per tier: <code>REP_TIER_MULTIPLIER</code> in
+  <code>settle/src/lib/coins/limits.ts</code>. Display labels:
+  <code>TIER_INFO</code> in <code>types.ts</code>.
+</p>
+
+<h3>10.4 Component weights inside the rep score</h3>
+<p>
+  <code>WEIGHTS</code> in <code>settle/src/lib/reputation/calculator.ts</code>
+  controls how reviews / execution / volume / consistency / trust
+  combine. Changing these takes effect on the next recompute (daily
+  worker pass).
+</p>
+
+<h3>10.5 Trade-limit tier prices</h3>
+<p>
+  <code>COIN_LIMIT_TIERS</code> in
+  <code>settle/src/lib/coins/limits.ts</code>. Prices, daily / per-trade
+  USD caps, KYC requirement per tier all live there. Currently active
+  unlocks are honoured at their original price — only NEW purchases
+  reflect the change.
+</p>
+
+<h3>10.6 Backfill of legacy accounts</h3>
+<p>
+  Use a NEW migration file (don't edit migration 134). The pattern from
+  134 is:
+</p>
+<pre>INSERT INTO blip_point_log (actor_id, actor_type, event, bonus_points, source_ref, metadata)
+SELECT u.id, 'user', 'MANUAL_CREDIT', N, 'unique-source-ref-for-this-backfill', '{"reason":"..."}'::jsonb
+FROM users u
+WHERE ...condition...
+ON CONFLICT DO NOTHING;
+
+UPDATE users SET blip_points = GREATEST(COALESCE(blip_points,0), N), updated_at = NOW()
+WHERE ...condition...;</pre>
+<p>
+  Always use a fresh <code>source_ref</code> per backfill — the
+  idempotency index prevents re-applying the same one.
+</p>
+
+<!-- ====================================================== -->
+<h2 id="troubleshooting">11. Troubleshooting</h2>
+
+<table>
+  <thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Navbar chips show <code>—</code></td>
+      <td><code>/api/coins/me</code> or <code>/api/reputation/me</code> returning 500 (table missing, migration not run)</td>
+      <td>Run migrations 132 / 133 / 134; restart dev server; the chips degrade gracefully but show defaults until then</td>
+    </tr>
+    <tr>
+      <td>Rep stuck at 0</td>
+      <td>Legacy <code>reputation_scores</code> row with <code>total_score = 0</code> from before the rebase</td>
+      <td>Endpoint auto-substitutes 500 for sub-300 stored values. Next login also UPDATEs the row to 500 via <code>bootstrapNewActor</code></td>
+    </tr>
+    <tr>
+      <td>Rep stuck at 500 after lots of activity</td>
+      <td>Daily worker hasn't run since the activity</td>
+      <td>Manually trigger: <code>tsx settle/src/workers/reputation-worker.ts</code>. Production: it runs nightly</td>
+    </tr>
+    <tr>
+      <td>Coins not credited after a trade</td>
+      <td>Order hasn't been processed by <code>sweepCompletedOrders</code> yet (runs daily; 48h lookback)</td>
+      <td>Wait one tick, or run the worker manually. Idempotent, safe to re-run</td>
+    </tr>
+    <tr>
+      <td>"Insufficient balance" on a limit-bump POST</td>
+      <td>Locked coins are NOT spendable (by design)</td>
+      <td>Check <code>locked_blip_points</code> column. If recent signup, locked balance releases on day 7</td>
+    </tr>
+    <tr>
+      <td>Two users on same device both got signup bonus</td>
+      <td>Device-ID capture not wired into that auth path</td>
+      <td>Check <code>x-device-id</code> header reaches the route. Check <code>device_accounts</code> table has the row. The capture is fire-and-forget, never blocks auth</td>
+    </tr>
+    <tr>
+      <td>Order create returns <code>402 TRADE_LIMIT_EXCEEDED</code></td>
+      <td>User over daily or per-trade cap</td>
+      <td>Surface UI CTA: "Burn N coins to unlock $X daily for 30 days." Tier prices in <code>COIN_LIMIT_TIERS</code></td>
+    </tr>
+    <tr>
+      <td>Streak coin not credited despite 7 consecutive days</td>
+      <td>Timezone hopping; streak computed against the account's first-detected timezone (90-day lock)</td>
+      <td>Verify <code>computeTrailingStreak</code> output — only DISTINCT UTC days count</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  Reputation &amp; Coin System Reference · Blip Money · v1.0 ·
+  Maintained alongside <code>settle/src/lib/coins/</code> and
+  <code>settle/src/lib/reputation/</code>. When tuning values, update
+  this document in the same PR.
+</div>
+
+</body>
+</html>
