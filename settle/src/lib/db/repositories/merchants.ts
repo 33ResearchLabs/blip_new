@@ -112,6 +112,77 @@ export async function updateMerchantOnlineStatus(id: string, isOnline: boolean):
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Presence freshness
+// ─────────────────────────────────────────────────────────────────────
+//
+// `merchants.is_online` is set to TRUE on login / heartbeat but it has
+// no automatic expiry: nothing flips it back when a merchant closes
+// the tab, crashes, or drops their connection. The heartbeat endpoint
+// (every 30s) DOES touch `last_seen_at`, so a recent `last_seen_at`
+// is the trustworthy "is this merchant really online" signal.
+//
+// We give downstream callers two tools:
+//
+//  1. ONLINE_FRESH_SQL — a SQL fragment to drop into WHERE clauses
+//     anywhere you'd previously written `is_online = true`. It still
+//     checks the flag (so opt-out via explicit logout still works)
+//     but ALSO requires a heartbeat within the freshness window.
+//
+//  2. sweepStaleMerchantPresence() — a single UPDATE that flips
+//     `is_online = false` for rows whose `last_seen_at` is too old.
+//     Fire-and-forget from the admin stats endpoint so the column
+//     becomes self-healing for downstream code we don't touch
+//     (corridor matching, marketplace offers, leaderboards, etc.).
+//
+// Window choice: 2 minutes ≈ 4 missed heartbeats at the 30s cadence,
+// so a single dropped network ping won't false-negative a real user,
+// but ghost sessions are cleared within ~2m of disconnection.
+
+export const MERCHANT_ONLINE_WINDOW = "2 minutes";
+
+export const ONLINE_FRESH_SQL =
+  `(m.is_online = true AND m.last_seen_at > NOW() - INTERVAL '${MERCHANT_ONLINE_WINDOW}')`;
+
+// Same fragment for callers that aliased merchants as something other
+// than `m` — keep them in lockstep so the freshness window lives in
+// one place.
+export const onlineFreshSqlForAlias = (alias: string): string =>
+  `(${alias}.is_online = true AND ${alias}.last_seen_at > NOW() - INTERVAL '${MERCHANT_ONLINE_WINDOW}')`;
+
+// In-memory cooldown so the sweeper doesn't run on every admin poll
+// (the Monitor page refreshes every 8s — sweeping 7x/minute is wasteful
+// when the freshness window itself is 2 minutes). Module-scoped state
+// is fine here: any instance pause >SWEEP_MIN_INTERVAL_MS triggers a
+// real sweep on the next call. A failed sweep doesn't update the
+// timestamp, so retries happen on the next invocation.
+const SWEEP_MIN_INTERVAL_MS = 30_000;
+let lastSweepAt = 0;
+
+export async function sweepStaleMerchantPresence(): Promise<number> {
+  const now = Date.now();
+  if (now - lastSweepAt < SWEEP_MIN_INTERVAL_MS) return 0;
+  lastSweepAt = now;
+
+  try {
+    const result = await query<{ id: string }>(
+      `UPDATE merchants
+         SET is_online = false
+       WHERE is_online = true
+         AND (last_seen_at IS NULL
+              OR last_seen_at < NOW() - INTERVAL '${MERCHANT_ONLINE_WINDOW}')
+       RETURNING id`,
+    );
+    return result.length;
+  } catch (err) {
+    // Don't propagate — caller is fire-and-forget. Reset the cooldown
+    // so the next request can retry instead of waiting 30s.
+    lastSweepAt = 0;
+    console.error('[sweepStaleMerchantPresence] failed', err);
+    return 0;
+  }
+}
+
 export async function incrementMerchantStats(id: string, volume: number): Promise<void> {
   await query(
     `UPDATE merchants

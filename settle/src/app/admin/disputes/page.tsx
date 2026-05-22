@@ -9,6 +9,8 @@ import {
   Users,
   Crown,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
@@ -40,7 +42,34 @@ interface RecentDispute {
   merchantName: string;
   merchantId: string;
   resolution: string | null;
+  // New fields sourced from the dedicated `disputes` table (nullable —
+  // a disputed_at flag on the order doesn't guarantee a disputes row).
+  disputeId?: string | null;
+  disputeStatus?: string | null;
+  disputeReason?: string | null;
+  disputeDescription?: string | null;
+  disputeResolution?: string | null;
+  disputeResolutionNotes?: string | null;
+  disputeResolvedAt?: string | null;
+  disputeResolvedInFavorOf?: string | null;
 }
+
+type DisputeStatusFilter =
+  | "all"
+  | "open"
+  | "investigating"
+  | "resolved"
+  | "escalated";
+
+const DISPUTE_STATUS_OPTIONS: { value: DisputeStatusFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "open", label: "Open" },
+  { value: "investigating", label: "Investigating" },
+  { value: "resolved", label: "Resolved" },
+  { value: "escalated", label: "Escalated" },
+];
+
+const PAGE_SIZE = 25;
 
 interface DisputeSummary {
   totalDisputes: number;
@@ -88,6 +117,10 @@ export default function DisputesPage() {
   const [merchants, setMerchants] = useState<DisputeParty[]>([]);
   const [users, setUsers] = useState<DisputeParty[]>([]);
   const [recentDisputes, setRecentDisputes] = useState<RecentDispute[]>([]);
+  const [recentTotal, setRecentTotal] = useState(0);
+  const [statusFilter, setStatusFilter] =
+    useState<DisputeStatusFilter>("all");
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -147,28 +180,47 @@ export default function DisputesPage() {
   };
 
   // ── Data ──
-  const fetchData = useCallback(async () => {
-    const token = adminTokenRef.current;
-    if (!token) return;
-    setIsRefreshing(true);
-    setLoading(true);
-    try {
-      const res = await fetchWithAuth("/api/admin/disputes");
-      const data = await res.json();
-      if (data.success) {
-        setSummary(data.data.summary);
-        setMerchants(data.data.merchants);
-        setUsers(data.data.users);
-        setRecentDisputes(data.data.recentDisputes);
-        setLastRefresh(new Date());
+  // Fetch is driven by the current status filter + page. Both are
+  // query-string params so the backend can paginate/filter server-side
+  // (the old call hard-capped at 50 disputes with no way to see older
+  // ones). Defaults match the prior request shape exactly.
+  const fetchData = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const token = adminTokenRef.current;
+      if (!token) return;
+      if (!opts?.silent) setLoading(true);
+      setIsRefreshing(true);
+      try {
+        const params = new URLSearchParams({
+          limit: String(PAGE_SIZE),
+          offset: String((page - 1) * PAGE_SIZE),
+          status: statusFilter,
+        });
+        const res = await fetchWithAuth(
+          `/api/admin/disputes?${params.toString()}`,
+        );
+        const data = await res.json();
+        if (data.success) {
+          setSummary(data.data.summary);
+          setMerchants(data.data.merchants);
+          setUsers(data.data.users);
+          setRecentDisputes(data.data.recentDisputes);
+          setRecentTotal(
+            typeof data.data.recentTotal === "number"
+              ? data.data.recentTotal
+              : data.data.recentDisputes?.length ?? 0,
+          );
+          setLastRefresh(new Date());
+        }
+      } catch (err) {
+        console.error("Failed to fetch disputes:", err);
+      } finally {
+        setLoading(false);
+        setIsRefreshing(false);
       }
-    } catch (err) {
-      console.error("Failed to fetch disputes:", err);
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
+    },
+    [page, statusFilter],
+  );
 
   useEffect(() => {
     if (isAuthenticated) fetchData();
@@ -251,7 +303,7 @@ export default function DisputesPage() {
         <span className="text-[9px] font-mono text-foreground/20 tabular-nums">
           {mounted ? lastRefresh.toLocaleTimeString() : "--:--:--"}
         </span>
-        <button onClick={fetchData} disabled={isRefreshing}
+        <button onClick={() => fetchData()} disabled={isRefreshing}
           className="p-2 rounded-lg transition-all bg-card hover:bg-accent-subtle border border-border">
           <RefreshCw className={`w-[18px] h-[18px] text-foreground/40 ${isRefreshing ? "animate-spin" : ""}`} />
         </button>
@@ -373,14 +425,40 @@ export default function DisputesPage() {
 
             {/* ── Recent Dispute Orders ── */}
             <div className="glass-card rounded-xl border border-border overflow-hidden">
-              <div className="px-4 py-3 border-b border-section-divider flex items-center gap-2">
+              <div className="px-4 py-3 border-b border-section-divider flex items-center gap-3 flex-wrap">
                 <AlertTriangle className="w-4 h-4 text-[var(--color-error)]/50" />
                 <span className="text-[11px] font-bold text-foreground/60 font-mono uppercase tracking-wider">All Disputed Orders</span>
-                <span className="text-[10px] font-mono text-foreground/25 ml-auto">{recentDisputes.length}</span>
+
+                {/* Status filter pills — server-side filter on the dispute
+                    lifecycle status. 'All' matches the historical default
+                    behavior so the panel looks identical until the admin
+                    explicitly narrows down. */}
+                <div className="flex items-center gap-1 ml-2">
+                  {DISPUTE_STATUS_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        setStatusFilter(opt.value);
+                        setPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-medium transition-colors ${
+                        statusFilter === opt.value
+                          ? "bg-primary/15 text-primary border border-primary/30"
+                          : "bg-card border border-border text-foreground/45 hover:text-foreground/70 hover:bg-accent-subtle"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                <span className="text-[10px] font-mono text-foreground/25 ml-auto tabular-nums">
+                  {recentTotal} total
+                </span>
               </div>
 
               {/* Table header */}
-              <div className="grid grid-cols-[100px_80px_1fr_1fr_80px_100px_1fr] gap-2 px-4 py-2 bg-card text-[9px] font-mono text-foreground/35 uppercase tracking-wider border-b border-section-divider">
+              <div className="grid grid-cols-[100px_80px_1fr_1fr_80px_100px_1.5fr] gap-2 px-4 py-2 bg-card text-[9px] font-mono text-foreground/35 uppercase tracking-wider border-b border-section-divider">
                 <span>Order</span>
                 <span className="text-right">Amount</span>
                 <span>User</span>
@@ -390,13 +468,31 @@ export default function DisputesPage() {
                 <span>Resolution</span>
               </div>
 
-              <div className="divide-y divide-section-divider max-h-[300px] overflow-y-auto scrollbar-hide">
-                {recentDisputes.length > 0 ? recentDisputes.map((d) => (
-                  <div key={d.orderNumber} className="grid grid-cols-[100px_80px_1fr_1fr_80px_100px_1fr] gap-2 px-4 py-2.5 items-center hover:bg-accent-subtle transition-colors">
+              <div className="divide-y divide-section-divider max-h-[400px] overflow-y-auto scrollbar-hide">
+                {recentDisputes.length > 0 ? recentDisputes.map((d) => {
+                  // Real dispute outcome wins over the order's
+                  // cancellation_reason fallback. Build a short summary
+                  // line from whichever resolution fields are populated.
+                  const resolutionText =
+                    d.disputeResolutionNotes ||
+                    d.disputeResolution ||
+                    d.resolution ||
+                    null;
+                  const resolvedInFavor = d.disputeResolvedInFavorOf;
+                  const isResolved = d.disputeStatus
+                    ? d.disputeStatus.startsWith("resolved")
+                    : false;
+                  return (
+                  <div key={d.orderNumber} className="grid grid-cols-[100px_80px_1fr_1fr_80px_100px_1.5fr] gap-2 px-4 py-2.5 items-center hover:bg-accent-subtle transition-colors">
                     <span className="text-[11px] font-mono text-foreground/60 font-medium">{d.orderNumber}</span>
                     <span className="text-[11px] font-mono text-foreground/60 font-bold tabular-nums text-right">${d.amount}</span>
                     <div className="min-w-0">
                       <p className="text-[11px] text-foreground/60 truncate">{d.userName}</p>
+                      {d.disputeReason && (
+                        <p className="text-[9px] font-mono text-foreground/30 truncate">
+                          {d.disputeReason.replace(/_/g, " ")}
+                        </p>
+                      )}
                     </div>
                     <div className="min-w-0">
                       <p className="text-[11px] text-foreground/60 truncate">{d.merchantName}</p>
@@ -408,25 +504,91 @@ export default function DisputesPage() {
                     }`}>
                       {d.disputedBy || "system"}
                     </span>
-                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border w-fit ${
-                      d.status === "disputed" ? "bg-[var(--color-error)]/10 border-[var(--color-error)]/20 text-[var(--color-error)]" :
-                      d.status === "cancelled" ? "bg-foreground/5 border-border text-foreground/40" :
-                      d.status === "completed" ? "bg-[var(--color-success)]/10 border-[var(--color-success)]/20 text-[var(--color-success)]" :
-                      "bg-card border-border text-foreground/40"
-                    }`}>
-                      {d.status.toUpperCase()}
-                    </span>
-                    <p className="text-[10px] font-mono text-foreground/30 truncate">
-                      {d.resolution || formatTimeAgo(d.disputedAt)}
-                    </p>
+                    <div className="flex flex-col gap-0.5">
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border w-fit ${
+                        d.status === "disputed" ? "bg-[var(--color-error)]/10 border-[var(--color-error)]/20 text-[var(--color-error)]" :
+                        d.status === "cancelled" ? "bg-foreground/5 border-border text-foreground/40" :
+                        d.status === "completed" ? "bg-[var(--color-success)]/10 border-[var(--color-success)]/20 text-[var(--color-success)]" :
+                        "bg-card border-border text-foreground/40"
+                      }`}>
+                        {d.status.toUpperCase()}
+                      </span>
+                      {d.disputeStatus && d.disputeStatus !== d.status && (
+                        <span className={`text-[9px] font-mono font-bold w-fit ${
+                          isResolved ? "text-[var(--color-success)]/70" :
+                          d.disputeStatus === "escalated" ? "text-[var(--color-error)]/70" :
+                          "text-foreground/35"
+                        }`}>
+                          {d.disputeStatus.replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      {resolutionText ? (
+                        <p className="text-[10px] font-mono text-foreground/55 truncate" title={resolutionText}>
+                          {resolutionText}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] font-mono text-foreground/30 truncate">
+                          {formatTimeAgo(d.disputedAt)}
+                        </p>
+                      )}
+                      {resolvedInFavor && (
+                        <p className="text-[9px] font-mono text-[var(--color-success)]/60 truncate">
+                          in favor of {resolvedInFavor}
+                          {d.disputeResolvedAt && ` · ${formatTimeAgo(d.disputeResolvedAt)}`}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                )) : (
+                  );
+                }) : (
                   <div className="px-4 py-10 text-center text-foreground/20">
                     <AlertTriangle className="w-6 h-6 mx-auto mb-2 opacity-20" />
                     <p className="text-[11px] font-mono">No disputes recorded</p>
                   </div>
                 )}
               </div>
+
+              {/* Pagination footer — only renders when there's more than
+                  one page. Compact prev/next + page indicator that matches
+                  the visual language of the rest of the admin pages. */}
+              {recentTotal > PAGE_SIZE && (
+                <div className="px-4 py-2.5 border-t border-section-divider flex items-center justify-between gap-3 bg-card/30">
+                  <span className="text-[10px] font-mono text-foreground/35 tabular-nums">
+                    {(page - 1) * PAGE_SIZE + 1}–
+                    {Math.min(page * PAGE_SIZE, recentTotal)} of {recentTotal}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="w-7 h-7 flex items-center justify-center rounded-md text-foreground/50 bg-card border border-border hover:bg-accent-subtle hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="px-2 text-[10px] font-mono text-foreground/50 tabular-nums">
+                      page {page} / {Math.max(1, Math.ceil(recentTotal / PAGE_SIZE))}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setPage((p) =>
+                          Math.min(
+                            Math.max(1, Math.ceil(recentTotal / PAGE_SIZE)),
+                            p + 1,
+                          ),
+                        )
+                      }
+                      disabled={page >= Math.ceil(recentTotal / PAGE_SIZE)}
+                      className="w-7 h-7 flex items-center justify-center rounded-md text-foreground/50 bg-card border border-border hover:bg-accent-subtle hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

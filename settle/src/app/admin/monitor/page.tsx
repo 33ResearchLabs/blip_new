@@ -34,6 +34,15 @@ interface StatsData {
   escrowLocked: number;
   activeMerchants: number;
   txPerMinute: number;
+  // ── New server-side counts (added in /api/admin/stats) ──
+  // Optional so older API responses (during a rolling deploy) still
+  // type-check; the page falls back to the legacy client-side counts
+  // when these are missing.
+  tradesToday?: number;
+  ordersToday?: number;
+  volumeToday?: number;
+  disputedOrders?: number;
+  totalOrders?: number;
 }
 
 interface OrderRow {
@@ -78,6 +87,19 @@ const formatAmount = (n: number) => {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toFixed(2);
+};
+
+// `avgTime` from /api/admin/stats is already in MINUTES (SQL is
+// `EXTRACT(EPOCH FROM AVG(...)) / 60`). The previous render path
+// divided by 60 again, which collapsed everything under an hour to
+// "0m" — the cause of the "—" placeholder on the Success card.
+const formatAvgTime = (minutes: number): string => {
+  if (!Number.isFinite(minutes) || minutes <= 0) return "—";
+  if (minutes < 1) return `${Math.max(1, Math.round(minutes * 60))}s`;
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
 
 const getStatusStyle = (status: string) => {
@@ -291,11 +313,20 @@ export default function MonitorPage() {
     (a) => alertSeverity === "all" || a.severity === alertSeverity
   );
 
-  // Computed metrics
-  const activeOrders = orders.filter((o) =>
+  // Computed metrics.
+  //
+  // We prefer the server-side counts from /api/admin/stats — they cover
+  // the full table, not just the 200-row orders fetch. The local
+  // `orders.filter(...)` fallbacks are kept so the page still renders a
+  // sensible number during the brief window where the stats response
+  // hasn't arrived yet (or against an older API build that doesn't yet
+  // expose `openOrders` / `disputedOrders`).
+  const clientActiveOrders = orders.filter((o) =>
     ["pending", "accepted", "escrowed", "payment_sent", "payment_confirmed", "releasing"].includes(o.status)
   ).length;
-  const disputedOrders = orders.filter((o) => o.status === "disputed").length;
+  const clientDisputedOrders = orders.filter((o) => o.status === "disputed").length;
+  const activeOrders = stats?.openOrders ?? clientActiveOrders;
+  const disputedOrders = stats?.disputedOrders ?? clientDisputedOrders;
 
   // ── Loading ──────────────────────────────────────────────────────────
 
@@ -385,18 +416,29 @@ export default function MonitorPage() {
       <div className="max-w-[1600px] mx-auto px-4 py-4 space-y-4">
         {/* ── Metrics Row ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
-          <MetricCard label="Orders Today" value={stats?.totalTrades ?? 0} icon={<Activity size={14} />} />
+          {/* "Orders Today" now actually means today. Falls back to the
+              all-time totalTrades only if the API hasn't shipped the new
+              `ordersToday` field yet (rolling deploy safety). */}
+          <MetricCard
+            label="Orders Today"
+            value={stats?.ordersToday ?? stats?.totalTrades ?? 0}
+            icon={<Activity size={14} />}
+          />
           <MetricCard label="Active" value={activeOrders} icon={<Zap size={14} />} accent="primary" />
           <MetricCard label="Disputed" value={disputedOrders} icon={<AlertTriangle size={14} />} accent={disputedOrders > 0 ? "error" : undefined} />
           <MetricCard label="Escrow Locked" value={`$${formatAmount(stats?.escrowLocked ?? 0)}`} icon={<Lock size={14} />} />
           <MetricCard label="Volume 24h" value={`$${formatAmount(stats?.volume24h ?? 0)}`} icon={<TrendingUp size={14} />} />
-          <MetricCard label="Merchants" value={stats?.activeMerchants ?? 0} icon={<Shield size={14} />} />
+          {/* `activeMerchants` is actually online merchants — the SQL is
+              `WHERE is_online = true`. Label updated to reflect that. */}
+          <MetricCard label="Online Merchants" value={stats?.activeMerchants ?? 0} icon={<Shield size={14} />} />
           <div className="bg-card border border-border rounded-lg p-3 flex items-center gap-3">
             <CircularGauge value={stats?.successRate ?? 0} size={40} />
             <div>
               <div className="text-[10px] text-foreground/40 uppercase tracking-wider">Success</div>
               <div className="text-xs font-mono font-bold text-foreground/80">
-                {stats?.avgTime ? `~${Math.round(stats.avgTime / 60)}m avg` : "—"}
+                {stats?.avgTime && stats.avgTime > 0
+                  ? `~${formatAvgTime(stats.avgTime)} avg`
+                  : "—"}
               </div>
             </div>
           </div>
@@ -412,7 +454,20 @@ export default function MonitorPage() {
                 <h2 className="text-sm font-bold flex items-center gap-1.5">
                   <Activity size={14} className="text-primary" />
                   Live Orders
-                  <span className="text-[10px] text-foreground/30 font-mono ml-1">{filteredOrders.length}</span>
+                  {/* The orders fetch is capped at 200 rows. Show
+                      "visible / total" so the admin can tell when the
+                      list is truncated; show just the count when it
+                      isn't, to keep the unfiltered case clean. */}
+                  <span className="text-[10px] text-foreground/30 font-mono ml-1 tabular-nums">
+                    {(() => {
+                      const total = stats?.totalOrders;
+                      const visible = filteredOrders.length;
+                      if (total != null && total > orders.length) {
+                        return `${visible} of ${total}`;
+                      }
+                      return visible;
+                    })()}
+                  </span>
                 </h2>
               </div>
               {/* Status tabs */}

@@ -275,11 +275,29 @@ let forcedLogoutInProgress = false;
  * Hard logout: wipe all client-side auth state and redirect to the appropriate
  * login page. Called when the server says our session is no longer valid
  * (401 after a failed refresh) — we MUST stop using the dead token.
+ *
+ * The redirect URL gets a `?reason=session_expired` (or `?expired=1` on
+ * waitlist) banner trigger ONLY when there's evidence the user actually
+ * had a session to lose. A landing-page visitor who's never been logged
+ * in shouldn't see "Your session expired" — that's confusing and wrong.
+ * We detect prior auth by sniffing the in-memory store token and the two
+ * persistent identity markers (`blip_user`, `blip_merchant`). If none of
+ * those have ever been set in this browser context, we redirect to a
+ * clean login URL with no banner.
  */
 function forceLogoutAndRedirect(): void {
   if (forcedLogoutInProgress) return;
   forcedLogoutInProgress = true;
   if (typeof window === 'undefined') return;
+
+  // Snapshot auth evidence BEFORE we wipe anything — otherwise we'd
+  // always see "no auth" and never show the banner for real expiries.
+  let hadAuthEvidence = false;
+  try {
+    if (useMerchantStore.getState().sessionToken) hadAuthEvidence = true;
+    if (!hadAuthEvidence && window.localStorage.getItem('blip_user')) hadAuthEvidence = true;
+    if (!hadAuthEvidence && window.localStorage.getItem('blip_merchant')) hadAuthEvidence = true;
+  } catch { /* storage disabled — assume no evidence */ }
 
   try {
     // Wipe in-memory store mirrors. The DURABLE auth state lives in the
@@ -305,28 +323,31 @@ function forceLogoutAndRedirect(): void {
   } catch { /* ignore — redirect proceeds */ }
 
   // Pick the right login page based on where the user currently is.
-  // Drop on the dedicated login form (not the welcome page) with a reason
-  // query param so the UI can show "Session expired — please sign in" banner.
+  // Banner suffix only when we actually had something to lose — see the
+  // hadAuthEvidence comment above.
   const path = window.location.pathname;
-  let target = '/login?reason=session_expired';
-  if (path.startsWith('/merchant')) target = '/merchant/login?reason=session_expired';
-  else if (path.startsWith('/admin')) target = '/admin?session=expired';
-  else if (path.startsWith('/compliance')) target = '/compliance?session=expired';
-  else if (path.startsWith('/waitlist')) {
+  let target = '/login';
+  let bannerQs = hadAuthEvidence ? '?reason=session_expired' : '';
+  if (path.startsWith('/merchant')) {
+    target = '/merchant/login';
+  } else if (path.startsWith('/admin')) {
+    target = '/admin';
+    bannerQs = hadAuthEvidence ? '?session=expired' : '';
+  } else if (path.startsWith('/compliance')) {
+    target = '/compliance';
+    bannerQs = hadAuthEvidence ? '?session=expired' : '';
+  } else if (path.startsWith('/waitlist')) {
     // Waitlist sessions split by role — read the cached actor type so a
     // merchant whose token died doesn't get bounced to the user login form.
-    // Key matches `blip_waitlist_actor_type` in src/lib/waitlist/roleCache.ts;
-    // we read it directly here to avoid pulling the waitlist module into the
-    // general-purpose fetchWithAuth bundle.
+    // Key matches `blip_waitlist_actor_type` in src/lib/waitlist/roleCache.ts.
     let role: string | null = null;
     try { role = window.localStorage.getItem('blip_waitlist_actor_type'); } catch { /* storage disabled */ }
-    target = role === 'merchant'
-      ? '/waitlist/merchant-login?expired=1'
-      : '/waitlist/login?expired=1';
+    target = role === 'merchant' ? '/waitlist/merchant-login' : '/waitlist/login';
+    bannerQs = hadAuthEvidence ? '?expired=1' : '';
   }
 
   // Use replace so the dead-token page can't be reached via Back button
-  window.location.replace(target);
+  window.location.replace(`${target}${bannerQs}`);
 }
 
 /**

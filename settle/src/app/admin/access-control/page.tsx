@@ -15,6 +15,8 @@ import {
   ChevronRight,
   ChevronDown,
   Check,
+  Star,
+  AlertTriangle,
 } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -30,11 +32,14 @@ interface MerchantItem {
   emoji: string;
   isOnline: boolean;
   rating: number;
+  ratingCount: number;
   trades: number;
   volume: number;
   hasComplianceAccess: boolean;
   hasOpsAccess: boolean;
   lastSeenAt: string | null;
+  riskScore: number;
+  riskLevel: string;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
@@ -517,12 +522,18 @@ export default function AccessControlPage() {
       <div className="w-full px-8 pb-4">
         <div className="bg-card-solid border border-border rounded-xl overflow-hidden">
           {/* Header row */}
-          <div className="grid grid-cols-[2fr_1.4fr_1.6fr_1.2fr_1fr_60px] gap-4 px-5 py-3 border-b border-section-divider bg-card">
+          <div className="grid grid-cols-[1.8fr_1.2fr_0.9fr_0.9fr_1.4fr_1.1fr_0.9fr_60px] gap-4 px-5 py-3 border-b border-section-divider bg-card">
             <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
               User
             </div>
             <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
               Details
+            </div>
+            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
+              Reputation
+            </div>
+            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
+              Risk
             </div>
             <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
               Permissions
@@ -720,6 +731,33 @@ function FilterOption({
   );
 }
 
+function getRiskStyle(level: string): { label: string; className: string } {
+  switch ((level || "low").toLowerCase()) {
+    case "critical":
+      return {
+        label: "Critical",
+        className:
+          "bg-[var(--color-error)]/15 border-[var(--color-error)]/30 text-[var(--color-error)]",
+      };
+    case "high":
+      return {
+        label: "High",
+        className: "bg-orange-500/15 border-orange-500/30 text-orange-400",
+      };
+    case "medium":
+      return {
+        label: "Medium",
+        className: "bg-amber-500/15 border-amber-500/30 text-amber-400",
+      };
+    default:
+      return {
+        label: "Low",
+        className:
+          "bg-[var(--color-success)]/10 border-[var(--color-success)]/25 text-[var(--color-success)]",
+      };
+  }
+}
+
 function UserRow({
   merchant,
   on,
@@ -745,8 +783,10 @@ function UserRow({
       : ["Read", "Trade", "Withdraw"]
     : ["Read Only"];
 
+  const riskStyle = getRiskStyle(merchant.riskLevel);
+
   return (
-    <div className="grid grid-cols-[2fr_1.4fr_1.6fr_1.2fr_1fr_60px] gap-4 px-5 py-3.5 border-b border-section-divider/50 last:border-0 hover:bg-accent-subtle/40 transition-colors items-center">
+    <div className="grid grid-cols-[1.8fr_1.2fr_0.9fr_0.9fr_1.4fr_1.1fr_0.9fr_60px] gap-4 px-5 py-3.5 border-b border-section-divider/50 last:border-0 hover:bg-accent-subtle/40 transition-colors items-center">
       {/* User */}
       <div className="flex items-center gap-3 min-w-0">
         <div className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-base shrink-0">
@@ -779,6 +819,35 @@ function UserRow({
         </span>
         <span className="tabular-nums">
           {formatCrypto(merchant.volume, { decimals: 0 })} vol
+        </span>
+      </div>
+
+      {/* Reputation */}
+      <div className="flex items-center gap-1.5">
+        <Star
+          className={`w-3.5 h-3.5 ${
+            merchant.rating > 0
+              ? "text-amber-400 fill-amber-400"
+              : "text-foreground/20"
+          }`}
+        />
+        <div className="flex flex-col">
+          <span className="text-[12px] font-medium text-foreground tabular-nums leading-tight">
+            {merchant.rating > 0 ? merchant.rating.toFixed(1) : "—"}
+          </span>
+          <span className="text-[9px] text-foreground/35 font-mono tabular-nums leading-tight">
+            {formatCount(merchant.ratingCount)} reviews
+          </span>
+        </div>
+      </div>
+
+      {/* Risk */}
+      <div>
+        <span
+          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border tabular-nums ${riskStyle.className}`}
+        >
+          <AlertTriangle className="w-3 h-3" />
+          {riskStyle.label} · {merchant.riskScore}
         </span>
       </div>
 
