@@ -86,10 +86,29 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const [tasks, pointsHistory, referrals] = await Promise.all([
+  const [tasks, pointsHistory, referrals, betaRequest] = await Promise.all([
     listTasksForActor(actorId, actorType),
     getPointHistory(actorId, actorType, 25),
     getMyReferrals(actorId, actorType),
+    // Latest beta-access request for this actor (any status). Powers the
+    // "Send Request" → "Request Sent" / "Approved" / "Rejected" button
+    // state on the waitlist dashboard. NULL when the actor has never
+    // submitted one. We only need the most recent row — the unique
+    // partial index keeps pending uniqueness; older rejected/approved
+    // rows are kept for audit but irrelevant to the button state.
+    queryOne<{
+      id: string;
+      status: 'pending' | 'approved' | 'rejected' | 'contacted';
+      expected_trading_amount_usd: string | null;
+      requested_at: string;
+    }>(
+      `SELECT id, status, expected_trading_amount_usd, requested_at
+         FROM beta_access_requests
+        WHERE actor_type = $1 AND actor_id = $2
+        ORDER BY requested_at DESC
+        LIMIT 1`,
+      [actorType, actorId],
+    ),
   ]);
 
   // Position in the waitlist line. Computed by counting how many waitlisted
@@ -136,6 +155,7 @@ export async function GET(request: NextRequest) {
       tasks,
       points_history: pointsHistory,
       referrals,
+      beta_request: betaRequest,
     },
   });
 }
