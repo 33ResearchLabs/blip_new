@@ -51,7 +51,17 @@ export default function LoginForm({ role }: LoginFormProps) {
   // statically-prerenderable page.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setShowExpired(new URLSearchParams(window.location.search).get("expired") === "1");
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("expired") !== "1") return;
+    setShowExpired(true);
+    // Strip the param so a refresh doesn't redisplay the banner forever,
+    // even after the user has dismissed it mentally by reading it once.
+    url.searchParams.delete("expired");
+    const clean =
+      url.pathname +
+      (url.searchParams.toString() ? `?${url.searchParams}` : "") +
+      url.hash;
+    window.history.replaceState(null, "", clean);
   }, []);
 
   // Tick the resend-verification countdown. Computes from the absolute

@@ -26,13 +26,25 @@ export default function MerchantLoginPage() {
 
   // Seed authTab / loginError from URL params so deep links like
   // /merchant/login?tab=register and /merchant/login?reason=session_expired
-  // land on the right state.
+  // land on the right state. The `reason` param is consumed once on mount
+  // and then stripped from the URL — otherwise a page refresh would
+  // reapply the banner forever, even after the user dismisses it or
+  // successfully signs back in.
   useEffect(() => {
     const tab = searchParams.get("tab");
     auth.setAuthTab(tab === "register" || tab === "create" ? "create" : "signin");
     const reason = searchParams.get("reason");
     if (reason === "session_expired") {
       auth.setLoginError("Your session expired. Please sign in again.");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("reason");
+        const clean =
+          url.pathname +
+          (url.searchParams.toString() ? `?${url.searchParams}` : "") +
+          url.hash;
+        window.history.replaceState(null, "", clean);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
