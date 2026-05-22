@@ -44,6 +44,12 @@ type TaskStatus = 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
 interface Task { id: string; task_type: TaskType; status: TaskStatus; points_awarded: number; }
 interface PointEntry { id: string; event: string; bonus_points: number; total_points: number | null; created_at: string; }
 interface Referral { id: string; referred_type: ActorType; reward_status: 'pending' | 'credited' | 'failed'; reward_amount: number; created_at: string; }
+interface BetaRequest {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'contacted';
+  expected_trading_amount_usd: string | null;
+  requested_at: string;
+}
 
 interface WaitlistMe {
   actor: {
@@ -67,6 +73,7 @@ interface WaitlistMe {
   tasks: Task[];
   points_history: PointEntry[];
   referrals: Referral[];
+  beta_request: BetaRequest | null;
 }
 
 interface LeaderboardRow {
@@ -101,6 +108,9 @@ export default function WaitlistDashboardPage() {
   const [howOpen, setHowOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  // Beta-access "Send Request" modal — only used by merchants (gated below).
+  // Kept here so the button + modal share state without prop-drilling.
+  const [betaModalOpen, setBetaModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -413,33 +423,16 @@ export default function WaitlistDashboardPage() {
               </button>
             )}
 
-            {/* MERCHANT BETA BANNER ── */}
-            <div className={`${surface} border ${border} rounded-xl p-4 mt-auto`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#ff6b35] bg-[#ff6b35]/10 border border-[#ff6b35]/20 rounded px-2 py-0.5">
-                      Merchant Beta
-                    </span>
-                    <span className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">
-                      On-Request
-                    </span>
-                  </div>
-                  <h4 className={`text-sm font-bold ${txt} mb-1`}>Request for Merchant P2P App Test</h4>
-                  <p className={`text-[11px] ${muted} mb-3 leading-relaxed`}>
-                    Trial our P2P release app. Early access &amp; governance perks included.
-                  </p>
-                  <div className="flex items-center gap-3 text-[10px] text-zinc-500">
-                    <span className="flex items-center gap-1"><CircleCheck className="w-3 h-3" /> P2P Access</span>
-                    <span className="flex items-center gap-1"><CircleCheck className="w-3 h-3" /> Governance</span>
-                    <span className="text-zinc-700">v0.1.4</span>
-                  </div>
-                </div>
-                <button className="bg-white text-black px-4 py-2.5 rounded-md text-[11px] font-bold uppercase tracking-[0.12em] hover:opacity-90 active:scale-[0.98] transition self-start">
-                  Send Request
-                </button>
-              </div>
-            </div>
+            {/* MERCHANT BETA BANNER ── only shown to merchants; user-facing
+                copy on this card is merchant-specific ("Merchant P2P App
+                Test"). Hidden for users to avoid promising them a flow that
+                doesn't exist for their actor type. */}
+            {isMerchant && (
+              <BetaRequestBanner
+                betaRequest={me.beta_request}
+                onClickRequest={() => setBetaModalOpen(true)}
+              />
+            )}
           </div>
           {/* /LEFT */}
 
@@ -591,6 +584,205 @@ export default function WaitlistDashboardPage() {
           onConfirm={() => void confirmLogout()}
         />
       )}
+      {betaModalOpen && (
+        <BetaRequestModal
+          onClose={() => setBetaModalOpen(false)}
+          onSuccess={() => { setBetaModalOpen(false); void load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Merchant beta-access banner ───────────────────────────────────────
+// Shows different button states based on the actor's latest request:
+//   - no request   → "Send Request" (opens the modal)
+//   - pending      → "Request Sent" (disabled)
+//   - contacted    → "We've Been In Touch" (disabled)
+//   - approved     → "Approved ✓"  (disabled, green)
+//   - rejected     → "Send Request" again (re-open)
+// Re-renders from /api/waitlist/me — the parent passes the latest state.
+function BetaRequestBanner({
+  betaRequest,
+  onClickRequest,
+}: {
+  betaRequest: BetaRequest | null;
+  onClickRequest: () => void;
+}) {
+  const status = betaRequest?.status ?? null;
+  const isOpen = status === 'pending' || status === 'contacted';
+  const isApproved = status === 'approved';
+
+  let buttonText = 'Send Request';
+  if (status === 'pending') buttonText = 'Request Sent';
+  else if (status === 'contacted') buttonText = "We've Been In Touch";
+  else if (isApproved) buttonText = 'Approved ✓';
+
+  const disabled = isOpen || isApproved;
+
+  return (
+    <div className={`${surface} border ${border} rounded-xl p-4 mt-auto`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#ff6b35] bg-[#ff6b35]/10 border border-[#ff6b35]/20 rounded px-2 py-0.5">
+              Merchant Beta
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">
+              On-Request
+            </span>
+          </div>
+          <h4 className={`text-sm font-bold ${txt} mb-1`}>Request for Merchant P2P App Test</h4>
+          <p className={`text-[11px] ${muted} mb-3 leading-relaxed`}>
+            Trial our P2P release app. Early access &amp; governance perks included.
+          </p>
+          <div className="flex items-center gap-3 text-[10px] text-zinc-500">
+            <span className="flex items-center gap-1"><CircleCheck className="w-3 h-3" /> P2P Access</span>
+            <span className="flex items-center gap-1"><CircleCheck className="w-3 h-3" /> Governance</span>
+            <span className="text-zinc-700">v0.1.4</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={disabled ? undefined : onClickRequest}
+          className={`px-4 py-2.5 rounded-md text-[11px] font-bold uppercase tracking-[0.12em] active:scale-[0.98] transition self-start whitespace-nowrap ${
+            isApproved
+              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 cursor-default'
+              : isOpen
+                ? 'bg-white/[0.04] border border-white/[0.08] text-white/50 cursor-default'
+                : 'bg-white text-black hover:opacity-90'
+          }`}
+        >
+          {buttonText}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Beta-access request modal ─────────────────────────────────────────
+// Prompts the merchant for an expected monthly trading volume (USD) and
+// POSTs to /api/waitlist/beta-request. The server snapshots the rest of
+// the profile (email/name/country) so this form stays a single field.
+function BetaRequestModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [amount, setAmount] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !submitting) onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [submitting, onClose]);
+
+  async function submit() {
+    if (submitting) return;
+    setError(null);
+    const parsed = Number(amount.replace(/[^\d.]/g, ''));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setError('Enter a positive monthly trading amount in USD.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth('/api/waitlist/beta-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expected_trading_amount_usd: parsed }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error ?? 'Request failed. Please try again.');
+        return;
+      }
+      onSuccess();
+    } catch (err) {
+      console.error('[beta-request] submit failed', err);
+      setError('Network error — please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="beta-request-title"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+      onClick={() => { if (!submitting) onClose(); }}
+    >
+      <div
+        className={`${surface} border ${border} rounded-2xl shadow-2xl w-full max-w-md p-6`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="beta-request-title" className={`text-base font-bold ${txt} mb-1`}>
+          Request P2P App Test Access
+        </h3>
+        <p className={`text-xs ${sub} mb-5 leading-relaxed`}>
+          Tell us how much volume you plan to trade each month. We&apos;ll review
+          your request and reach out via your account email.
+        </p>
+        <label className={`block text-[11px] font-bold uppercase tracking-[0.14em] ${sub} mb-2`}>
+          Expected Monthly Trading Amount (USD)
+        </label>
+        <div className="relative mb-1">
+          <span className={`absolute left-4 top-1/2 -translate-y-1/2 text-sm ${sub}`}>$</span>
+          <input
+            autoFocus
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }}
+            placeholder="50,000"
+            maxLength={14}
+            disabled={submitting}
+            className={`w-full pl-8 pr-4 py-2.5 ${inputBg} border ${border} rounded-xl text-sm ${txt} placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-50`}
+          />
+        </div>
+        <p className={`text-[10px] ${sub} mb-4`}>USD equivalent. Approximate is fine.</p>
+
+        {error && (
+          <div className="mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className={`flex-1 py-2.5 rounded-lg border ${border} ${inputBg} text-xs font-semibold ${txt} ${hov} transition-colors disabled:opacity-50`}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={submitting}
+            className="flex-1 py-2.5 rounded-lg bg-white text-black text-xs font-bold hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+          >
+            {submitting ? (
+              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+            ) : (
+              'Send Request'
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
