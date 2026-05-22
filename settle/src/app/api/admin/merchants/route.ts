@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { requireAdminAuth, readAdminTokenFromRequest, verifyAdminToken } from '@/lib/middleware/auth';
+import { sweepStaleMerchantPresence, ONLINE_FRESH_SQL } from '@/lib/db/repositories/merchants';
 
 interface MerchantRow {
   id: string;
@@ -56,6 +57,11 @@ export async function GET(request: NextRequest) {
   const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
+  // Self-healing sweep for stale `merchants.is_online` rows (see
+  // sweepStaleMerchantPresence comments). Internal 30s cooldown
+  // prevents this from running on every admin paging click.
+  sweepStaleMerchantPresence().catch(() => {});
+
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
@@ -83,10 +89,13 @@ export async function GET(request: NextRequest) {
       conditions.push(`m.status = $${paramIdx}`);
       params.push(statusFilter);
     }
+    // Apply the freshness check so the admin's online filter matches
+    // the new Monitor count. The "offline" branch is the inverse —
+    // merchants whose flag is false OR whose last heartbeat is stale.
     if (onlineFilter === 'true') {
-      conditions.push('m.is_online = true');
+      conditions.push(ONLINE_FRESH_SQL);
     } else if (onlineFilter === 'false') {
-      conditions.push('m.is_online = false');
+      conditions.push(`NOT ${ONLINE_FRESH_SQL}`);
     }
     if (searchQuery) {
       paramIdx++;
@@ -290,7 +299,7 @@ export async function GET(request: NextRequest) {
     }>(`
       SELECT
         (SELECT COUNT(*) FROM merchants)::text as total_merchants,
-        (SELECT COUNT(*) FROM merchants WHERE is_online = true)::text as online_merchants,
+        (SELECT COUNT(*) FROM merchants WHERE is_online = true AND last_seen_at > NOW() - INTERVAL '2 minutes')::text as online_merchants,
         (SELECT COUNT(*) FROM merchants WHERE verification_level >= 1 AND status = 'active')::text as verified_merchants,
         COALESCE((SELECT SUM(crypto_amount) FROM orders WHERE status = 'completed'), 0)::text as total_volume,
         (SELECT COUNT(*) FROM orders WHERE status = 'completed')::text as total_trades,

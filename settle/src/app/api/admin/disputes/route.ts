@@ -1,14 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { requireAdminAuth } from '@/lib/middleware/auth';
 
+// Dispute lifecycle statuses we accept as filter input. Anything else (or
+// missing) means "all". 'all' is the documented default to preserve the
+// existing no-filter response shape.
+const ALLOWED_DISPUTE_STATUS = new Set([
+  'all',
+  'open',
+  'investigating',
+  'resolved',
+  'escalated',
+  'pending_confirmation',
+  'resolved_user',
+  'resolved_merchant',
+  'resolved_split',
+]);
+
 // GET /api/admin/disputes — Dispute stats: top disputed merchants & users
+//
+// Query params (all optional, additive — defaults match prior behavior):
+//   limit            number of recent disputes (default 50, max 200)
+//   offset           pagination offset (default 0)
+//   status           dispute lifecycle status filter (default 'all')
 export async function GET(request: NextRequest) {
   const authError = await requireAdminAuth(request);
   if (authError) return authError;
 
   try {
-    // Top merchants with most disputes against them
+    const { searchParams } = new URL(request.url);
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50')));
+    const offset = Math.max(0, parseInt(searchParams.get('offset') || '0'));
+    const rawStatus = (searchParams.get('status') || 'all').toLowerCase();
+    const statusFilter = ALLOWED_DISPUTE_STATUS.has(rawStatus) ? rawStatus : 'all';
+
+    // Top merchants with most disputes against them.
+    //
+    // Counts disputes where the merchant is on EITHER side of the order —
+    // i.e. `merchant_id` (seller) OR `buyer_merchant_id` (M2M buyer). The
+    // prior query only matched the seller side and under-counted disputes
+    // against active M2M desks (same pattern used by the merchants list
+    // API for trades/volume — `(merchant_id = m.id OR buyer_merchant_id =
+    // m.id)`).
     const merchantDisputes = await query<{
       merchant_id: string;
       business_name: string;
@@ -32,7 +65,8 @@ export async function GET(request: NextRequest) {
         COALESCE(SUM(o.crypto_amount), 0)::text as total_disputed_amount,
         MAX(o.disputed_at)::text as last_disputed_at
       FROM orders o
-      JOIN merchants m ON m.id = o.merchant_id
+      JOIN merchants m
+        ON m.id = o.merchant_id OR m.id = o.buyer_merchant_id
       WHERE o.disputed_at IS NOT NULL
       GROUP BY m.id, m.business_name, m.email, m.total_trades
       ORDER BY COUNT(*) DESC, SUM(o.crypto_amount) DESC
@@ -70,7 +104,27 @@ export async function GET(request: NextRequest) {
       LIMIT 50
     `);
 
-    // Recent dispute orders with both parties
+    // Recent dispute orders with both parties.
+    //
+    // Key fixes vs. the prior version:
+    //  1. LEFT JOIN on users/merchants — the previous INNER JOINs silently
+    //     dropped any disputed order where merchant_id was NULL (broadcast)
+    //     or the user row was missing (edge cases). Disputes were
+    //     invisible in the admin history even though they existed.
+    //  2. LATERAL JOIN onto the dedicated `disputes` table — picks the
+    //     most-recent dispute row per order so the UI can show the real
+    //     dispute reason, resolution status, who it was resolved in favor
+    //     of, and the resolution notes (instead of just the order's
+    //     cancellation_reason text).
+    //  3. Pagination + status filter — pulled from query params with
+    //     backward-compatible defaults (limit=50, offset=0, status='all').
+    const statusWhereSql = statusFilter === 'all'
+      ? ''
+      : `AND d.status = $3::public.dispute_status`;
+
+    const recentParams: unknown[] = [limit, offset];
+    if (statusFilter !== 'all') recentParams.push(statusFilter);
+
     const recentDisputes = await query<{
       order_number: string;
       crypto_amount: string;
@@ -79,10 +133,18 @@ export async function GET(request: NextRequest) {
       disputed_by: string | null;
       disputed_by_id: string | null;
       user_name: string;
-      user_id: string;
+      user_id: string | null;
       merchant_name: string;
-      merchant_id: string;
+      merchant_id: string | null;
       cancellation_reason: string | null;
+      dispute_id: string | null;
+      dispute_status: string | null;
+      dispute_reason: string | null;
+      dispute_description: string | null;
+      dispute_resolution: string | null;
+      dispute_resolution_notes: string | null;
+      dispute_resolved_at: string | null;
+      dispute_resolved_in_favor_of: string | null;
     }>(`
       SELECT
         o.order_number,
@@ -93,16 +155,50 @@ export async function GET(request: NextRequest) {
         o.disputed_by_id::text,
         COALESCE(u.name, u.username, 'Unknown') as user_name,
         o.user_id::text,
-        m.business_name as merchant_name,
+        COALESCE(m.business_name, '—') as merchant_name,
         o.merchant_id::text,
-        o.cancellation_reason
+        o.cancellation_reason,
+        d.id::text as dispute_id,
+        d.status::text as dispute_status,
+        d.reason::text as dispute_reason,
+        d.description as dispute_description,
+        d.resolution as dispute_resolution,
+        d.resolution_notes as dispute_resolution_notes,
+        d.resolved_at::text as dispute_resolved_at,
+        d.resolved_in_favor_of::text as dispute_resolved_in_favor_of
       FROM orders o
-      JOIN users u ON u.id = o.user_id
-      JOIN merchants m ON m.id = o.merchant_id
+      LEFT JOIN users u ON u.id = o.user_id
+      LEFT JOIN merchants m ON m.id = o.merchant_id
+      LEFT JOIN LATERAL (
+        SELECT *
+        FROM disputes
+        WHERE order_id = o.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) d ON true
       WHERE o.disputed_at IS NOT NULL
+        ${statusWhereSql}
       ORDER BY o.disputed_at DESC
-      LIMIT 50
-    `);
+      LIMIT $1 OFFSET $2
+    `, recentParams);
+
+    // Total count for pagination — uses the same filter so the page
+    // numbering reflects the filtered view, not the unfiltered universe.
+    const totalCountParams: unknown[] = [];
+    let totalCountSql = `
+      SELECT COUNT(*)::text as count
+      FROM orders o
+      WHERE o.disputed_at IS NOT NULL
+    `;
+    if (statusFilter !== 'all') {
+      totalCountSql += ` AND EXISTS (
+        SELECT 1 FROM disputes d
+        WHERE d.order_id = o.id AND d.status = $1::public.dispute_status
+      )`;
+      totalCountParams.push(statusFilter);
+    }
+    const totalCountRow = await queryOne<{ count: string }>(totalCountSql, totalCountParams);
+    const recentTotal = parseInt(totalCountRow?.count || '0');
 
     // Summary stats
     const summary = await query<{
@@ -160,8 +256,26 @@ export async function GET(request: NextRequest) {
           userId: d.user_id,
           merchantName: d.merchant_name,
           merchantId: d.merchant_id,
+          // Existing field — preserved for backward compatibility. UI now
+          // prefers `disputeResolutionNotes`/`disputeResolution` if present
+          // and falls back to this if not.
           resolution: d.cancellation_reason,
+          // New fields sourced from the dedicated `disputes` table.
+          disputeId: d.dispute_id,
+          disputeStatus: d.dispute_status,
+          disputeReason: d.dispute_reason,
+          disputeDescription: d.dispute_description,
+          disputeResolution: d.dispute_resolution,
+          disputeResolutionNotes: d.dispute_resolution_notes,
+          disputeResolvedAt: d.dispute_resolved_at,
+          disputeResolvedInFavorOf: d.dispute_resolved_in_favor_of,
         })),
+        // Pagination metadata for the recent disputes panel. Old clients
+        // that ignore these fields keep working exactly as before.
+        recentTotal,
+        recentLimit: limit,
+        recentOffset: offset,
+        recentStatusFilter: statusFilter,
       },
     });
   } catch (error) {
