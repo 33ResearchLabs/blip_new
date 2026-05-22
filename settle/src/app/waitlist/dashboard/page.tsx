@@ -85,7 +85,11 @@ const hov = 'hover:bg-white/5';
 const inputBg = 'bg-white/5';
 const divider = 'border-white/[0.06]';
 
-const ONBOARD_FORM_URL = 'https://forms.gle/blipmoney-merchant-onboard';
+// Live Google Form (verified HTTP 200; resolves to docs.google.com/forms/...).
+// Same link futureStick's MerchantDashboard.tsx uses, so the two surfaces
+// stay in sync. The previous URL (forms.gle/blipmoney-merchant-onboard)
+// was a placeholder slug that returned 404.
+const ONBOARD_FORM_URL = 'https://forms.gle/UyfhpcMdq8BSTQSZA';
 
 export default function WaitlistDashboardPage() {
   const router = useRouter();
