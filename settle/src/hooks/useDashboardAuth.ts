@@ -218,13 +218,18 @@ export function useDashboardAuth({
         }
       } else {
         if (data.code === 'EMAIL_NOT_VERIFIED') {
-          // Surface the sentinel so the login screen pops the
-          // "Email not verified" modal with a resend button. The server
-          // already kicked off a resend (60s per-account throttle);
+          // Promote the unverified-login response into the full "check your
+          // inbox" gate (the same panel the post-register flow uses), not
+          // just a tiny banner. Setting pendingVerificationEmail +
+          // unverifiedMerchantId is what triggers the gate in merchant/login
+          // and starts the background poller that auto-advances to the
+          // success card the moment the verification link is clicked. The
+          // server already kicked off a resend (60s per-account throttle);
           // mirror its `cooldownSeconds` so the UI can show a countdown
           // and disable the manual "Resend" button until it expires.
-          setLoginError('EMAIL_NOT_VERIFIED');
+          setPendingVerificationEmail(loginForm.email.trim());
           setUnverifiedMerchantId(data.merchantId || null);
+          setLoginError('');
           const cd = typeof data.cooldownSeconds === 'number' ? data.cooldownSeconds : 60;
           setVerificationCooldownUntil(cd > 0 ? Date.now() + cd * 1000 : null);
         } else if (res.status === 401) {

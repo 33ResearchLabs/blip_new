@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Zap,
@@ -18,15 +18,23 @@ type VerifyState = "verifying" | "success" | "already" | "error";
 
 // Allow-list for the `next` query param so a malicious link can't redirect
 // the user off-site (open-redirect protection). Anything not on this list
-// falls back to the main-app `/` entry.
-const ALLOWED_NEXT = new Set(["/", "/waitlist/login"]);
+// falls back to the user login PAGE — NOT `/`, which is the gated app
+// root (landing there with no cookies trips fetchWithAuth's force-logout
+// and appends a spurious ?reason=session_expired).
+const ALLOWED_NEXT = new Set(["/login", "/waitlist/login"]);
 
 function safeNext(raw: string | null): string {
   if (raw && ALLOWED_NEXT.has(raw)) return raw;
-  return "/";
+  return "/login";
 }
 
+// Delay before auto-redirecting on a successful verification — short
+// enough that it doesn't feel like a wait, long enough that the success
+// animation reads as confirmation rather than a flash.
+const AUTO_REDIRECT_MS = 2000;
+
 function VerifyEmailContent({ nextHref }: { nextHref: string }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [state, setState] = useState<VerifyState>("verifying");
   const [errorMsg, setErrorMsg] = useState("");
@@ -34,6 +42,15 @@ function VerifyEmailContent({ nextHref }: { nextHref: string }) {
   // otherwise hit the API twice — the second call hits an already-used token
   // and flips the screen to "error" after the first call succeeded.
   const ran = useRef(false);
+
+  // Auto-redirect to the matching login once the verify call resolves to a
+  // success (fresh confirmation OR already-verified). Error state stays put
+  // so the user can read the failure and act on it.
+  useEffect(() => {
+    if (state !== "success" && state !== "already") return;
+    const t = setTimeout(() => router.replace(nextHref), AUTO_REDIRECT_MS);
+    return () => clearTimeout(t);
+  }, [state, router, nextHref]);
 
   useEffect(() => {
     if (ran.current) return;
@@ -111,8 +128,8 @@ function VerifyEmailContent({ nextHref }: { nextHref: string }) {
             </p>
             <p className="text-xs text-foreground/40 leading-relaxed">
               {state === "already"
-                ? "Your email is already confirmed on this account. You can sign in any time."
-                : "Your email has been verified successfully. Your account is now ready to use."}
+                ? "Your email is already confirmed on this account. Redirecting you to sign in…"
+                : "Your email has been verified successfully. Redirecting you to sign in…"}
             </p>
           </div>
 
