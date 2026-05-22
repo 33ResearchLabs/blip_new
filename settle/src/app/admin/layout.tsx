@@ -36,9 +36,10 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Zap, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
+import { Logo } from "@/components/shared/Logo";
 
 const NAV_ITEMS: { href: string; label: string; exact?: boolean }[] = [
   { href: "/admin", label: "Console", exact: true },
@@ -111,13 +112,7 @@ export default function AdminLayout({
         <div className="h-[50px] flex items-center px-4 gap-3">
           {/* Logo */}
           <div className="flex items-center shrink-0">
-            <Link href="/admin" className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-foreground fill-foreground" />
-              <span className="text-[17px] leading-none whitespace-nowrap hidden lg:block">
-                <span className="font-bold text-foreground">Blip</span>{" "}
-                <span className="italic text-foreground/90">money</span>
-              </span>
-            </Link>
+            <Logo href="/admin" />
           </div>
 
           {/* Center: Nav pills */}

@@ -421,6 +421,23 @@ export async function POST(request: NextRequest) {
         await bootstrapNewActor(loginPayload.actorId, 'user');
       } catch { /* swallow */ }
 
+      // Waitlist activation on login (opt-in via body.waitlist=true).
+      // Mirror of the merchant path — idempotent setup so a pre-waitlist
+      // user signing in via /waitlist/login picks up a referral_code and
+      // REGISTER bonus the first time, no-op on re-login.
+      if (body?.waitlist === true) {
+        try {
+          await setupWaitlistForActor({
+            actorId: user.id,
+            actorType: 'user',
+            source: typeof body?.source === 'string' ? body.source : 'waitlist_user_login',
+            referralCode: typeof body?.referral_code === 'string' ? body.referral_code.trim() : undefined,
+          });
+        } catch (waitlistErr) {
+          console.error('[user login] waitlist setup failed:', waitlistErr);
+        }
+      }
+
       const loginRes = NextResponse.json({
         success: true,
         data: {
@@ -597,7 +614,10 @@ export async function POST(request: NextRequest) {
         );
 
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-        const verifyLink = `${appUrl}/user/verify-email?token=${verifyToken}&id=${user.id}`;
+        // Same waitlist-aware redirect as the merchant flow — sends the
+        // post-verify CTA back to /waitlist/login instead of the main-app `/`.
+        const nextParam = body?.waitlist === true ? '&next=%2Fwaitlist%2Flogin' : '';
+        const verifyLink = `${appUrl}/user/verify-email?token=${verifyToken}&id=${user.id}${nextParam}`;
 
         const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
         // The User type only declares `username`; `name` exists as a

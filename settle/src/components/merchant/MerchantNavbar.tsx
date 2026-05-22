@@ -27,6 +27,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { OnboardingSetupChip } from "@/components/merchant/OnboardingSetupChip";
+import { Logo } from "@/components/shared/Logo";
 
 const CORRIDOR_OPTIONS = [
   { key: "USDT_INR", label: "🇮🇳 USDT / INR" },
@@ -158,12 +159,7 @@ export function MerchantNavbar({
 
           {/* Left: Logo + wordmark. */}
           <div className="flex items-center shrink-0">
-            <Link href="/merchant" aria-label="Blip Money home" className="flex items-center gap-1.5">
-              <Zap className="w-6 h-6 text-primary fill-primary" />
-              <span className="text-[15px] font-bold tracking-tight text-foreground">
-                Blip Money
-              </span>
-            </Link>
+            <Logo href="/merchant" />
           </div>
 
           {/* Center: Nav pills — pinned to viewport center via absolute

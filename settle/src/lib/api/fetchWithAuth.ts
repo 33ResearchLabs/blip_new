@@ -312,6 +312,18 @@ function forceLogoutAndRedirect(): void {
   if (path.startsWith('/merchant')) target = '/merchant/login?reason=session_expired';
   else if (path.startsWith('/admin')) target = '/admin?session=expired';
   else if (path.startsWith('/compliance')) target = '/compliance?session=expired';
+  else if (path.startsWith('/waitlist')) {
+    // Waitlist sessions split by role — read the cached actor type so a
+    // merchant whose token died doesn't get bounced to the user login form.
+    // Key matches `blip_waitlist_actor_type` in src/lib/waitlist/roleCache.ts;
+    // we read it directly here to avoid pulling the waitlist module into the
+    // general-purpose fetchWithAuth bundle.
+    let role: string | null = null;
+    try { role = window.localStorage.getItem('blip_waitlist_actor_type'); } catch { /* storage disabled */ }
+    target = role === 'merchant'
+      ? '/waitlist/merchant-login?expired=1'
+      : '/waitlist/login?expired=1';
+  }
 
   // Use replace so the dead-token page can't be reached via Back button
   window.location.replace(target);

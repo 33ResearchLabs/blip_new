@@ -9,6 +9,7 @@ import { MempoolFilters, MempoolFilterState } from '@/components/mempool/Mempool
 import { Zap, ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { Logo } from '@/components/shared/Logo';
 
 interface MempoolOrder {
   id: string;
@@ -143,13 +144,7 @@ export default function MempoolPage() {
           >
             <ArrowLeft className="w-4 h-4 text-white/40" />
           </button>
-          <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-white fill-white" />
-            <span className="text-[17px] leading-none whitespace-nowrap">
-              <span className="font-bold text-white">Blip</span>{' '}
-              <span className="italic text-white/90">money</span>
-            </span>
-          </div>
+          <Logo href="/merchant" onDark />
 
           {/* Center: Page title pill */}
           <div className="flex items-center gap-2 mx-auto">
