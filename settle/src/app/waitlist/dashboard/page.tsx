@@ -42,7 +42,15 @@ type TaskType = 'TWITTER' | 'TELEGRAM' | 'DISCORD' | 'QUIZ' | 'WHITEPAPER' | 'CU
 type TaskStatus = 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
 
 interface Task { id: string; task_type: TaskType; status: TaskStatus; points_awarded: number; }
-interface PointEntry { id: string; event: string; bonus_points: number; total_points: number | null; created_at: string; }
+interface PointEntry {
+  id: string;
+  event: string;
+  bonus_points: number;
+  total_points: number | null;
+  source_ref: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
 interface Referral { id: string; referred_type: ActorType; reward_status: 'pending' | 'credited' | 'failed'; reward_amount: number; created_at: string; }
 interface BetaRequest {
   id: string;
@@ -1115,20 +1123,38 @@ function HistoryModal({ history, onClose }: { history: PointEntry[]; onClose: ()
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className={`relative w-full max-w-md ${surface} border ${border} rounded-2xl overflow-hidden`} onClick={(e) => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b ${divider} flex items-center justify-between`}>
-          <h3 className={`text-sm font-bold ${txt}`}>Points History</h3>
+          <div>
+            <h3 className={`text-sm font-bold ${txt}`}>Points History</h3>
+            <p className={`text-[10px] ${sub} mt-0.5`}>Every BLIP credit on your account</p>
+          </div>
           <button onClick={onClose} className={`text-xs ${muted} hover:${txt}`}>Close</button>
         </div>
         <ul className="max-h-[60vh] overflow-y-auto divide-y divide-white/[0.04]">
-          {history.length === 0 && <li className={`px-5 py-6 text-xs ${sub} text-center`}>No entries yet</li>}
-          {history.map((h) => (
-            <li key={h.id} className="px-5 py-3 flex items-center justify-between text-xs">
-              <div>
-                <div className={txt}>{prettyEvent(h.event)}</div>
-                <div className={sub}>{new Date(h.created_at).toLocaleString('en-US')}</div>
-              </div>
-              <div className="font-black text-emerald-500">+{formatCount(h.bonus_points)}</div>
+          {history.length === 0 && (
+            <li className={`px-5 py-8 text-xs ${sub} text-center`}>
+              No entries yet — complete a quest to start earning BLIP.
             </li>
-          ))}
+          )}
+          {history.map((h) => {
+            const { title, subtitle } = describeEntry(h);
+            const isDebit = h.bonus_points < 0;
+            return (
+              <li key={h.id} className="px-5 py-3 flex items-start justify-between gap-3 text-xs">
+                <div className="min-w-0 flex-1">
+                  <div className={`${txt} font-semibold truncate`}>{title}</div>
+                  {subtitle && (
+                    <div className={`${muted} mt-0.5 truncate`}>{subtitle}</div>
+                  )}
+                  <div className={`${sub} mt-1 text-[10px]`} title={new Date(h.created_at).toLocaleString('en-US')}>
+                    {relativeTime(h.created_at)}
+                  </div>
+                </div>
+                <div className={`font-black tabular-nums shrink-0 ${isDebit ? 'text-red-400' : 'text-emerald-500'}`}>
+                  {isDebit ? '' : '+'}{formatCount(h.bonus_points)}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>
@@ -1276,6 +1302,111 @@ function UpgradeModal({ actorType, onClose, onSuccess }: {
   );
 }
 
-function prettyEvent(event: string): string {
-  return event.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+// Map a raw blip_point_log row to a human-readable title + subtitle so the
+// history modal answers "what is this 500-point line FOR?" at a glance.
+// Falls back to a sensible title if we ever record an event type we haven't
+// taught this function about — keeping new server-side events from rendering
+// blank.
+function describeEntry(entry: PointEntry): { title: string; subtitle: string | null } {
+  const meta = (entry.metadata ?? {}) as Record<string, unknown>;
+  const taskType = typeof meta.task_type === 'string' ? meta.task_type : null;
+  const reason = typeof meta.reason === 'string' ? meta.reason : null;
+  const sref = entry.source_ref ?? null;
+
+  switch (entry.event) {
+    case 'REGISTER':
+      return { title: 'Joined the Blip waitlist', subtitle: 'Welcome bonus on signup' };
+    case 'MERCHANT_REGISTER':
+      return { title: 'Joined as a merchant', subtitle: 'Welcome bonus on merchant signup' };
+
+    case 'TASK_VERIFIED': {
+      switch (taskType) {
+        case 'TWITTER':      return { title: 'Followed @blip_money on Twitter',  subtitle: 'Social quest verified' };
+        case 'TELEGRAM':     return { title: 'Joined our Telegram channel',      subtitle: 'Social quest verified' };
+        case 'DISCORD':      return { title: 'Joined our Discord server',        subtitle: 'Social quest verified' };
+        case 'CUSTOM':       return { title: 'Retweeted the Blip campaign',      subtitle: 'Social quest verified' };
+        case 'ONBOARD_FORM': return { title: 'Submitted Merchant Onboarding form', subtitle: 'Beta program signup' };
+        case 'QUIZ':         return { title: 'Completed a knowledge quiz',       subtitle: 'Quiz verified' };
+        case 'WHITEPAPER':   return { title: 'Read the whitepaper',              subtitle: 'Whitepaper quest verified' };
+        default:             return { title: 'Task verified', subtitle: taskType ? `Task type: ${taskType}` : null };
+      }
+    }
+
+    case 'TWITTER_FOLLOW':  return { title: 'Followed @blip_money on Twitter',  subtitle: 'Social quest verified' };
+    case 'TELEGRAM_JOIN':   return { title: 'Joined our Telegram channel',      subtitle: 'Social quest verified' };
+    case 'DISCORD_JOIN':    return { title: 'Joined our Discord server',        subtitle: 'Social quest verified' };
+    case 'RETWEET':         return { title: 'Retweeted the Blip campaign',      subtitle: 'Social quest verified' };
+    case 'WHITEPAPER_READ': return { title: 'Read the whitepaper',              subtitle: 'Whitepaper quest verified' };
+    case 'CROSS_BORDER_SWAP': return { title: 'Cross-border swap completed',    subtitle: null };
+
+    case 'REFERRAL_BONUS_EARNED':
+      return { title: 'Friend joined using your referral code', subtitle: 'Referral bonus credited' };
+    case 'REFERRAL_BONUS_RECEIVED':
+      return { title: 'You signed up via a referral', subtitle: 'Referral welcome bonus' };
+
+    case 'MERCHANT_ONBOARD_FORM':
+      return { title: 'Submitted Merchant Onboarding form', subtitle: 'Beta program signup' };
+
+    case 'MANUAL_CREDIT': {
+      // The same event powers several flows. Disambiguate via source_ref
+      // (idempotency anchor) and metadata.reason so users see a meaningful
+      // label instead of a generic "Manual Credit".
+      if (sref === 'signup_starter' || reason === 'signup_starter_coin_grant') {
+        return { title: 'Welcome bonus', subtitle: 'Starter Blip Points on account creation' };
+      }
+      if (reason) {
+        return { title: 'Bonus credit', subtitle: reason };
+      }
+      if (sref?.startsWith('legacy_backfill')) {
+        return { title: 'Account migration credit', subtitle: 'Backfilled from legacy reputation system' };
+      }
+      return { title: 'Bonus credit', subtitle: sref ? `Source: ${sref}` : 'Adjustment by support team' };
+    }
+
+    case 'MANUAL_DEBIT':
+      return { title: 'Adjustment', subtitle: reason ?? 'Manual deduction by support team' };
+
+    case 'FIRST_TRADE':            return { title: 'Completed your first trade',         subtitle: 'First-trade bonus' };
+    case 'TRADE_COMPLETED':        return { title: 'Trade completed',                    subtitle: typeof meta.order_id === 'string' ? `Order ${meta.order_id.slice(0, 8)}…` : null };
+    case 'VOLUME_BONUS':           return { title: 'Volume milestone reached',           subtitle: null };
+    case 'STREAK_7':               return { title: '7-day trading streak',               subtitle: 'Weekly streak bonus' };
+    case 'STREAK_30':              return { title: '30-day trading streak',              subtitle: 'Monthly streak bonus' };
+    case 'DISPUTE_FREE_MONTH':     return { title: 'Dispute-free month',                 subtitle: 'Monthly clean record bonus' };
+    case 'FIVE_STAR_RECEIVED':     return { title: 'Received a 5-star review',           subtitle: 'Counterparty rated you 5 stars' };
+    case 'REFERRAL_TRADE_CREDITED': return { title: 'Your referral made their first trade', subtitle: 'Referral activation bonus' };
+    case 'KYC_COMPLETED':          return { title: 'KYC verification completed',         subtitle: 'Identity verification bonus' };
+
+    case 'COIN_LOCK':              return { title: 'Points locked',                      subtitle: 'Held for anti-abuse review or signup hold' };
+    case 'COIN_UNLOCK':            return { title: 'Points unlocked',                    subtitle: 'Hold released — points now spendable' };
+    case 'COIN_VOID':              return { title: 'Points voided',                      subtitle: reason ?? 'Anti-abuse review' };
+    case 'LIMIT_BUMP_BURN':        return { title: 'Trade limit upgraded',               subtitle: typeof meta.tier === 'string' ? `${meta.tier} tier unlocked` : 'Points burned for higher limits' };
+    case 'PERK_BURN':              return { title: 'Perk purchased',                     subtitle: typeof meta.perk === 'string' ? meta.perk : 'Points burned for a perk' };
+
+    default:
+      // Unknown event — fall back to a Title Case rendering of the raw
+      // name. Better than rendering empty for events we haven't catalogued.
+      return {
+        title: entry.event.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()),
+        subtitle: null,
+      };
+  }
+}
+
+// Short "20 hours ago" style timestamps for the modal. Falls back to an
+// explicit en-US date once the entry is older than 7 days so the list
+// stays scannable without dates running off the right edge.
+function relativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return new Date(iso).toLocaleString('en-US');
+  const s = Math.floor(ms / 1000);
+  if (s < 45)                return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60)                return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24)                return `${h} hr ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7)                 return `${d} day${d === 1 ? '' : 's'} ago`;
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
 }

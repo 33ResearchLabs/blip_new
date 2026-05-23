@@ -168,6 +168,10 @@ export interface BlipPointLogEntry {
   event: BlipPointEvent;
   bonus_points: number;
   total_points: number | null;
+  // Idempotency anchor — e.g. 'signup_starter', '<order_id>', 'kyc',
+  // 'dfm:YYYY-MM'. Used by the history UI to disambiguate generic events
+  // (MANUAL_CREDIT used for both signup starter and legacy backfills, etc.).
+  source_ref: string | null;
   metadata: Record<string, unknown>;
   created_at: Date;
 }
