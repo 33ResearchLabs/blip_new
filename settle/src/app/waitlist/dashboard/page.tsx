@@ -288,6 +288,7 @@ export default function WaitlistDashboardPage() {
       <Navbar
         balance={blipPoints}
         onLogout={handleLogout}
+        onShowHistory={() => setHistoryOpen(true)}
         actor={actor}
       />
 
@@ -903,8 +904,8 @@ function LogoutConfirmModal({
 }
 
 // ── Navbar ─────────────────────────────────────────────────────────────
-function Navbar({ balance, onLogout, actor }: {
-  balance: number; onLogout: () => void;
+function Navbar({ balance, onLogout, onShowHistory, actor }: {
+  balance: number; onLogout: () => void; onShowHistory: () => void;
   actor: WaitlistMe['actor'];
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -924,14 +925,20 @@ function Navbar({ balance, onLogout, actor }: {
 
         {/* Right: pills + actions */}
         <div className="hidden md:flex items-center gap-2">
-          {/* Protocol Balance */}
-          <div className={`${inputBg} border ${border} rounded-md px-3 py-1.5 flex items-center gap-2.5`}>
-            <div>
+          {/* Protocol Balance — clicking opens the BLIP points history modal
+              so users can see exactly which events earned them their pts. */}
+          <button
+            type="button"
+            onClick={onShowHistory}
+            aria-label="View BLIP points history"
+            className={`${inputBg} border ${border} rounded-md px-3 py-1.5 flex items-center gap-2.5 ${hov} transition`}
+          >
+            <div className="text-left">
               <div className={`text-[8px] font-black uppercase tracking-[0.18em] ${sub} leading-none mb-0.5`}>Protocol Balance</div>
               <div className={`text-[11px] font-bold ${txt} leading-none`}>{formatCount(balance)} pts</div>
             </div>
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          </div>
+          </button>
           {/* Settings */}
           <button className={`w-9 h-9 rounded-md flex items-center justify-center border ${border} ${inputBg} ${hov} transition-all`} aria-label="Settings">
             <Settings className={`w-4 h-4 ${txt}`} />
