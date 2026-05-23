@@ -33,7 +33,15 @@ export function getTaskPoints(actorType: WaitlistActorType, taskType: WaitlistTa
       case 'TWITTER':  return MERCHANT_BLIP_POINTS.TWITTER;
       case 'TELEGRAM': return MERCHANT_BLIP_POINTS.TELEGRAM;
       case 'DISCORD':  return MERCHANT_BLIP_POINTS.DISCORD;
-      default:         return MERCHANT_BLIP_POINTS.TWITTER;
+      // The "Retweet a Post" quest is registered with task_type='CUSTOM' on
+      // the client (see waitlist/dashboard/page.tsx). Without an explicit
+      // arm it used to fall through to the TWITTER amount (500), so the UI
+      // promised +100 while the server credited +500.
+      case 'CUSTOM':   return MERCHANT_BLIP_POINTS.RETWEET;
+      // QUIZ / WHITEPAPER aren't wired to a credited quest yet — surface
+      // the same default the user side uses so unknown future task types
+      // don't silently inherit the TWITTER amount.
+      default:         return USER_BLIP_POINTS.TASK_DEFAULT;
     }
   }
   return USER_BLIP_POINTS.TASK_DEFAULT;
