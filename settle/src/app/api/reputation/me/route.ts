@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, successResponse, forbiddenResponse, notFoundResponse, errorResponse } from '@/lib/middleware/auth';
-import { getReputationScore } from '@/lib/reputation/repository';
+import { getReputationWithBreakdown } from '@/lib/reputation/repository';
 import { TIER_INFO } from '@/lib/reputation/types';
 
 export async function GET(request: NextRequest) {
@@ -25,10 +25,17 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const rep = await getReputationScore(auth.actorId, actorType);
-    if (!rep) {
-      // Default for actors who haven't been scored yet — matches the
-      // 500 default the rebase migration seeds.
+    // Recompute live from the same source the per-entity endpoint
+    // (`/api/reputation?entityId=…`) uses — `getReputationWithBreakdown`
+    // calls the calculator, which already emits CIBIL-rebased 300–900
+    // scores. Reading the cached `reputation_scores` row used to drift
+    // from the live computation on production (legacy pre-rebase rows
+    // weren't yet rescored by the daily worker), so the merchant
+    // dashboard and the waitlist dashboard would show different tiers
+    // for the same actor.
+    const result = await getReputationWithBreakdown(auth.actorId, actorType);
+    if (!result) {
+      // Actor row not found at all — surface the 500 "New" default.
       return successResponse({
         total_score: 500,
         tier: 'newcomer',
@@ -43,18 +50,11 @@ export async function GET(request: NextRequest) {
         is_default: true,
       });
     }
-    // Legacy rows can carry pre-rebase total_score values (0–1000).
-    // Surface the 500 "New" default until the daily worker rescores
-    // them properly. The DB row stays untouched here — onboarding
-    // takes care of updating it on next login.
-    const score = rep.total_score < 300 ? 500 : rep.total_score;
-    const tier = rep.total_score < 300 ? 'newcomer' : rep.tier;
+    const { score } = result;
     return successResponse({
-      ...rep,
-      total_score: score,
-      tier,
-      tier_info: TIER_INFO[tier] ?? TIER_INFO.newcomer,
-      is_default: rep.total_score < 300,
+      ...score,
+      tier_info: TIER_INFO[score.tier] ?? TIER_INFO.newcomer,
+      is_default: false,
     });
   } catch (err) {
     console.error('[reputation/me] failed', err);
