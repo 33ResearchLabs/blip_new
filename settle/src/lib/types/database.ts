@@ -141,6 +141,7 @@ export type BlipPointEvent =
   | 'TASK_VERIFIED'
   | 'MANUAL_CREDIT'
   | 'MANUAL_DEBIT'
+  | 'MERCHANT_ONBOARD_FORM'
   // In-app coin economy (migration 132)
   | 'FIRST_TRADE'
   | 'TRADE_COMPLETED'
@@ -157,7 +158,7 @@ export type BlipPointEvent =
   | 'LIMIT_BUMP_BURN'
   | 'PERK_BURN';
 
-export type WaitlistTaskType = 'TWITTER' | 'TELEGRAM' | 'DISCORD' | 'QUIZ' | 'WHITEPAPER' | 'CUSTOM';
+export type WaitlistTaskType = 'TWITTER' | 'TELEGRAM' | 'DISCORD' | 'QUIZ' | 'WHITEPAPER' | 'CUSTOM' | 'ONBOARD_FORM';
 export type WaitlistTaskStatus = 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
 
 export interface BlipPointLogEntry {

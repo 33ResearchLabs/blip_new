@@ -38,7 +38,7 @@ import { Logo } from '@/components/shared/Logo';
 
 type ActorType = 'user' | 'merchant';
 type WaitlistStatus = 'waitlisted' | 'active' | 'rejected';
-type TaskType = 'TWITTER' | 'TELEGRAM' | 'DISCORD' | 'QUIZ' | 'WHITEPAPER' | 'CUSTOM';
+type TaskType = 'TWITTER' | 'TELEGRAM' | 'DISCORD' | 'QUIZ' | 'WHITEPAPER' | 'CUSTOM' | 'ONBOARD_FORM';
 type TaskStatus = 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
 
 interface Task { id: string; task_type: TaskType; status: TaskStatus; points_awarded: number; }
@@ -330,26 +330,55 @@ export default function WaitlistDashboardPage() {
             </div>
 
             {/* JOIN MERCHANT ONBOARD PROGRAM ── */}
-            <a href={ONBOARD_FORM_URL} target="_blank" rel="noopener noreferrer"
-              className={`${surface} border ${border} rounded-xl p-4 flex items-center justify-between gap-3 ${hov} transition`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-md ${inputBg} border ${border} flex items-center justify-center shrink-0`}>
-                  <FileText className={`w-5 h-5 ${txt}`} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className={`text-sm font-bold ${txt}`}>Join Merchant On Board Program</p>
-                    <span className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-500">+500 BLIP</span>
+            {/* The CTA flips to a non-interactive "Redeemed" pill once the
+                Apps Script webhook (`/api/waitlist/onboard-form-webhook`)
+                has credited the actor for submitting the Google Form. The
+                webhook writes a VERIFIED row to waitlist_tasks with
+                task_type='ONBOARD_FORM', so we just look for that here. */}
+            {(() => {
+              const onboardTask = me.tasks.find((t) => t.task_type === 'ONBOARD_FORM');
+              const onboardDone = onboardTask?.status === 'VERIFIED';
+              const tileClass = `${surface} border ${border} rounded-xl p-4 flex items-center justify-between gap-3 ${onboardDone ? 'opacity-70' : hov} transition`;
+              const inner = (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-md ${inputBg} border ${border} flex items-center justify-center shrink-0`}>
+                      <FileText className={`w-5 h-5 ${txt}`} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm font-bold ${txt}`}>Join Merchant On Board Program</p>
+                        <span className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-500">+500 BLIP</span>
+                      </div>
+                      <p className={`text-[11px] ${muted} leading-relaxed`}>
+                        Submit this Google Form to join our merchant onboarding program and earn 500 pts.
+                      </p>
+                    </div>
                   </div>
-                  <p className={`text-[11px] ${muted} leading-relaxed`}>
-                    Submit this Google Form to join our merchant onboarding program and earn 500 pts.
-                  </p>
-                </div>
-              </div>
-              <span className={`${inputBg} border ${border} rounded-md px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] ${txt} flex items-center gap-1.5 whitespace-nowrap`}>
-                Submit Google Form <ExternalLink className="w-3 h-3" />
-              </span>
-            </a>
+                  {onboardDone ? (
+                    <span className="inline-flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-500 whitespace-nowrap">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Redeemed
+                    </span>
+                  ) : (
+                    <span className={`${inputBg} border ${border} rounded-md px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] ${txt} flex items-center gap-1.5 whitespace-nowrap`}>
+                      Submit Google Form <ExternalLink className="w-3 h-3" />
+                    </span>
+                  )}
+                </>
+              );
+              return onboardDone ? (
+                <div className={tileClass}>{inner}</div>
+              ) : (
+                <a
+                  href={ONBOARD_FORM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={tileClass}
+                >
+                  {inner}
+                </a>
+              );
+            })()}
 
             {/* YOUR REFERRAL STATS ── */}
             <div className={`${surface} border ${border} rounded-xl p-4`}>
