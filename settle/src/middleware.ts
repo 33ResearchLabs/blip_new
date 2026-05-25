@@ -368,6 +368,16 @@ export function middleware(request: NextRequest) {
     const isDevExempt =
       pathname === '/dev-lock' ||
       pathname === '/api/dev-unlock' ||
+      // Public static asset folders — must be reachable without auth so
+      // transactional emails (verify, password-reset) can load their
+      // hero images in any mail client.
+      pathname.startsWith('/illustrations/') ||
+      pathname === '/refer-friends-hero.png' ||
+      pathname === '/favicon.ico' ||
+      pathname === '/apple-touch-icon.png' ||
+      pathname === '/manifest.json' ||
+      pathname === '/robots.txt' ||
+      pathname === '/sitemap.xml' ||
       // Error-tracking ingest must be reachable without the dev cookie so
       // client-side errors (often happening on pages that never hit dev-lock,
       // like login pages or pre-auth screens) can still be captured. The
