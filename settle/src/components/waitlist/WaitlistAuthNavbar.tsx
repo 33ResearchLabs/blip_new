@@ -56,8 +56,14 @@ export default function WaitlistAuthNavbar(_props: Props) {
               }}
             />
             <span
-              className="text-[9.5px] font-semibold tracking-[0.22em] text-white/55"
-              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+              className="text-[9.5px] font-semibold tracking-[0.22em]"
+              style={{
+                // Explicit rgba bypasses the globals.css
+                // [class*="text-white"] substring rewrite that would
+                // otherwise repaint this label dark on the black navbar.
+                color: 'rgba(255,255,255,0.55)',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              }}
             >
               MAINNET · LIVE
             </span>
