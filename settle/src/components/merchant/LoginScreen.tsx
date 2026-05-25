@@ -266,7 +266,7 @@ export function LoginScreen({
                     Create your merchant account
                   </h1>
                   <p className="text-white/50 mb-4 text-[13px] leading-relaxed">
-                    Join Blip Market and start managing your business in minutes.
+                    Join Blip Money and start managing your business in minutes.
                   </p>
                 </>
               )}
@@ -789,7 +789,7 @@ function CreateLeft() {
       <h2 className="text-[34px] xl:text-[42px] leading-[1.05] font-bold text-white flex-shrink-0">
         Power your business
         <br />
-        with <span className="text-orange-500">Blip Market</span>
+        with <span className="text-orange-500">Blip Money</span>
       </h2>
       <p className="text-white/50 mt-4 text-[14px] leading-relaxed flex-shrink-0">
         Accept payments, manage funds, and grow your business with ease.

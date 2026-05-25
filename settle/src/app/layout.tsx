@@ -34,13 +34,13 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Blip Market",
+  title: "Blip Money",
   description: "P2P settlement. Send crypto to anyone.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Blip Market",
+    title: "Blip Money",
   },
 };
 
@@ -161,6 +161,11 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: swScript }}
           suppressHydrationWarning
         />
+        {/* Favicon — /favicon.ico isn't shipped, so set the SVG icon
+            explicitly so the browser tab shows the Blip lightning mark
+            instead of a placeholder. */}
+        <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+        <link rel="shortcut icon" type="image/svg+xml" href="/icons/icon.svg" />
         <link rel="apple-touch-icon" href="/icons/icon.svg" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />

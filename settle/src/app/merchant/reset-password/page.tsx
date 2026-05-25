@@ -2,9 +2,8 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  Zap,
   Eye,
   EyeOff,
   CheckCircle2,
@@ -14,6 +13,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
+import EmailFlowShell, {
+  EmailFlowPrimaryCta,
+  EmailFlowAccentPill,
+} from "@/components/email-flow/EmailFlowShell";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -30,36 +33,28 @@ function ResetPasswordForm() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
+  // Merchant min password length is stricter than user (8 vs 6).
   const isValid = password.length >= 8 && password === confirmPassword;
 
-  // Invalid link
   if (!token || !merchantId) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22 }}
-        className="text-center py-6 space-y-5"
-      >
-        <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center">
-            <AlertCircle className="w-8 h-8 text-red-400" />
+      <div className="space-y-5">
+        <div className="text-center space-y-2">
+          <div className="flex justify-center mb-3">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+              <AlertCircle className="w-6 h-6 text-red-600" />
+            </div>
           </div>
-        </div>
-        <div className="space-y-2">
-          <p className="text-base font-semibold text-white">Invalid reset link</p>
-          <p className="text-xs text-foreground/40 leading-relaxed">
-            This link is invalid or has expired. Reset links are good for 15
-            minutes — please request a fresh one.
+          <p className="text-[15.5px] font-semibold text-[#1d1d1f]">Invalid reset link</p>
+          <p className="text-[12.5px] text-[#6e6e73] leading-relaxed">
+            This link is invalid or has expired. Reset links are good for 15 minutes —
+            please request a fresh one.
           </p>
         </div>
-        <Link
-          href="/merchant/forgot-password"
-          className="block w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors"
-        >
-          Request new reset link
-        </Link>
-      </motion.div>
+        <EmailFlowPrimaryCta href="/merchant/forgot-password">
+          Request new link →
+        </EmailFlowPrimaryCta>
+      </div>
     );
   }
 
@@ -67,7 +62,6 @@ function ResetPasswordForm() {
     if (!isValid) return;
     setIsSubmitting(true);
     setError("");
-
     try {
       const res = await fetch("/api/auth/merchant/reset-password", {
         method: "POST",
@@ -75,19 +69,12 @@ function ResetPasswordForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, merchantId, newPassword: password }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error || "Something went wrong");
         return;
       }
-
       setSuccess(true);
-
-      // Redirect to the waitlist merchant sign-in — the app isn't live
-      // yet, so the waitlist surface is the correct landing page (NOT
-      // /merchant/login which sits behind the dev-lock).
       setTimeout(() => router.push("/waitlist/merchant-login"), 3000);
     } catch {
       setError("Network error. Please try again.");
@@ -99,168 +86,158 @@ function ResetPasswordForm() {
   if (success) {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.22 }}
-        className="text-center py-4 space-y-5"
+        className="space-y-5"
       >
-        <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
-            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+        <div className="text-center space-y-2">
+          <div className="flex justify-center mb-3">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+            </div>
           </div>
-        </div>
-        <div className="space-y-2">
-          <p className="text-base font-semibold text-white">Password updated</p>
-          <p className="text-xs text-foreground/40 leading-relaxed">
-            Your new password is ready. Redirecting you to sign in…
+          <p className="text-[15.5px] font-semibold text-[#1d1d1f]">Password updated</p>
+          <p className="text-[12.5px] text-[#6e6e73] leading-relaxed">
+            Your merchant password is ready. Sending you to sign in…
           </p>
         </div>
 
-        <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl px-4 py-3 flex items-start gap-3 text-left">
-          <ShieldCheck className="w-4 h-4 text-emerald-400/80 shrink-0 mt-0.5" />
-          <p className="text-[11px] text-foreground/45 leading-relaxed">
-            For your safety, every device signed into this merchant account
-            has been signed out. Use your new password to sign back in.
-          </p>
-        </div>
+        <EmailFlowAccentPill
+          icon={<ShieldCheck className="w-4 h-4" />}
+          title="Signed out everywhere for safety"
+          body="Sign back in with your new password on every device that runs the merchant app."
+        />
 
-        <Link
-          href="/merchant/login"
-          className="inline-block text-xs text-white/50 hover:text-foreground transition-colors"
-        >
-          Go to sign in
-        </Link>
+        <EmailFlowPrimaryCta href="/waitlist/merchant-login">
+          Go to merchant sign in →
+        </EmailFlowPrimaryCta>
       </motion.div>
     );
   }
 
   return (
-    <AnimatePresence>
-      <motion.div
-        key="form"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22 }}
-        className="space-y-4"
-      >
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
-            {error}
-          </div>
+    <motion.div
+      key="form"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22 }}
+      className="space-y-4"
+    >
+      <p className="text-[13.5px] text-[#3a3a3c] leading-relaxed">
+        Choose a strong password — at least 8 characters.
+      </p>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-[12.5px] text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div>
+        <label className="text-[10px] text-[#6e6e73] uppercase tracking-[0.18em] font-semibold mb-2 block">
+          New password
+        </label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a0a0a4]" />
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Min. 8 characters"
+            maxLength={24}
+            className="w-full bg-black/[0.04] border border-black/[0.06] rounded-xl px-4 py-3 pl-10 pr-11 text-[14px] text-[#1d1d1f] outline-none placeholder:text-[#a0a0a4] focus:ring-1 focus:ring-[#cc785c]/40 focus:border-[#cc785c]/40"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8a8a8e] hover:text-[#1d1d1f] transition-colors"
+          >
+            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+        {password && password.length < 8 && (
+          <p className="text-[11px] text-red-600 mt-1">Must be at least 8 characters</p>
         )}
+      </div>
 
-        <div>
-          <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
-            New Password
-          </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
-            <input
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 8 characters"
-              className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pl-10 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground transition-colors"
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          {password && password.length < 8 && (
-            <p className="text-[11px] text-red-400 mt-1">Must be at least 8 characters</p>
-          )}
+      <div>
+        <label className="text-[10px] text-[#6e6e73] uppercase tracking-[0.18em] font-semibold mb-2 block">
+          Confirm password
+        </label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a0a0a4]" />
+          <input
+            type={showConfirm ? "text" : "password"}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Re-enter password"
+            maxLength={24}
+            className="w-full bg-black/[0.04] border border-black/[0.06] rounded-xl px-4 py-3 pl-10 pr-11 text-[14px] text-[#1d1d1f] outline-none placeholder:text-[#a0a0a4] focus:ring-1 focus:ring-[#cc785c]/40 focus:border-[#cc785c]/40"
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirm(!showConfirm)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8a8a8e] hover:text-[#1d1d1f] transition-colors"
+          >
+            {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
         </div>
+        {confirmPassword && password !== confirmPassword && (
+          <p className="text-[11px] text-red-600 mt-1">Passwords don't match</p>
+        )}
+      </div>
 
-        <div>
-          <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
-            Confirm Password
-          </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
-            <input
-              type={showConfirm ? "text" : "password"}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Re-enter password"
-              className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pl-10 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirm(!showConfirm)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground transition-colors"
-            >
-              {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          {confirmPassword && password !== confirmPassword && (
-            <p className="text-[11px] text-red-400 mt-1">Passwords don&apos;t match</p>
-          )}
-        </div>
+      <motion.button
+        whileTap={{ scale: 0.98 }}
+        onClick={handleSubmit}
+        disabled={isSubmitting || !isValid}
+        className="w-full py-3.5 rounded-full text-[14.5px] font-semibold text-white transition-transform hover:-translate-y-[1px] disabled:opacity-50 disabled:hover:translate-y-0 inline-flex items-center justify-center gap-2"
+        style={{
+          background: "#0a0a0a",
+          boxShadow: "0 8px 22px -10px rgba(10,10,10,0.45)",
+        }}
+      >
+        {isSubmitting ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Updating…
+          </>
+        ) : (
+          <>Reset password →</>
+        )}
+      </motion.button>
 
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={handleSubmit}
-          disabled={isSubmitting || !isValid}
-          className="w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+      <div className="text-center pt-1">
+        <Link
+          href="/waitlist/merchant-login"
+          className="text-[11.5px] text-[#8a8a8e] hover:text-[#1d1d1f] transition-colors"
         >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Resetting...
-            </>
-          ) : (
-            "Reset Password"
-          )}
-        </motion.button>
-      </motion.div>
-    </AnimatePresence>
+          Back to sign in
+        </Link>
+      </div>
+    </motion.div>
   );
 }
 
-export default function ResetPasswordPage() {
+export default function MerchantResetPasswordPage() {
   return (
-    <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-primary/[0.03] rounded-full blur-[150px]" />
-      </div>
-
-      <div className="w-full max-w-sm relative z-10">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2.5 mb-4">
-            <Zap className="w-7 h-7 text-white fill-white" />
-            <span className="text-[22px] leading-none">
-              <span className="font-bold text-white">Blip</span>{" "}
-              <span className="italic text-white/90">money</span>
-            </span>
+    <EmailFlowShell
+      heroSrc="/illustrations/reset-password-hero.png"
+      eyebrow="Set a new password"
+      headlineLead="A fresh key for"
+      headlineAccent="your merchant account."
+    >
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="w-5 h-5 animate-spin text-black/40" />
           </div>
-          <h1 className="text-xl font-bold mb-2">Set New Password</h1>
-          <p className="text-sm text-foreground/35">Choose a strong password for your merchant account</p>
-        </div>
-
-        <div className="bg-white/[0.02] rounded-2xl border border-white/[0.04] p-6 space-y-4">
-          <Suspense fallback={
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-white/30" />
-            </div>
-          }>
-            <ResetPasswordForm />
-          </Suspense>
-        </div>
-
-        <div className="mt-6 text-center">
-          <Link
-            href="/merchant"
-            className="text-xs text-white/30 hover:text-foreground/60 transition-colors"
-          >
-            Back to sign in
-          </Link>
-        </div>
-      </div>
-    </div>
+        }
+      >
+        <ResetPasswordForm />
+      </Suspense>
+    </EmailFlowShell>
   );
 }

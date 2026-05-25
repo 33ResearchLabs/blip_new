@@ -10,7 +10,7 @@ interface PWAInstallBannerProps {
 }
 
 export default function PWAInstallBanner({
-  appName = 'Blip Market',
+  appName = 'Blip Money',
   accentColor = '#f97316',
 }: PWAInstallBannerProps) {
   const { isInstallable, isIOS, isStandalone, install, dismissInstall, showInstallBanner } = usePWA();

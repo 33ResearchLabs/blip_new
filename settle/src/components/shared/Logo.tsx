@@ -16,7 +16,7 @@ export const Logo = memo(function Logo({
   href = "/",
   className = "",
   onDark = false,
-  ariaLabel = "Blip Market home",
+  ariaLabel = "Blip Money home",
   onClick,
 }: LogoProps) {
   return (

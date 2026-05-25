@@ -1762,7 +1762,7 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
             projectId: walletConnectProjectId,
             // Metadata for WalletConnect modal
             metadata: {
-              name: 'Blip Market',
+              name: 'Blip Money',
               description: 'Secure P2P crypto payments with escrow protection',
               url: process.env.NEXT_PUBLIC_APP_URL || 'https://blip.money',
               icons: [`${process.env.NEXT_PUBLIC_APP_URL || 'https://blip.money'}/logo.png`],

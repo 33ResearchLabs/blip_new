@@ -78,7 +78,7 @@ export function buildLoginMessage(
   uri: string = getExpectedUri(),
 ): string {
   return (
-    `Sign this message to authenticate with Blip Market\n\n` +
+    `Sign this message to authenticate with Blip Money\n\n` +
     `Domain: ${domain}\n` +
     `URI: ${uri}\n` +
     `Wallet: ${walletAddress}\n` +

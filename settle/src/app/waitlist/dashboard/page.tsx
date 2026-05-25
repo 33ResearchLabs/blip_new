@@ -260,7 +260,7 @@ export default function WaitlistDashboardPage() {
     { id: 'TELEGRAM',   title: 'Follow Us on Telegram', reward: POINTS.TELEGRAM, icon: UsersIcon,
       description: 'Join our Telegram channel and verify membership.' },
     { id: 'CUSTOM',     title: 'Retweet a Post',        reward: POINTS.RETWEET,  icon: Repeat2,
-      description: 'Post about Blip Market on X with the campaign message.' },
+      description: 'Post about Blip Money on X with the campaign message.' },
     { id: 'WHITEPAPER', title: 'Share Referral Link',   reward: POINTS.REFERRAL, icon: Send,
       description: `Invite ${isMerchant ? 'merchants' : 'friends'} with your referral link to earn BLIP.` },
   ];
@@ -1792,7 +1792,7 @@ function ReferralModal({ code, link, onClose, onCopy, copied }: {
             className={`flex items-center justify-center gap-1.5 ${inputBg} border ${border} rounded-full px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] ${txt} ${hov} transition`}>
             <Twitter className="w-3.5 h-3.5" /> X
           </a>
-          <a href={`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join me on Blip Market')}`}
+          <a href={`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join me on Blip Money')}`}
             target="_blank" rel="noopener noreferrer"
             className={`flex items-center justify-center gap-1.5 ${inputBg} border ${border} rounded-full px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] ${txt} ${hov} transition`}>
             <MessageCircle className="w-3.5 h-3.5" /> Telegram

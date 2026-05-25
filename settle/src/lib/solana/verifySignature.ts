@@ -48,7 +48,7 @@ export function generateLoginMessage(walletAddress: string, nonce?: string): str
   const timestamp = Date.now();
   const nonceStr = nonce || Math.random().toString(36).substring(7);
 
-  return `Sign this message to authenticate with Blip Market\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonceStr}`;
+  return `Sign this message to authenticate with Blip Money\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonceStr}`;
 }
 
 /**

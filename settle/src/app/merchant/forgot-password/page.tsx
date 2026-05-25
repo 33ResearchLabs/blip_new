@@ -2,17 +2,13 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Zap,
-  ArrowLeft,
-  Mail,
-  CheckCircle2,
-  Loader2,
-  ShieldCheck,
-} from "lucide-react";
+import { Mail, CheckCircle2, Loader2, ShieldCheck, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import EmailFlowShell, {
+  EmailFlowAccentPill,
+} from "@/components/email-flow/EmailFlowShell";
 
-export default function ForgotPasswordPage() {
+export default function MerchantForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -22,7 +18,6 @@ export default function ForgotPasswordPage() {
     if (!email) return;
     setIsSubmitting(true);
     setError("");
-
     try {
       const res = await fetch("/api/auth/merchant/forgot-password", {
         method: "POST",
@@ -30,14 +25,11 @@ export default function ForgotPasswordPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error || "Something went wrong");
         return;
       }
-
       setSubmitted(true);
     } catch {
       setError("Network error. Please try again.");
@@ -47,137 +39,123 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-primary/[0.03] rounded-full blur-[150px]" />
-      </div>
-
-      <div className="w-full max-w-sm relative z-10">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2.5 mb-4">
-            <Zap className="w-7 h-7 text-white fill-white" />
-            <span className="text-[22px] leading-none">
-              <span className="font-bold text-white">Blip</span>{" "}
-              <span className="italic text-white/90">money</span>
-            </span>
-          </div>
-          <h1 className="text-xl font-bold mb-2">Reset Password</h1>
-          <p className="text-sm text-foreground/35">
-            {submitted
-              ? "Check your email for a reset link"
-              : "Enter your business email to receive a reset link"}
-          </p>
-        </div>
-
-        <div className="bg-white/[0.02] rounded-2xl border border-white/[0.04] p-6 space-y-4">
-          <AnimatePresence mode="wait">
-            {submitted ? (
-              <motion.div
-                key="success"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.22 }}
-                className="text-center py-4 space-y-5"
-              >
-                <div className="flex justify-center">
-                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-base font-semibold text-white">Email sent</p>
-                  <p className="text-xs text-foreground/40 leading-relaxed">
-                    If a merchant account with{" "}
-                    <span className="text-white/70">{email}</span> exists, a
-                    password reset link will arrive within a few minutes.
-                  </p>
-                </div>
-
-                <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl px-4 py-3 flex items-start gap-3 text-left">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400/80 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-foreground/45 leading-relaxed">
-                    The reset link expires in 15 minutes. Resetting your
-                    password signs you out of every device for your safety.
-                  </p>
-                </div>
-
-                <p className="text-[11px] text-gray-600">
-                  Didn&apos;t receive it? Check your spam folder or try again.
-                </p>
-                <button
-                  onClick={() => {
-                    setSubmitted(false);
-                    setEmail("");
-                  }}
-                  className="text-xs text-white/40 hover:text-foreground transition-colors"
-                >
-                  Try another email
-                </button>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="form"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.22 }}
-                className="space-y-4"
-              >
-                {error && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
-                    {error}
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
-                    Business Email
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="merchant@email.com"
-                      maxLength={254}
-                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pl-10 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                      onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                    />
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
-                  </div>
-                </div>
-
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !email}
-                  className="w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    "Send Reset Link"
-                  )}
-                </motion.button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="mt-6 text-center">
-          <Link
-            href="/waitlist/merchant-login"
-            className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-foreground/60 transition-colors"
+    <EmailFlowShell
+      heroSrc="/illustrations/reset-password-hero.png"
+      eyebrow={submitted ? "Check your inbox" : "Reset your password"}
+      headlineLead={submitted ? "Sent." : "A fresh key for"}
+      headlineAccent={submitted ? "Check your inbox." : "your merchant account."}
+    >
+      <AnimatePresence mode="wait">
+        {submitted ? (
+          <motion.div
+            key="success"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22 }}
+            className="space-y-5"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to sign in
-          </Link>
-        </div>
-      </div>
-    </div>
+            <div className="text-center space-y-2">
+              <div className="flex justify-center mb-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                </div>
+              </div>
+              <p className="text-[15.5px] font-semibold text-[#1d1d1f]">Email sent</p>
+              <p className="text-[12.5px] text-[#6e6e73] leading-relaxed">
+                If a merchant account with{" "}
+                <span className="font-semibold text-[#1d1d1f]">{email}</span> exists,
+                you'll receive a password reset link within a few minutes.
+              </p>
+            </div>
+
+            <EmailFlowAccentPill
+              icon={<ShieldCheck className="w-4 h-4" />}
+              title="Single-use link, 15-min window"
+              body="We never email your password — only a one-time link to set a new one."
+            />
+
+            <button
+              type="button"
+              onClick={() => {
+                setSubmitted(false);
+                setEmail("");
+              }}
+              className="block w-full text-center text-[12px] text-[#8a8a8e] hover:text-[#1d1d1f] transition-colors"
+            >
+              Didn't receive it? Try another email
+            </button>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="form"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22 }}
+            className="space-y-4"
+          >
+            <p className="text-[13.5px] text-[#3a3a3c] leading-relaxed">
+              Enter the email on your Blip merchant account. We'll send a one-time link
+              to set a new password.
+            </p>
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-[12.5px] text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] text-[#6e6e73] uppercase tracking-[0.18em] font-semibold mb-2 block">
+                Email Address
+              </label>
+              <div className="relative">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@email.com"
+                  maxLength={254}
+                  className="w-full bg-black/[0.04] border border-black/[0.06] rounded-xl px-4 py-3 pl-10 text-[14px] text-[#1d1d1f] outline-none placeholder:text-[#a0a0a4] focus:ring-1 focus:ring-[#cc785c]/40 focus:border-[#cc785c]/40"
+                  onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a0a0a4]" />
+              </div>
+            </div>
+
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={handleSubmit}
+              disabled={isSubmitting || !email}
+              className="w-full py-3.5 rounded-full text-[14.5px] font-semibold text-white transition-transform hover:-translate-y-[1px] disabled:opacity-50 disabled:hover:translate-y-0 inline-flex items-center justify-center gap-2"
+              style={{
+                background: "#0a0a0a",
+                boxShadow: "0 8px 22px -10px rgba(10,10,10,0.45)",
+              }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                <>Send reset link →</>
+              )}
+            </motion.button>
+
+            <div className="text-center pt-1">
+              <Link
+                href="/waitlist/merchant-login"
+                className="inline-flex items-center gap-1.5 text-[11.5px] text-[#8a8a8e] hover:text-[#1d1d1f] transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Back to sign in
+              </Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </EmailFlowShell>
   );
 }

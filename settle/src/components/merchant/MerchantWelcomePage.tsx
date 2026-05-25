@@ -737,7 +737,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
               Ready to Start Earning?
             </h2>
             <p className="text-[var(--mw-text-tertiary)] text-sm sm:text-base mb-8 max-w-md mx-auto relative z-10">
-              Join 1,200+ merchants already trading on Blip Market.
+              Join 1,200+ merchants already trading on Blip Money.
               Set up takes less than 5 minutes.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 relative z-10">
@@ -773,7 +773,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
             <a href="#" className="hover:text-[var(--mw-text-secondary)] transition-colors">Risk Warning</a>
           </div>
           <p className="text-[11px] text-[var(--mw-text-muted)] font-mono">
-            Blip Market v1.0
+            Blip Money v1.0
           </p>
         </div>
       </footer>

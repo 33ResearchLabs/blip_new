@@ -21,7 +21,7 @@ const TOUR_STEPS: Step[] = [
   {
     target: 'body',
     placement: 'center',
-    title: 'Welcome to Blip Market 👋',
+    title: 'Welcome to Blip Money 👋',
     content: "Let's take a quick 30-second tour so you know where everything is. You can skip anytime.",
   },
   {

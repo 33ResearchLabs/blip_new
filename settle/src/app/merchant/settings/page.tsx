@@ -2494,7 +2494,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
   const handleDownloadCodes = () => {
     if (backupCodes.length === 0) return;
     const text = [
-      "Blip Market — 2FA Recovery Codes",
+      "Blip Money — 2FA Recovery Codes",
       "",
       "Each code can be used ONCE if you lose access to your authenticator app.",
       "Keep this file somewhere safe (password manager / printed copy).",

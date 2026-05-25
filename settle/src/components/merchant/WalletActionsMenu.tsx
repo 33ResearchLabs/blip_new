@@ -123,7 +123,7 @@ export function WalletActionsMenu({
         const key = exportPrivateKey(kp);
         const fileBlob = new Blob(
           [
-            `Blip Market — Wallet Backup\n\nPublic Key: ${kp.publicKey.toBase58()}\nPrivate Key: ${key}\n\nKeep this file safe. Anyone with the private key can access your funds.\nExported: ${new Date().toISOString()}\n`,
+            `Blip Money — Wallet Backup\n\nPublic Key: ${kp.publicKey.toBase58()}\nPrivate Key: ${key}\n\nKeep this file safe. Anyone with the private key can access your funds.\nExported: ${new Date().toISOString()}\n`,
           ],
           { type: "text/plain" },
         );

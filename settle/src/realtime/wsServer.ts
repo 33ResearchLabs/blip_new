@@ -1,5 +1,5 @@
 /**
- * Shadow WebSocket server for Blip Market.
+ * Shadow WebSocket server for Blip Money.
  *
  * SHADOW MODE — fully isolated:
  *   - runs on its own port (WS_SHADOW_PORT, default 4001)
