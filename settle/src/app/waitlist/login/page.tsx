@@ -1,16 +1,16 @@
 'use client';
 
-// /waitlist/login — user sign-in. Rendered inside WaitlistAuthShell so the
-// User/Merchant + Sign up/Sign in toggles + role-switch CTA are shared
-// across all four auth pages.
+// /waitlist/login — user sign-in entry point. The shell holds role/mode
+// in state and renders the matching form internally, so toggling between
+// User↔Merchant or Sign in↔Sign up no longer triggers a route change.
 
-import LoginForm from '@/components/waitlist/LoginForm';
+import { Suspense } from 'react';
 import WaitlistAuthShell from '@/components/waitlist/WaitlistAuthShell';
 
 export default function WaitlistUserLoginPage() {
   return (
-    <WaitlistAuthShell role="user" mode="signin">
-      <LoginForm role="user" />
-    </WaitlistAuthShell>
+    <Suspense fallback={<div className="min-h-screen bg-[#FAF8F5] dark:bg-black" />}>
+      <WaitlistAuthShell initialRole="user" initialMode="signin" />
+    </Suspense>
   );
 }
