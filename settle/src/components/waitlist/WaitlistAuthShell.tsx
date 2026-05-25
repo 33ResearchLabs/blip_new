@@ -540,21 +540,25 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
                     style={{ color: t.d ? 'rgba(255,255,255,0.80)' : '#1d1d1f' }}
                   >
                     By creating an account, you agree to our{' '}
-                    <Link
-                      href="/terms"
+                    <a
+                      href="https://blip.money/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="underline underline-offset-2 transition-colors duration-200"
                       style={{ color: t.d ? 'rgba(255,255,255,0.80)' : '#1d1d1f' }}
                     >
                       Terms of Service
-                    </Link>{' '}
+                    </a>{' '}
                     and{' '}
-                    <Link
-                      href="/privacy"
+                    <a
+                      href="https://blip.money/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="underline underline-offset-2 transition-colors duration-200"
                       style={{ color: t.d ? 'rgba(255,255,255,0.80)' : '#1d1d1f' }}
                     >
                       Privacy Policy
-                    </Link>
+                    </a>
                   </p>
                 )}
               </div>
