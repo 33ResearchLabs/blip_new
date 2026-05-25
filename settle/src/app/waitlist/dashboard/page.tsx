@@ -501,7 +501,7 @@ function MerchantLayout(props: {
                 href={ONBOARD_FORM_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`${t.accentBg} ${t.accentText} px-5 py-2.5 rounded-full text-[12px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_8px_22px_-10px_rgba(0,0,0,0.35)] flex items-center gap-2 shrink-0`}
+                className={`${t.accentBg} ${t.accentText} px-5 py-3 rounded-full text-[12px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_8px_22px_-10px_rgba(0,0,0,0.35)] flex items-center gap-2 shrink-0`}
               >
                 Submit Form
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -1728,7 +1728,7 @@ function BetaRequestModal({
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className={`flex-1 py-2.5 rounded-full border ${border} ${inputBg} text-xs font-semibold ${txt} ${hov} transition-colors disabled:opacity-50`}
+            className={`flex-1 py-3 rounded-full border ${border} ${inputBg} text-xs font-semibold ${txt} ${hov} transition-colors disabled:opacity-50`}
           >
             Cancel
           </button>
@@ -1736,7 +1736,7 @@ function BetaRequestModal({
             type="button"
             onClick={() => void submit()}
             disabled={submitting}
-            className={`flex-1 py-2.5 rounded-full ${accentBg} ${accentText} text-xs font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-1.5`}
+            className={`flex-1 py-3 rounded-full ${accentBg} ${accentText} text-xs font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-1.5`}
           >
             {submitting ? (
               <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
@@ -1804,7 +1804,7 @@ function LogoutConfirmModal({
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className={`flex-1 py-2.5 rounded-full border ${border} ${inputBg} text-xs font-semibold ${txt} ${hov} transition-colors disabled:opacity-50`}
+            className={`flex-1 py-3 rounded-full border ${border} ${inputBg} text-xs font-semibold ${txt} ${hov} transition-colors disabled:opacity-50`}
           >
             Cancel
           </button>
@@ -1812,7 +1812,7 @@ function LogoutConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 py-2.5 rounded-full bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+            className="flex-1 py-3 rounded-full bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
             {loading ? (
               <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Logging out…</>
@@ -1891,8 +1891,8 @@ function ReferralModal({ code, link, onClose, onCopy, copied }: {
           <div className={`${inputBg} border ${border} rounded-md px-3 py-2.5 font-mono text-xs break-all ${txt}`}>{link || '—'}</div>
         </div>
         <div className="flex gap-3">
-          <button onClick={onClose} className={`flex-1 py-2.5 rounded-full border ${border} text-[11px] font-semibold uppercase tracking-[0.12em] ${txt} ${hov}`}>Close</button>
-          <button onClick={onCopy} className={`flex-1 py-2.5 rounded-full ${accentBg} ${accentText} text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90 flex items-center justify-center gap-1.5`}>
+          <button onClick={onClose} className={`flex-1 py-3 rounded-full border ${border} text-[11px] font-semibold uppercase tracking-[0.12em] ${txt} ${hov}`}>Close</button>
+          <button onClick={onCopy} className={`flex-1 py-3 rounded-full ${accentBg} ${accentText} text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90 flex items-center justify-center gap-1.5`}>
             {copied ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy Link</>}
           </button>
         </div>
@@ -1947,7 +1947,7 @@ function HowItWorksModal({ onClose, referralUnit }: { onClose: () => void; refer
             </li>
           ))}
         </ol>
-        <button onClick={onClose} className={`mt-6 w-full py-2.5 rounded-full ${accentBg} ${accentText} text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90`}>
+        <button onClick={onClose} className={`mt-6 w-full py-3 rounded-full ${accentBg} ${accentText} text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90`}>
           Got it
         </button>
       </div>
@@ -2023,12 +2023,12 @@ function UpgradeModal({ actorType, onClose, onSuccess }: {
         {error && <div className="text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded p-3 mb-3">{error}</div>}
         <div className="flex gap-3">
           <button onClick={onClose}
-            className={`flex-1 py-2.5 rounded-full border ${border} text-[11px] font-semibold uppercase tracking-[0.12em] ${txt} ${hov}`}>
+            className={`flex-1 py-3 rounded-full border ${border} text-[11px] font-semibold uppercase tracking-[0.12em] ${txt} ${hov}`}>
             Cancel
           </button>
           <button onClick={submit}
             disabled={submitting || (actorType === 'user' && !businessName.trim())}
-            className={`flex-1 py-2.5 rounded-full ${accentBg} ${accentText} text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90 disabled:opacity-50`}>
+            className={`flex-1 py-3 rounded-full ${accentBg} ${accentText} text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90 disabled:opacity-50`}>
             {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin inline" /> : 'Confirm'}
           </button>
         </div>

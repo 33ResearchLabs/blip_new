@@ -201,7 +201,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   // production page.
   function inputCls(hasError: boolean, extra = ""): string {
     return [
-      "w-full py-2.5 rounded-xl",
+      "w-full py-3.5 rounded-xl",
       "bg-[#F2F2F5] dark:bg-white/[0.06]",
       "text-black dark:text-white",
       "placeholder:text-[#6e6e73] dark:placeholder:text-white/55",
@@ -411,7 +411,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           onChange={(e) => setReferralCode(e.target.value)}
           maxLength={32}
           disabled={isLoading}
-          className="w-full px-4 py-2.5 bg-[#F2F2F5] dark:bg-white/[0.06] border-0 rounded-xl text-black dark:text-white placeholder:text-[#6e6e73] dark:placeholder:text-white/55 focus:outline-none focus:ring-2 focus:ring-black/[0.12] dark:focus:ring-white/20 focus:bg-white dark:focus:bg-white/[0.10] transition-all duration-200"
+          className="w-full px-4 py-3.5 bg-[#F2F2F5] dark:bg-white/[0.06] border-0 rounded-xl text-black dark:text-white placeholder:text-[#6e6e73] dark:placeholder:text-white/55 focus:outline-none focus:ring-2 focus:ring-black/[0.12] dark:focus:ring-white/20 focus:bg-white dark:focus:bg-white/[0.10] transition-all duration-200"
           placeholder="Referral code (optional)"
         />
       </div>

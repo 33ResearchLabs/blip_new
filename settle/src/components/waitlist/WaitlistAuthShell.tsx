@@ -222,15 +222,18 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
     >
       <WaitlistAuthNavbar current={navCurrent} />
 
-      <main className="relative z-10 max-w-[1200px] mx-auto px-6 pt-14 md:pt-20 pb-20">
+      <main className="relative z-10 max-w-[1200px] mx-auto px-4 sm:px-6 pt-8 md:pt-20 pb-12 md:pb-20">
         <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_475px] gap-10 lg:gap-14 items-center min-h-[80vh]">
-          {/* ── LEFT — editorial copy ─────────────────────────────── */}
+          {/* ── LEFT — editorial copy. Hidden on mobile (<lg) where the
+                user has a tiny viewport: the form alone reads cleaner
+                than form + chunky hero copy stacked above it. The
+                desktop / tablet hero is unchanged. */}
           <motion.div
             key={`${role}-${mode}-left`}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: EASE }}
-            className="text-center lg:text-left"
+            className="hidden lg:block text-center lg:text-left"
           >
             <div className="inline-flex items-center gap-3 mb-7">
               <span className="w-5 h-px" style={{ background: dividerColor }} />
@@ -350,10 +353,10 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: EASE, delay: 0.1 }}
-            className="w-full"
+            className="w-full max-w-[440px] mx-auto lg:max-w-none lg:mx-0"
           >
             <div
-              className="rounded-[24px] border border-black/[0.06] p-6 sm:p-7"
+              className="rounded-[24px] border border-black/[0.06] p-5 sm:p-7"
               style={{
                 background: t.d ? '#0f0f0f' : '#ffffff',
                 color: t.d ? '#ffffff' : '#1d1d1f',
@@ -372,7 +375,7 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
                   type="button"
                   onClick={() => setRole('user')}
                   aria-current={role === 'user' ? 'page' : undefined}
-                  className="py-2.5 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
+                  className="py-3 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
                   style={
                     role === 'user'
                       ? {
@@ -390,7 +393,7 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
                   type="button"
                   onClick={() => setRole('merchant')}
                   aria-current={role === 'merchant' ? 'page' : undefined}
-                  className="py-2.5 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
+                  className="py-3 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
                   style={
                     role === 'merchant'
                       ? {
@@ -472,7 +475,7 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
                   type="button"
                   onClick={() => setMode('signup')}
                   aria-current={mode === 'signup' ? 'page' : undefined}
-                  className="py-2.5 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
+                  className="py-3 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
                   style={
                     mode === 'signup'
                       ? {
@@ -490,7 +493,7 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
                   type="button"
                   onClick={() => setMode('signin')}
                   aria-current={mode === 'signin' ? 'page' : undefined}
-                  className="py-2.5 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
+                  className="py-3 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
                   style={
                     mode === 'signin'
                       ? {
