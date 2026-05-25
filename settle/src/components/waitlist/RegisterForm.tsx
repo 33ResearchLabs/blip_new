@@ -1,14 +1,12 @@
 "use client";
 
-// Ported from futureStick blip-protocol-ui/src/pages/Waitlist/Register.tsx.
-//
-// Two role variants:
-//   - user: email + username + password (with strength meter) + confirm + referral_code
-//   - merchant: same + business_name + business_category + expected_volume + country
-//
-// Posts to /api/auth/user or /api/auth/merchant with action='register' and
-// waitlist=true so the existing waitlist setup flow runs (credits 200/2000
-// REGISTER points and assigns a referral code).
+// Email-only waitlist signup for both user and merchant roles. Username
+// (user) and business_name (merchant) are derived from the email prefix
+// on submit so the form mirrors the marketing screenshots (no extra
+// fields). Posts to /api/auth/user or /api/auth/merchant with
+// action='register' and waitlist=true so the existing waitlist setup
+// flow runs (credits 200/2000 REGISTER points and assigns a referral
+// code).
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -21,8 +19,8 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
-  User as UserIcon,
   Check,
+  Shield,
 } from "lucide-react";
 import { rememberRole } from "@/lib/waitlist/roleCache";
 import { collectFingerprint, type FingerprintPayload } from "@/lib/threat/clientFingerprint";
@@ -56,11 +54,11 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [referralCode, setReferralCode] = useState(initialRef);
 
-  // User-only — username is still required by the settle backend
-  // (validateUserUsername in /api/auth/user). Merchant register derives a
-  // default business_name from the email prefix on submit, so no extra
-  // input is needed for merchants.
-  const [username, setUsername] = useState("");
+  // Username is required by the settle backend (validateUserUsername in
+  // /api/auth/user) but we no longer surface it in the form — the design
+  // is email-only, matching the merchant flow. We derive a username from
+  // the email prefix on submit (same approach merchant uses for
+  // business_name) so the schema is satisfied without an extra field.
 
   // UI state
   const [showPassword, setShowPassword] = useState(false);
@@ -117,14 +115,19 @@ export default function RegisterForm({ role }: RegisterFormProps) {
     else if (password !== confirmPassword)
       next.confirmPassword = "Passwords do not match";
 
-    if (!isMerchant) {
-      if (!username.trim()) next.username = "Username is required";
-      else if (username.trim().length < 3)
-        next.username = "Username must be at least 3 characters";
-    }
-
     setErrors(next);
     return Object.keys(next).length === 0;
+  }
+
+  // Derive a backend-valid username from the email prefix. The settle
+  // backend enforces length >= 3 and a charset of [a-z0-9_]; we lowercase,
+  // strip invalid characters, then pad/fall back so very short prefixes
+  // (e.g. "a@x.com") still satisfy the rule.
+  function deriveUsername(rawEmail: string): string {
+    const prefix = rawEmail.trim().split("@")[0] ?? "";
+    const cleaned = prefix.toLowerCase().replace(/[^a-z0-9_]/g, "");
+    const base = cleaned || "user";
+    return (base.length < 3 ? `${base}user` : base).slice(0, 50);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -169,7 +172,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           }
         : {
             action: "register",
-            username: username.trim(),
+            username: deriveUsername(email),
             email: email.trim(),
             password,
             referral_code: referralCode.trim() || undefined,
@@ -206,29 +209,9 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   return (
     <div>
       <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
-        {/* USER ONLY: Username — merchant signup is email-only (business_name
-            is auto-derived from email prefix server-side). */}
-        {!isMerchant && (
-          <FieldWithIcon
-            id="reg-username"
-            label="Username"
-            icon={<UserIcon className="w-[18px] h-[18px]" />}
-            error={errors.username}
-          >
-            <input
-              id="reg-username"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onBlur={() => validate()}
-              maxLength={50}
-              disabled={isLoading}
-              className={inputClass(!!errors.username)}
-              placeholder="Username"
-            />
-          </FieldWithIcon>
-        )}
+        {/* Email-only signup for both roles — username (user) /
+            business_name (merchant) are derived from the email prefix
+            on submit so the form mirrors the marketing screenshots. */}
 
         {/* Email */}
         <FieldWithIcon
@@ -379,17 +362,9 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           )}
         </div>
 
-        {/* Referral code */}
+        {/* Referral code — borderless caption-style field to match the
+            marketing screenshots (no label, single placeholder). */}
         <div>
-          <label
-            htmlFor="reg-referral"
-            className="block text-[13px] font-medium text-black/70 dark:text-white/70 mb-2"
-          >
-            Referral Code{" "}
-            <span className="text-black/30 dark:text-white/30 font-normal">
-              (Optional)
-            </span>
-          </label>
           <input
             id="reg-referral"
             type="text"
@@ -430,35 +405,32 @@ export default function RegisterForm({ role }: RegisterFormProps) {
                   ? "Joining Merchant Waitlist…"
                   : "Joining Waitlist…"}
               </>
-            ) : isMerchant ? (
-              "Join Merchant Waitlist"
             ) : (
-              "Join User Waitlist"
+              <>
+                {isMerchant ? "Join Merchant Waitlist" : "Join Waitlist"}
+                <span aria-hidden className="text-base">→</span>
+              </>
             )}
           </button>
-          {/* Phase D — minimal anti-fraud telemetry disclosure. We capture
-              timing-level signals only (no keystroke content, no pasted text,
-              no raw mouse coordinates). Aggregates are persisted server-side
-              to the signup_behavior table. */}
-          <p className="mt-2 text-[10px] text-black/40 dark:text-white/40 text-center">
-            By joining you agree we may collect anti-fraud signals (form-fill timing,
-            general mouse / keyboard activity) during signup.
+          <p className="mt-3 text-center text-[11.5px] text-black/70 dark:text-white/80 flex items-center justify-center gap-1.5">
+            <Shield className="w-3 h-3" strokeWidth={2} />
+            We respect your privacy. No spam, ever.
           </p>
         </div>
       </form>
 
-      <p className="mt-3 text-[11px] text-black/40 dark:text-white/40 leading-relaxed text-center">
+      <p className="mt-4 text-[11.5px] text-black/50 dark:text-white/50 leading-relaxed text-center">
         By creating an account, you agree to our{" "}
         <Link
           href="/terms"
-          className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
+          className="underline underline-offset-2 hover:text-black/80 dark:hover:text-white/80 transition-colors duration-200"
         >
           Terms of Service
         </Link>{" "}
         and{" "}
         <Link
           href="/privacy"
-          className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
+          className="underline underline-offset-2 hover:text-black/80 dark:hover:text-white/80 transition-colors duration-200"
         >
           Privacy Policy
         </Link>
