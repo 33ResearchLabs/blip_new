@@ -26,9 +26,15 @@ export const Logo = memo(function Logo({
       onClick={onClick}
       className="flex items-center gap-1.5 group no-underline hover:no-underline"
     >
+      {/* SVG + text dimensions match futureStick Navbar.tsx Logo:
+            - SVG: h-[17px] (was 20px — 3px too tall)
+            - Text: 22px / fontWeight 700 / letterSpacing -0.045em
+            - flex items-baseline so the lightning bolt aligns with the
+              text baseline rather than its center.
+          "money" stays italic, fontWeight 600. */}
       <svg
         viewBox="0 0 70 60"
-        className="h-[20px] w-auto"
+        className="h-[17px] w-auto"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
@@ -43,7 +49,8 @@ export const Logo = memo(function Logo({
       </svg>
 
       <motion.span
-        className={`${className} text-[20px] font-semibold tracking-tight leading-none flex items-center`}
+        className={`${className} text-[22px] leading-none flex items-baseline`}
+        style={{ letterSpacing: "-0.045em", fontWeight: 700 }}
         whileHover={{ scale: 1.02 }}
         transition={{ duration: 0.2 }}
       >
@@ -54,8 +61,13 @@ export const Logo = memo(function Logo({
           Blip
         </span>
         <span
-          className={`relative ml-1 italic ${onDark ? "" : "text-black dark:text-white"}`}
-          style={onDark ? { color: "#ffffff" } : undefined}
+          className={onDark ? "ml-1" : "ml-1 text-black dark:text-white"}
+          style={{
+            fontStyle: "italic",
+            fontWeight: 600,
+            letterSpacing: "-0.045em",
+            ...(onDark ? { color: "#ffffff" } : {}),
+          }}
         >
           money
         </span>

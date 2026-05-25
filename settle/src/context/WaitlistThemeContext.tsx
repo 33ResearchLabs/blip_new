@@ -107,7 +107,13 @@ export function useWaitlistTokens() {
     inputBg:    d ? 'bg-white/5'               : 'bg-[#F5F3F0]',
     divider:    d ? 'border-white/[0.06]'      : 'border-black/[0.06]',
     accentBg:   d ? 'bg-white'                 : 'bg-[#000000]',
-    accentText: d ? 'text-black'               : 'text-white',
+    // accentText uses arbitrary-value hex (text-[#ffffff]) in the light
+    // theme — the global `[class*="text-white"]` rewrite in globals.css
+    // would otherwise repaint white-on-black accent buttons to dark,
+    // making them look like text-less black slabs (the symptom on the
+    // dashboard's "Share Your Code" / "Join as user" CTAs). The substring
+    // `text-white` is absent from `text-[#ffffff]`, so the rewrite skips it.
+    accentText: d ? 'text-black'               : 'text-[#ffffff]',
     cardShadow: d ? '' : 'shadow-[0_24px_60px_-30px_rgba(0,0,0,0.10),0_8px_24px_-16px_rgba(0,0,0,0.06)]',
   };
 }

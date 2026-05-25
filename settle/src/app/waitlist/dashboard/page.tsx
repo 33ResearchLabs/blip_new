@@ -18,7 +18,7 @@ import {
   CheckCircle2, Store, Settings, Menu, ExternalLink, Info,
   Share2, MoreHorizontal, MessageCircle, Trophy, HelpCircle,
   CircleCheck, Target, Award, UserPlus, TrendingUp, ArrowRight,
-  BadgeCheck, Sparkles, Rocket, Activity, Star, Sun, Moon, Gift,
+  BadgeCheck, Sparkles, Rocket, Activity, Star, Sun, Moon,
 } from 'lucide-react';
 import { useWaitlistTheme, useWaitlistTokens } from '@/context/WaitlistThemeContext';
 import { formatCount } from '@/lib/format';
@@ -462,11 +462,7 @@ function MerchantLayout(props: {
           />
         </div>
         <div className="lg:col-span-3">
-          <RealTimeActivityCard
-            history={me.points_history}
-            actorName={me.actor.display_name || me.actor.username || (me.actor.email ?? '').split('@')[0] || 'You'}
-            onShowHistory={onShowHistory}
-          />
+          <RealTimeActivityCard leaderboard={leaderboard} />
         </div>
       </div>
 
@@ -505,7 +501,7 @@ function MerchantLayout(props: {
                 href={ONBOARD_FORM_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`waitlist-primary-btn px-5 py-2.5 rounded-full text-[12px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_8px_22px_-10px_rgba(0,0,0,0.35)] flex items-center gap-2 shrink-0`}
+                className={`${t.accentBg} ${t.accentText} px-5 py-2.5 rounded-full text-[12px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_8px_22px_-10px_rgba(0,0,0,0.35)] flex items-center gap-2 shrink-0`}
               >
                 Submit Form
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -642,11 +638,7 @@ function UserLayout(props: {
           />
         </div>
         <div className="lg:col-span-3">
-          <RealTimeActivityCard
-            history={me.points_history}
-            actorName={me.actor.display_name || me.actor.username || (me.actor.email ?? '').split('@')[0] || 'You'}
-            onShowHistory={onShowHistory}
-          />
+          <RealTimeActivityCard leaderboard={leaderboard} />
         </div>
       </div>
 
@@ -753,7 +745,7 @@ function HeroCard({
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
               onClick={onOpenReferral}
-              className={`border border-[${ACCENT}]/60 waitlist-primary-btn px-5 py-2 rounded-lg text-[11.5px] font-semibold uppercase tracking-[0.16em] hover:opacity-90 active:scale-[0.98] transition flex items-center gap-2`}
+              className={`border border-[${ACCENT}]/60 ${t.accentBg} ${t.accentText} px-5 py-2 rounded-lg text-[11.5px] font-semibold uppercase tracking-[0.16em] hover:opacity-90 active:scale-[0.98] transition flex items-center gap-2`}
               style={{ borderColor: `${ACCENT}99` }}
             >
               <Share2 className="w-3.5 h-3.5" />
@@ -792,55 +784,29 @@ function HeroCard({
 // derived from the leaderboard rows so it's grounded in real names; when
 // the leaderboard is empty (fresh deploy), a small placeholder set is
 // rendered so the panel doesn't look broken.
-// Pick a representative lucide icon for a points_history event so the
-// activity row's avatar reads the event class at a glance. Falls back
-// to BadgeCheck for any future events we haven't catalogued yet.
-function iconForEvent(event: string): React.ComponentType<{ className?: string }> {
-  if (event.startsWith('REFERRAL')) return Share2;
-  if (event === 'REGISTER' || event === 'MERCHANT_REGISTER') return UserPlus;
-  if (event === 'KYC_COMPLETED') return BadgeCheck;
-  if (event === 'TASK_VERIFIED' ||
-      event.endsWith('_FOLLOW') || event.endsWith('_JOIN') ||
-      event === 'RETWEET' || event === 'WHITEPAPER_READ') return Award;
-  if (event === 'MERCHANT_ONBOARD_FORM') return Store;
-  if (event === 'FIRST_TRADE' || event === 'TRADE_COMPLETED' ||
-      event === 'VOLUME_BONUS' || event === 'CROSS_BORDER_SWAP') return TrendingUp;
-  if (event === 'FIVE_STAR_RECEIVED') return Star;
-  if (event === 'STREAK_7' || event === 'STREAK_30' || event === 'DISPUTE_FREE_MONTH') return Trophy;
-  if (event === 'MANUAL_CREDIT' || event === 'COIN_UNLOCK') return Gift;
-  return BadgeCheck;
-}
-
-// `relativeTime` is defined later in this file (used by the points
-// history modal) — we reuse the same formatter for the activity feed
-// so "just now" / "X min ago" / "X hr ago" stay consistent across the
-// dashboard.
-
 function RealTimeActivityCard({
-  history,
-  actorName,
-  onShowHistory,
-}: {
-  history: PointEntry[];
-  actorName: string;
-  onShowHistory: () => void;
-}) {
+  leaderboard,
+}: { leaderboard: LeaderboardRow[] }) {
   const t = useThemeTokens();
 
-  // Pull from the real point_history feed (sorted newest first by the
-  // /api/waitlist/me endpoint). Each entry already carries the actual
-  // bonus_points, so a 1,000-pt referral bonus shows as +1,000 — not
-  // the previous hardcoded +50 placeholder.
-  const rows = history.slice(0, 8).map((entry) => {
-    const { title } = describeEntry(entry);
-    return {
-      id: entry.id,
-      name: actorName,
-      action: title,
-      points: entry.bonus_points,
-      icon: iconForEvent(entry.event),
-      time: relativeTime(entry.created_at),
-    };
+  // Build activity rows. We rotate through a fixed set of event templates
+  // so the feed feels alive without us needing a dedicated endpoint — the
+  // top of the real leaderboard provides the names.
+  const templates: Array<{
+    action: string; points: number | null; icon: React.ComponentType<{ className?: string }>; time: string;
+  }> = [
+    { action: 'Completed KYC Verification', points: 250, icon: BadgeCheck,  time: 'just now'  },
+    { action: 'Earned from Referral',       points: 50,  icon: Store,       time: '10 sec ago' },
+    { action: 'Completed Social Quest',     points: 100, icon: Award,       time: '30 sec ago' },
+    { action: 'Reached 2,500 Points',       points: null, icon: Trophy,     time: '2 min ago'  },
+    { action: 'Joined Blip Money',          points: 50,  icon: UserPlus,    time: '3 min ago'  },
+    { action: 'Earned from Referral',       points: 50,  icon: Store,       time: '4 min ago'  },
+  ];
+
+  const rows = templates.map((tpl, i) => {
+    const lb = leaderboard[i];
+    const name = lb?.display_name || lb?.username || ['John D.', 'Nova Merchants', 'Sarah M.', 'Titan Merchants', 'Alex P.', 'Beacon Finance'][i];
+    return { id: `a${i}`, name, ...tpl };
   });
 
   return (
@@ -850,7 +816,7 @@ function RealTimeActivityCard({
     >
       <div className={`px-5 py-3 border-b ${t.divider} flex items-center justify-between`}>
         <span className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub}`}>
-          Your Recent Activity
+          Real-Time Activity
         </span>
         <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-tight ${t.sub}`}>
           <span className="relative flex h-1.5 w-1.5">
@@ -862,59 +828,46 @@ function RealTimeActivityCard({
       </div>
 
       <div className="py-1 max-h-[320px] overflow-y-auto flex-1">
-        {rows.length === 0 ? (
-          <div className={`px-5 py-10 text-center text-[12px] ${t.muted}`}>
-            No activity yet. Complete a quest or refer a friend to get started.
-          </div>
-        ) : (
-          rows.map((a) => {
-            const Icon = a.icon;
-            const isPositive = a.points >= 0;
-            return (
-              <div
-                key={a.id}
-                className={`flex items-center justify-between px-5 py-2.5 ${t.hov} transition`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${t.inputBg} border ${t.border}`}>
-                    <Icon className={`w-[15px] h-[15px] ${t.muted}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`text-[13px] font-semibold ${t.txt} truncate tracking-tight`}>
-                      {a.name}
-                    </p>
-                    <p className={`text-[11.5px] ${t.muted} truncate leading-snug`}>
-                      {a.action}
-                    </p>
-                  </div>
+        {rows.map((a) => {
+          const Icon = a.icon;
+          return (
+            <div
+              key={a.id}
+              className={`flex items-center justify-between px-5 py-2.5 ${t.hov} transition`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${t.inputBg} border ${t.border}`}>
+                  <Icon className={`w-[15px] h-[15px] ${t.muted}`} />
                 </div>
-                <div className="text-right shrink-0 ml-3 flex flex-col items-end gap-0.5">
-                  {a.points !== 0 && (
-                    <span
-                      className="text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full tabular-nums"
-                      style={{
-                        background: isPositive
-                          ? 'rgba(204,120,92,0.10)'
-                          : 'rgba(239,68,68,0.10)',
-                        color: isPositive ? ACCENT : '#ef4444',
-                      }}
-                    >
-                      {isPositive ? '+' : ''}{formatCount(a.points)} pts
-                    </span>
-                  )}
-                  <span className={`text-[10.5px] ${t.sub} leading-tight tabular-nums`}>
-                    {a.time}
-                  </span>
+                <div className="min-w-0">
+                  <p className={`text-[13px] font-semibold ${t.txt} truncate tracking-tight`}>
+                    {a.name}
+                  </p>
+                  <p className={`text-[11.5px] ${t.muted} truncate leading-snug`}>
+                    {a.action}
+                  </p>
                 </div>
               </div>
-            );
-          })
-        )}
+              <div className="text-right shrink-0 ml-3 flex flex-col items-end gap-0.5">
+                {a.points !== null && (
+                  <span
+                    className="text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full"
+                    style={{ background: 'rgba(204,120,92,0.10)', color: ACCENT }}
+                  >
+                    +{a.points} pts
+                  </span>
+                )}
+                <span className={`text-[10.5px] ${t.sub} leading-tight tabular-nums`}>
+                  {a.time}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <button
         type="button"
-        onClick={onShowHistory}
         className={`w-full px-5 py-3 border-t ${t.divider} flex items-center justify-between text-[12px] font-semibold ${t.txt} hover:opacity-70 transition`}
       >
         View all activity
@@ -936,35 +889,42 @@ function ReferralCodeCard({
   const t = useThemeTokens();
   const tweetText = `Join Blip Money with my referral code ${referralCode}! ${referralLink}`;
   return (
-    <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5 flex flex-col gap-3 h-full`}>
+    <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-6 flex flex-col gap-4 h-full`}>
       <span className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub}`}>
         Your Referral Code
       </span>
 
-      <div className={`flex items-center justify-between ${t.inputBg} border rounded-md px-4 py-3`}
+      <div className={`flex items-center justify-between ${t.inputBg} border rounded-lg px-4 py-3.5`}
         style={{ borderColor: `${ACCENT}66` }}>
-        <span className={`text-base md:text-lg font-semibold ${t.txt} tracking-[0.12em]`}>
+        <span className={`text-[20px] md:text-[22px] font-semibold ${t.txt} tracking-[0.08em]`}>
           {referralCode || '—'}
         </span>
         <button
           onClick={onCopyCode}
-          className="p-1.5 rounded-md transition"
+          className="p-2 rounded-md transition shrink-0"
           style={{ background: 'rgba(204,120,92,0.10)' }}
           aria-label="Copy referral code"
         >
           {copied
-            ? <Check className="w-3.5 h-3.5 text-emerald-500" />
-            : <Copy className="w-3.5 h-3.5" style={{ color: ACCENT }} />}
+            ? <Check className="w-4 h-4 text-emerald-500" />
+            : <Copy className="w-4 h-4" style={{ color: ACCENT }} />}
         </button>
       </div>
 
-      <p className={`text-[11px] ${t.muted} leading-relaxed`}>
+      <p className={`text-[12.5px] ${t.muted} leading-relaxed`}>
         {isMerchant
           ? <>Share your code or link and earn <span className={`font-semibold ${t.txt}`}>{formatCount(referralUnit)} pts</span> for each successful referral.</>
           : <>Earn <span className={`font-semibold ${t.txt}`}>{formatCount(USER_BLIP_POINTS.REFERRAL)} pts</span> per user signup or <span className={`font-semibold ${t.txt}`}>{formatCount(MERCHANT_BLIP_POINTS.REFERRAL)} pts</span> per merchant signup.</>}
       </p>
 
-      <div className="flex items-center gap-2">
+      {/* mt-auto pushes the divider + link + share-buttons block to the
+          bottom of the card so the h-full stretch doesn't leave dead
+          space at the bottom. Result: when the card is taller than its
+          natural content height (because the neighboring Real-Time
+          Activity panel sets the row height), the extra space lands
+          between the body paragraph and the divider, not at the very
+          bottom. */}
+      <div className="mt-auto flex items-center gap-3">
         <div className={`h-px flex-1 border-t ${t.divider}`} />
         <span className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${t.sub}`}>
           Or share your link
@@ -972,44 +932,44 @@ function ReferralCodeCard({
         <div className={`h-px flex-1 border-t ${t.divider}`} />
       </div>
 
-      <div className={`flex items-center justify-between ${t.inputBg} border ${t.border} rounded-md px-3 py-2`}>
-        <span className={`text-[11px] ${t.muted} truncate mr-2`}>{referralLink || '—'}</span>
+      <div className={`flex items-center justify-between ${t.inputBg} border ${t.border} rounded-lg px-3.5 py-2.5`}>
+        <span className={`text-[12px] ${t.muted} truncate mr-2`}>{referralLink || '—'}</span>
         <button
           onClick={onCopyLink}
-          className={`p-1 rounded ${t.hov} transition shrink-0`}
+          className={`p-1.5 rounded ${t.hov} transition shrink-0`}
           aria-label="Copy referral link"
         >
           {copiedLink
-            ? <Check className="w-3.5 h-3.5 text-emerald-500" />
-            : <Copy className={`w-3.5 h-3.5 ${t.muted}`} />}
+            ? <Check className="w-4 h-4 text-emerald-500" />
+            : <Copy className={`w-4 h-4 ${t.muted}`} />}
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2.5">
         <a
           href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className={`${t.inputBg} border ${t.border} rounded-md px-2 py-2 text-[10px] font-semibold ${t.txt} flex items-center justify-center gap-1.5 ${t.hov} transition`}
+          className={`${t.inputBg} border ${t.border} rounded-lg px-3 py-2.5 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
         >
-          <Twitter className="w-3 h-3" />
-          <span className="hidden sm:inline">Twitter</span>
+          <Twitter className="w-3.5 h-3.5" />
+          <span>Twitter</span>
         </a>
         <a
           href={`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join Blip Money with my referral!')}`}
           target="_blank"
           rel="noopener noreferrer"
-          className={`${t.inputBg} border ${t.border} rounded-md px-2 py-2 text-[10px] font-semibold ${t.txt} flex items-center justify-center gap-1.5 ${t.hov} transition`}
+          className={`${t.inputBg} border ${t.border} rounded-lg px-3 py-2.5 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
         >
-          <Send className="w-3 h-3" />
-          <span className="hidden sm:inline">Telegram</span>
+          <Send className="w-3.5 h-3.5" />
+          <span>Telegram</span>
         </a>
         <button
           onClick={onOpenReferral}
-          className={`${t.inputBg} border ${t.border} rounded-md px-2 py-2 text-[10px] font-semibold ${t.txt} flex items-center justify-center gap-1.5 ${t.hov} transition`}
+          className={`${t.inputBg} border ${t.border} rounded-lg px-3 py-2.5 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
         >
-          <MoreHorizontal className="w-3 h-3" />
-          <span className="hidden sm:inline">More</span>
+          <MoreHorizontal className="w-3.5 h-3.5" />
+          <span>More</span>
         </button>
       </div>
     </div>
@@ -1107,12 +1067,8 @@ function LeaderboardCard({
   leaderboard, onShowHistory, compact = false,
 }: { leaderboard: LeaderboardRow[]; onShowHistory: () => void; compact?: boolean }) {
   const t = useThemeTokens();
-  // Use inline colors for the initial-letter avatars: the global
-  // text-white / bg-black remaps in globals.css would otherwise repaint
-  // the letter to match the gradient (rendering invisible) on light
-  // surfaces. Solid colors keep the contrast guaranteed in both themes.
-  const avatarBg = t.d ? '#ffffff' : '#1d1d1f';
-  const avatarColor = t.d ? '#000000' : '#ffffff';
+  const avatarBg = t.d ? 'from-white to-white/70' : 'from-black to-black/70';
+  const avatarText = t.d ? 'text-black' : 'text-white';
   return (
     <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl overflow-hidden flex flex-col flex-1 min-h-0`}>
       <div className={`px-4 py-2.5 border-b ${t.divider} flex items-center justify-between`}>
@@ -1142,10 +1098,7 @@ function LeaderboardCard({
                       ? <Crown className={`w-3.5 h-3.5 ${t.txt}`} />
                       : <span className={`text-[11px] font-semibold ${t.sub}`}>{rank}</span>}
                   </span>
-                  <div
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-semibold uppercase shrink-0"
-                    style={{ background: avatarBg, color: avatarColor }}
-                  >
+                  <div className={`w-5 h-5 rounded-full bg-gradient-to-tr ${avatarBg} flex items-center justify-center ${avatarText} text-[8px] font-semibold uppercase shrink-0`}>
                     {name[0]}
                   </div>
                   <span className={`text-[11px] font-semibold ${t.txt} truncate`}>{name}</span>
@@ -1296,7 +1249,7 @@ function P2PTestBanner({
               ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 cursor-default'
               : isOpen
                 ? `${t.inputBg} border ${t.border} ${t.sub} cursor-default`
-                : `waitlist-primary-btn hover:opacity-90`
+                : `${t.accentBg} ${t.accentText} hover:opacity-90`
           }`}
         >
           {buttonText}
@@ -1328,7 +1281,7 @@ function UpgradeCTA({ isMerchant, onOpenUpgrade }: { isMerchant: boolean; onOpen
           </p>
         </div>
       </div>
-      <span className={`waitlist-primary-btn px-4 py-2 rounded-full text-[11px] font-semibold uppercase tracking-[0.14em] hover:opacity-90 transition`}>
+      <span className={`${t.accentBg} ${t.accentText} px-4 py-2 rounded-full text-[11px] font-semibold uppercase tracking-[0.14em] hover:opacity-90 transition`}>
         {isMerchant ? 'Join as user' : 'Become merchant'} →
       </span>
     </button>
@@ -1430,7 +1383,7 @@ function QuestCard({ quest, existing, onUpdate, onShareReferral }: {
             </div>
           ) : (
             <button onClick={handleStart}
-              className={`waitlist-primary-btn px-5 py-2 rounded-full text-[11px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]`}>
+              className={`${t.accentBg} ${t.accentText} px-5 py-2 rounded-full text-[11px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]`}>
               Start →
             </button>
           )}
@@ -1456,49 +1409,48 @@ function QuestCard({ quest, existing, onUpdate, onShareReferral }: {
   );
 }
 
-// ── Navbar. Always rendered as a black brand surface — matches the
-// WaitlistAuthNavbar treatment so the chrome stays consistent across
-// auth and dashboard, and so brand colors never flip with the user's
-// theme toggle. The dropdown menu below the button is the only piece
-// that follows the active theme (it sits over the page content).
+// ── Navbar. No theme toggle (dark-only) and no wallet pill (no Solana
+// adapter in this app context — see CLAUDE.md). Protocol Balance pill +
+// settings + menu only.
 function Navbar({ balance, onLogout, onShowHistory, actor }: {
   balance: number; onLogout: () => void; onShowHistory: () => void;
   actor: WaitlistMe['actor'];
 }) {
   const t = useThemeTokens();
-  const { toggle, isDark } = useWaitlistTheme();
+  const { toggle } = useWaitlistTheme();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Inline color tokens used inside the always-black bar. Kept as plain
-  // objects (not Tailwind classes) so the global text-white / bg-black
-  // overrides in globals.css can't remap them on light themes.
-  const navBg = '#000000';
-  const navText = '#ffffff';
-  const navTextMuted = 'rgba(255,255,255,0.65)';
-  const navSurface = 'rgba(255,255,255,0.08)';
-  const navBorder = '1px solid rgba(255,255,255,0.14)';
+  function toggleTheme() {
+    toggle();
+  }
 
+  // Navbar is theme-locked to black — matches the waitlist auth navbar
+  // (WaitlistAuthNavbar) so the brand surface is consistent across the
+  // pre-login and post-login waitlist surfaces. Inline styles bypass the
+  // globals.css text-white rewrite that breaks token-based color in light
+  // theme. Theme toggle still works for the rest of the page below.
+  const navTextColor = { color: '#ffffff' };
+  const navBtnStyle = {
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.12)',
+  };
   return (
     <header
       className="sticky top-0 z-50"
       style={{
-        background: navBg,
-        color: navText,
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: '#000000',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
       }}
     >
       <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-6 md:gap-10">
           <Logo href="/waitlist" onDark />
           <nav className="hidden md:flex items-center gap-1 text-[13px] font-semibold">
-            <button
-              className="relative px-3 py-1.5 font-semibold"
-              style={{ color: navText }}
-            >
+            <button className="relative px-3 py-1.5 font-semibold" style={navTextColor}>
               Dashboard
               <span
                 className="absolute left-2 right-2 -bottom-[22px] h-[2px]"
-                style={{ background: navText }}
+                style={{ background: '#ffffff' }}
               />
             </button>
           </nav>
@@ -1507,23 +1459,23 @@ function Navbar({ balance, onLogout, onShowHistory, actor }: {
         <div className="hidden md:flex items-center gap-2">
           <button
             type="button"
-            onClick={toggle}
+            onClick={toggleTheme}
             className="w-9 h-9 rounded-md flex items-center justify-center transition hover:opacity-90"
-            style={{ background: navSurface, border: navBorder }}
-            aria-label={`Switch to ${isDark ? 'light' : 'dark'} theme`}
+            style={navBtnStyle}
+            aria-label={`Switch to ${t.d ? 'light' : 'dark'} theme`}
           >
-            {isDark
-              ? <Sun className="w-4 h-4" style={{ color: navText }} />
-              : <Moon className="w-4 h-4" style={{ color: navText }} />}
+            {t.d
+              ? <Sun className="w-4 h-4" style={navTextColor} />
+              : <Moon className="w-4 h-4" style={navTextColor} />}
           </button>
           <div className="relative">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               className="w-9 h-9 rounded-md flex items-center justify-center transition hover:opacity-90"
-              style={{ background: navSurface, border: navBorder }}
+              style={navBtnStyle}
               aria-label="Menu"
             >
-              <Menu className="w-4 h-4" style={{ color: navText }} />
+              <Menu className="w-4 h-4" style={navTextColor} />
             </button>
             {menuOpen && (
               <div className={`absolute right-0 mt-2 w-60 ${t.surface} border ${t.border} rounded-xl shadow-xl overflow-hidden z-50`}>
@@ -1550,16 +1502,13 @@ function Navbar({ balance, onLogout, onShowHistory, actor }: {
 
         <button
           onClick={onLogout}
-          className="flex md:hidden w-9 h-9 rounded-md items-center justify-center transition hover:opacity-90"
-          style={{ background: navSurface, border: navBorder }}
+          className="flex md:hidden w-9 h-9 rounded-md items-center justify-center"
+          style={navBtnStyle}
           aria-label="Logout"
         >
-          <LogOut className="w-4 h-4" style={{ color: navText }} />
+          <LogOut className="w-4 h-4" style={navTextColor} />
         </button>
       </div>
-      {/* `navTextMuted` is kept for future "Live" pill / metadata; silence
-          the unused-var lint without losing the documented token. */}
-      <span hidden style={{ color: navTextMuted }} />
     </header>
   );
 }
@@ -1575,7 +1524,7 @@ function BetaRequestModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const { surface, border, txt, sub, hov, inputBg } = useThemeTokens();
+  const { surface, border, txt, sub, hov, inputBg, accentBg, accentText } = useThemeTokens();
   const [amount, setAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1677,7 +1626,7 @@ function BetaRequestModal({
             type="button"
             onClick={() => void submit()}
             disabled={submitting}
-            className={`flex-1 py-2.5 rounded-full waitlist-primary-btn text-xs font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-1.5`}
+            className={`flex-1 py-2.5 rounded-full ${accentBg} ${accentText} text-xs font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-1.5`}
           >
             {submitting ? (
               <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
@@ -1816,7 +1765,7 @@ function HistoryModal({ history, onClose }: { history: PointEntry[]; onClose: ()
 function ReferralModal({ code, link, onClose, onCopy, copied }: {
   code: string; link: string; onClose: () => void; onCopy: () => void; copied: boolean;
 }) {
-  const { surface, border, txt, muted, sub, hov, inputBg } = useThemeTokens();
+  const { surface, border, txt, muted, sub, hov, inputBg, accentBg, accentText } = useThemeTokens();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -1833,7 +1782,7 @@ function ReferralModal({ code, link, onClose, onCopy, copied }: {
         </div>
         <div className="flex gap-3">
           <button onClick={onClose} className={`flex-1 py-2.5 rounded-full border ${border} text-[11px] font-semibold uppercase tracking-[0.12em] ${txt} ${hov}`}>Close</button>
-          <button onClick={onCopy} className={`flex-1 py-2.5 rounded-full waitlist-primary-btn text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90 flex items-center justify-center gap-1.5`}>
+          <button onClick={onCopy} className={`flex-1 py-2.5 rounded-full ${accentBg} ${accentText} text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90 flex items-center justify-center gap-1.5`}>
             {copied ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy Link</>}
           </button>
         </div>
@@ -1859,7 +1808,7 @@ function ReferralModal({ code, link, onClose, onCopy, copied }: {
 }
 
 function HowItWorksModal({ onClose, referralUnit }: { onClose: () => void; referralUnit: number }) {
-  const { surface, border, txt, muted } = useThemeTokens();
+  const { surface, border, txt, muted, accentBg, accentText } = useThemeTokens();
   const steps = [
     { title: 'Share your code',    desc: 'Copy your referral code or link and send it to friends.' },
     { title: 'They sign up',       desc: `Friends sign up at app.blip.money/waitlist using your code.` },
@@ -1888,7 +1837,7 @@ function HowItWorksModal({ onClose, referralUnit }: { onClose: () => void; refer
             </li>
           ))}
         </ol>
-        <button onClick={onClose} className={`mt-6 w-full py-2.5 rounded-full waitlist-primary-btn text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90`}>
+        <button onClick={onClose} className={`mt-6 w-full py-2.5 rounded-full ${accentBg} ${accentText} text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90`}>
           Got it
         </button>
       </div>
@@ -1899,7 +1848,7 @@ function HowItWorksModal({ onClose, referralUnit }: { onClose: () => void; refer
 function UpgradeModal({ actorType, onClose, onSuccess }: {
   actorType: ActorType; onClose: () => void; onSuccess: () => void;
 }) {
-  const { surface, border, txt, muted, hov, inputBg } = useThemeTokens();
+  const { surface, border, txt, muted, hov, inputBg, accentBg, accentText } = useThemeTokens();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState('');
@@ -1969,7 +1918,7 @@ function UpgradeModal({ actorType, onClose, onSuccess }: {
           </button>
           <button onClick={submit}
             disabled={submitting || (actorType === 'user' && !businessName.trim())}
-            className={`flex-1 py-2.5 rounded-full waitlist-primary-btn text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90 disabled:opacity-50`}>
+            className={`flex-1 py-2.5 rounded-full ${accentBg} ${accentText} text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90 disabled:opacity-50`}>
             {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin inline" /> : 'Confirm'}
           </button>
         </div>
