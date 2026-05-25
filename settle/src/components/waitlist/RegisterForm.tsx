@@ -10,7 +10,7 @@
 // waitlist=true so the existing waitlist setup flow runs (credits 200/2000
 // REGISTER points and assigns a referral code).
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -25,6 +25,8 @@ import {
   Check,
 } from "lucide-react";
 import { rememberRole } from "@/lib/waitlist/roleCache";
+import { collectFingerprint, type FingerprintPayload } from "@/lib/threat/clientFingerprint";
+import { SignupBehaviorCollector } from "@/lib/threat/clientTelemetry";
 
 interface RegisterFormProps {
   role: "user" | "merchant";
@@ -68,6 +70,32 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [robotChecked, setRobotChecked] = useState(false);
+
+  // Pre-collect the device fingerprint on mount so it's ready by submit.
+  // Failures are non-fatal — register proceeds with no fp on the body.
+  const fpRef = useRef<FingerprintPayload | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void collectFingerprint().then(fp => { if (alive) fpRef.current = fp; });
+    return () => { alive = false; };
+  }, []);
+
+  // Behavioural telemetry collector — attaches to the form root on mount,
+  // captures fill time / mouse entropy / keystroke cadence / paste events /
+  // tab-switches / scrolls. Detaches on unmount. Failures are non-fatal —
+  // register proceeds with no telemetry on the body.
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const telemetryRef = useRef<SignupBehaviorCollector | null>(null);
+  useEffect(() => {
+    if (!formRef.current) return;
+    const collector = new SignupBehaviorCollector();
+    const detach = collector.attach(formRef.current);
+    telemetryRef.current = collector;
+    return () => {
+      detach();
+      telemetryRef.current = null;
+    };
+  }, []);
 
   const strength = checkPasswordStrength(password);
 
@@ -120,6 +148,14 @@ export default function RegisterForm({ role }: RegisterFormProps) {
       const defaultBusinessName =
         email.trim().split("@")[0].slice(0, 100) || "Merchant";
 
+      // If the fingerprint wasn't ready at mount, give it one last best-effort
+      // chance here. Still non-fatal — register proceeds without it on failure.
+      const fp = fpRef.current ?? await collectFingerprint().catch(() => null);
+      // Snapshot the behavioural telemetry right before submit so fill_time
+      // captures the full session. Returns null if the collector never
+      // attached (SSR / unmount race).
+      const behavior = telemetryRef.current?.snapshot() ?? null;
+
       const body: Record<string, unknown> = isMerchant
         ? {
             action: "register",
@@ -129,6 +165,8 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             referral_code: referralCode.trim() || undefined,
             waitlist: true,
             source: "waitlist_merchant_form",
+            device_fp: fp ?? undefined,
+            behavior: behavior ?? undefined,
           }
         : {
             action: "register",
@@ -138,6 +176,8 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             referral_code: referralCode.trim() || undefined,
             waitlist: true,
             source: "waitlist_user_form",
+            device_fp: fp ?? undefined,
+            behavior: behavior ?? undefined,
           };
 
       const res = await fetch(endpoint, {
@@ -166,7 +206,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
 
   return (
     <div className="w-full max-w-lg">
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
         {/* USER ONLY: Username — merchant signup is email-only (business_name
             is auto-derived from email prefix server-side). */}
         {!isMerchant && (
@@ -409,6 +449,14 @@ export default function RegisterForm({ role }: RegisterFormProps) {
               "Join User Waitlist"
             )}
           </button>
+          {/* Phase D — minimal anti-fraud telemetry disclosure. We capture
+              timing-level signals only (no keystroke content, no pasted text,
+              no raw mouse coordinates). Aggregates are persisted server-side
+              to the signup_behavior table. */}
+          <p className="mt-2 text-[10px] text-black/40 dark:text-white/40 text-center">
+            By joining you agree we may collect anti-fraud signals (form-fill timing,
+            general mouse / keyboard activity) during signup.
+          </p>
         </div>
       </form>
 

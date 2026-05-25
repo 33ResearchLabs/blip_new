@@ -47,6 +47,7 @@ const NAV_ITEMS: { href: string; label: string; exact?: boolean }[] = [
   { href: "/admin/access-control", label: "Access Control" },
   { href: "/admin/accounts", label: "Accounts" },
   { href: "/admin/beta-requests", label: "Beta Requests" },
+  { href: "/admin/waitlist", label: "Waitlist" },
   { href: "/admin/disputes", label: "Disputes" },
   { href: "/admin/monitor", label: "Monitor" },
   { href: "/admin/observability", label: "Observability" },

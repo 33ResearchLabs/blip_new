@@ -13,6 +13,7 @@ import { requireAuth, forbiddenResponse, errorResponse } from '@/lib/middleware/
 import { verifyAndCreditTask } from '@/lib/db/repositories/waitlistTasks';
 import { queryOne } from '@/lib/db';
 import { checkRateLimit, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
+import { triggerRecompute } from '@/lib/threat/recompute';
 import type { WaitlistTask } from '@/lib/types/database';
 
 export async function POST(
@@ -36,6 +37,14 @@ export async function POST(
   }
 
   const result = await verifyAndCreditTask(id);
+
+  // Fire-and-forget threat-score recompute. New verified tasks affect both
+  // positive credits (engagement) and the RAPID_TASK_COMPLETION behavior
+  // signal. Non-blocking — failure can never break this response.
+  if (!result.alreadyVerified) {
+    triggerRecompute(auth.actorType, auth.actorId);
+  }
+
   return NextResponse.json({
     success: true,
     data: {

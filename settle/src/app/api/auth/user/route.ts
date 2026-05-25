@@ -24,6 +24,8 @@ import { createSession, getSessionIdFromRefreshCookie, revokeAllSessionsExcept }
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 import { requireTokenAuth } from '@/lib/middleware/auth';
 import { setupWaitlistForActor } from '@/lib/waitlist/signup';
+import { validateFingerprintPayload, persistFingerprintAsync } from '@/lib/threat/devicePersist';
+import { validateBehaviorPayload, persistBehaviorAsync } from '@/lib/threat/behaviorPersist';
 
 /**
  * POST /api/auth/user
@@ -600,6 +602,22 @@ export async function POST(request: NextRequest) {
 
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: user.id, entityType: 'user', action: 'signup' }).catch(() => {});
+
+      // Fire-and-forget: persist client device fingerprint (Phase C waitlist
+      // threat detection). Non-fatal — failed persistence just means the
+      // device-category signals don't have data to fire on later.
+      const fpValidated = validateFingerprintPayload((body as { device_fp?: unknown })?.device_fp);
+      if (fpValidated) {
+        persistFingerprintAsync('user', user.id, fpValidated, 'signup');
+      }
+
+      // Fire-and-forget: persist behavioural telemetry (Phase D — bot
+      // detection via mouse entropy, keystroke cadence, fill time,
+      // copy-paste fields). Non-fatal — same fail-open contract.
+      const behaviorValidated = validateBehaviorPayload((body as { behavior?: unknown })?.behavior);
+      if (behaviorValidated) {
+        persistBehaviorAsync('user', user.id, behaviorValidated);
+      }
 
       // Issue verification token + send the link. Same shape as the
       // merchant register flow.
