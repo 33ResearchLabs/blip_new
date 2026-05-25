@@ -10,7 +10,7 @@
 // waitlist=true so the existing waitlist setup flow runs (credits 200/2000
 // REGISTER points and assigns a referral code).
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -25,6 +25,8 @@ import {
   Check,
 } from "lucide-react";
 import { rememberRole } from "@/lib/waitlist/roleCache";
+import { collectFingerprint, type FingerprintPayload } from "@/lib/threat/clientFingerprint";
+import { SignupBehaviorCollector } from "@/lib/threat/clientTelemetry";
 
 interface RegisterFormProps {
   role: "user" | "merchant";
@@ -46,7 +48,6 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   const router = useRouter();
   const params = useSearchParams();
   const isMerchant = role === "merchant";
-  const loginPath = isMerchant ? "/waitlist/merchant-login" : "/waitlist/login";
   const initialRef = params.get("ref") ?? "";
 
   // Shared fields — email, password, confirm, referral code only.
@@ -68,6 +69,32 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [robotChecked, setRobotChecked] = useState(false);
+
+  // Pre-collect the device fingerprint on mount so it's ready by submit.
+  // Failures are non-fatal — register proceeds with no fp on the body.
+  const fpRef = useRef<FingerprintPayload | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void collectFingerprint().then(fp => { if (alive) fpRef.current = fp; });
+    return () => { alive = false; };
+  }, []);
+
+  // Behavioural telemetry collector — attaches to the form root on mount,
+  // captures fill time / mouse entropy / keystroke cadence / paste events /
+  // tab-switches / scrolls. Detaches on unmount. Failures are non-fatal —
+  // register proceeds with no telemetry on the body.
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const telemetryRef = useRef<SignupBehaviorCollector | null>(null);
+  useEffect(() => {
+    if (!formRef.current) return;
+    const collector = new SignupBehaviorCollector();
+    const detach = collector.attach(formRef.current);
+    telemetryRef.current = collector;
+    return () => {
+      detach();
+      telemetryRef.current = null;
+    };
+  }, []);
 
   const strength = checkPasswordStrength(password);
 
@@ -120,6 +147,14 @@ export default function RegisterForm({ role }: RegisterFormProps) {
       const defaultBusinessName =
         email.trim().split("@")[0].slice(0, 100) || "Merchant";
 
+      // If the fingerprint wasn't ready at mount, give it one last best-effort
+      // chance here. Still non-fatal — register proceeds without it on failure.
+      const fp = fpRef.current ?? await collectFingerprint().catch(() => null);
+      // Snapshot the behavioural telemetry right before submit so fill_time
+      // captures the full session. Returns null if the collector never
+      // attached (SSR / unmount race).
+      const behavior = telemetryRef.current?.snapshot() ?? null;
+
       const body: Record<string, unknown> = isMerchant
         ? {
             action: "register",
@@ -129,6 +164,8 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             referral_code: referralCode.trim() || undefined,
             waitlist: true,
             source: "waitlist_merchant_form",
+            device_fp: fp ?? undefined,
+            behavior: behavior ?? undefined,
           }
         : {
             action: "register",
@@ -138,6 +175,8 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             referral_code: referralCode.trim() || undefined,
             waitlist: true,
             source: "waitlist_user_form",
+            device_fp: fp ?? undefined,
+            behavior: behavior ?? undefined,
           };
 
       const res = await fetch(endpoint, {
@@ -165,8 +204,8 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   }
 
   return (
-    <div className="w-full max-w-lg">
-      <form onSubmit={handleSubmit} className="space-y-3">
+    <div>
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
         {/* USER ONLY: Username — merchant signup is email-only (business_name
             is auto-derived from email prefix server-side). */}
         {!isMerchant && (
@@ -186,7 +225,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
               maxLength={50}
               disabled={isLoading}
               className={inputClass(!!errors.username)}
-              placeholder="trader_01"
+              placeholder="Username"
             />
           </FieldWithIcon>
         )}
@@ -214,12 +253,6 @@ export default function RegisterForm({ role }: RegisterFormProps) {
 
         {/* Password */}
         <div>
-          <label
-            htmlFor="reg-password"
-            className="block text-[13px] font-medium text-black/70 dark:text-white/70 mb-2"
-          >
-            Password
-          </label>
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/30" />
             <input
@@ -232,7 +265,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
               maxLength={50}
               disabled={isLoading}
               className={inputClass(!!errors.password, "pr-12")}
-              placeholder="Min 8 characters"
+              placeholder="Password (min 8 characters)"
             />
             <button
               type="button"
@@ -310,12 +343,6 @@ export default function RegisterForm({ role }: RegisterFormProps) {
 
         {/* Confirm Password */}
         <div>
-          <label
-            htmlFor="reg-confirm"
-            className="block text-[13px] font-medium text-black/70 dark:text-white/70 mb-2"
-          >
-            Confirm Password
-          </label>
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/30" />
             <input
@@ -371,7 +398,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             maxLength={32}
             disabled={isLoading}
             className={`${inputClass(false)} uppercase`}
-            placeholder="BLIPXXXXXX"
+            placeholder="Referral code (optional)"
           />
         </div>
 
@@ -394,7 +421,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 bg-white text-black border border-black/10 font-semibold rounded-xl transition-all duration-200 ease-out hover:scale-[1.01] hover:bg-gray-50 hover:shadow-[0_4px_16px_rgba(0,0,0,0.10)] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+            className="waitlist-auth-submit w-full py-3 font-semibold rounded-xl transition-all duration-200 ease-out hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
@@ -409,37 +436,33 @@ export default function RegisterForm({ role }: RegisterFormProps) {
               "Join User Waitlist"
             )}
           </button>
+          {/* Phase D — minimal anti-fraud telemetry disclosure. We capture
+              timing-level signals only (no keystroke content, no pasted text,
+              no raw mouse coordinates). Aggregates are persisted server-side
+              to the signup_behavior table. */}
+          <p className="mt-2 text-[10px] text-black/40 dark:text-white/40 text-center">
+            By joining you agree we may collect anti-fraud signals (form-fill timing,
+            general mouse / keyboard activity) during signup.
+          </p>
         </div>
       </form>
 
-      {/* Footer links */}
-      <div className="mt-4 text-center space-y-2">
-        <p className="text-sm text-black/50 dark:text-white/40">
-          Already have an account?{" "}
-          <Link
-            href={loginPath}
-            className="text-black dark:text-white font-semibold hover:underline underline-offset-4 transition-colors duration-200"
-          >
-            {isMerchant ? "Merchant Sign In" : "Sign in"}
-          </Link>
-        </p>
-        <p className="text-xs text-black/30 dark:text-white/30 leading-relaxed">
-          By creating an account, you agree to our{" "}
-          <Link
-            href="/terms"
-            className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
-          >
-            Terms of Service
-          </Link>{" "}
-          and{" "}
-          <Link
-            href="/privacy"
-            className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
-          >
-            Privacy Policy
-          </Link>
-        </p>
-      </div>
+      <p className="mt-3 text-[11px] text-black/40 dark:text-white/40 leading-relaxed text-center">
+        By creating an account, you agree to our{" "}
+        <Link
+          href="/terms"
+          className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
+        >
+          Terms of Service
+        </Link>{" "}
+        and{" "}
+        <Link
+          href="/privacy"
+          className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
+        >
+          Privacy Policy
+        </Link>
+      </p>
     </div>
   );
 }
@@ -514,25 +537,21 @@ function RecaptchaTile({
 
 function FieldWithIcon({
   id,
-  label,
   icon,
   error,
   children,
 }: {
   id: string;
-  label: string;
+  // `label` is unused now (we use placeholders only) but kept as an optional
+  // prop so callers don't all need to change signatures at once.
+  label?: string;
   icon: React.ReactNode;
   error?: string;
   children: React.ReactNode;
 }) {
+  void id;
   return (
     <div>
-      <label
-        htmlFor={id}
-        className="block text-[13px] font-medium text-black/70 dark:text-white/70 mb-2"
-      >
-        {label}
-      </label>
       <div className="relative">
         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/30">
           {icon}

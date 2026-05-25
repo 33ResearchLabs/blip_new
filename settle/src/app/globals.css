@@ -1,5 +1,33 @@
 @import "tailwindcss";
 
+/* Tailwind v4's default `dark:` variant fires on OS prefers-color-scheme,
+   which clashed with our app-level theming. Redefine it so it only fires
+   inside a `data-waitlist-theme="dark"` subtree. Effect:
+     - Outside /waitlist/*: `dark:` never fires (no ancestor with the attr),
+       so OS dark-mode no longer flips backgrounds in unrelated pages.
+     - Inside /waitlist/*: the WaitlistThemeProvider sets the attr on its
+       wrapper div, so `dark:` faithfully tracks the waitlist toggle.
+   This means /waitlist owns its own light/dark theme without leaking to
+   the rest of the app.
+
+   We also keep the legacy `.dark` class as a fallback for any component
+   that opts in by hand. */
+@custom-variant dark (&:where([data-waitlist-theme="dark"] *, [data-waitlist-theme="dark"], .dark *, .dark));
+
+/* Submit button on waitlist auth forms. Defined here (not as Tailwind
+   utilities + dark:) because the global theme override rewrites
+   `text-white` to dark on light variants — which made the label
+   invisible on the black button. Inline color rules can't be overridden
+   by the rest of globals.css. */
+.waitlist-auth-submit {
+  background-color: #000000;
+  color: #ffffff;
+}
+[data-waitlist-theme="dark"] .waitlist-auth-submit {
+  background-color: #ffffff;
+  color: #000000;
+}
+
 /* ==========================================
    2026 DARK GLASS — Premium Monochrome
    Apple-inspired: white CTAs, semantic colors

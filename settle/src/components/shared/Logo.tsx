@@ -52,7 +52,7 @@ export const Logo = memo(function Logo({
         <span
           className={`relative ml-1 italic ${onDark ? "text-white" : "text-black dark:text-white"}`}
         >
-          market
+          money
         </span>
       </motion.span>
     </Link>

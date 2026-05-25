@@ -13,6 +13,7 @@ import { queryOne } from '@/lib/db';
 import { creditPoints } from './credit';
 import { generateReferralCode, applyReferral } from './referral';
 import { getRegisterPoints } from './blipPoints';
+import { triggerRecompute } from '@/lib/threat/recompute';
 import type { WaitlistActorType } from '@/lib/types/database';
 
 interface SetupWaitlistArgs {
@@ -83,6 +84,7 @@ export async function setupWaitlistForActor(args: SetupWaitlistArgs): Promise<Se
   // already succeeded; an invalid referral code just means no bonus.
   let referralApplied = false;
   let referralReason: string | undefined;
+  let referrer: { id: string; type: WaitlistActorType } | undefined;
   if (referralCode) {
     try {
       const refResult = await applyReferral({
@@ -92,6 +94,7 @@ export async function setupWaitlistForActor(args: SetupWaitlistArgs): Promise<Se
       });
       referralApplied = refResult.applied;
       referralReason = refResult.reason;
+      if (refResult.referrer) referrer = refResult.referrer;
     } catch (err) {
       console.error('[waitlist/setup] referral apply failed', err);
       referralReason = 'error';
@@ -103,6 +106,12 @@ export async function setupWaitlistForActor(args: SetupWaitlistArgs): Promise<Se
     `SELECT blip_points FROM ${table} WHERE id = $1`,
     [actorId],
   );
+
+  // 5. Fire-and-forget threat-score recompute for the new actor (and the
+  // referrer, since their ring-detection signals just changed). Both calls
+  // are non-blocking and swallow errors — they can never fail this signup.
+  triggerRecompute(actorType, actorId);
+  if (referrer) triggerRecompute(referrer.type, referrer.id);
 
   return {
     referralCode: assignedCode,

@@ -12,6 +12,8 @@ import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 import { defaultAvatarUrl } from '@/lib/avatars';
 import { setupWaitlistForActor } from '@/lib/waitlist/signup';
+import { validateFingerprintPayload, persistFingerprintAsync } from '@/lib/threat/devicePersist';
+import { validateBehaviorPayload, persistBehaviorAsync } from '@/lib/threat/behaviorPersist';
 
 // Password hashing — PBKDF2 with 100k iterations (OWASP minimum for SHA-512)
 const PBKDF2_ITERATIONS = 100_000;
@@ -464,6 +466,21 @@ export async function POST(request: NextRequest) {
 
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
+
+      // Fire-and-forget: persist client device fingerprint (Phase C waitlist
+      // threat detection). Non-fatal — failed persistence just means the
+      // device-category signals don't have data to fire on later.
+      {
+        const fpValidated = validateFingerprintPayload((body as { device_fp?: unknown })?.device_fp);
+        if (fpValidated) {
+          persistFingerprintAsync('merchant', merchant.id, fpValidated, 'signup');
+        }
+        // Phase D — behavioural telemetry persistence, same fail-open contract.
+        const behaviorValidated = validateBehaviorPayload((body as { behavior?: unknown })?.behavior);
+        if (behaviorValidated) {
+          persistBehaviorAsync('merchant', merchant.id, behaviorValidated);
+        }
+      }
 
       const createPayload = { actorId: merchant.id, actorType: 'merchant' as const };
       const createToken = 'cookie-session'; // sentinel — see comment at line ~137
@@ -1187,6 +1204,21 @@ export async function POST(request: NextRequest) {
 
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
+
+      // Fire-and-forget: persist client device fingerprint (Phase C waitlist
+      // threat detection). Non-fatal — failed persistence just means the
+      // device-category signals don't have data to fire on later.
+      {
+        const fpValidated = validateFingerprintPayload((body as { device_fp?: unknown })?.device_fp);
+        if (fpValidated) {
+          persistFingerprintAsync('merchant', merchant.id, fpValidated, 'signup');
+        }
+        // Phase D — behavioural telemetry persistence, same fail-open contract.
+        const behaviorValidated = validateBehaviorPayload((body as { behavior?: unknown })?.behavior);
+        if (behaviorValidated) {
+          persistBehaviorAsync('merchant', merchant.id, behaviorValidated);
+        }
+      }
 
       // Send verification email
       try {
