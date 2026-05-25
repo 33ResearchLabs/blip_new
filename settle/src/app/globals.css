@@ -973,9 +973,11 @@ input[type="number"] { -moz-appearance: textfield; }
   text-shadow: 0 0 20px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
-/* Live dot glow */
+/* Live dot glow — disabled per design direction (no coloured halos
+   around status icons). Kept as a no-op class so any consumer that
+   still references it doesn't break the layout. */
 .animate-live-dot {
-  box-shadow: 0 0 6px color-mix(in srgb, var(--primary) 50%, transparent);
+  /* box-shadow intentionally removed */
 }
 
 /* Notification badge glow */

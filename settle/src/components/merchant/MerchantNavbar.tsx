@@ -612,20 +612,20 @@ function NavbarRepCoins({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-1">
       <span
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-[11px] font-semibold text-emerald-300"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.08] text-[11px] font-semibold text-foreground"
         title="Reputation score (300–900)"
       >
-        <Shield className="w-3 h-3 text-emerald-400" />
+        <Shield className="w-3 h-3 text-foreground/70" />
         <span className="tabular-nums">{score}</span>
-        {!compact && <span className="text-emerald-300/70 text-[10px]">Rep</span>}
+        {!compact && <span className="text-foreground/55 text-[10px]">Rep</span>}
       </span>
       <span
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/25 text-[11px] font-semibold text-amber-300"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.08] text-[11px] font-semibold text-foreground"
         title="Blip Points"
       >
-        <Coins className="w-3 h-3" />
+        <Coins className="w-3 h-3 text-foreground/70" />
         <span className="tabular-nums">{coins.toLocaleString("en-US")}</span>
-        {!compact && <span className="text-amber-300/70 text-[10px]">Blip Points</span>}
+        {!compact && <span className="text-foreground/55 text-[10px]">Blip Points</span>}
       </span>
     </div>
   );

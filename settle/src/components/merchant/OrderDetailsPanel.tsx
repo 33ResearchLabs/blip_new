@@ -218,57 +218,57 @@ const STATUS_CONFIG: Record<
     label: "Escrowed",
   },
   payment_sent: {
-    color: "text-cyan-400",
-    bgColor: "bg-cyan-400/10",
+    color: "text-foreground/80",
+    bgColor: "bg-foreground/[0.06]",
     icon: ArrowRight,
     label: "Payment Sent",
   },
   completed: {
-    color: "text-green-400",
-    bgColor: "bg-green-400/10",
+    color: "text-foreground/85",
+    bgColor: "bg-foreground/[0.07]",
     icon: CheckCircle,
     label: "Completed",
   },
   cancelled: {
-    color: "text-red-400",
-    bgColor: "bg-red-400/10",
+    color: "text-foreground/55",
+    bgColor: "bg-foreground/[0.04]",
     icon: XCircle,
     label: "Cancelled",
   },
   disputed: {
-    color: "text-red-400",
-    bgColor: "bg-red-400/10",
+    color: "text-foreground/70",
+    bgColor: "bg-foreground/[0.06]",
     icon: AlertTriangle,
     label: "Disputed",
   },
   expired: {
-    color: "text-zinc-400",
-    bgColor: "bg-zinc-400/10",
+    color: "text-foreground/50",
+    bgColor: "bg-foreground/[0.04]",
     icon: Clock,
     label: "Expired",
   },
   // Legacy fallbacks (map to minimal states)
   escrow_pending: {
-    color: "text-yellow-400",
-    bgColor: "bg-yellow-400/10",
+    color: "text-foreground/70",
+    bgColor: "bg-foreground/[0.05]",
     icon: Clock,
     label: "Accepted",
   },
   payment_pending: {
-    color: "text-purple-400",
-    bgColor: "bg-purple-400/10",
+    color: "text-foreground/70",
+    bgColor: "bg-foreground/[0.05]",
     icon: Clock,
     label: "Escrowed",
   },
   payment_confirmed: {
-    color: "text-cyan-400",
-    bgColor: "bg-cyan-400/10",
+    color: "text-foreground/80",
+    bgColor: "bg-foreground/[0.06]",
     icon: Check,
     label: "Payment Sent",
   },
   releasing: {
-    color: "text-green-400",
-    bgColor: "bg-green-400/10",
+    color: "text-foreground/80",
+    bgColor: "bg-foreground/[0.06]",
     icon: ArrowRight,
     label: "Completing",
   },
@@ -645,15 +645,9 @@ export function OrderDetailsPanel({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {onOpenChat && (
-                <button
-                  onClick={handleOpenChat}
-                  className="p-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
-                  title="Open Chat"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                </button>
-              )}
+              {/* Chat button removed — the order-row already exposes a
+                  chat shortcut at the top of the screen, so a duplicate
+                  here is redundant. */}
               <button
                 onClick={onClose}
                 className="p-2 rounded-lg hover:bg-accent-subtle transition-colors"
@@ -685,10 +679,7 @@ export function OrderDetailsPanel({
                     1 {order.crypto_currency} = {Number(order.rate).toFixed(2)}{" "}
                     {order.fiat_currency}
                   </p>
-                  <span
-                    className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium
-                  ${order.type === "buy" ? "bg-green-500/20 text-green-400" : "bg-primary/20 text-primary"}`}
-                  >
+                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-foreground/[0.06] text-foreground/80 border border-foreground/[0.10]">
                     {order.type === "buy" ? "Send USDT" : "Receive USDT"}
                   </span>
                 </div>

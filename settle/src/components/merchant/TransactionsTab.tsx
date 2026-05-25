@@ -23,6 +23,8 @@ interface LedgerEntry {
   order_type: "buy" | "sell" | null;
   order_status: string | null;
   counterparty_name: string | null;
+  counterparty_id: string | null;
+  counterparty_type: 'user' | 'merchant' | null;
   created_at: string;
 }
 
@@ -93,10 +95,12 @@ function formatTimestamp(iso: string, now: Date): string {
 }
 
 const STATUS_BADGE: Record<DerivedStatus, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
-  completed: { label: "Completed", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", Icon: CheckCircle2 },
-  pending:   { label: "Pending",   cls: "bg-amber-500/10 text-amber-400 border-amber-500/20",       Icon: Clock },
-  failed:    { label: "Failed",    cls: "bg-[var(--color-error)]/10 text-[var(--color-error)] border-[var(--color-error)]/20", Icon: XCircle },
-  cancelled: { label: "Cancelled", cls: "bg-foreground/5 text-foreground/40 border-foreground/10", Icon: XCircle },
+  // All status pills use neutral foreground tones; status meaning is
+  // communicated by the icon + label, not colour.
+  completed: { label: "Completed", cls: "bg-foreground/[0.06] text-foreground/80 border-foreground/[0.12]", Icon: CheckCircle2 },
+  pending:   { label: "Pending",   cls: "bg-foreground/[0.04] text-foreground/60 border-foreground/[0.10]", Icon: Clock },
+  failed:    { label: "Failed",    cls: "bg-foreground/[0.04] text-foreground/50 border-foreground/[0.10]", Icon: XCircle },
+  cancelled: { label: "Cancelled", cls: "bg-foreground/[0.03] text-foreground/40 border-foreground/[0.08]", Icon: XCircle },
 };
 
 export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: TransactionsTabProps) {
@@ -199,15 +203,18 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
           </div>
         ) : visibleEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
-            <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
-              <ArrowUpRight className="w-5 h-5 text-foreground/20" />
+            {/* Quiet personality moment — a small dry ledger-themed
+                empty state. Stays minimal, no emoji/colour, just a
+                tiny line that doesn't take itself too seriously. */}
+            <div className="font-mono text-foreground/20 text-[10px] tracking-widest select-none">
+              ─────  ─────
             </div>
             <div className="text-center">
-              <p className="text-[11px] font-medium text-foreground/40 mb-0.5">
-                No transactions yet
+              <p className="text-[11px] font-medium text-foreground/45 mb-0.5">
+                Books are clean
               </p>
-              <p className="text-[9px] text-foreground/25 font-mono">
-                Ledger entries appear after your first trade
+              <p className="text-[9px] text-foreground/25 font-mono italic">
+                Market's open · first move is yours
               </p>
             </div>
           </div>
@@ -272,30 +279,20 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                     return (
                       <div
                         key={entry.id}
-                        className={`group relative flex items-center gap-3 px-2.5 py-2.5 rounded-xl border transition-all cursor-pointer overflow-hidden ${
-                          isIncoming
-                            ? "border-[var(--color-success)]/[0.08] bg-gradient-to-r from-[var(--color-success)]/[0.04] to-transparent hover:from-[var(--color-success)]/[0.08] hover:border-[var(--color-success)]/20"
-                            : "border-[var(--color-error)]/[0.08] bg-gradient-to-r from-[var(--color-error)]/[0.04] to-transparent hover:from-[var(--color-error)]/[0.08] hover:border-[var(--color-error)]/20"
-                        }`}
+                        className="group relative flex items-center gap-3 px-2.5 py-2.5 rounded-xl border border-foreground/[0.06] bg-foreground/[0.015] hover:bg-foreground/[0.04] transition-all cursor-pointer overflow-hidden"
                         onClick={() => entry.related_order_id && onSelectOrder?.(entry.related_order_id)}
                       >
-                        {/* Left accent stripe */}
-                        <div className={`absolute inset-y-0 left-0 w-[2px] ${
-                          isIncoming ? "bg-[var(--color-success)]/60" : "bg-[var(--color-error)]/60"
-                        }`} />
+                        {/* Left accent stripe — neutral, direction is
+                            still readable via the +/− sign and arrow. */}
+                        <div className="absolute inset-y-0 left-0 w-[2px] bg-foreground/15" />
 
-                        {/* Direction icon with glow */}
-                        <div
-                          className={`relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
-                            isIncoming
-                              ? "bg-[var(--color-success)]/10 border-[var(--color-success)]/25 shadow-[0_0_12px_-2px_var(--color-success)]/30"
-                              : "bg-[var(--color-error)]/10 border-[var(--color-error)]/25 shadow-[0_0_12px_-2px_var(--color-error)]/30"
-                          }`}
-                        >
+                        {/* Direction icon — borderless, no bg, no glow.
+                            Arrow alone communicates direction. */}
+                        <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
                           {isIncoming ? (
-                            <ArrowDownRight className="w-4 h-4 text-[var(--color-success)]" strokeWidth={2.5} />
+                            <ArrowDownRight className="w-4 h-4 text-foreground/80" strokeWidth={2.5} />
                           ) : (
-                            <ArrowUpRight className="w-4 h-4 text-[var(--color-error)]" strokeWidth={2.5} />
+                            <ArrowUpRight className="w-4 h-4 text-foreground/80" strokeWidth={2.5} />
                           )}
                         </div>
 
@@ -303,9 +300,7 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline justify-between gap-2 mb-1">
                             <div className="flex items-baseline gap-1.5 min-w-0">
-                              <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                                isIncoming ? "text-[var(--color-success)]" : "text-[var(--color-error)]"
-                              }`}>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/55">
                                 {isIncoming ? gotLabel : paidLabel}
                               </span>
                               <span className="text-[13px] font-bold text-foreground/90 tabular-nums truncate">
@@ -313,9 +308,7 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                               </span>
                               <span className="text-[10px] font-mono text-foreground/40 truncate">{asset}</span>
                             </div>
-                            <span className={`text-[13px] font-bold font-mono tabular-nums shrink-0 ${
-                              isIncoming ? "text-[var(--color-success)]" : "text-[var(--color-error)]"
-                            }`}>
+                            <span className="text-[13px] font-bold font-mono tabular-nums shrink-0 text-foreground">
                               {isIncoming ? "+" : "−"}{Math.abs(Number(entry.amount)).toFixed(2)}
                             </span>
                           </div>
@@ -326,8 +319,23 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                               <StatusIcon className="w-2.5 h-2.5" />
                               <span className="text-[9px] font-bold uppercase tracking-wider">{badge.label}</span>
                             </span>
-                            {entry.order_number && <span className="text-foreground/30 shrink-0">#{entry.order_number}</span>}
-                            {entry.counterparty_name && <span className="text-foreground/40 truncate">· {entry.counterparty_name}</span>}
+                            {entry.counterparty_name && (
+                              entry.counterparty_type === 'merchant' && entry.counterparty_id ? (
+                                // Tappable name — opens the merchant's
+                                // public profile. stopPropagation so the
+                                // outer row's order-detail click doesn't
+                                // also fire.
+                                <a
+                                  href={`/merchant/profile/${entry.counterparty_id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-foreground/55 truncate hover:text-foreground hover:underline transition-colors"
+                                >
+                                  {entry.counterparty_name}
+                                </a>
+                              ) : (
+                                <span className="text-foreground/40 truncate">{entry.counterparty_name}</span>
+                              )
+                            )}
                             <span className="text-foreground/25 ml-auto shrink-0">{formatTimestamp(entry.created_at, new Date())}</span>
                           </div>
                         </div>
