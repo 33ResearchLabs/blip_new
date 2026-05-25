@@ -383,7 +383,16 @@ export function middleware(request: NextRequest) {
       // task APIs they call from the browser.
       pathname.startsWith('/waitlist') ||
       pathname.startsWith('/api/waitlist/') ||
-      pathname.startsWith('/api/auth/');
+      pathname.startsWith('/api/auth/') ||
+      // Email-triggered auth flows must work on a fresh browser without
+      // first hitting the dev-lock — they're the entry point from an
+      // email link, the user has no cookie yet.
+      pathname === '/user/verify-email' ||
+      pathname === '/user/forgot-password' ||
+      pathname === '/user/reset-password' ||
+      pathname === '/merchant/verify-email' ||
+      pathname === '/merchant/forgot-password' ||
+      pathname === '/merchant/reset-password';
 
     if (!isDevExempt) {
       const devCookie = request.cookies.get('dev_access_granted');
