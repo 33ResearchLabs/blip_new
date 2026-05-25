@@ -1,19 +1,27 @@
 "use client";
 
-// Ported from futureStick blip-protocol-ui/src/pages/Waitlist/Register.tsx.
+// Pixel-port of the futureStick register form body
+// (/Users/zzz/Projects/Blip-money-futureStick/blip-protocol-ui/src/pages/Waitlist/Register.tsx,
+// the <form> through privacy-line section, lines ~370–660).
 //
-// Two role variants:
-//   - user: email + username + password (with strength meter) + confirm + referral_code
-//   - merchant: same + business_name + business_category + expected_volume + country
+// All chrome above and below the form (title, segmented control,
+// altMode link, terms text) is owned by WaitlistAuthShell so this
+// file stays focused on the form body itself.
 //
-// Posts to /api/auth/user or /api/auth/merchant with action='register' and
-// waitlist=true so the existing waitlist setup flow runs (credits 200/2000
-// REGISTER points and assigns a referral code).
+// Backend wiring is preserved from the previous version:
+//   - POSTs to /api/auth/user or /api/auth/merchant with action=register
+//     and waitlist=true so setupWaitlistForActor still runs.
+//   - Username for users: derived from the email prefix on submit (the
+//     UI input is removed to match futureStick, but the settle backend
+//     still requires a username via validateUserUsername — see
+//     /api/auth/user/route.ts).
+//   - Device fingerprint + signup behaviour telemetry are still
+//     collected for the threat pipeline.
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  ChevronDown,
   Eye,
   EyeOff,
   Mail,
@@ -21,7 +29,7 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
-  User as UserIcon,
+  Shield,
   Check,
 } from "lucide-react";
 import { rememberRole } from "@/lib/waitlist/roleCache";
@@ -44,45 +52,43 @@ function checkPasswordStrength(password: string) {
   return { checks, score };
 }
 
+function deriveUsernameFromEmail(email: string): string {
+  // Settle backend's validateUserUsername requires 3–30 chars,
+  // alphanumeric + underscore. The email prefix usually fits; sanitise
+  // anything else by stripping non-allowed chars and padding to 3.
+  const raw = email.trim().split("@")[0] || "user";
+  const cleaned = raw.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 30);
+  return cleaned.length >= 3 ? cleaned : `${cleaned}_user`.slice(0, 30);
+}
+
 export default function RegisterForm({ role }: RegisterFormProps) {
   const router = useRouter();
   const params = useSearchParams();
   const isMerchant = role === "merchant";
   const initialRef = params.get("ref") ?? "";
 
-  // Shared fields — email, password, confirm, referral code only.
+  // Form state — matches futureStick Register.tsx formData shape.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [referralCode, setReferralCode] = useState(initialRef);
 
-  // User-only — username is still required by the settle backend
-  // (validateUserUsername in /api/auth/user). Merchant register derives a
-  // default business_name from the email prefix on submit, so no extra
-  // input is needed for merchants.
-  const [username, setUsername] = useState("");
-
-  // UI state
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showRequirements, setShowRequirements] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [robotChecked, setRobotChecked] = useState(false);
 
-  // Pre-collect the device fingerprint on mount so it's ready by submit.
-  // Failures are non-fatal — register proceeds with no fp on the body.
+  // Threat-pipeline plumbing — preserved from the previous implementation.
   const fpRef = useRef<FingerprintPayload | null>(null);
   useEffect(() => {
     let alive = true;
-    void collectFingerprint().then(fp => { if (alive) fpRef.current = fp; });
+    void collectFingerprint().then((fp) => { if (alive) fpRef.current = fp; });
     return () => { alive = false; };
   }, []);
 
-  // Behavioural telemetry collector — attaches to the form root on mount,
-  // captures fill time / mouse entropy / keystroke cadence / paste events /
-  // tab-switches / scrolls. Detaches on unmount. Failures are non-fatal —
-  // register proceeds with no telemetry on the body.
   const formRef = useRef<HTMLFormElement | null>(null);
   const telemetryRef = useRef<SignupBehaviorCollector | null>(null);
   useEffect(() => {
@@ -117,12 +123,6 @@ export default function RegisterForm({ role }: RegisterFormProps) {
     else if (password !== confirmPassword)
       next.confirmPassword = "Passwords do not match";
 
-    if (!isMerchant) {
-      if (!username.trim()) next.username = "Username is required";
-      else if (username.trim().length < 3)
-        next.username = "Username must be at least 3 characters";
-    }
-
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -139,26 +139,17 @@ export default function RegisterForm({ role }: RegisterFormProps) {
 
     try {
       const endpoint = isMerchant ? "/api/auth/merchant" : "/api/auth/user";
-
-      // For merchant, the settle backend requires business_name (NOT NULL on
-      // the merchants table). We derive a default from the email prefix so
-      // the simplified form mirrors futureStick's Register.tsx while still
-      // satisfying the schema. The user can edit it later from settings.
+      const trimmedEmail = email.trim();
       const defaultBusinessName =
-        email.trim().split("@")[0].slice(0, 100) || "Merchant";
+        trimmedEmail.split("@")[0].slice(0, 100) || "Merchant";
 
-      // If the fingerprint wasn't ready at mount, give it one last best-effort
-      // chance here. Still non-fatal — register proceeds without it on failure.
-      const fp = fpRef.current ?? await collectFingerprint().catch(() => null);
-      // Snapshot the behavioural telemetry right before submit so fill_time
-      // captures the full session. Returns null if the collector never
-      // attached (SSR / unmount race).
+      const fp = fpRef.current ?? (await collectFingerprint().catch(() => null));
       const behavior = telemetryRef.current?.snapshot() ?? null;
 
       const body: Record<string, unknown> = isMerchant
         ? {
             action: "register",
-            email: email.trim(),
+            email: trimmedEmail,
             password,
             business_name: defaultBusinessName,
             referral_code: referralCode.trim() || undefined,
@@ -169,8 +160,10 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           }
         : {
             action: "register",
-            username: username.trim(),
-            email: email.trim(),
+            // Derived from email so the futureStick-style email-only UI
+            // still satisfies the settle backend's validateUserUsername.
+            username: deriveUsernameFromEmail(trimmedEmail),
+            email: trimmedEmail,
             password,
             referral_code: referralCode.trim() || undefined,
             waitlist: true,
@@ -190,10 +183,9 @@ export default function RegisterForm({ role }: RegisterFormProps) {
         return;
       }
 
-      // Stamp the actor type for the post-verification login flow.
       rememberRole(role);
       router.push(
-        `/waitlist/check-email?email=${encodeURIComponent(email.trim())}&role=${role}`,
+        `/waitlist/check-email?email=${encodeURIComponent(trimmedEmail)}&role=${role}`,
       );
     } catch (err) {
       console.error("register failed", err);
@@ -203,40 +195,33 @@ export default function RegisterForm({ role }: RegisterFormProps) {
     }
   }
 
-  return (
-    <div>
-      <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
-        {/* USER ONLY: Username — merchant signup is email-only (business_name
-            is auto-derived from email prefix server-side). */}
-        {!isMerchant && (
-          <FieldWithIcon
-            id="reg-username"
-            label="Username"
-            icon={<UserIcon className="w-[18px] h-[18px]" />}
-            error={errors.username}
-          >
-            <input
-              id="reg-username"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onBlur={() => validate()}
-              maxLength={50}
-              disabled={isLoading}
-              className={inputClass(!!errors.username)}
-              placeholder="Username"
-            />
-          </FieldWithIcon>
-        )}
+  // futureStick uses bg-[#F2F2F5] for the input fill, transparent
+  // border, and a focus ring that's 12% of the foreground. Keeping
+  // those literal values here so the inputs look identical to the
+  // production page.
+  function inputCls(hasError: boolean, extra = ""): string {
+    return [
+      "w-full py-2.5 rounded-xl",
+      "bg-[#F2F2F5] dark:bg-white/[0.06]",
+      "text-black dark:text-white",
+      "placeholder:text-[#6e6e73] dark:placeholder:text-white/55",
+      "focus:outline-none focus:ring-2 focus:bg-white dark:focus:bg-white/[0.10]",
+      "focus:ring-black/[0.12] dark:focus:ring-white/20",
+      "border",
+      hasError
+        ? "border-red-500/50 ring-2 ring-red-500/10"
+        : "border-transparent",
+      "transition-all duration-200",
+      extra,
+    ].join(" ");
+  }
 
-        {/* Email */}
-        <FieldWithIcon
-          id="reg-email"
-          label="Email Address"
-          icon={<Mail className="w-[18px] h-[18px]" />}
-          error={errors.email}
-        >
+  return (
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
+      {/* Email */}
+      <div>
+        <div className="relative">
+          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/70" />
           <input
             id="reg-email"
             type="email"
@@ -246,232 +231,244 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             onBlur={() => validate()}
             maxLength={254}
             disabled={isLoading}
-            className={inputClass(!!errors.email)}
+            className={inputCls(!!errors.email, "pl-11 pr-4")}
             placeholder="you@example.com"
           />
-        </FieldWithIcon>
-
-        {/* Password */}
-        <div>
-          <div className="relative">
-            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/30" />
-            <input
-              id="reg-password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onBlur={() => validate()}
-              maxLength={50}
-              disabled={isLoading}
-              className={inputClass(!!errors.password, "pr-12")}
-              placeholder="Password (min 8 characters)"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/30 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? (
-                <EyeOff className="w-[18px] h-[18px]" />
-              ) : (
-                <Eye className="w-[18px] h-[18px]" />
-              )}
-            </button>
-          </div>
-          {errors.password && (
-            <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">
-              {errors.password}
-            </p>
-          )}
-
-          {password && (
-            <div className="mt-2 space-y-1.5">
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ease-out ${
-                      strength.score <= 2
-                        ? "bg-red-400 w-1/3"
-                        : strength.score === 3
-                          ? "bg-amber-400 w-2/3"
-                          : "bg-emerald-400 w-full"
-                    }`}
-                  />
-                </div>
-                <span
-                  className={`text-[11px] font-medium ${
-                    strength.score <= 2
-                      ? "text-red-400"
-                      : strength.score === 3
-                        ? "text-amber-400"
-                        : "text-emerald-400"
-                  }`}
-                >
-                  {strength.score <= 2
-                    ? "Weak"
-                    : strength.score === 3
-                      ? "Medium"
-                      : "Strong"}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                {[
-                  { ok: strength.checks.length, label: "8+ characters" },
-                  { ok: strength.checks.uppercase, label: "Uppercase" },
-                  { ok: strength.checks.number, label: "Number" },
-                  { ok: strength.checks.lowercase, label: "Lowercase" },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center gap-1.5">
-                    {item.ok ? (
-                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <XCircle className="w-3.5 h-3.5 text-black/15 dark:text-white/15" />
-                    )}
-                    <span
-                      className={`text-[11px] ${item.ok ? "text-emerald-500 dark:text-emerald-400" : "text-black/30 dark:text-white/30"}`}
-                    >
-                      {item.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
-
-        {/* Confirm Password */}
-        <div>
-          <div className="relative">
-            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/30" />
-            <input
-              id="reg-confirm"
-              type={showConfirmPassword ? "text" : "password"}
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              onBlur={() => validate()}
-              maxLength={50}
-              disabled={isLoading}
-              className={inputClass(!!errors.confirmPassword, "pr-12")}
-              placeholder="Confirm your password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/30 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
-              aria-label={
-                showConfirmPassword ? "Hide password" : "Show password"
-              }
-            >
-              {showConfirmPassword ? (
-                <EyeOff className="w-[18px] h-[18px]" />
-              ) : (
-                <Eye className="w-[18px] h-[18px]" />
-              )}
-            </button>
-          </div>
-          {errors.confirmPassword && (
-            <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">
-              {errors.confirmPassword}
-            </p>
-          )}
-        </div>
-
-        {/* Referral code */}
-        <div>
-          <label
-            htmlFor="reg-referral"
-            className="block text-[13px] font-medium text-black/70 dark:text-white/70 mb-2"
-          >
-            Referral Code{" "}
-            <span className="text-black/30 dark:text-white/30 font-normal">
-              (Optional)
-            </span>
-          </label>
-          <input
-            id="reg-referral"
-            type="text"
-            value={referralCode}
-            onChange={(e) => setReferralCode(e.target.value)}
-            maxLength={32}
-            disabled={isLoading}
-            className={`${inputClass(false)} uppercase`}
-            placeholder="Referral code (optional)"
-          />
-        </div>
-
-        {/* reCAPTCHA-styled bot check — visual only (no Google integration
-            wired up here). Mirrors the reCAPTCHA v2 widget shape so the
-            page matches the futureStick screenshot exactly. */}
-        <RecaptchaTile
-          checked={robotChecked}
-          onChange={setRobotChecked}
-          disabled={isLoading}
-        />
-
-        {submitError && (
-          <div className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl p-3">
-            {submitError}
-          </div>
+        {errors.email && (
+          <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">
+            {errors.email}
+          </p>
         )}
+      </div>
 
-        <div className="pt-1">
-          <button
-            type="submit"
+      {/* Password */}
+      <div>
+        <div className="relative">
+          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/70" />
+          <input
+            id="reg-password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onBlur={() => validate()}
+            onFocus={() => setShowRequirements(true)}
+            maxLength={50}
             disabled={isLoading}
-            className="waitlist-auth-submit w-full py-3 font-semibold rounded-xl transition-all duration-200 ease-out hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className={inputCls(!!errors.password, "pl-11 pr-11")}
+            placeholder="Min 8 characters"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/70 hover:text-black/60 dark:hover:text-white transition-colors duration-200"
+            aria-label={showPassword ? "Hide password" : "Show password"}
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />{" "}
-                {isMerchant
-                  ? "Joining Merchant Waitlist…"
-                  : "Joining Waitlist…"}
-              </>
-            ) : isMerchant ? (
-              "Join Merchant Waitlist"
+            {showPassword ? (
+              <EyeOff className="w-[18px] h-[18px]" />
             ) : (
-              "Join User Waitlist"
+              <Eye className="w-[18px] h-[18px]" />
             )}
           </button>
-          {/* Phase D — minimal anti-fraud telemetry disclosure. We capture
-              timing-level signals only (no keystroke content, no pasted text,
-              no raw mouse coordinates). Aggregates are persisted server-side
-              to the signup_behavior table. */}
-          <p className="mt-2 text-[10px] text-black/40 dark:text-white/40 text-center">
-            By joining you agree we may collect anti-fraud signals (form-fill timing,
-            general mouse / keyboard activity) during signup.
-          </p>
         </div>
-      </form>
+        {errors.password && (
+          <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">
+            {errors.password}
+          </p>
+        )}
 
-      <p className="mt-3 text-[11px] text-black/40 dark:text-white/40 leading-relaxed text-center">
-        By creating an account, you agree to our{" "}
-        <Link
-          href="/terms"
-          className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
+        {password && (
+          <div className="mt-3 space-y-2.5">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ease-out ${
+                    strength.score <= 2
+                      ? "bg-red-400 w-1/3"
+                      : strength.score === 3
+                        ? "bg-amber-400 w-2/3"
+                        : "bg-emerald-400 w-full"
+                  }`}
+                />
+              </div>
+              <span
+                className={`text-[11px] font-medium ${
+                  strength.score <= 2
+                    ? "text-red-400"
+                    : strength.score === 3
+                      ? "text-amber-400"
+                      : "text-emerald-400"
+                }`}
+              >
+                {strength.score <= 2
+                  ? "Weak"
+                  : strength.score === 3
+                    ? "Medium"
+                    : "Strong"}
+              </span>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowRequirements((v) => !v)}
+                aria-expanded={showRequirements}
+                className="w-full flex items-center justify-between gap-2 text-[11px] font-medium text-black/50 dark:text-white/50 hover:text-black/70 dark:hover:text-white/70 transition-colors duration-200"
+              >
+                <span>
+                  Requirements ({strength.score}/
+                  {Object.keys(strength.checks).length})
+                </span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                    showRequirements ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              <div
+                className={`grid transition-all duration-200 ease-out ${
+                  showRequirements
+                    ? "grid-rows-[1fr] opacity-100 mt-2"
+                    : "grid-rows-[0fr] opacity-0"
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    {[
+                      { ok: strength.checks.length, label: "8+ characters" },
+                      { ok: strength.checks.uppercase, label: "Uppercase" },
+                      { ok: strength.checks.number, label: "Number" },
+                      { ok: strength.checks.lowercase, label: "Lowercase" },
+                    ].map((item) => (
+                      <div key={item.label} className="flex items-center gap-1.5">
+                        {item.ok ? (
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5 text-black/15 dark:text-white/15" />
+                        )}
+                        <span
+                          className={`text-[11px] ${
+                            item.ok
+                              ? "text-emerald-500 dark:text-emerald-400"
+                              : "text-black/30 dark:text-white/30"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Confirm Password */}
+      <div>
+        <div className="relative">
+          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/70" />
+          <input
+            id="reg-confirm"
+            type={showConfirmPassword ? "text" : "password"}
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            onBlur={() => validate()}
+            maxLength={50}
+            disabled={isLoading}
+            className={inputCls(!!errors.confirmPassword, "pl-11 pr-11")}
+            placeholder="Confirm your password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/70 hover:text-black/60 dark:hover:text-white transition-colors duration-200"
+            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+          >
+            {showConfirmPassword ? (
+              <EyeOff className="w-[18px] h-[18px]" />
+            ) : (
+              <Eye className="w-[18px] h-[18px]" />
+            )}
+          </button>
+        </div>
+        {errors.confirmPassword && (
+          <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">
+            {errors.confirmPassword}
+          </p>
+        )}
+      </div>
+
+      {/* Referral code — borderless caption, no icon, no separate label */}
+      <div>
+        <input
+          id="reg-referral"
+          type="text"
+          value={referralCode}
+          onChange={(e) => setReferralCode(e.target.value)}
+          maxLength={32}
+          disabled={isLoading}
+          className="w-full px-4 py-2.5 bg-[#F2F2F5] dark:bg-white/[0.06] border-0 rounded-xl text-black dark:text-white placeholder:text-[#6e6e73] dark:placeholder:text-white/55 focus:outline-none focus:ring-2 focus:ring-black/[0.12] dark:focus:ring-white/20 focus:bg-white dark:focus:bg-white/[0.10] transition-all duration-200"
+          placeholder="Referral code (optional)"
+        />
+      </div>
+
+      {/* reCAPTCHA-styled bot check — visual only, no Google integration */}
+      <RecaptchaTile
+        checked={robotChecked}
+        onChange={setRobotChecked}
+        disabled={isLoading}
+      />
+
+      {submitError && (
+        <div className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl p-3">
+          {submitError}
+        </div>
+      )}
+
+      {/* Submit button + privacy line — copied from futureStick
+          Register.tsx 633–657. Note rounded-FULL (not xl), font-bold,
+          text-[15px], and inline → glyph.
+
+          Inline color styles bypass the globals.css `[class*="bg-black"]`
+          / `[class*="text-white"]` substring rewrites that would otherwise
+          repaint the button to the page background + dark text in light
+          theme — producing a "white pill with black text" instead of the
+          intended solid-black CTA. We use hex literals (#000000/#ffffff)
+          here for the same reason `accentText` was switched to
+          `text-[#ffffff]` in WaitlistThemeContext. */}
+      <div>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full py-3 font-bold text-[15px] tracking-tight rounded-full shadow-[0_10px_28px_-12px_rgba(0,0,0,0.55)] hover:-translate-y-[1px] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2"
+          style={{
+            background: '#000000',
+            color: '#ffffff',
+          }}
         >
-          Terms of Service
-        </Link>{" "}
-        and{" "}
-        <Link
-          href="/privacy"
-          className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
-        >
-          Privacy Policy
-        </Link>
-      </p>
-    </div>
+          {isLoading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              {isMerchant ? "Joining Merchant Waitlist..." : "Joining Waitlist..."}
+            </>
+          ) : (
+            <>
+              {isMerchant ? "Join Merchant Waitlist" : "Join Waitlist"}
+              <span aria-hidden className="text-base">→</span>
+            </>
+          )}
+        </button>
+        <p className="mt-3 text-center text-[11.5px] text-[#1d1d1f] dark:text-white/80 flex items-center justify-center gap-1.5">
+          <Shield className="w-3 h-3" strokeWidth={2} />
+          We respect your privacy. No spam, ever.
+        </p>
+      </div>
+    </form>
   );
-}
-
-function inputClass(hasError: boolean, extra = ""): string {
-  const errCls = hasError
-    ? "border-red-500/50 ring-2 ring-red-500/10"
-    : "border-black/10 dark:border-white/10";
-  return `w-full pl-12 pr-4 py-2.5 bg-[#F2F2F5] dark:bg-white/[0.06] border ${errCls} rounded-xl text-black dark:text-white placeholder:text-black/30 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 focus:border-transparent transition-all duration-200 ${extra}`;
 }
 
 function RecaptchaTile({
@@ -495,23 +492,16 @@ function RecaptchaTile({
           onChange(!checked);
         }
       }}
-      className={`flex w-full items-center gap-3 px-4 py-2 rounded-md bg-white dark:bg-[#f9f9f9] border border-black/10 select-none cursor-pointer ${disabled ? "opacity-60 cursor-wait" : ""}`}
+      className={`flex w-full items-center gap-3 px-4 py-2 rounded-xl bg-[#F2F2F5] dark:bg-white/[0.06] border border-black/10 dark:border-white/10 select-none cursor-pointer ${disabled ? "opacity-60 cursor-wait" : ""}`}
     >
       <div
-        className={`w-5 h-5 rounded border ${checked ? "border-emerald-500 bg-white" : "border-black/30 bg-white"} flex items-center justify-center transition-colors shrink-0`}
+        className={`w-5 h-5 rounded border ${checked ? "border-emerald-500 bg-white" : "border-black/30 bg-white dark:bg-white/90"} flex items-center justify-center transition-colors shrink-0`}
       >
         {checked && <Check className="w-3.5 h-3.5 text-emerald-500" />}
       </div>
-      <span className="text-sm text-black/80 flex-1">
-        I&apos;m not a robot
-      </span>
+      <span className="text-sm text-black/80 flex-1">I&apos;m not a robot</span>
       <div className="flex flex-col items-center pl-2 border-l border-black/10 shrink-0">
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 32 32"
-          aria-label="reCAPTCHA"
-        >
+        <svg width="24" height="24" viewBox="0 0 32 32" aria-label="reCAPTCHA">
           <circle
             cx="16"
             cy="16"
@@ -524,43 +514,9 @@ function RecaptchaTile({
           />
           <circle cx="16" cy="16" r="3.5" fill="#4285F4" />
         </svg>
-        <span className="text-[7px] font-bold text-black/40 mt-0.5">
-          reCAPTCHA
-        </span>
-        <span className="text-[6px] text-black/30 leading-none">
-          Privacy&nbsp;-&nbsp;Terms
-        </span>
+        <span className="text-[7px] font-bold text-black/40 mt-0.5">reCAPTCHA</span>
+        <span className="text-[6px] text-black/30 leading-none">Privacy&nbsp;-&nbsp;Terms</span>
       </div>
-    </div>
-  );
-}
-
-function FieldWithIcon({
-  id,
-  icon,
-  error,
-  children,
-}: {
-  id: string;
-  // `label` is unused now (we use placeholders only) but kept as an optional
-  // prop so callers don't all need to change signatures at once.
-  label?: string;
-  icon: React.ReactNode;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  void id;
-  return (
-    <div>
-      <div className="relative">
-        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/30">
-          {icon}
-        </span>
-        {children}
-      </div>
-      {error && (
-        <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">{error}</p>
-      )}
     </div>
   );
 }

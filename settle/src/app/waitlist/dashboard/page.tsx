@@ -889,35 +889,42 @@ function ReferralCodeCard({
   const t = useThemeTokens();
   const tweetText = `Join Blip Money with my referral code ${referralCode}! ${referralLink}`;
   return (
-    <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5 flex flex-col gap-3 h-full`}>
+    <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-6 flex flex-col gap-4 h-full`}>
       <span className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub}`}>
         Your Referral Code
       </span>
 
-      <div className={`flex items-center justify-between ${t.inputBg} border rounded-md px-4 py-3`}
+      <div className={`flex items-center justify-between ${t.inputBg} border rounded-lg px-4 py-3.5`}
         style={{ borderColor: `${ACCENT}66` }}>
-        <span className={`text-base md:text-lg font-semibold ${t.txt} tracking-[0.12em]`}>
+        <span className={`text-[20px] md:text-[22px] font-semibold ${t.txt} tracking-[0.08em]`}>
           {referralCode || '—'}
         </span>
         <button
           onClick={onCopyCode}
-          className="p-1.5 rounded-md transition"
+          className="p-2 rounded-md transition shrink-0"
           style={{ background: 'rgba(204,120,92,0.10)' }}
           aria-label="Copy referral code"
         >
           {copied
-            ? <Check className="w-3.5 h-3.5 text-emerald-500" />
-            : <Copy className="w-3.5 h-3.5" style={{ color: ACCENT }} />}
+            ? <Check className="w-4 h-4 text-emerald-500" />
+            : <Copy className="w-4 h-4" style={{ color: ACCENT }} />}
         </button>
       </div>
 
-      <p className={`text-[11px] ${t.muted} leading-relaxed`}>
+      <p className={`text-[12.5px] ${t.muted} leading-relaxed`}>
         {isMerchant
           ? <>Share your code or link and earn <span className={`font-semibold ${t.txt}`}>{formatCount(referralUnit)} pts</span> for each successful referral.</>
           : <>Earn <span className={`font-semibold ${t.txt}`}>{formatCount(USER_BLIP_POINTS.REFERRAL)} pts</span> per user signup or <span className={`font-semibold ${t.txt}`}>{formatCount(MERCHANT_BLIP_POINTS.REFERRAL)} pts</span> per merchant signup.</>}
       </p>
 
-      <div className="flex items-center gap-2">
+      {/* mt-auto pushes the divider + link + share-buttons block to the
+          bottom of the card so the h-full stretch doesn't leave dead
+          space at the bottom. Result: when the card is taller than its
+          natural content height (because the neighboring Real-Time
+          Activity panel sets the row height), the extra space lands
+          between the body paragraph and the divider, not at the very
+          bottom. */}
+      <div className="mt-auto flex items-center gap-3">
         <div className={`h-px flex-1 border-t ${t.divider}`} />
         <span className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${t.sub}`}>
           Or share your link
@@ -925,44 +932,44 @@ function ReferralCodeCard({
         <div className={`h-px flex-1 border-t ${t.divider}`} />
       </div>
 
-      <div className={`flex items-center justify-between ${t.inputBg} border ${t.border} rounded-md px-3 py-2`}>
-        <span className={`text-[11px] ${t.muted} truncate mr-2`}>{referralLink || '—'}</span>
+      <div className={`flex items-center justify-between ${t.inputBg} border ${t.border} rounded-lg px-3.5 py-2.5`}>
+        <span className={`text-[12px] ${t.muted} truncate mr-2`}>{referralLink || '—'}</span>
         <button
           onClick={onCopyLink}
-          className={`p-1 rounded ${t.hov} transition shrink-0`}
+          className={`p-1.5 rounded ${t.hov} transition shrink-0`}
           aria-label="Copy referral link"
         >
           {copiedLink
-            ? <Check className="w-3.5 h-3.5 text-emerald-500" />
-            : <Copy className={`w-3.5 h-3.5 ${t.muted}`} />}
+            ? <Check className="w-4 h-4 text-emerald-500" />
+            : <Copy className={`w-4 h-4 ${t.muted}`} />}
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2.5">
         <a
           href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className={`${t.inputBg} border ${t.border} rounded-md px-2 py-2 text-[10px] font-semibold ${t.txt} flex items-center justify-center gap-1.5 ${t.hov} transition`}
+          className={`${t.inputBg} border ${t.border} rounded-lg px-3 py-2.5 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
         >
-          <Twitter className="w-3 h-3" />
-          <span className="hidden sm:inline">Twitter</span>
+          <Twitter className="w-3.5 h-3.5" />
+          <span>Twitter</span>
         </a>
         <a
           href={`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join Blip Money with my referral!')}`}
           target="_blank"
           rel="noopener noreferrer"
-          className={`${t.inputBg} border ${t.border} rounded-md px-2 py-2 text-[10px] font-semibold ${t.txt} flex items-center justify-center gap-1.5 ${t.hov} transition`}
+          className={`${t.inputBg} border ${t.border} rounded-lg px-3 py-2.5 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
         >
-          <Send className="w-3 h-3" />
-          <span className="hidden sm:inline">Telegram</span>
+          <Send className="w-3.5 h-3.5" />
+          <span>Telegram</span>
         </a>
         <button
           onClick={onOpenReferral}
-          className={`${t.inputBg} border ${t.border} rounded-md px-2 py-2 text-[10px] font-semibold ${t.txt} flex items-center justify-center gap-1.5 ${t.hov} transition`}
+          className={`${t.inputBg} border ${t.border} rounded-lg px-3 py-2.5 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
         >
-          <MoreHorizontal className="w-3 h-3" />
-          <span className="hidden sm:inline">More</span>
+          <MoreHorizontal className="w-3.5 h-3.5" />
+          <span>More</span>
         </button>
       </div>
     </div>
@@ -1417,15 +1424,34 @@ function Navbar({ balance, onLogout, onShowHistory, actor }: {
     toggle();
   }
 
+  // Navbar is theme-locked to black — matches the waitlist auth navbar
+  // (WaitlistAuthNavbar) so the brand surface is consistent across the
+  // pre-login and post-login waitlist surfaces. Inline styles bypass the
+  // globals.css text-white rewrite that breaks token-based color in light
+  // theme. Theme toggle still works for the rest of the page below.
+  const navTextColor = { color: '#ffffff' };
+  const navBtnStyle = {
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.12)',
+  };
   return (
-    <header className={`${t.surface} border-b ${t.border} sticky top-0 z-50`}>
+    <header
+      className="sticky top-0 z-50"
+      style={{
+        background: '#000000',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
       <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-6 md:gap-10">
-          <Logo href="/waitlist" onDark={t.d} />
+          <Logo href="/waitlist" onDark />
           <nav className="hidden md:flex items-center gap-1 text-[13px] font-semibold">
-            <button className={`relative px-3 py-1.5 ${t.txt} font-semibold`}>
+            <button className="relative px-3 py-1.5 font-semibold" style={navTextColor}>
               Dashboard
-              <span className={`absolute left-2 right-2 -bottom-[22px] h-[2px] ${t.d ? 'bg-white' : 'bg-black'}`} />
+              <span
+                className="absolute left-2 right-2 -bottom-[22px] h-[2px]"
+                style={{ background: '#ffffff' }}
+              />
             </button>
           </nav>
         </div>
@@ -1434,15 +1460,22 @@ function Navbar({ balance, onLogout, onShowHistory, actor }: {
           <button
             type="button"
             onClick={toggleTheme}
-            className={`w-9 h-9 rounded-md flex items-center justify-center border ${t.border} ${t.inputBg} ${t.hov} transition-all`}
+            className="w-9 h-9 rounded-md flex items-center justify-center transition hover:opacity-90"
+            style={navBtnStyle}
             aria-label={`Switch to ${t.d ? 'light' : 'dark'} theme`}
           >
-            {t.d ? <Sun className={`w-4 h-4 ${t.txt}`} /> : <Moon className={`w-4 h-4 ${t.txt}`} />}
+            {t.d
+              ? <Sun className="w-4 h-4" style={navTextColor} />
+              : <Moon className="w-4 h-4" style={navTextColor} />}
           </button>
           <div className="relative">
-            <button onClick={() => setMenuOpen(!menuOpen)}
-              className={`w-9 h-9 rounded-md flex items-center justify-center border ${t.border} ${t.inputBg} ${t.hov} transition-all`} aria-label="Menu">
-              <Menu className={`w-4 h-4 ${t.txt}`} />
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="w-9 h-9 rounded-md flex items-center justify-center transition hover:opacity-90"
+              style={navBtnStyle}
+              aria-label="Menu"
+            >
+              <Menu className="w-4 h-4" style={navTextColor} />
             </button>
             {menuOpen && (
               <div className={`absolute right-0 mt-2 w-60 ${t.surface} border ${t.border} rounded-xl shadow-xl overflow-hidden z-50`}>
@@ -1467,10 +1500,13 @@ function Navbar({ balance, onLogout, onShowHistory, actor }: {
           </div>
         </div>
 
-        <button onClick={onLogout}
-          className={`flex md:hidden w-9 h-9 rounded-md items-center justify-center border ${t.border} ${t.inputBg}`}
-          aria-label="Logout">
-          <LogOut className={`w-4 h-4 ${t.txt}`} />
+        <button
+          onClick={onLogout}
+          className="flex md:hidden w-9 h-9 rounded-md items-center justify-center"
+          style={navBtnStyle}
+          aria-label="Logout"
+        >
+          <LogOut className="w-4 h-4" style={navTextColor} />
         </button>
       </div>
     </header>

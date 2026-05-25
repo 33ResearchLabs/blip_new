@@ -6,6 +6,7 @@
 // without breaking the brand area.
 
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import { ArrowRight, Sun, Moon } from 'lucide-react';
 import { Logo } from '@/components/shared/Logo';
 import { useWaitlistTheme } from '@/context/WaitlistThemeContext';
@@ -18,28 +19,49 @@ interface Props {
 export default function WaitlistAuthNavbar(_props: Props) {
   void _props;
   const { isDark, toggle } = useWaitlistTheme();
+  // Dimensions and positioning match futureStick Navbar.tsx exactly:
+  //   - max-w-[1280px] inner container
+  //   - px-5 sm:px-8 lg:px-10 horizontal padding (scales by breakpoint)
+  //   - h-[58px] navbar height
+  //   - fixed w-full positioning so the navbar overlays the top of the
+  //     page, instead of taking 58px in the document flow. With sticky
+  //     the navbar pushed content 58px down, producing the
+  //     "too much empty space above EARLY ACCESS" gap the user flagged.
+  //     With fixed, the shell's pt-16 md:pt-24 lands the content at
+  //     96px from viewport top — exactly where production renders it.
   return (
     <header
-      className="sticky top-0 z-50"
+      className="fixed inset-x-0 top-0 z-50"
       style={{
         background: '#000000',
         color: '#ffffff',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
       }}
     >
-      <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-6">
-        <div className="flex items-center gap-3">
+      <div className="max-w-[1280px] mx-auto px-5 sm:px-8 lg:px-10 h-[58px] flex items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
           <Logo href="/waitlist" onDark />
-          <span
-            className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.18em] uppercase"
-            style={{ color: 'rgba(255,255,255,0.6)' }}
-          >
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full rounded-full animate-ping" style={{ background: 'rgba(204,120,92,0.6)' }} />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: '#cc785c' }} />
+          {/* MAINNET · LIVE indicator — mirrors futureStick Navbar.tsx:139-152:
+              monospace, text-[9.5px], tracking-[0.22em], white/55, with a
+              left divider and a pulsing accent dot (opacity loop, plus a
+              soft 8px brand-orange glow). */}
+          <div className="hidden md:flex items-center gap-1.5 pl-4 ml-1 border-l border-white/[0.08]">
+            <motion.span
+              animate={{ opacity: [1, 0.35, 1] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background: '#cc785c',
+                boxShadow: '0 0 8px rgba(204,120,92,0.7)',
+              }}
+            />
+            <span
+              className="text-[9.5px] font-semibold tracking-[0.22em] text-white/55"
+              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+            >
+              MAINNET · LIVE
             </span>
-            Mainnet · Live
-          </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
