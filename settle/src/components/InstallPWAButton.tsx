@@ -31,7 +31,7 @@ export function InstallPWAButton({ app = "user" }: Props) {
   const [showSheet, setShowSheet] = useState(false);
   const [platform, setPlatform] = useState<"ios" | "android" | "desktop">("desktop");
 
-  const appName = app === "merchant" ? "Blip Money Merchant" : "Blip Money";
+  const appName = app === "merchant" ? "Blip Market Merchant" : "Blip Market";
 
   useEffect(() => {
     const standalone =

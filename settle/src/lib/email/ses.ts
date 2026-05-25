@@ -229,7 +229,7 @@ export function emailVerificationEmail(verifyLink: string, merchantName: string)
     '',
     `Didn't sign up? Ignore this email — no account was created.`,
     '',
-    `— Blip Money`,
+    `— Blip Market`,
   ].join('\n');
 
   return { subject, html, text };

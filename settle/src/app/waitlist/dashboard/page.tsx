@@ -11,7 +11,7 @@
 // fetchWithAuth, all task verifications go through the existing modals
 // (XFollowVerificationModal, TelegramVerificationModal, TweetCampaignModal).
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Loader2, LogOut, Copy, Check, Crown, Twitter, Send, Repeat2, Users as UsersIcon,
@@ -260,7 +260,7 @@ export default function WaitlistDashboardPage() {
     { id: 'TELEGRAM',   title: 'Follow Us on Telegram', reward: POINTS.TELEGRAM, icon: UsersIcon,
       description: 'Join our Telegram channel and verify membership.' },
     { id: 'CUSTOM',     title: 'Retweet a Post',        reward: POINTS.RETWEET,  icon: Repeat2,
-      description: 'Post about Blip Money on X with the campaign message.' },
+      description: 'Post about Blip Market on X with the campaign message.' },
     { id: 'WHITEPAPER', title: 'Share Referral Link',   reward: POINTS.REFERRAL, icon: Send,
       description: `Invite ${isMerchant ? 'merchants' : 'friends'} with your referral link to earn BLIP.` },
   ];
@@ -462,7 +462,11 @@ function MerchantLayout(props: {
           />
         </div>
         <div className="lg:col-span-3">
-          <RealTimeActivityCard leaderboard={leaderboard} />
+          <RealTimeActivityCard
+            leaderboard={leaderboard}
+            currentUserName={me?.display_name || me?.username || null}
+            currentUserPoints={blipPoints}
+          />
         </div>
       </div>
 
@@ -638,7 +642,11 @@ function UserLayout(props: {
           />
         </div>
         <div className="lg:col-span-3">
-          <RealTimeActivityCard leaderboard={leaderboard} />
+          <RealTimeActivityCard
+            leaderboard={leaderboard}
+            currentUserName={me?.display_name || me?.username || null}
+            currentUserPoints={blipPoints}
+          />
         </div>
       </div>
 
@@ -738,7 +746,7 @@ function HeroCard({
             <span style={{ color: ACCENT }}>Earn More.</span>
           </h2>
           <p className={`text-[13.5px] ${t.muted} max-w-md leading-[1.7]`}>
-            Invite your friends to Blip Money and earn{' '}
+            Invite your friends to Blip Market and earn{' '}
             <span className={`font-semibold ${t.txt}`}>{formatCount(referralUnit)} pts</span> for each
             successful referral. There&apos;s no limit to how much you can earn.
           </p>
@@ -780,34 +788,166 @@ function HeroCard({
 }
 
 // ── Real-Time Activity panel — sits in the top-right of the merchant
-// dashboard, showing a live feed of recent waitlist events. The data is
-// derived from the leaderboard rows so it's grounded in real names; when
-// the leaderboard is empty (fresh deploy), a small placeholder set is
-// rendered so the panel doesn't look broken.
+// dashboard, showing a live feed of recent waitlist events. Mixes the
+// signed-in user's own activity (so they can see themselves rewarded)
+// with a rotating mock pool of ~100 community events so the panel feels
+// alive even on a fresh deploy. Visible rows reshuffle every 9 seconds.
+
+// Mock pool — wide spread of names (individuals + merchant entities)
+// and point amounts up to 7,500 so the feed shows a believable mix of
+// micro-rewards (quests, referrals) and milestone payouts.
+const MOCK_ACTIVITY_NAMES: ReadonlyArray<string> = [
+  'Aisha K.', 'Marcus L.', 'Sofia R.', 'Diego P.', 'Yuki T.', 'Liam W.',
+  'Priya N.', 'Noah B.', 'Maya S.', 'Ethan C.', 'Zara F.', 'Hugo M.',
+  'Camila V.', 'Felix D.', 'Ines O.', 'Omar J.', 'Lena G.', 'Caleb H.',
+  'Anika P.', 'Theo Q.', 'Isla R.', 'Mateo S.', 'Nadia T.', 'Bruno U.',
+  'Sana Y.', 'Ryo K.', 'Adaeze O.', 'Tariq B.', 'Mira L.', 'Jonah F.',
+  'Beatriz N.', 'Idris M.', 'Vera C.', 'Sefa E.', 'Liana D.', 'Kai R.',
+  'Amara J.', 'Ravi T.', 'Selin A.', 'Otto B.', 'Anya S.', 'Rohan P.',
+  'Esme K.', 'Kofi A.', 'Hana M.', 'Pablo R.', 'Yara H.', 'Dmitri Z.',
+  'Iris L.', 'Quentin F.',
+  'Nova Merchants', 'Titan Merchants', 'Beacon Finance', 'Orion Pay',
+  'Lumen Settle', 'Atlas Exchange', 'Helio Cash', 'Vega FX',
+  'Spectra OTC', 'Polaris Hub', 'Bridge & Co.', 'Continental Forex',
+  'Mercato Pay', 'Sahara Stables', 'Northgate Rails', 'Tidewater Crypto',
+  'Goldline Settle', 'Harbor Liquidity', 'Reverb Pay', 'Cascade FX',
+  'Anchor Stablecoins', 'Pioneer Merchant', 'Mainline Wires', 'Bazaar Pay',
+  'Citadel Settlement', 'Driftwood Brokers', 'Echelon Pay', 'Frontier Cash',
+];
+
+const MOCK_ACTIVITY_TEMPLATES: ReadonlyArray<{
+  action: string;
+  points: number | null;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  // Micro-rewards
+  { action: 'Earned from Referral',          points: 50,    icon: Store      },
+  { action: 'Completed Social Quest',        points: 100,   icon: Award      },
+  { action: 'Joined Waitlist',               points: 50,    icon: UserPlus   },
+  { action: 'Followed @blip_money on X',     points: 100,   icon: Award      },
+  { action: 'Joined Telegram Community',     points: 100,   icon: Award      },
+  { action: 'Retweeted Campaign',            points: 150,   icon: Award      },
+  { action: 'Verified Email',                points: 200,   icon: BadgeCheck },
+  // Mid-tier
+  { action: 'Completed KYC Verification',    points: 250,   icon: BadgeCheck },
+  { action: 'First Settlement Completed',    points: 500,   icon: Trophy     },
+  { action: 'Earned Referral Bonus',         points: 500,   icon: Store      },
+  { action: 'Onboarded a Merchant',          points: 750,   icon: Store      },
+  { action: 'Unlocked Founder Badge',        points: 1000,  icon: Trophy     },
+  // Big payouts — what the user asked to see
+  { action: 'Reached 2,500 Points Tier',     points: null,  icon: Trophy     },
+  { action: 'Tier Up: Reached 5,000 Points', points: null,  icon: Trophy     },
+  { action: 'Top-100 Bonus Awarded',         points: 2500,  icon: Award      },
+  { action: 'Founding Merchant Bonus',       points: 5000,  icon: Trophy     },
+  { action: 'Leaderboard #10 Bonus',         points: 5000,  icon: Trophy     },
+  { action: 'Liquidity Provider Bonus',      points: 7500,  icon: Trophy     },
+  { action: 'Settled $10K in Orders',        points: 5000,  icon: Trophy     },
+];
+
+const TIME_LABELS: ReadonlyArray<string> = [
+  'just now', '8 sec ago', '24 sec ago', '47 sec ago',
+  '1 min ago', '2 min ago', '3 min ago', '5 min ago',
+  '7 min ago', '11 min ago', '14 min ago',
+];
+
+interface ActivityRow {
+  id: string;
+  name: string;
+  action: string;
+  points: number | null;
+  icon: React.ComponentType<{ className?: string }>;
+  time: string;
+  highlight?: boolean;
+}
+
+// Pull six pseudo-random rows from the mock pool. Sticks the current
+// user in the top slot when their display name + a positive points
+// total are known so they always see themselves in the feed.
+function buildActivityRows(
+  seed: number,
+  currentUserName: string | null,
+  currentUserPoints: number,
+): ActivityRow[] {
+  const rows: ActivityRow[] = [];
+
+  if (currentUserName && currentUserPoints > 0) {
+    rows.push({
+      id: 'self',
+      name: currentUserName,
+      action: 'Earned Quest Reward',
+      points: currentUserPoints,
+      icon: BadgeCheck,
+      time: 'just now',
+      highlight: true,
+    });
+  }
+
+  // Mulberry32-style deterministic pick keyed off `seed` so the same
+  // seed always produces the same shuffle (predictable for tests, fresh
+  // for each interval tick).
+  let s = seed | 0;
+  const rand = () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  const need = 6 - rows.length;
+  const usedNames = new Set<string>(currentUserName ? [currentUserName] : []);
+
+  for (let i = 0; i < need; i++) {
+    let name = MOCK_ACTIVITY_NAMES[Math.floor(rand() * MOCK_ACTIVITY_NAMES.length)];
+    let guard = 0;
+    while (usedNames.has(name) && guard++ < 12) {
+      name = MOCK_ACTIVITY_NAMES[Math.floor(rand() * MOCK_ACTIVITY_NAMES.length)];
+    }
+    usedNames.add(name);
+
+    const tpl = MOCK_ACTIVITY_TEMPLATES[Math.floor(rand() * MOCK_ACTIVITY_TEMPLATES.length)];
+    const time = TIME_LABELS[i + 1] ?? TIME_LABELS[TIME_LABELS.length - 1];
+
+    rows.push({
+      id: `m${seed}-${i}`,
+      name,
+      action: tpl.action,
+      points: tpl.points,
+      icon: tpl.icon,
+      time,
+    });
+  }
+  return rows;
+}
+
 function RealTimeActivityCard({
   leaderboard,
-}: { leaderboard: LeaderboardRow[] }) {
+  currentUserName,
+  currentUserPoints,
+}: {
+  leaderboard: LeaderboardRow[];
+  currentUserName?: string | null;
+  currentUserPoints?: number;
+}) {
   const t = useThemeTokens();
+  // `leaderboard` is preserved on the prop signature so existing call
+  // sites keep compiling, but the new feed pulls from the mock pool to
+  // give every user a believable Top-100-tier picture instead of just
+  // the six current waitlist rows.
+  void leaderboard;
 
-  // Build activity rows. We rotate through a fixed set of event templates
-  // so the feed feels alive without us needing a dedicated endpoint — the
-  // top of the real leaderboard provides the names.
-  const templates: Array<{
-    action: string; points: number | null; icon: React.ComponentType<{ className?: string }>; time: string;
-  }> = [
-    { action: 'Completed KYC Verification', points: 250, icon: BadgeCheck,  time: 'just now'  },
-    { action: 'Earned from Referral',       points: 50,  icon: Store,       time: '10 sec ago' },
-    { action: 'Completed Social Quest',     points: 100, icon: Award,       time: '30 sec ago' },
-    { action: 'Reached 2,500 Points',       points: null, icon: Trophy,     time: '2 min ago'  },
-    { action: 'Joined Blip Money',          points: 50,  icon: UserPlus,    time: '3 min ago'  },
-    { action: 'Earned from Referral',       points: 50,  icon: Store,       time: '4 min ago'  },
-  ];
+  const [seed, setSeed] = React.useState(() => Math.floor(Math.random() * 0xffffffff));
+  React.useEffect(() => {
+    const id = setInterval(() => {
+      setSeed(Math.floor(Math.random() * 0xffffffff));
+    }, 9000);
+    return () => clearInterval(id);
+  }, []);
 
-  const rows = templates.map((tpl, i) => {
-    const lb = leaderboard[i];
-    const name = lb?.display_name || lb?.username || ['John D.', 'Nova Merchants', 'Sarah M.', 'Titan Merchants', 'Alex P.', 'Beacon Finance'][i];
-    return { id: `a${i}`, name, ...tpl };
-  });
+  const rows = React.useMemo(
+    () => buildActivityRows(seed, currentUserName ?? null, currentUserPoints ?? 0),
+    [seed, currentUserName, currentUserPoints],
+  );
 
   return (
     <div
@@ -833,15 +973,45 @@ function RealTimeActivityCard({
           return (
             <div
               key={a.id}
-              className={`flex items-center justify-between px-5 py-2.5 ${t.hov} transition`}
+              className={`flex items-center justify-between px-5 py-2.5 ${t.hov} transition ${
+                a.highlight ? 'relative' : ''
+              }`}
+              style={a.highlight ? { background: 'rgba(204,120,92,0.06)' } : undefined}
             >
+              {a.highlight && (
+                <span
+                  aria-hidden
+                  className="absolute left-0 top-0 bottom-0 w-[3px]"
+                  style={{ background: ACCENT }}
+                />
+              )}
               <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${t.inputBg} border ${t.border}`}>
-                  <Icon className={`w-[15px] h-[15px] ${t.muted}`} />
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border ${t.border} ${
+                    a.highlight ? '' : t.inputBg
+                  }`}
+                  style={
+                    a.highlight
+                      ? { background: ACCENT, color: '#ffffff' }
+                      : undefined
+                  }
+                >
+                  <Icon
+                    className={`w-[15px] h-[15px] ${a.highlight ? '' : t.muted}`}
+                    {...(a.highlight ? { style: { color: '#ffffff' } as React.CSSProperties } : {})}
+                  />
                 </div>
                 <div className="min-w-0">
                   <p className={`text-[13px] font-semibold ${t.txt} truncate tracking-tight`}>
                     {a.name}
+                    {a.highlight && (
+                      <span
+                        className="ml-1.5 text-[9.5px] font-bold tracking-[0.15em] uppercase"
+                        style={{ color: ACCENT }}
+                      >
+                        You
+                      </span>
+                    )}
                   </p>
                   <p className={`text-[11.5px] ${t.muted} truncate leading-snug`}>
                     {a.action}
@@ -851,10 +1021,13 @@ function RealTimeActivityCard({
               <div className="text-right shrink-0 ml-3 flex flex-col items-end gap-0.5">
                 {a.points !== null && (
                   <span
-                    className="text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full"
-                    style={{ background: 'rgba(204,120,92,0.10)', color: ACCENT }}
+                    className="text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full tabular-nums"
+                    style={{
+                      background: a.highlight ? ACCENT : 'rgba(204,120,92,0.10)',
+                      color: a.highlight ? '#ffffff' : ACCENT,
+                    }}
                   >
-                    +{a.points} pts
+                    +{a.points.toLocaleString('en-US')} pts
                   </span>
                 )}
                 <span className={`text-[10.5px] ${t.sub} leading-tight tabular-nums`}>
@@ -887,7 +1060,7 @@ function ReferralCodeCard({
   isMerchant: boolean;
 }) {
   const t = useThemeTokens();
-  const tweetText = `Join Blip Money with my referral code ${referralCode}! ${referralLink}`;
+  const tweetText = `Join Blip Market with my referral code ${referralCode}! ${referralLink}`;
   return (
     <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-6 flex flex-col gap-4 h-full`}>
       <span className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub}`}>
@@ -956,7 +1129,7 @@ function ReferralCodeCard({
           <span>Twitter</span>
         </a>
         <a
-          href={`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join Blip Money with my referral!')}`}
+          href={`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join Blip Market with my referral!')}`}
           target="_blank"
           rel="noopener noreferrer"
           className={`${t.inputBg} border ${t.border} rounded-lg px-3 py-2.5 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
@@ -1792,7 +1965,7 @@ function ReferralModal({ code, link, onClose, onCopy, copied }: {
             className={`flex items-center justify-center gap-1.5 ${inputBg} border ${border} rounded-full px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] ${txt} ${hov} transition`}>
             <Twitter className="w-3.5 h-3.5" /> X
           </a>
-          <a href={`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join me on Blip Money')}`}
+          <a href={`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join me on Blip Market')}`}
             target="_blank" rel="noopener noreferrer"
             className={`flex items-center justify-center gap-1.5 ${inputBg} border ${border} rounded-full px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] ${txt} ${hov} transition`}>
             <MessageCircle className="w-3.5 h-3.5" /> Telegram

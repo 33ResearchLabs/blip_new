@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "Blip Money Compliance",
+  title: "Blip Market Compliance",
   description: "Dispute resolution and compliance management",
   manifest: "/manifest-compliance.json",
   appleWebApp: {

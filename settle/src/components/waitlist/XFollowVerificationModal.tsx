@@ -1,17 +1,23 @@
 'use client';
 
-// Ported from futureStick's XFollowVerificationModal.tsx — two-step flow:
+// Two-step quest:
 //   1. Open X profile (https://x.com/blip_money) in a new tab.
-//   2. Confirm by entering the user's X username; server records proof + verifies.
+//   2. Confirm by entering the user's X username; server records proof.
 //
-// Verification is self-attested for the waitlist airdrop (matches how
-// futureStick's /twitter/verify-follow worked when the backend was offline —
-// it returns success on a well-formed username). Backend uses the existing
-// /api/waitlist/tasks/:id/submit + /verify endpoints; the X handle is stored
-// in proof_data so admin can audit later.
+// Verification is self-attested for the waitlist airdrop. Backend uses
+// the existing /api/waitlist/tasks/:id/submit + /verify endpoints; the
+// X handle is stored in proof_data so admin can audit later.
 
 import { useState } from 'react';
-import { X, Twitter, CheckCircle, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
+import {
+  Twitter, CheckCircle2, AlertCircle, Loader2, ExternalLink,
+} from 'lucide-react';
+import QuestModalShell, {
+  QuestPrimaryCta,
+  QuestSecondaryCta,
+  QuestNoticePill,
+  QuestSectionCard,
+} from '@/components/waitlist/QuestModalShell';
 
 const X_PROFILE_URL = 'https://x.com/blip_money';
 
@@ -32,8 +38,6 @@ export default function XFollowVerificationModal({
   const [step, setStep] = useState<Step>('follow');
   const [xUsername, setXUsername] = useState('');
   const [error, setError] = useState('');
-
-  if (!isOpen) return null;
 
   function handleClose() {
     setStep('follow'); setXUsername(''); setError('');
@@ -59,7 +63,6 @@ export default function XFollowVerificationModal({
       const id = taskId ?? (await ensureTaskId());
       if (!id) { setStep('error'); setError('Could not create task.'); return; }
 
-      // Save the handle as proof_data, then credit.
       await fetch(`/api/waitlist/tasks/${id}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -81,152 +84,144 @@ export default function XFollowVerificationModal({
     }
   }
 
+  const showStepper = step === 'follow' || step === 'confirm';
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={handleClose} />
-
-      <div className="relative w-full max-w-lg bg-[#0A0A0A] border border-neutral-800 shadow-2xl rounded-sm">
-        <div className="p-8">
-          <button onClick={handleClose}
-            className="absolute top-4 right-4 text-neutral-500 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-4 bg-neutral-900 border border-neutral-800 text-white rounded-sm">
-              <Twitter className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-white uppercase">Follow on X</h3>
-              <span className="text-xs text-neutral-500">REWARD: {rewardPoints} PTS</span>
-            </div>
-          </div>
-
-          {/* Step indicator */}
-          {step !== 'success' && step !== 'error' && step !== 'verifying' && (
-            <div className="flex items-center gap-2 mb-6">
-              {(['follow', 'confirm'] as Step[]).map((s, i) => {
-                const order = ['follow', 'confirm'] as Step[];
-                const idx = order.indexOf(step);
-                const isActive = i === idx;
-                const isDone = i < idx;
-                return (
-                  <div key={s} className="flex items-center gap-2 flex-1">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border transition-all ${
-                      isDone ? 'bg-green-500 border-green-500 text-white'
-                        : isActive ? 'bg-white text-black border-white'
-                          : 'bg-transparent border-neutral-700 text-neutral-600'
-                    }`}>{isDone ? '✓' : i + 1}</div>
-                    {i < 1 && <div className={`flex-1 h-px ${isDone ? 'bg-green-500' : 'bg-neutral-800'}`} />}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {step === 'follow' && (
-            <>
-              <div className="p-5 bg-neutral-900/30 border border-neutral-800 rounded-sm mb-6">
-                <h4 className="text-[10px] uppercase tracking-widest text-neutral-500 mb-2">
-                  Step 1: Follow @blip_money
-                </h4>
-                <p className="text-sm text-neutral-300">
-                  Follow our official X (Twitter) account to stay updated on protocol announcements, rewards, and governance.
-                </p>
-              </div>
-              <button onClick={handleFollowNow}
-                className="w-full py-3 px-4 bg-white text-black border border-black/10 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
-                <Twitter className="w-4 h-4" /> Follow @blip_money <ExternalLink className="w-3 h-3" />
-              </button>
-              <button onClick={() => setStep('confirm')}
-                className="w-full mt-3 py-2 text-xs text-neutral-500 hover:text-white transition-colors">
-                I already follow, continue
-              </button>
-            </>
-          )}
-
-          {step === 'confirm' && (
-            <>
-              <div className="p-5 bg-neutral-900/30 border border-neutral-800 rounded-sm mb-6">
-                <h4 className="text-[10px] uppercase tracking-widest text-neutral-500 mb-2">
-                  Step 2: Confirm Your Follow
-                </h4>
-                <p className="text-sm text-neutral-300 mb-4">
-                  Enter your X (Twitter) username so we can verify you&apos;re following @blip_money.
-                </p>
-                <div className="mb-4">
-                  <label className="text-xs text-neutral-400 mb-2 block">Your X Username</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 text-sm">@</span>
-                    <input type="text" value={xUsername}
-                      onChange={(e) => setXUsername(e.target.value)} placeholder="your_username" maxLength={15}
-                      className="w-full pl-8 pr-3 py-2 bg-black border border-neutral-700 text-white text-sm focus:border-white outline-none transition-colors" />
-                  </div>
+    <QuestModalShell
+      isOpen={isOpen}
+      onClose={handleClose}
+      icon={<Twitter className="w-5 h-5" />}
+      eyebrow="Social quest"
+      title="Follow on X"
+      rewardPoints={rewardPoints}
+    >
+      {showStepper && (
+        <div className="flex items-center gap-2 mb-5">
+          {(['follow', 'confirm'] as Step[]).map((s, i) => {
+            const order = ['follow', 'confirm'] as Step[];
+            const idx = order.indexOf(step);
+            const isActive = i === idx;
+            const isDone = i < idx;
+            return (
+              <div key={s} className="flex items-center gap-2 flex-1">
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border transition-all ${
+                    isDone
+                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                      : isActive
+                        ? 'bg-[#cc785c] border-[#cc785c] text-white'
+                        : 'bg-white border-black/[0.10] text-[#a0a0a4]'
+                  }`}
+                >
+                  {isDone ? '✓' : i + 1}
                 </div>
-                {error && (
-                  <div className="flex items-center gap-2 text-xs text-red-400 bg-red-950/20 border border-red-900/30 p-3 rounded-sm">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
-                  </div>
+                {i < 1 && (
+                  <div className={`flex-1 h-px ${isDone ? 'bg-emerald-500' : 'bg-black/[0.08]'}`} />
                 )}
               </div>
-              <div className="flex gap-3">
-                <button onClick={() => setStep('follow')}
-                  className="flex-1 py-3 text-xs uppercase tracking-wider border border-neutral-800 text-neutral-400 hover:bg-neutral-900 transition-colors">
-                  Back
-                </button>
-                <button onClick={handleVerify} disabled={!xUsername.trim()}
-                  className="flex-1 py-3 text-xs font-bold uppercase tracking-wider bg-white text-black border border-black/10 hover:bg-gray-50 active:scale-[0.98] transition disabled:opacity-50 disabled:cursor-not-allowed">
-                  Verify Follow
-                </button>
-              </div>
-            </>
-          )}
-
-          {step === 'verifying' && (
-            <div className="py-12 flex flex-col items-center justify-center">
-              <Loader2 className="w-12 h-12 text-white animate-spin mb-4" />
-              <p className="text-sm text-white font-semibold mb-2">Verifying your follow…</p>
-              <p className="text-xs text-neutral-500">This may take a few seconds</p>
-            </div>
-          )}
-
-          {step === 'success' && (
-            <div className="py-12 flex flex-col items-center justify-center">
-              <div className="w-16 h-16 bg-green-950/30 rounded-full flex items-center justify-center mb-4">
-                <CheckCircle className="w-8 h-8 text-green-400" />
-              </div>
-              <p className="text-lg font-bold text-white mb-2">Follow Verified!</p>
-              <p className="text-sm text-neutral-400 mb-4">You earned {rewardPoints} points</p>
-              <div className="text-xs text-neutral-500 bg-neutral-900/30 border border-neutral-800 px-4 py-2 rounded-sm">
-                Points added to your account
-              </div>
-            </div>
-          )}
-
-          {step === 'error' && (
-            <>
-              <div className="py-8 flex flex-col items-center justify-center mb-6">
-                <div className="w-16 h-16 bg-red-950/30 rounded-full flex items-center justify-center mb-4">
-                  <AlertCircle className="w-8 h-8 text-red-400" />
-                </div>
-                <p className="text-lg font-bold text-white mb-2">Verification Failed</p>
-                <p className="text-sm text-neutral-400 text-center max-w-md">{error}</p>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={handleClose}
-                  className="flex-1 py-3 text-xs uppercase tracking-wider border border-neutral-800 text-neutral-400 hover:bg-neutral-900 transition-colors">
-                  Cancel
-                </button>
-                <button onClick={() => { setError(''); setStep('confirm'); }}
-                  className="flex-1 py-3 text-xs font-bold uppercase tracking-wider bg-white text-black border border-black/10 hover:bg-gray-50 active:scale-[0.98] transition">
-                  Try Again
-                </button>
-              </div>
-            </>
-          )}
+            );
+          })}
         </div>
-      </div>
-    </div>
+      )}
+
+      {step === 'follow' && (
+        <div className="space-y-4">
+          <QuestSectionCard eyebrow="Step 1 · Follow @blip_money">
+            <p className="text-[13px] text-[#3a3a3c] leading-[1.55]">
+              Follow our official X (Twitter) account to stay updated on protocol
+              announcements, rewards, and governance.
+            </p>
+          </QuestSectionCard>
+
+          <QuestPrimaryCta onClick={handleFollowNow}>
+            <Twitter className="w-4 h-4" /> Follow @blip_money{' '}
+            <ExternalLink className="w-3.5 h-3.5" />
+          </QuestPrimaryCta>
+
+          <button
+            type="button"
+            onClick={() => setStep('confirm')}
+            className="block w-full text-center text-[12px] text-[#6e6e73] hover:text-[#1d1d1f] transition-colors"
+          >
+            I already follow — continue
+          </button>
+        </div>
+      )}
+
+      {step === 'confirm' && (
+        <div className="space-y-4">
+          <QuestSectionCard eyebrow="Step 2 · Confirm your follow">
+            <p className="text-[13px] text-[#3a3a3c] leading-[1.55] mb-3">
+              Enter your X (Twitter) username so we can verify you're following{' '}
+              <strong className="text-[#1d1d1f]">@blip_money</strong>.
+            </p>
+            <label className="block text-[10px] font-bold tracking-[0.18em] uppercase text-[#6e6e73] mb-2">
+              Your X Username
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#a0a0a4] text-[14px]">@</span>
+              <input
+                type="text"
+                value={xUsername}
+                onChange={(e) => setXUsername(e.target.value)}
+                placeholder="your_username"
+                maxLength={15}
+                className="w-full bg-white border border-black/[0.08] rounded-xl pl-8 pr-4 py-2.5 text-[13px] text-[#1d1d1f] placeholder:text-[#a0a0a4] outline-none focus:border-[#cc785c]/50 focus:ring-1 focus:ring-[#cc785c]/30"
+              />
+            </div>
+          </QuestSectionCard>
+
+          {error && (
+            <QuestNoticePill tone="error" icon={<AlertCircle className="w-4 h-4" />} body={error} />
+          )}
+
+          <div className="flex gap-3">
+            <QuestSecondaryCta onClick={() => setStep('follow')}>Back</QuestSecondaryCta>
+            <QuestPrimaryCta onClick={handleVerify} disabled={!xUsername.trim()}>
+              <CheckCircle2 className="w-4 h-4" /> Verify follow
+            </QuestPrimaryCta>
+          </div>
+        </div>
+      )}
+
+      {step === 'verifying' && (
+        <div className="py-10 flex flex-col items-center text-center">
+          <Loader2 className="w-9 h-9 text-[#cc785c] animate-spin mb-4" />
+          <p className="text-[14px] font-semibold text-[#1d1d1f] mb-1">Verifying your follow…</p>
+          <p className="text-[12px] text-[#6e6e73]">This only takes a moment.</p>
+        </div>
+      )}
+
+      {step === 'success' && (
+        <div className="py-8 flex flex-col items-center text-center space-y-3">
+          <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <CheckCircle2 className="w-7 h-7 text-emerald-600" />
+          </div>
+          <p className="text-[15.5px] font-semibold text-[#1d1d1f]">Follow verified</p>
+          <p className="text-[12.5px] text-[#6e6e73]">
+            You earned{' '}
+            <strong className="text-[#1d1d1f]">{rewardPoints.toLocaleString('en-US')} points</strong>.
+          </p>
+        </div>
+      )}
+
+      {step === 'error' && (
+        <div className="space-y-4">
+          <div className="py-6 flex flex-col items-center text-center space-y-3">
+            <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center">
+              <AlertCircle className="w-7 h-7 text-red-600" />
+            </div>
+            <p className="text-[15.5px] font-semibold text-[#1d1d1f]">Verification failed</p>
+            <p className="text-[12.5px] text-[#6e6e73] max-w-sm">{error}</p>
+          </div>
+          <div className="flex gap-3">
+            <QuestSecondaryCta onClick={handleClose}>Cancel</QuestSecondaryCta>
+            <QuestPrimaryCta onClick={() => { setError(''); setStep('confirm'); }}>
+              Try again
+            </QuestPrimaryCta>
+          </div>
+        </div>
+      )}
+    </QuestModalShell>
   );
 }

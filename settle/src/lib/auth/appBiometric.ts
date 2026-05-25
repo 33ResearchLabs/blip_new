@@ -19,7 +19,7 @@
 
 const STORAGE_PREFIX = 'blip_app_biometric_v1';
 const TRUST_VERSION = 1;
-const RP_NAME = 'Blip Money';
+const RP_NAME = 'Blip Market';
 const PRF_INFO = 'blip:app-lock:pin:v1';
 
 export const MAX_BIOMETRIC_FAILURES = 3;

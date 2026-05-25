@@ -12,7 +12,7 @@ import { encrypt, decrypt } from '@/lib/utils/encryption';
 import { query, queryOne } from '@/lib/db';
 
 // ── Config ──────────────────────────────────────────────────────────
-const ISSUER = process.env.TOTP_ISSUER || 'Blip Money';
+const ISSUER = process.env.TOTP_ISSUER || 'Blip Market';
 const WINDOW = parseInt(process.env.TOTP_WINDOW || '1', 10); // Allow ±1 time step for clock drift
 const TEMP_TOKEN_TTL_SEC = 5 * 60; // 5 min expiry for pending login tokens
 const MAX_ATTEMPTS_PER_WINDOW = 5; // Max failed OTP attempts per 15-min window

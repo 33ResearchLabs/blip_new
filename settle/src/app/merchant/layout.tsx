@@ -5,7 +5,7 @@ import { MerchantPresenceHeartbeat } from "@/components/merchant/MerchantPresenc
 import { PwaAppGuard } from "@/components/PwaAppGuard";
 
 export const metadata: Metadata = {
-  title: "Blip Money Merchant",
+  title: "Blip Market Merchant",
   description: "Manage your P2P trades and orders",
   manifest: "/manifest-merchant.json",
   appleWebApp: {
