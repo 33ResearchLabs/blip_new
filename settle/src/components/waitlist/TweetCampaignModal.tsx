@@ -19,14 +19,20 @@ interface Props {
 }
 
 function getCampaignMessage(): string {
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return `🚀 Just joined @BlipMoney - the future of decentralized payments and rewards!
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://blip.money';
+  // Copy describes the actual product (Pay with Crypto, Settle in Cash
+  // via non-custodial escrow on Solana) rather than the generic "DeFi
+  // protocol" pitch. Uses the real handle @blip_money — the dashboard
+  // already standardised on this; only the old campaign string was
+  // pinning @BlipMoney.
+  return `🪙 Just joined @blip_money — pay with crypto, settle in cash.
 
-Earn points, participate in governance, and be part of the next-gen financial protocol.
+Non-custodial escrow on Solana. No KYC, no banks, no waiting on wires. Borderless P2P settlement in under 60 seconds.
 
-Join the revolution: ${origin}
+Skip the line 👇
+${origin}
 
-#BlipMoney #DeFi #Web3`;
+#BlipMoney #Crypto #Stablecoins`;
 }
 
 function extractTweetId(url: string): string | null {
@@ -142,7 +148,7 @@ export default function TweetCampaignModal({
                     <p className="font-semibold mb-1">Important:</p>
                     <ul className="space-y-1 text-blue-400">
                       <li>• Your tweet must be public (not protected)</li>
-                      <li>• Must include @BlipMoney mention</li>
+                      <li>• Must include @blip_money mention</li>
                       <li>• Each tweet can only be verified once</li>
                     </ul>
                   </div>
