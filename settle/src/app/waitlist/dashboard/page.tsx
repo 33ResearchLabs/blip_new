@@ -462,11 +462,7 @@ function MerchantLayout(props: {
           />
         </div>
         <div className="lg:col-span-3">
-          <RealTimeActivityCard
-            leaderboard={leaderboard}
-            currentUserName={me?.display_name || me?.username || null}
-            currentUserPoints={blipPoints}
-          />
+          <RealTimeActivityCard leaderboard={leaderboard} />
         </div>
       </div>
 
@@ -642,11 +638,7 @@ function UserLayout(props: {
           />
         </div>
         <div className="lg:col-span-3">
-          <RealTimeActivityCard
-            leaderboard={leaderboard}
-            currentUserName={me?.display_name || me?.username || null}
-            currentUserPoints={blipPoints}
-          />
+          <RealTimeActivityCard leaderboard={leaderboard} />
         </div>
       </div>
 
@@ -776,7 +768,7 @@ function HeroCard({
               which 404'd and left only the alt text visible. The hero
               image lives in /public so the browser fetches it directly. */}
           <img
-            src="/refer-friends-hero.png"
+            src="/refer-friends-hero.jpg"
             alt="Refer friends and earn rewards"
             className="absolute inset-0 w-full h-full object-cover"
             loading="eager"
@@ -860,28 +852,11 @@ interface ActivityRow {
   highlight?: boolean;
 }
 
-// Pull six pseudo-random rows from the mock pool. Sticks the current
-// user in the top slot when their display name + a positive points
-// total are known so they always see themselves in the feed.
-function buildActivityRows(
-  seed: number,
-  currentUserName: string | null,
-  currentUserPoints: number,
-): ActivityRow[] {
-  const rows: ActivityRow[] = [];
-
-  if (currentUserName && currentUserPoints > 0) {
-    rows.push({
-      id: 'self',
-      name: currentUserName,
-      action: 'Earned Quest Reward',
-      points: currentUserPoints,
-      icon: BadgeCheck,
-      time: 'just now',
-      highlight: true,
-    });
-  }
-
+// Pull six pseudo-random rows from the mock pool. The signed-in user
+// is intentionally NOT pinned into the feed — it's a community pulse,
+// not a personal history. (User's own earnings live in the BLIP points
+// total + reward history modal.)
+function buildActivityRows(seed: number): ActivityRow[] {
   // Mulberry32-style deterministic pick keyed off `seed` so the same
   // seed always produces the same shuffle (predictable for tests, fresh
   // for each interval tick).
@@ -894,10 +869,10 @@ function buildActivityRows(
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  const need = 6 - rows.length;
-  const usedNames = new Set<string>(currentUserName ? [currentUserName] : []);
+  const rows: ActivityRow[] = [];
+  const usedNames = new Set<string>();
 
-  for (let i = 0; i < need; i++) {
+  for (let i = 0; i < 6; i++) {
     let name = MOCK_ACTIVITY_NAMES[Math.floor(rand() * MOCK_ACTIVITY_NAMES.length)];
     let guard = 0;
     while (usedNames.has(name) && guard++ < 12) {
@@ -906,7 +881,7 @@ function buildActivityRows(
     usedNames.add(name);
 
     const tpl = MOCK_ACTIVITY_TEMPLATES[Math.floor(rand() * MOCK_ACTIVITY_TEMPLATES.length)];
-    const time = TIME_LABELS[i + 1] ?? TIME_LABELS[TIME_LABELS.length - 1];
+    const time = TIME_LABELS[i] ?? TIME_LABELS[TIME_LABELS.length - 1];
 
     rows.push({
       id: `m${seed}-${i}`,
@@ -922,18 +897,13 @@ function buildActivityRows(
 
 function RealTimeActivityCard({
   leaderboard,
-  currentUserName,
-  currentUserPoints,
 }: {
   leaderboard: LeaderboardRow[];
-  currentUserName?: string | null;
-  currentUserPoints?: number;
 }) {
   const t = useThemeTokens();
   // `leaderboard` is preserved on the prop signature so existing call
-  // sites keep compiling, but the new feed pulls from the mock pool to
-  // give every user a believable Top-100-tier picture instead of just
-  // the six current waitlist rows.
+  // sites keep compiling, but the feed pulls from a mock community
+  // pool so the panel feels alive on a fresh deploy.
   void leaderboard;
 
   const [seed, setSeed] = React.useState(() => Math.floor(Math.random() * 0xffffffff));
@@ -944,10 +914,7 @@ function RealTimeActivityCard({
     return () => clearInterval(id);
   }, []);
 
-  const rows = React.useMemo(
-    () => buildActivityRows(seed, currentUserName ?? null, currentUserPoints ?? 0),
-    [seed, currentUserName, currentUserPoints],
-  );
+  const rows = React.useMemo(() => buildActivityRows(seed), [seed]);
 
   return (
     <div
@@ -973,45 +940,15 @@ function RealTimeActivityCard({
           return (
             <div
               key={a.id}
-              className={`flex items-center justify-between px-5 py-2.5 ${t.hov} transition ${
-                a.highlight ? 'relative' : ''
-              }`}
-              style={a.highlight ? { background: 'rgba(204,120,92,0.06)' } : undefined}
+              className={`flex items-center justify-between px-5 py-2.5 ${t.hov} transition`}
             >
-              {a.highlight && (
-                <span
-                  aria-hidden
-                  className="absolute left-0 top-0 bottom-0 w-[3px]"
-                  style={{ background: ACCENT }}
-                />
-              )}
               <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border ${t.border} ${
-                    a.highlight ? '' : t.inputBg
-                  }`}
-                  style={
-                    a.highlight
-                      ? { background: ACCENT, color: '#ffffff' }
-                      : undefined
-                  }
-                >
-                  <Icon
-                    className={`w-[15px] h-[15px] ${a.highlight ? '' : t.muted}`}
-                    {...(a.highlight ? { style: { color: '#ffffff' } as React.CSSProperties } : {})}
-                  />
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${t.inputBg} border ${t.border}`}>
+                  <Icon className={`w-[15px] h-[15px] ${t.muted}`} />
                 </div>
                 <div className="min-w-0">
                   <p className={`text-[13px] font-semibold ${t.txt} truncate tracking-tight`}>
                     {a.name}
-                    {a.highlight && (
-                      <span
-                        className="ml-1.5 text-[9.5px] font-bold tracking-[0.15em] uppercase"
-                        style={{ color: ACCENT }}
-                      >
-                        You
-                      </span>
-                    )}
                   </p>
                   <p className={`text-[11.5px] ${t.muted} truncate leading-snug`}>
                     {a.action}
@@ -1022,10 +959,7 @@ function RealTimeActivityCard({
                 {a.points !== null && (
                   <span
                     className="text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full tabular-nums"
-                    style={{
-                      background: a.highlight ? ACCENT : 'rgba(204,120,92,0.10)',
-                      color: a.highlight ? '#ffffff' : ACCENT,
-                    }}
+                    style={{ background: 'rgba(204,120,92,0.10)', color: ACCENT }}
                   >
                     +{a.points.toLocaleString('en-US')} pts
                   </span>

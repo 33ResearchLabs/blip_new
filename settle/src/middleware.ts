@@ -372,7 +372,7 @@ export function middleware(request: NextRequest) {
       // transactional emails (verify, password-reset) can load their
       // hero images in any mail client.
       pathname.startsWith('/illustrations/') ||
-      pathname === '/refer-friends-hero.png' ||
+      pathname === '/refer-friends-hero.jpg' ||
       pathname === '/favicon.ico' ||
       pathname === '/apple-touch-icon.png' ||
       pathname === '/manifest.json' ||
