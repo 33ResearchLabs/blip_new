@@ -908,9 +908,12 @@ function RealTimeActivityCard({
 
   const [seed, setSeed] = React.useState(() => Math.floor(Math.random() * 0xffffffff));
   React.useEffect(() => {
+    // 3.5-minute rotation — slow enough that users don't see the feed
+    // constantly churning while they read, fresh enough that it still
+    // reads as "live" on the next visit.
     const id = setInterval(() => {
       setSeed(Math.floor(Math.random() * 0xffffffff));
-    }, 9000);
+    }, 210_000);
     return () => clearInterval(id);
   }, []);
 
