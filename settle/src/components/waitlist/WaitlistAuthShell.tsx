@@ -12,11 +12,14 @@
 // configuration. The form body itself is slotted as `children`
 // (RegisterForm / LoginForm).
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Check } from 'lucide-react';
 import { useWaitlistTokens } from '@/context/WaitlistThemeContext';
 import WaitlistAuthNavbar from '@/components/waitlist/WaitlistAuthNavbar';
+import RegisterForm from '@/components/waitlist/RegisterForm';
+import LoginForm from '@/components/waitlist/LoginForm';
 
 type Role = 'user' | 'merchant';
 type Mode = 'signin' | 'signup';
@@ -152,18 +155,26 @@ const CROSS_SELL: Record<Role, CrossSellCopy> = {
 };
 
 interface Props {
-  role: Role;
-  mode: Mode;
-  children: React.ReactNode;
+  initialRole: Role;
+  initialMode: Mode;
 }
 
-export default function WaitlistAuthShell({ role, mode, children }: Props) {
+export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
+  // Role + mode are state-held in the shell — the segmented controls
+  // below swap inner content without a route change. Pages
+  // (/waitlist/user, /waitlist/merchant, /waitlist/login,
+  // /waitlist/merchant-login) just seed the initial values.
+  const [role, setRole] = useState<Role>(initialRole);
+  const [mode, setMode] = useState<Mode>(initialMode);
+
   const t = useWaitlistTokens();
   const copy = COPY[role][mode];
   const otherRole: Role = role === 'merchant' ? 'user' : 'merchant';
   const crossSell = CROSS_SELL[role];
   const crossSellHref = pathFor(otherRole, mode);
-  const altModeHref = pathFor(role, mode === 'signin' ? 'signup' : 'signin');
+  // altModeHref removed — the altMode link is now a state-update button
+  // (calls setMode) rather than a navigation Link, so it doesn't need
+  // a target route.
   const altModeLabel =
     mode === 'signin'
       ? (role === 'merchant' ? 'Register as Merchant' : 'Create one')
@@ -351,15 +362,15 @@ export default function WaitlistAuthShell({ role, mode, children }: Props) {
               }}
             >
               {/* User / Merchant role pill — Apple segmented control at the
-                  top of the card. Lets visitors flip between the user and
-                  merchant auth flows without leaving the card. Each option
-                  is a real <Link> so prefetch + back nav both work. */}
+                  top of the card. State-held (setRole) so the toggle
+                  swaps inner content without a route change. */}
               <div
                 className="mb-4 grid grid-cols-2 p-[3px] rounded-full"
                 style={{ background: t.d ? 'rgba(255,255,255,0.06)' : '#EFEFF2' }}
               >
-                <Link
-                  href={pathFor('user', mode)}
+                <button
+                  type="button"
+                  onClick={() => setRole('user')}
                   aria-current={role === 'user' ? 'page' : undefined}
                   className="py-2.5 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
                   style={
@@ -374,9 +385,10 @@ export default function WaitlistAuthShell({ role, mode, children }: Props) {
                   }
                 >
                   User
-                </Link>
-                <Link
-                  href={pathFor('merchant', mode)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole('merchant')}
                   aria-current={role === 'merchant' ? 'page' : undefined}
                   className="py-2.5 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
                   style={
@@ -391,7 +403,7 @@ export default function WaitlistAuthShell({ role, mode, children }: Props) {
                   }
                 >
                   Merchant
-                </Link>
+                </button>
               </div>
 
               <div className="mb-5">
@@ -436,25 +448,29 @@ export default function WaitlistAuthShell({ role, mode, children }: Props) {
                   />
                   Joining as {role === 'merchant' ? 'a Merchant' : 'a User'}
                 </div>
-                <Link
-                  href={pathFor(otherRole, mode)}
+                <button
+                  type="button"
+                  onClick={() => setRole(otherRole)}
                   className="text-[11px] font-semibold underline underline-offset-4 transition-colors"
                   style={{
                     color: t.d ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)',
+                    background: 'transparent',
                   }}
                 >
                   Switch to {role === 'merchant' ? 'User' : 'Merchant'}
-                </Link>
+                </button>
               </div>
 
-              {/* Apple segmented control — Sign up / Sign in. The active
-                  pill is a real Link so prefetch + back nav both work. */}
+              {/* Apple segmented control — Sign up / Sign in. State-held
+                  (setMode) so the toggle swaps the inner form without a
+                  route change. */}
               <div
                 className="mb-4 grid grid-cols-2 p-[3px] rounded-full"
                 style={{ background: t.d ? 'rgba(255,255,255,0.06)' : '#EFEFF2' }}
               >
-                <Link
-                  href={pathFor(role, 'signup')}
+                <button
+                  type="button"
+                  onClick={() => setMode('signup')}
                   aria-current={mode === 'signup' ? 'page' : undefined}
                   className="py-2.5 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
                   style={
@@ -469,9 +485,10 @@ export default function WaitlistAuthShell({ role, mode, children }: Props) {
                   }
                 >
                   Sign up
-                </Link>
-                <Link
-                  href={pathFor(role, 'signin')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('signin')}
                   aria-current={mode === 'signin' ? 'page' : undefined}
                   className="py-2.5 rounded-full text-[13px] font-semibold text-center transition-colors duration-200"
                   style={
@@ -486,30 +503,36 @@ export default function WaitlistAuthShell({ role, mode, children }: Props) {
                   }
                 >
                   Sign in
-                </Link>
+                </button>
               </div>
 
-              {/* Slotted form body — RegisterForm / LoginForm. */}
-              <div>{children}</div>
+              {/* Form body — picked from mode so toggling Sign up/Sign in
+                  swaps in-place. Keying on role+mode resets internal form
+                  state when the user flips role. */}
+              <div>
+                {mode === 'signup' ? (
+                  <RegisterForm key={`reg-${role}`} role={role} />
+                ) : (
+                  <LoginForm key={`login-${role}`} role={role} />
+                )}
+              </div>
 
               {/* Footer — altMode link + (signup-only) Terms / Privacy
-                  copy. futureStick renders this inside the form
-                  (Register.tsx 662–688); we keep the same copy + sizing
-                  but render it from the shell so RegisterForm /
-                  LoginForm stay focused on the form body itself. */}
+                  copy. */}
               <div className="mt-4 text-center space-y-1">
                 <p
                   className="text-[13.5px]"
                   style={{ color: t.d ? 'rgba(255,255,255,0.85)' : '#1d1d1f' }}
                 >
                   {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
-                  <Link
-                    href={altModeHref}
+                  <button
+                    type="button"
+                    onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
                     className="font-semibold hover:underline underline-offset-4 transition-colors duration-200"
-                    style={{ color: t.d ? '#ffffff' : '#000000' }}
+                    style={{ color: t.d ? '#ffffff' : '#000000', background: 'transparent' }}
                   >
                     {altModeLabel}
-                  </Link>
+                  </button>
                 </p>
                 {mode === 'signup' && (
                   <p
