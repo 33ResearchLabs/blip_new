@@ -22,7 +22,6 @@ interface LoginFormProps {
 export default function LoginForm({ role }: LoginFormProps) {
   const router = useRouter();
   const isMerchant = role === "merchant";
-  const registerPath = isMerchant ? "/waitlist/merchant" : "/waitlist/user";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -172,23 +171,16 @@ export default function LoginForm({ role }: LoginFormProps) {
   }
 
   return (
-    <div className="flex">
-      <div className="w-full max-w-lg">
-        {showExpired && (
-          <div className="mb-5 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-3">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>Your session expired. Sign in again to continue.</span>
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-2">
+    <div>
+      {showExpired && (
+        <div className="mb-4 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-3">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <span>Your session expired. Sign in again to continue.</span>
+        </div>
+      )}
+      <form onSubmit={handleSubmit} className="space-y-3">
           {/* Email */}
           <div>
-            <label
-              htmlFor="login-email"
-              className="block text-[13px] font-medium text-black/70 dark:text-white/70 mb-2"
-            >
-              Email Address
-            </label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/30" />
               <input
@@ -219,13 +211,7 @@ export default function LoginForm({ role }: LoginFormProps) {
 
           {/* Password */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label
-                htmlFor="login-password"
-                className="block text-[13px] font-medium text-black/70 dark:text-white/70"
-              >
-                Password
-              </label>
+            <div className="flex items-center justify-end mb-1.5">
               <Link
                 href={
                   isMerchant ? "/merchant/forgot-password" : "/forgot-password"
@@ -316,10 +302,13 @@ export default function LoginForm({ role }: LoginFormProps) {
           ) : null}
 
           <div className="pt-1">
+            {/* Inline color styles so the global ThemeContext's
+                `text-white → dark` override on light themes doesn't make
+                the button label invisible. */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3.5 bg-white text-black border border-black/10 font-semibold rounded-xl transition-all duration-200 ease-out hover:scale-[1.01] hover:bg-gray-50 hover:shadow-[0_4px_16px_rgba(0,0,0,0.10)] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+              className="waitlist-auth-submit w-full py-3.5 font-semibold rounded-xl transition-all duration-200 ease-out hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
@@ -333,41 +322,6 @@ export default function LoginForm({ role }: LoginFormProps) {
             </button>
           </div>
         </form>
-
-        {/* Footer */}
-        <div className="mt-8 text-center">
-          <p className="text-sm text-black/50 dark:text-white/40">
-            Don&apos;t have an account?{" "}
-            <Link
-              href={registerPath}
-              className="text-black dark:text-white font-semibold hover:underline underline-offset-4 transition-colors duration-200"
-            >
-              {isMerchant ? "Register as Merchant" : "Create one"}
-            </Link>
-          </p>
-          {!isMerchant ? (
-            <p className="text-xs text-black/40 dark:text-white/40 mt-3">
-              Are you a business?{" "}
-              <Link
-                href="/waitlist/merchant-login"
-                className="underline underline-offset-4 hover:text-black dark:hover:text-white"
-              >
-                Sign in as merchant
-              </Link>
-            </p>
-          ) : (
-            <p className="text-xs text-black/40 dark:text-white/40 mt-3">
-              Looking for the user portal?{" "}
-              <Link
-                href="/waitlist/login"
-                className="underline underline-offset-4 hover:text-black dark:hover:text-white"
-              >
-                Sign in as user
-              </Link>
-            </p>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

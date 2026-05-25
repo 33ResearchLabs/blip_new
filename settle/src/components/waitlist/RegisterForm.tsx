@@ -48,7 +48,6 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   const router = useRouter();
   const params = useSearchParams();
   const isMerchant = role === "merchant";
-  const loginPath = isMerchant ? "/waitlist/merchant-login" : "/waitlist/login";
   const initialRef = params.get("ref") ?? "";
 
   // Shared fields — email, password, confirm, referral code only.
@@ -205,7 +204,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   }
 
   return (
-    <div className="w-full max-w-lg">
+    <div>
       <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
         {/* USER ONLY: Username — merchant signup is email-only (business_name
             is auto-derived from email prefix server-side). */}
@@ -226,7 +225,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
               maxLength={50}
               disabled={isLoading}
               className={inputClass(!!errors.username)}
-              placeholder="trader_01"
+              placeholder="Username"
             />
           </FieldWithIcon>
         )}
@@ -254,12 +253,6 @@ export default function RegisterForm({ role }: RegisterFormProps) {
 
         {/* Password */}
         <div>
-          <label
-            htmlFor="reg-password"
-            className="block text-[13px] font-medium text-black/70 dark:text-white/70 mb-2"
-          >
-            Password
-          </label>
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/30" />
             <input
@@ -272,7 +265,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
               maxLength={50}
               disabled={isLoading}
               className={inputClass(!!errors.password, "pr-12")}
-              placeholder="Min 8 characters"
+              placeholder="Password (min 8 characters)"
             />
             <button
               type="button"
@@ -350,12 +343,6 @@ export default function RegisterForm({ role }: RegisterFormProps) {
 
         {/* Confirm Password */}
         <div>
-          <label
-            htmlFor="reg-confirm"
-            className="block text-[13px] font-medium text-black/70 dark:text-white/70 mb-2"
-          >
-            Confirm Password
-          </label>
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/30" />
             <input
@@ -411,7 +398,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             maxLength={32}
             disabled={isLoading}
             className={`${inputClass(false)} uppercase`}
-            placeholder="BLIPXXXXXX"
+            placeholder="Referral code (optional)"
           />
         </div>
 
@@ -434,7 +421,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 bg-white text-black border border-black/10 font-semibold rounded-xl transition-all duration-200 ease-out hover:scale-[1.01] hover:bg-gray-50 hover:shadow-[0_4px_16px_rgba(0,0,0,0.10)] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+            className="waitlist-auth-submit w-full py-3 font-semibold rounded-xl transition-all duration-200 ease-out hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
@@ -460,34 +447,22 @@ export default function RegisterForm({ role }: RegisterFormProps) {
         </div>
       </form>
 
-      {/* Footer links */}
-      <div className="mt-4 text-center space-y-2">
-        <p className="text-sm text-black/50 dark:text-white/40">
-          Already have an account?{" "}
-          <Link
-            href={loginPath}
-            className="text-black dark:text-white font-semibold hover:underline underline-offset-4 transition-colors duration-200"
-          >
-            {isMerchant ? "Merchant Sign In" : "Sign in"}
-          </Link>
-        </p>
-        <p className="text-xs text-black/30 dark:text-white/30 leading-relaxed">
-          By creating an account, you agree to our{" "}
-          <Link
-            href="/terms"
-            className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
-          >
-            Terms of Service
-          </Link>{" "}
-          and{" "}
-          <Link
-            href="/privacy"
-            className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
-          >
-            Privacy Policy
-          </Link>
-        </p>
-      </div>
+      <p className="mt-3 text-[11px] text-black/40 dark:text-white/40 leading-relaxed text-center">
+        By creating an account, you agree to our{" "}
+        <Link
+          href="/terms"
+          className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
+        >
+          Terms of Service
+        </Link>{" "}
+        and{" "}
+        <Link
+          href="/privacy"
+          className="underline underline-offset-2 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
+        >
+          Privacy Policy
+        </Link>
+      </p>
     </div>
   );
 }
@@ -562,25 +537,21 @@ function RecaptchaTile({
 
 function FieldWithIcon({
   id,
-  label,
   icon,
   error,
   children,
 }: {
   id: string;
-  label: string;
+  // `label` is unused now (we use placeholders only) but kept as an optional
+  // prop so callers don't all need to change signatures at once.
+  label?: string;
   icon: React.ReactNode;
   error?: string;
   children: React.ReactNode;
 }) {
+  void id;
   return (
     <div>
-      <label
-        htmlFor={id}
-        className="block text-[13px] font-medium text-black/70 dark:text-white/70 mb-2"
-      >
-        {label}
-      </label>
       <div className="relative">
         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/30">
           {icon}
