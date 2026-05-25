@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Merchant Data Report — Zooo (zoopweb3@gmail.com)</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2328; --muted: #656d76;
+    --border: #d0d7de; --link: #0969da; --code-bg: #f6f8fa;
+    --critical: #cf222e; --high: #d97706; --medium: #bf8700;
+    --low: #1a7f37; --info: #0969da;
+    --table-stripe: #f6f8fa;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--fg); background: var(--bg);
+    line-height: 1.6; max-width: 1040px;
+    margin: 0 auto; padding: 32px 48px 96px;
+    font-size: 15px;
+  }
+  .toolbar {
+    position: sticky; top: 0;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 48px; margin: -32px -48px 24px;
+    display: flex; justify-content: space-between;
+    align-items: center; gap: 16px; z-index: 100;
+  }
+  .toolbar-title { font-weight: 600; font-size: 14px; color: var(--muted); }
+  .btn {
+    background: var(--link); color: #fff; border: 0;
+    padding: 8px 16px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; font-family: inherit;
+  }
+  .btn:hover { opacity: 0.88; }
+  .btn-secondary { background: var(--code-bg); color: var(--fg); border: 1px solid var(--border); }
+  h1, h2, h3 {
+    margin-top: 1.8em; margin-bottom: 0.6em;
+    font-weight: 600; line-height: 1.25; page-break-after: avoid;
+  }
+  h1 { font-size: 32px; margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h2 { font-size: 24px; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h3 { font-size: 18px; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 16px; }
+  ul, ol { padding-left: 28px; }
+  li { margin: 4px 0; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--code-bg); padding: 2px 6px;
+    border-radius: 4px; font-size: 0.88em;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 14px 18px;
+    overflow-x: auto; font-size: 13px; line-height: 1.5;
+    page-break-inside: avoid;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; page-break-inside: avoid; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .field-table th:first-child, .field-table td:first-child { width: 28%; font-weight: 500; }
+
+  .alert {
+    border-left: 4px solid; padding: 12px 16px;
+    margin: 16px 0; border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .alert-critical { border-color: var(--critical); background: #ffebe9; }
+  .alert-high     { border-color: var(--high); background: #fff1e5; }
+  .alert-medium   { border-color: var(--medium); background: #fff8c5; }
+  .alert-info     { border-color: var(--info); background: #ddf4ff; }
+  .alert h3 { margin: 0 0 6px; font-size: 16px; }
+
+  .sev {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 10px; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.02em;
+    vertical-align: middle;
+  }
+  .sev-critical { background: #ffe0e0; color: var(--critical); }
+  .sev-high     { background: #ffedd5; color: var(--high); }
+  .sev-medium   { background: #fef3c7; color: var(--medium); }
+  .sev-low      { background: #dcfce7; color: var(--low); }
+  .sev-empty    { background: #e5e7eb; color: #4b5563; }
+
+  .meta {
+    color: var(--muted); font-size: 14px;
+    margin: -8px 0 24px; padding: 12px 16px;
+    background: var(--code-bg); border-left: 3px solid var(--link);
+    border-radius: 0 4px 4px 0;
+  }
+  .meta div { margin: 2px 0; }
+  .meta strong { color: var(--fg); }
+  .toc {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 16px 24px; margin: 24px 0 32px;
+  }
+  .toc h3 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .toc ol { margin: 0; padding-left: 20px; font-size: 14px; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px; margin: 16px 0;
+  }
+  .stat {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 16px;
+  }
+  .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .stat-zero { color: #9ca3af; }
+  .stat-critical { color: var(--critical); }
+
+  @media print {
+    body { max-width: none; padding: 0; font-size: 11pt; color: #000; }
+    .toolbar, .no-print { display: none !important; }
+    a { color: #000; text-decoration: none; }
+    pre, table, blockquote, .toc, .alert { page-break-inside: avoid; }
+    h1, h2 { page-break-after: avoid; }
+    table { font-size: 9.5pt; }
+    pre { font-size: 9pt; }
+    .sev, .stat { border: 1px solid #ccc; }
+  }
+  @page { size: A4; margin: 16mm 12mm; }
+</style>
+</head>
+<body>
+
+<div class="toolbar no-print">
+  <div class="toolbar-title">📋 Merchant Data Report — Zooo</div>
+  <div>
+    <button class="btn btn-secondary" onclick="document.querySelector('#toc').scrollIntoView()">Contents</button>
+    <button class="btn" onclick="window.print()">🖨️ Print / Save PDF</button>
+  </div>
+</div>
+
+<h1>Merchant Data Report</h1>
+<p style="color: var(--muted); margin-top: -8px; font-size: 16px;">Everything we store about the merchant <code>zoopweb3@gmail.com</code> (display name <strong>Zooo</strong>).</p>
+
+<div class="meta">
+  <div><strong>Merchant ID:</strong> <code>1371c81f-411f-4806-ae83-078cb936d639</code></div>
+  <div><strong>Wallet:</strong> <code>HcikA5eWWcVEVw5Z81SFv73AGaTTxNfVXRBoYwaUj6wf</code></div>
+  <div><strong>Database:</strong> Railway production (<code>centerbeam.proxy.rlwy.net</code>)</div>
+  <div><strong>Snapshot taken:</strong> 2026-05-20</div>
+  <div><strong>Note:</strong> Secrets (<code>password_hash</code>, <code>totp_secret</code>, <code>totp_backup_codes</code>, <code>wallet_unlock_helper</code>) are noted as present but their values are NOT printed.</div>
+</div>
+
+<div class="toc" id="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#s1">At a Glance</a></li>
+    <li><a href="#s2">Flags &amp; Anomalies</a></li>
+    <li><a href="#s3">Identity &amp; Profile</a></li>
+    <li><a href="#s4">Account State &amp; Settings</a></li>
+    <li><a href="#s5">Trading Activity</a></li>
+    <li><a href="#s6">Reputation</a></li>
+    <li><a href="#s7">Authentication &amp; Sessions</a></li>
+    <li><a href="#s8">Devices &amp; IPs</a></li>
+    <li><a href="#s9">Risk Profile &amp; Risk Events</a></li>
+    <li><a href="#s10">Onboarding</a></li>
+    <li><a href="#s11">Payment Methods</a></li>
+    <li><a href="#s12">Tables With No Data For This Merchant</a></li>
+  </ol>
+</div>
+
+<hr>
+
+<h2 id="s1">1. At a Glance</h2>
+
+<div class="stat-grid">
+  <div class="stat"><div class="stat-label">Account age</div><div class="stat-value">7 days</div></div>
+  <div class="stat"><div class="stat-label">Status</div><div class="stat-value" style="color: var(--low);">active</div></div>
+  <div class="stat"><div class="stat-label">Orders</div><div class="stat-value stat-zero">0</div></div>
+  <div class="stat"><div class="stat-label">Volume</div><div class="stat-value stat-zero">$0</div></div>
+  <div class="stat"><div class="stat-label">Ratings</div><div class="stat-value stat-zero">0</div></div>
+  <div class="stat"><div class="stat-label">Disputes</div><div class="stat-value stat-zero">0</div></div>
+  <div class="stat"><div class="stat-label">Sessions</div><div class="stat-value">88</div></div>
+  <div class="stat"><div class="stat-label">Devices</div><div class="stat-value">3</div></div>
+  <div class="stat"><div class="stat-label">Risk score</div><div class="stat-value stat-critical">96/100</div></div>
+  <div class="stat"><div class="stat-label">Risk level</div><div class="stat-value stat-critical">critical</div></div>
+  <div class="stat"><div class="stat-label">Trust level</div><div class="stat-value" style="color: var(--high);">probation</div></div>
+  <div class="stat"><div class="stat-label">Reputation</div><div class="stat-value">400 / diamond</div></div>
+</div>
+
+<hr>
+
+<h2 id="s2">2. Flags &amp; Anomalies</h2>
+
+<div class="alert alert-critical">
+  <h3>🚨 Risk profile: CRITICAL (96/100)</h3>
+  <p>This merchant has been flagged by the risk engine with the highest severity. Seven risk events have been recorded since signup. Two of these are particularly notable:</p>
+  <ul>
+    <li><strong>Multi-account device</strong> (<span class="sev sev-high">HIGH</span>) — at signup, their device fingerprint <code>8c7dea65…</code> was already linked to <strong>8 other accounts</strong>.</li>
+    <li><strong>IP cluster detected</strong> (<span class="sev sev-medium">MEDIUM</span>, 6 occurrences) — signups/logins from IPs (<code>103.66.61.46</code> and <code>::1</code>) that have been used by 7–9 unique users.</li>
+  </ul>
+</div>
+
+<div class="alert alert-high">
+  <h3>⚠️ Reputation tier inconsistency (likely a bug)</h3>
+  <p>The merchant has <strong>0 orders</strong>, <strong>0 ratings</strong>, and <strong>0 trades</strong>, yet their stored reputation row reads:</p>
+  <pre><code>total_score = 400, tier = "diamond"</code></pre>
+  <p>Per <code>settle/src/lib/reputation/types.ts</code>, score 400 should map to <span style="color: #94a3b8; font-weight: 600;">silver</span>, and diamond requires ≥900. Two probable causes:</p>
+  <ol>
+    <li>Core-api stores components on the 0–1000 scale (volume=500, consistency=300, trust=700) while Settle's schema expects 0–100. Schema drift between the two engines.</li>
+    <li>The tier classifier produced <code>"diamond"</code> from a different calculation path (possibly an old default). Worth verifying in <code>apps/core-api/src/reputation/scoring.ts:assignTier</code>.</li>
+  </ol>
+  <p>The denormalised <code>merchants.reputation_score = 400</code> with <code>merchants.reputation_tier = "diamond"</code> is what the matching engine sees — they will be ranked far higher than they should be.</p>
+</div>
+
+<div class="alert alert-medium">
+  <h3>⚠️ Trust level vs reputation tier contradiction</h3>
+  <p>The <code>v_merchant_scoring</code> view reports <code>trust_level = "probation"</code> (consistent with high risk + zero activity), but the reputation engine says <code>tier = "diamond"</code>. These two systems disagree about whether this merchant is trustworthy.</p>
+</div>
+
+<div class="alert alert-info">
+  <h3>ℹ️ Onboarding stalled after early steps</h3>
+  <p>Onboarding row shows: wallet connected, payment method added, username set, then <code>skipped_at = 2026-05-13 18:45:09</code>. They never funded the wallet or completed a first trade. Account has been logged in 88 times across 3 devices but has done nothing.</p>
+</div>
+
+<hr>
+
+<h2 id="s3">3. Identity &amp; Profile</h2>
+
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>id</td><td><code>1371c81f-411f-4806-ae83-078cb936d639</code></td></tr>
+    <tr><td>wallet_address</td><td><code>HcikA5eWWcVEVw5Z81SFv73AGaTTxNfVXRBoYwaUj6wf</code></td></tr>
+    <tr><td>email</td><td>zoopweb3@gmail.com</td></tr>
+    <tr><td>email_verified</td><td>✅ true</td></tr>
+    <tr><td>phone</td><td>—</td></tr>
+    <tr><td>username</td><td>— (not set; <code>username_customized_at</code> NULL)</td></tr>
+    <tr><td>display_name</td><td>Zooo</td></tr>
+    <tr><td>business_name</td><td>Zooo</td></tr>
+    <tr><td>bio</td><td>"Lets go"</td></tr>
+    <tr><td>avatar_url</td><td>https://api.dicebear.com/7.x/adventurer/svg?seed=zoopweb3%40gmail.com (auto-generated)</td></tr>
+    <tr><td>created_at</td><td>2026-05-13 16:16:39 UTC</td></tr>
+    <tr><td>updated_at</td><td>2026-05-20 11:06:41 UTC</td></tr>
+    <tr><td>last_seen_at</td><td>2026-05-14 18:23:33 UTC (6 days ago)</td></tr>
+    <tr><td>telegram_chat_id</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h3>Secrets stored (values redacted)</h3>
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>password_hash</td><td>✅ present — [redacted]</td></tr>
+    <tr><td>totp_secret</td><td>❌ NULL (2FA not configured)</td></tr>
+    <tr><td>totp_enabled</td><td>false</td></tr>
+    <tr><td>totp_verified_at</td><td>NULL</td></tr>
+    <tr><td>totp_backup_codes</td><td>✅ present — [redacted]</td></tr>
+    <tr><td>wallet_unlock_helper</td><td>✅ present — [redacted]</td></tr>
+  </tbody>
+</table>
+<blockquote style="border-left: 4px solid var(--medium); background: #fff8c5; color: var(--fg); padding: 8px 16px;">
+<strong>Note:</strong> <code>totp_backup_codes</code> stored despite <code>totp_enabled = false</code>. Likely backup codes pre-generated during signup but never activated.
+</blockquote>
+
+<hr>
+
+<h2 id="s4">4. Account State &amp; Settings</h2>
+
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>status</td><td>active</td></tr>
+    <tr><td>verification_level</td><td>1</td></tr>
+    <tr><td>is_online</td><td>true</td></tr>
+    <tr><td>balance</td><td>0.000000</td></tr>
+    <tr><td>sinr_balance</td><td>0</td></tr>
+    <tr><td>max_sinr_exposure</td><td>NULL</td></tr>
+    <tr><td>synthetic_rate</td><td>3.6700</td></tr>
+    <tr><td>auto_accept_enabled</td><td>false</td></tr>
+    <tr><td>auto_accept_max_amount</td><td>NULL</td></tr>
+    <tr><td>big_order_threshold</td><td>10,000.00</td></tr>
+    <tr><td>has_ops_access</td><td>false</td></tr>
+    <tr><td>has_compliance_access</td><td>false</td></tr>
+    <tr><td>tour_completed_at</td><td>NULL</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="s5">5. Trading Activity</h2>
+
+<p><strong>This merchant has performed zero trading activity.</strong></p>
+
+<table>
+  <thead><tr><th>Role / Source</th><th>Count</th></tr></thead>
+  <tbody>
+    <tr><td>Orders as <code>merchant_id</code></td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Orders as <code>buyer_merchant_id</code> (M2M buyer)</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Orders as <code>selected_merchant_id</code></td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Orders as <code>winner_merchant_id</code></td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Order bids submitted</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>On-chain trades (v1)</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>On-chain trades (v2)</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Ratings received</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Disputes touching their orders</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Merchant offers</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Merchant transactions</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Merchant quotes</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Pending escrow</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Orphaned escrows</td><td><span class="sev sev-empty">0</span></td></tr>
+    <tr><td>Ledger entries</td><td><span class="sev sev-empty">0</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Computed view <code>v_merchant_scoring</code></h3>
+<table class="field-table">
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>avg_rating</td><td>5.0 (default — no ratings)</td></tr>
+    <tr><td>rating_count</td><td>0</td></tr>
+    <tr><td>balance</td><td>0.000000</td></tr>
+    <tr><td>is_online</td><td>true</td></tr>
+    <tr><td>merchant_status</td><td>active</td></tr>
+    <tr><td>trust_level</td><td><strong>probation</strong></td></tr>
+    <tr><td>suspended_until</td><td>—</td></tr>
+    <tr><td>total_orders / completed / disputed / disputes_lost</td><td>0 / 0 / 0 / 0</td></tr>
+    <tr><td>avg_completion_seconds</td><td>300 (default)</td></tr>
+    <tr><td>success_rate</td><td>1.0 (vacuous — 0/0)</td></tr>
+    <tr><td>dispute_rate</td><td>0.0</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="s6">6. Reputation</h2>
+
+<h3>Current stored score (table <code>reputation_scores</code>)</h3>
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>total_score</td><td>400.00</td></tr>
+    <tr><td>review_score</td><td>0.00</td></tr>
+    <tr><td>execution_score</td><td>0.00</td></tr>
+    <tr><td>volume_score</td><td>500.00 <span style="color: var(--muted);">(0–1000 scale — schema drift)</span></td></tr>
+    <tr><td>consistency_score</td><td>300.00</td></tr>
+    <tr><td>trust_score</td><td>700.00</td></tr>
+    <tr><td>tier</td><td><strong>diamond</strong> <span style="color: var(--critical);">⚠ inconsistent with score=400</span></td></tr>
+    <tr><td>badges</td><td>[]</td></tr>
+    <tr><td>calculated_at</td><td>2026-05-20 11:06:41</td></tr>
+  </tbody>
+</table>
+
+<h3>History (last 10 snapshots)</h3>
+<p>Score has been constant at 400/diamond. Snapshots are taken every ~10 minutes — meaning the core-api reputation worker is actively recalculating despite no activity.</p>
+
+<table>
+  <thead><tr><th>Recorded at</th><th>Total</th><th>Review</th><th>Execution</th><th>Volume</th><th>Consistency</th><th>Trust</th><th>Tier</th></tr></thead>
+  <tbody>
+    <tr><td>2026-05-20 11:06:41</td><td>400</td><td>0</td><td>0</td><td>500</td><td>300</td><td>700</td><td>diamond</td></tr>
+    <tr><td>2026-05-20 10:56:43</td><td>400</td><td>0</td><td>0</td><td>500</td><td>300</td><td>700</td><td>diamond</td></tr>
+    <tr><td>2026-05-20 10:46:41</td><td>400</td><td>0</td><td>0</td><td>500</td><td>300</td><td>700</td><td>diamond</td></tr>
+    <tr><td>2026-05-20 10:36:43</td><td>400</td><td>0</td><td>0</td><td>500</td><td>300</td><td>700</td><td>diamond</td></tr>
+    <tr><td>… (6 more identical rows)</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+  </tbody>
+</table>
+
+<h3>Reputation events</h3>
+<p>Zero events. Consistent with zero activity. No <code>order_completed</code>, no <code>dispute_*</code>, no <code>review_received</code> events have fired for this merchant.</p>
+
+<hr>
+
+<h2 id="s7">7. Authentication &amp; Sessions</h2>
+
+<table class="field-table">
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Total sessions ever created</td><td><strong>88</strong></td></tr>
+    <tr><td>First session</td><td>2026-05-13 16:18:09 UTC</td></tr>
+    <tr><td>Most recent session</td><td>2026-05-15 03:26:43 UTC</td></tr>
+    <tr><td>Active span</td><td>~36 hours from signup, then quiet</td></tr>
+    <tr><td>Email verification tokens</td><td>1 (issued at signup, expired 2026-05-14)</td></tr>
+    <tr><td>Password reset tokens</td><td>0</td></tr>
+  </tbody>
+</table>
+
+<p>88 sessions in 36 hours = ~2.4/hour average. Most are refresh-token rotations (the schema shows <code>refresh_token_hash</code>, <code>replaced_by</code>, <code>revoked_at</code> — old sessions get replaced when refresh fires). This is a normal pattern but high count suggests frequent reconnects or multi-tab use.</p>
+
+<p>Each session row stores: <code>refresh_token_hash</code> (one-way), <code>device_info</code>, <code>ip_address</code>, <code>user_agent</code>, <code>expires_at</code>, <code>last_used_at</code>, <code>is_revoked</code>, <code>revoked_at</code>, <code>replaced_by</code>.</p>
+
+<hr>
+
+<h2 id="s8">8. Devices &amp; IPs</h2>
+
+<h3>Devices (table <code>device_users</code>)</h3>
+<table>
+  <thead><tr><th>Device fingerprint (truncated)</th><th>First seen</th><th>Last seen</th></tr></thead>
+  <tbody>
+    <tr><td><code>8c7dea6509e65c9c…</code></td><td>2026-05-13 16:16:39</td><td>2026-05-13 16:29:01</td></tr>
+    <tr><td><code>9f85e2df56daa91a…</code></td><td>2026-05-13 18:16:41</td><td>2026-05-13 18:16:41</td></tr>
+    <tr><td><code>4bcd8d64793d4f4e…</code></td><td>2026-05-13 21:33:55</td><td>2026-05-13 21:34:01</td></tr>
+  </tbody>
+</table>
+<p><strong>3 distinct devices</strong> within first 5.5 hours of signup. First device (<code>8c7dea65…</code>) is flagged as linked to 8 other accounts.</p>
+
+<h3>IP logs</h3>
+<table>
+  <thead><tr><th>IP</th><th>Action</th><th>User agent (summary)</th><th>Time</th></tr></thead>
+  <tbody>
+    <tr><td><code>103.66.61.46</code></td><td>signup</td><td>Mac Chrome 148</td><td>2026-05-13 16:16:39</td></tr>
+    <tr><td><code>103.66.61.46</code></td><td>login</td><td>Mac Chrome 148</td><td>2026-05-13 16:18:09</td></tr>
+    <tr><td><code>::1</code> (localhost)</td><td>login</td><td>Mac Chrome 148</td><td>2026-05-13 16:29:03</td></tr>
+    <tr><td><code>::1</code></td><td>login</td><td>Android Chrome 148 (Nexus 5)</td><td>2026-05-13 18:16:41</td></tr>
+    <tr><td><code>::1</code></td><td>login</td><td>iPhone Safari 18.5</td><td>2026-05-13 21:33:54</td></tr>
+    <tr><td><code>::1</code></td><td>login</td><td>iPhone Safari 18.5</td><td>2026-05-13 21:34:01</td></tr>
+  </tbody>
+</table>
+<blockquote style="border-left: 4px solid var(--medium); background: #fff8c5; color: var(--fg); padding: 8px 16px;">
+<strong>Observation:</strong> 4 of 6 logins come from <code>::1</code> (loopback). This means the requests came from inside the server itself — either local dev traffic that hit production, or a misconfigured proxy stripping the real client IP. Real client IPs are not being captured on those 4 events.
+</blockquote>
+
+<hr>
+
+<h2 id="s9">9. Risk Profile &amp; Risk Events</h2>
+
+<h3>Risk profile</h3>
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>risk_score</td><td><strong style="color: var(--critical);">96</strong> / 100</td></tr>
+    <tr><td>risk_level</td><td><span class="sev sev-critical">CRITICAL</span></td></tr>
+    <tr><td>event_count</td><td>7</td></tr>
+    <tr><td>last_event_type</td><td>ip_cluster_detected</td></tr>
+    <tr><td>last_event_at</td><td>2026-05-13 21:34:02</td></tr>
+    <tr><td>last_recalc_at</td><td>2026-05-13 21:34:02</td></tr>
+    <tr><td>created_at</td><td>2026-05-13 16:16:39 (at signup)</td></tr>
+  </tbody>
+</table>
+
+<h3>Risk events (7 total)</h3>
+<table>
+  <thead><tr><th>Type</th><th>Severity</th><th>IP / Detail</th><th>Time</th></tr></thead>
+  <tbody>
+    <tr><td>multi_account_device</td><td><span class="sev sev-high">HIGH</span></td><td>device <code>8c7dea65…</code> linked to 8 other accounts (at signup)</td><td>2026-05-13 16:16:39</td></tr>
+    <tr><td>ip_cluster_detected</td><td><span class="sev sev-medium">MED</span></td><td><code>103.66.61.46</code>, signup, 9 unique users on this IP</td><td>2026-05-13 16:16:39</td></tr>
+    <tr><td>ip_cluster_detected</td><td><span class="sev sev-medium">MED</span></td><td><code>103.66.61.46</code>, login, 9 unique users</td><td>2026-05-13 16:18:09</td></tr>
+    <tr><td>ip_cluster_detected</td><td><span class="sev sev-medium">MED</span></td><td><code>::1</code>, login, 7 unique users</td><td>2026-05-13 16:29:03</td></tr>
+    <tr><td>ip_cluster_detected</td><td><span class="sev sev-medium">MED</span></td><td><code>::1</code>, login, 7 unique users</td><td>2026-05-13 18:16:41</td></tr>
+    <tr><td>ip_cluster_detected</td><td><span class="sev sev-medium">MED</span></td><td><code>::1</code>, login, 7 unique users</td><td>2026-05-13 21:33:55</td></tr>
+    <tr><td>ip_cluster_detected</td><td><span class="sev sev-medium">MED</span></td><td><code>::1</code>, login, 7 unique users</td><td>2026-05-13 21:34:02</td></tr>
+  </tbody>
+</table>
+
+<h3>Blacklist</h3>
+<p>✅ Not blacklisted. Zero entries in <code>blacklist</code> table for this entity.</p>
+
+<hr>
+
+<h2 id="s10">10. Onboarding</h2>
+
+<table class="field-table">
+  <thead><tr><th>Step</th><th>Time</th></tr></thead>
+  <tbody>
+    <tr><td>created_at</td><td>2026-05-13 16:18:10</td></tr>
+    <tr><td>wallet_connected_at</td><td>2026-05-13 16:33:16</td></tr>
+    <tr><td>username_set_at</td><td>2026-05-13 16:46:44</td></tr>
+    <tr><td>payment_method_at</td><td>2026-05-13 16:56:39</td></tr>
+    <tr><td>completed_at</td><td>2026-05-13 16:56:39</td></tr>
+    <tr><td>wallet_funded_at</td><td>— (never)</td></tr>
+    <tr><td>first_trade_at</td><td>— (never)</td></tr>
+    <tr><td>current_step</td><td>6</td></tr>
+    <tr><td>skipped_at</td><td>2026-05-13 18:45:09</td></tr>
+  </tbody>
+</table>
+<p>Onboarding was nominally "completed" within 40 minutes of signup, but they skipped funding/trading and have not returned to those steps. <code>username_set_at</code> exists but <code>username</code> column is empty — likely deleted later or set to blank.</p>
+
+<hr>
+
+<h2 id="s11">11. Payment Methods</h2>
+
+<table>
+  <thead><tr><th>id</th><th>type</th><th>name</th><th>details</th><th>is_default</th><th>is_active</th><th>created_at</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>68df251c…</code></td>
+      <td>card</td>
+      <td>Card Payment</td>
+      <td>Sandeep - **** 2345</td>
+      <td>✅ true</td>
+      <td>✅ true</td>
+      <td>2026-05-13 16:56:25</td>
+    </tr>
+  </tbody>
+</table>
+<p>One card on file, masked to last 4 digits (✅ correct PCI-style masking). Cardholder name "Sandeep" — note that this differs from the merchant's email/display name ("Zooo" / zoopweb3). May be normal (alternate name), may be a flag if this is a stolen card. Combined with the multi-account device flag, worth a compliance review.</p>
+
+<hr>
+
+<h2 id="s12">12. Tables With No Data For This Merchant</h2>
+
+<p>The following tables were queried and contain <strong>zero rows</strong> referencing this merchant:</p>
+
+<ul>
+  <li><code>orders</code> (any role)</li>
+  <li><code>order_bids</code></li>
+  <li><code>ratings</code></li>
+  <li><code>disputes</code></li>
+  <li><code>reputation_events</code></li>
+  <li><code>trades</code> (v1 on-chain)</li>
+  <li><code>v2_trades</code></li>
+  <li><code>merchant_offers</code></li>
+  <li><code>merchant_quotes</code></li>
+  <li><code>merchant_transactions</code></li>
+  <li><code>merchant_contacts</code></li>
+  <li><code>merchant_metrics</code> (no row — view normally populated by activity)</li>
+  <li><code>corridor_providers</code></li>
+  <li><code>pending_escrow</code></li>
+  <li><code>orphaned_escrows</code></li>
+  <li><code>password_reset_tokens</code></li>
+  <li><code>error_logs</code></li>
+  <li><code>blacklist</code></li>
+  <li><code>v_merchant_ledger</code></li>
+</ul>
+
+<hr>
+
+<h2>Summary recommendation</h2>
+
+<div class="alert alert-critical">
+  <h3>For compliance review</h3>
+  <ol>
+    <li><strong>Investigate the multi-account device:</strong> device <code>8c7dea65…</code> was linked to 8 other accounts at signup time. Pull those linked accounts and check for coordinated activity.</li>
+    <li><strong>Investigate IP <code>103.66.61.46</code>:</strong> 9 unique signups from this IP. If this is a residential or cellular IP, it's likely a single user creating multiple accounts. If it's a known proxy/VPN, treat as elevated risk.</li>
+    <li><strong>Fix the reputation tier label:</strong> a brand-new merchant with no activity should never read "diamond". The matching engine will favor this account inappropriately. Triage <code>apps/core-api/src/reputation/scoring.ts:assignTier</code> and the scale conversion (0–100 vs 0–1000).</li>
+    <li><strong>Reconcile <code>trust_level=probation</code> with <code>reputation_tier=diamond</code>:</strong> these two systems should not contradict.</li>
+    <li><strong>Verify the card on file:</strong> different cardholder name from the merchant's claimed identity. Standard KYC step before allowing trades.</li>
+  </ol>
+</div>
+
+</body>
+</html>

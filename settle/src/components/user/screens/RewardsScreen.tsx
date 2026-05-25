@@ -21,6 +21,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   CircleCheck,
+  type LucideIcon,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import type { Screen } from "./types";
@@ -109,11 +110,7 @@ function useAnimatedNumber(target: number, duration = 900): number {
 type SharePlatform = {
   key: string;
   label: string;
-  Icon: React.ComponentType<{
-    className?: string;
-    size?: number;
-    strokeWidth?: number;
-  }>;
+  Icon: LucideIcon;
   /** Returns the deep-link URL to open. Receives the share message + url. */
   href?: (msg: string, url: string) => string;
   /** Special-case action (e.g. native share, copy to clipboard). */
@@ -125,11 +122,7 @@ type SharePlatform = {
 interface StatCellProps {
   label: string;
   value: string;
-  Icon: React.ComponentType<{
-    className?: string;
-    size?: number;
-    strokeWidth?: number;
-  }>;
+  Icon: LucideIcon;
   /** When true, no right-hand divider (last cell in the row). */
   isLast?: boolean;
 }
@@ -157,11 +150,7 @@ const StatCell = ({ label, value, Icon, isLast = false }: StatCellProps) => (
 
 interface ShareButtonProps {
   label: string;
-  Icon: React.ComponentType<{
-    className?: string;
-    size?: number;
-    strokeWidth?: number;
-  }>;
+  Icon: LucideIcon;
   onClick: () => void;
 }
 

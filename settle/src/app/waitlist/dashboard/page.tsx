@@ -13,7 +13,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import {
   Loader2, LogOut, Copy, Check, Crown, Twitter, Send, Repeat2, Users as UsersIcon,
   CheckCircle2, Store, Settings, Menu, ExternalLink, Info,
@@ -522,11 +521,11 @@ function MerchantLayout(props: {
                 Your Referral Stats
               </span>
             </div>
-            <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-0 md:divide-x ${t.divider}`}>
-              <StatCell icon={<Target className={`w-4 h-4 md:w-5 md:h-5 ${t.txt}`} />} value={referralCount} unit="" label="Total Referrals" hint="All time" position="first" />
-              <StatCell icon={<BadgeCheck className={`w-4 h-4 md:w-5 md:h-5 ${t.txt}`} />} value={questsCompleted} unit="" label="Completed Quests" hint={`${questsCompleted} of 4`} />
-              <StatCell icon={<UserPlus className={`w-4 h-4 md:w-5 md:h-5 ${t.txt}`} />} value={totalEarnedFromQuestsAndRef} unit="pts" label="Total Points Earned" hint="From quests + referrals" />
-              <StatCell icon={<Sparkles className={`w-4 h-4 md:w-5 md:h-5 ${t.txt}`} />} value={pendingPoints} unit="pts" label="Pending Points" hint="Not yet credited" position="last" />
+            <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-0 lg:divide-x ${t.divider}`}>
+              <StatCell icon={<Target className={`w-4 h-4 lg:w-5 lg:h-5 ${t.txt}`} />} value={referralCount} unit="" label="Total Referrals" hint="All time" position="first" />
+              <StatCell icon={<BadgeCheck className={`w-4 h-4 lg:w-5 lg:h-5 ${t.txt}`} />} value={questsCompleted} unit="" label="Completed Quests" hint={`${questsCompleted} of 4`} />
+              <StatCell icon={<UserPlus className={`w-4 h-4 lg:w-5 lg:h-5 ${t.txt}`} />} value={totalEarnedFromQuestsAndRef} unit="pts" label="Total Points Earned" hint="From quests + referrals" />
+              <StatCell icon={<Sparkles className={`w-4 h-4 lg:w-5 lg:h-5 ${t.txt}`} />} value={pendingPoints} unit="pts" label="Pending Points" hint="Not yet credited" position="last" />
             </div>
           </div>
 
@@ -771,13 +770,16 @@ function HeroCard({
         </div>
 
         <div className="hidden md:block relative overflow-hidden" style={{ background: '#FAF8F5' }}>
-          <Image
+          {/* Plain <img> instead of next/image — the Image optimizer
+              was producing a double-encoded /_next/image?url=/_next/image?url=…
+              src on production (Next 16 + Vercel image proxy edge case),
+              which 404'd and left only the alt text visible. The hero
+              image lives in /public so the browser fetches it directly. */}
+          <img
             src="/refer-friends-hero.png"
             alt="Refer friends and earn rewards"
-            fill
-            sizes="(min-width: 1024px) 25vw, 50vw"
-            className="object-cover"
-            priority
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="eager"
           />
         </div>
       </div>
@@ -1343,14 +1345,25 @@ function StatCell({
   position?: 'first' | 'last';
 }) {
   const t = useThemeTokens();
-  const mdPadding = position === 'first' ? 'md:first:pl-0' : position === 'last' ? 'md:last:pr-0' : '';
+  const lgPadding = position === 'first' ? 'lg:first:pl-0' : position === 'last' ? 'lg:last:pr-0' : '';
+  // Compact stack until lg (icon top, content below) — keeps long
+  // labels like "Total Points Earned" on one line at all viewport
+  // widths below 1024px. At lg+ the parent grid switches to 4 columns
+  // and there's enough room for the icon-left layout.
+  // Mobile fill uses arbitrary rgba so the global `bg-white/X` remap
+  // can't override the desktop `lg:bg-transparent`.
+  const mobileFill = t.d
+    ? 'bg-[rgba(255,255,255,0.04)]'
+    : 'bg-[rgba(0,0,0,0.025)]';
   return (
-    <div className={`flex flex-col items-start gap-2.5 p-3 md:p-0 md:px-5 md:flex-row md:items-center md:gap-3 ${t.inputBg} border ${t.border} rounded-lg md:bg-transparent md:border-0 md:rounded-none ${mdPadding}`}>
-      <div className={`w-10 h-10 md:w-11 md:h-11 rounded-lg ${t.surface} border ${t.border} flex items-center justify-center shrink-0`}>
+    <div
+      className={`flex flex-col items-start gap-2.5 p-3 lg:p-0 lg:px-5 lg:flex-row lg:items-center lg:gap-3 ${mobileFill} border ${t.border} rounded-lg lg:bg-transparent lg:border-0 lg:rounded-none ${lgPadding}`}
+    >
+      <div className={`w-10 h-10 lg:w-11 lg:h-11 rounded-lg ${t.surface} border ${t.border} flex items-center justify-center shrink-0`}>
         {icon}
       </div>
       <div className="min-w-0">
-        <p className={`text-2xl md:text-xl font-semibold ${t.txt} leading-tight tabular-nums`}>
+        <p className={`text-2xl lg:text-xl font-semibold ${t.txt} leading-tight tabular-nums whitespace-nowrap`}>
           {formatCount(value)} {unit && <span className="text-xs font-semibold ml-0.5">{unit}</span>}
         </p>
         <p className={`text-[11px] font-semibold ${t.txt} leading-tight mt-0.5`}>{label}</p>

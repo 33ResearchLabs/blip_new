@@ -120,7 +120,7 @@ export function ReputationCoinBadge({
   // 'card' variant — stacked, used on dashboards / waitlist.
   return (
     <div
-      className={`rounded-xl border border-foreground/[0.06] bg-foreground/[0.03] p-3 space-y-2 ${className ?? ''}`}
+      className={`rounded-xl border border-black/[0.06] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.03] p-3 space-y-2 ${className ?? ''}`}
     >
       {!hideRep && (
         <div className="flex items-center justify-between">
@@ -129,7 +129,7 @@ export function ReputationCoinBadge({
               className="w-4 h-4"
               style={{ color: rep?.tier_info.color ?? 'rgba(255,255,255,0.4)' }}
             />
-            <span className="text-[11px] font-mono uppercase tracking-wider text-foreground/40">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-black/40 dark:text-white/40">
               Reputation
             </span>
           </div>
@@ -140,7 +140,7 @@ export function ReputationCoinBadge({
             >
               {loading ? '—' : rep?.total_score ?? 500}
             </div>
-            <div className="text-[9px] text-foreground/40 -mt-0.5">
+            <div className="text-[9px] text-black/40 dark:text-white/40 -mt-0.5">
               {loading ? '—' : rep?.tier_info.name ?? 'New'}
             </div>
           </div>
@@ -150,7 +150,7 @@ export function ReputationCoinBadge({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Coins className="w-4 h-4 text-amber-400" />
-            <span className="text-[11px] font-mono uppercase tracking-wider text-foreground/40">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-black/40 dark:text-white/40">
               Coins
             </span>
           </div>

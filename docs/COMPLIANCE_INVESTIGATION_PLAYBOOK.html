@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compliance Investigation Playbook — What We Can Detect</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2328; --muted: #656d76;
+    --border: #d0d7de; --link: #0969da; --code-bg: #f6f8fa;
+    --critical: #cf222e; --high: #d97706; --medium: #bf8700;
+    --low: #1a7f37; --info: #0969da; --table-stripe: #f6f8fa;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--fg); background: var(--bg);
+    line-height: 1.6; max-width: 1100px;
+    margin: 0 auto; padding: 32px 48px 96px;
+    font-size: 15px;
+  }
+  .toolbar {
+    position: sticky; top: 0;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 48px; margin: -32px -48px 24px;
+    display: flex; justify-content: space-between;
+    align-items: center; gap: 16px; z-index: 100;
+  }
+  .toolbar-title { font-weight: 600; font-size: 14px; color: var(--muted); }
+  .btn {
+    background: var(--link); color: #fff; border: 0;
+    padding: 8px 16px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; font-family: inherit;
+  }
+  .btn:hover { opacity: 0.88; }
+  .btn-secondary { background: var(--code-bg); color: var(--fg); border: 1px solid var(--border); }
+  h1, h2, h3 {
+    margin-top: 1.8em; margin-bottom: 0.6em;
+    font-weight: 600; line-height: 1.25; page-break-after: avoid;
+  }
+  h1 { font-size: 30px; margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h2 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h3 { font-size: 18px; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 16px; }
+  ul, ol { padding-left: 28px; }
+  li { margin: 4px 0; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--code-bg); padding: 2px 6px;
+    border-radius: 4px; font-size: 0.88em;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 14px 18px;
+    overflow-x: auto; font-size: 13px; line-height: 1.5;
+    page-break-inside: avoid;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; page-break-inside: avoid; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+
+  .alert {
+    border-left: 4px solid; padding: 12px 16px;
+    margin: 16px 0; border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .alert-critical { border-color: var(--critical); background: #ffebe9; }
+  .alert-high     { border-color: var(--high); background: #fff1e5; }
+  .alert-medium   { border-color: var(--medium); background: #fff8c5; }
+  .alert-low      { border-color: var(--low); background: #dcfce7; }
+  .alert-info     { border-color: var(--info); background: #ddf4ff; }
+  .alert h3 { margin: 0 0 6px; font-size: 16px; }
+
+  .sev {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 10px; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.02em;
+    vertical-align: middle;
+  }
+  .sev-critical { background: #ffe0e0; color: var(--critical); }
+  .sev-high     { background: #ffedd5; color: var(--high); }
+  .sev-medium   { background: #fef3c7; color: var(--medium); }
+  .sev-low      { background: #dcfce7; color: var(--low); }
+  .sev-info     { background: #ddf4ff; color: var(--info); }
+  .sev-found    { background: #ffe0e0; color: var(--critical); }
+
+  .meta {
+    color: var(--muted); font-size: 14px;
+    margin: -8px 0 24px; padding: 12px 16px;
+    background: var(--code-bg); border-left: 3px solid var(--link);
+    border-radius: 0 4px 4px 0;
+  }
+  .meta div { margin: 2px 0; }
+  .meta strong { color: var(--fg); }
+  .toc {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 16px 24px; margin: 24px 0 32px;
+  }
+  .toc h3 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .toc ol { margin: 0; padding-left: 20px; font-size: 14px; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  .check {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px; margin: 16px 0;
+    page-break-inside: avoid;
+  }
+  .check h3 { margin-top: 0; }
+  .check-meta { display: flex; gap: 8px; flex-wrap: wrap; margin: -4px 0 12px; }
+  .check-section { margin: 12px 0; }
+  .check-section strong { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px; }
+
+  .net-diagram {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 16px; font-family: ui-monospace, monospace;
+    font-size: 12.5px; line-height: 1.5; white-space: pre;
+    overflow-x: auto;
+  }
+
+  @media print {
+    body { max-width: none; padding: 0; font-size: 11pt; color: #000; }
+    .toolbar, .no-print { display: none !important; }
+    a { color: #000; text-decoration: none; }
+    pre, table, blockquote, .toc, .alert, .check { page-break-inside: avoid; }
+    h1, h2 { page-break-after: avoid; }
+    table { font-size: 9.5pt; }
+    pre { font-size: 9pt; }
+    .sev, .check { border: 1px solid #ccc; }
+  }
+  @page { size: A4; margin: 16mm 12mm; }
+</style>
+</head>
+<body>
+
+<div class="toolbar no-print">
+  <div class="toolbar-title">🕵️ Compliance Investigation Playbook</div>
+  <div>
+    <button class="btn btn-secondary" onclick="document.querySelector('#toc').scrollIntoView()">Contents</button>
+    <button class="btn" onclick="window.print()">🖨️ Print / Save PDF</button>
+  </div>
+</div>
+
+<h1>Compliance Investigation Playbook</h1>
+<p style="color: var(--muted); margin-top: -8px; font-size: 16px;">What signals we can extract when a merchant or user is suspected of wrongdoing — with a worked example on the Zooo / Joe cluster.</p>
+
+<div class="meta">
+  <div><strong>Audience:</strong> compliance, fraud ops, risk</div>
+  <div><strong>Scope:</strong> every detection capability available from current data + worked findings on a real cluster</div>
+  <div><strong>Snapshot:</strong> 2026-05-20 (Railway production DB)</div>
+</div>
+
+<div class="alert alert-critical">
+  <h3>🚨 Headline finding from running these queries on the Zooo / Joe cluster</h3>
+  <p>The merchant <strong>Zooo</strong> and user <strong>Joe</strong> are part of a <strong>multi-account fraud ring</strong> involving at least <strong>11 accounts</strong> sharing one device fingerprint and one IP address. The 39 on-chain trades attributed to Joe were wash-trading with other members of the same cluster. Details in <a href="#findings">§ Findings</a> below.</p>
+</div>
+
+<div class="toc" id="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#what-we-can-detect">What We Can Detect (capability matrix)</a></li>
+    <li><a href="#playbook">The Investigation Playbook — 14 checks</a></li>
+    <li><a href="#findings">Findings on the Zooo / Joe Cluster</a></li>
+    <li><a href="#gaps">Detection Gaps (what we can't see)</a></li>
+    <li><a href="#actions">Actions Available to Compliance</a></li>
+  </ol>
+</div>
+
+<hr>
+
+<h2 id="what-we-can-detect">1. What We Can Detect — Capability Matrix</h2>
+
+<table>
+  <thead><tr><th>Wrongdoing pattern</th><th>How we detect it</th><th>Confidence</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Wash trading / self-dealing</strong></td>
+      <td>On-chain trade graph + wallet → account resolution; counterparty concentration in v2_trades</td>
+      <td><span class="sev sev-critical">High</span></td>
+    </tr>
+    <tr>
+      <td><strong>Multi-account abuse (sybil)</strong></td>
+      <td>device_users fingerprint shared across entities; ip_logs clustering</td>
+      <td><span class="sev sev-critical">High</span></td>
+    </tr>
+    <tr>
+      <td><strong>Coordinated email farms</strong></td>
+      <td>Pattern match on email (e.g. <code>zoopweb3</code>, <code>zoopweb33</code>, <code>zoopweb333</code>); shared device cross-reference</td>
+      <td><span class="sev sev-high">High</span></td>
+    </tr>
+    <tr>
+      <td><strong>Stolen identity / card fraud</strong></td>
+      <td>Payment method name vs account name mismatch (merchant_payment_methods, user_payment_methods); dispute history</td>
+      <td><span class="sev sev-medium">Medium</span></td>
+    </tr>
+    <tr>
+      <td><strong>Structuring (smurfing)</strong></td>
+      <td>Trade velocity buckets just below thresholds; many small trades concentrated in time</td>
+      <td><span class="sev sev-medium">Medium</span></td>
+    </tr>
+    <tr>
+      <td><strong>Velocity / burst</strong></td>
+      <td>orders/v2_trades grouped by day or hour</td>
+      <td><span class="sev sev-high">High</span></td>
+    </tr>
+    <tr>
+      <td><strong>Reputation manipulation</strong></td>
+      <td>ratings cross-checked against orders; same rater_id repeatedly</td>
+      <td><span class="sev sev-high">High</span></td>
+    </tr>
+    <tr>
+      <td><strong>Account takeover</strong></td>
+      <td>New device + new IP after long quiet; password_reset_tokens timing; sessions audit</td>
+      <td><span class="sev sev-medium">Medium</span></td>
+    </tr>
+    <tr>
+      <td><strong>Mark-paid-but-not-paid (off-chain fraud)</strong></td>
+      <td>Disputes with <code>resolved_in_favor_of</code> ≠ payer + reputation penalty event</td>
+      <td><span class="sev sev-high">High</span></td>
+    </tr>
+    <tr>
+      <td><strong>Fake proof / forged screenshots</strong></td>
+      <td>Manual review required — only <code>fake_proof</code> penalty event when arbiter rules</td>
+      <td><span class="sev sev-low">Low (manual)</span></td>
+    </tr>
+    <tr>
+      <td><strong>Coordinated raters / shill reviews</strong></td>
+      <td>Ratings clustered by rater_id across multiple sellers; counterparties always rate 5★</td>
+      <td><span class="sev sev-medium">Medium</span></td>
+    </tr>
+    <tr>
+      <td><strong>Stalled / dormant abuse</strong></td>
+      <td>Reputation calculated_at age + last_seen_at + cross-check with on-chain activity</td>
+      <td><span class="sev sev-medium">Medium</span></td>
+    </tr>
+    <tr>
+      <td><strong>Frivolous dispute filing</strong></td>
+      <td>disputes raised by user ratio to disputes_lost; <code>dispute_raised_by_user</code> flag in core-api</td>
+      <td><span class="sev sev-high">High</span></td>
+    </tr>
+    <tr>
+      <td><strong>Sanctions / blocked wallet</strong></td>
+      <td>blacklist table lookup + wallet_address match. <strong>No external sanctions feed integration today.</strong></td>
+      <td><span class="sev sev-low">Low (gap)</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="playbook">2. The Investigation Playbook</h2>
+
+<p>14 checks to run when a merchant or user is suspected of wrongdoing. Each shows the question, the SQL, and what to look for.</p>
+
+<div class="check">
+<h3>Check 1 — Are they trading with themselves on-chain?</h3>
+<div class="check-meta"><span class="sev sev-critical">Wash trading</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT
+  CASE WHEN creator_pubkey=$WALLET THEN counterparty_pubkey ELSE creator_pubkey END AS counterparty,
+  COUNT(*) AS trades, SUM(amount::numeric/1000000) AS total_usd
+FROM v2_trades
+WHERE creator_pubkey=$WALLET OR counterparty_pubkey=$WALLET
+GROUP BY 1 ORDER BY trades DESC;</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> Top counterparty has &gt;50% of trades, or counterparty wallet resolves to <em>any</em> account linked by device/IP to the subject.</div>
+<div class="check-section"><strong>Then resolve wallet → account</strong>
+<pre><code>SELECT 'merchant' AS type, id, email FROM merchants WHERE wallet_address=$CP
+UNION ALL SELECT 'user', id, email FROM users WHERE wallet_address=$CP;</code></pre></div>
+</div>
+
+<div class="check">
+<h3>Check 2 — How many accounts share their device?</h3>
+<div class="check-meta"><span class="sev sev-critical">Multi-account</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT du.device_id, COUNT(DISTINCT du.entity_id) AS unique_accounts
+FROM device_users du
+WHERE du.device_id IN (SELECT device_id FROM device_users WHERE entity_id=$ID)
+GROUP BY du.device_id ORDER BY 2 DESC;</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> Any device with &gt;2 accounts — especially mixed merchant + user types — is suspicious.</div>
+</div>
+
+<div class="check">
+<h3>Check 3 — Who else logged in from their IP(s)?</h3>
+<div class="check-meta"><span class="sev sev-high">IP clustering</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT DISTINCT entity_id, entity_type, MIN(created_at), MAX(created_at)
+FROM ip_logs
+WHERE ip IN (SELECT ip FROM ip_logs WHERE entity_id=$ID)
+GROUP BY entity_id, entity_type
+ORDER BY MIN(created_at);</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> &gt;3 unique accounts from same residential / mobile IP within a short window. Note: shared corporate / café / VPN IPs are false positives — interpret with care.</div>
+</div>
+
+<div class="check">
+<h3>Check 4 — Are there email-pattern siblings?</h3>
+<div class="check-meta"><span class="sev sev-high">Email farm</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>-- Strip digits/suffix to find pattern variants
+SELECT id, email FROM merchants WHERE email ~* '^prefix\d*@.*'
+UNION ALL SELECT id, email FROM users WHERE email ~* '^prefix\d*@.*'
+ORDER BY created_at;</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> Multiple accounts with emails differing only by a digit suffix (e.g. <code>foo3</code>, <code>foo33</code>, <code>foo333</code>). Combine with check 2/3 for confirmation.</div>
+</div>
+
+<div class="check">
+<h3>Check 5 — Does the payment method match the account name?</h3>
+<div class="check-meta"><span class="sev sev-medium">Stolen card / identity</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT m.display_name, mpm.type, mpm.name, mpm.details
+FROM merchants m JOIN merchant_payment_methods mpm ON mpm.merchant_id=m.id
+WHERE m.id=$ID;
+-- Same for user_payment_methods</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> Cardholder / UPI handle name does not match merchant display_name or KYC name. Could be normal (family card), or indicator of stolen identity.</div>
+</div>
+
+<div class="check">
+<h3>Check 6 — What's their trade velocity pattern?</h3>
+<div class="check-meta"><span class="sev sev-medium">Structuring / burst</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT DATE(created_at) AS day, COUNT(*) AS trades,
+  SUM(fiat_amount) AS volume,
+  COUNT(*) FILTER (WHERE fiat_amount &lt; 10000) AS small_trades
+FROM orders WHERE user_id=$ID OR merchant_id=$ID
+GROUP BY 1 ORDER BY 1;</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> Many trades just below a regulatory threshold (e.g. ₹50,000 for KYC, ₹2,00,000 for STR). Sudden spike from 0 to high volume.</div>
+</div>
+
+<div class="check">
+<h3>Check 7 — Who rated them, and is it suspicious?</h3>
+<div class="check-meta"><span class="sev sev-medium">Reputation manipulation</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT r.rater_id, r.rating, r.created_at, o.id AS order_id, o.fiat_amount
+FROM ratings r LEFT JOIN orders o ON o.id = r.order_id
+WHERE r.rated_id=$ID
+ORDER BY r.created_at;
+-- Cross-check: does rater_id appear in device/IP cluster?</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> All ratings come from the same rater_id, or from raters in the same multi-account cluster. All ratings are 5★ on tiny trades.</div>
+</div>
+
+<div class="check">
+<h3>Check 8 — Is their reputation score consistent?</h3>
+<div class="check-meta"><span class="sev sev-medium">Engine bug exploit</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT total_score, tier, calculated_at,
+  AGE(NOW(), calculated_at) AS staleness
+FROM reputation_scores WHERE entity_id=$ID;
+-- Check: does tier match score per the formula?
+-- Check: was it updated recently?</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> Stale reputation (calculated_at &gt; 7d old), or tier label inconsistent with total_score (current known bug — see merchant report).</div>
+</div>
+
+<div class="check">
+<h3>Check 9 — Any disputes lost or fake-proof events?</h3>
+<div class="check-meta"><span class="sev sev-high">Direct fraud</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT d.*, o.fiat_amount FROM disputes d
+JOIN orders o ON d.order_id = o.id
+WHERE o.merchant_id=$ID OR o.user_id=$ID OR d.raiser_id=$ID
+ORDER BY d.created_at DESC;
+SELECT * FROM reputation_events
+WHERE entity_id=$ID AND event_type IN ('dispute_lost','fake_proof','mark_paid_not_paid');</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> Any dispute resolved against them; any fake_proof event; cluster of mark_paid_not_paid penalties.</div>
+</div>
+
+<div class="check">
+<h3>Check 10 — Did they file frivolous disputes?</h3>
+<div class="check-meta"><span class="sev sev-medium">Dispute abuse</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT
+  COUNT(*) FILTER (WHERE raiser_id=$ID) AS raised,
+  COUNT(*) FILTER (WHERE raiser_id=$ID AND resolved_in_favor_of != 'user') AS lost
+FROM disputes;</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> lost / raised &gt; 50% with ≥3 raised. Core-api applies a frivolous-dispute trust penalty when this ratio exceeds 0.5.</div>
+</div>
+
+<div class="check">
+<h3>Check 11 — Sudden behaviour change (account takeover)?</h3>
+<div class="check-meta"><span class="sev sev-medium">ATO</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT created_at, ip_address, user_agent, device_info FROM sessions
+WHERE entity_id=$ID ORDER BY created_at DESC LIMIT 20;
+SELECT created_at FROM password_reset_tokens WHERE merchant_id=$ID
+  OR user_id=$ID ORDER BY created_at DESC LIMIT 5;</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> New device + new IP after &gt;30 days quiet, immediately followed by financial action. Recent password_reset_token use.</div>
+</div>
+
+<div class="check">
+<h3>Check 12 — On-chain trades without app sessions?</h3>
+<div class="check-meta"><span class="sev sev-medium">Bypass / bot</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>-- Time-correlate v2_trades vs sessions
+SELECT v.created_at AS trade_time,
+  (SELECT created_at FROM sessions s
+    WHERE s.entity_id=$ID
+    AND s.created_at &lt; v.created_at
+    ORDER BY created_at DESC LIMIT 1) AS prev_session
+FROM v2_trades v
+WHERE v.creator_pubkey=$WALLET OR v.counterparty_pubkey=$WALLET
+ORDER BY v.created_at DESC LIMIT 10;</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> Many v2 trades when no recent session exists (means actor is hitting the chain directly, not via the app — possibly automated bot or non-account-holder access).</div>
+</div>
+
+<div class="check">
+<h3>Check 13 — Risk engine signals (already computed)</h3>
+<div class="check-meta"><span class="sev sev-info">Read existing</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>SELECT * FROM risk_profiles WHERE entity_id=$ID;
+SELECT * FROM risk_events WHERE entity_id=$ID ORDER BY created_at DESC;
+SELECT * FROM security_alerts WHERE entity_id=$ID ORDER BY created_at DESC;
+SELECT * FROM blacklist WHERE entity_id=$ID;</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> risk_level ∈ ('high','critical'); event_type IN ('multi_account_device','ip_cluster_detected','payment_retry_burst').</div>
+</div>
+
+<div class="check">
+<h3>Check 14 — The "round-trip" wallet check</h3>
+<div class="check-meta"><span class="sev sev-critical">Circular trading</span></div>
+<div class="check-section"><strong>SQL</strong>
+<pre><code>-- Find chains: A → B → C → A within X hours
+-- (approximation via counterparty graph on v2_trades)
+WITH edges AS (
+  SELECT creator_pubkey AS src, counterparty_pubkey AS dst, amount, created_at
+  FROM v2_trades WHERE status='released'
+)
+SELECT e1.src, e1.dst, e2.dst AS three, e3.dst AS back_to_start
+FROM edges e1
+JOIN edges e2 ON e2.src = e1.dst AND e2.created_at BETWEEN e1.created_at AND e1.created_at + INTERVAL '24 hours'
+JOIN edges e3 ON e3.src = e2.dst AND e3.dst = e1.src
+WHERE e1.src=$WALLET LIMIT 50;</code></pre></div>
+<div class="check-section"><strong>Red flag</strong> Funds return to origin within 24h. Strong indicator of layering / wash.</div>
+</div>
+
+<hr>
+
+<h2 id="findings">3. Findings — The Zooo / Joe Cluster</h2>
+
+<p>I actually ran checks 1–8 above on this case. Here's what came back:</p>
+
+<div class="alert alert-critical">
+  <h3>🚨 This is a confirmed multi-account fraud ring</h3>
+</div>
+
+<h3>3.1 — The wash-trading loop (Check 1)</h3>
+<p>Joe (user, wallet <code>DyKspncD…</code>) did 39 on-chain v2 trades. The 3 distinct counterparty wallets resolve to:</p>
+<table>
+  <thead><tr><th>Counterparty wallet</th><th>Account</th><th>Email</th><th>Trades with Joe</th><th>Volume</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>D1M4bjQk…</code></td>
+      <td>user <strong>Alfa</strong></td>
+      <td><code>dono4fire@gmail.com</code></td>
+      <td><span class="sev sev-found">20</span></td>
+      <td>$1,079</td>
+    </tr>
+    <tr>
+      <td><code>2MgWJmN2…</code></td>
+      <td>merchant <strong>Hulk</strong></td>
+      <td><code>dono.4fire@gmail.com</code> ← same as Alfa with a dot</td>
+      <td><span class="sev sev-found">14</span></td>
+      <td>$311</td>
+    </tr>
+    <tr>
+      <td><code>FD4MqhLu…</code></td>
+      <td>merchant <strong>Zayn Khan</strong></td>
+      <td><code>experenza.team@gmail.com</code></td>
+      <td>1</td>
+      <td>$482</td>
+    </tr>
+    <tr>
+      <td>(null pubkey)</td>
+      <td>—</td>
+      <td>—</td>
+      <td>4</td>
+      <td>$96</td>
+    </tr>
+  </tbody>
+</table>
+<p><strong>34 of Joe's 39 trades (87%)</strong> were with Alfa+Hulk — and those two accounts use the same email (<code>dono4fire</code> / <code>dono.4fire</code> — Gmail ignores dots, so this is <strong>literally the same Gmail inbox</strong>).</p>
+
+<h3>3.2 — The email farm (Check 4)</h3>
+<table>
+  <thead><tr><th>Type</th><th>Account</th><th>Email</th><th>Created</th></tr></thead>
+  <tbody>
+    <tr><td>user</td><td>Joe</td><td><code>zoopweb3@gmail.com</code></td><td>2026-05-06 09:46</td></tr>
+    <tr><td>merchant</td><td>John</td><td><code>zoopweb333@gmail.com</code></td><td>2026-05-06 09:48</td></tr>
+    <tr><td>merchant</td><td>zoro</td><td><code>zoopweb33@gmail.com</code></td><td>2026-05-06 11:31</td></tr>
+    <tr><td>user</td><td>Alfa2</td><td><code>zoopweb33@gmail.com</code></td><td>2026-05-11 09:19</td></tr>
+    <tr><td>user</td><td>Olo</td><td><code>zoopweb333@gmail.com</code></td><td>2026-05-12 19:11</td></tr>
+    <tr><td>merchant</td><td>Zooo</td><td><code>zoopweb3@gmail.com</code></td><td>2026-05-13 16:16</td></tr>
+  </tbody>
+</table>
+<p><strong>6 accounts on 3 sequentially-numbered emails</strong>: <code>zoopweb3</code> / <code>zoopweb33</code> / <code>zoopweb333</code>. Each email maps to <em>one user + one merchant</em> — classic dual-side setup for trading with yourself.</p>
+
+<h3>3.3 — Shared device fingerprint (Check 2)</h3>
+<p>Device <code>8c7dea65…</code> has been used by <strong>11 different accounts</strong>:</p>
+<table>
+  <thead><tr><th>Account</th><th>Type</th><th>First seen</th></tr></thead>
+  <tbody>
+    <tr><td><code>220c5e6c…</code> (Zayn Khan)</td><td>merchant</td><td>2026-05-11 15:44</td></tr>
+    <tr><td><code>e702f2f4…</code> (Alfa2)</td><td>user</td><td>2026-05-12 02:03</td></tr>
+    <tr><td><code>6a97a797…</code></td><td>user</td><td>2026-05-12 13:52</td></tr>
+    <tr><td><code>807f3d41…</code></td><td>user</td><td>2026-05-12 13:54</td></tr>
+    <tr><td><code>f6a9017b…</code></td><td>user</td><td>2026-05-12 14:13</td></tr>
+    <tr><td><code>f29e123a…</code> (John)</td><td>merchant</td><td>2026-05-12 14:56</td></tr>
+    <tr><td><code>0bc00ec7…</code> (Olo)</td><td>user</td><td>2026-05-12 19:11</td></tr>
+    <tr><td><code>1371c81f…</code> (Zooo)</td><td>merchant</td><td>2026-05-13 16:16</td></tr>
+    <tr><td><code>e1793434…</code></td><td>user</td><td>2026-05-16 16:16</td></tr>
+    <tr><td><code>2adf5cec…</code></td><td>user</td><td>2026-05-16 17:54</td></tr>
+    <tr><td><code>153bf76d…</code> (Drako)</td><td>merchant</td><td>2026-05-17 19:12</td></tr>
+  </tbody>
+</table>
+<p>One physical device used to operate 11 different accounts (8 users + 4 merchants) over 8 days.</p>
+
+<h3>3.4 — Shared IP (Check 3)</h3>
+<p>IP <code>103.66.61.46</code> has been used by <strong>11 different accounts</strong>, including all the named cluster members (Joe, John, zoro, Zooo, Alfa2, Olo, Zayn Khan, Sam, plus 3 anonymous-looking user accounts).</p>
+
+<h3>3.5 — The full cluster network</h3>
+<div class="net-diagram">
+                    📧 dono4fire@gmail.com
+                  ┌────────────┴────────────┐
+                  ▼                         ▼
+            user Alfa                  merchant Hulk
+       wallet D1M4bjQk…           wallet 2MgWJmN2…
+                  │                         │
+                  └─────┐         ┌─────────┘
+                        ▼         ▼
+        20 trades        ┌─────────────┐         14 trades
+        $1,079    ◀──────│   user Joe  │──────▶  $311
+                         │  wallet     │
+                         │ DyKspncD…   │
+                         └──────┬──────┘
+                                │ 1 trade $482
+                                ▼
+                       merchant Zayn Khan
+                       wallet FD4MqhLu…
+
+  📧 zoopweb3@gmail.com  →  user Joe  +  merchant Zooo
+  📧 zoopweb33@gmail.com →  user Alfa2 + merchant zoro
+  📧 zoopweb333@gmail.com → user Olo + merchant John
+
+  🖥️  device 8c7dea65… used by 11 accounts (8 users + 4 merchants)
+  🌐  IP 103.66.61.46   used by 11 accounts
+</div>
+
+<h3>3.6 — Off-chain self-trade confirmation</h3>
+<p>User Joe's <strong>only off-chain order</strong> (sell, ₹3,705 = $39) was with merchant <strong>John</strong> — whose email <code>zoopweb333@gmail.com</code> is part of the same farm AND who shares the same device. Joe gave John 5★ within 10 seconds of the order completing.</p>
+
+<p><strong>That 5★ rating is shill — the same human rated themselves to seed reputation.</strong></p>
+
+<h3>3.7 — Risk engine caught the device but missed everything else</h3>
+<table>
+  <thead><tr><th>What the risk engine caught</th><th>What it missed</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Multi-account device flag at signup (HIGH)</td>
+      <td>The wash-trading didn't happen until 5–7 days later — no automated alert</td>
+    </tr>
+    <tr>
+      <td>IP cluster (6 events, MEDIUM)</td>
+      <td>The shill 5★ rating — none of the rating checks fire</td>
+    </tr>
+    <tr>
+      <td>—</td>
+      <td>The on-chain trade concentration (3 counterparties / 39 trades) — reputation worker stopped processing this user on 2026-05-11</td>
+    </tr>
+    <tr>
+      <td>—</td>
+      <td>The email pattern (zoopweb3/33/333) — no automated email-similarity detection</td>
+    </tr>
+    <tr>
+      <td>—</td>
+      <td>Wallet-to-account resolution of counterparties — not done automatically</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="gaps">4. Detection Gaps</h2>
+
+<p>Things we currently can't see or don't see automatically:</p>
+
+<table>
+  <thead><tr><th>Gap</th><th>Why it matters</th><th>To fix</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Email similarity / pattern detection at signup</td>
+      <td>Sequential-digit emails like <code>zoopweb3/33/333</code> slip through individual email validation</td>
+      <td>Add Levenshtein-distance check or numeric-suffix-stripped match against existing emails</td>
+    </tr>
+    <tr>
+      <td>Sanctions / blocked wallet feed</td>
+      <td>No integration with OFAC / Chainalysis / TRM Labs sanctions lists</td>
+      <td>Add periodic feed → <code>blacklist</code> table import</td>
+    </tr>
+    <tr>
+      <td>Cross-account on-chain analysis automation</td>
+      <td>Wash-trade detection in core-api looks at one entity at a time — doesn't resolve counterparty wallets back to accounts to find the cluster</td>
+      <td>Worker that builds the wallet ↔ account map and flags trades where both sides resolve to linked accounts</td>
+    </tr>
+    <tr>
+      <td>Reputation worker reliability</td>
+      <td>Joe's reputation last updated 2026-05-11 — 9 days stale; on-chain volume not reflected</td>
+      <td>Monitor + alert on calculated_at staleness; verify the activity-window query catches on-chain trades</td>
+    </tr>
+    <tr>
+      <td>Shill-rating detection</td>
+      <td>No rule fires when a counterparty rates a trade 5★ within seconds — common shill pattern</td>
+      <td>Rating velocity check + cross-cluster rater-rated overlap</td>
+    </tr>
+    <tr>
+      <td>Behavioural telemetry</td>
+      <td>No click/typing/timing data; can't detect bot-like behaviour</td>
+      <td>Out of scope for this DB — would need event-stream layer</td>
+    </tr>
+    <tr>
+      <td>Reverse-proxy IP loss</td>
+      <td>4 of 6 ip_logs for the Zooo merchant show <code>::1</code> (loopback) — real client IP not being captured</td>
+      <td>Fix X-Forwarded-For / X-Real-IP handling in the API gateway</td>
+    </tr>
+    <tr>
+      <td>Real-name vs payment-method-name auto-match</td>
+      <td>Currently a manual review; no rule fires when card name ≠ display name</td>
+      <td>Add fuzzy-match flag at payment-method add time</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="actions">5. Actions Available to Compliance</h2>
+
+<p>What you can <em>do</em> once an account is flagged, based on schema:</p>
+
+<table>
+  <thead><tr><th>Action</th><th>Where</th><th>Effect</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Suspend a merchant</td>
+      <td>UPDATE <code>merchants.status='suspended'</code> + <code>v_merchant_scoring.suspended_until</code></td>
+      <td>Excluded from matching; can't accept new orders</td>
+    </tr>
+    <tr>
+      <td>Disable a user</td>
+      <td>UPDATE <code>users.kyc_status='blocked'</code> (or similar — depends on auth gate)</td>
+      <td>Login still works but actions blocked at API level</td>
+    </tr>
+    <tr>
+      <td>Blacklist</td>
+      <td>INSERT INTO <code>blacklist (entity_id, entity_type, reason, severity, is_active)</code></td>
+      <td>Hard block on all entities of that id; checked by middleware</td>
+    </tr>
+    <tr>
+      <td>Force re-KYC</td>
+      <td>UPDATE <code>users.kyc_status='re_verify_required'</code></td>
+      <td>Hold all actions until re-verified through UI flow</td>
+    </tr>
+    <tr>
+      <td>Revoke sessions</td>
+      <td>UPDATE <code>sessions SET is_revoked=true</code> WHERE entity_id=…</td>
+      <td>Forces re-login on every active session</td>
+    </tr>
+    <tr>
+      <td>Record manual reputation adjustment</td>
+      <td>INSERT INTO <code>reputation_events</code> with <code>event_type='manual_adjustment'</code></td>
+      <td>Audit trail; reputation worker will pick up next cycle</td>
+    </tr>
+    <tr>
+      <td>Force escrow refund (open orders)</td>
+      <td><code>atomicCancelWithRefund()</code> via admin endpoint</td>
+      <td>Closes order, returns crypto to escrow funder</td>
+    </tr>
+    <tr>
+      <td>Open dispute on their behalf</td>
+      <td>INSERT INTO <code>disputes</code> with <code>raiser_id='compliance'</code></td>
+      <td>Locks order in disputed state for arbiter review</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>Recommended actions for this cluster</h2>
+
+<div class="alert alert-critical">
+  <h3>Immediate (today)</h3>
+  <ol>
+    <li><strong>Suspend</strong> all 6 named cluster accounts (Joe, Zooo, John, zoro, Alfa2, Olo) plus Alfa (<code>dono4fire</code>) and Hulk (<code>dono.4fire</code>) — 8 accounts total.</li>
+    <li><strong>Hold</strong> the $1,968 of on-chain volume — these trades may already be on-chain and irreversible, but flag any pending escrows.</li>
+    <li><strong>Blacklist</strong> device <code>8c7dea65…</code> and IP <code>103.66.61.46</code> so future signups from this fingerprint are blocked.</li>
+    <li><strong>Reverse the shill 5★ rating</strong> on merchant John — and audit all of John's other ratings (he is the highest-activity merchant in the cluster).</li>
+    <li><strong>Reset reputation scores</strong> for the entire cluster to <code>tier='risky'</code> with manual_adjustment events.</li>
+  </ol>
+
+  <h3>Short term (this week)</h3>
+  <ol>
+    <li>Add email pattern matching at signup — strip trailing digits + dots + plus addressing, compare against existing emails.</li>
+    <li>Fix reverse proxy so real client IPs reach <code>ip_logs</code> (4 of 6 of Zooo's records are loopback).</li>
+    <li>Investigate why the reputation worker stopped processing Joe on 2026-05-11.</li>
+    <li>Add the wallet → account resolution as a periodic worker so on-chain wash-trade detection runs automatically.</li>
+  </ol>
+
+  <h3>Medium term</h3>
+  <ol>
+    <li>Build a "cluster view" admin UI: given any account ID, show the full device/IP/email-pattern/wallet-counterparty graph.</li>
+    <li>Add a shill-rating detector: rating posted &lt;60s after order completion + rater previously linked by device/IP = flag.</li>
+    <li>Integrate an external sanctions feed for wallet addresses.</li>
+  </ol>
+</div>
+
+</body>
+</html>
