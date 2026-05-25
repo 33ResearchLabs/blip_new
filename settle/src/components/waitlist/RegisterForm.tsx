@@ -471,7 +471,7 @@ function inputClass(hasError: boolean, extra = ""): string {
   const errCls = hasError
     ? "border-red-500/50 ring-2 ring-red-500/10"
     : "border-black/10 dark:border-white/10";
-  return `w-full pl-12 pr-4 py-2.5 bg-black/[0.02] dark:bg-white/[0.03] border ${errCls} rounded-xl text-black dark:text-white placeholder:text-black/30 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 focus:border-transparent transition-all duration-200 ${extra}`;
+  return `w-full pl-12 pr-4 py-2.5 bg-[#F2F2F5] dark:bg-white/[0.06] border ${errCls} rounded-xl text-black dark:text-white placeholder:text-black/30 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 focus:border-transparent transition-all duration-200 ${extra}`;
 }
 
 function RecaptchaTile({

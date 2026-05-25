@@ -562,6 +562,66 @@ html:not(.no-transitions) > body {
 }
 
 /* ==========================================
+   WAITLIST DARK-MODE SCOPED RESTORE
+   ==========================================
+   When the global app theme is light (:root.light / [data-theme="light"|
+   "clean"]) but the user toggles the waitlist to dark, the blanket
+   text-white / bg-white / border-white remaps above still fire inside
+   the waitlist subtree and repaint white text → dark, making the
+   dashboard/auth content invisible.
+
+   Specificity note: the global remaps use `:is(:root.light, ...)
+   [class*="text-white"]` which evaluates to (0,0,3,0). To beat that
+   even with matching `!important`, this block doubles the
+   `[data-waitlist-theme="dark"]` attribute selector to reach (0,0,3,0)
+   itself — then source order (mine is later) decides the tie. Same
+   trick the `.login-scope.login-scope` block above uses. */
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white"]    { color: #ffffff !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/9"]  { color: rgba(255,255,255,0.92) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/8"]  { color: rgba(255,255,255,0.85) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/7"]  { color: rgba(255,255,255,0.75) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/6"]  { color: rgba(255,255,255,0.60) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/55"] { color: rgba(255,255,255,0.55) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/5"]  { color: rgba(255,255,255,0.50) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/45"] { color: rgba(255,255,255,0.45) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/4"]  { color: rgba(255,255,255,0.40) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/3"]  { color: rgba(255,255,255,0.30) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/2"]  { color: rgba(255,255,255,0.20) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/15"] { color: rgba(255,255,255,0.15) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="text-white/1"]  { color: rgba(255,255,255,0.10) !important; }
+
+/* Backgrounds — bg-white/[0.xx] should stay a faint white tint on the
+   dark waitlist surface; bg-white (no opacity) wins as solid white. */
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="bg-white/"]    { background-color: rgba(255,255,255,0.05) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="bg-white/8"]   { background-color: rgba(255,255,255,0.08) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="bg-white/6"]   { background-color: rgba(255,255,255,0.06) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="bg-white/5"]   { background-color: rgba(255,255,255,0.05) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="bg-white/4"]   { background-color: rgba(255,255,255,0.04) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="bg-white/3"]   { background-color: rgba(255,255,255,0.03) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="bg-white/2"]   { background-color: rgba(255,255,255,0.02) !important; }
+
+/* Borders — keep white hairlines for cards / dividers inside the dark
+   waitlist subtree. */
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="border-white/"]  { border-color: rgba(255,255,255,0.10) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="border-white/8"] { border-color: rgba(255,255,255,0.08) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="border-white/6"] { border-color: rgba(255,255,255,0.06) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="border-white/5"] { border-color: rgba(255,255,255,0.05) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="border-white/4"] { border-color: rgba(255,255,255,0.04) !important; }
+
+/* Ring + divide */
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="ring-white/"]    { --tw-ring-color: rgba(255,255,255,0.12) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="divide-white"] > * + * { border-color: rgba(255,255,255,0.06) !important; }
+
+/* bg-black inside the dark waitlist should remain literal black, not
+   the light theme's --background variable. */
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="bg-black"] { background-color: #000000 !important; }
+
+/* Placeholders + hover */
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="placeholder:text-white"]::placeholder { color: rgba(255,255,255,0.40) !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="hover:text-white"]:hover               { color: #ffffff !important; }
+:root [data-waitlist-theme="dark"][data-waitlist-theme="dark"] [class*="hover:bg-white"]:hover                 { background-color: rgba(255,255,255,0.08) !important; }
+
+/* ==========================================
    TYPOGRAPHY
    ========================================== */
 

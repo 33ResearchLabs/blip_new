@@ -58,7 +58,7 @@ export function WaitlistThemeProvider({ children }: { children: React.ReactNode 
     <Ctx.Provider value={{ mode, isDark, toggle, setMode }}>
       {/* The wrapper div carries the data attribute so future CSS hooks
           can target waitlist-scoped overrides if needed. */}
-      <div data-waitlist-theme={mode} className={isDark ? 'bg-black' : 'bg-[#FAF8F5]'}>
+      <div data-waitlist-theme={mode} className={isDark ? 'bg-[#060606]' : 'bg-[#FAF8F5]'}>
         {children}
       </div>
     </Ctx.Provider>
@@ -86,19 +86,28 @@ export function useWaitlistTheme(): WaitlistThemeContextValue {
 export function useWaitlistTokens() {
   const { isDark, toggle, setMode, mode } = useWaitlistTheme();
   const d = isDark;
+  // All tokens use literal arbitrary-value classes (or `bg-white` /
+  // `text-white` / `text-black` without a slash) so the global
+  // light-theme remaps in globals.css can't repaint them. In
+  // particular, `bg-black` is matched by `[class*="bg-black"]` and
+  // gets remapped to the light theme's --background — that caused the
+  // waitlist page background to render light even after the user
+  // toggled dark mode. Using `bg-[#060606]` (the same value the rest
+  // of the app uses for --background in dark themes) avoids the
+  // substring match entirely.
   return {
     d, mode, toggle, setMode,
-    bg:         d ? 'bg-black'           : 'bg-[#FAF8F5]',
-    surface:    d ? 'bg-[#0f0f0f]'       : 'bg-white',
-    border:     d ? 'border-white/[0.06]': 'border-black/[0.06]',
-    txt:        d ? 'text-white'         : 'text-black',
-    muted:      d ? 'text-white/60'      : 'text-black/60',
-    sub:        d ? 'text-white/40'      : 'text-black/40',
-    hov:        d ? 'hover:bg-white/5'   : 'hover:bg-black/[0.03]',
-    inputBg:    d ? 'bg-white/5'         : 'bg-[#F5F3F0]',
-    divider:    d ? 'border-white/[0.06]': 'border-black/[0.06]',
-    accentBg:   d ? 'bg-white'           : 'bg-black',
-    accentText: d ? 'text-black'         : 'text-white',
+    bg:         d ? 'bg-[#060606]'             : 'bg-[#FAF8F5]',
+    surface:    d ? 'bg-[#0f0f0f]'             : 'bg-white',
+    border:     d ? 'border-white/[0.06]'      : 'border-black/[0.06]',
+    txt:        d ? 'text-white'               : 'text-black',
+    muted:      d ? 'text-white/60'            : 'text-black/60',
+    sub:        d ? 'text-white/40'            : 'text-black/40',
+    hov:        d ? 'hover:bg-white/5'         : 'hover:bg-black/[0.03]',
+    inputBg:    d ? 'bg-white/5'               : 'bg-[#F5F3F0]',
+    divider:    d ? 'border-white/[0.06]'      : 'border-black/[0.06]',
+    accentBg:   d ? 'bg-white'                 : 'bg-[#000000]',
+    accentText: d ? 'text-black'               : 'text-white',
     cardShadow: d ? '' : 'shadow-[0_24px_60px_-30px_rgba(0,0,0,0.10),0_8px_24px_-16px_rgba(0,0,0,0.06)]',
   };
 }

@@ -194,7 +194,7 @@ export default function LoginForm({ role }: LoginFormProps) {
                 onBlur={() => validate()}
                 maxLength={254}
                 disabled={isLoading}
-                className={`w-full pl-12 pr-4 py-3.5 bg-black/[0.02] dark:bg-white/[0.03] border ${
+                className={`w-full pl-12 pr-4 py-3.5 bg-[#F2F2F5] dark:bg-white/[0.06] border ${
                   errors.email
                     ? "border-red-500/50 ring-2 ring-red-500/10"
                     : "border-black/10 dark:border-white/10"
@@ -233,7 +233,7 @@ export default function LoginForm({ role }: LoginFormProps) {
                 onBlur={() => validate()}
                 maxLength={100}
                 disabled={isLoading}
-                className={`w-full pl-12 pr-12 py-3.5 bg-black/[0.02] dark:bg-white/[0.03] border ${
+                className={`w-full pl-12 pr-12 py-3.5 bg-[#F2F2F5] dark:bg-white/[0.06] border ${
                   errors.password
                     ? "border-red-500/50 ring-2 ring-red-500/10"
                     : "border-black/10 dark:border-white/10"
