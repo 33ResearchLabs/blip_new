@@ -214,7 +214,7 @@ export default function LoginForm({ role }: LoginFormProps) {
             <div className="flex items-center justify-end mb-1.5">
               <Link
                 href={
-                  isMerchant ? "/merchant/forgot-password" : "/forgot-password"
+                  isMerchant ? "/merchant/forgot-password" : "/user/forgot-password"
                 }
                 className="text-xs text-black/40 dark:text-white/40 hover:text-black dark:hover:text-white transition-colors duration-200"
               >
