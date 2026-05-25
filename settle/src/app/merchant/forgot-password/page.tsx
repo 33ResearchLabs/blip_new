@@ -170,7 +170,7 @@ export default function ForgotPasswordPage() {
 
         <div className="mt-6 text-center">
           <Link
-            href="/merchant"
+            href="/waitlist/merchant-login"
             className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-foreground/60 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />

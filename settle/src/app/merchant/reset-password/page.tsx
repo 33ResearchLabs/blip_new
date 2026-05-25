@@ -85,10 +85,10 @@ function ResetPasswordForm() {
 
       setSuccess(true);
 
-      // Redirect to the login page after 3 seconds so the merchant can
-      // sign in with the new password (NOT the dashboard — they're not
-      // authenticated yet).
-      setTimeout(() => router.push("/merchant/login"), 3000);
+      // Redirect to the waitlist merchant sign-in — the app isn't live
+      // yet, so the waitlist surface is the correct landing page (NOT
+      // /merchant/login which sits behind the dev-lock).
+      setTimeout(() => router.push("/waitlist/merchant-login"), 3000);
     } catch {
       setError("Network error. Please try again.");
     } finally {

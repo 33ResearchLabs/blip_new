@@ -25,7 +25,10 @@ const ALLOWED_NEXT = new Set(["/login", "/waitlist/login"]);
 
 function safeNext(raw: string | null): string {
   if (raw && ALLOWED_NEXT.has(raw)) return raw;
-  return "/login";
+  // Default lands on the waitlist surface — the app is not yet live, so
+  // anyone clicking through from a verify email should arrive at the
+  // waitlist sign-in, not the gated app login.
+  return "/waitlist/login";
 }
 
 // Delay before auto-redirecting on a successful verification — short

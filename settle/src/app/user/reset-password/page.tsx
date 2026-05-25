@@ -84,9 +84,10 @@ function ResetPasswordForm() {
         return;
       }
       setSuccess(true);
-      // Send the user back to the landing page where they can sign in
-      // with the new password.
-      setTimeout(() => router.push("/"), 3000);
+      // Send the user to the waitlist sign-in with their new password —
+      // the app isn't live yet, so the waitlist surface is the right
+      // landing page (not "/" which hits the dev-lock).
+      setTimeout(() => router.push("/waitlist/login"), 3000);
     } catch {
       setError("Network error. Please try again.");
     } finally {

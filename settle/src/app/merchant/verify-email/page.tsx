@@ -26,7 +26,10 @@ const ALLOWED_NEXT = new Set(["/merchant/login", "/waitlist/merchant-login"]);
 
 function safeNext(raw: string | null): string {
   if (raw && ALLOWED_NEXT.has(raw)) return raw;
-  return "/merchant/login";
+  // Default lands on the waitlist merchant sign-in — see /user/verify-email
+  // for the same rationale: the app isn't live, so verified merchants
+  // should land on the waitlist surface, not the gated merchant login.
+  return "/waitlist/merchant-login";
 }
 
 // Delay before auto-redirecting on a successful verification — short
