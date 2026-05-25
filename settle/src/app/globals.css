@@ -15,17 +15,30 @@
 @custom-variant dark (&:where([data-waitlist-theme="dark"] *, [data-waitlist-theme="dark"], .dark *, .dark));
 
 /* Submit button on waitlist auth forms. Defined here (not as Tailwind
-   utilities + dark:) because the global theme override rewrites
-   `text-white` to dark on light variants — which made the label
-   invisible on the black button. Inline color rules can't be overridden
-   by the rest of globals.css. */
+   utilities + dark:) because the global theme overrides further down
+   the file use `!important` to remap text-white / bg-black classes for
+   light-themed surfaces — without `!important` here, the button label
+   would render invisible on the black background. */
 .waitlist-auth-submit {
-  background-color: #000000;
-  color: #ffffff;
+  background-color: #000000 !important;
+  color: #ffffff !important;
 }
 [data-waitlist-theme="dark"] .waitlist-auth-submit {
-  background-color: #ffffff;
-  color: #000000;
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* Primary CTAs inside the waitlist dashboard (Share Your Code, Submit
+   Form, Send Request, Join as User, modal confirms, etc.). Same
+   `!important` treatment as .waitlist-auth-submit so the global
+   bg-black / text-white remaps in this file can't strip the color. */
+.waitlist-primary-btn {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+[data-waitlist-theme="dark"] .waitlist-primary-btn {
+  background-color: #ffffff !important;
+  color: #000000 !important;
 }
 
 /* ==========================================
@@ -1033,9 +1046,11 @@ input[type="number"] { -moz-appearance: textfield; }
   text-shadow: 0 0 20px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
-/* Live dot glow */
+/* Live dot glow — disabled per design direction (no coloured halos
+   around status icons). Kept as a no-op class so any consumer that
+   still references it doesn't break the layout. */
 .animate-live-dot {
-  box-shadow: 0 0 6px color-mix(in srgb, var(--primary) 50%, transparent);
+  /* box-shadow intentionally removed */
 }
 
 /* Notification badge glow */

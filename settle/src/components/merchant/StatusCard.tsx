@@ -450,12 +450,12 @@ export const StatusCard = memo(function StatusCard({
           onClick={onToggleOnline}
           className={`relative z-10 flex items-center justify-center w-6 h-6 rounded-full transition-all border ${
             isOnline
-              ? "bg-primary/10 border-primary/30 text-primary"
+              ? "bg-foreground/[0.06] border-foreground/[0.15] text-foreground"
               : "bg-foreground/[0.03] border-foreground/[0.08] text-foreground/30"
           }`}
           title={isOnline ? "ACTIVE" : "OFFLINE"}
         >
-          <Radio className={`w-3 h-3 ${isOnline ? "animate-live-dot" : ""}`} />
+          <Radio className="w-3 h-3" />
         </button>
       </div>
 

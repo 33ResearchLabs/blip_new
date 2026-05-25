@@ -311,65 +311,6 @@ export function MerchantChatTabs({
       </div>
       )}
 
-      {/* Tabs — on mobile (hideHeading) sit in a sticky header that cancels
-          the parent <main>'s p-3 so the filter is flush with the navbar,
-          matching MobileOrdersView / MobileEscrowView. */}
-      <div className={hideHeading ? "sticky top-0 z-20 -mx-3 -mt-3 px-3 pt-0.5 pb-1.5 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04]" : ""}>
-      <div className="flex items-center gap-0.5 p-0.5 h-9 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08]">
-        <button
-          onClick={() => setActiveTab("active")}
-          className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
-            activeTab === "active"
-              ? "bg-white text-black shadow"
-              : "text-foreground/60 hover:text-foreground/80"
-          }`}
-        >
-          <span className="truncate">Active Chat</span>
-          {activeUnread > 0 && (
-            <span className={`shrink-0 text-[10px] font-mono tabular-nums ${
-              activeTab === "active" ? "text-black/55" : "text-foreground/40"
-            }`}>
-              {activeUnread > 9 ? "9+" : activeUnread}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("orders")}
-          className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
-            activeTab === "orders"
-              ? "bg-white text-black shadow"
-              : "text-foreground/60 hover:text-foreground/80"
-          }`}
-        >
-          <span className="truncate">Inbox</span>
-          {totalUnread > 0 && (
-            <span className={`shrink-0 text-[10px] font-mono tabular-nums ${
-              activeTab === "orders" ? "text-black/55" : "text-foreground/40"
-            }`}>
-              {totalUnread > 9 ? "9+" : totalUnread}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("disputes")}
-          className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
-            activeTab === "disputes"
-              ? "bg-white text-black shadow"
-              : "text-foreground/60 hover:text-foreground/80"
-          }`}
-        >
-          <Shield className="w-3 h-3 shrink-0" />
-          <span className="truncate">Disputes</span>
-          {disputeUnread > 0 && (
-            <span className={`shrink-0 text-[10px] font-mono tabular-nums ${
-              activeTab === "disputes" ? "text-red-600" : "text-red-400"
-            }`}>
-              {disputeUnread > 9 ? "9+" : disputeUnread}
-            </span>
-          )}
-        </button>
-      </div>
-      </div>
 
       {/* Search */}
       <div className="py-1.5 border-b border-white/[0.04]">
@@ -677,6 +618,67 @@ export function MerchantChatTabs({
             ))}
           </div>
         )}
+      </div>
+
+      {/* Footer tab bar — Active Chat / Inbox / Disputes pinned to the
+          bottom of the panel like a message-app tab strip. Same logic
+          as before, just relocated for better thumb-reach on mobile and
+          a calmer top of the panel on desktop. */}
+      <div className={`px-2 pt-1.5 pb-2 border-t border-white/[0.04] bg-background/95 backdrop-blur-sm ${hideHeading ? "-mx-3 px-3" : ""}`}>
+        <div className="flex items-center gap-0.5 p-0.5 h-9 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08]">
+          <button
+            onClick={() => setActiveTab("active")}
+            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
+              activeTab === "active"
+                ? "bg-white text-black shadow"
+                : "text-foreground/60 hover:text-foreground/80"
+            }`}
+          >
+            <span className="truncate">Active Chat</span>
+            {activeUnread > 0 && (
+              <span className={`shrink-0 text-[10px] font-mono tabular-nums ${
+                activeTab === "active" ? "text-black/55" : "text-foreground/40"
+              }`}>
+                {activeUnread > 9 ? "9+" : activeUnread}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("orders")}
+            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
+              activeTab === "orders"
+                ? "bg-white text-black shadow"
+                : "text-foreground/60 hover:text-foreground/80"
+            }`}
+          >
+            <span className="truncate">Inbox</span>
+            {totalUnread > 0 && (
+              <span className={`shrink-0 text-[10px] font-mono tabular-nums ${
+                activeTab === "orders" ? "text-black/55" : "text-foreground/40"
+              }`}>
+                {totalUnread > 9 ? "9+" : totalUnread}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("disputes")}
+            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
+              activeTab === "disputes"
+                ? "bg-white text-black shadow"
+                : "text-foreground/60 hover:text-foreground/80"
+            }`}
+          >
+            <Shield className="w-3 h-3 shrink-0" />
+            <span className="truncate">Disputes</span>
+            {disputeUnread > 0 && (
+              <span className={`shrink-0 text-[10px] font-mono tabular-nums ${
+                activeTab === "disputes" ? "text-foreground/70" : "text-foreground/50"
+              }`}>
+                {disputeUnread > 9 ? "9+" : disputeUnread}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -20,7 +20,10 @@ interface WalletLedgerEntry {
   related_order_id: string | null;
   order_number: string | null;
   order_type: 'buy' | 'sell' | null;
+  order_status: string | null;
   counterparty_name: string | null;
+  counterparty_id: string | null;
+  counterparty_type: 'user' | 'merchant' | null;
   created_at: string;
 }
 
@@ -154,7 +157,17 @@ export async function GET(request: NextRequest) {
           le.related_order_id,
           o.order_number,
           o.type AS order_type,
+          o.status AS order_status,
           COALESCE(u.username, bm.business_name) AS counterparty_name,
+          -- Counterparty ID + type so the UI can deep-link to the right
+          -- profile (user vs merchant). Both fields are NULL when the
+          -- ledger entry has no related order (deposits, swaps, etc).
+          COALESCE(u.id::text, bm.id::text) AS counterparty_id,
+          CASE
+            WHEN u.id IS NOT NULL THEN 'user'
+            WHEN bm.id IS NOT NULL THEN 'merchant'
+            ELSE NULL
+          END AS counterparty_type,
           le.created_at
         FROM ledger_entries le
         LEFT JOIN orders o ON le.related_order_id = o.id
