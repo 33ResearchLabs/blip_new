@@ -51,7 +51,7 @@ const COPY: Record<Role, Record<Mode, CopyBlock>> = {
         'Track your BLIP point balance',
         'Get notified the moment the app opens',
       ],
-      stat: '12,438 already in line',
+      stat: '122 already in line',
       cardTitleLead: 'Sign in to',
       cardTitleAccent: 'Blip.',
       cardSub: 'Welcome back. Your spot is right where you left it.',
