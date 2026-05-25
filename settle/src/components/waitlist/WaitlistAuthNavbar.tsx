@@ -19,7 +19,14 @@ export default function WaitlistAuthNavbar(_props: Props) {
   void _props;
   const { isDark, toggle } = useWaitlistTheme();
   return (
-    <header className="sticky top-0 z-50 bg-black text-white border-b border-white/[0.06]">
+    <header
+      className="sticky top-0 z-50"
+      style={{
+        background: '#000000',
+        color: '#ffffff',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
       <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-6">
         <div className="flex items-center gap-3">
           <Logo href="/waitlist" onDark />

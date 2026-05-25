@@ -13,7 +13,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import {
   Loader2, LogOut, Copy, Check, Crown, Twitter, Send, Repeat2, Users as UsersIcon,
   CheckCircle2, Store, Settings, Menu, ExternalLink, Info,
@@ -763,13 +762,16 @@ function HeroCard({
         </div>
 
         <div className="hidden md:block relative overflow-hidden" style={{ background: '#FAF8F5' }}>
-          <Image
+          {/* Plain <img> instead of next/image — the Image optimizer
+              was producing a double-encoded /_next/image?url=/_next/image?url=…
+              src on production (Next 16 + Vercel image proxy edge case),
+              which 404'd and left only the alt text visible. The hero
+              image lives in /public so the browser fetches it directly. */}
+          <img
             src="/refer-friends-hero.png"
             alt="Refer friends and earn rewards"
-            fill
-            sizes="(min-width: 1024px) 25vw, 50vw"
-            className="object-cover"
-            priority
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="eager"
           />
         </div>
       </div>

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>User Data Report — Joe (zoopweb3@gmail.com)</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2328; --muted: #656d76;
+    --border: #d0d7de; --link: #0969da; --code-bg: #f6f8fa;
+    --critical: #cf222e; --high: #d97706; --medium: #bf8700;
+    --low: #1a7f37; --info: #0969da; --table-stripe: #f6f8fa;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--fg); background: var(--bg);
+    line-height: 1.6; max-width: 1040px;
+    margin: 0 auto; padding: 32px 48px 96px;
+    font-size: 15px;
+  }
+  .toolbar {
+    position: sticky; top: 0;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 48px; margin: -32px -48px 24px;
+    display: flex; justify-content: space-between;
+    align-items: center; gap: 16px; z-index: 100;
+  }
+  .toolbar-title { font-weight: 600; font-size: 14px; color: var(--muted); }
+  .btn {
+    background: var(--link); color: #fff; border: 0;
+    padding: 8px 16px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; font-family: inherit;
+  }
+  .btn:hover { opacity: 0.88; }
+  .btn-secondary { background: var(--code-bg); color: var(--fg); border: 1px solid var(--border); }
+  h1, h2, h3 {
+    margin-top: 1.8em; margin-bottom: 0.6em;
+    font-weight: 600; line-height: 1.25; page-break-after: avoid;
+  }
+  h1 { font-size: 32px; margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h2 { font-size: 24px; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h3 { font-size: 18px; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 16px; }
+  ul, ol { padding-left: 28px; }
+  li { margin: 4px 0; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--code-bg); padding: 2px 6px;
+    border-radius: 4px; font-size: 0.88em;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 14px 18px;
+    overflow-x: auto; font-size: 13px; line-height: 1.5;
+    page-break-inside: avoid;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; page-break-inside: avoid; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .field-table th:first-child, .field-table td:first-child { width: 28%; font-weight: 500; }
+
+  .alert {
+    border-left: 4px solid; padding: 12px 16px;
+    margin: 16px 0; border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .alert-critical { border-color: var(--critical); background: #ffebe9; }
+  .alert-high     { border-color: var(--high); background: #fff1e5; }
+  .alert-medium   { border-color: var(--medium); background: #fff8c5; }
+  .alert-low      { border-color: var(--low); background: #dcfce7; }
+  .alert-info     { border-color: var(--info); background: #ddf4ff; }
+  .alert h3 { margin: 0 0 6px; font-size: 16px; }
+
+  .sev {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 10px; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.02em;
+    vertical-align: middle;
+  }
+  .sev-good     { background: #dcfce7; color: var(--low); }
+  .sev-warn     { background: #fef3c7; color: var(--medium); }
+  .sev-bad      { background: #ffe0e0; color: var(--critical); }
+  .sev-empty    { background: #e5e7eb; color: #4b5563; }
+
+  .meta {
+    color: var(--muted); font-size: 14px;
+    margin: -8px 0 24px; padding: 12px 16px;
+    background: var(--code-bg); border-left: 3px solid var(--link);
+    border-radius: 0 4px 4px 0;
+  }
+  .meta div { margin: 2px 0; }
+  .meta strong { color: var(--fg); }
+  .toc {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 16px 24px; margin: 24px 0 32px;
+  }
+  .toc h3 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .toc ol { margin: 0; padding-left: 20px; font-size: 14px; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px; margin: 16px 0;
+  }
+  .stat {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 16px;
+  }
+  .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .stat-zero { color: #9ca3af; }
+  .stat-good { color: var(--low); }
+  .stat-warn { color: var(--high); }
+  .stat-bad { color: var(--critical); }
+
+  @media print {
+    body { max-width: none; padding: 0; font-size: 11pt; color: #000; }
+    .toolbar, .no-print { display: none !important; }
+    a { color: #000; text-decoration: none; }
+    pre, table, blockquote, .toc, .alert { page-break-inside: avoid; }
+    h1, h2 { page-break-after: avoid; }
+    table { font-size: 9.5pt; }
+    pre { font-size: 9pt; }
+    .sev, .stat { border: 1px solid #ccc; }
+  }
+  @page { size: A4; margin: 16mm 12mm; }
+</style>
+</head>
+<body>
+
+<div class="toolbar no-print">
+  <div class="toolbar-title">👤 User Data Report — Joe</div>
+  <div>
+    <button class="btn btn-secondary" onclick="document.querySelector('#toc').scrollIntoView()">Contents</button>
+    <button class="btn" onclick="window.print()">🖨️ Print / Save PDF</button>
+  </div>
+</div>
+
+<h1>User Data Report</h1>
+<p style="color: var(--muted); margin-top: -8px; font-size: 16px;">Everything we store about user <strong>Joe</strong> (<code>zoopweb3@gmail.com</code>).</p>
+
+<div class="meta">
+  <div><strong>User ID:</strong> <code>607b393f-f8de-4547-a4e4-90b95c86b110</code></div>
+  <div><strong>Wallet:</strong> <code>DyKspncDaguAyDB7aicgUVi5cpbdmRr3wd9xD7Tt5jhK</code></div>
+  <div><strong>Database:</strong> Railway production (<code>centerbeam.proxy.rlwy.net</code>)</div>
+  <div><strong>Snapshot:</strong> 2026-05-20</div>
+  <div><strong>Note:</strong> shares email <code>zoopweb3@gmail.com</code> with merchant <strong>Zooo</strong> — same human has both a user and a merchant account.</div>
+  <div><strong>Secrets:</strong> <code>password_hash</code>, <code>totp_secret</code>, <code>totp_backup_codes</code>, <code>wallet_unlock_helper</code>, <code>user_pin_hash</code> shown as present/null only — actual values are NOT printed.</div>
+</div>
+
+<div class="toc" id="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#s1">At a Glance</a></li>
+    <li><a href="#s2">Flags &amp; Anomalies</a></li>
+    <li><a href="#s3">Identity &amp; Profile</a></li>
+    <li><a href="#s4">Verification &amp; Security</a></li>
+    <li><a href="#s5">Off-Chain Order (the one trade)</a></li>
+    <li><a href="#s6">On-Chain Trading (39 v2 trades)</a></li>
+    <li><a href="#s7">Ratings &amp; Reviews</a></li>
+    <li><a href="#s8">Reputation</a></li>
+    <li><a href="#s9">Auth, Sessions, Devices, IPs</a></li>
+    <li><a href="#s10">Payment Methods</a></li>
+    <li><a href="#s11">Communications</a></li>
+    <li><a href="#s12">Tables With No Data</a></li>
+  </ol>
+</div>
+
+<hr>
+
+<h2 id="s1">1. At a Glance</h2>
+
+<div class="stat-grid">
+  <div class="stat"><div class="stat-label">Account age</div><div class="stat-value">14 days</div></div>
+  <div class="stat"><div class="stat-label">Off-chain orders</div><div class="stat-value">1</div></div>
+  <div class="stat"><div class="stat-label">On-chain trades (v2)</div><div class="stat-value">39</div></div>
+  <div class="stat"><div class="stat-label">Total on-chain volume</div><div class="stat-value">$1,968</div></div>
+  <div class="stat"><div class="stat-label">Off-chain volume</div><div class="stat-value">$39</div></div>
+  <div class="stat"><div class="stat-label">Counterparties</div><div class="stat-value">3</div></div>
+  <div class="stat"><div class="stat-label">Disputes</div><div class="stat-value stat-zero">0</div></div>
+  <div class="stat"><div class="stat-label">Ratings received</div><div class="stat-value stat-zero">0</div></div>
+  <div class="stat"><div class="stat-label">Ratings given</div><div class="stat-value">1</div></div>
+  <div class="stat"><div class="stat-label">Reputation</div><div class="stat-value stat-warn">528 / diamond</div></div>
+  <div class="stat"><div class="stat-label">KYC</div><div class="stat-value stat-bad">0 / none</div></div>
+  <div class="stat"><div class="stat-label">Email verified</div><div class="stat-value stat-bad">No</div></div>
+  <div class="stat"><div class="stat-label">2FA</div><div class="stat-value stat-bad">Off</div></div>
+  <div class="stat"><div class="stat-label">Risk profile</div><div class="stat-value stat-good">None</div></div>
+  <div class="stat"><div class="stat-label">Devices</div><div class="stat-value">1</div></div>
+  <div class="stat"><div class="stat-label">Sessions</div><div class="stat-value">3</div></div>
+</div>
+
+<hr>
+
+<h2 id="s2">2. Flags &amp; Anomalies</h2>
+
+<div class="alert alert-high">
+  <h3>⚠️ Trading on-chain without verifying email or KYC</h3>
+  <p>The user has done <strong>39 on-chain trades worth ~$1,968</strong> but:</p>
+  <ul>
+    <li><code>email_verified = false</code> — the verification token issued at signup (2026-05-06) expired unused on 2026-05-07.</li>
+    <li><code>kyc_status = 'none'</code>, <code>kyc_level = 0</code> — no KYC at any level.</li>
+    <li><code>totp_enabled = false</code>, no 2FA configured.</li>
+    <li><code>user_pin_hash</code> NULL — no PIN set.</li>
+  </ul>
+  <p>If your policy is "no trading without verified email + KYC L1", this account slipped through. Compliance question: should the $1,968 of on-chain activity have been allowed?</p>
+</div>
+
+<div class="alert alert-high">
+  <h3>⚠️ Reputation tier label is wrong (same bug as merchant report)</h3>
+  <p>Stored: <code>total_score = 528, tier = "diamond"</code>. Per the formula, 528 should map to <strong>silver</strong> (400–599); diamond requires ≥900. The matching engine reads <code>users.reputation_tier = "diamond"</code> directly — this user is being ranked far too high.</p>
+  <p>Worse: <code>trust_score = 0</code> stored despite no disputes lost and a clean record. The trust calculator's base score (50) was supposed to apply — looks like a scale-mixing bug where Settle's 0–100 component was overwritten by core-api's 0–1000 path. Component values stored: <code>review=844, execution=970, volume=695, consistency=911, trust=0</code> — clearly on the 0–1000 scale.</p>
+</div>
+
+<div class="alert alert-medium">
+  <h3>⚠️ Reputation worker frozen / stopped recalculating</h3>
+  <p><code>calculated_at = 2026-05-11 12:46:46</code> — last reputation recompute was <strong>9 days ago</strong>. The most recent <code>reputation_history</code> snapshot is from the same time. The core-api reputation worker is supposed to run every 5 minutes on active entities, but this user's data is stale even though they have on-chain activity (v2 trades up to 2026-05-11).</p>
+  <p>Either the worker stopped after 2026-05-11, or this user's "activity window" no longer includes their actual activity. There are <strong>158 historical snapshots</strong> stored — heavy churn for a single user.</p>
+</div>
+
+<div class="alert alert-info">
+  <h3>ℹ️ Off-chain vs on-chain visibility mismatch</h3>
+  <p>The Settle reputation engine reads only off-chain <code>orders</code> — it sees <strong>1 trade, $39 volume</strong>. Core-api reads on-chain too — it sees <strong>40 trades, $2,007 total</strong>. Both engines write to the same DB row. Depending on which engine wrote last, the reputation reflects very different realities.</p>
+</div>
+
+<div class="alert alert-low">
+  <h3>✅ No risk flags on this account</h3>
+  <p>Unlike the matching merchant account (which is CRITICAL risk), the user account has <strong>zero risk events</strong>, no risk profile row, and is not blacklisted. Signed up from a single Indian IP (<code>122.162.151.25</code>) on one device — clean fingerprint.</p>
+</div>
+
+<hr>
+
+<h2 id="s3">3. Identity &amp; Profile</h2>
+
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>id</td><td><code>607b393f-f8de-4547-a4e4-90b95c86b110</code></td></tr>
+    <tr><td>username</td><td>Joe</td></tr>
+    <tr><td>name</td><td>Joe</td></tr>
+    <tr><td>email</td><td>zoopweb3@gmail.com</td></tr>
+    <tr><td>phone</td><td>—</td></tr>
+    <tr><td>wallet_address</td><td><code>DyKspncDaguAyDB7aicgUVi5cpbdmRr3wd9xD7Tt5jhK</code></td></tr>
+    <tr><td>avatar_url</td><td>https://api.dicebear.com/7.x/adventurer/svg?seed=Joe</td></tr>
+    <tr><td>created_at</td><td>2026-05-06 09:46:07 UTC</td></tr>
+    <tr><td>updated_at</td><td>2026-05-15 06:18:29 UTC</td></tr>
+    <tr><td>balance</td><td>0.000000</td></tr>
+    <tr><td>sinr_balance</td><td>0</td></tr>
+    <tr><td>total_trades (denormalised)</td><td>1</td></tr>
+    <tr><td>total_volume (denormalised)</td><td>39.00</td></tr>
+    <tr><td>cancelled_orders (denormalised)</td><td>0</td></tr>
+    <tr><td>dispute_count (denormalised)</td><td>0</td></tr>
+    <tr><td>avg_completion_time_ms</td><td>—</td></tr>
+    <tr><td>rating (denormalised)</td><td>5.0 (default — no ratings received)</td></tr>
+    <tr><td>rating_count</td><td>0</td></tr>
+    <tr><td>total_rating_sum</td><td>0</td></tr>
+    <tr><td>push_token</td><td>—</td></tr>
+    <tr><td>notification_settings</td><td><code>{}</code></td></tr>
+    <tr><td>reputation_score</td><td>528 <span class="sev sev-warn">tier mismatch</span></td></tr>
+    <tr><td>reputation_tier</td><td>diamond</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="s4">4. Verification &amp; Security</h2>
+
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>email_verified</td><td><span class="sev sev-bad">false</span></td></tr>
+    <tr><td>kyc_status</td><td><span class="sev sev-bad">none</span></td></tr>
+    <tr><td>kyc_level</td><td><span class="sev sev-bad">0</span></td></tr>
+    <tr><td>totp_enabled</td><td><span class="sev sev-bad">false</span></td></tr>
+    <tr><td>totp_verified_at</td><td>—</td></tr>
+    <tr><td>user_pin_set_at</td><td>— (no PIN)</td></tr>
+    <tr><td>user_pin_failed_attempts</td><td>0</td></tr>
+    <tr><td>user_pin_locked_until</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h3>Secrets stored (values redacted)</h3>
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>password_hash</td><td>✅ present — [redacted]</td></tr>
+    <tr><td>totp_secret</td><td>❌ NULL (no 2FA)</td></tr>
+    <tr><td>totp_backup_codes</td><td>✅ present — [redacted] <span style="color: var(--muted);">(backup codes stored even though 2FA never activated — same pattern as the matching merchant account)</span></td></tr>
+    <tr><td>wallet_unlock_helper</td><td>✅ present — [redacted]</td></tr>
+    <tr><td>user_pin_hash</td><td>❌ NULL</td></tr>
+  </tbody>
+</table>
+
+<h3>Email verification token (table <code>user_email_verification_tokens</code>)</h3>
+<table>
+  <thead><tr><th>Issued</th><th>Expires</th><th>Used</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>2026-05-06 09:46:07</td>
+      <td>2026-05-07 09:46:07</td>
+      <td><span class="sev sev-bad">never used — expired</span></td>
+    </tr>
+  </tbody>
+</table>
+<p>One token issued at signup, expired without being clicked. No subsequent re-send recorded.</p>
+
+<hr>
+
+<h2 id="s5">5. Off-Chain Order (the one trade)</h2>
+
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>id</td><td><code>9b8b7b55-9efc-410f-be47-6daa85d02215</code></td></tr>
+    <tr><td>status</td><td><span class="sev sev-good">completed</span></td></tr>
+    <tr><td>type</td><td>sell (user sold crypto to merchant)</td></tr>
+    <tr><td>fiat_amount</td><td>₹3,705.00 (INR)</td></tr>
+    <tr><td>crypto_amount</td><td>39 USDT</td></tr>
+    <tr><td>merchant_id</td><td><code>f29e123a-50f2-47a7-a17a-cc912fb1ead4</code> (merchant <strong>John</strong>)</td></tr>
+    <tr><td>created_at</td><td>2026-05-10 12:47:59</td></tr>
+    <tr><td>completed_at</td><td>2026-05-10 12:49:57 (≈2 minutes — fast)</td></tr>
+    <tr><td>cancelled_by</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="s6">6. On-Chain Trading (39 v2 trades)</h2>
+
+<table class="field-table">
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Total v2 trades</td><td>39</td></tr>
+    <tr><td>Released (settled successfully)</td><td>34</td></tr>
+    <tr><td>Other states (in-flight / cancelled / expired)</td><td>5</td></tr>
+    <tr><td>Total amount</td><td>~$1,968.18</td></tr>
+    <tr><td>As <code>creator_pubkey</code></td><td>22</td></tr>
+    <tr><td>As <code>counterparty_pubkey</code></td><td>17</td></tr>
+    <tr><td>Distinct counterparties</td><td><strong>3</strong></td></tr>
+    <tr><td>First v2 trade</td><td>2026-05-06 14:45:02</td></tr>
+    <tr><td>Last v2 trade</td><td>2026-05-11 15:51:09</td></tr>
+    <tr><td>v1 trades</td><td>0</td></tr>
+  </tbody>
+</table>
+
+<blockquote style="border-left: 4px solid var(--medium); background: #fff8c5; color: var(--fg); padding: 8px 16px;">
+<strong>⚠️ Concentration risk:</strong> 39 trades across only 3 distinct counterparties = average 13 trades per counterparty. The reputation engine's <code>repeat_pair_count</code> rule penalises any counterparty pair with &gt;5 trades — likely all 3 of these are flagged. Concentration (% with top counterparty) is probably also &gt;60%, triggering the wash-trade penalty. Yet the stored tier reads "diamond" because of the tier-label bug.
+</blockquote>
+
+<p>Settle's reputation worker doesn't see any of this — it only reads off-chain <code>orders</code>. Core-api does see it but appears to have stopped updating this user since 2026-05-11.</p>
+
+<hr>
+
+<h2 id="s7">7. Ratings &amp; Reviews</h2>
+
+<h3>Ratings received: 0</h3>
+<p>No one has rated this user. (Their one completed order was a sell, so the merchant John would be the one who could rate them — they did not.)</p>
+
+<h3>Ratings given: 1</h3>
+<table>
+  <thead><tr><th>Rated</th><th>Type</th><th>Rating</th><th>Given at</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>f29e123a…</code> (merchant John)</td>
+      <td>merchant</td>
+      <td>5 ⭐</td>
+      <td>2026-05-10 12:50:06 (~10s after order completed)</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="s8">8. Reputation</h2>
+
+<h3>Current stored score</h3>
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Value</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>total_score</td><td>528</td><td>0–1000 scale</td></tr>
+    <tr><td>review_score</td><td>844</td><td>Suspicious — only 0 ratings received</td></tr>
+    <tr><td>execution_score</td><td>970</td><td>Based on 1/1 completion + fast settlement</td></tr>
+    <tr><td>volume_score</td><td>695</td><td>$1,968 on-chain volume (log-scaled)</td></tr>
+    <tr><td>consistency_score</td><td>911</td><td>Daily activity 6 of last 30</td></tr>
+    <tr><td>trust_score</td><td><span class="sev sev-bad">0</span></td><td>Should be ≥50 base — looks like a bug</td></tr>
+    <tr><td>tier</td><td><span class="sev sev-warn">diamond</span></td><td>Should be silver (400–599)</td></tr>
+    <tr><td>badges</td><td><code>["fast_trader"]</code></td><td>Avg completion ≤15 min ✅</td></tr>
+    <tr><td>calculated_at</td><td>2026-05-11 12:46:46</td><td><strong>9 days stale</strong></td></tr>
+  </tbody>
+</table>
+
+<h3>History</h3>
+<p><strong>158 snapshots</strong> stored. Recent values are all identical (528 / diamond / trust=0) — the worker ran many times against the same data, producing no change. Last snapshot: 2026-05-11 12:46:46.</p>
+
+<h3>Reputation events</h3>
+<table>
+  <thead><tr><th>Event</th><th>Δ</th><th>Reason</th><th>When</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>order_completed</td>
+      <td>+5</td>
+      <td>Order BM-260510-9B8B completed</td>
+      <td>2026-05-10 12:49:59</td>
+    </tr>
+  </tbody>
+</table>
+<p>Only one event recorded. The 39 on-chain trades did not produce any <code>reputation_events</code> rows — confirming that on-chain activity is read by core-api for scoring but does not write event audit rows.</p>
+
+<hr>
+
+<h2 id="s9">9. Auth, Sessions, Devices, IPs</h2>
+
+<table class="field-table">
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Total sessions</td><td>3</td></tr>
+    <tr><td>First session</td><td>2026-05-06 09:46:07 UTC</td></tr>
+    <tr><td>Last session</td><td>2026-05-06 10:40:30 UTC</td></tr>
+    <tr><td>Session span</td><td>~55 minutes on signup day only</td></tr>
+    <tr><td>Distinct devices</td><td>1</td></tr>
+    <tr><td>IP logs</td><td>1</td></tr>
+  </tbody>
+</table>
+
+<h3>Device</h3>
+<table>
+  <thead><tr><th>Fingerprint (truncated)</th><th>First seen</th><th>Last seen</th></tr></thead>
+  <tbody>
+    <tr><td><code>65424614e6b192…</code></td><td>2026-05-06 09:46:07</td><td>2026-05-06 09:46:07</td></tr>
+  </tbody>
+</table>
+
+<h3>IP log</h3>
+<table>
+  <thead><tr><th>IP</th><th>Action</th><th>User agent (summary)</th><th>When</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>122.162.151.25</code> (India)</td>
+      <td>signup</td>
+      <td>Mac Chrome 147</td>
+      <td>2026-05-06 09:46:07</td>
+    </tr>
+  </tbody>
+</table>
+<p>One IP, one device, three sessions — all within first hour of signup. After that, no sessions recorded — but the user did 39 v2 trades up to 2026-05-11. <strong>This implies the v2 on-chain trades were placed without going through the off-chain session/auth system</strong> — direct wallet transactions on Solana.</p>
+
+<h3>Risk</h3>
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>risk_profiles row</td><td>None (clean)</td></tr>
+    <tr><td>risk_events</td><td>0</td></tr>
+    <tr><td>blacklist</td><td>Not listed</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="s10">10. Payment Methods</h2>
+
+<table>
+  <thead><tr><th>id</th><th>type</th><th>label</th><th>details</th><th>default</th><th>active</th><th>created_at</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>685f935d…</code></td>
+      <td>upi</td>
+      <td>JJ</td>
+      <td><code>{"upi_id": "jjord@ybl"}</code></td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>2026-05-10 12:47:46</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>One UPI handle on file. Added 13 seconds before they created their first off-chain order (also at 12:47:59). Label "JJ" and UPI handle "jjord" don't match the account name "Joe" — could be a nickname (JJ → Joe), or could be a different person's UPI.</p>
+
+<p><strong>No bank accounts</strong> (<code>user_bank_accounts</code> empty), <strong>no rewards</strong> (<code>user_rewards</code> empty).</p>
+
+<hr>
+
+<h2 id="s11">11. Communications</h2>
+
+<h3>Direct messages received: 1</h3>
+<table>
+  <thead><tr><th>From</th><th>Type</th><th>When</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>f29e123a…</code> (merchant John)</td>
+      <td>merchant → user</td>
+      <td>2026-05-10 12:49:41</td>
+    </tr>
+  </tbody>
+</table>
+<p>One DM, from the merchant they traded with, sent ~16 seconds before the order completed. Content not shown (would require additional consent — this is end-user message content).</p>
+
+<h3>Error logs: 1</h3>
+<table>
+  <thead><tr><th>Message</th><th>When</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>Request rejected — session 7cad3ee8… is no longer valid</code></td>
+      <td>2026-05-16 11:07:58</td>
+    </tr>
+  </tbody>
+</table>
+<p>One auth-rejection error from 2026-05-16, after their last recorded session expired. Suggests they tried to reach the API with a stale token a week later.</p>
+
+<hr>
+
+<h2 id="s12">12. Tables With No Data For This User</h2>
+<ul>
+  <li><code>user_bank_accounts</code> — 0</li>
+  <li><code>user_rewards</code> — 0</li>
+  <li><code>user_password_reset_tokens</code> — 0</li>
+  <li><code>merchant_contacts</code> (as <code>user_id</code>) — 0</li>
+  <li><code>pending_escrow</code> — 0</li>
+  <li><code>trades</code> (v1 on-chain) — 0</li>
+  <li><code>disputes</code> (as raiser or on their orders) — 0</li>
+  <li><code>ratings</code> received — 0</li>
+  <li><code>risk_profiles</code> — none (clean)</li>
+  <li><code>risk_events</code> — 0</li>
+  <li><code>blacklist</code> — not listed</li>
+</ul>
+
+<hr>
+
+<h2>Summary recommendation</h2>
+
+<div class="alert alert-medium">
+  <h3>What this account looks like</h3>
+  <p>A real but unverified user who:</p>
+  <ul>
+    <li>Did a single $39 off-chain sell via merchant John, gave 5★ feedback — clean signal.</li>
+    <li>Then moved to on-chain v2 trading: 39 trades, $1,968, but only with <strong>3 counterparties</strong> — likely tripping the reputation engine's wash-trade heuristic if it were running.</li>
+    <li>Never verified email, never KYC'd, never set 2FA, never set a PIN.</li>
+    <li>Was last actively using the off-chain product on signup day; everything since is direct wallet activity.</li>
+  </ul>
+  <p>Combined with the matching merchant account <strong>Zooo</strong> (also under <code>zoopweb3@gmail.com</code>, flagged CRITICAL risk for multi-account device + IP clustering), this user is probably part of the same human operating both sides. The on-chain counterparty concentration is consistent with that.</p>
+
+  <h3>Actions</h3>
+  <ol>
+    <li>Verify whether the v2 on-chain trades involve the matching <strong>Zooo</strong> merchant wallet (<code>HcikA5eWWcVEVw5Z81SFv73AGaTTxNfVXRBoYwaUj6wf</code>) — if yes, this is self-trading.</li>
+    <li>Force re-verification of email before allowing more off-chain trading.</li>
+    <li>Fix the reputation tier bug (528 should map to silver, not diamond) and the <code>trust_score = 0</code> regression — same issues seen on the merchant report.</li>
+    <li>Restart / debug the reputation worker — this user's score hasn't updated in 9 days.</li>
+  </ol>
+</div>
+
+</body>
+</html>
