@@ -38,8 +38,8 @@ export default function WaitlistAuthNavbar(_props: Props) {
         borderBottom: '1px solid rgba(255,255,255,0.06)',
       }}
     >
-      <div className="max-w-[1280px] mx-auto px-5 sm:px-8 lg:px-10 h-[58px] flex items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
+      <div className="max-w-[1216px] mx-auto px-5 sm:px-8 lg:px-10 h-[58px] flex items-center justify-between gap-6">
+        <div className="flex items-center gap-6 md:gap-8">
           <Logo href="/waitlist" onDark />
           {/* MAINNET · LIVE indicator — mirrors futureStick Navbar.tsx:139-152:
               monospace, text-[9.5px], tracking-[0.22em], white/55, with a

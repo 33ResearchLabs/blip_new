@@ -222,7 +222,7 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
     >
       <WaitlistAuthNavbar current={navCurrent} />
 
-      <main className="relative z-10 max-w-[1200px] mx-auto px-6 pt-16 md:pt-24 pb-20">
+      <main className="relative z-10 max-w-[1200px] mx-auto px-6 pt-6 md:pt-10 pb-20">
         <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_475px] gap-10 lg:gap-14 items-center min-h-[80vh]">
           {/* ── LEFT — editorial copy ─────────────────────────────── */}
           <motion.div
