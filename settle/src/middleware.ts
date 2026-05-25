@@ -375,7 +375,15 @@ export function middleware(request: NextRequest) {
       pathname === '/api/client-errors' ||
       // Sentry tunnel route — used to bypass ad-blockers; must be anonymous.
       pathname === '/monitoring' ||
-      pathname.startsWith('/monitoring/');
+      pathname.startsWith('/monitoring/') ||
+      // Waitlist surfaces and their backing APIs are public — the rest of
+      // the app stays gated. Covers /waitlist/user, /waitlist/merchant,
+      // /waitlist/login, /waitlist/merchant-login, /waitlist/dashboard,
+      // /waitlist/check-email, plus the auth/register/login + waitlist
+      // task APIs they call from the browser.
+      pathname.startsWith('/waitlist') ||
+      pathname.startsWith('/api/waitlist/') ||
+      pathname.startsWith('/api/auth/');
 
     if (!isDevExempt) {
       const devCookie = request.cookies.get('dev_access_granted');
