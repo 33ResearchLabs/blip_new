@@ -33,6 +33,7 @@ interface MerchantRow {
   risk_score: string;
   risk_level: string;
   reputation_score: string;
+  reputation_calculated_at: string | null;
 }
 
 const SORT_COLUMNS: Record<string, string> = {
@@ -269,11 +270,18 @@ export async function GET(request: NextRequest) {
         COALESCE(m.has_compliance_access, false) as has_compliance_access,
         COALESCE(rp.risk_score, 0)::text as risk_score,
         COALESCE(rp.risk_level, 'low') as risk_level,
-        COALESCE(rs.total_score, 0)::text as reputation_score
+        COALESCE(rs.total_score, 0)::text as reputation_score,
         -- Intentionally NOT selecting rs.tier — it can drift from the
         -- live score (legacy pre-CIBIL-rebase rows still hold stale
         -- tier strings like 'platinum' on a 400 score). The frontend
         -- derives the tier from the score via getTierFromScore.
+        --
+        -- calculated_at IS exposed though, as the freshness indicator
+        -- in the admin Compliance UI. Same to_char ISO-with-Z handling
+        -- as last_seen_at above — without it the browser parses the
+        -- timestamp-without-tz value as local time, making fresh rows
+        -- read ~hours older than they are.
+        to_char(rs.calculated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS reputation_calculated_at
       FROM merchants m
       LEFT JOIN risk_profiles rp ON rp.entity_id = m.id
       LEFT JOIN reputation_scores rs ON rs.entity_id = m.id AND rs.entity_type = 'merchant'
@@ -363,6 +371,7 @@ export async function GET(request: NextRequest) {
       riskScore: parseInt(merchant.risk_score || '0'),
       riskLevel: merchant.risk_level || 'low',
       reputationScore: parseInt(merchant.reputation_score || '0'),
+      reputationCalculatedAt: merchant.reputation_calculated_at,
     }));
 
     return NextResponse.json({
