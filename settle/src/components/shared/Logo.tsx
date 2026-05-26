@@ -40,7 +40,7 @@ export const Logo = memo(function Logo({
       >
         <path
           d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28"
-          className={onDark ? undefined : "stroke-black dark:stroke-white"}
+          className={onDark ? undefined : "stroke-foreground"}
           stroke={onDark ? "#ffffff" : undefined}
           strokeWidth="9"
           strokeLinecap="round"
@@ -55,13 +55,13 @@ export const Logo = memo(function Logo({
         transition={{ duration: 0.2 }}
       >
         <span
-          className={onDark ? undefined : "text-black dark:text-white"}
+          className={onDark ? undefined : "text-foreground"}
           style={onDark ? { color: "#ffffff" } : undefined}
         >
           Blip
         </span>
         <span
-          className={onDark ? "ml-1" : "ml-1 text-black dark:text-white"}
+          className={onDark ? "ml-1" : "ml-1 text-foreground"}
           style={{
             fontStyle: "italic",
             fontWeight: 600,
