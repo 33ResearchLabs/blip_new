@@ -50,12 +50,14 @@ export async function POST(request: NextRequest) {
       message: 'If an account with that email exists, a password reset link has been sent.',
     });
 
-    // Lookup BOTH password-bearing AND wallet-only accounts so we can log
-    // WHICH case we hit. The actual email is only sent for password
-    // accounts (wallet-only has nothing to reset). The response shape
-    // remains identical in all cases — anti-enumeration preserved.
-    const allUsers = await query<UserRow & { password_hash: string | null }>(
-      `SELECT id, username, name, email, password_hash FROM users
+    // Lookup BOTH password-bearing AND alt-auth accounts so we can log
+    // WHICH case we hit. The actual email is sent for any account that
+    // has either a password to reset OR a Google link to "set first
+    // password" against; truly wallet-only accounts have nothing to do
+    // here. The response shape remains identical in all cases —
+    // anti-enumeration preserved.
+    const allUsers = await query<UserRow & { password_hash: string | null; google_sub: string | null }>(
+      `SELECT id, username, name, email, password_hash, google_sub FROM users
        WHERE LOWER(email) = $1`,
       [normalizedEmail]
     );
@@ -66,7 +68,13 @@ export async function POST(request: NextRequest) {
     }
 
     const candidate = allUsers[0];
-    if (!candidate.password_hash) {
+    // Skip wallet-only accounts (no password, no Google) — they truly
+    // have nothing to reset. Google-signed-up accounts with NULL
+    // password_hash legitimately use this same flow to set their FIRST
+    // password so they can sign in via email/password too; the existing
+    // reset-password endpoint already handles writing the first hash
+    // (it's just an UPDATE).
+    if (!candidate.password_hash && !candidate.google_sub) {
 
       return successResponse;
     }
