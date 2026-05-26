@@ -32,6 +32,8 @@ interface MerchantRow {
   has_compliance_access: boolean;
   risk_score: string;
   risk_level: string;
+  reputation_score: string;
+  reputation_tier: string | null;
 }
 
 const SORT_COLUMNS: Record<string, string> = {
@@ -267,9 +269,12 @@ export async function GET(request: NextRequest) {
         m.has_ops_access,
         COALESCE(m.has_compliance_access, false) as has_compliance_access,
         COALESCE(rp.risk_score, 0)::text as risk_score,
-        COALESCE(rp.risk_level, 'low') as risk_level
+        COALESCE(rp.risk_level, 'low') as risk_level,
+        COALESCE(rs.total_score, 0)::text as reputation_score,
+        rs.tier as reputation_tier
       FROM merchants m
       LEFT JOIN risk_profiles rp ON rp.entity_id = m.id
+      LEFT JOIN reputation_scores rs ON rs.entity_id = m.id AND rs.entity_type = 'merchant'
       ${whereClause}
       ${orderClause}
       LIMIT $${limitParam} OFFSET $${offsetParam}
@@ -277,7 +282,11 @@ export async function GET(request: NextRequest) {
 
     // Get total count for pagination
     const countResult = await queryOne<{ count: string }>(
-      `SELECT COUNT(*)::text as count FROM merchants m LEFT JOIN risk_profiles rp ON rp.entity_id = m.id ${whereClause}`,
+      `SELECT COUNT(*)::text as count
+       FROM merchants m
+       LEFT JOIN risk_profiles rp ON rp.entity_id = m.id
+       LEFT JOIN reputation_scores rs ON rs.entity_id = m.id AND rs.entity_type = 'merchant'
+       ${whereClause}`,
       params.slice(0, params.length - 2) // exclude limit/offset
     );
 
@@ -351,6 +360,8 @@ export async function GET(request: NextRequest) {
       hasComplianceAccess: merchant.has_compliance_access,
       riskScore: parseInt(merchant.risk_score || '0'),
       riskLevel: merchant.risk_level || 'low',
+      reputationScore: parseInt(merchant.reputation_score || '0'),
+      reputationTier: merchant.reputation_tier,
     }));
 
     return NextResponse.json({

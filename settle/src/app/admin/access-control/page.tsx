@@ -40,7 +40,31 @@ interface MerchantItem {
   lastSeenAt: string | null;
   riskScore: number;
   riskLevel: string;
+  reputationScore: number;
+  reputationTier: string | null;
 }
+
+// CIBIL-rebased reputation tier styling (300–900 scale).
+// Matches settle/src/lib/reputation/types.ts TIER_INFO.
+const getReputationStyle = (
+  score: number,
+  tier: string | null
+): { label: string; className: string } => {
+  if (!score || score <= 0) {
+    return { label: "—", className: "text-foreground/35" };
+  }
+  if (tier === "platinum" || tier === "diamond")
+    return { label: "Platinum", className: "text-[#E5E4E2]" };
+  if (tier === "gold")
+    return { label: "Gold", className: "text-[#FFD700]" };
+  if (tier === "silver")
+    return { label: "Silver", className: "text-[#C0C0C0]" };
+  if (tier === "bronze")
+    return { label: "Bronze", className: "text-[#CD7F32]" };
+  if (tier === "risky")
+    return { label: "Restricted", className: "text-[var(--color-error)]" };
+  return { label: "New", className: "text-foreground/55" };
+};
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -784,6 +808,10 @@ function UserRow({
     : ["Read Only"];
 
   const riskStyle = getRiskStyle(merchant.riskLevel);
+  const reputationStyle = getReputationStyle(
+    merchant.reputationScore,
+    merchant.reputationTier
+  );
 
   return (
     <div className="grid grid-cols-[1.8fr_1.2fr_0.9fr_0.9fr_1.4fr_1.1fr_0.9fr_60px] gap-4 px-5 py-3.5 border-b border-section-divider/50 last:border-0 hover:bg-accent-subtle/40 transition-colors items-center">
@@ -822,22 +850,49 @@ function UserRow({
         </span>
       </div>
 
-      {/* Reputation */}
-      <div className="flex items-center gap-1.5">
-        <Star
-          className={`w-3.5 h-3.5 ${
-            merchant.rating > 0
-              ? "text-amber-400 fill-amber-400"
-              : "text-foreground/20"
-          }`}
-        />
-        <div className="flex flex-col">
-          <span className="text-[12px] font-medium text-foreground tabular-nums leading-tight">
-            {merchant.rating > 0 ? merchant.rating.toFixed(1) : "—"}
+      {/* Reputation — score on top (300–900 CIBIL-rebased), rating beneath */}
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <div className="flex items-baseline gap-1.5">
+          <span
+            className={`text-[13px] font-semibold tabular-nums leading-tight ${reputationStyle.className}`}
+          >
+            {merchant.reputationScore > 0
+              ? formatCount(merchant.reputationScore)
+              : "—"}
           </span>
-          <span className="text-[9px] text-foreground/35 font-mono tabular-nums leading-tight">
-            {formatCount(merchant.ratingCount)} reviews
+          <span className="text-[9px] font-mono text-foreground/35 leading-tight truncate">
+            {reputationStyle.label}
           </span>
+        </div>
+        {/*
+          Gate the star + numeric rating on ratingCount, not on rating>0.
+          merchants.rating is initialised to a non-zero default for fresh
+          accounts (DB column default), so checking rating>0 lets a
+          "5.0 · 0 reviews" placeholder leak in. Only show a real rating
+          once at least one review has been written.
+        */}
+        <div className="flex items-center gap-1">
+          <Star
+            className={`w-3 h-3 shrink-0 ${
+              merchant.ratingCount > 0
+                ? "text-amber-400 fill-amber-400"
+                : "text-foreground/20"
+            }`}
+          />
+          {merchant.ratingCount > 0 ? (
+            <>
+              <span className="text-[10px] font-mono text-foreground/55 tabular-nums leading-tight">
+                {merchant.rating.toFixed(1)}
+              </span>
+              <span className="text-[9px] font-mono text-foreground/35 tabular-nums leading-tight">
+                · {formatCount(merchant.ratingCount)}
+              </span>
+            </>
+          ) : (
+            <span className="text-[10px] font-mono text-foreground/35 leading-tight">
+              No reviews
+            </span>
+          )}
         </div>
       </div>
 
