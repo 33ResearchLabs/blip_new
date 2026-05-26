@@ -229,8 +229,15 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onBlur={() => validate()}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (errors.email) {
+                setErrors((prev) => {
+                  const { email: _omit, ...rest } = prev;
+                  return rest;
+                });
+              }
+            }}
             maxLength={254}
             disabled={isLoading}
             className={inputCls(!!errors.email, "pl-11 pr-4")}
@@ -253,8 +260,15 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onBlur={() => validate()}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (errors.password) {
+                setErrors((prev) => {
+                  const { password: _omit, ...rest } = prev;
+                  return rest;
+                });
+              }
+            }}
             onFocus={() => setShowRequirements(true)}
             maxLength={50}
             disabled={isLoading}
@@ -377,8 +391,15 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             type={showConfirmPassword ? "text" : "password"}
             autoComplete="new-password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            onBlur={() => validate()}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              if (errors.confirmPassword) {
+                setErrors((prev) => {
+                  const { confirmPassword: _omit, ...rest } = prev;
+                  return rest;
+                });
+              }
+            }}
             maxLength={50}
             disabled={isLoading}
             className={inputCls(!!errors.confirmPassword, "pl-11 pr-11")}

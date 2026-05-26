@@ -192,8 +192,10 @@ export default function LoginForm({ role }: LoginFormProps) {
                 autoComplete="email"
                 autoFocus
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onBlur={() => validate()}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                }}
                 maxLength={254}
                 disabled={isLoading}
                 className={`w-full pl-12 pr-4 py-3.5 bg-[#F2F2F5] dark:bg-white/[0.06] border ${
@@ -231,8 +233,10 @@ export default function LoginForm({ role }: LoginFormProps) {
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onBlur={() => validate()}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
+                }}
                 maxLength={100}
                 disabled={isLoading}
                 className={`w-full pl-12 pr-12 py-3.5 bg-[#F2F2F5] dark:bg-white/[0.06] border ${

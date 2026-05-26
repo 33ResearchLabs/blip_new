@@ -1420,12 +1420,12 @@ function UpgradeCTA({ isMerchant, onOpenUpgrade }: { isMerchant: boolean; onOpen
   const t = useThemeTokens();
   return (
     <button onClick={onOpenUpgrade}
-      className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 flex items-center justify-between gap-3 text-left ${t.hov} transition`}>
-      <div className="flex items-center gap-3">
+      className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left ${t.hov} transition w-full`}>
+      <div className="flex items-center gap-3 min-w-0">
         <div className={`w-10 h-10 rounded-full ${t.inputBg} border ${t.border} flex items-center justify-center shrink-0`}>
           {isMerchant ? <UsersIcon className={`w-5 h-5 ${t.txt}`} /> : <Store className={`w-5 h-5 ${t.txt}`} />}
         </div>
-        <div>
+        <div className="min-w-0">
           <p className={`text-sm font-semibold ${t.txt}`}>
             {isMerchant ? 'Also a trader? Join as user.' : 'Run a business? Become a merchant.'}
           </p>
@@ -1436,7 +1436,7 @@ function UpgradeCTA({ isMerchant, onOpenUpgrade }: { isMerchant: boolean; onOpen
           </p>
         </div>
       </div>
-      <span className={`${t.accentBg} ${t.accentText} px-4 py-2 rounded-full text-[11px] font-semibold uppercase tracking-[0.14em] hover:opacity-90 transition`}>
+      <span className={`${t.accentBg} ${t.accentText} px-4 py-2 rounded-full text-[11px] font-semibold uppercase tracking-[0.14em] hover:opacity-90 transition whitespace-nowrap shrink-0 self-stretch sm:self-auto text-center`}>
         {isMerchant ? 'Join as user' : 'Become merchant'} →
       </span>
     </button>
