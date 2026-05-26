@@ -226,6 +226,16 @@ export default function WaitlistDashboardPage() {
   // referral (matches the synthetic-existing logic in the quest map below).
   const verifiedTaskCount = me.tasks.filter((t) => t.status === 'VERIFIED').length;
   const questsCompleted = verifiedTaskCount + (referralCount > 0 ? 1 : 0);
+  // Merchant beta-access "Send Request" requires the three social quests
+  // (X follow, Telegram join, retweet) to be verified first — the banner
+  // copy promises this gate, the button needs to honour it.
+  const verifiedTaskTypes = new Set(
+    me.tasks.filter((t) => t.status === 'VERIFIED').map((t) => t.task_type),
+  );
+  const socialQuestsDone =
+    verifiedTaskTypes.has('TWITTER') &&
+    verifiedTaskTypes.has('TELEGRAM') &&
+    verifiedTaskTypes.has('CUSTOM');
   const totalEarnedFromQuestsAndRef = me.tasks.filter((t) => t.status === 'VERIFIED').reduce((s, t) => s + (t.points_awarded || 0), 0)
     + me.referrals.filter((r) => r.reward_status === 'credited').reduce((s, r) => s + r.reward_amount, 0);
   const pendingPoints = me.referrals.filter((r) => r.reward_status === 'pending').length * (isMerchant ? MERCHANT_BLIP_POINTS.REFERRAL : USER_BLIP_POINTS.REFERRAL);
@@ -284,6 +294,7 @@ export default function WaitlistDashboardPage() {
             referralCount={referralCount}
             verifiedTaskCount={verifiedTaskCount}
             questsCompleted={questsCompleted}
+            socialQuestsDone={socialQuestsDone}
             totalEarnedFromQuestsAndRef={totalEarnedFromQuestsAndRef}
             pendingPoints={pendingPoints}
             referralCode={referralCode}
@@ -406,6 +417,7 @@ function MerchantLayout(props: {
   referralCount: number;
   verifiedTaskCount: number;
   questsCompleted: number;
+  socialQuestsDone: boolean;
   totalEarnedFromQuestsAndRef: number;
   pendingPoints: number;
   referralCode: string;
@@ -426,7 +438,8 @@ function MerchantLayout(props: {
   onOpenUpgrade: () => void;
 }) {
   const {
-    me, blipPoints, referralCount, questsCompleted, totalEarnedFromQuestsAndRef, pendingPoints,
+    me, blipPoints, referralCount, questsCompleted, socialQuestsDone,
+    totalEarnedFromQuestsAndRef, pendingPoints,
     referralCode, referralLink, referralUnit, quests, leaderboard,
     copied, copiedLink, onCopyCode, onCopyLink, onShowHistory, onOpenReferral, onOpenHow,
     onOpenBeta, onReload, hasBothSegments, onOpenUpgrade,
@@ -556,7 +569,11 @@ function MerchantLayout(props: {
           </div>
 
           {/* P2P App Test banner */}
-          <P2PTestBanner betaRequest={me.beta_request} onSendRequest={onOpenBeta} />
+          <P2PTestBanner
+            betaRequest={me.beta_request}
+            socialQuestsDone={socialQuestsDone}
+            onSendRequest={onOpenBeta}
+          />
 
           {!hasBothSegments && (
             <UpgradeCTA isMerchant onOpenUpgrade={onOpenUpgrade} />
@@ -1314,18 +1331,27 @@ function ProgressStepsCard({
 // ── Merchant P2P beta banner. Source: MerchantDashboard.tsx 1704–1755.
 // Button state mirrors the actor's latest BetaRequest row.
 function P2PTestBanner({
-  betaRequest, onSendRequest,
-}: { betaRequest: BetaRequest | null; onSendRequest: () => void }) {
+  betaRequest, socialQuestsDone, onSendRequest,
+}: {
+  betaRequest: BetaRequest | null;
+  socialQuestsDone: boolean;
+  onSendRequest: () => void;
+}) {
   const t = useThemeTokens();
   const status = betaRequest?.status ?? null;
   const isOpen = status === 'pending' || status === 'contacted';
   const isApproved = status === 'approved';
+  // Honour the inline "Complete Social Quests to unlock" copy: the
+  // Send Request CTA only becomes pressable once the three social
+  // quests (X follow, Telegram join, retweet) are verified.
+  const locked = !socialQuestsDone && status == null;
 
   let buttonText = 'Send Request';
-  if (status === 'pending') buttonText = 'Request Sent';
+  if (locked) buttonText = 'Complete Quests';
+  else if (status === 'pending') buttonText = 'Request Sent';
   else if (status === 'contacted') buttonText = "We've Been In Touch";
   else if (isApproved) buttonText = 'Approved ✓';
-  const disabled = isOpen || isApproved;
+  const disabled = locked || isOpen || isApproved;
 
   return (
     <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl overflow-hidden`}>
@@ -1357,8 +1383,8 @@ function P2PTestBanner({
           className={`px-4 py-2 text-[11px] font-semibold rounded-full transition-colors shrink-0 ${
             isApproved
               ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 cursor-default'
-              : isOpen
-                ? `${t.inputBg} border ${t.border} ${t.sub} cursor-default`
+              : isOpen || locked
+                ? `${t.inputBg} border ${t.border} ${t.sub} cursor-not-allowed`
                 : `${t.accentBg} ${t.accentText} hover:opacity-90`
           }`}
         >

@@ -566,6 +566,25 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
                 )}
               </div>
             </div>
+
+            {/* Mobile-only cross-sell card. The full CrossSellCard
+                lives inside the desktop editorial column (which is
+                `hidden lg:block`); on phones, surface the same CTA
+                below the form so visitors on /waitlist/merchant still
+                have a discoverable path into /waitlist/user (and
+                vice-versa). Reuses the exact same component so copy +
+                styling stay in lock-step. */}
+            {showCrossSell && (
+              <div className="lg:hidden mt-6">
+                <CrossSellCard
+                  href={crossSellHref}
+                  stat={crossSell.stat}
+                  statLabel={crossSell.statLabel}
+                  eyebrow={crossSell.eyebrow}
+                  title={crossSell.title}
+                />
+              </div>
+            )}
           </motion.div>
         </div>
       </main>
