@@ -22,6 +22,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
 import { formatCount, formatCrypto } from "@/lib/format";
+import { getTierFromScore } from "@/lib/reputation/types";
 
 type Tab = "compliance" | "ops";
 type StatusFilter = "all" | "granted" | "no_access";
@@ -41,18 +42,22 @@ interface MerchantItem {
   riskScore: number;
   riskLevel: string;
   reputationScore: number;
-  reputationTier: string | null;
 }
 
 // CIBIL-rebased reputation tier styling (300–900 scale).
-// Matches settle/src/lib/reputation/types.ts TIER_INFO.
+// Tier is *derived from the score* via getTierFromScore — we deliberately
+// ignore the persisted reputation_scores.tier column because production
+// still has stale pre-rebase rows (e.g. score=400 stored with tier=
+// 'platinum'), and the daily rescore worker hasn't caught up. Computing
+// it live here matches the same approach /api/reputation/me takes for the
+// merchant + waitlist dashboards.
 const getReputationStyle = (
-  score: number,
-  tier: string | null
+  score: number
 ): { label: string; className: string } => {
   if (!score || score <= 0) {
     return { label: "—", className: "text-foreground/35" };
   }
+  const tier = getTierFromScore(score);
   if (tier === "platinum" || tier === "diamond")
     return { label: "Platinum", className: "text-[#E5E4E2]" };
   if (tier === "gold")
@@ -61,9 +66,9 @@ const getReputationStyle = (
     return { label: "Silver", className: "text-[#C0C0C0]" };
   if (tier === "bronze")
     return { label: "Bronze", className: "text-[#CD7F32]" };
-  if (tier === "risky")
-    return { label: "Restricted", className: "text-[var(--color-error)]" };
-  return { label: "New", className: "text-foreground/55" };
+  if (tier === "newcomer")
+    return { label: "New", className: "text-foreground/55" };
+  return { label: "Restricted", className: "text-[var(--color-error)]" };
 };
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
@@ -808,10 +813,7 @@ function UserRow({
     : ["Read Only"];
 
   const riskStyle = getRiskStyle(merchant.riskLevel);
-  const reputationStyle = getReputationStyle(
-    merchant.reputationScore,
-    merchant.reputationTier
-  );
+  const reputationStyle = getReputationStyle(merchant.reputationScore);
 
   return (
     <div className="grid grid-cols-[1.8fr_1.2fr_0.9fr_0.9fr_1.4fr_1.1fr_0.9fr_60px] gap-4 px-5 py-3.5 border-b border-section-divider/50 last:border-0 hover:bg-accent-subtle/40 transition-colors items-center">

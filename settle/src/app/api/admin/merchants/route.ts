@@ -33,7 +33,6 @@ interface MerchantRow {
   risk_score: string;
   risk_level: string;
   reputation_score: string;
-  reputation_tier: string | null;
 }
 
 const SORT_COLUMNS: Record<string, string> = {
@@ -270,8 +269,11 @@ export async function GET(request: NextRequest) {
         COALESCE(m.has_compliance_access, false) as has_compliance_access,
         COALESCE(rp.risk_score, 0)::text as risk_score,
         COALESCE(rp.risk_level, 'low') as risk_level,
-        COALESCE(rs.total_score, 0)::text as reputation_score,
-        rs.tier as reputation_tier
+        COALESCE(rs.total_score, 0)::text as reputation_score
+        -- Intentionally NOT selecting rs.tier — it can drift from the
+        -- live score (legacy pre-CIBIL-rebase rows still hold stale
+        -- tier strings like 'platinum' on a 400 score). The frontend
+        -- derives the tier from the score via getTierFromScore.
       FROM merchants m
       LEFT JOIN risk_profiles rp ON rp.entity_id = m.id
       LEFT JOIN reputation_scores rs ON rs.entity_id = m.id AND rs.entity_type = 'merchant'
@@ -361,7 +363,6 @@ export async function GET(request: NextRequest) {
       riskScore: parseInt(merchant.risk_score || '0'),
       riskLevel: merchant.risk_level || 'low',
       reputationScore: parseInt(merchant.reputation_score || '0'),
-      reputationTier: merchant.reputation_tier,
     }));
 
     return NextResponse.json({
