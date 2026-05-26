@@ -30,8 +30,8 @@ interface MerchantRow {
   created_at: string;
   has_ops_access: boolean;
   has_compliance_access: boolean;
-  risk_score: string;
-  risk_level: string;
+  risk_score: string | null;
+  risk_level: string | null;
   reputation_score: string;
   reputation_calculated_at: string | null;
 }
@@ -51,7 +51,10 @@ const SORT_COLUMNS: Record<string, string> = {
   name: 'm.business_name ASC',
   status: 'm.status ASC',
   online: 'm.is_online DESC',
-  risk: 'risk_score DESC',
+  // risk_score is now nullable (rp.wl_score is NULL for actors the threat
+  // detector hasn't seen yet). NULLS LAST keeps Unscored rows out of the
+  // top of a "sort by risk desc" view where the riskiest should surface.
+  risk: 'risk_score DESC NULLS LAST',
 };
 
 // GET /api/admin/merchants - Get all merchants with stats
@@ -157,9 +160,13 @@ export async function GET(request: NextRequest) {
     } else if (riskFilter === 'zero_trades') {
       conditions.push('COALESCE(m.total_trades, 0) = 0');
     } else if (riskFilter === 'high_risk') {
-      conditions.push('COALESCE(rp.risk_score, 0) > 60');
+      // Switched from event-based rp.risk_score to algo-based rp.wl_score
+      // so this page filters on the same number it now displays. wl_score
+      // uses the threat-service 0–100 scale (LABEL_BANDS in lib/threat/
+      // weights.ts: HIGH_RISK >= 65, CRITICAL >= 85).
+      conditions.push('COALESCE(rp.wl_score, 0) >= 65');
     } else if (riskFilter === 'critical') {
-      conditions.push('COALESCE(rp.risk_score, 0) >= 80');
+      conditions.push('COALESCE(rp.wl_score, 0) >= 85');
     }
 
     // Auto-accept
@@ -268,8 +275,15 @@ export async function GET(request: NextRequest) {
         to_char(m.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
         m.has_ops_access,
         COALESCE(m.has_compliance_access, false) as has_compliance_access,
-        COALESCE(rp.risk_score, 0)::text as risk_score,
-        COALESCE(rp.risk_level, 'low') as risk_level,
+        -- Risk read switched from event-counter (rp.risk_score / rp.risk_level)
+        -- to algorithmic threat score (rp.wl_score / rp.wl_label) so this
+        -- page now matches the Admin Waitlist screen — both surfaces sit on
+        -- the same algo (settle/src/lib/threat/service.ts). We deliberately
+        -- DO NOT COALESCE here: nullable so the frontend can render a
+        -- distinct "Unscored" state for merchants the threat detector
+        -- hasn't evaluated yet (e.g. created outside the waitlist flow).
+        rp.wl_score::text as risk_score,
+        rp.wl_label as risk_level,
         COALESCE(rs.total_score, 0)::text as reputation_score,
         -- Intentionally NOT selecting rs.tier — it can drift from the
         -- live score (legacy pre-CIBIL-rebase rows still hold stale
@@ -368,8 +382,11 @@ export async function GET(request: NextRequest) {
       createdAt: merchant.created_at,
       hasOpsAccess: merchant.has_ops_access,
       hasComplianceAccess: merchant.has_compliance_access,
-      riskScore: parseInt(merchant.risk_score || '0'),
-      riskLevel: merchant.risk_level || 'low',
+      // Null when the threat detector has never run for this merchant.
+      // Frontend uses null as the "Unscored" signal rather than collapsing
+      // to a misleading 0 / 'low'.
+      riskScore: merchant.risk_score === null ? null : parseInt(merchant.risk_score),
+      riskLevel: merchant.risk_level,
       reputationScore: parseInt(merchant.reputation_score || '0'),
       reputationCalculatedAt: merchant.reputation_calculated_at,
     }));

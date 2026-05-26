@@ -39,8 +39,11 @@ interface MerchantItem {
   hasComplianceAccess: boolean;
   hasOpsAccess: boolean;
   lastSeenAt: string | null;
-  riskScore: number;
-  riskLevel: string;
+  // Risk now comes from the threat-service algo (wl_score/wl_label),
+  // shared with the Admin Waitlist page. Both fields are null when the
+  // threat detector has never run for this merchant.
+  riskScore: number | null;
+  riskLevel: string | null;
   reputationScore: number;
   reputationCalculatedAt: string | null;
 }
@@ -761,29 +764,56 @@ function FilterOption({
   );
 }
 
-function getRiskStyle(level: string): { label: string; className: string } {
-  switch ((level || "low").toLowerCase()) {
-    case "critical":
+// Vocabulary matches settle/src/lib/threat/types.ts RiskLabel — the same
+// labels rendered on /admin/waitlist. Bands are defined in
+// settle/src/lib/threat/weights.ts LABEL_BANDS:
+//   CRITICAL  >= 85   HIGH_RISK >= 65   SUSPECT >= 45
+//   NEUTRAL   >= 25   CLEAN     >= 10   TRUSTED >= 0
+// A null label is the "no algo run yet" state — distinct from TRUSTED.
+function getRiskStyle(
+  level: string | null
+): { label: string; className: string } {
+  switch ((level || "").toUpperCase()) {
+    case "CRITICAL":
       return {
         label: "Critical",
         className:
           "bg-[var(--color-error)]/15 border-[var(--color-error)]/30 text-[var(--color-error)]",
       };
-    case "high":
+    case "HIGH_RISK":
       return {
-        label: "High",
+        label: "High risk",
         className: "bg-orange-500/15 border-orange-500/30 text-orange-400",
       };
-    case "medium":
+    case "SUSPECT":
       return {
-        label: "Medium",
+        label: "Suspect",
         className: "bg-amber-500/15 border-amber-500/30 text-amber-400",
       };
-    default:
+    case "NEUTRAL":
       return {
-        label: "Low",
+        label: "Neutral",
+        className: "bg-foreground/5 border-foreground/15 text-foreground/70",
+      };
+    case "CLEAN":
+      return {
+        label: "Clean",
         className:
           "bg-[var(--color-success)]/10 border-[var(--color-success)]/25 text-[var(--color-success)]",
+      };
+    case "TRUSTED":
+      return {
+        label: "Trusted",
+        className:
+          "bg-[var(--color-success)]/15 border-[var(--color-success)]/30 text-[var(--color-success)]",
+      };
+    default:
+      // No threat-service row → "Unscored". Visually muted so admins can
+      // tell at a glance which actors haven't been evaluated.
+      return {
+        label: "Unscored",
+        className:
+          "bg-foreground/5 border-foreground/10 text-foreground/40",
       };
   }
 }
@@ -920,7 +950,8 @@ function UserRow({
           className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border tabular-nums ${riskStyle.className}`}
         >
           <AlertTriangle className="w-3 h-3" />
-          {riskStyle.label} · {merchant.riskScore}
+          {riskStyle.label}
+          {merchant.riskScore !== null && ` · ${merchant.riskScore}`}
         </span>
       </div>
 
