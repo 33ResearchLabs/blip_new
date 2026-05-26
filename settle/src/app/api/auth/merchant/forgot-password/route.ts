@@ -36,11 +36,11 @@ export async function POST(request: NextRequest) {
       message: 'If an account with that email exists, a password reset link has been sent.',
     });
 
-    // Lookup BOTH password-bearing AND wallet-only merchants so we can log
+    // Lookup BOTH password-bearing AND alt-auth merchants so we can log
     // WHICH case we hit. Anti-enumeration preserved — response shape is
     // identical in all branches; only the server log differs.
-    const allMerchants = await query<MerchantRow & { password_hash: string | null }>(
-      `SELECT id, display_name, email, password_hash FROM merchants WHERE LOWER(email) = $1`,
+    const allMerchants = await query<MerchantRow & { password_hash: string | null; google_sub: string | null }>(
+      `SELECT id, display_name, email, password_hash, google_sub FROM merchants WHERE LOWER(email) = $1`,
       [normalizedEmail]
     );
 
@@ -50,7 +50,12 @@ export async function POST(request: NextRequest) {
     }
 
     const candidate = allMerchants[0];
-    if (!candidate.password_hash) {
+    // Skip wallet-only merchants (no password, no Google) — they truly
+    // have nothing to reset. Google-signed-up merchants with NULL
+    // password_hash legitimately use this flow to set their FIRST
+    // password so they can sign in via email/password too; the existing
+    // reset-password endpoint already handles writing the first hash.
+    if (!candidate.password_hash && !candidate.google_sub) {
 
       return successResponse;
     }
