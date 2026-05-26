@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, Sun, Moon } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 import { Logo } from '@/components/shared/Logo';
 import { useWaitlistTheme } from '@/context/WaitlistThemeContext';
 
@@ -82,15 +82,9 @@ export default function WaitlistAuthNavbar(_props: Props) {
               ? <Sun className="w-4 h-4" style={{ color: '#ffffff' }} />
               : <Moon className="w-4 h-4" style={{ color: '#ffffff' }} />}
           </button>
-
-          <Link
-            href="/waitlist/user"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-semibold hover:opacity-90 transition"
-            style={{ background: '#ffffff', color: '#000000' }}
-          >
-            Join Waitlist
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+          {/* "Join Waitlist" CTA removed — the auth shell already
+              presents Sign up / Sign in directly; a duplicate CTA in
+              the navbar on the same page is redundant. */}
         </div>
       </div>
     </header>
