@@ -49,6 +49,12 @@ ARG NEXT_PUBLIC_ENABLE_APP_TOUR=false
 # variable for the same name never reaches the compiled JS and the entire
 # feature appears off in production.
 ARG NEXT_PUBLIC_ENABLE_MERCHANT_ONBOARDING=false
+# Google Identity Services client ID — read client-side by
+# GoogleSignInButton.tsx to init the GIS button. NEXT_PUBLIC_* values are
+# baked into the client bundle at build time, so without this ARG the
+# Railway service variable never reaches the compiled JS and the
+# "Continue with Google" button is hidden everywhere in production.
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ARG DEV_LOCK_ENABLED=true
 ENV DEV_LOCK_ENABLED=$DEV_LOCK_ENABLED
 ENV NEXT_PUBLIC_MOCK_MODE=false
@@ -63,6 +69,7 @@ ENV NEXT_PUBLIC_BLIPSCAN_URL=$NEXT_PUBLIC_BLIPSCAN_URL
 ENV NEXT_PUBLIC_EMBEDDED_WALLET=$NEXT_PUBLIC_EMBEDDED_WALLET
 ENV NEXT_PUBLIC_ENABLE_APP_TOUR=$NEXT_PUBLIC_ENABLE_APP_TOUR
 ENV NEXT_PUBLIC_ENABLE_MERCHANT_ONBOARDING=$NEXT_PUBLIC_ENABLE_MERCHANT_ONBOARDING
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 RUN pnpm -C settle build
 
 # ── Production image ────────────────────────────────────────────────
