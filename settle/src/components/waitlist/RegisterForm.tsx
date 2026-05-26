@@ -35,6 +35,8 @@ import {
 import { rememberRole } from "@/lib/waitlist/roleCache";
 import { collectFingerprint, type FingerprintPayload } from "@/lib/threat/clientFingerprint";
 import { SignupBehaviorCollector } from "@/lib/threat/clientTelemetry";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
+import OrDivider from "@/components/auth/OrDivider";
 
 interface RegisterFormProps {
   role: "user" | "merchant";
@@ -466,6 +468,23 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           <Shield className="w-3 h-3" strokeWidth={2} />
           We respect your privacy. No spam, ever.
         </p>
+      </div>
+
+      <div className="pt-1 space-y-2">
+        <OrDivider />
+        <GoogleSignInButton
+          role={role}
+          source={isMerchant ? "waitlist_merchant_register_google" : "waitlist_user_register_google"}
+          waitlist
+          referralCode={referralCode.trim() || undefined}
+          theme="light"
+          onSuccess={() => {
+            rememberRole(role);
+            router.push("/waitlist/dashboard");
+          }}
+          onError={(msg) => setSubmitError(msg)}
+          disabled={isLoading}
+        />
       </div>
     </form>
   );

@@ -15,6 +15,8 @@ import {
   validateUserPin,
   USER_PIN_LENGTH,
 } from "@/lib/validation/userAuth";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
+import OrDivider from "@/components/auth/OrDivider";
 
 interface LandingPageProps {
   loginForm: { username: string; password: string };
@@ -53,6 +55,10 @@ interface LandingPageProps {
   /** When true, skips the welcome page and goes straight to the login form.
    *  Used by the /login route. */
   skipWelcome?: boolean;
+  /** Apply a successful /api/auth/google response — same shape as the
+   *  password-login success path (user + accessToken + token). When omitted
+   *  the Google button is hidden so we never render an unwired flow. */
+  onGoogleSuccess?: (data: any) => void;
 }
 
 export function LandingPage({
@@ -69,6 +75,7 @@ export function LandingPage({
   registerEmail = "",
   setRegisterEmail,
   skipWelcome = false,
+  onGoogleSuccess,
 }: LandingPageProps) {
   const router = useRouter();
   // Hide merchant entry points when running as the User PWA — those routes
@@ -868,6 +875,20 @@ export function LandingPage({
             >
               {authMode === 'login' ? 'Register' : 'Sign In'}
             </motion.button>
+
+            {onGoogleSuccess && (
+              <div className="space-y-2 pt-1">
+                <OrDivider />
+                <GoogleSignInButton
+                  role="user"
+                  source={authMode === 'login' ? 'user_app_login_google' : 'user_app_register_google'}
+                  theme="dark"
+                  onSuccess={onGoogleSuccess}
+                  onError={(msg) => setLoginError(msg)}
+                  disabled={isLoggingIn}
+                />
+              </div>
+            )}
 
             <p className="text-center text-[11px] text-text-secondary">
               Connect your wallet after signing in to enable on-chain trading

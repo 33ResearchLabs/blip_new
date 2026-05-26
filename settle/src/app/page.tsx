@@ -570,6 +570,7 @@ export default function Home() {
                 registerEmail={auth.registerEmail}
                 setRegisterEmail={auth.setRegisterEmail}
                 skipWelcome={skipWelcome}
+                onGoogleSuccess={auth.handleGoogleSuccess}
               />
             );
           })()}

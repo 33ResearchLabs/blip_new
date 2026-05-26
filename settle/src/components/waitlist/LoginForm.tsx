@@ -14,6 +14,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
 import { rememberRole } from "@/lib/waitlist/roleCache";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
+import OrDivider from "@/components/auth/OrDivider";
 
 interface LoginFormProps {
   role: "user" | "merchant";
@@ -320,6 +322,22 @@ export default function LoginForm({ role }: LoginFormProps) {
                 "Sign In"
               )}
             </button>
+          </div>
+
+          <div className="pt-2 space-y-2">
+            <OrDivider />
+            <GoogleSignInButton
+              role={role}
+              source={isMerchant ? "waitlist_merchant_login_google" : "waitlist_user_login_google"}
+              waitlist
+              theme="light"
+              onSuccess={() => {
+                rememberRole(role);
+                router.push("/waitlist/dashboard");
+              }}
+              onError={(msg) => setSubmitError(msg)}
+              disabled={isLoading}
+            />
           </div>
         </form>
     </div>
