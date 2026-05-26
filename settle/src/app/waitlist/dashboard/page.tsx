@@ -268,7 +268,7 @@ export default function WaitlistDashboardPage() {
   const hasBothSegments = !!counterpart;
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] dark:bg-black text-black dark:text-white font-sans antialiased">
+    <div className="min-h-screen bg-[#FAF8F5] dark:bg-black text-black dark:text-white font-sans antialiased overflow-x-hidden">
       <Navbar
         balance={blipPoints}
         onLogout={handleLogout}
@@ -1482,18 +1482,18 @@ function QuestCard({ quest, existing, onUpdate, onShareReferral }: {
             +{formatCount(quest.reward)} BLIP
           </span>
         </div>
-        <div className="mb-3.5 flex-1">
-          <h3 className={`text-[14px] font-semibold ${t.txt} mb-1 tracking-tight leading-tight`}>{quest.title}</h3>
-          <p className={`text-[12px] ${t.muted} leading-snug`}>{quest.description}</p>
+        <div className="mb-4 flex-1 min-w-0">
+          <h3 className={`text-[15.5px] font-semibold ${t.txt} mb-1 tracking-tight leading-tight break-words`}>{quest.title}</h3>
+          <p className={`text-[13.5px] ${t.muted} leading-snug break-words`}>{quest.description}</p>
         </div>
         <div className={`mt-auto flex ${isDone ? 'justify-end' : 'justify-start'}`}>
           {isDone ? (
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-500">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Redeemed
+            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-500">
+              <CheckCircle2 className="w-4 h-4" /> Redeemed
             </div>
           ) : (
             <button onClick={handleStart}
-              className={`${t.accentBg} ${t.accentText} px-5 py-2 rounded-full text-[11px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]`}>
+              className={`${t.accentBg} ${t.accentText} px-6 py-3 rounded-full text-[13.5px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]`}>
               Start →
             </button>
           )}
