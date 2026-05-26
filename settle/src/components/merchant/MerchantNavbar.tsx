@@ -132,10 +132,6 @@ export function MerchantNavbar({
     }
   };
 
-  const initial =
-    (merchantInfo?.username || merchantInfo?.display_name)
-      ?.charAt(0)
-      ?.toUpperCase() || "?";
   const displayName =
     merchantInfo?.username ||
     merchantInfo?.display_name ||
@@ -268,19 +264,13 @@ export function MerchantNavbar({
                       : "hover:bg-foreground/[0.06]"
                   }`}
                 >
-                  <div className="relative w-7 h-7 rounded-full border border-foreground/10 flex items-center justify-center text-[11px] overflow-hidden bg-foreground/[0.04]">
-                    {merchantInfo?.avatar_url ? (
-                      <img
-                        src={merchantInfo.avatar_url}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="font-semibold text-foreground/70">
-                        {initial}
-                      </span>
-                    )}
-                  </div>
+                  <UserAvatar
+                    src={merchantInfo?.avatar_url}
+                    seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
+                    size={28}
+                    alt={displayName}
+                    className="border border-foreground/10"
+                  />
                   <ChevronDown
                     className={`w-3 h-3 text-foreground/30 transition-transform ${menuOpen ? "rotate-180" : ""}`}
                   />
@@ -290,19 +280,13 @@ export function MerchantNavbar({
                   <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border border-foreground/[0.08] bg-card-solid shadow-2xl shadow-black/60 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 z-[60]">
                     <div className="px-3 py-2.5 border-b border-foreground/[0.06]">
                       <div className="flex items-center gap-2.5">
-                        <div className="relative w-9 h-9 rounded-full border border-foreground/10 flex items-center justify-center text-[13px] overflow-hidden bg-foreground/[0.04] shrink-0">
-                          {merchantInfo?.avatar_url ? (
-                            <img
-                              src={merchantInfo.avatar_url}
-                              alt="Profile"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="font-semibold text-foreground/70">
-                              {initial}
-                            </span>
-                          )}
-                        </div>
+                        <UserAvatar
+                          src={merchantInfo?.avatar_url}
+                          seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
+                          size={36}
+                          alt={displayName}
+                          className="border border-foreground/10"
+                        />
                         <div className="min-w-0">
                           <p className="text-[12px] font-medium text-foreground truncate">
                             {displayName}
@@ -469,19 +453,13 @@ export function MerchantNavbar({
               {/* Drawer header */}
               <div className="flex items-center justify-between p-4 border-b border-foreground/[0.06]">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full border border-foreground/10 flex items-center justify-center text-sm overflow-hidden bg-foreground/[0.04]">
-                    {merchantInfo?.avatar_url ? (
-                      <img
-                        src={merchantInfo.avatar_url}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="font-semibold text-foreground/70">
-                        {initial}
-                      </span>
-                    )}
-                  </div>
+                  <UserAvatar
+                    src={merchantInfo?.avatar_url}
+                    seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
+                    size={40}
+                    alt={displayName}
+                    className="border border-foreground/10"
+                  />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">
                       {displayName}
