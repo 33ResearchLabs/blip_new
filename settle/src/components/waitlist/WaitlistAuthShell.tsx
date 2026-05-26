@@ -356,7 +356,7 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
             className="w-full max-w-[440px] mx-auto lg:max-w-none lg:mx-0"
           >
             <div
-              className="rounded-[24px] border border-black/[0.06] p-5 sm:p-7"
+              className="rounded-[24px] border border-black/[0.06] p-5 sm:p-7 lg:mt-0 mt-6"
               style={{
                 background: t.d ? '#0f0f0f' : '#ffffff',
                 color: t.d ? '#ffffff' : '#1d1d1f',

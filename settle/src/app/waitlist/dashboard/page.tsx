@@ -14,12 +14,28 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Loader2, LogOut, Copy, Check, Crown, Twitter, Send, Repeat2, Users as UsersIcon,
+  Loader2, LogOut, Copy, Check, Crown, Send, Repeat2, Users as UsersIcon,
   CheckCircle2, Store, Settings, Menu, ExternalLink, Info,
   Share2, MoreHorizontal, MessageCircle, Trophy, HelpCircle,
   CircleCheck, Target, Award, UserPlus, TrendingUp, ArrowRight,
   BadgeCheck, Sparkles, Rocket, Activity, Star, Sun, Moon,
 } from 'lucide-react';
+
+// Lucide ships the legacy bird-shaped Twitter glyph; X rebranded to the
+// stylised wordmark in 2023. Inline the official X logo path so the
+// share buttons and the "Follow on X" quest read as current.
+function XLogo({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
+    </svg>
+  );
+}
 import { useWaitlistTheme, useWaitlistTokens } from '@/context/WaitlistThemeContext';
 import { formatCount } from '@/lib/format';
 import { USER_BLIP_POINTS, MERCHANT_BLIP_POINTS } from '@/lib/waitlist/blipPoints';
@@ -265,7 +281,7 @@ export default function WaitlistDashboardPage() {
     icon: React.ComponentType<{ className?: string }>;
     description: string;
   }> = [
-    { id: 'TWITTER',    title: 'Follow Us on Twitter',  reward: POINTS.TWITTER,  icon: Twitter,
+    { id: 'TWITTER',    title: 'Follow Us on Twitter',  reward: POINTS.TWITTER,  icon: XLogo,
       description: 'Follow @blip_money on X to stay updated and earn points.' },
     { id: 'TELEGRAM',   title: 'Follow Us on Telegram', reward: POINTS.TELEGRAM, icon: UsersIcon,
       description: 'Join our Telegram channel and verify membership.' },
@@ -493,12 +509,12 @@ function MerchantLayout(props: {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
                   <p className={`text-[14px] font-semibold ${t.txt} tracking-tight`}>Join Merchant On Board Program</p>
-                  <span
+                  {/* <span
                     className="text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full"
                     style={{ background: 'rgba(204,120,92,0.10)', color: ACCENT }}
                   >
                     +500 BLIP
-                  </span>
+                  </span> */}
                 </div>
                 <p className={`text-[12px] ${t.muted} leading-snug`}>
                   Submit this Google Form to join our merchant onboarding program and earn 500 pts.
@@ -692,7 +708,7 @@ function UserLayout(props: {
           </div>
 
           {/* Invite Friends */}
-          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 mt-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3`}>
+          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3`}>
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-full ${t.inputBg} border ${t.border} flex items-center justify-center shrink-0`}>
                 <UsersIcon className={`w-5 h-5 ${t.txt}`} />
@@ -770,7 +786,7 @@ function HeroCard({
             </button>
             <button
               onClick={onOpenHow}
-              className={`${t.inputBg} border ${t.border} ${t.txt} px-5 py-2 rounded-lg text-[11.5px] font-semibold uppercase tracking-[0.16em] ${t.hov} transition flex items-center gap-2`}
+              className={`${t.inputBg} border ${t.border} ${t.txt} px-8 py-2 rounded-lg text-[11.5px] font-semibold uppercase tracking-[0.16em] ${t.hov} transition flex items-center gap-2 `}
             >
               How It Works
               <Info className="w-3.5 h-3.5" />
@@ -1079,7 +1095,7 @@ function ReferralCodeCard({
           rel="noopener noreferrer"
           className={`${t.inputBg} border ${t.border} rounded-lg px-3 py-2.5 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
         >
-          <Twitter className="w-3.5 h-3.5" />
+          <XLogo className="w-3.5 h-3.5" />
           <span>Twitter</span>
         </a>
         <a
@@ -1154,9 +1170,9 @@ function ProgressGauge({ blipPoints }: { blipPoints: number }) {
             </p>
           </div>
         </div>
-        <p className={`text-[11.5px] ${t.muted} mt-2`}>
+        {/* <p className={`text-[11.5px] ${t.muted} mt-2`}>
           Next milestone: <span className="font-semibold" style={{ color: ACCENT }}>{formatCount(next)} pts</span>
-        </p>
+        </p> */}
       </div>
 
       <ReputationCoinBadge variant="card" className="my-2" />
@@ -1922,21 +1938,21 @@ function ReferralModal({ code, link, onClose, onCopy, copied }: {
             {copied ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy Link</>}
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-2 mt-4">
+        <div className="grid grid-cols-2 gap-2 mt-4">
           <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join me on @blip_money — use my referral code ${code || ''}: ${link}`)}`}
             target="_blank" rel="noopener noreferrer"
             className={`flex items-center justify-center gap-1.5 ${inputBg} border ${border} rounded-full px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] ${txt} ${hov} transition`}>
-            <Twitter className="w-3.5 h-3.5" /> X
+            <XLogo className="w-3.5 h-3.5" /> X
           </a>
           <a href={`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join me on Blip Market')}`}
             target="_blank" rel="noopener noreferrer"
             className={`flex items-center justify-center gap-1.5 ${inputBg} border ${border} rounded-full px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] ${txt} ${hov} transition`}>
             <MessageCircle className="w-3.5 h-3.5" /> Telegram
           </a>
-          <button onClick={onCopy}
+          {/* <button onClick={onCopy}
             className={`flex items-center justify-center gap-1.5 ${inputBg} border ${border} rounded-full px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.10em] ${txt} ${hov} transition`}>
             <MoreHorizontal className="w-3.5 h-3.5" /> More
-          </button>
+          </button> */}
         </div>
       </div>
     </div>
