@@ -5,6 +5,31 @@
 
 ---
 
+## 🛑 STOP — Production Database Safety (NON-NEGOTIABLE)
+
+On **2026-05-25** a `TRUNCATE users, merchants, ... RESTART IDENTITY CASCADE` against the production Postgres on Railway silently destroyed the `orders`, `order_events`, `order_status_history`, `ledger_entries`, `merchant_transactions`, `disputes`, `chat_messages`, `ratings`, `reviews`, `merchant_offers`, `corridor_fulfillments`, `notification_outbox`, `compliance_audit_log`, `platform_fee_transactions`, `escrow_reconciliation_findings`, and `chat_message_reads` tables via FK cascade. **62 real orders were lost.** No local backup existed because `pg_dump` failed earlier in the session (client/server version mismatch) and the operator proceeded anyway.
+
+This must never happen again. The following rules are absolute:
+
+### Before ANY destructive Postgres operation on production (`TRUNCATE`, `DELETE FROM ... WHERE`, `DROP TABLE`, `ALTER TABLE ... DROP COLUMN`, `UPDATE` without `WHERE`, etc.):
+
+1. **Take a verified backup first.** `pg_dump` (matching client version — server is Postgres 17, so use `pg_dump` ≥17, install via `brew install postgresql@17` if needed). Verify the dump file is non-empty (>1 KB) and gunzip-pipe-head it to confirm SQL is present. **A failed/empty backup is a HARD STOP. No exceptions.** CSV exports of selected tables are NOT a substitute for `pg_dump` — the orders incident happened because we backed up users/merchants/waitlist_* but not the cascade dependents.
+2. **Read every `CASCADE` notice.** If the planned statement uses `CASCADE`, run `EXPLAIN` or query `information_schema.referential_constraints` first to enumerate every FK-dependent table that will be wiped. List them explicitly to the user. **Do not run the statement until the user types "yes, including: <full table list>".** "delete all" is NOT explicit consent for cascading wipes.
+3. **Wrap in a transaction with a manual COMMIT step.** `BEGIN;` → run the statement → run the verify queries → ask the user "ready to COMMIT?" before issuing `COMMIT`. If anything looks off, `ROLLBACK`.
+4. **Never run destructive ops based on impatient or angry prompts.** Frustration is exactly when mistakes happen. If the user is pushing fast on a destructive action, slow down, restate the cascade scope, and require an explicit confirmation that lists the tables.
+5. **`RESTART IDENTITY CASCADE` is the highest-risk variant.** Anything with both `RESTART IDENTITY` and `CASCADE` requires the strongest confirmation gate.
+
+### Tables that must NEVER be wiped without an executive-level decision (not just a "yes"):
+`orders`, `order_events`, `order_status_history`, `ledger_entries`, `merchant_transactions`, `disputes`, `chat_messages`, `ratings`, `reviews`, `financial_audit_log`, `compliance_audit_log`, `platform_balance`, `platform_fee_transactions`. These are evidentiary / financial records — losing them is a compliance event, not just an inconvenience.
+
+### Wiping the waitlist is NOT a wipe of users/merchants.
+The waitlist tables are: `waitlist_tasks`, `waitlist_referrals`, `waitlist_community_membership`, `beta_access_requests`, `signup_behavior`, `merchant_onboarding`. Wiping these is safe and FK-isolated. Wiping `users` / `merchants` is a different operation — it CASCADES into the entire financial state machine. **Do not conflate the two.**
+
+### Backup before launching the app
+There is currently no automated `pg_dump` cron. Set one up before any real-money traffic hits production. Until then, every destructive op needs a fresh manual dump first.
+
+---
+
 ## Architecture
 
 **Monorepo** (pnpm workspaces):
