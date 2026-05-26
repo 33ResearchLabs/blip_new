@@ -42,6 +42,7 @@ interface MerchantItem {
   riskScore: number;
   riskLevel: string;
   reputationScore: number;
+  reputationCalculatedAt: string | null;
 }
 
 // CIBIL-rebased reputation tier styling (300–900 scale).
@@ -896,6 +897,21 @@ function UserRow({
             </span>
           )}
         </div>
+        {/*
+          Freshness indicator. The admin merchants endpoint reads
+          reputation_scores.total_score *as stored* — that row is
+          refreshed by the daily reputation worker, not on every page
+          load. The merchant's own dashboard (/api/reputation/me)
+          recomputes live, so the two surfaces can disagree until the
+          worker next runs. Surfacing calculated_at here is a no-logic
+          way to make that staleness visible instead of mysterious.
+          Omitted when there's no reputation_scores row at all.
+        */}
+        {merchant.reputationCalculatedAt && (
+          <div className="text-[9px] font-mono text-foreground/30 leading-tight">
+            Updated {formatRelativeAgo(merchant.reputationCalculatedAt)}
+          </div>
+        )}
       </div>
 
       {/* Risk */}
