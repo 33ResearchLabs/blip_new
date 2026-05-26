@@ -296,6 +296,29 @@ export function useUserAuth({
     }
   }, [loginForm, setScreen, fetchOrders, fetchBankAccounts, fetchResolvedDisputes]);
 
+  // Apply a successful /api/auth/google response. The response shape
+  // mirrors /api/auth/user login: { user, accessToken, token, isNewUser }
+  // — so we run the same state updates the password login uses.
+  const handleGoogleSuccess = useCallback((data: any) => {
+    const user = data?.user;
+    if (!user) {
+      setLoginError('Google sign-in failed');
+      return;
+    }
+    setUserId(user.id);
+    setUserWallet(user.wallet_address);
+    setUserName(user.username || user.name || 'User');
+    setUserBalance(user.balance || 0);
+    localStorage.setItem('blip_user', JSON.stringify(user));
+    if (data.token) useMerchantStore.getState().setSessionToken(data.token);
+    fetchOrders(user.id);
+    fetchBankAccounts(user.id);
+    fetchResolvedDisputes(user.id);
+    setUnverifiedUserId(null);
+    setLoginError('');
+    setScreen('home');
+  }, [setScreen, fetchOrders, fetchBankAccounts, fetchResolvedDisputes]);
+
   // Re-issue the verification email when the login screen surfaces
   // EMAIL_NOT_VERIFIED. Best-effort fire-and-forget shape mirroring the
   // merchant flow — the server always returns success to prevent
@@ -607,5 +630,6 @@ export function useUserAuth({
     handleWalletUsername,
     handleUserLogin,
     handleUserRegister,
+    handleGoogleSuccess,
   };
 }

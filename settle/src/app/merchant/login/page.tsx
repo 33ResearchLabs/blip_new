@@ -8,14 +8,33 @@ import { CheckCircle2, ChevronLeft, Eye, EyeOff, Loader2, Mail, ShieldCheck, Sto
 import { useMerchantStore } from "@/stores/merchantStore";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { useDashboardAuth } from "@/hooks/useDashboardAuth";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
+import OrDivider from "@/components/auth/OrDivider";
 
 export default function MerchantLoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
   const merchantId = useMerchantStore((s) => s.merchantId);
+  const setMerchantId = useMerchantStore((s) => s.setMerchantId);
+  const setMerchantInfo = useMerchantStore((s) => s.setMerchantInfo);
+  const setIsLoggedIn = useMerchantStore((s) => s.setIsLoggedIn);
+  const setSessionToken = useMerchantStore((s) => s.setSessionToken);
   const solanaWallet = useSolanaWallet();
   const [showPassword, setShowPassword] = useState(false);
+
+  // Mirror of useDashboardAuth.handleLogin's success path — Google sign-in
+  // skips the password flow but lands the same store updates so the
+  // existing `/merchant` redirect (useEffect below) takes over.
+  const handleGoogleSuccess = (data: any) => {
+    if (data?.merchant) {
+      setMerchantId(data.merchant.id);
+      setMerchantInfo(data.merchant);
+      setIsLoggedIn(true);
+      if (data.token) setSessionToken(data.token);
+      router.replace("/merchant");
+    }
+  };
 
   const auth = useDashboardAuth({
     isMockMode: false,
@@ -434,6 +453,18 @@ export default function MerchantLoginPage() {
               >
                 {isSignIn ? "Register" : "Sign In"}
               </motion.button>
+
+              <div className="space-y-2 pt-1">
+                <OrDivider />
+                <GoogleSignInButton
+                  role="merchant"
+                  source={isSignIn ? "merchant_login_google" : "merchant_register_google"}
+                  theme="dark"
+                  onSuccess={handleGoogleSuccess}
+                  onError={(msg) => auth.setLoginError(msg)}
+                  disabled={isLoading}
+                />
+              </div>
               </>
               )}
 

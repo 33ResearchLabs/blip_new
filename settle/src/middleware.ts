@@ -298,16 +298,26 @@ export function buildCsp(nonce: string): string {
   // `ws:` to connect-src only when NODE_ENV !== 'production' so prod
   // stays strict (TLS-only sockets).
   const wsScheme = process.env.NODE_ENV === 'production' ? 'wss:' : 'ws: wss:';
+  // Google Identity Services ("Continue with Google") needs four CSP holes:
+  //   - script-src: the GIS client script at accounts.google.com/gsi/client
+  //   - style-src:  inline styles emitted by the rendered button
+  //                 (gsi/style is the official allowlisted host)
+  //   - connect-src: XHR back to accounts.google.com after the user picks an
+  //                  account (token issuance)
+  //   - frame-src:  the GIS popup/one-tap iframe (separate from
+  //                 frame-ancestors which controls who can frame US)
+  // Scoped to accounts.google.com — does NOT broaden to *.google.com.
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}'`,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    `script-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/client`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
     "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     // LI.FI cross-chain quotes (li.quest) — needed by the cross-chain
     // deposit flow. Without it the browser blocks every quote request
     // and the modal sits on "Couldn't get a quote right now".
-    `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag https://li.quest`,
+    `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag https://li.quest https://accounts.google.com`,
+    "frame-src https://accounts.google.com",
     "frame-ancestors 'none'",
     'report-uri /api/csp-report',
     'report-to csp-endpoint',
