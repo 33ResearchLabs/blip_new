@@ -169,20 +169,20 @@ export default function TelegramVerificationModal({
                     </li>
                     <li>4. Paste it below</li>
                   </ol>
-                  <div className="mt-3 flex items-center gap-3">
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                     <a
                       href="https://t.me/userinfobot"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#cc785c] hover:underline"
+                      className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#cc785c] hover:underline whitespace-nowrap"
                     >
                       Open @userinfobot <ExternalLink className="w-3 h-3" />
                     </a>
-                    <span className="text-black/20">|</span>
+                    <span className="text-black/20 hidden sm:inline">|</span>
                     <button
                       type="button"
                       onClick={() => setShowExample(!showExample)}
-                      className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#cc785c] hover:underline"
+                      className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#cc785c] hover:underline whitespace-nowrap"
                     >
                       {showExample ? 'Hide' : 'See'} example
                       {showExample ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -232,9 +232,10 @@ export default function TelegramVerificationModal({
 
           <input
             type="text"
+            inputMode="numeric"
             value={telegramId}
             onChange={(e) => setTelegramId(e.target.value)}
-            placeholder="Enter your Telegram User ID (e.g. 123456789)"
+            placeholder="Telegram User ID (e.g. 123456789)"
             maxLength={20}
             className="w-full bg-white border border-black/[0.08] rounded-xl px-4 py-3 text-[13px] text-[#1d1d1f] placeholder:text-[#a0a0a4] outline-none focus:border-[#cc785c]/50 focus:ring-1 focus:ring-[#cc785c]/30"
           />
@@ -243,7 +244,7 @@ export default function TelegramVerificationModal({
             <QuestNoticePill tone="error" icon={<AlertCircle className="w-4 h-4" />} body={error} />
           )}
 
-          <div className="flex gap-3">
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
             <QuestSecondaryCta onClick={() => setStep('join')}>Back</QuestSecondaryCta>
             <QuestPrimaryCta onClick={handleVerify}>
               <CheckCircle2 className="w-4 h-4" /> Verify membership
@@ -281,7 +282,7 @@ export default function TelegramVerificationModal({
             <p className="text-[15.5px] font-semibold text-[#1d1d1f]">Verification failed</p>
             <p className="text-[12.5px] text-[#6e6e73] max-w-sm">{error}</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
             <QuestSecondaryCta onClick={handleClose}>Cancel</QuestSecondaryCta>
             <QuestPrimaryCta onClick={() => { setError(''); setStep('verify'); }}>
               Try again

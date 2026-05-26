@@ -44,18 +44,18 @@ export default function QuestModalShell({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] overflow-y-auto px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+88px)] md:pb-4 flex items-start sm:items-center justify-center">
       {/* Backdrop — light cream tint + blur so it reads as the same
           surface family as the rest of /waitlist instead of the harsh
           black/90 the old modals used. */}
       <div
-        className="absolute inset-0"
+        className="fixed inset-0"
         style={{ background: 'rgba(250,248,245,0.92)', backdropFilter: 'blur(8px)' }}
         onClick={onClose}
       />
 
       <div
-        className="relative w-full max-w-lg bg-white rounded-[24px] overflow-hidden border border-black/[0.06]"
+        className="relative w-full max-w-lg my-auto bg-white rounded-[24px] overflow-hidden border border-black/[0.06]"
         style={{ boxShadow: '0 24px 60px -24px rgba(0,0,0,0.25)' }}
       >
         {/* Close button */}
@@ -69,8 +69,8 @@ export default function QuestModalShell({
         </button>
 
         {/* Header strip */}
-        <div className="px-7 pt-7 pb-5">
-          <div className="flex items-start gap-4">
+        <div className="px-5 sm:px-7 pt-6 sm:pt-7 pb-5">
+          <div className="flex items-start gap-3 sm:gap-4">
             <div
               className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white"
               style={{ background: ACCENT }}
@@ -100,7 +100,7 @@ export default function QuestModalShell({
         </div>
 
         {/* Body */}
-        <div className="px-7 pb-7">{children}</div>
+        <div className="px-5 sm:px-7 pb-6 sm:pb-7">{children}</div>
       </div>
     </div>
   );
@@ -221,7 +221,7 @@ export function QuestSectionCard({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl bg-[#FAF8F5] border border-black/[0.05] p-5">
+    <div className="rounded-2xl bg-[#FAF8F5] border border-black/[0.05] p-4 sm:p-5">
       {(eyebrow || action) && (
         <div className="flex items-center justify-between mb-3">
           {eyebrow && (

@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import {
-  Twitter, CheckCircle2, AlertCircle, Loader2, ExternalLink, Copy, Check,
+  CheckCircle2, AlertCircle, Loader2, ExternalLink, Copy, Check,
 } from 'lucide-react';
 import QuestModalShell, {
   QuestPrimaryCta,
@@ -14,6 +14,21 @@ import QuestModalShell, {
   QuestNoticePill,
   QuestSectionCard,
 } from '@/components/waitlist/QuestModalShell';
+
+// Inline X (formerly Twitter) wordmark — Lucide still ships the legacy
+// bird glyph. Kept local so the modal stays self-contained.
+function XLogo({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
+    </svg>
+  );
+}
 
 type Step = 'tweet' | 'submit' | 'verifying' | 'success' | 'error';
 
@@ -116,9 +131,9 @@ export default function TweetCampaignModal({
     <QuestModalShell
       isOpen={isOpen}
       onClose={handleClose}
-      icon={<Twitter className="w-5 h-5" />}
+      icon={<XLogo className="w-5 h-5" />}
       eyebrow="Social quest"
-      title="Share on X (Twitter)"
+      title="Share on X"
       rewardPoints={rewardPoints}
     >
       {step === 'tweet' && (
@@ -153,7 +168,7 @@ export default function TweetCampaignModal({
           />
 
           <QuestPrimaryCta onClick={handleTweetNow}>
-            <Twitter className="w-4 h-4" /> Tweet now <ExternalLink className="w-3.5 h-3.5" />
+            <XLogo className="w-4 h-4" /> Post on X <ExternalLink className="w-3.5 h-3.5" />
           </QuestPrimaryCta>
         </div>
       )}
@@ -181,7 +196,7 @@ export default function TweetCampaignModal({
             <QuestNoticePill tone="error" icon={<AlertCircle className="w-4 h-4" />} body={error} />
           )}
 
-          <div className="flex gap-3">
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
             <QuestSecondaryCta onClick={() => setStep('tweet')}>Back</QuestSecondaryCta>
             <QuestPrimaryCta onClick={handleVerify} disabled={!tweetUrl.trim()}>
               Verify tweet →
@@ -219,7 +234,7 @@ export default function TweetCampaignModal({
             <p className="text-[15.5px] font-semibold text-[#1d1d1f]">Verification failed</p>
             <p className="text-[12.5px] text-[#6e6e73] max-w-sm">{error}</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
             <QuestSecondaryCta onClick={handleClose}>Cancel</QuestSecondaryCta>
             <QuestPrimaryCta onClick={() => { setError(''); setStep('submit'); }}>
               Try again

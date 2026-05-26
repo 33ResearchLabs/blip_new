@@ -598,7 +598,7 @@ function MerchantLayout(props: {
 
         {/* MIDDLE COLUMN */}
         <div className="lg:col-span-3 flex flex-col gap-3 min-w-0">
-          <ProgressGauge blipPoints={blipPoints} />
+          <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} compact />
         </div>
 
@@ -741,7 +741,7 @@ function UserLayout(props: {
 
         {/* RIGHT — Progress + Leaderboard */}
         <div className="lg:col-span-4 flex flex-col gap-3">
-          <ProgressGauge blipPoints={blipPoints} />
+          <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} />
         </div>
       </div>
@@ -1121,7 +1121,7 @@ function ReferralCodeCard({
 
 // ── Progress gauge — half-circle SVG (no recharts). Source: MerchantDashboard.tsx
 // lines 1866–1985.
-function ProgressGauge({ blipPoints }: { blipPoints: number }) {
+function ProgressGauge({ blipPoints, onShowHistory }: { blipPoints: number; onShowHistory: () => void }) {
   const t = useThemeTokens();
   const milestones = [100, 250, 500, 1000, 2500];
   const next = milestones.find((m) => m > blipPoints) ?? milestones[milestones.length - 1];
@@ -1173,6 +1173,9 @@ function ProgressGauge({ blipPoints }: { blipPoints: number }) {
         {/* <p className={`text-[11.5px] ${t.muted} mt-2`}>
           Next milestone: <span className="font-semibold" style={{ color: ACCENT }}>{formatCount(next)} pts</span>
         </p> */}
+        <button onClick={onShowHistory} className={`text-[10px] font-semibold ${t.muted} hover:${t.txt} transition-colors`}>
+          All Points
+        </button>
       </div>
 
       <ReputationCoinBadge variant="card" className="my-2" />
@@ -1451,10 +1454,12 @@ function StatCell({
 }) {
   const t = useThemeTokens();
   const lgPadding = position === 'first' ? 'lg:first:pl-0' : position === 'last' ? 'lg:last:pr-0' : '';
-  // Compact stack until lg (icon top, content below) — keeps long
-  // labels like "Total Points Earned" on one line at all viewport
-  // widths below 1024px. At lg+ the parent grid switches to 4 columns
-  // and there's enough room for the icon-left layout.
+  // Icon-on-top stack at every breakpoint. The icon-left horizontal
+  // variant we tried at lg was breaking when long labels like "Total
+  // Points Earned" wrapped — the icon stayed centered while the right
+  // column grew taller, making the four cells look misaligned. A
+  // consistent vertical stack keeps every cell the same shape; the
+  // parent grid's lg:divide-x still produces the horizontal strip.
   // Mobile fill uses arbitrary rgba so the global `bg-white/X` remap
   // can't override the desktop `lg:bg-transparent`.
   const mobileFill = t.d
@@ -1462,17 +1467,17 @@ function StatCell({
     : 'bg-[rgba(0,0,0,0.025)]';
   return (
     <div
-      className={`flex flex-col items-start gap-2.5 p-3 lg:p-0 lg:px-5 lg:flex-row lg:items-center lg:gap-3 ${mobileFill} border ${t.border} rounded-lg lg:bg-transparent lg:border-0 lg:rounded-none ${lgPadding}`}
+      className={`flex flex-col items-start gap-2.5 p-3 lg:p-0 lg:px-5 lg:py-1 ${mobileFill} border ${t.border} rounded-lg lg:bg-transparent lg:border-0 lg:rounded-none ${lgPadding}`}
     >
-      <div className={`w-10 h-10 lg:w-11 lg:h-11 rounded-lg ${t.surface} border ${t.border} flex items-center justify-center shrink-0`}>
+      <div className={`w-10 h-10 rounded-lg ${t.surface} border ${t.border} flex items-center justify-center shrink-0`}>
         {icon}
       </div>
       <div className="min-w-0">
-        <p className={`text-2xl lg:text-xl font-semibold ${t.txt} leading-tight tabular-nums whitespace-nowrap`}>
-          {formatCount(value)} {unit && <span className="text-xs font-semibold ml-0.5">{unit}</span>}
+        <p className={`text-2xl font-semibold ${t.txt} leading-tight tabular-nums whitespace-nowrap`}>
+          {formatCount(value)}{unit && <span className={`text-xs font-semibold ml-1 ${t.muted}`}>{unit}</span>}
         </p>
-        <p className={`text-[11px] font-semibold ${t.txt} leading-tight mt-0.5`}>{label}</p>
-        <p className={`text-[10px] ${t.sub} mt-0.5`}>{hint}</p>
+        <p className={`text-[12px] font-semibold ${t.txt} leading-tight mt-1.5`}>{label}</p>
+        <p className={`text-[10.5px] ${t.sub} leading-snug mt-0.5`}>{hint}</p>
       </div>
     </div>
   );
