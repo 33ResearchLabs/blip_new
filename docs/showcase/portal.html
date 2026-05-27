@@ -32,12 +32,26 @@
   }
   a{color:inherit;text-decoration:none}
 
+  /* USDC/INR pre-launch marquee */
+  .marq{background:#0a0a0a;color:#fff;border-bottom:1px solid rgba(255,255,255,0.06);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;overflow:hidden}
+  .marq-in{display:flex;align-items:center;padding:7px 0}
+  .marq-l{flex-shrink:0;padding:0 16px;color:var(--accent-2);font-weight:600;border-right:1px solid rgba(255,255,255,0.08);letter-spacing:0.06em;display:inline-flex;align-items:center;gap:8px}
+  .marq-l::before{content:"";width:6px;height:6px;border-radius:50%;background:#d8b85a;box-shadow:0 0 0 3px rgba(216,184,90,0.20);animation:dotPulse 1.8s ease-in-out infinite}
+  @keyframes dotPulse{0%,100%{opacity:1}50%{opacity:0.45}}
+  .marq-track{display:inline-flex;gap:38px;padding-left:18px;animation:marqScroll 50s linear infinite;white-space:nowrap;color:rgba(255,255,255,0.75)}
+  @keyframes marqScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .marq-track .pr{color:#fff;font-weight:500}
+  .marq-track .sym{color:var(--accent-2)}
+  .marq-track .tag{color:rgba(255,255,255,0.35)}
+
   .topbar{display:flex;justify-content:space-between;align-items:center;padding:22px 32px}
-  .brand{display:flex;align-items:center;gap:10px;font-family:'Fraunces',serif;font-size:20px;font-weight:600;letter-spacing:-0.02em}
-  .mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
-  .brand .dot{color:var(--accent)}
-  .liveDot{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-soft);letter-spacing:0.04em}
-  .liveDot::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px rgba(63,174,106,0.15)}
+  .brand{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:700;letter-spacing:-0.045em;line-height:1;color:var(--ink)}
+  .brand .bolt{display:flex;align-items:center;justify-content:center;height:18px}
+  .brand .bolt svg{height:18px;width:auto;display:block}
+  .brand .b{font-weight:700}
+  .brand .i{font-style:italic;font-weight:600;letter-spacing:-0.045em;margin-left:4px;color:var(--ink-2)}
+  .liveDot{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-soft);letter-spacing:0.06em;text-transform:uppercase;font-weight:600}
+  .liveDot::before{content:"";width:7px;height:7px;border-radius:50%;background:#d8b85a;box-shadow:0 0 0 4px rgba(216,184,90,0.18)}
 
   .center{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
 
@@ -96,7 +110,7 @@
 
   .below{padding:24px 32px;display:flex;justify-content:center;gap:28px;font-size:11.5px;color:var(--ink-soft);flex-wrap:wrap}
   .below span{display:inline-flex;align-items:center;gap:8px}
-  .below span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--good)}
+  .below span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--ink-soft)}
 
   @media (max-width: 480px){
     .card{padding:36px 26px 28px}
@@ -107,9 +121,30 @@
 </head>
 <body>
 
+<div class="marq">
+  <div class="marq-in">
+    <span class="marq-l">Pre-launch · Preview</span>
+    <div class="marq-track">
+      <span><span class="sym">USDC/INR</span> <span class="pr">₹83.46</span> <span class="tag">indicative · not live</span></span>
+      <span><span class="sym">USDC/AED</span> <span class="pr">3.6725</span> <span class="tag">indicative</span></span>
+      <span><span class="sym">USDT/INR</span> <span class="pr">₹83.48</span> <span class="tag">indicative</span></span>
+      <span><span class="sym">USDC/THB</span> <span class="pr">฿34.82</span> <span class="tag">indicative</span></span>
+      <span class="tag">Volume · 0 Cr · pre-launch</span>
+      <span><span class="sym">USDC/INR</span> <span class="pr">₹83.46</span> <span class="tag">indicative · not live</span></span>
+      <span><span class="sym">USDC/AED</span> <span class="pr">3.6725</span> <span class="tag">indicative</span></span>
+      <span><span class="sym">USDT/INR</span> <span class="pr">₹83.48</span> <span class="tag">indicative</span></span>
+      <span><span class="sym">USDC/THB</span> <span class="pr">฿34.82</span> <span class="tag">indicative</span></span>
+      <span class="tag">Volume · 0 Cr · pre-launch</span>
+    </div>
+  </div>
+</div>
+
 <header class="topbar">
-  <div class="brand"><span class="mark">B</span> Blip<span class="dot">.</span> money</div>
-  <span class="liveDot">Network live</span>
+  <div class="brand">
+    <span class="bolt"><svg viewBox="0 0 70 60" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#1d1d1f" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span><span class="b">Blip</span><span class="i">money</span></span>
+  </div>
+  <span class="liveDot">Pre-launch</span>
 </header>
 
 <main class="center">
