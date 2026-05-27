@@ -621,8 +621,8 @@ export const ProfileScreen = ({
             }
             window.location.href = '/';
           }}
-          className="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-red-900 border border-red-800/70 text-[14px] font-bold text-red-100 tracking-[-0.01em]">
-          <LogOut size={16} className="text-red-100" />
+          className="w-full h-12 flex items-center justify-center gap-2 rounded-lg bg-white border border-white text-[14px] font-bold text-black tracking-[-0.01em]">
+          <LogOut size={16} className="text-invert" />
           Sign Out
         </motion.button>
       </div>

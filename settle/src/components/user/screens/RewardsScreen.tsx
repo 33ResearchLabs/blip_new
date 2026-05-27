@@ -136,7 +136,7 @@ const StatCell = ({ label, value, Icon, isLast = false }: StatCellProps) => (
     <div className="flex items-center gap-2 mb-1.5">
       <Icon className="w-[14px] h-[14px] text-text-tertiary shrink-0" />
       <span
-        className="text-[15px] font-bold tracking-[-0.02em] leading-none text-text-primary truncate"
+        className="text-[15px] font-bold tracking-[-0.02em] leading-none text-text-primary "
         title={value}
       >
         {value}
@@ -160,12 +160,12 @@ const ShareButton = ({ label, Icon, onClick }: ShareButtonProps) => (
     whileHover={{ y: -2 }}
     transition={{ type: "spring", stiffness: 380, damping: 28 }}
     onClick={onClick}
-    className={`flex-1 min-w-0 flex flex-col items-center gap-1.5 py-3 rounded-[14px] ${CARD} hover:bg-surface-hover transition-colors`}
+    className={`min-w-0 flex flex-col items-center gap-1.5 py-3 px-1 rounded-[14px] ${CARD} hover:bg-surface-hover transition-colors`}
   >
-    <span className="w-9 h-9 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center">
-      <Icon className="w-4 h-4 text-text-primary" />
+    <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center shrink-0">
+      <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-text-primary" />
     </span>
-    <span className="text-[10.5px] font-semibold text-text-secondary truncate max-w-full px-1">
+    <span className="text-[9.5px] sm:text-[10.5px] font-semibold text-text-secondary text-center leading-tight max-w-full truncate w-full px-0.5">
       {label}
     </span>
   </motion.button>
@@ -174,7 +174,7 @@ const ShareButton = ({ label, Icon, onClick }: ShareButtonProps) => (
 // Decorative grid of gift / coin icons used inside the main referral card
 // and the tips card. Uses theme tokens only — no images / off-palette colors.
 const GiftMotif = () => (
-  <div className="relative w-[88px] h-[88px] shrink-0">
+  <div className="md:relative hidden w-[88px] h-[88px] shrink-0">
     <motion.div
       animate={{ y: [0, -3, 0] }}
       transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
@@ -411,7 +411,7 @@ export const RewardsScreen = ({
               <div className="flex-1 min-w-0">
                 <p className={SECTION_LABEL}>Your Referral Code</p>
                 <div className="mt-2 flex items-center gap-2 min-w-0">
-                  <p className="text-[32px] font-extrabold tracking-[-0.01em] text-text-primary leading-none truncate select-all">
+                  <p className="text-[32px] font-extrabold tracking-[-0.01em] text-text-primary leading-none  select-all">
                     {referralCode}
                   </p>
                   <motion.button
@@ -481,7 +481,7 @@ export const RewardsScreen = ({
                   className={`flex-1 min-w-0 flex items-center px-3.5 rounded-[14px] bg-surface-raised border border-border-subtle`}
                 >
                   <span
-                    className="block text-[12.5px] font-medium text-text-secondary truncate"
+                    className="block text-[12.5px] font-medium text-text-secondary "
                     title={referralLink}
                   >
                     {referralLink}
@@ -569,27 +569,29 @@ export const RewardsScreen = ({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
-            className={`mb-6 rounded-[18px] p-4 flex items-center gap-3 ${CARD}`}
+            className={`mb-6 rounded-[18px] p-4 flex flex-col sm:flex-row sm:items-center gap-3 ${CARD}`}
           >
-            <div className="w-12 h-12 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center shrink-0">
-              <UserPlus
-                className="w-5 h-5 text-text-primary"
-                strokeWidth={1.8}
-              />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-extrabold text-text-primary tracking-[-0.01em] leading-tight">
-                More friends, more rewards
-              </p>
-              <p className="mt-1 text-[11.5px] font-medium text-text-secondary leading-snug">
-                You get 20% of trading fees from your friends. They get 10% off.
-              </p>
+            <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center shrink-0">
+                <UserPlus
+                  className="w-5 h-5 text-text-primary"
+                  strokeWidth={1.8}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-extrabold text-text-primary tracking-[-0.01em] leading-tight">
+                  More friends, more rewards
+                </p>
+                <p className="mt-1 text-[11.5px] font-medium text-text-secondary leading-snug">
+                  You get 20% of trading fees from your friends. They get 10% off.
+                </p>
+              </div>
             </div>
             <motion.button
               whileTap={{ scale: 0.96 }}
               whileHover={{ y: -1 }}
               onClick={onLearnMore}
-              className="shrink-0 flex items-center gap-1 px-3 py-2 rounded-[12px] bg-surface-raised border border-border-subtle text-text-primary hover:bg-surface-hover transition-colors"
+              className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-1 px-3 py-2.5 sm:py-2 rounded-[12px] bg-surface-raised border border-border-subtle text-text-primary hover:bg-surface-hover transition-colors"
             >
               <span className="text-[12px] font-bold">Learn more</span>
               <ChevronRight className="w-3.5 h-3.5 text-text-tertiary" />
@@ -608,7 +610,7 @@ export const RewardsScreen = ({
             className="mb-6"
           >
             <p className={`${SECTION_LABEL} mb-3 px-1`}>Share Via</p>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
               {SHARE_PLATFORMS.map((p) => (
                 <ShareButton
                   key={p.key}

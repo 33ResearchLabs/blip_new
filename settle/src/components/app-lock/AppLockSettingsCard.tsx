@@ -604,10 +604,10 @@ function TrustedDevicesSheet({ onClose }: { onClose: () => void }) {
                 <p className="text-[13px] font-semibold text-white/95 leading-tight truncate">
                   {labelDevice(s)}
                 </p>
-                <p className="mt-0.5 text-[11px] text-white/45 truncate">
+                <p className="mt-0.5 text-[11px] text-white/90 truncate">
                   {[s.browser, s.os].filter(Boolean).join(' • ') || 'Unknown'}
                 </p>
-                <p className="mt-1 text-[10px] tracking-[0.04em] uppercase font-semibold text-white/35">
+                <p className="mt-1 text-[10px] tracking-[0.04em] uppercase font-semibold text-white/90">
                   {s.ip ? `IP ${s.ip} · ` : ''}Last used {relativeTime(s.lastUsed)}
                 </p>
               </div>
@@ -635,7 +635,7 @@ function TrustedDevicesSheet({ onClose }: { onClose: () => void }) {
         type="button"
         onClick={signOutEverywhere}
         disabled={signoutAllBusy || sessions === null || sessions.length === 0}
-        className="mt-4 w-full py-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[13px] font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+        className="mt-4 w-full py-2.5 rounded-lg bg-white border border-white  text-black text-[13px] font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
       >
         {signoutAllBusy ? (
           <Loader2 className="w-4 h-4 animate-spin" />
