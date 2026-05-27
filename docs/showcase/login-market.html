@@ -41,14 +41,15 @@
   .marq-track .sym{color:var(--accent-2)}
   .marq-track .tag{color:rgba(255,255,255,0.35)}
 
-  .topbar{display:flex;justify-content:space-between;align-items:center;padding:22px 32px;border-bottom:1px solid var(--line);background:var(--bg)}
-  .brand{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:700;letter-spacing:-0.045em;line-height:1;color:var(--ink)}
-  .brand .bolt{display:flex;align-items:center;justify-content:center;height:18px}
-  .brand .bolt svg{height:18px;width:auto;display:block}
+  .topbar{background:#0a0a0a;color:#fff;padding:18px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+  .topbar .hdr-in{max-width:1440px;margin:0 auto;padding:0 64px;display:flex;justify-content:space-between;align-items:center;box-sizing:border-box}
+  .brand{display:flex;align-items:center;gap:6px;font-size:20px;font-weight:700;letter-spacing:-0.045em;line-height:1;color:#fff}
+  .brand .bolt{display:flex;align-items:center;justify-content:center;height:16px}
+  .brand .bolt svg{height:16px;width:auto;display:block}
   .brand .b{font-weight:700}
-  .brand .i{font-style:italic;font-weight:600;letter-spacing:-0.045em;margin-left:4px;color:var(--ink-2)}
-  .switch-link{font-size:13px;color:var(--ink-soft);display:inline-flex;align-items:center;gap:6px}
-  .switch-link:hover{color:var(--accent)}
+  .brand .i{font-style:italic;font-weight:600;letter-spacing:-0.045em;margin-left:4px;color:rgba(255,255,255,0.85)}
+  .switch-link{font-size:13px;color:rgba(255,255,255,0.65);display:inline-flex;align-items:center;gap:6px;font-weight:500}
+  .switch-link:hover{color:#fff}
 
   .split{flex:1;display:grid;grid-template-columns:1.1fr 1fr;min-height:calc(100vh - 72px)}
 
@@ -129,7 +130,7 @@
     .card .sub{font-size:13.5px;margin-bottom:22px}
   }
   @media (max-width: 560px){
-    .topbar{padding:16px 18px}
+    .topbar .hdr-in{padding:0 18px}
     .brand{font-size:17px;gap:7px}
     .brand .bolt,.brand .bolt svg{height:15px}
     .switch-link{font-size:11.5px;max-width:42%;text-align:right;line-height:1.2}
@@ -160,11 +161,13 @@
 <body>
 
 <header class="topbar">
+ <div class="hdr-in">
   <div class="brand">
-    <span class="bolt"><svg viewBox="0 0 70 60" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#1d1d1f" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="bolt"><svg viewBox="0 0 70 60" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     <span><span class="b">Blip</span><span class="i">Market</span></span>
   </div>
   <a class="switch-link" href="login-user.html">Sign in to user app instead →</a>
+ </div>
 </header>
 
 <main class="split">
