@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Blip Market — Settlement engine for borderless money</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAF8F5;
+    --panel:#ffffff;
+    --ink:#1d1d1f;
+    --ink-2:#3a3a3c;
+    --ink-soft:#6b675f;
+    --line:#ece6dc;
+    --line-strong:#dcd4c5;
+    --accent:#cc785c;
+    --accent-2:#e9a787;
+    --accent-soft:#f4e3d9;
+    --good:#3fae6a;
+    --bad:#d35a4b;
+    --blue:#5d7bbf;
+    --ink-on-dark:#FAF8F5;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .serif{font-family:'Fraunces',Georgia,serif;font-weight:500;letter-spacing:-0.02em}
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  a{color:inherit;text-decoration:none}
+
+  /* nav — mirrors waitlist navbar */
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:20px 32px;border-bottom:1px solid var(--line);background:var(--bg)}
+  .brand{display:flex;align-items:center;gap:10px;font-family:'Fraunces',serif;font-size:20px;font-weight:600;letter-spacing:-0.02em;color:var(--ink)}
+  .mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
+  .nav .center{display:flex;gap:26px;font-size:13.5px;color:var(--ink-2)}
+  .nav .center a:hover{color:var(--ink)}
+  .nav .right{display:flex;gap:10px;align-items:center}
+  .liveDot{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-soft);letter-spacing:0.04em}
+  .liveDot::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px rgba(63,174,106,0.16)}
+  .btn{padding:10px 18px;border-radius:999px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:8px;border:1px solid transparent}
+  .btn-ink{background:var(--ink);color:#fff}
+  .btn-outline{background:transparent;color:var(--ink);border-color:var(--line-strong)}
+  .btn-accent{background:var(--accent);color:#fff}
+
+  .wrap{max-width:1240px;margin:0 auto;padding:0 32px}
+
+  /* hero */
+  .hero{padding:72px 0 56px;display:grid;grid-template-columns:1.05fr 1.15fr;gap:64px;align-items:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:0.20em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:7px 14px;border-radius:999px;font-weight:500}
+  h1{font-family:'Fraunces',serif;font-weight:500;font-size:clamp(44px,5.4vw,72px);line-height:1.02;letter-spacing:-0.028em;margin:22px 0 20px;color:var(--ink)}
+  h1 em{font-style:italic;color:var(--accent)}
+  .lead{color:var(--ink-2);font-size:18px;line-height:1.6;max-width:50ch;margin:0 0 32px}
+  .cta-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .btn-lg{padding:14px 22px;font-size:14px;border-radius:999px}
+  .meta-row{display:flex;gap:36px;margin-top:38px;color:var(--ink-soft);font-size:12.5px}
+  .meta-row .v{display:block;color:var(--ink);font-family:'Fraunces',serif;font-size:24px;font-weight:500;margin-bottom:4px;letter-spacing:-0.012em}
+
+  /* live order book — light terminal */
+  .terminal{background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 30px 80px -40px rgba(60,40,30,0.16)}
+  .term-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);background:#fdfbf7}
+  .term-tabs{display:flex;gap:4px}
+  .tt{padding:7px 13px;font-size:12.5px;color:var(--ink-soft);border-radius:8px}
+  .tt.active{background:var(--ink);color:#fff}
+  .term-body{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .ob{padding:16px 18px;border-right:1px solid var(--line)}
+  .ob-h{display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-soft);padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .ob-row{display:grid;grid-template-columns:1fr 1fr 1fr;padding:6px 0;font-size:12.5px;position:relative}
+  .ob-row .depth{position:absolute;inset:0 0 0 auto;background:rgba(204,120,92,0.08);z-index:0}
+  .ob-row.bid .depth{background:rgba(63,174,106,0.10)}
+  .ob-row.ask .depth{background:rgba(211,90,75,0.09)}
+  .ob-row .c{position:relative;z-index:1}
+  .ob-row .price.ask{color:var(--bad)}
+  .ob-row .price.bid{color:var(--good)}
+  .ob-row .right{text-align:right;color:var(--ink-2)}
+  .ob-row .center{text-align:center;color:var(--ink-2)}
+  .spread{padding:9px 0;text-align:center;font-size:11.5px;color:var(--ink-soft);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:8px 0}
+  .trades{padding:16px 18px}
+  .trades h5{margin:0 0 10px;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-soft);font-weight:500}
+  .tr{display:grid;grid-template-columns:1fr 1fr 1fr;padding:6px 0;font-size:12.5px}
+  .tr .right{text-align:right;color:var(--ink-soft)}
+  .tr .bid{color:var(--good)}
+  .tr .ask{color:var(--bad)}
+
+  /* stats bar */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:28px;border:1px solid var(--line);border-radius:18px;background:#fff;margin:24px 0 56px}
+  .stat .lab{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--ink-soft)}
+  .stat .val{font-family:'Fraunces',serif;font-size:30px;font-weight:500;letter-spacing:-0.015em;margin-top:6px;color:var(--ink)}
+  .stat .d{font-size:12px;color:var(--good);margin-top:4px}
+  .stat .d.bad{color:var(--bad)}
+
+  /* section */
+  .section{padding:80px 0;border-top:1px solid var(--line)}
+  .section .h-top{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:40px;gap:32px}
+  h2{font-family:'Fraunces',serif;font-size:clamp(30px,3.6vw,48px);font-weight:500;letter-spacing:-0.022em;margin:0;max-width:18ch;color:var(--ink)}
+  h2 em{font-style:italic;color:var(--accent)}
+  .section .h-top p{color:var(--ink-soft);font-size:15px;max-width:46ch;margin:0;line-height:1.6}
+
+  /* surfaces */
+  .surfaces{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .surface{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px;display:flex;flex-direction:column;gap:10px;min-height:220px;transition:border-color 0.2s,transform 0.2s,box-shadow 0.2s}
+  .surface:hover{border-color:var(--line-strong);transform:translateY(-2px);box-shadow:0 20px 40px -30px rgba(60,40,30,0.18)}
+  .surface .ic{width:42px;height:42px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center}
+  .surface h4{font-family:'Fraunces',serif;font-size:22px;font-weight:500;margin:8px 0 0;letter-spacing:-0.012em;color:var(--ink)}
+  .surface .p{color:var(--ink-2);font-size:14px;line-height:1.55;margin:0}
+  .badges{display:flex;gap:6px;margin-top:auto;padding-top:16px;flex-wrap:wrap}
+  .badge{font-size:11px;padding:4px 10px;border:1px solid var(--line-strong);border-radius:999px;color:var(--ink-2);background:#fdfbf7}
+
+  /* dashboard preview — dark inset to evoke the actual operator console */
+  .dash{background:#0B0F14;color:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;margin-top:36px;box-shadow:0 30px 80px -40px rgba(20,15,10,0.30)}
+  .dash-head{display:flex;justify-content:space-between;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.07);align-items:center;background:rgba(255,255,255,0.02)}
+  .dash-head .t{font-size:13px;color:rgba(255,255,255,0.65);font-weight:500}
+  .dash-head .liveDot{color:rgba(255,255,255,0.7)}
+  .dash-head .liveDot::before{box-shadow:0 0 0 4px rgba(63,174,106,0.18)}
+  .dash-body{display:grid;grid-template-columns:200px 1fr;min-height:440px}
+  .side{padding:20px 14px;border-right:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.015)}
+  .side .group{font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin:14px 8px 6px}
+  .si{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;font-size:13px;color:rgba(255,255,255,0.72)}
+  .si.active{background:rgba(204,120,92,0.16);color:#fff}
+  .si .d{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:0.55}
+  .dash-main{padding:22px 26px}
+  .dash-main h3{font-family:'Fraunces',serif;font-weight:500;font-size:24px;margin:0 0 4px;letter-spacing:-0.018em;color:#fff}
+  .dash-main .sub{font-size:13px;color:rgba(255,255,255,0.55);margin:0 0 22px}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .kpi .k{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px 16px}
+  .kpi .lab{font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.45)}
+  .kpi .val{font-family:'Fraunces',serif;font-size:22px;font-weight:500;margin-top:4px;letter-spacing:-0.012em;color:#fff}
+  .kpi .d{font-size:11.5px;color:#7cd29c;margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  thead th{text-align:left;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.45);font-weight:500;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07)}
+  tbody td{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06);color:rgba(255,255,255,0.85)}
+  tbody tr:last-child td{border-bottom:none}
+  .tag{font-size:10.5px;padding:3px 9px;border-radius:999px}
+  .tag.new{background:rgba(204,120,92,0.18);color:var(--accent-2)}
+  .tag.esc{background:rgba(122,162,255,0.16);color:#a8bff7}
+  .tag.pay{background:rgba(63,174,106,0.16);color:#7cd29c}
+  .dash-foot{padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);text-align:center;font-size:12px;color:rgba(255,255,255,0.5)}
+
+  /* earnings split — editorial */
+  .earnings{display:grid;grid-template-columns:1fr 1.2fr;gap:36px;align-items:center;margin-top:32px}
+  .earnings .split-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:26px}
+  .split-card .row{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .split-card .row:last-child{border-bottom:none;font-weight:600}
+  .split-card .row .lab{color:var(--ink-2)}
+  .split-card .row .v{font-family:'JetBrains Mono',monospace}
+  .split-card .pill{display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);margin-left:8px;font-weight:500;letter-spacing:0.04em}
+
+  /* corridors */
+  .corridors{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:36px}
+  .corr{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}
+  .corr .pair{font-family:'Fraunces',serif;font-size:16px;font-weight:500;letter-spacing:-0.01em;color:var(--ink)}
+  .corr .rate{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--ink-2);margin-top:6px}
+  .corr .vol{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
+  .corr .d{font-size:11.5px;color:var(--good);margin-top:8px}
+  .corr .d.bad{color:var(--bad)}
+
+  /* cross-sell to user */
+  .cross{background:var(--ink);color:#fff;border-radius:22px;padding:48px;margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+  .cross .eyebrow-d{display:inline-block;font-size:11px;letter-spacing:0.20em;text-transform:uppercase;color:rgba(255,255,255,0.55);margin-bottom:14px}
+  .cross h3{font-family:'Fraunces',serif;font-weight:500;font-size:34px;letter-spacing:-0.02em;margin:0 0 14px;color:#fff}
+  .cross h3 em{font-style:italic;color:var(--accent)}
+  .cross p{color:rgba(255,255,255,0.70);font-size:15px;line-height:1.6;margin:0 0 22px}
+  .cross .stat-big{font-family:'Fraunces',serif;font-size:120px;font-weight:500;letter-spacing:-0.04em;line-height:1;color:var(--accent);margin:0}
+  .cross .stat-lab{color:rgba(255,255,255,0.55);font-size:13px;margin-top:6px;letter-spacing:0.08em;text-transform:uppercase}
+
+  /* cta */
+  .cta{padding:96px 0;text-align:center;border-top:1px solid var(--line)}
+  .cta h2{margin:0 auto 14px}
+  .cta p{color:var(--ink-soft);margin:0 0 28px;font-size:16px}
+
+  footer{padding:40px 32px;color:var(--ink-soft);font-size:12.5px;border-top:1px solid var(--line);display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
+  footer .links{display:flex;gap:24px}
+
+  @media (max-width: 980px){
+    .hero{grid-template-columns:1fr;gap:48px;padding:48px 0}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .surfaces{grid-template-columns:1fr}
+    .dash-body{grid-template-columns:1fr}
+    .side{display:none}
+    .kpi{grid-template-columns:repeat(2,1fr)}
+    .corridors{grid-template-columns:repeat(2,1fr)}
+    .earnings{grid-template-columns:1fr}
+    .cross{grid-template-columns:1fr;padding:32px}
+    .nav .center{display:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="brand"><span class="mark">B</span> Blip<span style="color:var(--accent)">.</span> Market</div>
+  <div class="center">
+    <a>Order book</a><a>Desks</a><a>Corridors</a><a>Docs</a><a>API</a>
+  </div>
+  <div class="right">
+    <span class="liveDot">Network live</span>
+    <a class="btn btn-outline">Sign in</a>
+    <a class="btn btn-ink">Apply to run a desk →</a>
+  </div>
+</nav>
+
+<section class="wrap hero">
+  <div>
+    <span class="eyebrow">Founding Desk Programme</span>
+    <h1>The settlement layer for <em>borderless money.</em></h1>
+    <p class="lead">Blip Market matches and settles cross-border P2P trades in under 60 seconds. Verified desks lock escrow, take fills, and earn the merchant rate plus a service fee on every order — paid out instantly on-chain.</p>
+    <div class="cta-row">
+      <a class="btn btn-ink btn-lg">Apply to run a desk →</a>
+      <a class="btn btn-outline btn-lg">Open the live order book</a>
+    </div>
+    <div class="meta-row">
+      <div><span class="v mono">₹14.8 Cr</span><span>Settled · 24h</span></div>
+      <div><span class="v mono">122</span><span>Desks live</span></div>
+      <div><span class="v mono">47s</span><span>Avg settle</span></div>
+    </div>
+  </div>
+
+  <div class="terminal">
+    <div class="term-head">
+      <div class="term-tabs">
+        <div class="tt active">USDC / INR</div>
+        <div class="tt">USDC / AED</div>
+        <div class="tt">USDC / NGN</div>
+        <div class="tt">USDT / INR</div>
+      </div>
+      <span class="liveDot">Streaming</span>
+    </div>
+    <div class="term-body">
+      <div class="ob">
+        <div class="ob-h"><span>Price (INR)</span><span style="text-align:center">Size</span><span style="text-align:right">Total</span></div>
+        <div class="ob-row ask"><div class="depth" style="left:30%"></div><div class="c price ask mono">83.4820</div><div class="c center mono">1,200</div><div class="c right mono">100,178</div></div>
+        <div class="ob-row ask"><div class="depth" style="left:45%"></div><div class="c price ask mono">83.4780</div><div class="c center mono">800</div><div class="c right mono">66,782</div></div>
+        <div class="ob-row ask"><div class="depth" style="left:55%"></div><div class="c price ask mono">83.4720</div><div class="c center mono">600</div><div class="c right mono">50,083</div></div>
+        <div class="ob-row ask"><div class="depth" style="left:70%"></div><div class="c price ask mono">83.4680</div><div class="c center mono">400</div><div class="c right mono">33,387</div></div>
+        <div class="spread mono">Spread 0.0120 · Mid 83.4620</div>
+        <div class="ob-row bid"><div class="depth" style="left:70%"></div><div class="c price bid mono">83.4560</div><div class="c center mono">450</div><div class="c right mono">37,555</div></div>
+        <div class="ob-row bid"><div class="depth" style="left:55%"></div><div class="c price bid mono">83.4500</div><div class="c center mono">700</div><div class="c right mono">58,415</div></div>
+        <div class="ob-row bid"><div class="depth" style="left:40%"></div><div class="c price bid mono">83.4440</div><div class="c center mono">1,100</div><div class="c right mono">91,788</div></div>
+        <div class="ob-row bid"><div class="depth" style="left:25%"></div><div class="c price bid mono">83.4380</div><div class="c center mono">1,500</div><div class="c right mono">125,157</div></div>
+      </div>
+      <div class="trades">
+        <h5>Recent fills</h5>
+        <div class="tr"><span class="bid mono">↑ 83.4620</span><span class="mono">820</span><span class="right mono">3s</span></div>
+        <div class="tr"><span class="ask mono">↓ 83.4600</span><span class="mono">1,400</span><span class="right mono">11s</span></div>
+        <div class="tr"><span class="bid mono">↑ 83.4640</span><span class="mono">300</span><span class="right mono">28s</span></div>
+        <div class="tr"><span class="bid mono">↑ 83.4640</span><span class="mono">920</span><span class="right mono">42s</span></div>
+        <div class="tr"><span class="ask mono">↓ 83.4580</span><span class="mono">560</span><span class="right mono">1m</span></div>
+        <div class="tr"><span class="bid mono">↑ 83.4620</span><span class="mono">2,100</span><span class="right mono">1m</span></div>
+        <div class="tr"><span class="ask mono">↓ 83.4560</span><span class="mono">740</span><span class="right mono">2m</span></div>
+        <div class="tr"><span class="bid mono">↑ 83.4660</span><span class="mono">410</span><span class="right mono">2m</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="stats">
+    <div class="stat"><div class="lab">Volume · 24h</div><div class="val mono">₹14.8 Cr</div><div class="d">▲ 18.2% vs yest</div></div>
+    <div class="stat"><div class="lab">Fills · 24h</div><div class="val mono">8,412</div><div class="d">▲ 6.4%</div></div>
+    <div class="stat"><div class="lab">Avg settle time</div><div class="val mono">47s</div><div class="d">−6s vs 7d avg</div></div>
+    <div class="stat"><div class="lab">Live desks</div><div class="val mono">122</div><div class="d">▲ 4 in last hour</div></div>
+  </div>
+</section>
+
+<section class="wrap section">
+  <div class="h-top">
+    <h2>Plug in <em>your way.</em></h2>
+    <p>One engine. Three surfaces. Run flow from the dashboard, the bot, or your own stack.</p>
+  </div>
+  <div class="surfaces">
+    <a class="surface">
+      <div class="ic">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+      </div>
+      <h4>Desk Dashboard</h4>
+      <p class="p">Full operator console. Order book, escrow status, settlement queue, earnings, KYB.</p>
+      <div class="badges"><span class="badge">Web</span><span class="badge">market.blip.money</span></div>
+    </a>
+    <a class="surface">
+      <div class="ic">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-11 11"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+      </div>
+      <h4>Telegram Bot</h4>
+      <p class="p">Take orders, lock escrow, confirm payment — all from chat. For desks running flow on the move.</p>
+      <div class="badges"><span class="badge">Telegram</span><span class="badge">@blipmoneybot</span></div>
+    </a>
+    <a class="surface">
+      <div class="ic">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </div>
+      <h4>Developer API</h4>
+      <p class="p">REST + websockets. Build your own desk client, dashboards, or hedging bots on the Blip engine.</p>
+      <div class="badges"><span class="badge">REST</span><span class="badge">WS</span><span class="badge">Beta</span></div>
+    </a>
+  </div>
+</section>
+
+<section class="wrap section">
+  <div class="h-top">
+    <h2>What a desk <em>looks like.</em></h2>
+    <p>A preview of the operator console. Live order book, escrow, earnings — built for operators who run flow all day.</p>
+  </div>
+  <div class="dash">
+    <div class="dash-head">
+      <div class="t">Desk · Meera Capital · Mumbai</div>
+      <span class="liveDot">Streaming</span>
+    </div>
+    <div class="dash-body">
+      <aside class="side">
+        <div class="group">Trade</div>
+        <div class="si active"><span class="d"></span>Order book</div>
+        <div class="si"><span class="d"></span>My fills</div>
+        <div class="si"><span class="d"></span>Escrow</div>
+        <div class="si"><span class="d"></span>Settlement queue</div>
+        <div class="group">Desk</div>
+        <div class="si"><span class="d"></span>Earnings</div>
+        <div class="si"><span class="d"></span>Pricing rules</div>
+        <div class="si"><span class="d"></span>KYB</div>
+      </aside>
+      <div class="dash-main">
+        <h3>Good evening, Meera.</h3>
+        <div class="sub">12 open · ₹3.42L cleared today · service fee earned ₹1,840</div>
+        <div class="kpi">
+          <div class="k"><div class="lab">Volume · 24h</div><div class="val mono">₹3,42,180</div><div class="d">▲ 18.2%</div></div>
+          <div class="k"><div class="lab">Open orders</div><div class="val mono">12</div><div class="d">▲ 3 last hour</div></div>
+          <div class="k"><div class="lab">Avg settle</div><div class="val mono">47s</div><div class="d">−6s vs yest</div></div>
+          <div class="k"><div class="lab">Service fee · 24h</div><div class="val mono">₹1,840</div><div class="d">▲ 12.4%</div></div>
+        </div>
+        <table>
+          <thead><tr><th>Order</th><th>Pair</th><th>Amount</th><th>Merchant rate</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">#A82F1</td><td>USDC → INR</td><td class="mono">₹24,000</td><td class="mono">83.42</td><td><span class="tag new">New</span></td></tr>
+            <tr><td class="mono">#A82E8</td><td>USDC → INR</td><td class="mono">₹8,200</td><td class="mono">83.40</td><td><span class="tag esc">Escrowed</span></td></tr>
+            <tr><td class="mono">#A82D1</td><td>INR → USDC</td><td class="mono">₹1,12,000</td><td class="mono">83.48</td><td><span class="tag pay">Payment sent</span></td></tr>
+            <tr><td class="mono">#A82B4</td><td>USDC → AED</td><td class="mono">AED 1,820</td><td class="mono">3.6720</td><td><span class="tag esc">Escrowed</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dash-foot">A real desk on Blip Market — names anonymised.</div>
+  </div>
+</section>
+
+<section class="wrap section">
+  <div class="h-top">
+    <h2>What you earn, <em>per fill.</em></h2>
+    <p>Three-part economics, written out in plain English. No hidden spread, no surprises at settlement.</p>
+  </div>
+  <div class="earnings">
+    <div class="split-card">
+      <div class="row"><span class="lab">Merchant rate <span class="pill">Your spread</span></span><span class="v">₹83.42 / USDC</span></div>
+      <div class="row"><span class="lab">Service fee <span class="pill">Network</span></span><span class="v">₹2.00 / fill</span></div>
+      <div class="row"><span class="lab">Boost <span class="pill">Optional</span></span><span class="v">Priority routing</span></div>
+      <div class="row"><span class="lab">Settlement</span><span class="v">On-chain · ≤ 60s</span></div>
+    </div>
+    <div>
+      <h2 style="font-size:36px;max-width:14ch;margin-bottom:14px">You set the <em>merchant rate.</em><br/>We route the flow.</h2>
+      <p style="color:var(--ink-2);font-size:15px;line-height:1.65;margin:0 0 16px">Your rate competes live. The order book matches by best price first, then by desk reputation and uptime. Win the fill, lock escrow, payout in seconds.</p>
+      <a class="btn btn-ink btn-lg">Apply to run a desk →</a>
+    </div>
+  </div>
+</section>
+
+<section class="wrap section">
+  <div class="h-top">
+    <h2>Corridors live <em>right now.</em></h2>
+    <p>Liquidity follows real consumer flows. These are the pairs with the deepest book today.</p>
+  </div>
+  <div class="corridors">
+    <div class="corr"><div class="pair">USDC / INR</div><div class="rate">₹83.46</div><div class="vol">₹8.2 Cr · 24h</div><div class="d">▲ 0.12%</div></div>
+    <div class="corr"><div class="pair">USDC / AED</div><div class="rate">AED 3.6720</div><div class="vol">AED 1.1M · 24h</div><div class="d">▲ 0.04%</div></div>
+    <div class="corr"><div class="pair">USDC / NGN</div><div class="rate">₦1,648</div><div class="vol">₦220M · 24h</div><div class="d bad">▼ 0.21%</div></div>
+    <div class="corr"><div class="pair">USDT / INR</div><div class="rate">₹83.44</div><div class="vol">₹4.6 Cr · 24h</div><div class="d">▲ 0.08%</div></div>
+    <div class="corr"><div class="pair">USDC / PHP</div><div class="rate">₱58.20</div><div class="vol">₱88M · 24h</div><div class="d">▲ 0.06%</div></div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="cross">
+    <div>
+      <div class="eyebrow-d">Or just want to send money?</div>
+      <h3>Earn up to <em>5% cashback</em> on every send.</h3>
+      <p>Same network, different side. The Blip user app lets you send, swap, and spend across borders — settled by these same desks in under 60 seconds.</p>
+      <a class="btn btn-accent btn-lg">Open the user app →</a>
+    </div>
+    <div style="text-align:right">
+      <div class="stat-big">10%</div>
+      <div class="stat-lab">Average margin · top desks</div>
+    </div>
+  </div>
+</section>
+
+<section class="cta wrap">
+  <h2>Run a desk on <em>Blip Market.</em></h2>
+  <p>KYB takes 24–48h. Once live, you take fills from day one. Founding desks keep zero settlement fees through the beta.</p>
+  <div class="cta-row" style="justify-content:center">
+    <a class="btn btn-ink btn-lg">Apply to run a desk →</a>
+    <a class="btn btn-outline btn-lg">Read the docs</a>
+  </div>
+</section>
+
+<footer>
+  <div><span class="brand" style="font-size:15px"><span class="mark" style="width:20px;height:20px;font-size:11px">B</span> Blip<span style="color:var(--accent)">.</span> Market</span></div>
+  <div class="links"><a>Docs</a><a>API</a><a>Status</a><a>Privacy</a><a>Terms</a></div>
+  <div>Escrow-protected · On-chain settlement</div>
+</footer>
+
+</body>
+</html>

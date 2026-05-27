@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Blip Market — Sign in to your desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAF8F5;
+    --panel:#ffffff;
+    --ink:#1d1d1f;
+    --ink-2:#3a3a3c;
+    --ink-soft:#6b675f;
+    --line:#ece6dc;
+    --line-strong:#dcd4c5;
+    --accent:#cc785c;
+    --accent-2:#e9a787;
+    --accent-soft:#f4e3d9;
+    --good:#3fae6a;
+    --bad:#d35a4b;
+    --blue:#5d7bbf;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  body{min-height:100vh;display:flex;flex-direction:column}
+  a{color:inherit;text-decoration:none}
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:22px 32px;border-bottom:1px solid var(--line);background:var(--bg)}
+  .brand{display:flex;align-items:center;gap:10px;font-family:'Fraunces',serif;font-size:20px;font-weight:600;letter-spacing:-0.02em}
+  .mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
+  .brand .dot{color:var(--accent)}
+  .switch-link{font-size:13px;color:var(--ink-soft);display:inline-flex;align-items:center;gap:6px}
+  .switch-link:hover{color:var(--accent)}
+
+  .split{flex:1;display:grid;grid-template-columns:1.1fr 1fr;min-height:calc(100vh - 72px)}
+
+  /* LEFT — live operator proof (dark) */
+  .left{background:#0B0F14;color:#fff;padding:56px 56px 48px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+  .left::after{content:"";position:absolute;inset:0;background:radial-gradient(70% 50% at 0% 0%,rgba(204,120,92,0.10),transparent 70%);pointer-events:none}
+  .left .inner{position:relative;z-index:1}
+
+  .left .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:0.20em;text-transform:uppercase;color:var(--accent-2);padding:6px 12px;border:1px solid rgba(204,120,92,0.35);background:rgba(204,120,92,0.10);border-radius:999px;font-weight:500}
+  .left h1{font-family:'Fraunces',serif;font-weight:500;font-size:44px;letter-spacing:-0.025em;line-height:1.05;margin:22px 0 16px;color:#fff;max-width:14ch}
+  .left h1 em{font-style:italic;color:var(--accent)}
+  .left .lead{color:rgba(255,255,255,0.65);font-size:15px;line-height:1.6;max-width:42ch;margin:0 0 36px}
+
+  .live-row{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;color:rgba(255,255,255,0.55);letter-spacing:0.06em;margin-bottom:14px}
+  .live-row::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px rgba(63,174,106,0.18)}
+
+  /* mini live tape */
+  .tape{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px;max-width:380px}
+  .tape h5{margin:0 0 10px;font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.45);font-weight:500;display:flex;justify-content:space-between}
+  .tr{display:grid;grid-template-columns:80px 1fr 60px 60px;padding:6px 0;font-size:12.5px;color:rgba(255,255,255,0.82);align-items:center}
+  .tr .pair{color:rgba(255,255,255,0.55);font-size:11px}
+  .tr .px.bid{color:#7cd29c}
+  .tr .px.ask{color:#ee8e83}
+  .tr .sz{text-align:right;color:rgba(255,255,255,0.65)}
+  .tr .age{text-align:right;color:rgba(255,255,255,0.4);font-size:11px}
+
+  .kpis{display:grid;grid-template-columns:repeat(3,auto);gap:28px;margin-top:32px}
+  .kpi .v{font-family:'Fraunces',serif;font-size:22px;font-weight:500;letter-spacing:-0.012em;color:#fff}
+  .kpi .l{font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.45);margin-top:2px}
+
+  .left-foot{position:relative;z-index:1;font-size:12px;color:rgba(255,255,255,0.4);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  .left-foot a{color:rgba(255,255,255,0.7);border-bottom:1px solid rgba(255,255,255,0.15)}
+
+  /* RIGHT — login (cream) */
+  .right{display:flex;align-items:center;justify-content:center;padding:48px 32px}
+  .card{width:100%;max-width:420px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:0.20em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:6px 12px;border-radius:999px;font-weight:500;margin-bottom:22px}
+  .card h2{font-family:'Fraunces',serif;font-weight:500;font-size:32px;letter-spacing:-0.022em;margin:0 0 8px;line-height:1.05}
+  .card h2 em{font-style:italic;color:var(--accent)}
+  .card .sub{color:var(--ink-2);font-size:14px;line-height:1.55;margin:0 0 28px}
+
+  .field{display:block;margin-bottom:12px}
+  .field label{display:block;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px;font-weight:500}
+  .field input{width:100%;padding:13px 16px;border:1px solid var(--line-strong);border-radius:12px;font-size:15px;font-family:inherit;background:#fff;transition:all 0.15s}
+  .field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px rgba(204,120,92,0.10)}
+
+  .btn-primary{width:100%;padding:13px 18px;background:var(--ink);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:500;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;margin-top:4px;transition:background 0.15s}
+  .btn-primary:hover{background:#000}
+
+  .or{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--ink-soft);margin:18px 0;letter-spacing:0.14em;text-transform:uppercase}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .google{width:100%;padding:12px;display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#fff;border:1px solid var(--line-strong);border-radius:12px;font-size:13.5px;font-weight:500;font-family:inherit;cursor:pointer;color:var(--ink);transition:all 0.15s}
+  .google:hover{border-color:var(--ink)}
+  .google svg{width:17px;height:17px}
+
+  .meta{margin-top:22px;display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--ink-soft)}
+  .meta a{color:var(--ink);font-weight:500}
+  .meta a:hover{color:var(--accent)}
+
+  .apply{margin-top:18px;padding:14px 16px;border:1px dashed var(--line-strong);border-radius:12px;background:#fdfbf7;font-size:13px;color:var(--ink-2);text-align:center}
+  .apply a{color:var(--accent);font-weight:500}
+
+  @media (max-width: 900px){
+    .split{grid-template-columns:1fr}
+    .left{padding:40px 32px 32px;min-height:auto}
+    .left h1{font-size:32px}
+    .kpis{gap:18px}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="mark">B</span> Blip<span class="dot">.</span> Market</div>
+  <a class="switch-link" href="login-user.html">Sign in to user app instead →</a>
+</header>
+
+<main class="split">
+
+  <!-- LEFT: operator proof -->
+  <section class="left">
+    <div class="inner">
+      <span class="eyebrow">Operator console</span>
+      <h1>Welcome back, <em>operator.</em></h1>
+      <p class="lead">Your order book is open. 12 fills cleared in your absence. Sign in to take the queue.</p>
+
+      <div class="live-row">Live order tape · USDC / INR</div>
+      <div class="tape">
+        <h5><span>Recent fills</span><span style="color:var(--good)">Streaming</span></h5>
+        <div class="tr"><span class="pair">USDC/INR</span><span class="px bid mono">↑ 83.4620</span><span class="sz mono">820</span><span class="age">3s</span></div>
+        <div class="tr"><span class="pair">USDC/INR</span><span class="px ask mono">↓ 83.4600</span><span class="sz mono">1,400</span><span class="age">11s</span></div>
+        <div class="tr"><span class="pair">USDC/AED</span><span class="px bid mono">↑ 3.6720</span><span class="sz mono">340</span><span class="age">28s</span></div>
+        <div class="tr"><span class="pair">USDC/INR</span><span class="px bid mono">↑ 83.4640</span><span class="sz mono">920</span><span class="age">42s</span></div>
+        <div class="tr"><span class="pair">USDC/INR</span><span class="px ask mono">↓ 83.4580</span><span class="sz mono">560</span><span class="age">1m</span></div>
+        <div class="tr"><span class="pair">USDC/NGN</span><span class="px bid mono">↑ 1,648</span><span class="sz mono">2.1k</span><span class="age">1m</span></div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="v mono">₹14.8 Cr</div><div class="l">Volume · 24h</div></div>
+        <div class="kpi"><div class="v mono">122</div><div class="l">Desks live</div></div>
+        <div class="kpi"><div class="v mono">47s</div><div class="l">Avg settle</div></div>
+      </div>
+    </div>
+
+    <div class="left-foot">
+      <span>Escrow-protected · On-chain settlement</span>
+      <span><a href="market.html">View the live market →</a></span>
+    </div>
+  </section>
+
+  <!-- RIGHT: login -->
+  <aside class="right">
+    <div class="card">
+      <span class="eyebrow">Desk sign-in</span>
+      <h2>Sign in to your <em>desk.</em></h2>
+      <p class="sub">Two-factor required. Use the same login as your user account.</p>
+
+      <form onsubmit="return false">
+        <div class="field">
+          <label for="email">Desk email</label>
+          <input id="email" type="email" placeholder="desk@meeracapital.in" autocomplete="email" />
+        </div>
+        <div class="field">
+          <label for="pw">Password</label>
+          <input id="pw" type="password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <button class="btn-primary" type="submit">
+          Continue to 2FA
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </button>
+      </form>
+
+      <div class="or">or</div>
+
+      <button class="google" type="button">
+        <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3a12 12 0 1 1-3.3-13.2l5.7-5.7A20 20 0 1 0 44 24c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8A12 12 0 0 1 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7A20 20 0 0 0 6.3 14.7z"/><path fill="#4CAF50" d="M24 44a20 20 0 0 0 13.5-5.2l-6.2-5.3A12 12 0 0 1 12.7 28l-6.6 5A20 20 0 0 0 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3a12 12 0 0 1-4 5.5l6.2 5.3C37.2 39 44 33 44 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+        Continue with Google SSO
+      </button>
+
+      <div class="meta">
+        <span>Use a hardware key</span>
+        <a href="#">Lost 2FA?</a>
+      </div>
+
+      <div class="apply">
+        Don't have a desk yet? <a href="market.html">Apply to run one →</a>
+      </div>
+    </div>
+  </aside>
+
+</main>
+
+</body>
+</html>
