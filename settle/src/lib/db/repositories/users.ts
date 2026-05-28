@@ -247,7 +247,12 @@ export async function updatePassword(
   const user = await queryOne<User>('SELECT * FROM users WHERE id = $1', [id]);
   if (!user || !user.password_hash) return false;
 
-  if (!verifyPassword(currentPassword, user.password_hash)) {
+  // verifyPassword returns { valid, needsRehash } — destructure so the gate
+  // actually evaluates the boolean. The bare `!verifyPassword(...)` form
+  // was always false (object is truthy), letting the current-password
+  // check be bypassed entirely.
+  const { valid } = verifyPassword(currentPassword, user.password_hash);
+  if (!valid) {
     return false;
   }
 
