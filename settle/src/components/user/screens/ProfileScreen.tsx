@@ -3,13 +3,11 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Activity,
   Check,
   Copy,
   Wallet,
   Sun,
   Moon,
-  TrendingUp,
   ChevronRight,
   LogOut,
   Shield,
@@ -477,24 +475,6 @@ export const ProfileScreen = ({
           <AppLockSettingsCard userId={userId} />
         </div>
 
-        {/* ── 3. Activity ── */}
-        <SettingsGroup label="Activity" icon={<Activity className="w-3.5 h-3.5" />}>
-          <SettingsRow
-            href="/console"
-            icon={<TrendingUp className="w-[15px] h-[15px]" />}
-            title="Console"
-            subtitle="Timeouts & analytics"
-            trailing={
-              timedOutOrders.length > 0 ? (
-                <StatusPill
-                  label={`${timedOutOrders.length} timeout${timedOutOrders.length !== 1 ? 's' : ''}`}
-                  tone="error"
-                />
-              ) : undefined
-            }
-          />
-        </SettingsGroup>
-
         {/* Resolved Disputes — rich list kept inline so each card retains
             its existing layout (orderNumber, won/lost/split badge, amount,
             counterparty). Only rendered when there's at least one. */}
@@ -621,8 +601,8 @@ export const ProfileScreen = ({
             }
             window.location.href = '/';
           }}
-          className="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-red-900 border border-red-800/70 text-[14px] font-bold text-red-100 tracking-[-0.01em]">
-          <LogOut size={16} className="text-red-100" />
+          className="w-full h-12 flex items-center justify-center gap-2 rounded-lg bg-white border border-white text-[14px] font-bold text-black tracking-[-0.01em]">
+          <LogOut size={16} className="text-invert" />
           Sign Out
         </motion.button>
       </div>

@@ -92,62 +92,6 @@ function formatDate(d: Date) {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// Dummy transactions — visual placeholders for the Transactions section
-const DUMMY_ORDERS: Order[] = [
-  {
-    id: 'dummy-1',
-    type: 'buy',
-    cryptoAmount: '120.50',
-    cryptoCode: 'USDT',
-    fiatAmount: '10242.50',
-    fiatCode: 'INR',
-    merchant: { id: 'dm-1', name: 'Rahul S.', rating: 4.9, trades: 312, rate: 85.0, paymentMethod: 'bank' },
-    status: 'complete',
-    step: 4,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6),
-    expiresAt: new Date(),
-  },
-  {
-    id: 'dummy-2',
-    type: 'sell',
-    cryptoAmount: '50.00',
-    cryptoCode: 'USDT',
-    fiatAmount: '4250.00',
-    fiatCode: 'INR',
-    merchant: { id: 'dm-2', name: 'Priya M.', rating: 4.7, trades: 89, rate: 85.0, paymentMethod: 'bank' },
-    status: 'complete',
-    step: 4,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
-    expiresAt: new Date(),
-  },
-  {
-    id: 'dummy-3',
-    type: 'buy',
-    cryptoAmount: '75.25',
-    cryptoCode: 'USDT',
-    fiatAmount: '6396.25',
-    fiatCode: 'INR',
-    merchant: { id: 'dm-3', name: 'Aman K.', rating: 4.8, trades: 156, rate: 85.0, paymentMethod: 'bank' },
-    status: 'complete',
-    step: 4,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48),
-    expiresAt: new Date(),
-  },
-  {
-    id: 'dummy-4',
-    type: 'sell',
-    cryptoAmount: '200.00',
-    cryptoCode: 'USDT',
-    fiatAmount: '17000.00',
-    fiatCode: 'INR',
-    merchant: { id: 'dm-4', name: 'Neha R.', rating: 4.95, trades: 420, rate: 85.0, paymentMethod: 'bank' },
-    status: 'complete',
-    step: 4,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72),
-    expiresAt: new Date(),
-  },
-];
-
 // ─── Single transaction row ────────────────────────────────────────────────
 function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: number; onPress: () => void; avatarUrl?: string }) {
   const isBuy = order.type === 'buy';
@@ -264,44 +208,9 @@ function WalletBalanceSection({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* ── Live-rate pill (Phantom-style) — pinned to top with its own row
-              so it cannot get vertically squished into the header on short
-              responsive viewports. Previously it lived inside the
-              justify-center group below and would overflow upward into the
-              wallet-address row when the centered area got tight. ── */}
+      {/* Reputation + coin pill — small, sits at the top of the hero. Same
+          widget as the merchant + waitlist surfaces. */}
       <div className="shrink-0 flex items-center justify-center mt-1 mb-2">
-        <div
-          className="flex items-center gap-1.5"
-          style={{
-            padding: '5px 10px',
-            borderRadius: 999,
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.10)',
-          }}
-        >
-          <motion.div
-            animate={{ opacity: [1, 0.3, 1] }}
-            transition={{ duration: 1.8, repeat: Infinity }}
-            style={{
-              width: 5, height: 5, borderRadius: 999,
-              background: '#10b981',
-              boxShadow: '0 0 6px rgba(16,185,129,0.55)',
-            }}
-          />
-          <span style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
-            color: heroText.md,
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          }}>
-            {currentRate.toFixed(2)} {fiatLabel}
-          </span>
-        </div>
-      </div>
-
-      {/* Reputation + coin pill — small, sits below the live-rate pill so
-          it doesn't compete with the hero balance. Same widget as the
-          merchant + waitlist surfaces. */}
-      <div className="shrink-0 flex items-center justify-center mb-2">
         <ReputationCoinBadge variant="pill" />
       </div>
 
@@ -312,7 +221,7 @@ function WalletBalanceSection({
 
       {/* ── Big centered balance + Apple-style page-dot token switcher ── */}
       {isWalletReady ? (
-        <div  style={{ marginTop: 12, marginBottom: 8, textAlign: 'center' }}>
+        <div   style={{ marginTop: 12, marginBottom: 8, textAlign: 'center' }}>
           <motion.div
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
@@ -338,7 +247,7 @@ function WalletBalanceSection({
               >
                 <div className="flex items-baseline justify-center" style={{ gap: 2 }}>
                   <span style={{
-                    fontSize: 60, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1,
+                    fontSize: window.innerWidth <= 768 ? 50 : 60, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1,
                     color: heroText.hi,
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                   }}>
@@ -361,7 +270,7 @@ function WalletBalanceSection({
                 <p style={{
                   fontSize: 12, fontWeight: 600,
                   color: heroText.md,
-                  marginTop: 12, letterSpacing: '-0.005em',
+                  marginTop: 2, letterSpacing: '-0.005em',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 }}>
                   {tFiat ? `≈ ${tFiat} ${fiatLabel}` : t.name}
@@ -371,7 +280,7 @@ function WalletBalanceSection({
           </motion.div>
 
           {/* ── Page-dot indicator (iOS-style) ── */}
-          <div className="flex items-center justify-center" style={{ gap: 6, marginTop: 18 }}>
+          <div className="flex items-center justify-center mt-1" style={{ gap: 6,  }}>
             {tokens.map((tk, i) => {
               const active = i === tokenIdx;
               return (
@@ -397,19 +306,19 @@ function WalletBalanceSection({
 
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-4" style={{ textAlign: 'center' }}>
+        <div className="flex flex-col items-center gap-2" style={{ textAlign: 'center' }}>
           {/* Compact dash placeholder — kept small (font-size 32, not 60)
               so the stack stays short enough to fit inside the flex-1
               centered area on mobile viewports without overflowing into
               the action-tile row below. */}
-          <span style={{
+          <span className="" style={{
             fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1,
             color: 'rgba(255,255,255,0.22)',
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
           }}>
             ---
           </span>
-          <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1.4, maxWidth: 240 }}>
+          <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1, maxWidth: 240 }}>
             {IS_EMBEDDED_WALLET
               ? embeddedWallet?.state === 'locked' ? 'Unlock your wallet to view balance' : 'Set up a wallet to start trading'
               : 'Connect your Solana wallet to trade'}
@@ -1176,10 +1085,10 @@ export const HomeScreen = ({
             </motion.button>
           )}
 
-          {/* Transaction rows — real orders first, then 4 dummies */}
-          {true ? (
+          {/* Transaction rows — real orders only */}
+          {orders.length > 0 ? (
             <div className="mt-2">
-              {[...orders, ...DUMMY_ORDERS].slice(0, 8).map((order, i, arr) => (
+              {orders.slice(0, 8).map((order, i, arr) => (
                 <motion.div
                   key={order.id}
                   initial={{ opacity: 0, y: 18 }}

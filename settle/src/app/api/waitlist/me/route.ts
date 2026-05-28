@@ -14,7 +14,7 @@ import { requireAuth, forbiddenResponse } from '@/lib/middleware/auth';
 import { queryOne } from '@/lib/db';
 import { getPointHistory } from '@/lib/waitlist/credit';
 import { listTasksForActor } from '@/lib/db/repositories/waitlistTasks';
-import { getMyReferrals } from '@/lib/waitlist/referral';
+import { ensureReferralCode, getMyReferrals } from '@/lib/waitlist/referral';
 import type { WaitlistActorType, WaitlistStatus } from '@/lib/types/database';
 
 interface PrimaryRow {
@@ -64,6 +64,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Account not found' }, { status: 404 });
   }
 
+  // Backfill the referral_code lazily. Some accounts predate the waitlist
+  // pipeline (or signed up via a path that skipped setupWaitlistForActor),
+  // so primary.referral_code can be NULL even though the user is otherwise
+  // healthy. The Refer & Earn screen needs a code to share. ensure* is
+  // idempotent (COALESCE) and has no other side effects — does not touch
+  // waitlist_status or points. Failures here are non-fatal; the screen
+  // shows a placeholder instead.
+  if (!primary.referral_code) {
+    try {
+      primary.referral_code = await ensureReferralCode(actorType, actorId);
+    } catch (err) {
+      console.error('[waitlist/me] ensureReferralCode failed', err);
+    }
+  }
+
   // Counterpart: find the OTHER actor type for the same person, linked by
   // email first, then wallet. Returns null if they haven't joined that side.
   let counterpart: CounterpartRow | null = null;
@@ -84,6 +99,35 @@ export async function GET(request: NextRequest) {
         LIMIT 1`,
       [primary.wallet_address],
     );
+  }
+
+  // Same lazy backfill for the counterpart row. When the primary already
+  // has a code, COPY it onto the counterpart instead of generating a fresh
+  // value — same human (linked by email/wallet) sees the SAME code whether
+  // they're logged in as a user or as a merchant. The unique partial index
+  // is per-table, so the same string can live on a users row and a merchants
+  // row without violating constraints. Failures non-fatal.
+  if (counterpart && !counterpart.referral_code) {
+    const counterType: WaitlistActorType =
+      actorType === 'merchant' ? 'user' : 'merchant';
+    const counterTableName = counterType === 'merchant' ? 'merchants' : 'users';
+    try {
+      if (primary.referral_code) {
+        const copied = await queryOne<{ referral_code: string | null }>(
+          `UPDATE ${counterTableName}
+              SET referral_code = COALESCE(referral_code, $2),
+                  updated_at = NOW()
+            WHERE id = $1
+            RETURNING referral_code`,
+          [counterpart.id, primary.referral_code],
+        );
+        counterpart.referral_code = copied?.referral_code ?? null;
+      } else {
+        counterpart.referral_code = await ensureReferralCode(counterType, counterpart.id);
+      }
+    } catch (err) {
+      console.error('[waitlist/me] counterpart referral_code backfill failed', err);
+    }
   }
 
   const [tasks, pointsHistory, referrals, betaRequest] = await Promise.all([

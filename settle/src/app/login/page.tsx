@@ -1,14 +1,18 @@
 "use client";
 
 /**
- * /login → redirects to /?welcome=skip&tab=... to bypass the welcome page.
+ * /login — redirects to /?welcome=skip&tab=… so visitors land directly
+ * on the user login form.
  *
- * The root / page renders LandingPage which handles login/register.
- * This redirect adds a query param so LandingPage skips the welcome
- * screen and goes directly to the login form.
+ * The role chooser that previously sat here was removed: the marketing
+ * landing at `/` already forks the User vs Merchant paths via its hero
+ * CTAs ("Send money" → user form, "Run a desk" → /merchant/login), and
+ * the navbar Sign-in pill is meant for returning users — sending them
+ * through an extra "Choose your portal" step was friction.
  *
- * Zero regression: /?welcome=skip is an additive URL — existing users
- * visiting / still see the welcome page as before.
+ * `?tab` and `?reason` are forwarded so deep links keep working
+ * (e.g. /login?tab=register from the merchant promo card,
+ * /login?reason=session_expired from the auth client).
  */
 
 import { useEffect } from "react";
@@ -22,13 +26,13 @@ export default function LoginPage() {
   useEffect(() => {
     const tab = searchParams.get("tab") === "register" ? "register" : "signin";
     const reason = searchParams.get("reason");
-    const reasonParam = reason ? `&reason=${reason}` : '';
+    const reasonParam = reason ? `&reason=${reason}` : "";
     router.replace(`/?welcome=skip&tab=${tab}${reasonParam}`);
   }, [router, searchParams]);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <Loader2 className="w-6 h-6 text-foreground/40 animate-spin" />
+    <div className="min-h-dvh bg-[#0B0F14] flex items-center justify-center">
+      <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
     </div>
   );
 }
