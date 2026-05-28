@@ -317,7 +317,9 @@ export function buildCsp(nonce: string): string {
     // deposit flow. Without it the browser blocks every quote request
     // and the modal sits on "Couldn't get a quote right now".
     `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag https://li.quest https://accounts.google.com`,
-    "frame-src https://accounts.google.com",
+    // 'self' lets the marketing landing iframe /marketing.html from the
+    // same origin; Google entry stays scoped to accounts.google.com.
+    "frame-src 'self' https://accounts.google.com",
     "frame-ancestors 'none'",
     'report-uri /api/csp-report',
     'report-to csp-endpoint',
@@ -354,7 +356,13 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico' ||
     pathname.startsWith('/icons/') ||
-    pathname === '/manifest.json'
+    pathname === '/manifest.json' ||
+    // Static marketing landing — self-contained HTML with inline scripts
+    // and styles. Bypasses the strict CSP so its waitlist counter / live
+    // pulse JS can run; embedded as a same-origin iframe by the React
+    // landing component, never reachable as an attack surface from
+    // user input.
+    pathname === '/marketing.html'
   ) {
     return NextResponse.next();
   }

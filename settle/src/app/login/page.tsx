@@ -1,34 +1,20 @@
 "use client";
 
 /**
- * /login → redirects to /?welcome=skip&tab=... to bypass the welcome page.
+ * /login — role chooser.
  *
- * The root / page renders LandingPage which handles login/register.
- * This redirect adds a query param so LandingPage skips the welcome
- * screen and goes directly to the login form.
+ * Visitors land here after clicking "Sign in" on the marketing landing
+ * at `/`. The tiles route them to:
+ *   - User    → /?welcome=skip&tab=signin   (LandingPage form view)
+ *   - Merchant → /merchant/login?tab=signin (existing merchant flow)
  *
- * Zero regression: /?welcome=skip is an additive URL — existing users
- * visiting / still see the welcome page as before.
+ * Previously this route was a redirect helper to `/?welcome=skip` —
+ * that bypass is no longer needed because `/` now serves the marketing
+ * site instead of the chooser, so the chooser needs its own URL.
  */
 
-import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { RoleChooserScreen } from "@/components/auth/RoleChooserScreen";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    const tab = searchParams.get("tab") === "register" ? "register" : "signin";
-    const reason = searchParams.get("reason");
-    const reasonParam = reason ? `&reason=${reason}` : '';
-    router.replace(`/?welcome=skip&tab=${tab}${reasonParam}`);
-  }, [router, searchParams]);
-
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <Loader2 className="w-6 h-6 text-foreground/40 animate-spin" />
-    </div>
-  );
+  return <RoleChooserScreen />;
 }

@@ -2,6 +2,7 @@
 
 import "@/components/user/styles/user-theme.css";
 import { LandingPage } from "@/components/user/LandingPage";
+import { MarketingLanding } from "@/components/marketing/MarketingLanding";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 // TransactionProgress removed — simple loading on buttons instead
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
@@ -542,12 +543,20 @@ export default function Home() {
             // session-expired banner is wired up by a one-shot mount
             // effect above (it also strips ?reason so refresh is clean);
             // here we only read ?welcome=skip to decide whether to skip
-            // the welcome splash and jump straight to the sign-in form.
+            // the marketing splash and jump straight to the sign-in form.
             const params =
               typeof window !== "undefined"
                 ? new URLSearchParams(window.location.search)
                 : null;
             const skipWelcome = params?.get("welcome") === "skip";
+            // Fresh visit (`/` with no skip flag) shows the marketing
+            // landing — the showcase index.html ported via iframe. Once
+            // the user clicks "Sign in" they end up at /login (the role
+            // chooser) which routes them back here with ?welcome=skip
+            // for the actual auth form.
+            if (!skipWelcome) {
+              return <MarketingLanding />;
+            }
             return (
               <LandingPage
                 loginForm={auth.loginForm}
