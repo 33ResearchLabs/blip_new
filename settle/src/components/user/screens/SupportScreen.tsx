@@ -324,7 +324,7 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
                 </motion.button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid md:grid-cols-2 gap-2.5">
                 {filteredIssues.map(({ key, title, Icon }) => (
                   <IssueCard
                     key={key}

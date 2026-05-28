@@ -312,7 +312,7 @@ function WalletBalanceSection({
 
       {/* ── Big centered balance + Apple-style page-dot token switcher ── */}
       {isWalletReady ? (
-        <div  style={{ marginTop: 12, marginBottom: 8, textAlign: 'center' }}>
+        <div   style={{ marginTop: 12, marginBottom: 8, textAlign: 'center' }}>
           <motion.div
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
@@ -338,7 +338,7 @@ function WalletBalanceSection({
               >
                 <div className="flex items-baseline justify-center" style={{ gap: 2 }}>
                   <span style={{
-                    fontSize: 60, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1,
+                    fontSize: window.innerWidth <= 768 ? 50 : 60, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1,
                     color: heroText.hi,
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                   }}>
@@ -361,7 +361,7 @@ function WalletBalanceSection({
                 <p style={{
                   fontSize: 12, fontWeight: 600,
                   color: heroText.md,
-                  marginTop: 12, letterSpacing: '-0.005em',
+                  marginTop: 2, letterSpacing: '-0.005em',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 }}>
                   {tFiat ? `≈ ${tFiat} ${fiatLabel}` : t.name}
@@ -371,7 +371,7 @@ function WalletBalanceSection({
           </motion.div>
 
           {/* ── Page-dot indicator (iOS-style) ── */}
-          <div className="flex items-center justify-center" style={{ gap: 6, marginTop: 18 }}>
+          <div className="flex items-center justify-center mt-1" style={{ gap: 6,  }}>
             {tokens.map((tk, i) => {
               const active = i === tokenIdx;
               return (
@@ -397,19 +397,19 @@ function WalletBalanceSection({
 
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-4" style={{ textAlign: 'center' }}>
+        <div className="flex flex-col items-center gap-2" style={{ textAlign: 'center' }}>
           {/* Compact dash placeholder — kept small (font-size 32, not 60)
               so the stack stays short enough to fit inside the flex-1
               centered area on mobile viewports without overflowing into
               the action-tile row below. */}
-          <span style={{
+          <span className="" style={{
             fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1,
             color: 'rgba(255,255,255,0.22)',
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
           }}>
             ---
           </span>
-          <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1.4, maxWidth: 240 }}>
+          <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1, maxWidth: 240 }}>
             {IS_EMBEDDED_WALLET
               ? embeddedWallet?.state === 'locked' ? 'Unlock your wallet to view balance' : 'Set up a wallet to start trading'
               : 'Connect your Solana wallet to trade'}
