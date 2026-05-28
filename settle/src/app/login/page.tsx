@@ -1,20 +1,38 @@
 "use client";
 
 /**
- * /login — role chooser.
+ * /login — redirects to /?welcome=skip&tab=… so visitors land directly
+ * on the user login form.
  *
- * Visitors land here after clicking "Sign in" on the marketing landing
- * at `/`. The tiles route them to:
- *   - User    → /?welcome=skip&tab=signin   (LandingPage form view)
- *   - Merchant → /merchant/login?tab=signin (existing merchant flow)
+ * The role chooser that previously sat here was removed: the marketing
+ * landing at `/` already forks the User vs Merchant paths via its hero
+ * CTAs ("Send money" → user form, "Run a desk" → /merchant/login), and
+ * the navbar Sign-in pill is meant for returning users — sending them
+ * through an extra "Choose your portal" step was friction.
  *
- * Previously this route was a redirect helper to `/?welcome=skip` —
- * that bypass is no longer needed because `/` now serves the marketing
- * site instead of the chooser, so the chooser needs its own URL.
+ * `?tab` and `?reason` are forwarded so deep links keep working
+ * (e.g. /login?tab=register from the merchant promo card,
+ * /login?reason=session_expired from the auth client).
  */
 
-import { RoleChooserScreen } from "@/components/auth/RoleChooserScreen";
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
-  return <RoleChooserScreen />;
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const tab = searchParams.get("tab") === "register" ? "register" : "signin";
+    const reason = searchParams.get("reason");
+    const reasonParam = reason ? `&reason=${reason}` : "";
+    router.replace(`/?welcome=skip&tab=${tab}${reasonParam}`);
+  }, [router, searchParams]);
+
+  return (
+    <div className="min-h-dvh bg-[#0B0F14] flex items-center justify-center">
+      <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
+    </div>
+  );
 }
