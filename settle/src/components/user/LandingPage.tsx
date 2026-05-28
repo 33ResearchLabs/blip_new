@@ -423,22 +423,29 @@ export function LandingPage({
 
   return (
     <motion.div
-      className="w-full mx-auto flex flex-col bg-surface-base text-text-primary relative min-h-dvh touch-pan-y"
+      className="w-full mx-auto flex flex-col relative min-h-dvh touch-pan-y text-[#1d1d1f]"
+      style={{
+        fontFamily: "'Inter', system-ui, sans-serif",
+        background:
+          "radial-gradient(50% 35% at 50% 0%, rgba(204,120,92,0.07), transparent 70%), #FAF8F5",
+      }}
       drag="x"
       dragDirectionLock
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={{ left: 0.35, right: 0 }}
       onPanEnd={onSwipeEnd}
     >
-      {/* Ambient background */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] md:w-[700px] h-[300px] md:h-[500px] bg-warning/[0.05] rounded-full blur-[120px]" />
-      </div>
+      {/* Fraunces — React 19 hoists <link> elements into <head> automatically.
+          Used for the headline italic accent ("Sign in.") below. */}
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap"
+      />
 
       {/* Swipe hint — only on first interaction-less render */}
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 z-20 text-[10px] font-mono tracking-[0.2em] text-text-tertiary/60 rotate-90 origin-right"
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 z-20 text-[10px] font-mono tracking-[0.2em] text-[#6b675f]/60 rotate-90 origin-right"
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.7, 0.7, 0] }}
         transition={{ duration: 4, delay: 1.5, times: [0, 0.15, 0.85, 1] }}
@@ -446,491 +453,530 @@ export function LandingPage({
         ← SWIPE FOR MERCHANT
       </motion.div>
 
-      <div className="flex h-full flex-col items-center px-5 py-4 relative z-10">
-        <div className="w-full max-w-[440px] flex-1 flex flex-col self-stretch mx-auto">
-          {/* Top bar: home link + role switch — proper visible buttons */}
-          <div className="flex items-center justify-between mb-3 gap-2 shrink-0">
+      {/* Topbar — brand on the left, utility actions on the right.
+          Logo already wraps itself in a <Link href="/"> — don't add another. */}
+      <header className="flex items-center justify-between gap-3 px-5 py-5 sm:px-8 sm:py-[22px]">
+        <Logo />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            aria-label="Back to home"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#1d1d1f] bg-white border border-[#dcd4c5] hover:border-[#1d1d1f] transition-colors"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Home</span>
+          </Link>
+          <InstallPWAButton app="user" />
+          {!hideMerchantLinks && (
             <Link
-              href="/"
-              aria-label="Home"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
+              href="/merchant/login"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#1d1d1f] bg-white border border-[#dcd4c5] hover:border-[#1d1d1f] transition-colors"
             >
-              <ChevronLeft className="w-3.5 h-3.5" />
-              {/* Label hidden on phones — chevron alone is enough; reappears
-                  on sm+ where there's more room. */}
-              <span className="hidden sm:inline">Home</span>
+              Merchant
+              <span aria-hidden>→</span>
             </Link>
-            <div className="flex items-center gap-2">
-              <InstallPWAButton app="user" />
-              {!hideMerchantLinks && (
-                <Link
-                  href="/merchant/login"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-primary bg-surface-card hover:bg-surface-hover border border-border-medium hover:border-text-tertiary transition-all"
+          )}
+          <span className="hidden md:inline-flex items-center gap-2 text-[11.5px] uppercase font-semibold text-[#6b675f] tracking-[0.06em]">
+            <span
+              className="inline-block w-[7px] h-[7px] rounded-full bg-[#d8b85a]"
+              style={{ boxShadow: "0 0 0 4px rgba(216,184,90,0.18)" }}
+            />
+            Pre-launch
+          </span>
+        </div>
+      </header>
+
+      {/* Center stage with the sign-in card */}
+      <main className="flex-1 flex items-center justify-center px-5 py-6 sm:px-6 sm:py-8 relative z-10">
+        <motion.div
+          initial={{ opacity: 0, y: 12, filter: "blur(8px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full max-w-[440px] bg-white border border-[#ece6dc] rounded-[22px] pt-9 px-[26px] pb-7 sm:pt-11 sm:px-10 sm:pb-9"
+          style={{ boxShadow: "0 30px 80px -40px rgba(60,40,30,0.14)" }}
+        >
+          {/* Eyebrow */}
+          <span className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.20em] text-[#cc785c] bg-[#f4e3d9] px-3 py-1.5 rounded-full font-medium mb-[22px]">
+            {authMode === 'login' ? 'app.blip.money' : 'Create account'}
+          </span>
+
+          {/* Headline (Fraunces) */}
+          <h1
+            className="text-[30px] sm:text-[36px] leading-[1.05] tracking-[-0.022em] text-[#1d1d1f] mb-2"
+            style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 500 }}
+          >
+            {authMode === 'login' ? (
+              <>Welcome back. <em className="italic text-[#cc785c]">Sign in.</em></>
+            ) : (
+              <>Get started. <em className="italic text-[#cc785c]">Create account.</em></>
+            )}
+          </h1>
+          <p className="text-[#3a3a3c] text-[14.5px] leading-[1.55] mb-8">
+            {authMode === 'login'
+              ? "One login. We'll take you to wherever you were last — user app or Blip Market."
+              : "Pick a username and a 6-digit PIN. We'll send a quick email verification before activating your account."}
+          </p>
+
+          {/* Polling success notice — green banner when the inbox poller
+              detects verification while the user is on the sign-in form. */}
+          {verificationSuccessNotice && !pendingVerificationEmail && (
+            <div className="mb-4 rounded-xl bg-[#eaf8ef] border border-[#3fae6a]/30 px-4 py-3 flex items-start gap-3">
+              <CheckCircle2 className="w-4 h-4 text-[#3fae6a] flex-shrink-0 mt-0.5" />
+              <div className="flex-1 text-[13px] text-[#1d1d1f]">
+                Email verified — you can sign in now.
+              </div>
+              {onDismissVerificationSuccess && (
+                <button
+                  type="button"
+                  onClick={onDismissVerificationSuccess}
+                  aria-label="Dismiss"
+                  className="text-[#6b675f] hover:text-[#1d1d1f]"
                 >
-                  Merchant
-                  <span aria-hidden>→</span>
-                </Link>
+                  <X className="w-4 h-4" />
+                </button>
               )}
             </div>
-          </div>
+          )}
 
-          <div className="flex-1 flex flex-col pt-6 sm:pt-[50px] pb-1 min-h-0">
-          <motion.div
-            initial={{ opacity: 0, y: -8, filter: "blur(8px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="mb-4 sm:mb-8 shrink-0"
-          >
-            {/* Glass hero card — matches welcome chooser aesthetic */}
-            <div
-              className="relative rounded-[22px] p-[1.5px] overflow-hidden"
-              style={{
-                background:
-                  "linear-gradient(140deg, rgba(255,255,255,0.35), rgba(255,255,255,0.08) 40%, rgba(255,255,255,0.25) 100%)",
-              }}
-            >
-              <div
-                className="relative rounded-[21px] px-5 py-5 sm:px-7 sm:py-6 backdrop-blur-2xl overflow-hidden"
-                style={{
-                  background:
-                    "linear-gradient(160deg, rgba(28,28,32,0.92), rgba(18,18,22,0.85) 60%)",
-                  boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,0.12), 0 30px 60px -20px rgba(0,0,0,0.6)",
-                }}
+          {/* Post-signup verification gate. Registration is NOT complete
+              until the user clicks the link we just sent — the form is
+              replaced by an inbox panel, which the poller in useUserAuth
+              flips into a success card the moment verification is
+              detected. Mirrors the merchant flow exactly. */}
+          {pendingVerificationEmail ? (
+            pendingVerificationVerified ? (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-5 py-2"
               >
-                {/* Corner glow */}
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute -right-8 -top-8 w-32 h-32 rounded-full"
-                  style={{
-                    background:
-                      "radial-gradient(circle, rgba(168,247,98,0.35), transparent 70%)",
-                    filter: "blur(10px)",
-                  }}
-                />
-                <div className="relative flex items-center gap-3">
-                  <div
-                    className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
-                    style={{
-                      background:
-                        "linear-gradient(140deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04))",
-                      boxShadow:
-                        "inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.2)",
-                    }}
-                  >
-                    <User className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold tracking-[0.3em] uppercase text-white/40 mb-1">
-                      {authMode === 'login' ? 'Welcome back' : 'Get started'}
-                    </p>
-                    <h1 className="text-[22px] sm:text-[26px] font-semibold text-white tracking-[-0.03em] leading-[1.05]">
-                      {authMode === 'login' ? (
-                        <>Login <span className="text-white/50 font-light">as</span> User</>
-                      ) : (
-                        <>Create <span className="text-white/50 font-light">an</span> Account</>
-                      )}
-                    </h1>
+                <div className="flex justify-center">
+                  <div className="w-16 h-16 rounded-full bg-[#3fae6a]/10 flex items-center justify-center">
+                    <CheckCircle2 className="w-8 h-8 text-[#3fae6a]" />
                   </div>
                 </div>
-              </div>
-            </div>
-          </motion.div>
-
-          <div className="flex mb-4 bg-surface-card rounded-xl p-1">
-            <button
-              onClick={() => { setAuthMode('login'); setLoginError(''); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                authMode === 'login' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => { setAuthMode('register'); setLoginError(''); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                authMode === 'register' ? 'bg-accent text-accent-text' : 'text-text-tertiary'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
-
-          <div className="flex-1 min-h-0 rounded-2xl p-4 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-surface-card border border-border-subtle shadow-2xl">
-            {/* Post-signup verification gate. Registration is NOT complete
-                until the user clicks the link we just sent — the form is
-                replaced by an inbox panel, which the poller in useUserAuth
-                flips into a success card the moment verification is
-                detected. Mirrors the merchant flow exactly. */}
-            {pendingVerificationEmail ? (
-              pendingVerificationVerified ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="space-y-5 py-2"
-                >
-                  <div className="flex justify-center">
-                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                      <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-                    </div>
-                  </div>
-                  <div className="text-center space-y-2">
-                    <p className="text-base font-semibold text-text-primary">
-                      Email verified
-                    </p>
-                    <p className="text-xs text-text-secondary leading-relaxed">
-                      <span className="font-semibold break-all text-text-primary">
-                        {pendingVerificationEmail}
-                      </span>{" "}
-                      is confirmed. Your account is ready to use.
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl px-4 py-3 flex items-start gap-3 bg-emerald-500/[0.06] border border-emerald-500/20">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-text-secondary leading-relaxed">
-                      Verified emails help us protect your funds and
-                      recover access if you ever lose your device.
-                    </p>
-                  </div>
-
-                  {onClearPendingVerification && (
-                    <button
-                      onClick={onClearPendingVerification}
-                      className="w-full py-3 rounded-xl text-sm font-bold bg-accent text-accent-text"
-                    >
-                      Continue to sign in
-                    </button>
-                  )}
-                </motion.div>
-              ) : (
-                <div className="space-y-3.5">
-                  <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 flex gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
-                      <Mail className="w-4 h-4 text-emerald-400" />
-                    </div>
-                    <div className="text-[13px] leading-relaxed text-text-primary">
-                      <p>
-                        We sent a verification link to{" "}
-                        <span className="font-semibold break-all">
-                          {pendingVerificationEmail}
-                        </span>
-                        .
-                      </p>
-                      <p className="mt-1 text-text-secondary">
-                        Click the link in that email to activate your account.
-                        This screen updates automatically as soon as we detect
-                        the verification.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-[12px] text-text-tertiary flex items-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-text-tertiary" />
-                    Waiting for verification…
-                  </div>
-
-                  {onResendVerification && (
-                    <button
-                      onClick={onResendVerification}
-                      disabled={isResendingVerification || verificationCooldownSeconds > 0}
-                      className="w-full py-2.5 rounded-lg text-[13px] font-medium bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {isResendingVerification ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Sending…
-                        </>
-                      ) : verificationCooldownSeconds > 0 ? (
-                        `Resend available in ${verificationCooldownSeconds}s`
-                      ) : (
-                        "Resend verification email"
-                      )}
-                    </button>
-                  )}
-
-                  <p className="text-[11px] text-text-tertiary text-center">
-                    Didn&apos;t get it? Check spam. Links expire after 24 hours.
+                <div className="text-center space-y-2">
+                  <p className="text-base font-semibold text-[#1d1d1f]">
+                    Email verified
+                  </p>
+                  <p className="text-xs text-[#3a3a3c] leading-relaxed">
+                    <span className="font-semibold break-all text-[#1d1d1f]">
+                      {pendingVerificationEmail}
+                    </span>{" "}
+                    is confirmed. Your account is ready to use.
                   </p>
                 </div>
-              )
+
+                <div className="rounded-xl px-4 py-3 flex items-start gap-3 bg-[#3fae6a]/[0.06] border border-[#3fae6a]/20">
+                  <ShieldCheck className="w-4 h-4 text-[#3fae6a] shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-[#3a3a3c] leading-relaxed">
+                    Verified emails help us protect your funds and
+                    recover access if you ever lose your device.
+                  </p>
+                </div>
+
+                {onClearPendingVerification && (
+                  <button
+                    onClick={onClearPendingVerification}
+                    className="w-full py-3.5 rounded-xl text-[14.5px] font-medium bg-[#1d1d1f] hover:bg-black text-white flex items-center justify-center gap-2 transition-colors"
+                  >
+                    Continue to sign in
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </motion.div>
             ) : (
-              <>
-            {loginError === 'EMAIL_NOT_VERIFIED' ? (
-              <div className="rounded-xl p-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-2">
-                <p className="font-medium">
-                  Verify your email before signing in.
-                </p>
-                <p className="text-xs text-amber-200/80">
-                  We just sent a fresh verification link
-                  {loginForm.username.includes('@')
-                    ? <> to <span className="font-semibold break-all">{loginForm.username.trim()}</span></>
-                    : null}.
-                  Click it from your inbox, then come back to sign in.
-                </p>
+              <div className="space-y-3.5">
+                <div className="rounded-xl border border-[#3fae6a]/25 bg-[#3fae6a]/[0.06] p-4 flex gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-[#3fae6a]/15 flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-4 h-4 text-[#3fae6a]" />
+                  </div>
+                  <div className="text-[13px] leading-relaxed text-[#1d1d1f]">
+                    <p>
+                      We sent a verification link to{" "}
+                      <span className="font-semibold break-all">
+                        {pendingVerificationEmail}
+                      </span>
+                      .
+                    </p>
+                    <p className="mt-1 text-[#3a3a3c]">
+                      Click the link in that email to activate your account.
+                      This screen updates automatically as soon as we detect
+                      the verification.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-[12px] text-[#6b675f] flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6b675f]" />
+                  Waiting for verification…
+                </div>
+
                 {onResendVerification && (
                   <button
-                    type="button"
                     onClick={onResendVerification}
                     disabled={isResendingVerification || verificationCooldownSeconds > 0}
-                    className="mt-1 w-full py-2 rounded-lg text-xs font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-lg text-[13px] font-medium bg-[#fdfbf7] hover:border-[#1d1d1f] border border-[#dcd4c5] text-[#1d1d1f] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                   >
                     {isResendingVerification ? (
-                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Sending…
+                      </>
                     ) : verificationCooldownSeconds > 0 ? (
-                      <>Resend available in {verificationCooldownSeconds}s</>
+                      `Resend available in ${verificationCooldownSeconds}s`
                     ) : (
-                      'Resend verification email'
+                      "Resend verification email"
                     )}
                   </button>
                 )}
-              </div>
-            ) : loginError ? (
-              <div className="rounded-xl p-3 text-sm bg-error-dim border border-error-border text-error">
-                {loginError}
-              </div>
-            ) : null}
 
-            <div>
-              <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">
-                {authMode === 'register' ? 'Username' : 'Username or Email'}
-              </label>
-              <input
-                type="text"
-                value={loginForm.username}
-                onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
-                onBlur={e => {
-                  setLoginForm({ ...loginForm, username: e.target.value.trim() });
-                  setTouched(t => ({ ...t, username: true }));
-                }}
-                placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'username or you@email.com'}
-                autoCapitalize="none"
-                autoCorrect="off"
-                maxLength={authMode === 'register' ? 20 : 254}
-                onKeyDown={e => e.key === 'Enter' && submit()}
-                className={`w-full rounded-xl px-4 py-3 text-sm font-medium outline-none bg-surface-hover border ${
-                  usernameError || usernameTaken ? 'border-error' : 'border-border-subtle'
-                } text-text-primary placeholder:text-text-tertiary`}
-              />
-              {/* Per-field status: format error wins over availability,
-                  since availability only matters once the format passes. */}
-              {usernameError ? (
-                <p className="mt-1.5 text-[11px] text-error">{usernameError}</p>
-              ) : authMode === 'register' && usernameAvailability.state === 'checking' ? (
-                <p className="mt-1.5 text-[11px] text-text-tertiary inline-flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Checking availability…
-                </p>
-              ) : authMode === 'register' && usernameAvailability.state === 'available' &&
-                usernameAvailability.value === loginForm.username.trim() ? (
-                <p className="mt-1.5 text-[11px] text-success inline-flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Available
-                </p>
-              ) : usernameTaken ? (
-                <p className="mt-1.5 text-[11px] text-error inline-flex items-center gap-1">
-                  <X className="w-3 h-3" />
-                  Username already taken
-                </p>
-              ) : null}
-            </div>
-
-            {/* Email field — register-only. We collect it so we can run
-                an email verification gate (mailed link → users.email_verified=true).
-                Used later by forgot-password and account-recovery flows. */}
-            {authMode === 'register' && setRegisterEmail && (
-              <div>
-                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">
-                  Email
-                </label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    value={registerEmail}
-                    onChange={e => setRegisterEmail(e.target.value)}
-                    placeholder="you@email.com"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    maxLength={254}
-                    onKeyDown={e => e.key === 'Enter' && submit()}
-                    className="w-full rounded-xl px-4 py-3 pl-10 text-sm font-medium outline-none bg-surface-hover border border-border-subtle text-text-primary placeholder:text-text-tertiary"
-                  />
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
-                </div>
-                <p className="mt-1.5 text-[10px] text-text-tertiary">
-                  We&apos;ll send you a verification link before activating
-                  your account.
+                <p className="text-[11px] text-[#6b675f] text-center">
+                  Didn&apos;t get it? Check spam. Links expire after 24 hours.
                 </p>
               </div>
-            )}
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary">
-                  {authMode === 'register' ? `Set a ${USER_PIN_LENGTH}-digit PIN` : 'Password'}
-                </label>
-                {/* Forgot-password — login tab only. The backend
-                    /api/auth/user/forgot-password emails a 15-min reset
-                    link to the address on file, gated to accounts that
-                    have a password set (wallet-only users have nothing
-                    to reset). */}
-                {authMode === 'login' && (
-                  <Link
-                    href="/user/forgot-password"
-                    className="text-[11px] font-medium text-text-tertiary hover:text-text-primary transition-colors"
-                  >
-                    Forgot password?
-                  </Link>
-                )}
-              </div>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={loginForm.password}
-                  onChange={e => {
-                    const next = authMode === 'register'
-                      ? e.target.value.replace(/\D/g, '').slice(0, USER_PIN_LENGTH)
-                      : e.target.value;
-                    setLoginForm({ ...loginForm, password: next });
-                  }}
-                  onBlur={() => setTouched(t => ({ ...t, password: true }))}
-                  placeholder={authMode === 'register' ? `${USER_PIN_LENGTH}-digit PIN` : '••••••••'}
-                  maxLength={authMode === 'register' ? USER_PIN_LENGTH : 24}
-                  inputMode={authMode === 'register' ? 'numeric' : undefined}
-                  autoComplete={authMode === 'register' ? 'one-time-code' : 'current-password'}
-                  onKeyDown={e => e.key === 'Enter' && submit()}
-                  className={`w-full rounded-xl pl-4 pr-11 py-3 text-sm font-medium outline-none bg-surface-hover border ${
-                    passwordError ? 'border-error' : 'border-border-subtle'
-                  } text-text-primary placeholder:text-text-tertiary ${
-                    authMode === 'register' ? 'tracking-[0.4em] text-center' : ''
-                  }`}
-                />
+            )
+          ) : (
+            <>
+              {/* Mode tabs — segmented control */}
+              <div className="flex mb-5 p-1 rounded-xl bg-[#f4e3d9]/50">
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {passwordError && (
-                <p className="mt-1.5 text-[11px] text-error">{passwordError}</p>
-              )}
-              {authMode === 'register' && !passwordError && (
-                <p className="mt-1.5 text-[10px] text-text-tertiary">
-                  You&apos;ll use this PIN to sign in. Keep it private.
-                </p>
-              )}
-            </div>
-
-            {/* Remember me — login tab only. Pre-fills the username on
-                future visits to this device. */}
-            {authMode === 'login' && (
-              <label className="flex items-center gap-2 cursor-pointer select-none -mt-1">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => toggleRememberMe(e.target.checked)}
-                  className="peer sr-only"
-                />
-                <span
-                  className={`w-4 h-4 rounded-md inline-flex items-center justify-center border transition-colors ${
-                    rememberMe
-                      ? 'bg-accent border-accent'
-                      : 'border-border-medium bg-surface-card'
+                  onClick={() => { setAuthMode('login'); setLoginError(''); }}
+                  className={`flex-1 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                    authMode === 'login'
+                      ? 'bg-white text-[#1d1d1f] shadow-[0_1px_2px_rgba(60,40,30,0.06)]'
+                      : 'text-[#6b675f]'
                   }`}
                 >
-                  {rememberMe && <Check className="w-3 h-3 text-accent-text" strokeWidth={3} />}
-                </span>
-                <span className="text-[12px] font-medium text-text-secondary">
-                  Remember me
-                </span>
-              </label>
-            )}
-
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={submit}
-              disabled={isDisabled}
-              className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 tracking-[-0.01em] transition-colors ${
-                isDisabled
-                  ? 'bg-surface-card text-text-tertiary cursor-not-allowed'
-                  : 'bg-accent text-accent-text'
-              }`}
-            >
-              {isLoggingIn
-                ? <><Loader2 className="w-4 h-4 animate-spin" />{authMode === 'login' ? 'Signing in...' : 'Creating...'}</>
-                : authMode === 'login' ? 'Login as User' : 'Register as User'}
-            </motion.button>
-
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              type="button"
-              onClick={() => {
-                setAuthMode(authMode === 'login' ? 'register' : 'login');
-                setLoginError('');
-              }}
-              className="w-full py-3 rounded-xl text-sm font-bold tracking-[-0.01em] transition-colors bg-surface-hover hover:bg-surface-card border border-border-medium text-text-primary"
-            >
-              {authMode === 'login' ? 'Register' : 'Sign In'}
-            </motion.button>
-
-            {onGoogleSuccess && (
-              <div className="space-y-2 pt-1">
-                <OrDivider />
-                <GoogleSignInButton
-                  role="user"
-                  source={authMode === 'login' ? 'user_app_login_google' : 'user_app_register_google'}
-                  theme="dark"
-                  onSuccess={onGoogleSuccess}
-                  onError={(msg) => setLoginError(msg)}
-                  disabled={isLoggingIn}
-                />
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('register'); setLoginError(''); }}
+                  className={`flex-1 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                    authMode === 'register'
+                      ? 'bg-white text-[#1d1d1f] shadow-[0_1px_2px_rgba(60,40,30,0.06)]'
+                      : 'text-[#6b675f]'
+                  }`}
+                >
+                  Create Account
+                </button>
               </div>
-            )}
 
-            <p className="text-center text-[11px] text-text-secondary">
-              Connect your wallet after signing in to enable on-chain trading
-            </p>
-
-            {!hideMerchantLinks && (
-              <Link
-                href="/merchant/login?tab=register"
-                className="relative overflow-hidden flex items-center justify-between rounded-xl px-4 py-3 transition-all group bg-white text-[#0B0F14] shadow-[0_10px_30px_-10px_rgba(168,247,98,0.45)] hover:shadow-[0_14px_40px_-10px_rgba(168,247,98,0.6)]"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(120deg, #ffffff 0%, #f0fff4 55%, #e6fbe6 100%)",
-                }}
-              >
-                {/* corner glow */}
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute -right-6 -top-6 w-20 h-20 rounded-full"
-                  style={{ background: "radial-gradient(circle, rgba(168,247,98,0.55), transparent 70%)" }}
-                />
-                <div className="relative">
-                  <div className="inline-flex items-center gap-1.5 mb-1">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-emerald-700">For Merchants</span>
-                  </div>
-                  <p className="text-[13px] font-bold leading-tight">Run your own P2P desk</p>
-                  <p className="text-[10px] text-black/55 mt-0.5">Control spreads · earn on every trade</p>
+              {/* Error banners */}
+              {loginError === 'EMAIL_NOT_VERIFIED' ? (
+                <div className="mb-4 rounded-xl p-3.5 text-sm bg-[#fef6e4] border border-[#cc785c]/30 text-[#7a4327] space-y-2">
+                  <p className="font-medium">
+                    Verify your email before signing in.
+                  </p>
+                  <p className="text-xs text-[#7a4327]/80">
+                    We just sent a fresh verification link
+                    {loginForm.username.includes('@')
+                      ? <> to <span className="font-semibold break-all">{loginForm.username.trim()}</span></>
+                      : null}.
+                    Click it from your inbox, then come back to sign in.
+                  </p>
+                  {onResendVerification && (
+                    <button
+                      type="button"
+                      onClick={onResendVerification}
+                      disabled={isResendingVerification || verificationCooldownSeconds > 0}
+                      className="mt-1 w-full py-2 rounded-lg text-xs font-semibold bg-[#cc785c]/10 border border-[#cc785c]/30 text-[#7a4327] hover:bg-[#cc785c]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                    >
+                      {isResendingVerification ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+                      ) : verificationCooldownSeconds > 0 ? (
+                        <>Resend available in {verificationCooldownSeconds}s</>
+                      ) : (
+                        'Resend verification email'
+                      )}
+                    </button>
+                  )}
                 </div>
-                <span className="relative shrink-0 ml-3 inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-full bg-[#0B0F14] text-white group-hover:translate-x-0.5 transition-transform">
-                  Register
-                  <span aria-hidden>→</span>
-                </span>
-              </Link>
-            )}
-              </>
-            )}
-          </div>
-          </div>
+              ) : loginError ? (
+                <div className="mb-4 rounded-xl p-3.5 text-sm bg-[#fdecea] border border-[#e5484d]/30 text-[#a31b1f]">
+                  {loginError}
+                </div>
+              ) : null}
 
-        </div>
+              {/* Form — Enter on any input submits via onSubmit */}
+              <form
+                onSubmit={(e) => { e.preventDefault(); submit(); }}
+                className="space-y-3"
+              >
+                {/* Username */}
+                <div>
+                  <label className="block text-[11.5px] tracking-[0.08em] uppercase text-[#6b675f] font-medium mb-2">
+                    {authMode === 'register' ? 'Username' : 'Username or Email'}
+                  </label>
+                  <input
+                    type="text"
+                    value={loginForm.username}
+                    onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
+                    onBlur={e => {
+                      setLoginForm({ ...loginForm, username: e.target.value.trim() });
+                      setTouched(t => ({ ...t, username: true }));
+                    }}
+                    placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'username or you@email.com'}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    maxLength={authMode === 'register' ? 20 : 254}
+                    className={`w-full rounded-xl px-4 py-3.5 text-[15px] outline-none transition-all bg-[#fdfbf7] focus:bg-white focus:shadow-[0_0_0_4px_rgba(204,120,92,0.10)] text-[#1d1d1f] placeholder:text-[#6b675f]/60 border ${
+                      usernameError || usernameTaken
+                        ? 'border-[#e5484d]/60 focus:border-[#e5484d]'
+                        : 'border-[#dcd4c5] focus:border-[#cc785c]'
+                    }`}
+                  />
+                  {/* Per-field status: format error wins over availability,
+                      since availability only matters once the format passes. */}
+                  {usernameError ? (
+                    <p className="mt-1.5 text-[11.5px] text-[#a31b1f]">{usernameError}</p>
+                  ) : authMode === 'register' && usernameAvailability.state === 'checking' ? (
+                    <p className="mt-1.5 text-[11.5px] text-[#6b675f] inline-flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Checking availability…
+                    </p>
+                  ) : authMode === 'register' && usernameAvailability.state === 'available' &&
+                    usernameAvailability.value === loginForm.username.trim() ? (
+                    <p className="mt-1.5 text-[11.5px] text-[#3fae6a] inline-flex items-center gap-1">
+                      <Check className="w-3 h-3" />
+                      Available
+                    </p>
+                  ) : usernameTaken ? (
+                    <p className="mt-1.5 text-[11.5px] text-[#a31b1f] inline-flex items-center gap-1">
+                      <X className="w-3 h-3" />
+                      Username already taken
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Email field — register-only. We collect it so we can run
+                    an email verification gate (mailed link → users.email_verified=true).
+                    Used later by forgot-password and account-recovery flows. */}
+                {authMode === 'register' && setRegisterEmail && (
+                  <div>
+                    <label className="block text-[11.5px] tracking-[0.08em] uppercase text-[#6b675f] font-medium mb-2">
+                      Email
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="email"
+                        value={registerEmail}
+                        onChange={e => setRegisterEmail(e.target.value)}
+                        placeholder="you@email.com"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        maxLength={254}
+                        className="w-full rounded-xl pl-10 pr-4 py-3.5 text-[15px] outline-none transition-all bg-[#fdfbf7] focus:bg-white focus:border-[#cc785c] focus:shadow-[0_0_0_4px_rgba(204,120,92,0.10)] text-[#1d1d1f] placeholder:text-[#6b675f]/60 border border-[#dcd4c5]"
+                      />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b675f]" />
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-[#6b675f]">
+                      We&apos;ll send you a verification link before activating
+                      your account.
+                    </p>
+                  </div>
+                )}
+
+                {/* Password / PIN */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-[11.5px] tracking-[0.08em] uppercase text-[#6b675f] font-medium">
+                      {authMode === 'register' ? `Set a ${USER_PIN_LENGTH}-digit PIN` : 'Password'}
+                    </label>
+                    {/* Forgot-password — login tab only. The backend
+                        /api/auth/user/forgot-password emails a 15-min reset
+                        link to the address on file, gated to accounts that
+                        have a password set (wallet-only users have nothing
+                        to reset). */}
+                    {authMode === 'login' && (
+                      <Link
+                        href="/user/forgot-password"
+                        className="text-[12px] font-medium text-[#3a3a3c] hover:text-[#cc785c] transition-colors"
+                      >
+                        Forgot password?
+                      </Link>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={loginForm.password}
+                      onChange={e => {
+                        const next = authMode === 'register'
+                          ? e.target.value.replace(/\D/g, '').slice(0, USER_PIN_LENGTH)
+                          : e.target.value;
+                        setLoginForm({ ...loginForm, password: next });
+                      }}
+                      onBlur={() => setTouched(t => ({ ...t, password: true }))}
+                      placeholder={authMode === 'register' ? `${USER_PIN_LENGTH}-digit PIN` : '••••••••'}
+                      maxLength={authMode === 'register' ? USER_PIN_LENGTH : 24}
+                      inputMode={authMode === 'register' ? 'numeric' : undefined}
+                      autoComplete={authMode === 'register' ? 'one-time-code' : 'current-password'}
+                      className={`w-full rounded-xl pl-4 pr-11 py-3.5 text-[15px] outline-none transition-all bg-[#fdfbf7] focus:bg-white focus:shadow-[0_0_0_4px_rgba(204,120,92,0.10)] text-[#1d1d1f] placeholder:text-[#6b675f]/60 border ${
+                        passwordError
+                          ? 'border-[#e5484d]/60 focus:border-[#e5484d]'
+                          : 'border-[#dcd4c5] focus:border-[#cc785c]'
+                      } ${authMode === 'register' ? 'tracking-[0.4em] text-center' : ''}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b675f] hover:text-[#1d1d1f] transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {passwordError ? (
+                    <p className="mt-1.5 text-[11.5px] text-[#a31b1f]">{passwordError}</p>
+                  ) : authMode === 'register' ? (
+                    <p className="mt-1.5 text-[11px] text-[#6b675f]">
+                      You&apos;ll use this PIN to sign in. Keep it private.
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Remember me — login tab only. Pre-fills the username on
+                    future visits to this device. */}
+                {authMode === 'login' && (
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => toggleRememberMe(e.target.checked)}
+                      className="peer sr-only"
+                    />
+                    <span
+                      className={`w-4 h-4 rounded-md inline-flex items-center justify-center border transition-colors ${
+                        rememberMe
+                          ? 'bg-[#1d1d1f] border-[#1d1d1f]'
+                          : 'border-[#dcd4c5] bg-white'
+                      }`}
+                    >
+                      {rememberMe && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                    </span>
+                    <span className="text-[12.5px] font-medium text-[#3a3a3c]">
+                      Remember me
+                    </span>
+                  </label>
+                )}
+
+                {/* Submit */}
+                <motion.button
+                  type="submit"
+                  whileTap={{ scale: 0.98 }}
+                  disabled={isDisabled}
+                  className={`w-full py-3.5 px-[18px] mt-1.5 rounded-xl text-[14.5px] font-medium flex items-center justify-center gap-2 transition-colors ${
+                    isDisabled
+                      ? 'bg-[#dcd4c5]/50 text-[#6b675f]/70 cursor-not-allowed'
+                      : 'bg-[#1d1d1f] hover:bg-black text-white'
+                  }`}
+                >
+                  {isLoggingIn ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {authMode === 'login' ? 'Signing in…' : 'Creating account…'}
+                    </>
+                  ) : (
+                    <>
+                      {authMode === 'login' ? 'Sign in' : 'Create account'}
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </motion.button>
+              </form>
+
+              {/* Or + Google */}
+              {onGoogleSuccess && (
+                <div className="mt-5 space-y-3">
+                  <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-[#6b675f]">
+                    <span className="flex-1 h-px bg-[#ece6dc]" />
+                    or
+                    <span className="flex-1 h-px bg-[#ece6dc]" />
+                  </div>
+                  <GoogleSignInButton
+                    role="user"
+                    source={authMode === 'login' ? 'user_app_login_google' : 'user_app_register_google'}
+                    theme="light"
+                    onSuccess={onGoogleSuccess}
+                    onError={(msg) => setLoginError(msg)}
+                    disabled={isLoggingIn}
+                  />
+                </div>
+              )}
+
+              <p className="mt-5 text-center text-[11.5px] text-[#6b675f]">
+                Connect your wallet after signing in to enable on-chain trading
+              </p>
+
+              {/* Foot card — mode toggle in portal.html's "New to Blip?" style */}
+              <div className="mt-[14px] pt-[14px] border-t border-[#ece6dc] text-[12.5px] text-[#6b675f] text-center">
+                {authMode === 'login' ? (
+                  <>New to Blip?{" "}
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMode('register'); setLoginError(''); }}
+                      className="font-medium text-[#1d1d1f] hover:text-[#cc785c] border-b border-[#dcd4c5] hover:border-[#cc785c] transition-colors"
+                    >
+                      Create an account →
+                    </button>
+                  </>
+                ) : (
+                  <>Already have an account?{" "}
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMode('login'); setLoginError(''); }}
+                      className="font-medium text-[#1d1d1f] hover:text-[#cc785c] border-b border-[#dcd4c5] hover:border-[#cc785c] transition-colors"
+                    >
+                      Sign in →
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Merchant promo */}
+              {!hideMerchantLinks && (
+                <Link
+                  href="/merchant/login?tab=register"
+                  className="relative overflow-hidden mt-4 flex items-center justify-between rounded-xl px-4 py-3 transition-colors group bg-[#fdfbf7] border border-[#ece6dc] hover:border-[#cc785c]"
+                >
+                  <div className="relative">
+                    <div className="inline-flex items-center gap-1.5 mb-1">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#3fae6a]" />
+                      <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-[#2d8c52]">For Merchants</span>
+                    </div>
+                    <p className="text-[13px] font-semibold leading-tight text-[#1d1d1f]">Run your own P2P desk</p>
+                    <p className="text-[10.5px] text-[#6b675f] mt-0.5">Control spreads · earn on every trade</p>
+                  </div>
+                  <span className="shrink-0 ml-3 inline-flex items-center gap-1 text-[11px] font-semibold px-3 py-1.5 rounded-full bg-[#1d1d1f] text-white group-hover:translate-x-0.5 transition-transform">
+                    Register
+                    <ArrowRight className="w-3 h-3" />
+                  </span>
+                </Link>
+              )}
+            </>
+          )}
+        </motion.div>
+      </main>
+
+      {/* Below feature tags */}
+      <div className="px-5 py-6 sm:px-8 flex justify-center gap-7 text-[11.5px] text-[#6b675f] flex-wrap">
+        <span className="inline-flex items-center gap-2">
+          <span className="w-[5px] h-[5px] rounded-full bg-[#6b675f]" />
+          Escrow-protected
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="w-[5px] h-[5px] rounded-full bg-[#6b675f]" />
+          On-chain settlement
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="w-[5px] h-[5px] rounded-full bg-[#6b675f]" />
+          Same login on both sides
+        </span>
       </div>
-
     </motion.div>
   );
 }
