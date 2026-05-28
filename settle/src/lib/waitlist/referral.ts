@@ -20,6 +20,47 @@ export function generateReferralCode(length = 8): string {
 }
 
 /**
+ * Ensure an actor has a referral_code, generating one on the fly if NULL.
+ * Idempotent (COALESCE) and has no other side effects — does not change
+ * waitlist_status / joined_at / points. Use this when the actor needs a
+ * code surfaced (e.g. Refer & Earn screen) but they signed up through a
+ * path that didn't call setupWaitlistForActor.
+ *
+ * Returns the actor's referral code. Throws if no unique code could be
+ * assigned after MAX_RETRIES collisions on the unique partial index.
+ */
+export async function ensureReferralCode(
+  actorType: WaitlistActorType,
+  actorId: string,
+): Promise<string> {
+  const table = actorType === 'merchant' ? 'merchants' : 'users';
+  const MAX_RETRIES = 5;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
+    const candidate = generateReferralCode();
+    try {
+      const row = await queryOne<{ referral_code: string | null }>(
+        `UPDATE ${table}
+            SET referral_code = COALESCE(referral_code, $2),
+                updated_at = NOW()
+          WHERE id = $1
+          RETURNING referral_code`,
+        [actorId, candidate],
+      );
+      if (row?.referral_code) return row.referral_code;
+      throw new Error(`actor ${actorId} not found in ${table}`);
+    } catch (err: unknown) {
+      // 23505 = unique_violation on the partial referral_code index. Retry
+      // with a fresh candidate; the COALESCE means an existing non-null
+      // value would have been returned above without a collision.
+      const code = (err as { code?: string })?.code;
+      if (code === '23505') continue;
+      throw err;
+    }
+  }
+  throw new Error('Could not assign unique referral code after retries');
+}
+
+/**
  * Look up the (actor_type, actor_id) that owns a referral code. Searches
  * users first, then merchants. Returns null if not found.
  */
