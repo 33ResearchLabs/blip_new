@@ -208,44 +208,9 @@ function WalletBalanceSection({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* ── Live-rate pill (Phantom-style) — pinned to top with its own row
-              so it cannot get vertically squished into the header on short
-              responsive viewports. Previously it lived inside the
-              justify-center group below and would overflow upward into the
-              wallet-address row when the centered area got tight. ── */}
+      {/* Reputation + coin pill — small, sits at the top of the hero. Same
+          widget as the merchant + waitlist surfaces. */}
       <div className="shrink-0 flex items-center justify-center mt-1 mb-2">
-        <div
-          className="flex items-center gap-1.5"
-          style={{
-            padding: '5px 10px',
-            borderRadius: 999,
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.10)',
-          }}
-        >
-          <motion.div
-            animate={{ opacity: [1, 0.3, 1] }}
-            transition={{ duration: 1.8, repeat: Infinity }}
-            style={{
-              width: 5, height: 5, borderRadius: 999,
-              background: '#10b981',
-              boxShadow: '0 0 6px rgba(16,185,129,0.55)',
-            }}
-          />
-          <span style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
-            color: heroText.md,
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          }}>
-            {currentRate.toFixed(2)} {fiatLabel}
-          </span>
-        </div>
-      </div>
-
-      {/* Reputation + coin pill — small, sits below the live-rate pill so
-          it doesn't compete with the hero balance. Same widget as the
-          merchant + waitlist surfaces. */}
-      <div className="shrink-0 flex items-center justify-center mb-2">
         <ReputationCoinBadge variant="pill" />
       </div>
 
