@@ -460,7 +460,44 @@ export function LandingPage({
           the form, so cramming the trio across <640px just caused the
           "Merchant" pill to clip ("Merch…"). */}
       <header className="flex items-center justify-between gap-3 px-5 py-5 sm:px-8 sm:py-[22px]">
-        <Logo />
+        {/* Inline brand mark — the shared <Logo /> component renders
+            with `text-foreground`, which resolves to `#ffffff` inside
+            the `.user-scope` (dark-theme) wrapper and is therefore
+            invisible on this page's cream surface. We inline an ink-
+            stroked variant so the wordmark always reads against the
+            light card, regardless of the active user-scope theme. */}
+        <Link
+          href="/"
+          aria-label="Blip money home"
+          className="flex items-center gap-1.5 no-underline"
+        >
+          <svg
+            viewBox="0 0 70 60"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ height: 17, width: "auto", display: "block" }}
+          >
+            <path
+              d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28"
+              stroke="#1d1d1f"
+              strokeWidth="9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span
+            className="flex items-baseline"
+            style={{ fontSize: 22, lineHeight: 1, letterSpacing: "-0.045em", fontWeight: 700, color: "#1d1d1f" }}
+          >
+            <span>Blip</span>
+            <span
+              className="ml-1"
+              style={{ fontStyle: "italic", fontWeight: 600, letterSpacing: "-0.045em", color: "#1d1d1f" }}
+            >
+              money
+            </span>
+          </span>
+        </Link>
         <div className="flex items-center gap-2">
           <Link
             href="/"
