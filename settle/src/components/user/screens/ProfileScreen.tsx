@@ -3,13 +3,11 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Activity,
   Check,
   Copy,
   Wallet,
   Sun,
   Moon,
-  TrendingUp,
   ChevronRight,
   LogOut,
   Shield,
@@ -476,24 +474,6 @@ export const ProfileScreen = ({
         <div className="mb-6">
           <AppLockSettingsCard userId={userId} />
         </div>
-
-        {/* ── 3. Activity ── */}
-        <SettingsGroup label="Activity" icon={<Activity className="w-3.5 h-3.5" />}>
-          <SettingsRow
-            href="/console"
-            icon={<TrendingUp className="w-[15px] h-[15px]" />}
-            title="Console"
-            subtitle="Timeouts & analytics"
-            trailing={
-              timedOutOrders.length > 0 ? (
-                <StatusPill
-                  label={`${timedOutOrders.length} timeout${timedOutOrders.length !== 1 ? 's' : ''}`}
-                  tone="error"
-                />
-              ) : undefined
-            }
-          />
-        </SettingsGroup>
 
         {/* Resolved Disputes — rich list kept inline so each card retains
             its existing layout (orderNumber, won/lost/split badge, amount,
