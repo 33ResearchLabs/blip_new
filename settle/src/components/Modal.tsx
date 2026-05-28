@@ -50,12 +50,12 @@ const VARIANT_CONFIG: Record<ModalVariant, {
   },
   warning: {
     icon: AlertTriangle,
-    iconColor: 'text-amber-400',
-    iconBg: 'bg-amber-500/10',
-    border: 'border-amber-500/20',
-    buttonBg: 'bg-gradient-to-b from-amber-500 to-amber-600',
-    buttonHover: 'hover:from-amber-400 hover:to-amber-500',
-    buttonShadow: 'shadow-[0_2px_12px_rgba(245,158,11,0.15)]',
+    iconColor: 'text-white',
+    iconBg: 'bg-white/10',
+    border: 'border-white/15',
+    buttonBg: 'bg-white text-black',
+    buttonHover: 'hover:bg-white/90',
+    buttonShadow: 'shadow-[0_2px_12px_rgba(0,0,0,0.25)]',
   },
   info: {
     // Info-variant button uses the brand primary so the modal CTA reads as
@@ -223,9 +223,12 @@ export function Modal({
                 disabled={loading}
                 className={`flex-1 px-3 py-2.5 rounded-xl ${config.buttonBg} ${
                   // Info variant uses solid primary (orange) so the label
-                  // needs to be dark for AA contrast. Other variants keep
-                  // their light-on-saturated-color combo unchanged.
-                  variant === 'info' ? 'text-background' : 'text-white'
+                  // needs to be dark for AA contrast. Warning now renders
+                  // as a white button, so it also needs dark text. Other
+                  // variants keep their light-on-saturated-color combo.
+                  variant === 'info' ? 'text-background'
+                    : variant === 'warning' ? 'text-black'
+                    : 'text-white'
                 } text-[12px] font-bold
                            ${config.buttonHover} transition-all disabled:opacity-50 disabled:cursor-not-allowed
                            flex items-center justify-center gap-1.5 ${config.buttonShadow}`}

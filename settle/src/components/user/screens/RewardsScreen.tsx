@@ -375,7 +375,7 @@ export const RewardsScreen = ({
           >
             <ChevronLeft className="w-5 h-5 text-text-secondary" />
           </motion.button>
-           <h1 className="text-[17px] font-semibold text-text-primary">Refral</h1>
+           <h1 className="text-[17px] font-semibold text-text-primary">Referral</h1>
         </div>
         <motion.section
           initial={{ opacity: 0, y: 8 }}
@@ -587,7 +587,7 @@ export const RewardsScreen = ({
                 </p>
               </div>
             </div>
-            <motion.button
+            {/* <motion.button
               whileTap={{ scale: 0.96 }}
               whileHover={{ y: -1 }}
               onClick={onLearnMore}
@@ -595,7 +595,7 @@ export const RewardsScreen = ({
             >
               <span className="text-[12px] font-bold">Learn more</span>
               <ChevronRight className="w-3.5 h-3.5 text-text-tertiary" />
-            </motion.button>
+            </motion.button> */}
           </motion.section>
 
           {/* ── 2. Share Via ── */}

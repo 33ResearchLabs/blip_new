@@ -145,8 +145,8 @@ export const OrdersListScreen = ({
 
               const iconWrap =
                 isCompleted ? "bg-surface-active border border-border-subtle" :
-                isCancelled || isDisputed ? "bg-error-dim border border-error-border" :
-                isBuy ? "bg-success-dim border border-success-border" : "bg-error-dim border border-error-border";
+                isCancelled || isDisputed ? "bg-surface-card border border-border-subtle" :
+                "bg-surface-active border border-border-medium";
 
               const Icon =
                 isCompleted ? Check :
@@ -154,8 +154,8 @@ export const OrdersListScreen = ({
                 isBuy ? TrendingUp : TrendingDown;
               const iconColor =
                 isCompleted ? "text-text-tertiary" :
-                isCancelled || isDisputed ? "text-error" :
-                isBuy ? "text-success" : "text-error";
+                isCancelled || isDisputed ? "text-text-quaternary" :
+                "text-text-primary";
 
               const titleVerb =
                 isCompleted ? (isBuy ? "Received" : "Sent") :
@@ -163,9 +163,8 @@ export const OrdersListScreen = ({
                 isBuy ? "Receiving" : "Sending";
 
               const amountColor =
-                isCompleted ? (isBuy ? "text-success" : "text-error") :
                 isCancelled || isDisputed ? "text-text-tertiary" :
-                isBuy ? "text-success" : "text-error";
+                "text-text-primary";
 
               const amountSign = isCompleted ? (isBuy ? "+" : "-") : isCancelled || isDisputed ? "" : (isBuy ? "+" : "-");
 
@@ -181,8 +180,8 @@ export const OrdersListScreen = ({
 
               const statusBadgeClass =
                 isCompleted ? "bg-surface-active text-text-tertiary" :
-                isCancelled ? "bg-error-dim text-error" :
-                isDisputed  ? "bg-error-dim text-error" :
+                isCancelled ? "bg-surface-card text-text-tertiary border border-border-subtle" :
+                isDisputed  ? "bg-surface-card text-text-tertiary border border-border-subtle" :
                 "bg-surface-active text-text-secondary";
 
               return (
@@ -208,8 +207,10 @@ export const OrdersListScreen = ({
                         {statusLabel}
                       </span>
                       {isActive && timeStr && (
-                        <span className={`text-[9px] font-bold font-mono ${
-                          secs !== null && secs < 60 ? 'text-error' : 'text-text-tertiary'
+                        <span className={`font-mono ${
+                          secs !== null && secs < 60
+                            ? 'text-[9px] font-extrabold text-text-primary'
+                            : 'text-[9px] font-bold text-text-tertiary'
                         }`}>
                           {timeStr}
                         </span>

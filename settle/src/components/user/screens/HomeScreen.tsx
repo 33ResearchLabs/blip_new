@@ -249,9 +249,9 @@ function WalletBalanceSection({
 
   // ── Token deck — main USDT balance is index 0, swipe-equivalent via page dots
   const tokens = [
-    { symbol: 'USDT', name: 'Tether',   amount: displayBalance,                 dp: 2, color: '#26A17B', hasRate: true  },
-    { symbol: 'SOL',  name: 'Solana',   amount: solanaWallet.solBalance ?? null, dp: 4, color: '#9945FF', hasRate: false },
-    { symbol: 'USDC', name: 'USD Coin', amount: solanaWallet.usdcBalance ?? null, dp: 2, color: '#2775CA', hasRate: true  },
+    { symbol: 'USDT', name: 'Tether',   amount: displayBalance,                 dp: 2, color: 'rgba(255,255,255,0.92)', hasRate: true  },
+    { symbol: 'SOL',  name: 'Solana',   amount: solanaWallet.solBalance ?? null, dp: 4, color: 'rgba(255,255,255,0.92)', hasRate: false },
+    { symbol: 'USDC', name: 'USD Coin', amount: solanaWallet.usdcBalance ?? null, dp: 2, color: 'rgba(255,255,255,0.92)', hasRate: true  },
   ] as const;
   const [tokenIdx, setTokenIdx] = useStateHook(0);
   const t = tokens[tokenIdx];
@@ -284,8 +284,8 @@ function WalletBalanceSection({
             transition={{ duration: 1.8, repeat: Infinity }}
             style={{
               width: 5, height: 5, borderRadius: 999,
-              background: '#10b981',
-              boxShadow: '0 0 6px rgba(16,185,129,0.55)',
+              background: 'rgba(255,255,255,0.85)',
+              boxShadow: '0 0 6px rgba(255,255,255,0.4)',
             }}
           />
           <span style={{
@@ -385,7 +385,7 @@ function WalletBalanceSection({
                     width: active ? 18 : 6,
                     borderRadius: 999,
                     background: active ? tk.color : 'rgba(255,255,255,0.22)',
-                    boxShadow: active ? `0 0 8px ${tk.color}55` : undefined,
+                    boxShadow: active ? '0 0 8px rgba(255,255,255,0.35)' : undefined,
                     transition: 'width 280ms cubic-bezier(0.22,1,0.36,1), background 280ms ease',
                     border: 0,
                     padding: 0,
@@ -944,11 +944,11 @@ export const HomeScreen = ({
                       className="flex items-center justify-center"
                       style={{
                         width: 18, height: 18, borderRadius: 5,
-                        background: navCopied ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.06)',
-                        border: navCopied ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(255,255,255,0.10)',
+                        background: navCopied ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)',
+                        border: navCopied ? '1px solid rgba(255,255,255,0.30)' : '1px solid rgba(255,255,255,0.10)',
                       }}>
                       {navCopied
-                        ? <Check size={9} style={{ color: '#10b981' }} />
+                        ? <Check size={9} style={{ color: 'rgba(255,255,255,0.95)' }} />
                         : <Copy size={9} style={{ color: 'rgba(255,255,255,0.55)' }} />}
                     </motion.button>
                   </div>
@@ -957,6 +957,7 @@ export const HomeScreen = ({
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Bug / Report Issue button — hidden
               <motion.button
                 whileTap={{ scale: 0.88 }}
                 onClick={() => void openIssueReporter()}
@@ -971,6 +972,7 @@ export const HomeScreen = ({
               >
                 <Bug size={17} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.65)' }} />
               </motion.button>
+              */}
 
               <motion.button whileTap={{ scale: 0.88 }} onClick={() => setScreen('notifications')}
                 className="relative flex items-center justify-center"

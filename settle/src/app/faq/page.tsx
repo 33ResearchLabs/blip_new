@@ -289,8 +289,8 @@ export default function FaqPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1">
-            <h1 className="text-sm font-semibold" style={{ color: T.text }}>FAQs</h1>
-            <p className="text-[10px]" style={{ color: T.textLo }}>Frequently asked questions</p>
+            <h1 className="text-base font-semibold" style={{ color: T.text }}>FAQs</h1>
+            <p className="text-[12px]" style={{ color: T.textLo }}>Frequently asked questions</p>
           </div>
           <LifeBuoy className="w-4 h-4" style={{ color: T.textXl }} />
         </div>
@@ -309,7 +309,7 @@ export default function FaqPage() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search questions"
             maxLength={100}
-            className="w-full h-11 pl-9 pr-3 rounded-[12px] text-[13px] outline-none transition"
+            className="w-full h-12 pl-9 pr-3 rounded-[12px] text-[15px] outline-none transition"
             style={{
               background: T.inputBg,
               border: `1px solid ${T.border}`,
@@ -325,10 +325,10 @@ export default function FaqPage() {
             className="rounded-[16px] p-6 text-center"
             style={{ background: T.surface, border: `1px solid ${T.border}` }}
           >
-            <p className="text-[13px]" style={{ color: T.textMd }}>
+            <p className="text-[15px]" style={{ color: T.textMd }}>
               No results for &ldquo;{query}&rdquo;.
             </p>
-            <p className="mt-1 text-[11px]" style={{ color: T.textXl }}>
+            <p className="mt-1 text-[13px]" style={{ color: T.textXl }}>
               Try a different keyword or contact support.
             </p>
           </div>
@@ -376,7 +376,7 @@ export default function FaqPage() {
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
                         <span
-                          className="flex-1 min-w-0 text-[13.5px] font-semibold tracking-[-0.01em] leading-snug"
+                          className="flex-1 min-w-0 text-[15.5px] font-semibold tracking-[-0.01em] leading-snug"
                           style={{ color: T.text }}
                         >
                           {item.q}
@@ -399,7 +399,7 @@ export default function FaqPage() {
                             className="overflow-hidden"
                           >
                             <p
-                              className="px-4 pb-4 -mt-1 text-[12.5px] leading-relaxed"
+                              className="px-4 pb-4 -mt-1 text-[14.5px] leading-relaxed"
                               style={{ color: T.textMd }}
                             >
                               {item.a}
@@ -415,7 +415,7 @@ export default function FaqPage() {
           );
         })}
 
-        <p className="mt-6 text-center text-[11px]" style={{ color: T.textXl }}>
+        <p className="mt-6 text-center text-[13px]" style={{ color: T.textXl }}>
           Can&apos;t find what you need? Tap Contact Support from your profile.
         </p>
       </main>
