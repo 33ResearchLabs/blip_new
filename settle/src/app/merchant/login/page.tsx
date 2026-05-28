@@ -23,15 +23,18 @@ export default function MerchantLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   // Live tape rows fetched from /api/corridor/dynamic-rate every 60s.
-  // Falls back to fixture rates if fetch fails.
+  // Falls back to realistic P2P rates if fetch fails — INR mid ~97.5
+  // (P2P range 95–100, much higher than FX spot of ~83), AED mid ~3.665
+  // (P2P range 3.65–3.67). These match what the merchant dashboard
+  // actually shows so the preview reads as "alive" even offline.
   type TapeRow = { pair: string; dir: "bid" | "ask"; px: string; sz: string };
   const [tapeRows, setTapeRows] = useState<TapeRow[]>([
-    { pair: "USDT/INR", dir: "bid", px: "83.4620", sz: "820" },
-    { pair: "USDT/INR", dir: "ask", px: "83.4600", sz: "1,400" },
-    { pair: "USDT/AED", dir: "bid", px: "3.6720", sz: "340" },
-    { pair: "USDT/INR", dir: "bid", px: "83.4640", sz: "920" },
-    { pair: "USDT/INR", dir: "ask", px: "83.4580", sz: "560" },
-    { pair: "USDT/AED", dir: "ask", px: "3.6710", sz: "650" },
+    { pair: "USDT/INR", dir: "bid", px: "97.5500", sz: "820" },
+    { pair: "USDT/INR", dir: "ask", px: "97.4500", sz: "1,400" },
+    { pair: "USDT/AED", dir: "bid", px: "3.6700", sz: "340" },
+    { pair: "USDT/INR", dir: "bid", px: "97.6500", sz: "920" },
+    { pair: "USDT/INR", dir: "ask", px: "97.3000", sz: "560" },
+    { pair: "USDT/AED", dir: "ask", px: "3.6600", sz: "650" },
   ]);
 
   // Mirror of useDashboardAuth.handleLogin's success path — Google sign-in
@@ -97,24 +100,29 @@ export default function MerchantLoginPage() {
         const aedData = await aedRes.json();
         const inrData = await inrRes.json();
 
+        // Fallback values match the P2P market reality (INR ~97.5, AED
+        // ~3.665), not the FX spot rate (~83 INR) — the endpoint may
+        // return P2P-aligned numbers but if it 401s or stalls we still
+        // want the tape to look like the merchant dashboard.
         const aedRate =
           aedData?.success && typeof aedData.data?.ref_price === "number"
             ? aedData.data.ref_price
-            : 3.67;
+            : 3.665;
         const inrRate =
           inrData?.success && typeof inrData.data?.ref_price === "number"
             ? inrData.data.ref_price
-            : 83.0;
+            : 97.5;
 
-        // Generate 6 rows: INR bid, INR ask, AED bid, INR bid, INR ask, AED ask.
-        // Spreads: INR bids +0.004/+0.006, INR asks -0.001/-0.003, AED bids +0.002, AED ask -0.001.
+        // Generate 6 rows in a 3× INR / 2× AED pattern. P2P spreads are
+        // wider than FX spot — bids land 0.05–0.15 above mid, asks 0.05–
+        // 0.20 below mid for INR; AED uses ±0.005 (~0.15%).
         const rows: TapeRow[] = [
-          { pair: "USDT/INR", dir: "bid", px: (inrRate + 0.004).toFixed(4), sz: "820" },
-          { pair: "USDT/INR", dir: "ask", px: (inrRate - 0.001).toFixed(4), sz: "1,400" },
-          { pair: "USDT/AED", dir: "bid", px: (aedRate + 0.002).toFixed(4), sz: "340" },
-          { pair: "USDT/INR", dir: "bid", px: (inrRate + 0.006).toFixed(4), sz: "920" },
-          { pair: "USDT/INR", dir: "ask", px: (inrRate - 0.003).toFixed(4), sz: "560" },
-          { pair: "USDT/AED", dir: "ask", px: (aedRate - 0.001).toFixed(4), sz: "650" },
+          { pair: "USDT/INR", dir: "bid", px: (inrRate + 0.05).toFixed(4), sz: "820" },
+          { pair: "USDT/INR", dir: "ask", px: (inrRate - 0.05).toFixed(4), sz: "1,400" },
+          { pair: "USDT/AED", dir: "bid", px: (aedRate + 0.005).toFixed(4), sz: "340" },
+          { pair: "USDT/INR", dir: "bid", px: (inrRate + 0.15).toFixed(4), sz: "920" },
+          { pair: "USDT/INR", dir: "ask", px: (inrRate - 0.20).toFixed(4), sz: "560" },
+          { pair: "USDT/AED", dir: "ask", px: (aedRate - 0.005).toFixed(4), sz: "650" },
         ];
         setTapeRows(rows);
       } catch {
