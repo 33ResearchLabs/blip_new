@@ -454,23 +454,27 @@ export function LandingPage({
       </motion.div>
 
       {/* Topbar — brand on the left, utility actions on the right.
-          Logo already wraps itself in a <Link href="/"> — don't add another. */}
+          On mobile only the Install PWA button is shown; Home is
+          handled by the brand Logo (already wraps a Link to `/`) and
+          Merchant has its own dedicated promo card at the bottom of
+          the form, so cramming the trio across <640px just caused the
+          "Merchant" pill to clip ("Merch…"). */}
       <header className="flex items-center justify-between gap-3 px-5 py-5 sm:px-8 sm:py-[22px]">
         <Logo />
         <div className="flex items-center gap-2">
           <Link
             href="/"
             aria-label="Back to home"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#1d1d1f] bg-white border border-[#dcd4c5] hover:border-[#1d1d1f] transition-colors"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#1d1d1f] bg-white border border-[#dcd4c5] hover:border-[#1d1d1f] transition-colors"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Home</span>
+            <span>Home</span>
           </Link>
           <InstallPWAButton app="user" />
           {!hideMerchantLinks && (
             <Link
               href="/merchant/login"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#1d1d1f] bg-white border border-[#dcd4c5] hover:border-[#1d1d1f] transition-colors"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#1d1d1f] bg-white border border-[#dcd4c5] hover:border-[#1d1d1f] transition-colors"
             >
               Merchant
               <span aria-hidden>→</span>
