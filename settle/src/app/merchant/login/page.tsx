@@ -22,6 +22,18 @@ export default function MerchantLoginPage() {
   const solanaWallet = useSolanaWallet();
   const [showPassword, setShowPassword] = useState(false);
 
+  // Live tape rows fetched from /api/corridor/dynamic-rate every 60s.
+  // Falls back to fixture rates if fetch fails.
+  type TapeRow = { pair: string; dir: "bid" | "ask"; px: string; sz: string };
+  const [tapeRows, setTapeRows] = useState<TapeRow[]>([
+    { pair: "USDT/INR", dir: "bid", px: "83.4620", sz: "820" },
+    { pair: "USDT/INR", dir: "ask", px: "83.4600", sz: "1,400" },
+    { pair: "USDT/AED", dir: "bid", px: "3.6720", sz: "340" },
+    { pair: "USDT/INR", dir: "bid", px: "83.4640", sz: "920" },
+    { pair: "USDT/INR", dir: "ask", px: "83.4580", sz: "560" },
+    { pair: "USDT/AED", dir: "ask", px: "3.6710", sz: "650" },
+  ]);
+
   // Mirror of useDashboardAuth.handleLogin's success path — Google sign-in
   // skips the password flow but lands the same store updates so the
   // existing `/merchant` redirect (useEffect below) takes over.
@@ -70,6 +82,50 @@ export default function MerchantLoginPage() {
   useEffect(() => {
     if (isLoggedIn && merchantId) router.replace("/merchant");
   }, [isLoggedIn, merchantId, router]);
+
+  // Fetch live corridor prices every 60s and generate tape rows.
+  // Pattern: 3× INR, 2× AED, with alternating bid/ask. Fallback to
+  // fixture rates if the API call fails (network down, auth required).
+  useEffect(() => {
+    const fetchTapeRates = async () => {
+      try {
+        const [aedRes, inrRes] = await Promise.all([
+          fetch("/api/corridor/dynamic-rate?pair=usdt_aed"),
+          fetch("/api/corridor/dynamic-rate?pair=usdt_inr"),
+        ]);
+
+        const aedData = await aedRes.json();
+        const inrData = await inrRes.json();
+
+        const aedRate =
+          aedData?.success && typeof aedData.data?.ref_price === "number"
+            ? aedData.data.ref_price
+            : 3.67;
+        const inrRate =
+          inrData?.success && typeof inrData.data?.ref_price === "number"
+            ? inrData.data.ref_price
+            : 83.0;
+
+        // Generate 6 rows: INR bid, INR ask, AED bid, INR bid, INR ask, AED ask.
+        // Spreads: INR bids +0.004/+0.006, INR asks -0.001/-0.003, AED bids +0.002, AED ask -0.001.
+        const rows: TapeRow[] = [
+          { pair: "USDT/INR", dir: "bid", px: (inrRate + 0.004).toFixed(4), sz: "820" },
+          { pair: "USDT/INR", dir: "ask", px: (inrRate - 0.001).toFixed(4), sz: "1,400" },
+          { pair: "USDT/AED", dir: "bid", px: (aedRate + 0.002).toFixed(4), sz: "340" },
+          { pair: "USDT/INR", dir: "bid", px: (inrRate + 0.006).toFixed(4), sz: "920" },
+          { pair: "USDT/INR", dir: "ask", px: (inrRate - 0.003).toFixed(4), sz: "560" },
+          { pair: "USDT/AED", dir: "ask", px: (aedRate - 0.001).toFixed(4), sz: "650" },
+        ];
+        setTapeRows(rows);
+      } catch {
+        // Silent fail — keep the last good cache (initial fixture rates).
+      }
+    };
+
+    fetchTapeRates();
+    const interval = setInterval(fetchTapeRates, 60_000); // Poll every 60s
+    return () => clearInterval(interval);
+  }, []);
 
   const isSignIn = auth.authTab === "signin";
   const submit = () => (isSignIn ? auth.handleLogin() : auth.handleRegister());
@@ -316,21 +372,8 @@ export default function MerchantLoginPage() {
                   className="blip-tape-list flex flex-col"
                   style={{ animation: "blipTapeScroll 18s linear infinite" }}
                 >
-                  {/* 6 unique rows × 2 (seamless loop) */}
-                  {[
-                    { pair: "USDC/INR", dir: "bid" as const, px: "83.4620", sz: "820" },
-                    { pair: "USDC/INR", dir: "ask" as const, px: "83.4600", sz: "1,400" },
-                    { pair: "USDC/AED", dir: "bid" as const, px: "3.6720", sz: "340" },
-                    { pair: "USDC/INR", dir: "bid" as const, px: "83.4640", sz: "920" },
-                    { pair: "USDC/INR", dir: "ask" as const, px: "83.4580", sz: "560" },
-                    { pair: "USDC/THB", dir: "bid" as const, px: "34.8200", sz: "2.1k" },
-                    { pair: "USDC/INR", dir: "bid" as const, px: "83.4620", sz: "820" },
-                    { pair: "USDC/INR", dir: "ask" as const, px: "83.4600", sz: "1,400" },
-                    { pair: "USDC/AED", dir: "bid" as const, px: "3.6720", sz: "340" },
-                    { pair: "USDC/INR", dir: "bid" as const, px: "83.4640", sz: "920" },
-                    { pair: "USDC/INR", dir: "ask" as const, px: "83.4580", sz: "560" },
-                    { pair: "USDC/THB", dir: "bid" as const, px: "34.8200", sz: "2.1k" },
-                  ].map((row, i) => (
+                  {/* 6 unique rows × 2 (seamless loop) — populated from live rates */}
+                  {[...tapeRows, ...tapeRows].map((row, i) => (
                     <div
                       key={i}
                       style={{
