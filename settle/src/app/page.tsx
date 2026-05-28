@@ -27,6 +27,7 @@ import { useOrphanedEscrowRecovery } from "@/hooks/useOrphanedEscrowRecovery";
 import { IssueReporter } from "@/components/IssueReporter";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 
 import type { Screen } from "@/components/user/screens/types";
 import { FEE_CONFIG } from "@/components/user/screens/helpers";
@@ -418,6 +419,78 @@ export default function Home() {
         url.hash;
       window.history.replaceState(null, "", clean);
     }
+  }, [auth.userId]);
+
+  // Refer & Earn data — sourced from the same waitlist row as
+  // /waitlist/dashboard so the code shown here is the user's *real*
+  // referral code (users.referral_code), not a value derived locally.
+  //   friends         = count of users this account has referred
+  //   blipFromReferrals = sum of credited reward_amount on those referrals
+  //                       (excludes register/task bonuses)
+  //   totalBlip       = the actor's current blip_points balance
+  //                     (register + referrals + tasks combined)
+  const [referralInfo, setReferralInfo] = useState<{
+    code: string | null;
+    friends: number;
+    blipFromReferrals: number;
+    totalBlip: number;
+  }>({ code: null, friends: 0, blipFromReferrals: 0, totalBlip: 0 });
+  const [referralLoading, setReferralLoading] = useState(false);
+  useEffect(() => {
+    if (!auth.userId) {
+      setReferralInfo({
+        code: null,
+        friends: 0,
+        blipFromReferrals: 0,
+        totalBlip: 0,
+      });
+      return;
+    }
+    let cancelled = false;
+    setReferralLoading(true);
+    (async () => {
+      try {
+        const res = await fetchWithAuth("/api/waitlist/me");
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          success?: boolean;
+          data?: {
+            actor?: {
+              referral_code?: string | null;
+              blip_points?: number | null;
+            };
+            referrals?: Array<{
+              reward_amount?: number | null;
+              reward_status?: string | null;
+            }>;
+          };
+        };
+        if (cancelled || !json?.success || !json.data) return;
+        const referrals = Array.isArray(json.data.referrals)
+          ? json.data.referrals
+          : [];
+        const blipFromReferrals = referrals.reduce(
+          (acc, r) =>
+            r?.reward_status === "credited" && typeof r.reward_amount === "number"
+              ? acc + r.reward_amount
+              : acc,
+          0,
+        );
+        setReferralInfo({
+          code: json.data.actor?.referral_code ?? null,
+          friends: referrals.length,
+          blipFromReferrals,
+          totalBlip: json.data.actor?.blip_points ?? 0,
+        });
+      } catch {
+        // Swallow — the screen falls back to "—" and 0s on its own.
+      } finally {
+        if (!cancelled) setReferralLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [auth.userId]);
 
   // Consume ?reason=session_expired exactly once on mount, then strip it
@@ -839,11 +912,11 @@ export default function Home() {
             <RewardsScreen
               setScreen={setScreen}
               previousScreen={previousScreen}
-              referralCode={
-                auth.userId
-                  ? auth.userId.replace(/-/g, "").slice(0, 8).toUpperCase()
-                  : "—"
-              }
+              referralCode={referralInfo.code ?? "—"}
+              friendsJoined={referralInfo.friends}
+              blipEarned={referralInfo.blipFromReferrals}
+              totalBlip={referralInfo.totalBlip}
+              isLoading={referralLoading}
             />
           </Panel>
         )}
