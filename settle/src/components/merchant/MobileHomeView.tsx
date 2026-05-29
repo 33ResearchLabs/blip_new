@@ -91,7 +91,7 @@ interface MobileHomeViewProps {
 
 type MerchantPaymentMethod = {
   id: string;
-  type: "bank" | "cash" | "crypto" | "card" | "mobile";
+  type: "bank" | "cash" | "crypto" | "card" | "mobile" | "upi";
   name: string;
   details: string;
   is_default: boolean;
@@ -106,6 +106,7 @@ const PM_TYPE_META: Record<
   crypto: { label: "Crypto Wallet", Icon: Wallet, cls: "text-primary bg-primary/10 border-primary/20" },
   card: { label: "Card Payment", Icon: CreditCard, cls: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
   mobile: { label: "Mobile Money", Icon: Smartphone, cls: "text-pink-400 bg-pink-500/10 border-pink-500/20" },
+  upi: { label: "UPI", Icon: Smartphone, cls: "text-green-400 bg-green-500/10 border-green-500/20" },
 };
 
 export function MobileHomeView({

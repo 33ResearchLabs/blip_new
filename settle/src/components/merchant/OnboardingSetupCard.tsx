@@ -86,8 +86,8 @@ export function OnboardingSetupCard({
   const steps: StepView[] = [
     {
       key: 'profile',
-      label: 'Profile Setup',
-      description: 'Add a short bio (and tweak your display name) so users know who they’re trading with.',
+      label: 'Set Up Your Profile',
+      description: 'Add a short bio and your name so buyers know who they’re dealing with.',
       done: conditions.usernameSet,
       doneLabel: 'Completed',
       cta: conditions.usernameSet
@@ -99,8 +99,8 @@ export function OnboardingSetupCard({
     },
     {
       key: 'wallet',
-      label: 'Connect Wallet',
-      description: 'Connect your Solana wallet to secure your account.',
+      label: 'Connect Your Wallet',
+      description: 'Link a wallet so you can hold and send USDT safely.',
       done: conditions.walletConnected,
       doneLabel: 'Connected',
       cta: conditions.walletConnected
@@ -109,8 +109,8 @@ export function OnboardingSetupCard({
     },
     {
       key: 'payment',
-      label: 'Add Payment Method',
-      description: 'Add UPI / Bank / Local payout method.',
+      label: 'Add a Payment Method',
+      description: 'Add a UPI ID or bank account where buyers will pay you.',
       done: conditions.hasPaymentMethod,
       doneLabel: 'Added',
       cta: conditions.hasPaymentMethod
@@ -121,8 +121,8 @@ export function OnboardingSetupCard({
     },
     {
       key: 'fund',
-      label: 'Fund Wallet',
-      description: 'Deposit at least 1 USDT to start accepting BUY orders.',
+      label: 'Add USDT to Your Wallet',
+      description: 'Top up your wallet so you have USDT ready to sell to buyers.',
       done: conditions.walletFunded,
       doneLabel: 'Funded',
       optional: true,
@@ -132,8 +132,8 @@ export function OnboardingSetupCard({
     },
     {
       key: 'trade',
-      label: 'Start Trading',
-      description: 'Accept your first order to go live.',
+      label: 'Make Your First Trade',
+      description: 'Take your first order to start earning.',
       done: conditions.hasTrade,
       doneLabel: 'Done',
       optional: true,
@@ -162,10 +162,10 @@ export function OnboardingSetupCard({
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
           <h3 className="text-[12px] font-bold text-foreground tracking-wide">
-            Merchant Setup
+            Get Started
           </h3>
           <p className="text-[10.5px] text-foreground/55 mt-0.5 leading-snug">
-            Complete onboarding to appear live on the marketplace.
+            Finish these steps to go live and start trading.
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -261,8 +261,8 @@ export function OnboardingSetupCard({
       <div className="mt-3 pt-2 border-t border-foreground/[0.06]">
         <p className="text-[10.5px] text-foreground/55 leading-snug">
           {requiredDone
-            ? "You're live in the marketplace. Optional steps boost your trading — or hit Go Live to dismiss."
-            : 'Complete all required steps to appear in the marketplace and unlock trading.'}
+            ? "You're live and ready to trade. The remaining steps are optional — finish them to earn more, or tap Go Live to dismiss this card."
+            : 'Finish the steps above to go live and start accepting orders.'}
         </p>
       </div>
     </div>

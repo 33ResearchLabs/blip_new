@@ -31,7 +31,7 @@ function corridorFiat(corridorId: string | undefined): "AED" | "INR" {
 
 interface MerchantPaymentMethod {
   id: string;
-  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile';
+  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile' | 'upi';
   name: string;
   details?: string;
   is_default?: boolean;
@@ -165,7 +165,7 @@ export function TradeFormModal({
   };
 
   const pmIcon = (type: string) =>
-    type === 'bank' ? '🏦' : type === 'cash' ? '💵' : type === 'card' ? '💳' : type === 'mobile' ? '📱' : '💰';
+    type === 'bank' ? '🏦' : type === 'cash' ? '💵' : type === 'card' ? '💳' : type === 'mobile' || type === 'upi' ? '📱' : '💰';
   const selectedPm =
     paymentMethods.find((pm) => pm.id === openTradeForm.paymentMethodId) ||
     paymentMethods.find((pm) => pm.type === openTradeForm.paymentMethod);

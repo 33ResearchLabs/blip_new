@@ -3,7 +3,7 @@ import { query, queryOne, transaction } from '../index';
 export interface MerchantPaymentMethodRow {
   id: string;
   merchant_id: string;
-  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile';
+  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile' | 'upi';
   name: string;
   details: string;
   is_default: boolean;
@@ -25,7 +25,7 @@ export async function getMerchantPaymentMethods(merchantId: string): Promise<Mer
 // constraint on (merchant_id) WHERE is_default = true is never violated.
 export async function addMerchantPaymentMethod(data: {
   merchant_id: string;
-  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile';
+  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile' | 'upi';
   name: string;
   details: string;
   is_default?: boolean;

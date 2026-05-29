@@ -109,13 +109,19 @@ export const NotificationsPanel = memo(function NotificationsPanel({
     unreadIds.forEach((id) => onMarkRead(id));
   };
 
-  // Tab state — defaults to Getting Started. Both tabs are visible from
-  // day one, but new merchants land on Getting Started because that's
-  // where the actionable next steps live; Notifications would otherwise
-  // open empty. Once setup is complete (or skipped), the Getting Started
-  // tab vanishes and the snap-back effect below moves activeTab to
-  // Notifications so we don't render an empty body.
-  const [activeTab, setActiveTab] = useState<PanelTab>("getting_started");
+  // Tab state — defaults to Notifications. Previously this defaulted to
+  // Getting Started on the theory that new merchants should land on the
+  // checklist, but combined with the "show tab while loading" predicate
+  // below it produced a visible flash on every hard refresh / route
+  // remount for merchants whose real status was skipped or completed.
+  // The snap-forward effect below moves the active tab to Getting Started
+  // ONCE we have the authoritative status AND it says the merchant needs
+  // attention — so new merchants still land where they need to, but
+  // completed/skipped merchants never see the flash.
+  const [activeTab, setActiveTab] = useState<PanelTab>("notifications");
+  // One-shot guard so the snap-forward fires only on the first
+  // authoritative status, not every subsequent re-render.
+  const [didInitialFocus, setDidInitialFocus] = useState(false);
 
   // Drives both the Getting Started tab's visibility AND its dot
   // indicator. The tab itself only renders while this is true — once
@@ -128,11 +134,15 @@ export const NotificationsPanel = memo(function NotificationsPanel({
     useOnboarding();
   const onboardingNeedsAttention = (() => {
     if (!onboardingEnabled) return false;
-    // While the first fetch is in flight, status is null. Default to
-    // "needs attention" so the Notifications tab doesn't briefly flash
-    // before the status response arrives and the layout snaps. Once the
-    // fetch resolves, the real predicate below applies.
-    if (!onboardingStatus) return true;
+    // While the first fetch is in flight (loading=true) or status hasn't
+    // arrived yet, hide the tab. The previous default ("show while
+    // loading") flashed Getting Started on every hard refresh / route
+    // remount for merchants whose real answer was "skipped" or "all
+    // done" — the tab would appear, the fetch would resolve, and it
+    // would vanish. Hiding until we have the authoritative state avoids
+    // the flash; the trade-off is a brief absence for merchants who DO
+    // need the tab, which is the strictly better default.
+    if (onboardingLoading || !onboardingStatus) return false;
     if (onboardingStatus.skipped_at) return false;
     const c = onboardingStatus.conditions;
     const allMet =
@@ -146,14 +156,26 @@ export const NotificationsPanel = memo(function NotificationsPanel({
 
   // Snap-back: when onboarding completes (or is dismissed) and the
   // Getting Started tab stops rendering, move activeTab off it so we
-  // don't show an empty body. The reverse direction is NOT forced —
-  // both tabs are visible while onboarding needs attention, so the
-  // merchant can freely switch to Notifications and back.
+  // don't show an empty body.
   useEffect(() => {
     if (!onboardingNeedsAttention && activeTab === "getting_started") {
       setActiveTab("notifications");
     }
   }, [onboardingNeedsAttention, activeTab]);
+
+  // Snap-forward (one-shot): the moment we get the first authoritative
+  // status response and it says the merchant needs attention, switch
+  // the active tab to Getting Started. This replaces the old strategy
+  // of defaulting to Getting Started + hiding-via-snap-back; doing it
+  // this way means completed/skipped merchants never see the tab flash
+  // in during the loading window, while new merchants still land on
+  // the checklist as soon as we know they need to.
+  useEffect(() => {
+    if (didInitialFocus) return;
+    if (onboardingLoading || !onboardingStatus) return;
+    if (onboardingNeedsAttention) setActiveTab("getting_started");
+    setDidInitialFocus(true);
+  }, [onboardingLoading, onboardingStatus, onboardingNeedsAttention, didInitialFocus]);
 
   return (
     <div style={{ height: '50%' }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
@@ -244,8 +266,8 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                       : "Getting Started"}
                   </span>
                   {activeTab === "notifications"
-                    ? "Real-time alerts for orders, payments, escrow, disputes, and chats. Click any item to jump to the order."
-                    : "Setup checklist and platform updates. Live until you're set up and live in the marketplace."}
+                    ? "Live updates about your orders, payments, and chats. Tap any item to open it."
+                    : "A short checklist to finish your setup. It disappears once you're live."}
                 </span>
               </span>
             </div>
