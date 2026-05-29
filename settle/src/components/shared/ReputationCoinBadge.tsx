@@ -124,7 +124,7 @@ export function ReputationCoinBadge({
           </span>
         )}
         {!hideCoins && (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-white/[0.06] border border-white/[0.12] text-white/85">
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-white/[0.06] border border-white/[0.12] text-invert">
             <Coins className="w-2.5 h-2.5" />
             {loading ? '—' : (coins?.balance ?? 0).toLocaleString('en-US')}
             {coins && coins.locked > 0 && (

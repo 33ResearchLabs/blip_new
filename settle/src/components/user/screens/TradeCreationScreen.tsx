@@ -351,9 +351,9 @@ export const TradeCreationScreen = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.96 }}
                   transition={SPRING}
-                  className="absolute right-0 mt-2 z-30"
+                  className="absolute -right-4 mt-2 z-30"
                   style={{
-                    minWidth: 110,
+                    minWidth: 100,
                     padding: 4,
                     borderRadius: 14,
                     background: T.dropdownBg,
