@@ -210,9 +210,9 @@ function WalletBalanceSection({
     <div className="flex flex-col flex-1 min-h-0">
       {/* Reputation + coin pill — small, sits at the top of the hero. Same
           widget as the merchant + waitlist surfaces. */}
-      <div className="shrink-0 flex items-center justify-center mt-1 mb-2">
-        <ReputationCoinBadge variant="pill" />
-      </div>
+      {/* <div className="shrink-0 flex items-center justify-center mt-1 mb-2">
+        <ReputationCoinBadge variant="pill" hideRep="true" />
+      </div> */}
 
       {/* ── Top group: balance, vertically centered in remaining hero height
               so the empty/ready states feel anchored rather than floating
@@ -866,6 +866,7 @@ export const HomeScreen = ({
             </div>
 
             <div className="flex items-center gap-2">
+              <ReputationCoinBadge variant="pill" hideRep />
               {/* Bug / Report Issue button — hidden
               <motion.button
                 whileTap={{ scale: 0.88 }}
@@ -886,11 +887,11 @@ export const HomeScreen = ({
               <motion.button whileTap={{ scale: 0.88 }} onClick={() => setScreen('notifications')}
                 className="relative flex items-center justify-center"
                 style={{
-                  width: 38, height: 38, borderRadius: 13,
+                  width: 28, height: 28, borderRadius: 13,
                   background: 'rgba(255,255,255,0.06)',
                   border: '1px solid rgba(255,255,255,0.10)',
                 }}>
-                <Bell size={17} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.65)' }} />
+                <Bell size={15} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.65)' }} />
                 {notificationCount > 0 && (
                   <div
                     className="absolute -top-[3px] -right-[3px] flex items-center justify-center"
