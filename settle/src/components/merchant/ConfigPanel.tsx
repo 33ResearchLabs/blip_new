@@ -25,7 +25,10 @@ import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 // generic 2-input inline form which forced merchants to cram type-specific
 // data (UPI ID, IBAN, etc.) into a free-text "details" field.
 const PaymentMethodModal = dynamic(
-  () => import("@/components/merchant/PaymentMethodModal").then((m) => ({ default: m.PaymentMethodModal })),
+  () =>
+    import("@/components/merchant/PaymentMethodModal").then((m) => ({
+      default: m.PaymentMethodModal,
+    })),
   { ssr: false },
 );
 
@@ -37,7 +40,7 @@ const PaymentMethodModal = dynamic(
 
 interface MerchantPaymentMethod {
   id: string;
-  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile' | 'upi';
+  type: "bank" | "cash" | "crypto" | "card" | "mobile" | "upi";
   name: string;
   details?: string;
   is_default?: boolean;
@@ -57,7 +60,11 @@ interface ConfigPanelProps {
   };
   setOpenTradeForm: (form: any) => void;
   isCreatingTrade: boolean;
-  onCreateOrder: (tradeType?: "buy" | "sell", priorityFee?: number, pair?: "usdt_aed" | "usdt_inr") => void;
+  onCreateOrder: (
+    tradeType?: "buy" | "sell",
+    priorityFee?: number,
+    pair?: "usdt_aed" | "usdt_inr",
+  ) => void;
   refreshBalance: () => void;
 }
 
@@ -180,7 +187,7 @@ export const ConfigPanel = memo(function ConfigPanel({
   merchantId,
   merchantInfo,
   effectiveBalance,
-  activeCorridor = 'USDT_INR',
+  activeCorridor = "USDT_INR",
   openTradeForm,
   setOpenTradeForm,
   isCreatingTrade,
@@ -188,10 +195,13 @@ export const ConfigPanel = memo(function ConfigPanel({
   refreshBalance,
 }: ConfigPanelProps) {
   // Derive pair from activeCorridor (set in StatusCard trading pair selector)
-  const pair = activeCorridor === 'USDT_INR' ? 'usdt_inr' : 'usdt_aed' as const;
+  const pair =
+    activeCorridor === "USDT_INR" ? "usdt_inr" : ("usdt_aed" as const);
 
   // Merchant payment methods (replaces the static Bank/Cash buttons).
-  const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>(
+    [],
+  );
   // showAddPm now toggles the dedicated PaymentMethodModal (bottom of file)
   // instead of an inline 2-input form. The modal renders type-specific fields
   // (bank → IBAN/account/SWIFT, cash → location, mobile → provider/phone,
@@ -239,7 +249,9 @@ export const ConfigPanel = memo(function ConfigPanel({
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const res = await fetchWithAuth(`/api/corridor/dynamic-rate?pair=${pair}`);
+        const res = await fetchWithAuth(
+          `/api/corridor/dynamic-rate?pair=${pair}`,
+        );
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.data.ref_price) {
@@ -338,7 +350,10 @@ export const ConfigPanel = memo(function ConfigPanel({
               maxLength={14}
               value={openTradeForm.cryptoAmount}
               onChange={(e) => {
-                const clamped = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
+                const clamped = clampDecimal(
+                  e.target.value,
+                  DECIMAL_PRESETS.amount,
+                );
                 setOpenTradeForm({ ...openTradeForm, cryptoAmount: clamped });
               }}
               placeholder="0"
@@ -373,10 +388,22 @@ export const ConfigPanel = memo(function ConfigPanel({
         <div className="relative flex-[0.75] min-h-0 flex flex-col z-30">
           {(() => {
             const pmIcon = (type: string) =>
-              type === 'bank' ? '🏦' : type === 'cash' ? '💵' : type === 'card' ? '💳' : type === 'mobile' || type === 'upi' ? '📱' : '💰';
+              type === "bank"
+                ? "🏦"
+                : type === "cash"
+                  ? "💵"
+                  : type === "card"
+                    ? "💳"
+                    : type === "mobile" || type === "upi"
+                      ? "📱"
+                      : "💰";
             const selectedPm =
-              paymentMethods.find((pm) => pm.id === openTradeForm.paymentMethodId) ||
-              paymentMethods.find((pm) => pm.type === openTradeForm.paymentMethod);
+              paymentMethods.find(
+                (pm) => pm.id === openTradeForm.paymentMethodId,
+              ) ||
+              paymentMethods.find(
+                (pm) => pm.type === openTradeForm.paymentMethod,
+              );
             return (
               <>
                 <button
@@ -385,11 +412,17 @@ export const ConfigPanel = memo(function ConfigPanel({
                 >
                   {selectedPm ? (
                     <div className="flex items-center gap-2 @max-[240px]:gap-1.5 min-w-0 flex-1">
-                      <span className="text-[11px] @max-[240px]:text-[10px] shrink-0">{pmIcon(selectedPm.type)}</span>
+                      <span className="text-[11px] @max-[240px]:text-[10px] shrink-0">
+                        {pmIcon(selectedPm.type)}
+                      </span>
                       <div className="min-w-0 flex-1 text-left">
                         <div className="flex items-center gap-1.5 @max-[240px]:gap-1">
-                          <span className="text-[11px] @max-[240px]:text-[10px] font-bold text-foreground/80 truncate">{selectedPm.name}</span>
-                          <span className="text-[9px] @max-[240px]:text-[8px] text-foreground/30 font-mono uppercase shrink-0">{selectedPm.type}</span>
+                          <span className="text-[11px] @max-[240px]:text-[10px] font-bold text-foreground/80 truncate">
+                            {selectedPm.name}
+                          </span>
+                          <span className="text-[9px] @max-[240px]:text-[8px] text-foreground/30 font-mono uppercase shrink-0">
+                            {selectedPm.type}
+                          </span>
                         </div>
                         {selectedPm.details && (
                           <div className="text-[10px] @max-[240px]:text-[9px] text-foreground/45 font-mono truncate">
@@ -399,11 +432,17 @@ export const ConfigPanel = memo(function ConfigPanel({
                       </div>
                     </div>
                   ) : paymentMethods.length === 0 ? (
-                    <span className="text-[11px] text-foreground/30">No payment methods</span>
+                    <span className="text-[11px] text-foreground/30">
+                      No payment methods
+                    </span>
                   ) : (
-                    <span className="text-[11px] text-foreground/40">Select payment method</span>
+                    <span className="text-[11px] text-foreground/40">
+                      Select payment method
+                    </span>
                   )}
-                  <ChevronDown className={`w-3.5 h-3.5 @max-[240px]:w-3 @max-[240px]:h-3 text-foreground/30 transition-transform shrink-0 ${showPmDropdown ? 'rotate-180' : ''}`} />
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 @max-[240px]:w-3 @max-[240px]:h-3 text-foreground/30 transition-transform shrink-0 ${showPmDropdown ? "rotate-180" : ""}`}
+                  />
                 </button>
 
                 {showPmDropdown && (
@@ -418,7 +457,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                           onClick={() => {
                             setOpenTradeForm({
                               ...openTradeForm,
-                              paymentMethod: pm.type as 'bank' | 'cash',
+                              paymentMethod: pm.type as "bank" | "cash",
                               paymentMethodId: pm.id,
                             });
                             setShowPmDropdown(false);
@@ -429,11 +468,17 @@ export const ConfigPanel = memo(function ConfigPanel({
                               : "hover:bg-foreground/[0.04] text-foreground/60"
                           }`}
                         >
-                          <span className="text-[11px] mt-0.5 shrink-0">{pmIcon(pm.type)}</span>
+                          <span className="text-[11px] mt-0.5 shrink-0">
+                            {pmIcon(pm.type)}
+                          </span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] font-bold truncate">{pm.name}</span>
-                              <span className="text-[9px] text-foreground/25 font-mono uppercase shrink-0 ml-auto">{pm.type}</span>
+                              <span className="text-[11px] font-bold truncate">
+                                {pm.name}
+                              </span>
+                              <span className="text-[9px] text-foreground/25 font-mono uppercase shrink-0 ml-auto">
+                                {pm.type}
+                              </span>
                             </div>
                             {pm.details && (
                               <div className="text-[10px] text-foreground/40 font-mono truncate mt-0.5">
@@ -445,11 +490,16 @@ export const ConfigPanel = memo(function ConfigPanel({
                       );
                     })}
                     <button
-                      onClick={() => { setShowAddPm(true); setShowPmDropdown(false); }}
+                      onClick={() => {
+                        setShowAddPm(true);
+                        setShowPmDropdown(false);
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left border-t border-foreground/[0.06] hover:bg-foreground/[0.04] transition-colors"
                     >
                       <Plus className="w-3 h-3 text-primary/60" />
-                      <span className="text-[11px] font-bold text-primary/70">Add Payment Method</span>
+                      <span className="text-[11px] font-bold text-primary/70">
+                        Add Payment Method
+                      </span>
                     </button>
                   </div>
                 )}
@@ -484,9 +534,15 @@ export const ConfigPanel = memo(function ConfigPanel({
               title="Spread"
               description="Your profit margin per trade. Pick the balance between speed and profit."
               items={[
-                { label: 'Fast', value: '+2.5% — matches quickly, lower profit' },
-                { label: 'Best', value: '+2% — balanced speed and profit' },
-                { label: 'Cheap', value: '+1.5% — highest profit, slower match' },
+                {
+                  label: "Fast",
+                  value: "+2.5% — matches quickly, lower profit",
+                },
+                { label: "Best", value: "+2% — balanced speed and profit" },
+                {
+                  label: "Cheap",
+                  value: "+1.5% — highest profit, slower match",
+                },
               ]}
             />
           </label>
@@ -523,8 +579,12 @@ export const ConfigPanel = memo(function ConfigPanel({
                     <TierIcon
                       className={`w-3 h-3 @max-[240px]:w-2.5 @max-[240px]:h-2.5 shrink-0 ${isSelected ? "text-primary" : "text-foreground/20"}`}
                     />
+                    {/* Tier name (Fast / Best / Cheap) hidden when the
+                        column is narrow OR the card is short — the icon
+                        + percentage alone are enough to identify the
+                        tier in those tight layouts. */}
                     <span
-                      className={`text-[10px] @max-[280px]:text-[9px] @max-[240px]:text-[8px] @max-h-[340px]:text-[9px] font-bold ${isSelected ? "text-foreground" : "text-foreground/35"}`}
+                      className={`text-[10px] @max-[280px]:text-[9px] @max-[240px]:hidden @max-h-[340px]:hidden font-bold ${isSelected ? "text-foreground" : "text-foreground/35"}`}
                     >
                       {t.label}
                     </span>
@@ -551,10 +611,13 @@ export const ConfigPanel = memo(function ConfigPanel({
                 title="Boost"
                 description="Priority fee that pushes your order ahead of other merchants in the queue."
                 items={[
-                  { label: '0%', value: 'No boost — standard queue priority' },
-                  { label: '5%', value: 'Low boost — slightly faster match' },
-                  { label: '10%', value: 'Medium boost — preferred in busy markets' },
-                  { label: '15%', value: 'High boost — top of the queue' },
+                  { label: "0%", value: "No boost — standard queue priority" },
+                  { label: "5%", value: "Low boost — slightly faster match" },
+                  {
+                    label: "10%",
+                    value: "Medium boost — preferred in busy markets",
+                  },
+                  { label: "15%", value: "High boost — top of the queue" },
                 ]}
               />
             </label>
@@ -653,10 +716,14 @@ export const ConfigPanel = memo(function ConfigPanel({
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <span className="text-sm @max-[240px]:text-xs @max-h-[400px]:text-xs @max-h-[340px]:text-[11px] font-black tracking-wide">BUY</span>
+                <span className="text-sm @max-[240px]:text-xs @max-h-[400px]:text-xs @max-h-[340px]:text-[11px] font-black tracking-wide">
+                  BUY
+                </span>
                 {cryptoAmount > 0 && (
                   <span className="text-[10px] @max-[240px]:text-[9px] @max-h-[400px]:text-[9px] @max-h-[340px]:text-[8px] font-mono font-bold opacity-60 truncate max-w-full px-1">
-                    {fiatSymbol}{pricing.buyAed.toFixed(2)}{fiatSuffix || ` ${fiatLabel}`}
+                    {fiatSymbol}
+                    {pricing.buyAed.toFixed(2)}
+                    {fiatSuffix || ` ${fiatLabel}`}
                   </span>
                 )}
               </>
@@ -674,10 +741,14 @@ export const ConfigPanel = memo(function ConfigPanel({
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <span className="text-sm @max-[240px]:text-xs @max-h-[400px]:text-xs @max-h-[340px]:text-[11px] font-black tracking-wide">SELL</span>
+                <span className="text-sm @max-[240px]:text-xs @max-h-[400px]:text-xs @max-h-[340px]:text-[11px] font-black tracking-wide">
+                  SELL
+                </span>
                 {cryptoAmount > 0 && (
                   <span className="text-[10px] @max-[240px]:text-[9px] @max-h-[400px]:text-[9px] @max-h-[340px]:text-[8px] font-mono font-bold text-foreground/40 truncate max-w-full px-1">
-                    {fiatSymbol}{pricing.sellAed.toFixed(2)}{fiatSuffix || ` ${fiatLabel}`}
+                    {fiatSymbol}
+                    {pricing.sellAed.toFixed(2)}
+                    {fiatSuffix || ` ${fiatLabel}`}
                   </span>
                 )}
               </>

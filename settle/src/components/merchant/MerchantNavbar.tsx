@@ -29,9 +29,7 @@ import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { OnboardingSetupChip } from "@/components/merchant/OnboardingSetupChip";
 import { Logo } from "@/components/shared/Logo";
 
-const CORRIDOR_OPTIONS = [
-  { key: "USDT_INR", label: "🇮🇳 USDT / INR" },
-] as const;
+const CORRIDOR_OPTIONS = [{ key: "USDT_INR", label: "🇮🇳 USDT / INR" }] as const;
 
 export type NavPage = "dashboard" | "wallet" | "settings" | "ops";
 
@@ -141,7 +139,7 @@ export function MerchantNavbar({
   return (
     <>
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border-strong">
-        <div className="relative h-12 lg:h-[50px] flex items-center px-3 lg:px-4 gap-3">
+        <div className="relative h-12 lg:h-[50px] flex lg:grid lg:grid-cols-[1fr_auto_1fr] items-center px-3 lg:px-4 gap-3">
           {/* Mobile back button — only on overlay screens that pass onBack */}
           {onBack && (
             <button
@@ -154,21 +152,20 @@ export function MerchantNavbar({
           )}
 
           {/* Left: Logo + wordmark. */}
-          <div className="flex items-center shrink-0">
+          <div className="flex items-center shrink-0 lg:justify-self-start min-w-0">
             <Logo href="/merchant" />
           </div>
 
-          {/* Center: Nav pills — pinned to viewport center via absolute
-              positioning. Previous `mx-auto` only centered the block in the
-              REMAINING space between the logo and the right-side icon cluster,
-              so it drifted left whenever the right cluster grew (avatar +
-              report + bell + 2FA pill etc). With `left-1/2 -translate-x-1/2`
-              the pills sit exactly at 50% of the header width regardless of
-              what flanks them. `pointer-events-none` on the wrapper keeps the
-              empty space click-through; the inner <nav> re-enables pointer
-              events for the pills themselves. */}
-          <div className="hidden lg:flex items-center gap-2 absolute left-1/2 -translate-x-1/2 pointer-events-none">
-            <nav className="pointer-events-auto flex items-center gap-0.5 bg-foreground/[0.03] rounded-lg p-[3px]">
+          {/* Center: Nav pills — placed in the centre grid column.
+              The container uses `grid-cols-[1fr_auto_1fr]` so the two side
+              columns are equal in width regardless of their content, which
+              keeps this nav visually centred on the viewport (matching the
+              previous absolute-position behaviour) WITHOUT letting the
+              right-hand cluster overlap it. `min-w-0` allows the nav to
+              shrink before any overlap can occur, and Ops/Compliance fall
+              back to icon-only below xl. */}
+          <div className="hidden lg:flex items-center justify-center min-w-0">
+            <nav className="flex items-center gap-0.5 bg-foreground/[0.03] rounded-lg p-[3px] min-w-0 max-w-full">
               <Link
                 href="/merchant"
                 className={pill(activePage === "dashboard")}
@@ -210,28 +207,32 @@ export function MerchantNavbar({
               {merchantInfo?.has_ops_access && (
                 <Link
                   href="/ops"
-                  className={`${pill(activePage === "ops")} flex items-center gap-1.5`}
+                  className={`${pill(activePage === "ops")} flex items-center gap-1.5 shrink-0`}
                   onClick={onNavLinkClick}
+                  aria-label="Ops"
+                  title="Ops"
                 >
-                  <Activity className="w-3.5 h-3.5 text-primary" />
-                  Ops
+                  <Activity className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="hidden xl:inline">Ops</span>
                 </Link>
               )}
               {merchantInfo?.has_compliance_access && (
                 <Link
                   href="/compliance"
-                  className={`${pill(activePage === ("compliance" as NavPage))} flex items-center gap-1.5`}
+                  className={`${pill(activePage === ("compliance" as NavPage))} flex items-center gap-1.5 shrink-0`}
                   onClick={onNavLinkClick}
+                  aria-label="Compliance"
+                  title="Compliance"
                 >
-                  <Shield className="w-3.5 h-3.5 text-purple-400" />
-                  Compliance
+                  <Shield className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <span className="hidden xl:inline">Compliance</span>
                 </Link>
               )}
             </nav>
           </div>
 
           {/* Right: Desktop — Avatar dropdown | Mobile — Notification + Hamburger */}
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
+          <div className="flex items-center gap-2 shrink-0 ml-auto lg:ml-0 lg:justify-self-end">
             {/* Desktop: rightActions + avatar dropdown */}
             <div className="hidden lg:flex items-center gap-2">
               {/* Onboarding-incomplete chip — feature-flagged glanceable
@@ -244,16 +245,16 @@ export function MerchantNavbar({
 
               {rightActions}
               {rightActions && (
-                <div className="w-px h-6 bg-foreground/[0.06] mx-0.5" />
+                <div className="hidden lg:block w-px h-6 bg-foreground/[0.06] mx-0.5" />
               )}
 
               {/* Report Issue — icon-only trigger that opens the same modal
-                  as the floating bug button. Always visible in the navbar
-                  so merchants always have a one-click path to file a bug
-                  without needing to scroll/find the floating button. */}
+                  as the floating bug button. Hidden below xl so the
+                  narrower lg viewport keeps the centre nav collision-free;
+                  the floating bug button remains available everywhere. */}
               <button
                 onClick={() => openIssueReporter()}
-                className="p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors text-foreground/50 hover:text-foreground/80"
+                className="hidden xl:inline-flex p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors text-foreground/50 hover:text-foreground/80"
                 title="Report Issue (Ctrl+Shift+I)"
                 aria-label="Report an issue"
               >
@@ -274,13 +275,19 @@ export function MerchantNavbar({
                       : "hover:bg-foreground/[0.06]"
                   }`}
                 >
-                  <UserAvatar
-                    src={merchantInfo?.avatar_url}
-                    seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
-                    size={28}
-                    alt={displayName}
-                    className="border border-foreground/10"
-                  />
+                  <span className="rounded-full p-[2px] border border-foreground/25 bg-foreground/[0.08] inline-flex">
+                    <UserAvatar
+                      src={merchantInfo?.avatar_url}
+                      seed={
+                        merchantInfo?.username ||
+                        merchantInfo?.display_name ||
+                        "merchant"
+                      }
+                      size={28}
+                      alt={displayName}
+                      className="border border-foreground/10"
+                    />
+                  </span>
                   <ChevronDown
                     className={`w-3 h-3 text-foreground/30 transition-transform ${menuOpen ? "rotate-180" : ""}`}
                   />
@@ -292,7 +299,11 @@ export function MerchantNavbar({
                       <div className="flex items-center gap-2.5">
                         <UserAvatar
                           src={merchantInfo?.avatar_url}
-                          seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
+                          seed={
+                            merchantInfo?.username ||
+                            merchantInfo?.display_name ||
+                            "merchant"
+                          }
                           size={36}
                           alt={displayName}
                           className="border border-foreground/10"
@@ -402,15 +413,15 @@ export function MerchantNavbar({
                   }
                 >
                   <Bell
-                    className={`w-5 h-5 ${urgentNotificationCount > 0 ? 'text-red-400' : 'text-foreground/50'}`}
+                    className={`w-5 h-5 ${urgentNotificationCount > 0 ? "text-red-400" : "text-foreground/50"}`}
                   />
                   {notificationCount > 0 && (
                     <>
                       <span
                         className={`absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${
                           urgentNotificationCount > 0
-                            ? 'bg-red-500 text-white'
-                            : 'bg-primary text-background'
+                            ? "bg-red-500 text-white"
+                            : "bg-primary text-background"
                         }`}
                       >
                         {notificationCount > 9 ? "9+" : notificationCount}
@@ -465,7 +476,11 @@ export function MerchantNavbar({
                 <div className="flex items-center gap-3">
                   <UserAvatar
                     src={merchantInfo?.avatar_url}
-                    seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
+                    seed={
+                      merchantInfo?.username ||
+                      merchantInfo?.display_name ||
+                      "merchant"
+                    }
                     size={40}
                     alt={displayName}
                     className="border border-foreground/10"
@@ -589,7 +604,6 @@ export function MerchantNavbar({
   );
 }
 
-
 /**
  * Compact rep + Blip Points display for the navbar. Two side-by-side
  * pills: shield+score and coin+balance. `compact` drops the verbose
@@ -608,34 +622,51 @@ function NavbarRepCoins({ compact = false }: { compact?: boolean }) {
     (async () => {
       try {
         const [repRes, coinRes] = await Promise.all([
-          fetchWithAuth("/api/reputation/me").then((r) => (r.ok ? r.json() : null)),
+          fetchWithAuth("/api/reputation/me").then((r) =>
+            r.ok ? r.json() : null,
+          ),
           fetchWithAuth("/api/coins/me").then((r) => (r.ok ? r.json() : null)),
         ]);
         if (cancelled) return;
-        if (repRes?.data && typeof repRes.data.total_score === "number") setScore(repRes.data.total_score);
-        if (coinRes?.data && typeof coinRes.data.balance === "number") setCoins(coinRes.data.balance);
+        if (repRes?.data && typeof repRes.data.total_score === "number")
+          setScore(repRes.data.total_score);
+        if (coinRes?.data && typeof coinRes.data.balance === "number")
+          setCoins(coinRes.data.balance);
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  // Desktop (non-compact) variant hides the verbose labels at lg and only
+  // re-introduces them at xl+, so the right cluster stays narrow enough at
+  // narrow-desktop widths to never collide with the centre nav.
   return (
     <div className="flex items-center gap-1">
       <span
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.08] text-[11px] font-semibold text-foreground"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.08] text-[11px] font-semibold text-foreground shrink-0"
         title="Reputation score (300–900)"
       >
-        <Shield className="w-3 h-3 text-foreground/70" />
+        <Shield className="w-3 h-3 text-foreground/70 shrink-0" />
         <span className="tabular-nums">{score}</span>
-        {!compact && <span className="text-foreground/55 text-[10px]">Rep</span>}
+        {!compact && (
+          <span className="hidden xl:inline text-foreground/55 text-[10px]">
+            Rep
+          </span>
+        )}
       </span>
       <span
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.08] text-[11px] font-semibold text-foreground"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.08] text-[11px] font-semibold text-foreground shrink-0"
         title="Blip Points"
       >
-        <Coins className="w-3 h-3 text-foreground/70" />
+        <Coins className="w-3 h-3 text-foreground/70 shrink-0" />
         <span className="tabular-nums">{coins.toLocaleString("en-US")}</span>
-        {!compact && <span className="text-foreground/55 text-[10px]">Blip Points</span>}
+        {!compact && (
+          <span className="hidden xl:inline text-foreground/55 text-[10px]">
+            Blip Points
+          </span>
+        )}
       </span>
     </div>
   );

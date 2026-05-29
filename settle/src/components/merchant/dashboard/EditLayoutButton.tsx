@@ -22,7 +22,7 @@ export function EditLayoutButton() {
     <button
       type="button"
       onClick={() => setIsEditing(!isEditing)}
-      className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors border ${
+      className={`hidden lg:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors border ${
         isEditing
           ? "bg-primary text-background border-primary"
           : "bg-white/[0.03] text-foreground/60 border-white/[0.05] hover:bg-card hover:text-foreground/90"
@@ -33,12 +33,12 @@ export function EditLayoutButton() {
       {isEditing ? (
         <>
           <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-          <span className="hidden xl:inline">Done</span>
+          <span>Done</span>
         </>
       ) : (
         <>
           <Pencil className="w-3.5 h-3.5" strokeWidth={2.5} />
-          <span className="hidden xl:inline">Edit Layout</span>
+          <span className="hidden xl:block">Edit Layout</span>
         </>
       )}
     </button>

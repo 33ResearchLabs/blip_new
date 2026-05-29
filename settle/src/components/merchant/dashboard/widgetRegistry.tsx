@@ -32,6 +32,7 @@ import { ConfigPanel } from "@/components/merchant/ConfigPanel";
 import { PendingOrdersPanel } from "@/components/merchant/PendingOrdersPanel";
 import { LeaderboardPanel } from "@/components/merchant/LeaderboardPanel";
 import { InProgressPanel } from "@/components/merchant/InProgressPanel";
+import { CompletedOrdersPanel } from "@/components/merchant/CompletedOrdersPanel";
 import { ActivityPanel } from "@/components/merchant/ActivityPanel";
 import { NotificationsPanel } from "@/components/merchant/NotificationsPanel";
 import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
@@ -278,6 +279,21 @@ const WidgetInProgress: React.FC<{ ctx: DashboardContext }> = ({ ctx }) => (
   </div>
 );
 
+const WidgetCompleted: React.FC<{ ctx: DashboardContext }> = ({ ctx }) => (
+  <div
+    data-tour="completed-panel"
+    className="h-full flex flex-col overflow-hidden border-b border-foreground/[0.08]"
+  >
+    <CompletedOrdersPanel
+      orders={ctx.completedOrders}
+      onSelectOrder={(order) => ctx.setSelectedOrderId(order.id)}
+      collapsed={ctx.completedCollapsed}
+      onCollapseChange={ctx.setCompletedCollapsed}
+      walletBalance={ctx.effectiveBalance}
+    />
+  </div>
+);
+
 const WidgetLeaderboard: React.FC<{ ctx: DashboardContext }> = ({ ctx }) => (
   <div
     data-tour="leaderboard"
@@ -383,6 +399,7 @@ export const WIDGET_REGISTRY: Record<
   configPanel: WidgetConfigPanel,
   pendingOrders: WidgetPendingOrders,
   inProgress: WidgetInProgress,
+  completedOrders: WidgetCompleted,
   leaderboard: WidgetLeaderboard,
   activity: WidgetActivity,
   notifications: WidgetNotifications,
@@ -395,6 +412,7 @@ export const WIDGET_LABELS: Record<WidgetId, string> = {
   configPanel: "Create Trade",
   pendingOrders: "Pending Orders",
   inProgress: "In Progress",
+  completedOrders: "Completed",
   leaderboard: "Leaderboard",
   activity: "Activity",
   notifications: "Notifications",

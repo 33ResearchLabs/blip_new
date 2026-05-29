@@ -316,11 +316,18 @@ export function MerchantChatTabs({
           the panel (just under the MESSAGES header) so the primary section
           switcher is the first thing the merchant sees, instead of being
           buried below the scrolling chat list. */}
-      <div className="px-2 pt-1.5 pb-2 border-b border-white/[0.04] bg-background/95 backdrop-blur-sm">
-        <div className="flex items-center gap-0.5 p-0.5 h-9 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08]">
+      <div
+        className="px-2 pt-1.5 pb-2 border-b border-white/[0.04] bg-background/95 backdrop-blur-sm"
+        style={{ containerType: "inline-size" }}
+      >
+        <div
+          className="flex items-center gap-0.5 p-0.5 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08]"
+          style={{ height: "clamp(1.85rem, 11cqi, 2.75rem)" }}
+        >
           <button
             onClick={() => setActiveTab("active")}
-            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
+            style={{ fontSize: "clamp(9px, 4.2cqi, 13px)" }}
+            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1 h-full px-0.5 rounded-md font-bold whitespace-nowrap transition-colors ${
               activeTab === "active"
                 ? "bg-white text-black shadow"
                 : "text-foreground/60 hover:text-foreground/80"
@@ -329,7 +336,8 @@ export function MerchantChatTabs({
             <span className="truncate">Active Chat</span>
             {activeUnread > 0 && (
               <span
-                className={`shrink-0 text-[10px] font-mono tabular-nums ${
+                style={{ fontSize: "clamp(8px, 3.4cqi, 11px)" }}
+                className={`shrink-0 font-mono tabular-nums ${
                   activeTab === "active"
                     ? "text-black/55"
                     : "text-foreground/40"
@@ -341,7 +349,8 @@ export function MerchantChatTabs({
           </button>
           <button
             onClick={() => setActiveTab("orders")}
-            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
+            style={{ fontSize: "clamp(9px, 4.2cqi, 13px)" }}
+            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1 h-full px-0.5 rounded-md font-bold whitespace-nowrap transition-colors ${
               activeTab === "orders"
                 ? "bg-white text-black shadow"
                 : "text-foreground/60 hover:text-foreground/80"
@@ -350,7 +359,8 @@ export function MerchantChatTabs({
             <span className="truncate">Inbox</span>
             {totalUnread > 0 && (
               <span
-                className={`shrink-0 text-[10px] font-mono tabular-nums ${
+                style={{ fontSize: "clamp(8px, 3.4cqi, 11px)" }}
+                className={`shrink-0 font-mono tabular-nums ${
                   activeTab === "orders"
                     ? "text-black/55"
                     : "text-foreground/40"
@@ -362,17 +372,25 @@ export function MerchantChatTabs({
           </button>
           <button
             onClick={() => setActiveTab("disputes")}
-            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-full px-1 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
+            style={{ fontSize: "clamp(9px, 4.2cqi, 13px)" }}
+            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1 h-full px-0.5 rounded-md font-bold whitespace-nowrap transition-colors ${
               activeTab === "disputes"
                 ? "bg-white text-black shadow"
                 : "text-foreground/60 hover:text-foreground/80"
             }`}
           >
-            <Shield className="w-3 h-3 shrink-0" />
+            <Shield
+              className="shrink-0"
+              style={{
+                width: "clamp(0.7rem, 3.4cqi, 1rem)",
+                height: "clamp(0.7rem, 3.4cqi, 1rem)",
+              }}
+            />
             <span className="truncate">Disputes</span>
             {disputeUnread > 0 && (
               <span
-                className={`shrink-0 text-[10px] font-mono tabular-nums ${
+                style={{ fontSize: "clamp(8px, 3.4cqi, 11px)" }}
+                className={`shrink-0 font-mono tabular-nums ${
                   activeTab === "disputes"
                     ? "text-foreground/70"
                     : "text-foreground/50"

@@ -201,11 +201,11 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
   }, [ongoingOrders, merchantId]);
 
   // ── Phase 1 v2 path ─────────────────────────────────────────────────
-  // Only the wide-screen layout is data-driven for now; narrow keeps the
-  // legacy JSX so the height:60% pending/leaderboard split stays intact.
-  // The hook is only mounted when both conditions are true, so the flag-
-  // off case has zero runtime cost.
-  if (MERCHANT_LAYOUT_V2 && isWideScreen) {
+  // V2 renders at all desktop widths (the wrapper's `hidden lg:flex`
+  // handles the mobile cutoff). Edit-layout mode only works against V2,
+  // so gating V2 to 2xl+ left the Edit button non-functional between
+  // lg and 2xl — now V2 takes over from lg upward whenever the flag is on.
+  if (MERCHANT_LAYOUT_V2) {
     return (
       <MerchantDashboardV2
         props={props}
