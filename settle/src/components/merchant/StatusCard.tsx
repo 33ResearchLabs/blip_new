@@ -592,28 +592,73 @@ export const StatusCard = memo(function StatusCard({
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 @max-[240px]:py-2 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
+                style={{
+                  paddingTop: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
+                  paddingBottom: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
+                  gap: "clamp(0.15rem, 1.2cqi + 0.3vh, 0.6rem)",
+                }}
+                className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
-                <ArrowLeftRight className="w-4 h-4" />
-                <span className="text-[11px] font-bold uppercase tracking-wider">Swap</span>
+                <ArrowLeftRight
+                  style={{
+                    width: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
+                    height: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
+                  }}
+                />
+                <span
+                  style={{ fontSize: "clamp(7px, 4cqi + 0.5vh, 14px)" }}
+                  className="font-bold uppercase tracking-wider"
+                >
+                  Swap
+                </span>
               </button>
             )}
             {onOpenSend && (
               <button
                 onClick={onOpenSend}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 @max-[240px]:py-2 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
+                style={{
+                  paddingTop: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
+                  paddingBottom: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
+                  gap: "clamp(0.15rem, 1.2cqi + 0.3vh, 0.6rem)",
+                }}
+                className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
-                <ArrowUpFromLine className="w-4 h-4" />
-                <span className="text-[11px] font-bold uppercase tracking-wider">Send</span>
+                <ArrowUpFromLine
+                  style={{
+                    width: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
+                    height: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
+                  }}
+                />
+                <span
+                  style={{ fontSize: "clamp(7px, 4cqi + 0.5vh, 14px)" }}
+                  className="font-bold uppercase tracking-wider"
+                >
+                  Send
+                </span>
               </button>
             )}
             {onOpenDeposit && (
               <button
                 onClick={onOpenDeposit}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 @max-[240px]:py-2 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
+                style={{
+                  paddingTop: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
+                  paddingBottom: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
+                  gap: "clamp(0.15rem, 1.2cqi + 0.3vh, 0.6rem)",
+                }}
+                className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
-                <ArrowDownToLine className="w-4 h-4" />
-                <span className="text-[11px] font-bold uppercase tracking-wider">Deposit</span>
+                <ArrowDownToLine
+                  style={{
+                    width: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
+                    height: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
+                  }}
+                />
+                <span
+                  style={{ fontSize: "clamp(7px, 4cqi + 0.5vh, 14px)" }}
+                  className="font-bold uppercase tracking-wider"
+                >
+                  Deposit
+                </span>
               </button>
             )}
           </div>
@@ -658,17 +703,28 @@ export const StatusCard = memo(function StatusCard({
               <button
                 key={c.id}
                 onClick={() => onCorridorChange?.(c.id)}
-                className={`flex-1 py-1.5 px-2 rounded-md flex items-center justify-center gap-2 transition-all ${
+                style={{
+                  paddingTop: "clamp(0.2rem, 1.5cqi + 0.4vh, 0.5rem)",
+                  paddingBottom: "clamp(0.2rem, 1.5cqi + 0.4vh, 0.5rem)",
+                  paddingLeft: "clamp(0.3rem, 1.5cqi + 0.3vh, 0.7rem)",
+                  paddingRight: "clamp(0.3rem, 1.5cqi + 0.3vh, 0.7rem)",
+                  gap: "clamp(0.25rem, 1cqi + 0.3vh, 0.6rem)",
+                }}
+                className={`flex-1 min-w-0 rounded-md flex items-center justify-center transition-all ${
                   isActive
                     ? "bg-foreground/[0.07] text-foreground"
                     : "text-foreground/40 hover:text-foreground/65"
                 }`}
               >
-                <span className="text-[11px] font-medium tracking-tight">
+                <span
+                  style={{ fontSize: "clamp(8px, 3.5cqi + 0.4vh, 13px)" }}
+                  className="font-medium tracking-tight whitespace-nowrap"
+                >
                   USDT/{c.fiat}
                 </span>
                 <span
-                  className={`text-[10px] font-mono tabular-nums ${
+                  style={{ fontSize: "clamp(7px, 3cqi + 0.35vh, 12px)" }}
+                  className={`font-mono tabular-nums truncate ${
                     isActive ? "text-foreground/55" : "text-foreground/30"
                   }`}
                 >

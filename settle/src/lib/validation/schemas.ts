@@ -97,6 +97,7 @@ export const WIDGET_IDS = [
   'configPanel',
   'pendingOrders',
   'inProgress',
+  'completedOrders',
   'leaderboard',
   'activity',
   'notifications',

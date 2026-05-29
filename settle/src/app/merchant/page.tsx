@@ -807,13 +807,7 @@ export default function MerchantDashboard() {
         onCorridorChange={setActiveCorridor}
         rightActions={
           <>
-            {/* Dashboard layout editor toggle — only present on the
-                dashboard page (no-op on Wallet/Settings). Self-hides
-                below the lg breakpoint where the editable grid doesn't
-                render. */}
-            <div className="hidden lg:block">
-              <EditLayoutButton />
-            </div>
+            <EditLayoutButton />
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowTransactionHistory(true)}
