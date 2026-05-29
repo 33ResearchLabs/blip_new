@@ -237,6 +237,12 @@ export default function FaqPage() {
   const isLight = theme === 'light';
   const T = isLight ? TOKENS_LIGHT : TOKENS_DARK;
 
+  // Auth gate lives in faq/layout.tsx — server-side cookie + HMAC check
+  // runs before this component mounts, so a logged-out visitor never
+  // reaches here. Kept the page itself simple to avoid the client-side
+  // race that surfaced when the probe and the existing user-app
+  // providers tried to redirect simultaneously.
+
   const [query, setQuery] = useState('');
   // Per-category open index — only one item open per category to keep the
   // page short on mobile. Map keys are category ids.

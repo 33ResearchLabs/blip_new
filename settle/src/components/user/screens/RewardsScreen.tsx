@@ -48,25 +48,21 @@ export interface RewardsScreenProps {
   previousScreen?: Screen;
   /** All values are API-driven — defaults shown for the empty/loading state. */
   referralCode?: string;
-  lifetimeEarnings?: number;
+  /** Number of accounts this user has referred. */
   friendsJoined?: number;
-  lockedRewards?: number;
-  claimableRewards?: number;
-  totalRewards?: number;
+  /** BLIP points credited from referrals only (sum of credited reward_amount). */
+  blipEarned?: number;
+  /** Total BLIP point balance — referrals + register + tasks. */
+  totalBlip?: number;
   isLoading?: boolean;
   /** Called when the user taps "Learn more" on the benefits card. */
   onLearnMore?: () => void;
-  /** Base URL for the referral link (e.g. https://blip.money/invite/). The
-   *  code is appended client-side. */
+  /** Base URL for the referral link (e.g. https://app.blip.money/waitlist?ref=).
+   *  The code is appended client-side. */
   referralLinkBase?: string;
 }
 
 // ─── Local utils ─────────────────────────────────────────────────────────
-
-function formatUsdt(value: number, decimals = 2): string {
-  const safe = Number.isFinite(value) ? value : 0;
-  return safe.toFixed(decimals);
-}
 
 function formatCount(value: number): string {
   const safe = Number.isFinite(value) ? Math.floor(value) : 0;
@@ -222,13 +218,14 @@ export const RewardsScreen = ({
   setScreen,
   previousScreen,
   referralCode = "—",
-  lifetimeEarnings = 0,
   friendsJoined = 0,
-  claimableRewards = 0,
-  totalRewards = 0,
+  blipEarned = 0,
+  totalBlip = 0,
   isLoading = false,
   onLearnMore,
-  referralLinkBase = "https://blip.money/invite/",
+  referralLinkBase = `${
+    process.env.NEXT_PUBLIC_APP_URL || "https://app.blip.money"
+  }/waitlist?ref=`,
 }: RewardsScreenProps) => {
   const [copied, setCopied] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -244,9 +241,8 @@ export const RewardsScreen = ({
 
   // Animated counters
   const aFriends = useAnimatedNumber(friendsJoined);
-  const aLifetime = useAnimatedNumber(lifetimeEarnings);
-  const aClaimable = useAnimatedNumber(claimableRewards);
-  const aTotal = useAnimatedNumber(totalRewards);
+  const aBlipEarned = useAnimatedNumber(blipEarned);
+  const aTotalBlip = useAnimatedNumber(totalBlip);
 
   const handleBack = () => {
     const target =
@@ -540,24 +536,18 @@ export const RewardsScreen = ({
             <p className={`${SECTION_LABEL} mb-3 px-1`}>Your Stats</p>
             <div className={`flex rounded-[18px] overflow-hidden ${CARD}`}>
               <StatCell
-                // label="Friends Joined"
-                label="Your Referral "
+                label="Your Referral"
                 value={formatCount(aFriends)}
                 Icon={Users}
               />
               <StatCell
-                label="USDT Earned"
-                value={formatUsdt(aLifetime)}
+                label="BLIP Earned"
+                value={formatCount(aBlipEarned)}
                 Icon={Coins}
               />
               <StatCell
-                label="Claimed"
-                value={formatUsdt(aClaimable)}
-                Icon={Gift}
-              />
-              <StatCell
-                label="Total Earned"
-                value={formatUsdt(aTotal)}
+                label="Total BLIP"
+                value={formatCount(aTotalBlip)}
                 Icon={Wallet}
                 isLast
               />
