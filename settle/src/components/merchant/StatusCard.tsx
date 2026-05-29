@@ -422,7 +422,7 @@ export const StatusCard = memo(function StatusCard({
   }
 
   return (
-    <div className="flex flex-col" data-tour="status-card">
+    <div className="flex flex-col h-full" data-tour="status-card">
       {/* Live ticker strip — sticky at top while sidebar scrolls */}
       <div
         className="sticky top-0 z-20 flex items-center justify-between px-3 py-2.5 bg-background border-b border-foreground/[0.04] text-[9px] font-mono overflow-hidden"
@@ -459,15 +459,26 @@ export const StatusCard = memo(function StatusCard({
         </button>
       </div>
 
-      {/* Main balance hero */}
-      <div data-tour="fund-wallet" className="flex flex-col items-center justify-center px-4 py-3 relative">
+      {/* Main balance hero — flex-1 absorbs extra card height. Inside,
+          `justify-between` distributes the hero's children (USDT label,
+          balance number, wallet row, action buttons, earnings/escrow
+          badges) across the available vertical space instead of
+          clustering them in the centre. The hero keeps its content
+          height (no overflow:hidden) so SWAP/SEND/DEPOSIT always shows
+          — clipping at the bottom of the card is handled by allowing
+          the WidgetDashboardWidgets wrapper to scroll when needed. */}
+      <div data-tour="fund-wallet" className="flex-1 flex flex-col items-center justify-between px-4 py-3 relative">
         {/* Ambient glow behind amount */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-48 h-24 bg-primary/[0.03] rounded-full blur-[60px]" />
         </div>
 
-        {/* USDT Label + wallet-actions gear menu */}
-        <div className="flex items-center justify-between mb-1 relative z-10">
+        {/* USDT Label + wallet-actions gear menu.
+            z-30 (not the surrounding z-10) so the gear-menu dropdown
+            isn't trapped inside a z-10 stacking context — without this
+            the later-sibling balance number, wallet row, and SWAP/SEND/
+            DEPOSIT buttons paint on top of the dropdown items. */}
+        <div className="flex items-center justify-between mb-1 relative z-30">
           <div className="flex items-center gap-1.5">
             {walletStatus === 'locked' ? (
               <Lock className="w-3 h-3 text-foreground/30" />
@@ -494,7 +505,7 @@ export const StatusCard = memo(function StatusCard({
         <div className="relative z-10 text-center">
           {walletStatus === 'locked' ? (
             <>
-              <div className="text-4xl font-black text-foreground/30 font-mono tabular-nums tracking-tight leading-none">
+              <div className="text-4xl @max-[260px]:text-3xl @max-[200px]:text-2xl font-black text-foreground/30 font-mono tabular-nums tracking-tight leading-none">
                 ••••
               </div>
               {/* Real Unlock button — matches mobile MobileHomeView's
@@ -519,7 +530,7 @@ export const StatusCard = memo(function StatusCard({
             </>
           ) : walletStatus === 'none' ? (
             <>
-              <div className="text-4xl font-black text-foreground/30 font-mono tabular-nums tracking-tight leading-none">
+              <div className="text-4xl @max-[260px]:text-3xl @max-[200px]:text-2xl font-black text-foreground/30 font-mono tabular-nums tracking-tight leading-none">
                 ••••
               </div>
               {onAddWallet ? (
@@ -540,7 +551,11 @@ export const StatusCard = memo(function StatusCard({
             </>
           ) : (
             <>
-              <div className="text-4xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
+              {/* @max-[N]: container-query variants shrink the balance
+                  text when the card is narrower than N. Default text-4xl
+                  is unchanged so today's normal-width dashboard looks
+                  identical. */}
+              <div className="text-4xl @max-[260px]:text-3xl @max-[200px]:text-2xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
                 {balance.toLocaleString(undefined, {
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 0,
@@ -577,7 +592,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1.5 py-3 @max-[240px]:py-2 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
                 <ArrowLeftRight className="w-4 h-4" />
                 <span className="text-[11px] font-bold uppercase tracking-wider">Swap</span>
@@ -586,7 +601,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenSend && (
               <button
                 onClick={onOpenSend}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1.5 py-3 @max-[240px]:py-2 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
                 <ArrowUpFromLine className="w-4 h-4" />
                 <span className="text-[11px] font-bold uppercase tracking-wider">Send</span>
@@ -595,7 +610,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenDeposit && (
               <button
                 onClick={onOpenDeposit}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1.5 py-3 @max-[240px]:py-2 rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
                 <ArrowDownToLine className="w-4 h-4" />
                 <span className="text-[11px] font-bold uppercase tracking-wider">Deposit</span>
@@ -624,8 +639,13 @@ export const StatusCard = memo(function StatusCard({
         )}
       </div>
 
-      {/* Bottom section — corridor + secondary balances + rate */}
-      <div className="px-3 pb-2.5 space-y-1.5">
+      {/* Bottom section — corridor + secondary balances + rate.
+          `shrink-0` guarantees the corridor selector / cash & market /
+          corridor row / "9 done · 9 cancelled · 18 total" always render
+          at their natural height. Without it, the `flex-1` hero above
+          could squeeze this section down to nothing (or push it past
+          the card's overflow:hidden boundary) and the rows disappeared. */}
+      <div className="px-3 pb-2.5 space-y-1.5 shrink-0">
         {/* Active Corridor Selector — minimal segmented control */}
         <div
           className="inline-flex w-full rounded-lg bg-foreground/[0.03] border border-foreground/[0.05] p-0.5"

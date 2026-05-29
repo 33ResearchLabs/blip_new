@@ -283,17 +283,31 @@ export const ConfigPanel = memo(function ConfigPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {/* Hero amount input */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-1.5">
-              <ArrowRightLeft className="w-3.5 h-3.5 text-primary/60" />
-              <span className="text-[11px] font-bold text-foreground/50 uppercase tracking-wider">
+      {/* Each section is `flex-1` so the form's five rows (Amount, Bank,
+          Spread, Boost, Buy/Sell) share the card's vertical space
+          equally. Inside each section, the interactive element (input,
+          button row) grows via h-full / flex-1 so the actual control —
+          not just the wrapper — gets taller. With the prior
+          `justify-between` approach the wrappers spread but the inputs
+          stayed compact. */}
+      {/* Form spacing scales BOTH on height (shrink card → tighter)
+          AND on width (narrow sidebar → tighter padding-first per the
+          width-aware responsive spec). Defaults at standard widths
+          unchanged. */}
+      <div className="flex-1 overflow-y-auto p-3 @max-[280px]:p-2 @max-[220px]:p-1.5 @max-h-[400px]:p-2 @max-h-[340px]:p-1.5 flex flex-col gap-5 @max-[280px]:gap-3 @max-[220px]:gap-2 @max-h-[400px]:gap-3 @max-h-[340px]:gap-2">
+        {/* Hero amount input.
+            `flex-1` — Amount gets 20% of the form (1 / total 5) so the
+            input has comfortable height for entering trade amounts.
+            Shrinks proportionally with the card via min-h-0. */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex items-center justify-between mb-2 @max-[280px]:mb-1.5 gap-1 min-w-0">
+            <div className="flex items-center gap-1.5 @max-[240px]:gap-1 min-w-0">
+              <ArrowRightLeft className="w-3.5 h-3.5 @max-[240px]:w-3 @max-[240px]:h-3 text-primary/60 shrink-0" />
+              <span className="text-[11px] @max-[240px]:text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
                 Amount
               </span>
               {/* Corridor badge — driven by StatusCard trading pair */}
-              <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider bg-primary/10 text-primary border border-primary/20">
+              <span className="ml-2 @max-[280px]:ml-1 px-1.5 @max-[240px]:px-1 py-0.5 rounded text-[9px] @max-[240px]:text-[8px] font-bold font-mono tracking-wider bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
                 USDT / {pair === "usdt_inr" ? "INR" : "AED"}
               </span>
             </div>
@@ -304,7 +318,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                   cryptoAmount: maxAmount.toFixed(0),
                 })
               }
-              className="text-[10px] text-primary/70 hover:text-primary font-mono font-bold transition-colors px-1.5 py-0.5 rounded bg-primary/[0.06] hover:bg-primary/10"
+              className="text-[10px] @max-[240px]:text-[9px] text-primary/70 hover:text-primary font-mono font-bold transition-colors px-1.5 @max-[240px]:px-1 py-0.5 rounded bg-primary/[0.06] hover:bg-primary/10 shrink-0 whitespace-nowrap"
             >
               MAX{" "}
               {maxAmount.toLocaleString(undefined, {
@@ -312,23 +326,25 @@ export const ConfigPanel = memo(function ConfigPanel({
               })}
             </button>
           </div>
-          <div className="relative">
+          {/* Input wrapper grows/shrinks with the Amount section. The
+              min-h-[2.25rem] floor is the touch-friendly minimum so the
+              input never collapses to 0 in legacy desktop mode (where
+              the parent has no definite height) while still letting
+              the input grow to fill the section in v2 wide mode. */}
+          <div className="relative flex-1 min-h-[2.25rem]">
             <input
               type="text"
               inputMode="decimal"
               maxLength={14}
               value={openTradeForm.cryptoAmount}
               onChange={(e) => {
-                // Clamp to 10 int + 2 decimal — same rule as the other
-                // amount fields (offer / corridor / trade form) so a single
-                // source of truth governs what a USDT amount looks like.
                 const clamped = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
                 setOpenTradeForm({ ...openTradeForm, cryptoAmount: clamped });
               }}
               placeholder="0"
-              className="w-full bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-4 py-3 text-xl font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-primary/30 focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
+              className="absolute inset-0 w-full h-full bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-4 @max-[240px]:px-3 @max-h-[440px]:px-3 text-xl @max-[240px]:text-base @max-h-[480px]:text-lg @max-h-[400px]:text-base @max-h-[340px]:text-sm font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-primary/30 focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/25 font-mono">
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/25 font-mono pointer-events-none">
               USDT
             </span>
           </div>
@@ -349,8 +365,12 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
         </div>
 
-        {/* Payment Methods — dropdown */}
-        <div className="relative">
+        {/* Payment Methods — dropdown.
+            `flex-[0.75]` — Bank gets 15% of the form (0.75 / total 5).
+            Slightly increased over the previous setting so the bank
+            selector content (icon + name + account number) isn't
+            cramped. Spacing above comes from the outer `gap-5`. */}
+        <div className="relative flex-[0.75] min-h-0 flex flex-col z-30">
           {(() => {
             const pmIcon = (type: string) =>
               type === 'bank' ? '🏦' : type === 'cash' ? '💵' : type === 'card' ? '💳' : type === 'mobile' || type === 'upi' ? '📱' : '💰';
@@ -361,18 +381,18 @@ export const ConfigPanel = memo(function ConfigPanel({
               <>
                 <button
                   onClick={() => setShowPmDropdown(!showPmDropdown)}
-                  className="w-full flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
+                  className="w-full flex-1 min-h-[2.25rem] flex items-center justify-between gap-2 @max-[240px]:gap-1 px-3 @max-[240px]:px-2 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
                 >
                   {selectedPm ? (
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-[11px] shrink-0">{pmIcon(selectedPm.type)}</span>
+                    <div className="flex items-center gap-2 @max-[240px]:gap-1.5 min-w-0 flex-1">
+                      <span className="text-[11px] @max-[240px]:text-[10px] shrink-0">{pmIcon(selectedPm.type)}</span>
                       <div className="min-w-0 flex-1 text-left">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-bold text-foreground/80 truncate">{selectedPm.name}</span>
-                          <span className="text-[9px] text-foreground/30 font-mono uppercase shrink-0">{selectedPm.type}</span>
+                        <div className="flex items-center gap-1.5 @max-[240px]:gap-1">
+                          <span className="text-[11px] @max-[240px]:text-[10px] font-bold text-foreground/80 truncate">{selectedPm.name}</span>
+                          <span className="text-[9px] @max-[240px]:text-[8px] text-foreground/30 font-mono uppercase shrink-0">{selectedPm.type}</span>
                         </div>
                         {selectedPm.details && (
-                          <div className="text-[10px] text-foreground/45 font-mono truncate">
+                          <div className="text-[10px] @max-[240px]:text-[9px] text-foreground/45 font-mono truncate">
                             {selectedPm.details}
                           </div>
                         )}
@@ -383,7 +403,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                   ) : (
                     <span className="text-[11px] text-foreground/40">Select payment method</span>
                   )}
-                  <ChevronDown className={`w-3.5 h-3.5 text-foreground/30 transition-transform shrink-0 ${showPmDropdown ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 @max-[240px]:w-3 @max-[240px]:h-3 text-foreground/30 transition-transform shrink-0 ${showPmDropdown ? 'rotate-180' : ''}`} />
                 </button>
 
                 {showPmDropdown && (
@@ -455,8 +475,8 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
         </div>
 
-        {/* Spread Tier */}
-        <div data-tour="spread">
+        {/* Spread Tier — `flex-[0.75]` → 15% of form (0.75 / total 5). */}
+        <div data-tour="spread" className="flex-[0.75] min-h-0 flex flex-col">
           <label className="text-[10px] text-foreground/30 mb-1.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold">
             Spread
             <InfoTooltip
@@ -470,7 +490,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               ]}
             />
           </label>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 @max-[280px]:gap-1 @max-[240px]:gap-0.5 flex-1 min-h-0">
             {(
               Object.entries(PRICING_TIERS) as [
                 keyof typeof PRICING_TIERS,
@@ -488,26 +508,31 @@ export const ConfigPanel = memo(function ConfigPanel({
                       spreadPreference: key,
                     })
                   }
-                  className={`flex-1 py-2 px-1.5 rounded-xl transition-all border text-center ${
+                  className={`flex-1 h-full px-1.5 @max-[240px]:px-1 rounded-xl @max-[240px]:rounded-lg transition-all border text-center min-w-0 ${
                     isSelected
                       ? "bg-primary/[0.08] border-primary/20"
                       : "bg-foreground/[0.02] hover:bg-foreground/[0.04] border-foreground/[0.04]"
                   }`}
                 >
-                  <div className="flex items-center justify-center gap-1 mb-0.5">
+                  {/* Adaptive label: items wrap when the button is too
+                      narrow to fit icon + tier name + spread % on one
+                      row. At wider button widths everything fits on a
+                      single row; at narrower widths the +% wraps to a
+                      second line AND the type / icon scale down. */}
+                  <div className="flex items-center justify-center gap-x-1 @max-[240px]:gap-x-0.5 gap-y-0 flex-wrap">
                     <TierIcon
-                      className={`w-3 h-3 ${isSelected ? "text-primary" : "text-foreground/20"}`}
+                      className={`w-3 h-3 @max-[240px]:w-2.5 @max-[240px]:h-2.5 shrink-0 ${isSelected ? "text-primary" : "text-foreground/20"}`}
                     />
                     <span
-                      className={`text-[10px] font-bold ${isSelected ? "text-foreground" : "text-foreground/35"}`}
+                      className={`text-[10px] @max-[280px]:text-[9px] @max-[240px]:text-[8px] @max-h-[340px]:text-[9px] font-bold ${isSelected ? "text-foreground" : "text-foreground/35"}`}
                     >
                       {t.label}
                     </span>
-                  </div>
-                  <div
-                    className={`text-[11px] font-black font-mono tabular-nums ${isSelected ? "text-primary" : "text-white/25"}`}
-                  >
-                    +{t.base}%
+                    <span
+                      className={`text-[11px] @max-[280px]:text-[10px] @max-[240px]:text-[9px] @max-h-[340px]:text-[10px] font-black font-mono tabular-nums ${isSelected ? "text-primary" : "text-white/25"}`}
+                    >
+                      +{t.base}%
+                    </span>
                   </div>
                 </button>
               );
@@ -515,8 +540,8 @@ export const ConfigPanel = memo(function ConfigPanel({
           </div>
         </div>
 
-        {/* Priority Fee / Boost */}
-        <div data-tour="boost">
+        {/* Priority Fee / Boost — `flex-[0.75]` → 15% of form. */}
+        <div data-tour="boost" className="flex-[0.75] min-h-0 flex flex-col">
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider font-bold flex items-center gap-1">
               <Flame className="w-3 h-3 text-primary/40" />
@@ -540,12 +565,12 @@ export const ConfigPanel = memo(function ConfigPanel({
               {showPriorityInput ? "hide" : "manual"}
             </button>
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 @max-[280px]:gap-1 @max-[240px]:gap-0.5 flex-1 min-h-0">
             {[0, 5, 10, 15].map((val) => (
               <button
                 key={val}
                 onClick={() => setPriorityFee(val)}
-                className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold font-mono transition-all border ${
+                className={`flex-1 h-full rounded-lg text-[10px] @max-[280px]:text-[9px] @max-[240px]:text-[8px] @max-h-[340px]:text-[9px] font-bold font-mono transition-all border min-w-0 ${
                   priorityFee === val
                     ? "bg-foreground/[0.08] text-foreground/90 border-foreground/[0.12]"
                     : "bg-foreground/[0.02] text-foreground/25 hover:bg-foreground/[0.05] border-foreground/[0.04]"
@@ -602,15 +627,22 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
         </div>
 
-        {/* BUY / SELL Buttons */}
-        <div className="flex gap-2 pt-1">
+        {/* BUY / SELL Buttons — `flex-[0.9]` → ~22% of the form
+            (target range 18–26%). Closer to the upper-section weights
+            so the panel reads as evenly distributed; BUY/SELL stays
+            tappable and visually distinct via colour, not size.
+            Final weights:
+              Amount 1 + Bank 0.75 + Spread 0.75 + Boost 0.75 + Buy-Sell 0.9
+              = 4.15 total → 24.1% / 18.1% / 18.1% / 18.1% / 21.7%.
+            Gap shrinks at narrow widths to preserve button width. */}
+        <div className="flex gap-2 @max-[280px]:gap-1.5 @max-[240px]:gap-1 flex-[0.9] min-h-0">
           <button
             onClick={() => {
               setOpenTradeForm({ ...openTradeForm, tradeType: "buy" });
               onCreateOrder("buy", priorityFee, pair);
             }}
             disabled={isDisabled}
-            className="flex-1 py-3 rounded-xl font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5"
+            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5 min-w-0 px-1"
             style={{
               backgroundColor: "var(--primary)",
               color: "var(--background)",
@@ -621,9 +653,9 @@ export const ConfigPanel = memo(function ConfigPanel({
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <span className="text-sm font-black tracking-wide">BUY</span>
+                <span className="text-sm @max-[240px]:text-xs @max-h-[400px]:text-xs @max-h-[340px]:text-[11px] font-black tracking-wide">BUY</span>
                 {cryptoAmount > 0 && (
-                  <span className="text-[10px] font-mono font-bold opacity-60">
+                  <span className="text-[10px] @max-[240px]:text-[9px] @max-h-[400px]:text-[9px] @max-h-[340px]:text-[8px] font-mono font-bold opacity-60 truncate max-w-full px-1">
                     {fiatSymbol}{pricing.buyAed.toFixed(2)}{fiatSuffix || ` ${fiatLabel}`}
                   </span>
                 )}
@@ -636,15 +668,15 @@ export const ConfigPanel = memo(function ConfigPanel({
               onCreateOrder("sell", priorityFee, pair);
             }}
             disabled={isDisabled}
-            className="flex-1 py-3 rounded-xl bg-foreground/[0.06] text-foreground font-bold hover:bg-foreground/[0.10] transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect border border-foreground/[0.08] flex flex-col items-center justify-center gap-0.5"
+            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg bg-foreground/[0.06] text-foreground font-bold hover:bg-foreground/[0.10] transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect border border-foreground/[0.08] flex flex-col items-center justify-center gap-0.5 min-w-0 px-1"
           >
             {isCreatingTrade && openTradeForm.tradeType === "sell" ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <span className="text-sm font-black tracking-wide">SELL</span>
+                <span className="text-sm @max-[240px]:text-xs @max-h-[400px]:text-xs @max-h-[340px]:text-[11px] font-black tracking-wide">SELL</span>
                 {cryptoAmount > 0 && (
-                  <span className="text-[10px] font-mono font-bold text-foreground/40">
+                  <span className="text-[10px] @max-[240px]:text-[9px] @max-h-[400px]:text-[9px] @max-h-[340px]:text-[8px] font-mono font-bold text-foreground/40 truncate max-w-full px-1">
                     {fiatSymbol}{pricing.sellAed.toFixed(2)}{fiatSuffix || ` ${fiatLabel}`}
                   </span>
                 )}

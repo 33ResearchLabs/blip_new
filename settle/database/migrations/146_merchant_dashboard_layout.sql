@@ -1,0 +1,36 @@
+-- Migration 146: per-merchant editable dashboard layout
+--
+-- BACKGROUND:
+-- The merchant dashboard (settle/src/components/merchant/MerchantDesktopLayout.tsx)
+-- renders a fixed 5-column arrangement of 8 widgets (DashboardWidgets,
+-- ConfigPanel, PendingOrdersPanel, InProgressPanel, LeaderboardPanel,
+-- ActivityPanel, NotificationsPanel, MerchantChatTabs). Every merchant sees
+-- the same layout. Merchants want to choose which widgets are visible and
+-- rearrange them across the existing columns (e.g. move LeaderboardPanel
+-- next to the balance widget on the left).
+--
+-- FIX:
+-- Add `dashboard_layout JSONB` on merchants. Shape (validated client-side
+-- and in the PATCH /api/merchant/[id] Zod schema):
+--   {
+--     "version": 1,
+--     "columns": [
+--       { "id": "left"|"center-left"|..., "widgets": ["dashboardWidgets", ...] }
+--     ],
+--     "hidden": ["leaderboard", ...]
+--   }
+-- NULL means "use the default layout" (matches today's hardcoded
+-- arrangement). No backfill — existing rows keep NULL and render
+-- identically to before this change.
+--
+-- SAFETY:
+-- - Pure ADD COLUMN IF NOT EXISTS, nullable, no default → zero impact on
+--   existing rows, no rewrite, existing INSERTs continue to work.
+-- - No constraints and no index. This column is read once per dashboard
+--   load alongside the merchant row; it never appears in a WHERE clause.
+-- - JSONB (not JSON) so future read patterns can use ->> / @> if needed
+--   without another migration.
+-- - Idempotent and re-runnable.
+
+ALTER TABLE merchants
+  ADD COLUMN IF NOT EXISTS dashboard_layout JSONB NULL;

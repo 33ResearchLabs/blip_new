@@ -109,6 +109,10 @@ export interface Merchant {
    *  timestamp when the merchant dismisses / finishes the tour.
    *  Null-safe by design — see migration 096. */
   tour_completed_at: string | null;
+  /** Per-merchant editable dashboard layout (migration 146).
+   *  Null means "use the default arrangement". Shape validated by
+   *  dashboardLayoutSchema in src/lib/validation/schemas.ts. */
+  dashboard_layout: unknown | null;
   // Waitlist (migration 131). Existing rows default to 'active'.
   waitlist_status?: WaitlistStatus;
   waitlist_joined_at?: Date | null;
