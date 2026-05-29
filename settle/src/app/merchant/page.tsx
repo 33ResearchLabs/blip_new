@@ -15,6 +15,7 @@ import {
   ConnectionIndicator,
 } from "@/components/NotificationToast";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
+import { EditLayoutButton } from "@/components/merchant/dashboard/EditLayoutButton";
 import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsOverlay";
 import { MerchantWalletOverlay } from "@/components/merchant/MerchantWalletOverlay";
 import { useMerchantStore } from "@/stores/merchantStore";
@@ -806,6 +807,13 @@ export default function MerchantDashboard() {
         onCorridorChange={setActiveCorridor}
         rightActions={
           <>
+            {/* Dashboard layout editor toggle — only present on the
+                dashboard page (no-op on Wallet/Settings). Self-hides
+                below the lg breakpoint where the editable grid doesn't
+                render. */}
+            <div className="hidden lg:block">
+              <EditLayoutButton />
+            </div>
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowTransactionHistory(true)}

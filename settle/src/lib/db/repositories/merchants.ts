@@ -62,6 +62,7 @@ export const SAFE_MERCHANT_COLUMNS = [
   'cancelled_orders',
   'dispute_count',
   'tour_completed_at',
+  'dashboard_layout',
   'created_at',
   'updated_at',
 ] as const;
@@ -213,7 +214,9 @@ export async function updateMerchantRating(id: string): Promise<void> {
 
 export async function updateMerchant(
   id: string,
-  data: Partial<Pick<Merchant, 'avatar_url' | 'display_name' | 'phone' | 'business_name' | 'bio'>>
+  data: Partial<
+    Pick<Merchant, 'avatar_url' | 'display_name' | 'phone' | 'business_name' | 'bio'>
+  > & { dashboard_layout?: unknown | null }
 ): Promise<Merchant | null> {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -238,6 +241,14 @@ export async function updateMerchant(
   if (data.bio !== undefined) {
     fields.push(`bio = $${paramIndex++}`);
     values.push(data.bio);
+  }
+  if (data.dashboard_layout !== undefined) {
+    // Explicit ::jsonb cast so `null` clears the column and an object is
+    // stored as JSONB (not text). Zod has already shape-validated the value.
+    fields.push(`dashboard_layout = $${paramIndex++}::jsonb`);
+    values.push(
+      data.dashboard_layout === null ? null : JSON.stringify(data.dashboard_layout)
+    );
   }
 
   if (fields.length === 0) return getMerchantByIdInternal(id);
@@ -271,6 +282,7 @@ export function serializeMerchant(merchant: {
   has_ops_access?: boolean;
   has_compliance_access?: boolean;
   tour_completed_at?: string | Date | null;
+  dashboard_layout?: unknown | null;
 }): Record<string, unknown> {
   const dto: Record<string, unknown> = {
     id: merchant.id,
@@ -294,6 +306,12 @@ export function serializeMerchant(merchant: {
   if (merchant.tour_completed_at !== undefined) {
     const v = merchant.tour_completed_at;
     dto.tour_completed_at = v == null ? null : (v instanceof Date ? v.toISOString() : String(v));
+  }
+  // Dashboard layout — null means "use default". Pass through as-is; the
+  // hook on the client re-parses with Zod and falls back to default on any
+  // shape mismatch (forward-compat when new widgets ship).
+  if (merchant.dashboard_layout !== undefined) {
+    dto.dashboard_layout = merchant.dashboard_layout;
   }
   return dto;
 }
