@@ -54,10 +54,10 @@ function ProfileHeaderStats() {
 
   return (
     <div className="flex items-center gap-2 mb-2 flex-wrap">
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-semibold">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-raised border border-border-subtle text-text-secondary text-[11px] font-semibold">
         <Coins size={11} />
-        <span className="tabular-nums">{coins != null ? coins.toLocaleString('en-US') : '—'}</span>
-        <span className="text-amber-300/70">Blip Points</span>
+        <span className="tabular-nums text-text-primary">{coins != null ? coins.toLocaleString('en-US') : '—'}</span>
+        <span className="text-text-tertiary">Blip Points</span>
       </span>
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-raised border border-border-subtle text-text-secondary text-[11px] font-semibold">
         <Shield size={11} />
@@ -243,7 +243,7 @@ export const ProfileScreen = ({
             </div>
             <span
               className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-surface-base ${
-                solanaWallet.connected ? 'bg-success' : 'bg-text-quaternary'
+                solanaWallet.connected ? 'bg-text-primary' : 'bg-text-quaternary'
               }`}
               aria-label={solanaWallet.connected ? 'Wallet connected' : 'Wallet disconnected'}
             />
@@ -266,7 +266,7 @@ export const ProfileScreen = ({
                   {`${solanaWallet.walletAddress.slice(0, 4)}…${solanaWallet.walletAddress.slice(-4)}`}
                 </span>
                 {copied
-                  ? <Check size={11} className="text-success" />
+                  ? <Check size={11} className="text-text-primary" />
                   : <Copy size={11} className="text-text-quaternary" />}
               </motion.button>
             ) : (
@@ -381,9 +381,9 @@ export const ProfileScreen = ({
               </div>
             </div>
             {solanaWallet.connected && (
-              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-success-dim border border-success-border shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                <span className="text-[9px] font-bold tracking-[0.1em] uppercase text-success">Live</span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface-raised border border-border-subtle shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-text-primary" />
+                <span className="text-[9px] font-bold tracking-[0.1em] uppercase text-text-secondary">Live</span>
               </span>
             )}
           </div>
@@ -416,16 +416,16 @@ export const ProfileScreen = ({
                   <motion.button
                     whileTap={{ scale: 0.96 }}
                     onClick={() => solanaWallet.disconnect()}
-                    className="flex-1 h-9 rounded-[12px] flex items-center justify-center gap-1.5 bg-error-dim border border-error-border text-[11px] font-bold text-error tracking-[0.08em] uppercase"
+                    className="flex-1 h-9 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-active border border-border-subtle text-[11px] font-bold text-text-secondary tracking-[0.08em] uppercase"
                   >
-                    <LogOut size={12} className="text-error" />
+                    <LogOut size={12} className="text-text-tertiary" />
                     Disconnect
                   </motion.button>
                 </div>
 
                 {/* Embedded-wallet management. Surfaced only when the
                     embedded-wallet flag is on. */}
-                {IS_EMBEDDED_WALLET && (
+                {/* {IS_EMBEDDED_WALLET && (
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={() => router.push('/user/wallet')}
@@ -434,7 +434,7 @@ export const ProfileScreen = ({
                     Manage Wallet
                     <ChevronRight size={14} className="text-text-tertiary" />
                   </motion.button>
-                )}
+                )} */}
               </div>
             </>
           )}
@@ -488,9 +488,9 @@ export const ProfileScreen = ({
               {resolvedDisputes.map(dispute => {
                 const badgeClass =
                   dispute.resolvedInFavorOf === 'user'
-                    ? 'bg-success-dim text-success border border-success-border'
+                    ? 'bg-surface-raised text-text-primary border border-border-medium'
                     : dispute.resolvedInFavorOf === 'merchant'
-                    ? 'bg-error-dim text-error border border-error-border'
+                    ? 'bg-surface-active text-text-tertiary border border-border-subtle'
                     : 'bg-surface-active text-text-tertiary';
                 return (
                   <div key={dispute.id} className={`rounded-[16px] px-4 py-3 ${CARD}`}>

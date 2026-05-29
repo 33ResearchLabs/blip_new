@@ -124,11 +124,11 @@ export function ReputationCoinBadge({
           </span>
         )}
         {!hideCoins && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-300">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/[0.06] border border-white/[0.12] text-white/85">
             <Coins className="w-2.5 h-2.5" />
             {loading ? '—' : (coins?.balance ?? 0).toLocaleString('en-US')}
             {coins && coins.locked > 0 && (
-              <span className="ml-1 inline-flex items-center text-amber-200/60" title={`${coins.locked} locked`}>
+              <span className="ml-1 inline-flex items-center text-white/55" title={`${coins.locked} locked`}>
                 <Lock className="w-2 h-2" />
               </span>
             )}

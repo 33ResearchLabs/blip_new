@@ -437,7 +437,7 @@ function SecurityRow({
 function StatusBadge({ status }: { status: StatusPill }) {
   const toneCls =
     status.tone === 'on'
-      ? 'text-emerald-300/95 bg-emerald-400/[0.08] border-emerald-400/15'
+      ? 'text-black bg-white border-white'
       : status.tone === 'off'
         ? 'text-white/55 bg-white/[0.04] border-white/[0.06]'
         : 'text-white/45 bg-white/[0.03] border-white/[0.05]';
@@ -446,7 +446,7 @@ function StatusBadge({ status }: { status: StatusPill }) {
       className={`inline-flex items-center gap-1.5 h-[22px] px-2 rounded-full text-[10px] font-semibold tracking-[0.04em] border ${toneCls}`}
     >
       {status.tone === 'on' && (
-        <span className="w-1 h-1 rounded-full bg-emerald-300 shadow-[0_0_6px_rgba(110,231,183,0.7)]" />
+        <span className="w-1 h-1 rounded-full bg-black" />
       )}
       {status.label}
     </span>
@@ -492,7 +492,7 @@ function DangerButton({
         e.stopPropagation();
         onClick();
       }}
-      className="h-8 px-3 rounded-[10px] bg-red-500/[0.08] border border-red-500/20 text-[11.5px] font-semibold text-red-300 hover:bg-red-500/[0.14] active:scale-[0.97] transition"
+      className="h-8 px-3 rounded-[10px] bg-white/[0.05] border border-white/[0.12] text-[11.5px] font-semibold text-white/80 hover:bg-white/[0.08] active:scale-[0.97] transition"
     >
       {children}
     </button>
@@ -616,7 +616,7 @@ function TrustedDevicesSheet({ onClose }: { onClose: () => void }) {
                 onClick={() => revoke(s.id)}
                 disabled={busyId === s.id}
                 aria-label="Revoke device"
-                className="h-8 px-2 rounded-[10px] bg-red-500/[0.08] border border-red-500/20 text-red-300 disabled:opacity-50 active:scale-[0.97] transition flex items-center gap-1"
+                className="h-8 px-2 rounded-[10px] bg-white/[0.05] border border-white/[0.12] text-white/80 disabled:opacity-50 active:scale-[0.97] transition flex items-center gap-1"
               >
                 {busyId === s.id ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -735,8 +735,8 @@ function ChangePasswordSheet({
     return (
       <Sheet title="Password Changed" onClose={onClose}>
         <div className="flex items-start gap-3 mb-2">
-          <div className="w-10 h-10 rounded-[12px] bg-emerald-400/[0.08] border border-emerald-400/20 flex items-center justify-center shrink-0">
-            <Key className="w-5 h-5 text-emerald-300" />
+          <div className="w-10 h-10 rounded-[12px] bg-white/[0.05] border border-white/[0.12] flex items-center justify-center shrink-0">
+            <Key className="w-5 h-5 text-white/85" />
           </div>
           <p className="text-[13px] leading-relaxed text-white/80">
             Your password has been updated. Other devices have been signed out for

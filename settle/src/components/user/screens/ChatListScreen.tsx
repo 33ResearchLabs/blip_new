@@ -131,7 +131,7 @@ export const ChatListScreen = ({
           >
             <Bell size={18} className="text-text-tertiary" />
             {notificationCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 rounded-full flex items-center justify-center bg-error text-text-primary text-[9px] font-extrabold px-1">
+              <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 rounded-full flex items-center justify-center bg-text-primary text-surface-base text-[9px] font-extrabold px-1">
                 {notificationCount > 9 ? '9+' : notificationCount}
               </span>
             )}
@@ -163,15 +163,15 @@ export const ChatListScreen = ({
           onClick={() => setActiveTab('disputes')}
           className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
             activeTab === 'disputes'
-              ? 'bg-error text-text-primary'
-              : 'bg-error-dim text-error'
+              ? 'bg-accent text-accent-text'
+              : 'bg-surface-hover text-text-tertiary'
           }`}
         >
           <Shield size={13} strokeWidth={2.2} />
           <span className="text-[12px] font-bold">Disputes</span>
           {disputeGroups.length > 0 && (
             <span className={`text-[10px] font-extrabold min-w-4.5 text-center rounded-[10px] px-1.25 py-px ${
-              activeTab === 'disputes' ? 'bg-surface-active text-text-primary' : 'bg-error-dim text-error'
+              activeTab === 'disputes' ? 'bg-surface-hover text-text-primary' : 'bg-surface-active text-text-secondary'
             }`}>
               {disputeUnread > 0 ? disputeUnread : disputeGroups.length}
             </span>
@@ -192,13 +192,9 @@ export const ChatListScreen = ({
       <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto scrollbar-hide">
         {displayGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className={`w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 border ${
-              activeTab === 'disputes'
-                ? 'bg-error-dim border-error-border'
-                : 'bg-surface-card border-border-subtle'
-            }`}>
+            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 border bg-surface-card border-border-subtle">
               {activeTab === 'disputes'
-                ? <Shield size={22} className="text-error" />
+                ? <Shield size={22} className="text-text-quaternary" />
                 : <MessageCircle size={22} className="text-text-quaternary" />
               }
             </div>
@@ -225,8 +221,8 @@ export const ChatListScreen = ({
                   className={`w-full rounded-[18px] p-3.5 flex items-center gap-3 text-left border-[1.5px] ${
                     isDispute
                       ? hasUnread
-                        ? 'bg-error-dim border-error-border'
-                        : 'bg-error-dim border-error-border'
+                        ? 'bg-surface-active border-border-strong'
+                        : 'bg-surface-card border-border-medium'
                       : hasUnread
                         ? 'bg-surface-active border-border-strong'
                         : 'bg-surface-card border-border-subtle'
@@ -236,21 +232,21 @@ export const ChatListScreen = ({
                   <div className="relative shrink-0">
                     <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${
                       isDispute
-                        ? 'bg-error-dim border border-error-border'
+                        ? 'bg-surface-active border border-border-medium'
                         : hasUnread
                           ? 'bg-accent'
                           : 'bg-surface-active'
                     }`}>
                       {isDispute
-                        ? <AlertTriangle size={18} className="text-error" />
+                        ? <AlertTriangle size={18} className="text-text-secondary" />
                         : <span className={`text-[17px] font-extrabold ${hasUnread ? 'text-accent-text' : 'text-text-tertiary'}`}>{initial}</span>
                       }
                     </div>
                     {hasUnread && (
                       <div className={`absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center border-2 border-surface-base ${
-                        isDispute ? 'bg-error' : 'bg-accent'
+                        isDispute ? 'bg-text-primary' : 'bg-accent'
                       }`}>
-                        <span className={`text-[8px] font-extrabold ${isDispute ? 'text-text-primary' : 'text-accent-text'}`}>{group.totalUnread > 9 ? '9+' : group.totalUnread}</span>
+                        <span className={`text-[8px] font-extrabold ${isDispute ? 'text-surface-base' : 'text-accent-text'}`}>{group.totalUnread > 9 ? '9+' : group.totalUnread}</span>
                       </div>
                     )}
                   </div>
@@ -262,7 +258,7 @@ export const ChatListScreen = ({
                           {order.merchant?.name || 'Merchant'}
                         </p>
                         {isDispute && (
-                          <span className="text-[8px] font-bold bg-error-dim text-error px-1.25 py-px rounded">
+                          <span className="text-[8px] font-bold bg-surface-active text-text-secondary border border-border-subtle px-1.25 py-px rounded">
                             DISPUTE
                           </span>
                         )}
