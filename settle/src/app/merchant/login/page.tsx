@@ -549,7 +549,7 @@ export default function MerchantLoginPage() {
                 borderRadius: 999,
               }}
             >
-              {isSignIn ? "Desk sign-in" : "New desk · sign up"}
+              {isSignIn ? "Merchant sign-in" : "New merchant · sign up"}
             </span>
 
             <h2
