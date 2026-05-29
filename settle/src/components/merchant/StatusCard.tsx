@@ -573,7 +573,7 @@ export const StatusCard = memo(function StatusCard({
             buttons with side-by-side icon + label so they feel like
             primary actions, not afterthought icons. */}
         {(onOpenSwap || onOpenSend || onOpenDeposit) && (
-          <div className="mt-3 grid grid-cols-3 gap-1.5 relative z-10">
+          <div className="mt-3 w-full grid grid-cols-3 gap-1.5 relative z-10">
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}

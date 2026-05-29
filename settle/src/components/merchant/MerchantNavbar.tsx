@@ -176,12 +176,22 @@ export function MerchantNavbar({
               >
                 Dashboard
               </Link>
-              {/* Wallet nav entry removed — the whole wallet UX now
-                  lives on the home dashboard (balance card with the
-                  gear menu, Send/Swap/Deposit/Buy/Sell buttons, QR
-                  shortcut next to the address). The route still
-                  exists at /merchant/wallet for direct links, but the
-                  navbar shouldn't surface it as a primary destination. */}
+              {onOpenWallet ? (
+                <button
+                  onClick={onOpenWallet}
+                  className={pill(activePage === "wallet")}
+                >
+                  Wallet
+                </button>
+              ) : (
+                <Link
+                  href="/merchant/wallet"
+                  className={pill(activePage === "wallet")}
+                  onClick={onNavLinkClick}
+                >
+                  Wallet
+                </Link>
+              )}
               {onOpenSettings ? (
                 <button
                   onClick={onOpenSettings}
@@ -492,6 +502,28 @@ export function MerchantNavbar({
                 >
                   <Zap className="w-5 h-5" /> Dashboard
                 </Link>
+                {onOpenWallet ? (
+                  <button
+                    onClick={() => {
+                      setDrawerOpen(false);
+                      onOpenWallet();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
+                  >
+                    <Wallet className="w-5 h-5" /> Wallet
+                  </button>
+                ) : (
+                  <Link
+                    href="/merchant/wallet"
+                    onClick={() => {
+                      setDrawerOpen(false);
+                      onNavLinkClick?.();
+                    }}
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
+                  >
+                    <Wallet className="w-5 h-5" /> Wallet
+                  </Link>
+                )}
                 {onOpenSettings ? (
                   <button
                     onClick={() => {

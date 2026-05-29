@@ -69,7 +69,7 @@ import {
 
 type MerchantPaymentMethod = {
   id: string;
-  type: "bank" | "cash" | "crypto" | "card" | "mobile";
+  type: "bank" | "cash" | "crypto" | "card" | "mobile" | "upi";
   name: string;
   details: string;
   is_default: boolean;
@@ -113,6 +113,13 @@ const PM_TYPE_META: Record<
     gradient: "from-pink-500/20 to-pink-600/5",
     border: "border-pink-500/30",
     text: "text-pink-400",
+  },
+  upi: {
+    label: "UPI",
+    Icon: Smartphone,
+    gradient: "from-green-500/20 to-green-600/5",
+    border: "border-green-500/30",
+    text: "text-green-400",
   },
 };
 

@@ -18,7 +18,7 @@ import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
-const VALID_TYPES = ['bank', 'cash', 'crypto', 'card', 'mobile'] as const;
+const VALID_TYPES = ['bank', 'cash', 'crypto', 'card', 'mobile', 'upi'] as const;
 
 // GET /api/merchant/[id]/payment-methods
 //

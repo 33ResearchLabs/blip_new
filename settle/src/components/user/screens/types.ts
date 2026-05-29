@@ -191,7 +191,7 @@ export interface LockedPaymentMethod {
 // Merchant's payment method locked into an order (from merchant_payment_methods table)
 export interface MerchantPaymentMethod {
   id: string;
-  type: "bank" | "cash" | "crypto" | "card" | "mobile";
+  type: "bank" | "cash" | "crypto" | "card" | "mobile" | "upi";
   name: string;
   details: string;
   is_default: boolean;
