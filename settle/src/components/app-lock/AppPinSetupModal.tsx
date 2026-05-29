@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Loader2, ShieldCheck, X } from 'lucide-react';
 import { AppPinPad } from './AppPinPad';
 import { setAppPin, validateAppPinStrength, APP_PIN_LENGTH } from '@/lib/auth/appPin';
+import { useUserTheme } from '@/hooks/useUserTheme';
 
 interface AppPinSetupModalProps {
   userId: string;
@@ -34,6 +35,10 @@ export function AppPinSetupModal({
   onClose,
   dismissible = true,
 }: AppPinSetupModalProps) {
+  const { theme: userTheme } = useUserTheme();
+  const isLight = userTheme === 'light';
+  const pinPadTheme: 'light' | 'dark' = isLight ? 'light' : 'dark';
+
   const [step, setStep] = useState<Step>('enter');
   const [first, setFirst] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -86,8 +91,11 @@ export function AppPinSetupModal({
       <motion.div
         initial={{ scale: 0.97, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-sm rounded-3xl p-6 space-y-5 border border-white/[0.06] shadow-2xl"
-        style={{ background: '#0d0d0d' }}
+        className="w-full max-w-sm rounded-3xl p-6 space-y-5 shadow-2xl"
+        style={{
+          background: isLight ? '#ffffff' : '#0d0d0d',
+          border: `1px solid ${isLight ? 'rgba(15,23,42,0.10)' : 'rgba(255,255,255,0.06)'}`,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -131,6 +139,7 @@ export function AppPinSetupModal({
             onComplete={handleFirstComplete}
             errorTick={errorTick}
             disabled={busy}
+            theme={pinPadTheme}
           />
         ) : (
           <AppPinPad
@@ -139,6 +148,7 @@ export function AppPinSetupModal({
             onComplete={handleConfirmComplete}
             errorTick={errorTick}
             disabled={busy}
+            theme={pinPadTheme}
           />
         )}
 

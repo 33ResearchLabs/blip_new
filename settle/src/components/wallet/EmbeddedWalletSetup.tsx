@@ -15,6 +15,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
 import { colors } from "@/lib/design/theme";
 import { AppPinPad } from '@/components/app-lock/AppPinPad';
+import { useUserTheme } from '@/hooks/useUserTheme';
 
 const PIN_LENGTH = 6;
 
@@ -47,6 +48,9 @@ interface EmbeddedWalletSetupProps {
 }
 
 export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: EmbeddedWalletSetupProps) {
+  const { theme: userTheme } = useUserTheme();
+  const isLight = userTheme === 'light';
+  const pinPadTheme: 'light' | 'dark' = isLight ? 'light' : 'dark';
   const [tab, setTab] = useState<'create' | 'import'>('create');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -351,6 +355,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                       onComplete={() => setCreateStep('confirm')}
                       length={PIN_LENGTH}
                       disabled={isLoading}
+                      theme={pinPadTheme}
                     />
                   ) : (
                     <AppPinPad
@@ -369,6 +374,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                       length={PIN_LENGTH}
                       errorTick={errorTick}
                       disabled={isLoading}
+                      theme={pinPadTheme}
                     />
                   )}
                 </motion.div>
@@ -436,6 +442,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                 active={activePinField === 'pin'}
                 show={showPin}
                 onClick={() => setActivePinField('pin')}
+                isLight={isLight}
               />
               <PinFieldDisplay
                 label="Confirm PIN"
@@ -444,11 +451,13 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                 active={activePinField === 'confirm'}
                 show={showPin}
                 onClick={() => setActivePinField('confirm')}
+                isLight={isLight}
                 trailing={
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setShowPin((s) => !s); }}
-                    className="p-1.5 rounded-md transition-colors hover:bg-white/[0.06]"
+                    className="p-1.5 rounded-md transition-colors"
+                    style={{ background: 'transparent' }}
                     aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
                   >
                     {showPin ? (
@@ -495,6 +504,7 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
                     length={PIN_LENGTH}
                     errorTick={errorTick}
                     disabled={isLoading}
+                    theme={pinPadTheme}
                   />
                 </motion.div>
               )}
@@ -525,6 +535,7 @@ interface PinFieldDisplayProps {
   show: boolean;
   onClick: () => void;
   trailing?: React.ReactNode;
+  isLight?: boolean;
 }
 
 function PinFieldDisplay({
@@ -535,15 +546,22 @@ function PinFieldDisplay({
   show,
   onClick,
   trailing,
+  isLight = false,
 }: PinFieldDisplayProps) {
+  const fieldBg = isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.02)';
+  const fieldBorder = isLight ? 'rgba(15,23,42,0.12)' : 'rgba(255,255,255,0.08)';
+  const dotFilled = isLight ? '#0f172a' : '#fff';
+  const dotEmpty = isLight ? 'rgba(15,23,42,0.22)' : 'rgba(255,255,255,0.18)';
+  const digitColor = isLight ? '#0f172a' : '#fff';
+
   return (
     <button
       type="button"
       onClick={onClick}
       className="w-full text-left rounded-xl px-4 py-3 transition-colors"
       style={{
-        background: 'rgba(255,255,255,0.02)',
-        border: `1px solid ${active ? colors.accent.primary : 'rgba(255,255,255,0.08)'}`,
+        background: fieldBg,
+        border: `1px solid ${active ? colors.accent.primary : fieldBorder}`,
       }}
     >
       <div className="flex items-center justify-between">
@@ -562,7 +580,7 @@ function PinFieldDisplay({
                   <span
                     key={i}
                     className="text-base font-mono tabular-nums"
-                    style={{ color: '#fff', minWidth: 10, textAlign: 'center' }}
+                    style={{ color: digitColor, minWidth: 10, textAlign: 'center' }}
                   >
                     {value[i]}
                   </span>
@@ -575,7 +593,7 @@ function PinFieldDisplay({
                   style={{
                     width: 8,
                     height: 8,
-                    background: filled ? '#fff' : 'rgba(255,255,255,0.18)',
+                    background: filled ? dotFilled : dotEmpty,
                   }}
                 />
               );
