@@ -275,8 +275,8 @@ export const ConfigPanel = memo(function ConfigPanel({
     // Use merchant's configured rates if set, else use Blip's fixed INR rates
     const merchantBuyRate = merchantInfo?.buy_rate ? parseFloat(String(merchantInfo.buy_rate)) : null;
     const merchantSellRate = merchantInfo?.sell_rate ? parseFloat(String(merchantInfo.sell_rate)) : null;
-    const INR_BUY = 103.53;  // merchant buys USDT from users (101.5 + 2% backend fee baked in)
-    const INR_SELL = 101.33; // merchant sells USDT to users (103.4 - 2% backend fee baked in)
+    const INR_BUY = 99.47;   // 101.5 - 2% backend fee absorbed
+    const INR_SELL = 105.47; // 103.4 + 2% backend fee absorbed
     const isInr = pair === 'usdt_inr';
     const buyRate = merchantBuyRate ?? (isInr ? INR_BUY : baseRate * (1 - totalSpread / 100));
     const sellRate = merchantSellRate ?? (isInr ? INR_SELL : baseRate * (1 + totalSpread / 100));
