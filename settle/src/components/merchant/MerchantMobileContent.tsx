@@ -244,7 +244,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
 
         <main
           ref={scrollRef}
-          className="flex-1 overflow-auto p-3 pb-20"
+          className="flex-1 overflow-auto p-3 pb-24"
           style={{
             overscrollBehaviorY: "contain",
             WebkitOverflowScrolling: "touch",

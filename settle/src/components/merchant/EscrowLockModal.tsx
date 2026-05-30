@@ -92,22 +92,37 @@ export function EscrowLockModal({
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-[10px] text-foreground/35 uppercase mb-1">Amount</p>
-                      <p className="text-lg font-bold text-white">{escrowOrder.amount} USDT</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-foreground/35 uppercase mb-1">Fiat Value</p>
-                      {/* Use the order's actual fiat currency. The previous
-                          hardcoded "د.إ" (AED) was wrong for INR / USD /
-                          other corridors — it ignored escrowOrder.toCurrency
-                          (which the order picker already resolved correctly). */}
-                      <p className="text-lg font-bold text-white">
-                        {formatFiat(escrowOrder.total, escrowOrder.toCurrency || escrowOrder.dbOrder?.fiat_currency || '')}
-                      </p>
-                    </div>
-                  </div>
+                  {(() => {
+                    const currency = escrowOrder.toCurrency || escrowOrder.dbOrder?.fiat_currency || '';
+                    const isInr = currency === 'INR';
+                    const isBuy = escrowOrder.orderType === 'buy';
+                    const INR_RATE = isBuy ? 101.33 : 103.53;
+                    const promoDiscountFiat = isInr ? 5 * INR_RATE : 0;
+                    const discountedTotal = Math.max(0, escrowOrder.total - promoDiscountFiat);
+                    return (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[10px] text-foreground/35 uppercase mb-1">Amount</p>
+                          <p className="text-lg font-bold text-white">{escrowOrder.amount} USDT</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-foreground/35 uppercase mb-1">Fiat Value</p>
+                          {isInr ? (
+                            <div>
+                              <p className="text-lg font-bold text-white">{formatFiat(discountedTotal, currency)}</p>
+                              <p className="text-[10px] text-green-400 mt-0.5 flex items-center gap-1">
+                                🎁 -₹{promoDiscountFiat.toFixed(0)} testing reward
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-lg font-bold text-white">
+                              {formatFiat(escrowOrder.total, currency)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Wallet Balance */}
