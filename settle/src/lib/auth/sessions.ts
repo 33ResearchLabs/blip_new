@@ -86,10 +86,12 @@ export async function createSession(
   if (!session) return null;
 
   // One active session per device. Collapse PRIOR active sessions from the
-  // same device (same entity + user-agent + IP) into this fresh login so that
+  // same device (same entity + user-agent) into this fresh login so that
   // re-logging-in from the same browser no longer piles up duplicate "active
-  // session" rows. The LOGIN_DEDUP_GRACE_SECONDS guard skips sessions created
-  // moments ago in the SAME login flow (e.g. password step before 2FA step).
+  // session" rows — even when the IP changed between logins (different network
+  // / dynamic ISP address). The surviving row carries the latest login's IP.
+  // The LOGIN_DEDUP_GRACE_SECONDS guard skips sessions created moments ago in
+  // the SAME login flow (e.g. password step before 2FA step).
   // Best-effort: a failure here must never break an otherwise-successful login.
   try {
     const collapsed = await query<{ id: string }>(
@@ -99,11 +101,10 @@ export async function createSession(
           AND entity_type = $3
           AND is_revoked = false
           AND id <> $1
-          AND created_at < NOW() - ($6 || ' seconds')::interval
+          AND created_at < NOW() - ($5 || ' seconds')::interval
           AND user_agent IS NOT DISTINCT FROM $4
-          AND ip_address IS NOT DISTINCT FROM $5
         RETURNING id`,
-      [session.id, payload.actorId, payload.actorType, userAgent, ip, String(LOGIN_DEDUP_GRACE_SECONDS)]
+      [session.id, payload.actorId, payload.actorType, userAgent, String(LOGIN_DEDUP_GRACE_SECONDS)]
     );
     for (const s of collapsed) invalidateSessionCache(s.id);
   } catch {
