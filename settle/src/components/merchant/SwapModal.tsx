@@ -29,6 +29,7 @@ import {
   PublicKey,
 } from "@solana/web3.js";
 import { recordSwap } from "@/lib/wallet/swapHistory";
+import { useOnboarding } from "@/contexts/OnboardingContext";
 
 // ── Constants ───────────────────────────────────────────────────────
 const SLIPPAGE_BPS = 50; // 0.5% — hard-capped for safety
@@ -117,6 +118,7 @@ export function SwapModal({
   onSwapSuccess,
   actorId,
 }: SwapModalProps) {
+  const { refresh } = useOnboarding();
   const [inputToken, setInputToken] = useState<TokenMeta>(USDT);
   const [outputToken, setOutputToken] = useState<TokenMeta>(SOL);
 
@@ -317,6 +319,7 @@ export function SwapModal({
         /* non-critical — recordSwap already swallows its own errors */
       }
       onSwapSuccess?.();
+      void refresh();
       // Auto-close after a short success-state display so the merchant
       // can see the checkmark + tx link briefly without having to dismiss.
       window.setTimeout(() => {

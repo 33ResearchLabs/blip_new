@@ -15,6 +15,7 @@ import {
   notificationPermission,
 } from '@/lib/notifications/attention';
 import { getNotifPrefs } from '@/hooks/useNotifPrefs';
+import { useOnboarding } from '@/contexts/OnboardingContext';
 
 interface UseMerchantEffectsParams {
   isMockMode: boolean;
@@ -60,6 +61,16 @@ export function useMerchantEffects({
   const setMerchantInfo = useMerchantStore(s => s.setMerchantInfo);
   const { setActor } = usePusher();
   const wsContext = useWebSocketChatContextOptional();
+  const { refresh: refreshOnboarding } = useOnboarding();
+
+  // Held in a ref so the wallet-link effect can fire-and-forget an onboarding
+  // refresh without `refresh` becoming an effect dependency — keeping that
+  // effect's re-run conditions (and the wallet-signature prompt guard)
+  // byte-for-byte unchanged. zero regression.
+  const refreshOnboardingRef = useRef(refreshOnboarding);
+  useEffect(() => {
+    refreshOnboardingRef.current = refreshOnboarding;
+  }, [refreshOnboarding]);
 
   const fetchOrderConversationsRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
@@ -219,6 +230,7 @@ export function useMerchantEffects({
             // Update the in-memory store. The DB is the durable copy; on
             // next mount /api/auth/me re-reads it. No localStorage mirror.
             setMerchantInfo((prev: any) => prev ? { ...prev, wallet_address: solanaWallet.walletAddress! } : prev);
+            void refreshOnboardingRef.current();
           }
         } else {
           // Reset the guard on failure so a manual retry (e.g. user rejected

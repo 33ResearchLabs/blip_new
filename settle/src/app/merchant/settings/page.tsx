@@ -200,7 +200,7 @@ export default function MerchantSettingsPage({
   // as "not yet claimed" even if merchants.username has an auto-generated
   // value. Surfaces the editable form so the merchant can run the
   // PATCH /api/merchant/username that flips username_customized_at.
-  const { status: onboardingStatus } = useOnboarding();
+  const { status: onboardingStatus, refresh: refreshOnboarding } = useOnboarding();
   const usernameClaimed = onboardingStatus?.conditions?.usernameSet ?? false;
 
   const [usernameInput, setUsernameInput] = useState("");
@@ -305,12 +305,13 @@ export default function MerchantSettingsPage({
       setUsernameAvailability({ kind: "idle" });
       // Drop back to the read-only display once the new value is committed.
       setIsEditingUsername(false);
+      void refreshOnboarding();
     } catch {
       setUsernameError("Network error — try again.");
     } finally {
       setUsernameSaving(false);
     }
-  }, [usernameInput, usernameAvailability, usernameSaving, setMerchantInfo]);
+  }, [usernameInput, usernameAvailability, usernameSaving, setMerchantInfo, refreshOnboarding]);
 
   // Password change
   const [currentPassword, setCurrentPassword] = useState("");
@@ -491,6 +492,8 @@ export default function MerchantSettingsPage({
       // merchants table that the API call above just updated; on next load
       // /api/auth/me re-reads it from the DB. No localStorage mirror.
       setMerchantInfo((prev: any) => ({ ...prev, ...updates }));
+
+      void refreshOnboarding();
 
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
