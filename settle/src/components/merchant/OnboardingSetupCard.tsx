@@ -1,58 +1,26 @@
 'use client';
 
-/**
- * Rich 5-step onboarding checklist that lives at the top of the
- * merchant NotificationsPanel.
- *
- * Replaces the OnboardingOverlay (blocking modal) and the bridged
- * "Setup incomplete" notification entry — the panel is now the
- * single surface for the merchant's setup state.
- *
- * Visibility:
- *   - Renders nothing if feature flag is off
- *   - Renders nothing if status is still loading
- *   - Renders nothing once ALL FIVE truth conditions are met (the three
- *     required + the two optional). Previously the card hid the moment
- *     completed_at fired (3 required done), but that meant the merchant
- *     never saw the optional rows or the "Start Trading" CTA. The
- *     marketplace gates still unlock at 3 required — that's a separate
- *     server-side concern keyed off completed_at.
- *
- * Palette is intentionally neutral — borders + foreground-opacity
- * tones — to avoid the screen feeling like a marketing banner. The
- * navbar chip remains the amber accent that draws attention; the
- * card itself is calm.
- */
-
-import { Check, Circle, ArrowRight, X } from 'lucide-react';
+import { Check, ArrowRight, X, Wallet, TrendingUp, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 
 interface StepView {
-  key: 'profile' | 'wallet' | 'payment' | 'fund' | 'trade';
+  key: 'profile' | 'wallet' | 'inr-rate' | 'trade';
   label: string;
   description: string;
+  icon: React.ElementType;
   done: boolean;
-  /** Optional steps are shown but don't gate completed_at. */
   optional?: boolean;
-  /** Right-hand affordance: either a done badge ("Connected") or a CTA. */
   cta: { label: string; onClick: () => void } | null;
-  /** Tag shown in place of CTA when the step is done. */
   doneLabel?: string;
 }
 
 interface OnboardingSetupCardProps {
-  /**
-   * Opens the dashboard PaymentMethodModal — same handler that the
-   * navbar's "+" button uses. Wired through NotificationsPanel.
-   */
   onOpenPaymentMethods?: () => void;
-  /** Opens the merchant settings overlay (for the username step). */
   onOpenSettings?: () => void;
 }
 
 export function OnboardingSetupCard({
-  onOpenPaymentMethods,
   onOpenSettings,
 }: OnboardingSetupCardProps) {
   const { enabled, status, skip } = useOnboarding();
@@ -63,44 +31,23 @@ export function OnboardingSetupCard({
 
   const conditions = status.conditions;
 
-  // Hide when every visible row would carry a checkmark — at that point
-  // there's nothing left to show or click. Note: this is independent of
-  // status.completed_at, which fires when only the 3 REQUIRED steps are
-  // done (and is the signal the server uses for marketplace visibility
-  // and the trade-participation gates).
   const allConditionsMet =
     conditions.usernameSet &&
     conditions.walletConnected &&
-    conditions.hasPaymentMethod &&
-    conditions.walletFunded &&
+    conditions.inrRateSet &&
     conditions.hasTrade;
   if (allConditionsMet) return null;
 
-  // Required steps drive the "you can trade" gate. Used to decide whether
-  // to surface the Go Live CTA + swap the footer copy.
   const requiredDone =
-    conditions.usernameSet &&
     conditions.walletConnected &&
-    conditions.hasPaymentMethod;
+    conditions.inrRateSet;
 
   const steps: StepView[] = [
     {
-      key: 'profile',
-      label: 'Profile Setup',
-      description: 'Add a short bio (and tweak your display name) so users know who they’re trading with.',
-      done: conditions.usernameSet,
-      doneLabel: 'Completed',
-      cta: conditions.usernameSet
-        ? null
-        : {
-            label: 'Set',
-            onClick: onOpenSettings ?? (() => router.push('/merchant/settings')),
-          },
-    },
-    {
       key: 'wallet',
       label: 'Connect Wallet',
-      description: 'Connect your Solana wallet to secure your account.',
+      description: 'Link your Solana wallet to secure your account.',
+      icon: Wallet,
       done: conditions.walletConnected,
       doneLabel: 'Connected',
       cta: conditions.walletConnected
@@ -108,163 +55,158 @@ export function OnboardingSetupCard({
         : { label: 'Connect', onClick: () => router.push('/merchant/wallet') },
     },
     {
-      key: 'payment',
-      label: 'Add Payment Method',
-      description: 'Add UPI / Bank / Local payout method.',
-      done: conditions.hasPaymentMethod,
-      doneLabel: 'Added',
-      cta: conditions.hasPaymentMethod
+      key: 'inr-rate',
+      label: 'Set INR Rate',
+      description: 'Set your buy/sell rate for the India corridor.',
+      icon: TrendingUp,
+      done: conditions.inrRateSet,
+      doneLabel: 'Set',
+      cta: conditions.inrRateSet
         ? null
-        : onOpenPaymentMethods
-        ? { label: 'Add', onClick: onOpenPaymentMethods }
-        : { label: 'Add', onClick: () => router.push('/merchant/settings') },
-    },
-    {
-      key: 'fund',
-      label: 'Fund Wallet',
-      description: 'Deposit at least 1 USDT to start accepting BUY orders.',
-      done: conditions.walletFunded,
-      doneLabel: 'Funded',
-      optional: true,
-      cta: conditions.walletFunded
-        ? null
-        : { label: 'Fund', onClick: () => router.push('/merchant/wallet') },
+        : { label: 'Set Rate', onClick: () => router.push('/merchant/settings?tab=rates') },
     },
     {
       key: 'trade',
-      label: 'Start Trading',
-      description: 'Accept your first order to go live.',
+      label: 'Accept First Trade',
+      description: 'Accept your first order to complete setup.',
+      icon: Zap,
       done: conditions.hasTrade,
       doneLabel: 'Done',
       optional: true,
-      // Go Live appears once the required 3 are complete — at that point
-      // the merchant is allowed to trade (server gates open). Tapping it
-      // skip()s the card so it gets out of the merchant's way; the chip
-      // in the navbar has already self-hidden by now via completed_at.
-      // Pre-required-done the row has no CTA (clicking would be moot —
-      // server would still reject any trade action).
-      cta:
-        !conditions.hasTrade && requiredDone
-          ? { label: 'Go Live', onClick: () => void skip() }
-          : null,
+      cta: null,
     },
   ];
 
-  // Visible counter mirrors the screenshot reference ("X/5 completed").
-  // Required-step gating remains 3 — see merchantOnboarding repository.
   const doneCount = steps.filter((s) => s.done).length;
-  const totalCount = steps.length;
-  const percent = Math.round((doneCount / totalCount) * 100);
+  const totalRequired = steps.filter((s) => !s.optional).length;
+  const requiredDoneCount = steps.filter((s) => !s.optional && s.done).length;
+  const percent = Math.round((doneCount / steps.length) * 100);
 
   return (
-    <div className="m-2 rounded-xl border border-foreground/10 bg-foreground/[0.02] p-3 sm:p-4">
+    <div className="mx-1.5 mt-1.5 rounded-2xl overflow-hidden border border-white/[0.08] bg-white/[0.03]">
+
       {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="min-w-0">
-          <h3 className="text-[12px] font-bold text-foreground tracking-wide">
-            Merchant Setup
-          </h3>
-          <p className="text-[10.5px] text-foreground/55 mt-0.5 leading-snug">
-            Complete onboarding to appear live on the marketplace.
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-[10px] font-mono font-bold tabular-nums text-foreground/70">
-            {doneCount}/{totalCount}
-          </span>
+      <div className="px-4 pt-4 pb-3 border-b border-white/[0.06]">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[9.5px] font-mono font-bold uppercase tracking-widest text-white/30 mb-1">
+              Getting Started
+            </p>
+            <h3 className="text-[13px] font-bold text-white leading-tight">
+              Merchant Setup
+            </h3>
+            <p className="text-[10.5px] text-white/40 mt-0.5">
+              {requiredDone
+                ? "Required steps complete — you're live."
+                : `${requiredDoneCount} of ${totalRequired} required steps done`}
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => void skip()}
-            aria-label="Dismiss setup checklist"
-            title="Dismiss for now"
-            className="p-0.5 rounded text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.04]"
+            aria-label="Dismiss"
+            className="mt-0.5 p-1 rounded-lg text-white/20 hover:text-white/50 hover:bg-white/[0.05] transition-colors shrink-0"
           >
-            <X className="w-3 h-3" />
+            <X className="w-3.5 h-3.5" />
           </button>
+        </div>
+
+        {/* Progress bar */}
+        <div className="mt-3 h-[3px] w-full rounded-full bg-white/[0.06] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-white/50 transition-all duration-700"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+        <div className="flex justify-between mt-1.5">
+          <span className="text-[9px] text-white/20 font-mono">{percent}% complete</span>
+          <span className="text-[9px] text-white/20 font-mono">{doneCount} / {steps.length} steps</span>
         </div>
       </div>
 
-      {/* Progress bar — neutral foreground tint */}
-      <div className="h-1 w-full rounded-full bg-foreground/[0.06] overflow-hidden mb-3">
-        <div
-          className="h-full bg-foreground/40 transition-all duration-500"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-
       {/* Steps */}
-      <ul className="space-y-2">
-        {steps.map((step, idx) => (
-          <li key={step.key} className="flex items-start gap-2.5">
-            {/* Numbered marker — emerald for done, neutral outline for pending */}
-            <span className="mt-0.5 shrink-0">
-              {step.done ? (
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40">
-                  <Check className="w-3 h-3 text-emerald-400" strokeWidth={3} />
-                </span>
-              ) : (
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-foreground/[0.04] border border-foreground/15 text-[10px] font-mono font-bold text-foreground/50">
-                  {idx + 1}
-                </span>
-              )}
-            </span>
-
-            {/* Body */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span
-                  className={`text-[12px] font-semibold ${
-                    step.done ? 'text-foreground/50 line-through' : 'text-foreground'
-                  }`}
-                >
-                  {step.label}
-                </span>
-                {step.optional && !step.done && (
-                  <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-px rounded bg-foreground/[0.06] text-foreground/50">
-                    Optional
-                  </span>
+      <div className="divide-y divide-white/[0.04]">
+        {steps.map((step, idx) => {
+          const Icon = step.icon;
+          return (
+            <div
+              key={step.key}
+              className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                step.done ? 'opacity-40' : 'hover:bg-white/[0.02]'
+              }`}
+            >
+              {/* Icon */}
+              <div
+                className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${
+                  step.done
+                    ? 'bg-white/[0.06] border border-white/10'
+                    : 'bg-white/[0.05] border border-white/[0.08]'
+                }`}
+              >
+                {step.done ? (
+                  <Check className="w-3.5 h-3.5 text-white/60" strokeWidth={2.5} />
+                ) : (
+                  <Icon className="w-3.5 h-3.5 text-white/40" />
                 )}
               </div>
-              {!step.done && (
-                <p className="text-[10.5px] text-foreground/50 mt-0.5 leading-snug">
-                  {step.description}
-                </p>
-              )}
-            </div>
 
-            {/* Right affordance */}
-            <div className="shrink-0">
-              {step.done && step.doneLabel && (
-                <span className="text-[10px] text-emerald-400/80 font-medium">
-                  {step.doneLabel}
-                </span>
-              )}
-              {!step.done && step.cta && (
-                <button
-                  type="button"
-                  onClick={step.cta.onClick}
-                  className="inline-flex items-center gap-1 rounded-md border border-foreground/15 bg-foreground/[0.04] px-2 py-1 text-[10.5px] font-semibold text-foreground hover:bg-foreground/[0.08] hover:border-foreground/25 transition-colors"
-                >
-                  {step.cta.label}
-                  <ArrowRight className="w-2.5 h-2.5" />
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
+              {/* Text */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[12px] font-semibold leading-tight ${step.done ? 'text-white/30 line-through' : 'text-white/90'}`}>
+                    {step.label}
+                  </span>
+                  {step.optional && !step.done && (
+                    <span className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-px rounded bg-white/[0.05] text-white/25 border border-white/[0.06]">
+                      Optional
+                    </span>
+                  )}
+                </div>
+                {!step.done && (
+                  <p className="text-[10px] text-white/30 mt-0.5 leading-snug truncate">
+                    {step.description}
+                  </p>
+                )}
+              </div>
 
-      {/* Footer hint — copy swaps the moment the required 3 are done.
-          Pre-required-done: nudge the merchant to finish the gating steps.
-          Post-required-done (optional rows pending): reassure them they're
-          already trading and surface the optional rows as bonus polish. */}
-      <div className="mt-3 pt-2 border-t border-foreground/[0.06]">
-        <p className="text-[10.5px] text-foreground/55 leading-snug">
-          {requiredDone
-            ? "You're live in the marketplace. Optional steps boost your trading — or hit Go Live to dismiss."
-            : 'Complete all required steps to appear in the marketplace and unlock trading.'}
-        </p>
+              {/* CTA */}
+              <div className="shrink-0">
+                {step.done ? (
+                  <span className="text-[9.5px] text-white/30 font-mono">✓</span>
+                ) : step.cta ? (
+                  <div className="group relative">
+                    <button
+                      type="button"
+                      onClick={step.cta.onClick}
+                      className="inline-flex items-center gap-1 rounded-lg border border-white/[0.12] bg-white/[0.05] hover:bg-white/[0.09] hover:border-white/20 px-2.5 py-1.5 text-[10.5px] font-semibold text-white/70 hover:text-white transition-all"
+                    >
+                      {step.cta.label}
+                      <ArrowRight className="w-2.5 h-2.5" />
+                    </button>
+                    <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-max max-w-[160px] opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                      <span className="block rounded-lg bg-white text-black text-[10.5px] font-medium px-2.5 py-1.5 leading-snug shadow-xl shadow-black/40">
+                        {step.description}
+                      </span>
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[9px] font-mono text-white/15">{idx + 1}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Footer — only when live */}
+      {requiredDone && (
+        <div className="px-4 py-2.5 border-t border-white/[0.06]">
+          <p className="text-[10px] text-white/40 flex items-center gap-1.5 font-mono">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
+            Live in marketplace
+          </p>
+        </div>
+      )}
     </div>
   );
 }

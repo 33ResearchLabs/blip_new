@@ -21,7 +21,7 @@ import type { EventData, Step } from 'react-joyride';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 
 interface StepDef {
-  key: 'customize-username' | 'connect-wallet' | 'add-payment-method' | 'fund-wallet' | 'accept-trade';
+  key: 'customize-username' | 'connect-wallet' | 'set-inr-rates' | 'accept-trade';
   target: string;
   title: string;
   content: string;
@@ -31,31 +31,25 @@ const ALL_STEPS: StepDef[] = [
   {
     key: 'customize-username',
     target: '[data-tour="customize-username"]',
-    title: 'Step 1 of 5 — Set Your Username',
+    title: 'Step 1 of 4 — Set Your Username',
     content: 'Pick a username — this is how traders will recognize you in the marketplace.',
   },
   {
     key: 'connect-wallet',
     target: '[data-tour="connect-wallet"]',
-    title: 'Step 2 of 5 — Connect Wallet',
+    title: 'Step 2 of 4 — Connect Wallet',
     content: 'Connect your wallet to start trading securely.',
   },
   {
-    key: 'add-payment-method',
-    target: '[data-tour="add-payment-method"]',
-    title: 'Step 3 of 5 — Add Payment Method',
-    content: 'Add a payment method so buyers and sellers can trade with you.',
-  },
-  {
-    key: 'fund-wallet',
-    target: '[data-tour="fund-wallet"]',
-    title: 'Step 4 of 5 — Fund Wallet',
-    content: 'Fund your wallet with USDT if you want to accept BUY trades.',
+    key: 'set-inr-rates',
+    target: '[data-tour="inr-rates"]',
+    title: 'Step 3 of 4 — Set Your INR Rate',
+    content: 'Set the buy and sell rates you want to offer for USDT/INR. Live market suggestions are shown to help you price competitively.',
   },
   {
     key: 'accept-trade',
     target: '[data-tour="pending-panel"]',
-    title: 'Step 5 of 5 — Accept First Trade',
+    title: 'Step 4 of 4 — Accept First Trade',
     content: 'Accept your first trade to start using the platform.',
   },
 ];
@@ -153,8 +147,7 @@ export function OnboardingTour() {
     const conditionFor: Record<StepDef['key'], boolean> = {
       'customize-username': conditions.usernameSet,
       'connect-wallet': conditions.walletConnected,
-      'add-payment-method': conditions.hasPaymentMethod,
-      'fund-wallet': conditions.walletFunded,
+      'set-inr-rates': conditions.inrRateSet,
       'accept-trade': conditions.hasTrade,
     };
     return ALL_STEPS.filter((s) => !conditionFor[s.key]).map((s) => ({
@@ -203,23 +196,6 @@ export function OnboardingTour() {
     }
   };
 
-  if (!JoyrideCmp || !shouldRun) return null;
-
-  return (
-    <JoyrideCmp
-      steps={activeSteps}
-      run={shouldRun}
-      continuous
-      showProgress
-      showSkipButton
-      disableScrolling={false}
-      scrollToFirstStep
-      scrollOffset={80}
-      spotlightPadding={6}
-      hideCloseButton={false}
-      callback={handleCallback}
-      styles={TOUR_STYLES}
-      locale={TOUR_LOCALE}
-    />
-  );
+  // Tour is disabled — onboarding is handled via the setup card tooltips.
+  return null;
 }

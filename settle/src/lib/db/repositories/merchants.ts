@@ -62,6 +62,8 @@ export const SAFE_MERCHANT_COLUMNS = [
   'cancelled_orders',
   'dispute_count',
   'tour_completed_at',
+  'buy_rate',
+  'sell_rate',
   'created_at',
   'updated_at',
 ] as const;
@@ -213,7 +215,7 @@ export async function updateMerchantRating(id: string): Promise<void> {
 
 export async function updateMerchant(
   id: string,
-  data: Partial<Pick<Merchant, 'avatar_url' | 'display_name' | 'phone' | 'business_name' | 'bio'>>
+  data: Partial<Pick<Merchant, 'avatar_url' | 'display_name' | 'phone' | 'business_name' | 'bio' | 'buy_rate' | 'sell_rate'>>
 ): Promise<Merchant | null> {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -238,6 +240,14 @@ export async function updateMerchant(
   if (data.bio !== undefined) {
     fields.push(`bio = $${paramIndex++}`);
     values.push(data.bio);
+  }
+  if (data.buy_rate !== undefined) {
+    fields.push(`buy_rate = $${paramIndex++}`);
+    values.push(data.buy_rate);
+  }
+  if (data.sell_rate !== undefined) {
+    fields.push(`sell_rate = $${paramIndex++}`);
+    values.push(data.sell_rate);
   }
 
   if (fields.length === 0) return getMerchantByIdInternal(id);
@@ -271,6 +281,8 @@ export function serializeMerchant(merchant: {
   has_ops_access?: boolean;
   has_compliance_access?: boolean;
   tour_completed_at?: string | Date | null;
+  buy_rate?: number | null;
+  sell_rate?: number | null;
 }): Record<string, unknown> {
   const dto: Record<string, unknown> = {
     id: merchant.id,
@@ -291,6 +303,8 @@ export function serializeMerchant(merchant: {
   // Tour completion — null means "never completed" so the frontend shows the tour.
   // Present in every response so the client can invalidate its localStorage flag
   // if it goes out of sync with the DB (e.g. admin reset, account migration).
+  if (merchant.buy_rate !== undefined) dto.buy_rate = merchant.buy_rate != null ? parseFloat(String(merchant.buy_rate)) : null;
+  if (merchant.sell_rate !== undefined) dto.sell_rate = merchant.sell_rate != null ? parseFloat(String(merchant.sell_rate)) : null;
   if (merchant.tour_completed_at !== undefined) {
     const v = merchant.tour_completed_at;
     dto.tour_completed_at = v == null ? null : (v instanceof Date ? v.toISOString() : String(v));

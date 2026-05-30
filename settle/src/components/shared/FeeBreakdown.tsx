@@ -38,6 +38,10 @@ interface FeeBreakdownProps {
   collapsible?: boolean;
   /** Optional className for the outer wrapper. */
   className?: string;
+  /** Testing promo: flat USDT discount applied to the order. */
+  promoDiscountUsdt?: number;
+  /** Label for the promo row (default: "Testing reward"). */
+  promoLabel?: string;
 }
 
 export function FeeBreakdown({
@@ -49,17 +53,18 @@ export function FeeBreakdown({
   cryptoCurrency = "USDT",
   collapsible = false,
   className = "",
+  promoDiscountUsdt = 0,
+  promoLabel = "Testing reward ($5 off)",
 }: FeeBreakdownProps) {
   const [expanded, setExpanded] = useState(!collapsible);
 
-  // All maths happens here so call sites never re-derive numbers (and
-  // never accidentally apply the fee to the wrong base).
   const grossFiat = merchantRate != null ? baseAmount * merchantRate : null;
   const blipFee = (baseAmount * blipFeePct) / 100;
   const boostFee = (baseAmount * boostPct) / 100;
   const totalCryptoCost = baseAmount + blipFee + boostFee;
-  const finalFiat =
-    merchantRate != null ? totalCryptoCost * merchantRate : null;
+  const preFiat = merchantRate != null ? totalCryptoCost * merchantRate : null;
+  const promoDiscountFiat = merchantRate != null ? promoDiscountUsdt * merchantRate : 0;
+  const finalFiat = preFiat != null ? Math.max(0, preFiat - promoDiscountFiat) : null;
 
   const fmt = (n: number, frac = 2) =>
     n.toLocaleString(undefined, {
@@ -118,18 +123,24 @@ export function FeeBreakdown({
               accent
             />
           )}
-          <div className="pt-1.5 mt-1 border-t border-white/[0.04]">
-            <Row
-              label="Total escrow hold"
-              value={`${fmt(totalCryptoCost)} ${cryptoCurrency}`}
-              muted
-            />
-          </div>
-          {grossFiat != null && grossFiat !== finalFiat && (
-            <p className="text-[10px] text-foreground/35 pt-1">
-              Unused authorization (if any) is released back to your wallet
-              after the merchant accepts.
-            </p>
+          {preFiat != null && (
+            <div className="pt-1.5 mt-1 border-t border-white/[0.04] space-y-1.5">
+              <Row label="Subtotal" value={`${fmt(preFiat)} ${fiatCurrency}`} muted />
+              {promoDiscountUsdt > 0 && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-green-400/80">🎁 {promoLabel}</span>
+                  <span className="tabular-nums font-semibold text-green-400">
+                    -{fmt(promoDiscountFiat)} {fiatCurrency}
+                  </span>
+                </div>
+              )}
+              <div className="pt-1 mt-0.5 border-t border-white/[0.04] flex items-center justify-between gap-2">
+                <span className="font-bold text-foreground/80">Total</span>
+                <span className="tabular-nums font-bold text-foreground">
+                  {fmt(finalFiat ?? 0)} {fiatCurrency}
+                </span>
+              </div>
+            </div>
           )}
         </div>
       )}

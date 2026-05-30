@@ -62,7 +62,7 @@ interface ConfigPanelProps {
 }
 
 const PRICING_TIERS = {
-  fastest: { label: "Fast", base: 2.5, range: 5, icon: Zap },
+  fastest: { label: "Fast", base: 0, range: 5, icon: Zap },
   best: { label: "Best", base: 2.0, range: 3, icon: Target },
   cheap: { label: "Cheap", base: 1.5, range: 2, icon: TrendingDown },
 } as const;
@@ -260,17 +260,33 @@ export const ConfigPanel = memo(function ConfigPanel({
   const cryptoAmount = parseFloat(openTradeForm.cryptoAmount) || 0;
   const maxAmount = effectiveBalance || 0;
 
+  const PROMO_DISCOUNT_USDT = 5;
+  const [promoActive, setPromoActive] = useState(true);
+  useEffect(() => {
+    fetchWithAuth('/api/promo/testing-reward')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.success) setPromoActive(d.data.active); })
+      .catch(() => {});
+  }, []);
+
   const pricing = useMemo(() => {
     const totalSpread = tier.base + priorityFee;
-    // Round base rate to 2 decimals so display matches calculation
     const baseRate = Math.round(currentRate * 100) / 100;
-    const buyRate = baseRate * (1 - totalSpread / 100);
-    const sellRate = baseRate * (1 + totalSpread / 100);
-    const buyAed = cryptoAmount * buyRate;
-    const sellAed = cryptoAmount * sellRate;
+    // Use merchant's configured rates if set, else use Blip's fixed INR rates
+    const merchantBuyRate = merchantInfo?.buy_rate ? parseFloat(String(merchantInfo.buy_rate)) : null;
+    const merchantSellRate = merchantInfo?.sell_rate ? parseFloat(String(merchantInfo.sell_rate)) : null;
+    const INR_BUY = 101.5;  // merchant buys USDT from users at this rate
+    const INR_SELL = 103.4; // merchant sells USDT to users at this rate
+    const isInr = pair === 'usdt_inr';
+    const buyRate = merchantBuyRate ?? (isInr ? INR_BUY : baseRate * (1 - totalSpread / 100));
+    const sellRate = merchantSellRate ?? (isInr ? INR_SELL : baseRate * (1 + totalSpread / 100));
+    const promoDeductFiat = promoActive ? PROMO_DISCOUNT_USDT * buyRate : 0;
+    const promoAddFiat = promoActive ? PROMO_DISCOUNT_USDT * sellRate : 0;
+    const buyAed = Math.max(0, cryptoAmount * buyRate - promoDeductFiat);
+    const sellAed = Math.max(0, cryptoAmount * sellRate - promoAddFiat);
 
     return { totalSpread, buyRate, sellRate, buyAed, sellAed };
-  }, [currentRate, tier, priorityFee, cryptoAmount]);
+  }, [currentRate, tier, priorityFee, cryptoAmount, merchantInfo, promoActive, pair]);
 
   const handlePriorityChange = (val: number) => {
     setPriorityFee(Math.min(50, Math.max(0, val)));
@@ -504,19 +520,24 @@ export const ConfigPanel = memo(function ConfigPanel({
                       {t.label}
                     </span>
                   </div>
-                  <div
-                    className={`text-[11px] font-black font-mono tabular-nums ${isSelected ? "text-primary" : "text-white/25"}`}
-                  >
-                    +{t.base}%
-                  </div>
+                  {key === 'fastest' ? (
+                    <div className="flex items-center justify-center gap-1">
+                      <span className="text-[10px] font-black font-mono tabular-nums text-foreground/20 line-through">+2.5%</span>
+                      <span className="text-[11px] font-black font-mono tabular-nums text-green-400">0%</span>
+                    </div>
+                  ) : (
+                    <div className={`text-[11px] font-black font-mono tabular-nums ${isSelected ? "text-primary" : "text-white/25"}`}>
+                      +{t.base}%
+                    </div>
+                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Priority Fee / Boost */}
-        <div data-tour="boost">
+        {/* Priority Fee / Boost — hidden for now */}
+        {false && <div data-tour="boost">
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider font-bold flex items-center gap-1">
               <Flame className="w-3 h-3 text-primary/40" />
@@ -600,6 +621,15 @@ export const ConfigPanel = memo(function ConfigPanel({
               <DecayChart maxFee={priorityFee} />
             </div>
           )}
+        </div>}
+
+        {/* Testing rewards banner */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-green-500/[0.08] border border-green-500/20">
+          <span className="text-base">🎁</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold text-green-400 leading-tight">$5 testing rewards</p>
+            <p className="text-[10px] text-green-400/60 leading-tight">Earn for completing your first trades</p>
+          </div>
         </div>
 
         {/* BUY / SELL Buttons */}
@@ -656,8 +686,10 @@ export const ConfigPanel = memo(function ConfigPanel({
         {/* Spread summary */}
         {cryptoAmount > 0 && (
           <div className="flex items-center justify-between px-1 text-[9px] font-mono text-foreground/20">
-            <span>+{pricing.totalSpread.toFixed(1)}% spread</span>
-            <span className="tabular-nums">
+            {promoActive && (
+              <span className="text-green-400/60">🎁 -$5 applied</span>
+            )}
+            <span className="tabular-nums ml-auto">
               B {pricing.buyRate.toFixed(4)} · S {pricing.sellRate.toFixed(4)}
             </span>
           </div>

@@ -250,12 +250,40 @@ export const TradeCreationScreen = ({
     };
   }, [ratePair]);
 
-  const displayRate = rateData?.price ?? null;
+  const midRate = rateData?.price ?? null;
   const rateCurrency = ratePair === "usdt_aed" ? "AED" : "INR";
   const rateSymbol = ratePair === "usdt_inr" ? "₹" : "د.إ";
+
+  // Directional rates for INR — buy at 103.4 (merchant's sell rate), sell at 101.5 (merchant's buy rate)
+  const BUY_RATE_INR = 103.4;
+  const SELL_RATE_INR = 101.5;
+  const displayRate: number | null = ratePair === "usdt_inr"
+    ? (isBuy ? BUY_RATE_INR : SELL_RATE_INR)
+    : midRate;
+  // For INR we don't need the API — suppress loading state
+  const effectiveRateLoading = ratePair === "usdt_inr" ? false : rateLoading;
+
+  // Promo: first 10 orders get $5 off — default optimistically active, API updates remaining count
+  const [promo, setPromo] = useState<{ active: boolean; remaining: number; discount_usdt: number }>({
+    active: true, remaining: 10, discount_usdt: 5,
+  });
+  useEffect(() => {
+    fetchWithAuth('/api/promo/testing-reward')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.success) setPromo(d.data); })
+      .catch(() => {});
+  }, []);
+
+  const promoDiscountInr = promo.active && displayRate !== null && ratePair === 'usdt_inr'
+    ? promo.discount_usdt * displayRate
+    : 0;
+
+  const rawFiatAmount = hasAmount && displayRate !== null ? parseFloat(amount) * displayRate : 0;
+  const discountedFiatAmount = Math.max(0, rawFiatAmount - promoDiscountInr);
+
   const fiatValue =
     hasAmount && displayRate !== null
-      ? formatCrypto(parseFloat(amount) * displayRate)
+      ? formatCrypto(discountedFiatAmount)
       : "0.00";
 
   return (
@@ -517,7 +545,7 @@ export const TradeCreationScreen = ({
                   "ui-monospace, SFMono-Regular, Menlo, monospace",
               }}
             >
-              {rateLoading ? (
+              {effectiveRateLoading ? (
                 <span className="inline-flex items-center" style={{ gap: 6 }}>
                   <Loader2 size={12} className="animate-spin" />
                   Loading…
@@ -707,13 +735,38 @@ export const TradeCreationScreen = ({
               style={{ overflow: "hidden" }}
             >
               {FEE_UI_V2 ? (
-                <FeeBreakdown
-                  baseAmount={parseFloat(amount || "0")}
-                  merchantRate={displayRate ?? null}
-                  blipFeePct={currentFees.totalFee * 100}
-                  fiatCurrency={rateCurrency}
-                  collapsible
-                />
+                /* Receipt breakdown */
+                hasAmount && displayRate !== null ? (
+                  <div
+                    className="rounded-2xl overflow-hidden"
+                    style={{ background: T.surface2, border: `1px solid ${T.border2}` }}
+                  >
+                    <div className="flex items-center justify-between px-3 py-2.5">
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.md }}>{amount} USDT</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                        {rateSymbol}{rawFiatAmount.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
+                      <div className="flex items-center gap-1.5">
+                        <span style={{ fontSize: 11, color: T.lo }}>Fees</span>
+                        <span style={{ fontSize: 11, color: T.lo, textDecoration: "line-through" }}>{(currentFees.totalFee * 100).toFixed(0)}%</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80" }}>0%</span>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}0.00</span>
+                    </div>
+                    {promo.active && (
+                      <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
+                        <span style={{ fontSize: 11, color: "#4ade80" }}>🎁 $5 testing reward</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>-{rateSymbol}{promoDiscountInr.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between px-3 py-2.5" style={{ borderTop: `1px solid ${T.border2}`, background: isLight ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)" }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: T.hi }}>Total</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}{discountedFiatAmount.toFixed(2)} {rateCurrency}</span>
+                    </div>
+                  </div>
+                ) : null
               ) : (
                 <div
                   className="flex items-center"
@@ -1062,11 +1115,11 @@ export const TradeCreationScreen = ({
           >
             {(
               [
-                { key: "fast" as const, label: "Fastest", fee: "2.9%", color: "#FBBF24" },
-                { key: "best" as const, label: "Best Rate", fee: "2.5%", color: "#60A5FA" },
-                { key: "cheap" as const, label: "Cheapest", fee: "1.5%", color: "#34D399" },
+                { key: "fast" as const, label: "Fastest", fee: "0%", oldFee: "2.9%", color: "#FBBF24" },
+                { key: "best" as const, label: "Best Rate", fee: "2.5%", oldFee: null, color: "#60A5FA" },
+                { key: "cheap" as const, label: "Cheapest", fee: "1.5%", oldFee: null, color: "#34D399" },
               ] as const
-            ).map(({ key, label, fee }) => {
+            ).map(({ key, label, fee, oldFee }) => {
               const on = tradePreference === key;
               return (
                 <motion.button
@@ -1102,24 +1155,35 @@ export const TradeCreationScreen = ({
                   >
                     {label}
                   </span>
-                  <span
-                    className="relative"
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 800,
-                      color: on ? T.activeTileSubText : T.lo,
-                      marginTop: 2,
-                      fontFamily:
-                        "ui-monospace, SFMono-Regular, Menlo, monospace",
-                    }}
-                  >
-                    {fee}
+                  <span className="relative flex items-center gap-1" style={{ marginTop: 2 }}>
+                    {oldFee && (
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: T.lo,
+                        textDecoration: "line-through",
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      }}>
+                        {oldFee}
+                      </span>
+                    )}
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: fee === "0%" ? (on ? "#4ade80" : "#22c55e") : (on ? T.activeTileSubText : T.lo),
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      }}
+                    >
+                      {fee}
+                    </span>
                   </span>
                 </motion.button>
               );
             })}
           </div>
         </LayoutGroup>
+
 
         {/* CTA — Buy/Sell action, in flow after Priority */}
         <motion.button

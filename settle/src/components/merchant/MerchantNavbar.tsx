@@ -176,12 +176,22 @@ export function MerchantNavbar({
               >
                 Dashboard
               </Link>
-              {/* Wallet nav entry removed — the whole wallet UX now
-                  lives on the home dashboard (balance card with the
-                  gear menu, Send/Swap/Deposit/Buy/Sell buttons, QR
-                  shortcut next to the address). The route still
-                  exists at /merchant/wallet for direct links, but the
-                  navbar shouldn't surface it as a primary destination. */}
+              {onOpenWallet ? (
+                <button
+                  onClick={onOpenWallet}
+                  className={pill(activePage === "wallet")}
+                >
+                  Wallet
+                </button>
+              ) : (
+                <Link
+                  href="/merchant/wallet"
+                  className={pill(activePage === "wallet")}
+                  onClick={onNavLinkClick}
+                >
+                  Wallet
+                </Link>
+              )}
               {onOpenSettings ? (
                 <button
                   onClick={onOpenSettings}
@@ -224,14 +234,6 @@ export function MerchantNavbar({
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             {/* Desktop: rightActions + avatar dropdown */}
             <div className="hidden lg:flex items-center gap-2">
-              {/* Onboarding-incomplete chip — feature-flagged glanceable
-                  reminder. Sits to the LEFT of the rightActions (history
-                  icon, connection indicator, etc.) so it sits at the
-                  start of the right-hand cluster. Self-hides once
-                  completed_at fires. Clicking reopens OnboardingOverlay
-                  via resume(). */}
-              <OnboardingSetupChip />
-
               {rightActions}
               {rightActions && (
                 <div className="w-px h-6 bg-foreground/[0.06] mx-0.5" />
@@ -373,11 +375,6 @@ export function MerchantNavbar({
                   }))}
                 />
               )} */}
-              {/* Onboarding-incomplete chip — compact variant for the
-                  narrower mobile navbar. Sits left of the bell so the
-                  reminder is in the same visual zone as notifications. */}
-              <OnboardingSetupChip compact />
-
               {/* Rep + Coins — mobile inline. Same component as desktop;
                   the compact prop drops the labels and shows numbers only. */}
               <NavbarRepCoins compact />
@@ -492,6 +489,25 @@ export function MerchantNavbar({
                 >
                   <Zap className="w-5 h-5" /> Dashboard
                 </Link>
+                {onOpenWallet ? (
+                  <button
+                    onClick={() => {
+                      setDrawerOpen(false);
+                      onOpenWallet();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
+                  >
+                    <Wallet className="w-5 h-5" /> Wallet
+                  </button>
+                ) : (
+                  <Link
+                    href="/merchant/wallet"
+                    onClick={() => setDrawerOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
+                  >
+                    <Wallet className="w-5 h-5" /> Wallet
+                  </Link>
+                )}
                 {onOpenSettings ? (
                   <button
                     onClick={() => {

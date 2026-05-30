@@ -109,6 +109,8 @@ export interface Merchant {
    *  timestamp when the merchant dismisses / finishes the tour.
    *  Null-safe by design — see migration 096. */
   tour_completed_at: string | null;
+  buy_rate: number | null;
+  sell_rate: number | null;
   // Waitlist (migration 131). Existing rows default to 'active'.
   waitlist_status?: WaitlistStatus;
   waitlist_joined_at?: Date | null;

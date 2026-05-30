@@ -96,6 +96,8 @@ export const updateMerchantSchema = z.object({
   phone: z.string().max(20).optional(),
   business_name: z.string().min(1).max(100).optional(),
   bio: z.string().max(200).optional(),
+  buy_rate: z.number().min(50).max(200).nullable().optional(),
+  sell_rate: z.number().min(50).max(200).nullable().optional(),
 });
 
 export type UpdateMerchantInput = z.infer<typeof updateMerchantSchema>;

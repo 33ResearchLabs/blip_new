@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useOnboarding } from "@/contexts/OnboardingContext";
@@ -42,6 +43,7 @@ import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { WalletLedger } from "@/components/merchant/WalletLedger";
 import { PaymentMethodModal, PaymentMethodInlineForm } from "@/components/merchant/PaymentMethodModal";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { useCorridorPrices } from "@/hooks/useCorridorPrices";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { useTheme, THEMES, type Theme } from "@/context/ThemeContext";
 import {
@@ -65,6 +67,7 @@ import {
   Medal,
   Award,
   Clock,
+  TrendingUp,
 } from "lucide-react";
 
 type MerchantPaymentMethod = {
@@ -118,30 +121,30 @@ const PM_TYPE_META: Record<
 
 // Avatar presets (same as profile modal)
 const PRESET_AVATARS = [
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix",
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Aneka",
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Max",
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Luna",
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Charlie",
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Bella",
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Oliver",
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Milo",
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Sophie",
-  "https://api.dicebear.com/7.x/adventurer/svg?seed=Leo",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=John",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Emma",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=David",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice",
-  "https://api.dicebear.com/7.x/bottts/svg?seed=Robot1",
-  "https://api.dicebear.com/7.x/bottts/svg?seed=Robot2",
-  "https://api.dicebear.com/7.x/bottts/svg?seed=Robot3",
-  "https://api.dicebear.com/7.x/bottts/svg?seed=Robot4",
-  "https://api.dicebear.com/7.x/pixel-art/svg?seed=Pixel1",
-  "https://api.dicebear.com/7.x/pixel-art/svg?seed=Pixel2",
-  "https://api.dicebear.com/7.x/pixel-art/svg?seed=Pixel3",
-  "https://api.dicebear.com/7.x/pixel-art/svg?seed=Pixel4",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Felix",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Aneka",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Max",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Luna",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Charlie",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Bella",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Oliver",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Milo",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Sophie",
+  "https://api.dicebear.com/9.x/adventurer/svg?seed=Leo",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=John",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Sarah",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Mike",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Emma",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=David",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Alice",
+  "https://api.dicebear.com/9.x/bottts/svg?seed=Robot1",
+  "https://api.dicebear.com/9.x/bottts/svg?seed=Robot2",
+  "https://api.dicebear.com/9.x/bottts/svg?seed=Robot3",
+  "https://api.dicebear.com/9.x/bottts/svg?seed=Robot4",
+  "https://api.dicebear.com/9.x/pixel-art/svg?seed=Pixel1",
+  "https://api.dicebear.com/9.x/pixel-art/svg?seed=Pixel2",
+  "https://api.dicebear.com/9.x/pixel-art/svg?seed=Pixel3",
+  "https://api.dicebear.com/9.x/pixel-art/svg?seed=Pixel4",
 ];
 
 type SettingsTab =
@@ -150,6 +153,7 @@ type SettingsTab =
   | "security"
   | "theme"
   | "payments"
+  | "rates"
   | "notifications"
   | "liquidity"
   | "reputation"
@@ -165,7 +169,10 @@ export default function MerchantSettingsPage({
   const setMerchantInfo = useMerchantStore((s) => s.setMerchantInfo);
   const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    (searchParams.get("tab") as SettingsTab) || "profile"
+  );
   const [isLoading, setIsLoading] = useState(!merchantInfo);
   const [merchant, setMerchant] = useState<any>(merchantInfo ?? null);
 
@@ -174,6 +181,12 @@ export default function MerchantSettingsPage({
     (merchantInfo as any)?.display_name || "",
   );
   const [bio, setBio] = useState<string>((merchantInfo as any)?.bio || "");
+  const [buyRate, setBuyRate] = useState<string>((merchantInfo as any)?.buy_rate?.toString() || "");
+  const [sellRate, setSellRate] = useState<string>((merchantInfo as any)?.sell_rate?.toString() || "");
+  const [rateSaving, setRateSaving] = useState(false);
+  const [rateSaved, setRateSaved] = useState(false);
+  const [rateError, setRateError] = useState<string | null>(null);
+  const corridorPrices = useCorridorPrices();
   const [phone, setPhone] = useState<string>(
     (merchantInfo as any)?.phone || "",
   );
@@ -379,6 +392,8 @@ export default function MerchantSettingsPage({
           setMerchant(data.data);
           setDisplayName(data.data.display_name || "");
           setBio(data.data.bio || "");
+          if (data.data.buy_rate != null) setBuyRate(String(data.data.buy_rate));
+          if (data.data.sell_rate != null) setSellRate(String(data.data.sell_rate));
           setPhone(data.data.phone || "");
           setSelectedAvatar(data.data.avatar_url || null);
         }
@@ -490,6 +505,34 @@ export default function MerchantSettingsPage({
       setSaveError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveRates = async () => {
+    const id = merchantId || merchant?.id;
+    if (!id) return;
+    const buy = parseFloat(buyRate);
+    const sell = parseFloat(sellRate);
+    if (isNaN(buy) || buy < 50 || buy > 200) { setRateError("Buy rate must be between 50 and 200"); return; }
+    if (isNaN(sell) || sell < 50 || sell > 200) { setRateError("Sell rate must be between 50 and 200"); return; }
+    if (sell < buy) { setRateError("Sell rate should be ≥ buy rate"); return; }
+    setRateSaving(true); setRateError(null);
+    try {
+      const res = await fetchWithAuth(`/api/merchant/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ buy_rate: buy, sell_rate: sell }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed to save rates"); }
+      const data = await res.json();
+      setMerchant(data.data);
+      setMerchantInfo((prev: any) => ({ ...prev, buy_rate: buy, sell_rate: sell }));
+      setRateSaved(true);
+      setTimeout(() => setRateSaved(false), 3000);
+    } catch (err) {
+      setRateError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setRateSaving(false);
     }
   };
 
@@ -732,6 +775,7 @@ export default function MerchantSettingsPage({
     { id: "security", label: "Security", icon: Lock },
     { id: "theme", label: "Theme", icon: Palette },
     { id: "payments", label: "Payments", icon: CreditCard },
+    { id: "rates", label: "INR Rates", icon: TrendingUp },
   ];
   const preferenceTabs: { id: SettingsTab; label: string; icon: any }[] = [
     { id: "notifications", label: "Alerts", icon: Bell },
@@ -895,14 +939,16 @@ export default function MerchantSettingsPage({
                     {selectedAvatar ? (
                       <img
                         src={selectedAvatar}
-                        alt="Avatar"
+                        alt=""
                         className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
                       />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-white/5 text-2xl">
-                        {displayName?.charAt(0)?.toUpperCase() || "?"}
-                      </div>
-                    )}
+                    ) : null}
+                    <div className="w-full h-full flex items-center justify-center bg-white/5 text-2xl">
+                      {displayName?.charAt(0)?.toUpperCase() || "?"}
+                    </div>
                   </div>
                   <div>
                     <p className="text-sm text-white/70">
@@ -1716,6 +1762,103 @@ export default function MerchantSettingsPage({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* INR Rates Tab */}
+          {activeTab === "rates" && (
+            <div className="space-y-6" data-tour="inr-rates">
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <h2 className="text-2xl font-bold">INR Rates</h2>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-white/10 bg-white/[0.05] text-[11px] font-semibold text-white/50">
+                    0% Blip fees
+                  </span>
+                </div>
+                <p className="text-sm text-white/40">
+                  Set the rates you offer for buying and selling USDT in the India corridor.
+                </p>
+              </div>
+
+
+              {/* Buy Rate */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-white/70">
+                  Buy Rate — you buy USDT from users at this price (₹/USDT)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">₹</span>
+                  <input
+                    type="number"
+                    value={buyRate}
+                    onChange={(e) => setBuyRate(e.target.value)}
+                    placeholder="Enter buy rate"
+                    min={50}
+                    max={200}
+                    step={0.01}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-7 pr-4 py-3 text-white text-sm focus:outline-none focus:border-white/30 focus:bg-white/8"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-white/30">Blip Rate:</span>
+                  <button
+                    onClick={() => setBuyRate('101.5')}
+                    className="text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1 rounded-lg transition-colors"
+                  >
+                    ₹101.5
+                  </button>
+                </div>
+              </div>
+
+              {/* Sell Rate */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-white/70">
+                  Sell Rate — you sell USDT to users at this price (₹/USDT)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">₹</span>
+                  <input
+                    type="number"
+                    value={sellRate}
+                    onChange={(e) => setSellRate(e.target.value)}
+                    placeholder="Enter sell rate"
+                    min={50}
+                    max={200}
+                    step={0.01}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-7 pr-4 py-3 text-white text-sm focus:outline-none focus:border-white/30 focus:bg-white/8"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-white/30">Blip Rate:</span>
+                  <button
+                    onClick={() => setSellRate('103.4')}
+                    className="text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1 rounded-lg transition-colors"
+                  >
+                    ₹103.4
+                  </button>
+                </div>
+              </div>
+
+              {rateError && (
+                <p className="text-red-400 text-sm flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" /> {rateError}
+                </p>
+              )}
+
+              <button
+                onClick={handleSaveRates}
+                disabled={rateSaving}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-black font-semibold text-sm transition-colors"
+              >
+                {rateSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : rateSaved ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {rateSaved ? "Saved!" : rateSaving ? "Saving…" : "Save Rates"}
+              </button>
             </div>
           )}
 

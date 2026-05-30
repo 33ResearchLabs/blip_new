@@ -138,8 +138,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
     const allMet =
       c.usernameSet &&
       c.walletConnected &&
-      c.hasPaymentMethod &&
-      c.walletFunded &&
+      c.inrRateSet &&
       c.hasTrade;
     return !allMet;
   })();
@@ -203,7 +202,16 @@ export const NotificationsPanel = memo(function NotificationsPanel({
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 Getting Started
-                <span className="w-1.5 h-1.5 rounded-full bg-[#ff8a4c]" />
+                {/* Desktop: tooltip on hover. Mobile: tiny neutral dot. */}
+                <span className="hidden sm:inline-block group relative">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/30 inline-block" />
+                  <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[180px] opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                    <span className="block rounded-lg bg-foreground text-background text-[10.5px] font-medium px-2.5 py-1.5 leading-snug shadow-xl shadow-black/40 text-center">
+                      Complete setup to go live in the marketplace
+                    </span>
+                  </span>
+                </span>
+                <span className="sm:hidden w-1.5 h-1.5 rounded-full bg-white/30" />
                 {activeTab === "getting_started" && (
                   <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-t" />
                 )}

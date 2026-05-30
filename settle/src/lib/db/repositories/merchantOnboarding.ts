@@ -37,14 +37,13 @@ export interface OnboardingRow {
 }
 
 export interface OnboardingStatus extends OnboardingRow {
-  /** Derived: lowest 1-based step number not yet timestamped. 6 = all done. */
+  /** Derived: lowest 1-based step number not yet timestamped. 5 = all done. */
   nextStep: 1 | 2 | 3 | 4 | 5 | 6;
   /** Derived from truth conditions at read time. */
   conditions: {
     usernameSet: boolean;
     walletConnected: boolean;
-    hasPaymentMethod: boolean;
-    walletFunded: boolean;
+    inrRateSet: boolean;
     hasTrade: boolean;
   };
 }
@@ -52,8 +51,7 @@ export interface OnboardingStatus extends OnboardingRow {
 interface TruthConditions {
   usernameSet: boolean;
   walletConnected: boolean;
-  hasPaymentMethod: boolean;
-  walletFunded: boolean;
+  inrRateSet: boolean;
   hasTrade: boolean;
 }
 
@@ -66,51 +64,22 @@ interface TruthConditions {
 async function computeConditions(merchantId: string): Promise<TruthConditions> {
   const merchantRow = await queryOne<{
     wallet_address: string | null;
-    balance: number | string | null;
-    username_customized_at: string | null;
     bio: string | null;
+    buy_rate: number | null;
+    sell_rate: number | null;
   }>(
-    `SELECT wallet_address, balance, username_customized_at, bio FROM merchants WHERE id = $1`,
+    `SELECT wallet_address, bio, buy_rate, sell_rate FROM merchants WHERE id = $1`,
     [merchantId]
   );
 
   if (!merchantRow) {
-    // Unreachable in practice — caller guards with auth.actorId. Return all
-    // false to avoid throwing inside a read endpoint.
-    return {
-      usernameSet: false,
-      walletConnected: false,
-      hasPaymentMethod: false,
-      walletFunded: false,
-      hasTrade: false,
-    };
+    return { usernameSet: false, walletConnected: false, inrRateSet: false, hasTrade: false };
   }
 
-  // `usernameSet` is a legacy field name — it now gates on a non-empty
-  // bio. Rationale: merchants already log in with a username, so asking
-  // them to "set a username" in onboarding was redundant. business_name
-  // and display_name are NOT NULL at signup, so they can't act as the
-  // gate either. Bio is the only optional profile field that meaningfully
-  // signals "the merchant filled out their profile."
-  // (Rename to `profileSet` in a future pass — touches ~6 files.)
   const usernameSet = !!(merchantRow.bio && merchantRow.bio.trim().length > 0);
   const walletConnected = !!(merchantRow.wallet_address && merchantRow.wallet_address.trim().length > 0);
-  // Minimum funding threshold for onboarding step 4. Set above zero so
-  // a stray dust balance (e.g. a refund of a tiny fee) doesn't trip
-  // "Funded" without the merchant actually being able to back a trade.
-  const MIN_FUND_USDT = 1;
-  const walletFunded = Number(merchantRow.balance ?? 0) >= MIN_FUND_USDT;
+  const inrRateSet = merchantRow.buy_rate != null || merchantRow.sell_rate != null;
 
-  const pmRow = await queryOne<{ c: string | number }>(
-    `SELECT COUNT(*)::int AS c FROM merchant_payment_methods
-      WHERE merchant_id = $1 AND is_active = true`,
-    [merchantId]
-  );
-  const hasPaymentMethod = Number(pmRow?.c ?? 0) > 0;
-
-  // "First trade" = ever participated in a non-cancelled order as either
-  // seller (merchant_id), buyer (buyer_merchant_id), or completed.
-  // We're permissive — any movement counts, including in-progress.
   const tradeRow = await queryOne<{ c: string | number }>(
     `SELECT COUNT(*)::int AS c FROM orders
       WHERE (merchant_id = $1 OR buyer_merchant_id = $1)
@@ -119,7 +88,7 @@ async function computeConditions(merchantId: string): Promise<TruthConditions> {
   );
   const hasTrade = Number(tradeRow?.c ?? 0) > 0;
 
-  return { usernameSet, walletConnected, hasPaymentMethod, walletFunded, hasTrade };
+  return { usernameSet, walletConnected, inrRateSet, hasTrade };
 }
 
 /** Ensure a row exists for this merchant, creating it lazily on first access. */
@@ -152,8 +121,7 @@ export async function getOnboardingStatus(merchantId: string): Promise<Onboardin
   const sets: string[] = [];
   if (!row.username_set_at && conditions.usernameSet) sets.push('username_set_at = NOW()');
   if (!row.wallet_connected_at && conditions.walletConnected) sets.push('wallet_connected_at = NOW()');
-  if (!row.payment_method_at && conditions.hasPaymentMethod) sets.push('payment_method_at = NOW()');
-  if (!row.wallet_funded_at && conditions.walletFunded) sets.push('wallet_funded_at = NOW()');
+  if (!row.payment_method_at && conditions.inrRateSet) sets.push('payment_method_at = NOW()');  // reused column tracks inrRateSet
   if (!row.first_trade_at && conditions.hasTrade) sets.push('first_trade_at = NOW()');
 
   let updated = row;
@@ -243,11 +211,18 @@ export async function resumeOnboarding(merchantId: string): Promise<OnboardingRo
  * Used by the order-participation gates to block trades until setup is done.
  */
 export async function isOnboardingComplete(merchantId: string): Promise<boolean> {
-  const row = await queryOne<{ completed_at: string | null }>(
-    `SELECT completed_at FROM merchant_onboarding WHERE merchant_id = $1`,
+  // Treat as complete if: (a) completed_at is set, OR (b) skipped_at is set,
+  // OR (c) the two required conditions (wallet + inr rate) are satisfied.
+  // This ensures merchants who set up wallet+rates can trade without needing
+  // to explicitly click "Go Live" or wait for hasTrade.
+  const row = await queryOne<{ completed_at: string | null; skipped_at: string | null }>(
+    `SELECT completed_at, skipped_at FROM merchant_onboarding WHERE merchant_id = $1`,
     [merchantId]
   );
-  return !!row?.completed_at;
+  if (!row) return true; // no record = new merchant, let them through
+  if (row.completed_at || row.skipped_at) return true;
+  const conditions = await computeConditions(merchantId);
+  return conditions.walletConnected && conditions.inrRateSet;
 }
 
 /**

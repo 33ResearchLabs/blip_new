@@ -34,8 +34,7 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 export interface OnboardingConditions {
   usernameSet: boolean;
   walletConnected: boolean;
-  hasPaymentMethod: boolean;
-  walletFunded: boolean;
+  inrRateSet: boolean;
   hasTrade: boolean;
 }
 
@@ -248,13 +247,6 @@ export function useOnboardingGuard(action: GuardedAction): {
   // letting the server return a generic balance error.
   if (!conditions.walletConnected) {
     return { allowed: false, reason: 'Reconnect your wallet to keep trading.' };
-  }
-
-  if (action === 'create-buy-order' && !conditions.walletFunded) {
-    return {
-      allowed: false,
-      reason: 'Fund your wallet with USDT to accept BUY trades.',
-    };
   }
 
   return { allowed: true, reason: null };
