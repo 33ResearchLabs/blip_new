@@ -101,7 +101,10 @@ export async function GET(request: NextRequest) {
         bm.display_name as buyer_merchant_name,
         bm.wallet_address as buyer_merchant_wallet,
         bm.rating as buyer_merchant_rating,
-        bm.total_trades as buyer_merchant_trades
+        bm.total_trades as buyer_merchant_trades,
+        o.escrow_tx_hash,
+        o.escrow_trade_id,
+        o.escrow_creator_wallet
       FROM orders o
       LEFT JOIN disputes d ON d.order_id = o.id
       JOIN users u ON o.user_id = u.id
@@ -198,6 +201,11 @@ export async function GET(request: NextRequest) {
         // M2M orders: user_id is an open_order_ placeholder — real buyer is buyer_merchant_id.
         // Swap `user` to show the actual buyer merchant so compliance sees merchant vs merchant.
         isM2M: !!row.buyer_merchant_id,
+        escrow: row.escrow_tx_hash ? {
+          txHash: row.escrow_tx_hash,
+          tradeId: row.escrow_trade_id,
+          creatorWallet: row.escrow_creator_wallet,
+        } : null,
         user: row.buyer_merchant_id ? {
           id: row.buyer_merchant_id,
           name: row.buyer_merchant_name || 'Buyer Merchant',

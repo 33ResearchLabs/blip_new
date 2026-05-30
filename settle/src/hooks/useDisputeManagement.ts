@@ -51,6 +51,11 @@ interface DisputeOrder {
     trades: number;
   };
   isM2M?: boolean;
+  escrow?: {
+    txHash: string;
+    tradeId: number;
+    creatorWallet: string;
+  } | null;
   buyerMerchant?: {
     id: string;
     name: string;
@@ -90,6 +95,7 @@ interface UseDisputeManagementReturn {
   startInvestigating: (orderId: string) => Promise<void>;
   resolveDispute: () => Promise<void>;
   finalizeDispute: () => Promise<void>;
+  refundDepositor: (dispute: DisputeOrder) => Promise<void>;
   getDisputeReasonInfo: (reason: string | undefined) => { icon: string; label: string; color: string };
 }
 
@@ -302,6 +308,45 @@ export function useDisputeManagement(
     }
   };
 
+  // Refund depositor directly via on-chain refundEscrow (no arbiter needed).
+  // Works when escrow is in Funded state (dispute not raised on-chain).
+  // The connected wallet must be the original escrow depositor.
+  const refundDepositor = async (dispute: DisputeOrder) => {
+    if (!dispute.escrow?.tradeId || !dispute.escrow?.creatorWallet) {
+      addNotification("dispute", "No on-chain escrow found for this order", dispute.id);
+      return;
+    }
+    if (!solanaWallet.connected) {
+      addNotification("dispute", "Connect the depositor's wallet first", dispute.id);
+      return;
+    }
+    setIsProcessingOnChain(true);
+    try {
+      addNotification("system", "Sending refund to depositor on-chain...", dispute.id);
+      const result = await solanaWallet.refundEscrow({
+        creatorPubkey: dispute.escrow.creatorWallet,
+        tradeId: dispute.escrow.tradeId,
+      });
+      if (result.success && result.txHash) {
+        addNotification("resolution", `Refund sent on-chain: ${result.txHash.slice(0, 8)}...`, dispute.id);
+        // Mark order cancelled + record refund tx in DB
+        await fetchWithAuth(`/api/orders/${dispute.id}/escrow`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": txAnchoredKey(result.txHash, "depositor_refund"),
+          },
+          body: JSON.stringify({ tx_hash: result.txHash, action: "refund", actor_type: "compliance", actor_id: member?.id }),
+        });
+        fetchDisputes();
+      }
+    } catch (err: any) {
+      addNotification("dispute", `Refund failed: ${err?.message || "Unknown error"}`, dispute.id);
+    } finally {
+      setIsProcessingOnChain(false);
+    }
+  };
+
   return {
     disputes,
     showResolveModal,
@@ -315,6 +360,7 @@ export function useDisputeManagement(
     startInvestigating,
     resolveDispute: handleResolveDispute,
     finalizeDispute,
+    refundDepositor,
     getDisputeReasonInfo,
   };
 }

@@ -118,6 +118,7 @@ export default function ComplianceDashboard() {
     startInvestigating,
     resolveDispute,
     finalizeDispute,
+    refundDepositor,
     getDisputeReasonInfo,
   } = disputeMgmt;
 
@@ -813,6 +814,17 @@ export default function ComplianceDashboard() {
                             <Scale className="w-4 h-4" />
                             Resolve
                           </motion.button>
+                          {dispute.escrow?.tradeId && (
+                            <motion.button
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => refundDepositor(dispute)}
+                              disabled={isProcessingOnChain}
+                              title="Refund escrow to depositor on-chain (no arbiter needed)"
+                              className="px-3 py-2.5 border border-amber-500/40 bg-amber-500/10 text-amber-400 rounded-xl text-xs font-medium flex items-center gap-1 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                            >
+                              ↩ Refund
+                            </motion.button>
+                          )}
                           <button
                             onClick={() => { handleOpenDisputeChat(dispute); setMobileView('chat'); }}
                             className="px-4 py-2.5 border border-[var(--color-border-medium)] rounded-xl"
