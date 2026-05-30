@@ -584,29 +584,35 @@ export const StatusCard = memo(function StatusCard({
           <WalletAddressRow onOpenDeposit={onOpenDeposit} />
         )}
 
-        {/* Quick actions — Swap / Send / Deposit. Full-width, taller
-            buttons with side-by-side icon + label so they feel like
-            primary actions, not afterthought icons. */}
+        {/* Quick actions — Swap / Send / Deposit. Full-width buttons with
+            stacked icon + label so they feel like primary actions.
+            Sizing (padding/gap/icon/font) is driven purely by `cqi` — the
+            card's OWN width — not `vh`. The old formulas added `+ Nvh`,
+            which tracks the WINDOW height, not this column; on a tall-but-
+            narrow window that term stayed large and pinned the buttons near
+            their max, so they barely shrank when the column was narrowed.
+            cqi-only makes them scale down as the column narrows. The max
+            clamp values are unchanged, so the wide-column look is identical. */}
         {(onOpenSwap || onOpenSend || onOpenDeposit) && (
           <div className="mt-3 w-full grid grid-cols-3 gap-1.5 relative z-10">
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
                 style={{
-                  paddingTop: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
-                  paddingBottom: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
-                  gap: "clamp(0.15rem, 1.2cqi + 0.3vh, 0.6rem)",
+                  paddingTop: "clamp(0.3rem, 4.5cqi, 1.1rem)",
+                  paddingBottom: "clamp(0.3rem, 4.5cqi, 1.1rem)",
+                  gap: "clamp(0.15rem, 2.4cqi, 0.6rem)",
                 }}
                 className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
                 <ArrowLeftRight
                   style={{
-                    width: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
-                    height: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
+                    width: "clamp(0.7rem, 5cqi, 1.4rem)",
+                    height: "clamp(0.7rem, 5cqi, 1.4rem)",
                   }}
                 />
                 <span
-                  style={{ fontSize: "clamp(7px, 4cqi + 0.5vh, 14px)" }}
+                  style={{ fontSize: "clamp(7px, 5.5cqi, 14px)" }}
                   className="font-bold uppercase tracking-wider"
                 >
                   Swap
@@ -617,20 +623,20 @@ export const StatusCard = memo(function StatusCard({
               <button
                 onClick={onOpenSend}
                 style={{
-                  paddingTop: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
-                  paddingBottom: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
-                  gap: "clamp(0.15rem, 1.2cqi + 0.3vh, 0.6rem)",
+                  paddingTop: "clamp(0.3rem, 4.5cqi, 1.1rem)",
+                  paddingBottom: "clamp(0.3rem, 4.5cqi, 1.1rem)",
+                  gap: "clamp(0.15rem, 2.4cqi, 0.6rem)",
                 }}
                 className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
                 <ArrowUpFromLine
                   style={{
-                    width: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
-                    height: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
+                    width: "clamp(0.7rem, 5cqi, 1.4rem)",
+                    height: "clamp(0.7rem, 5cqi, 1.4rem)",
                   }}
                 />
                 <span
-                  style={{ fontSize: "clamp(7px, 4cqi + 0.5vh, 14px)" }}
+                  style={{ fontSize: "clamp(7px, 5.5cqi, 14px)" }}
                   className="font-bold uppercase tracking-wider"
                 >
                   Send
@@ -641,20 +647,20 @@ export const StatusCard = memo(function StatusCard({
               <button
                 onClick={onOpenDeposit}
                 style={{
-                  paddingTop: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
-                  paddingBottom: "clamp(0.35rem, 2.4cqi + 0.7vh, 1.1rem)",
-                  gap: "clamp(0.15rem, 1.2cqi + 0.3vh, 0.6rem)",
+                  paddingTop: "clamp(0.3rem, 4.5cqi, 1.1rem)",
+                  paddingBottom: "clamp(0.3rem, 4.5cqi, 1.1rem)",
+                  gap: "clamp(0.15rem, 2.4cqi, 0.6rem)",
                 }}
                 className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
                 <ArrowDownToLine
                   style={{
-                    width: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
-                    height: "clamp(0.7rem, 3cqi + 0.5vh, 1.4rem)",
+                    width: "clamp(0.7rem, 5cqi, 1.4rem)",
+                    height: "clamp(0.7rem, 5cqi, 1.4rem)",
                   }}
                 />
                 <span
-                  style={{ fontSize: "clamp(7px, 4cqi + 0.5vh, 14px)" }}
+                  style={{ fontSize: "clamp(7px, 5.5cqi, 14px)" }}
                   className="font-bold uppercase tracking-wider"
                 >
                   Deposit
@@ -704,11 +710,11 @@ export const StatusCard = memo(function StatusCard({
                 key={c.id}
                 onClick={() => onCorridorChange?.(c.id)}
                 style={{
-                  paddingTop: "clamp(0.2rem, 1.5cqi + 0.4vh, 0.5rem)",
-                  paddingBottom: "clamp(0.2rem, 1.5cqi + 0.4vh, 0.5rem)",
-                  paddingLeft: "clamp(0.3rem, 1.5cqi + 0.3vh, 0.7rem)",
-                  paddingRight: "clamp(0.3rem, 1.5cqi + 0.3vh, 0.7rem)",
-                  gap: "clamp(0.25rem, 1cqi + 0.3vh, 0.6rem)",
+                  paddingTop: "clamp(0.2rem, 2.2cqi, 0.5rem)",
+                  paddingBottom: "clamp(0.2rem, 2.2cqi, 0.5rem)",
+                  paddingLeft: "clamp(0.3rem, 3cqi, 0.7rem)",
+                  paddingRight: "clamp(0.3rem, 3cqi, 0.7rem)",
+                  gap: "clamp(0.2rem, 2.4cqi, 0.6rem)",
                 }}
                 className={`flex-1 min-w-0 rounded-md flex items-center justify-center transition-all ${
                   isActive
@@ -717,13 +723,13 @@ export const StatusCard = memo(function StatusCard({
                 }`}
               >
                 <span
-                  style={{ fontSize: "clamp(8px, 3.5cqi + 0.4vh, 13px)" }}
+                  style={{ fontSize: "clamp(7px, 4cqi, 13px)" }}
                   className="font-medium tracking-tight whitespace-nowrap"
                 >
                   USDT/{c.fiat}
                 </span>
                 <span
-                  style={{ fontSize: "clamp(7px, 3cqi + 0.35vh, 12px)" }}
+                  style={{ fontSize: "clamp(6px, 3.5cqi, 12px)" }}
                   className={`font-mono tabular-nums truncate ${
                     isActive ? "text-foreground/55" : "text-foreground/30"
                   }`}
