@@ -729,6 +729,8 @@ export default function MerchantDashboard() {
     return orders
       .filter((o) => {
         const status = getEffectiveStatus(o);
+        // Disputed orders stay in In Progress so both merchants can see them
+        if (status === "disputed") return true;
         if (status !== "escrow") return false;
         if (isSelfUnaccepted(o)) return false;
         if (isUnclaimedEscrow(o)) return false;
@@ -759,7 +761,6 @@ export default function MerchantDashboard() {
       const status = getEffectiveStatus(o);
       return (
         status === "cancelled" ||
-        status === "disputed" ||
         ((status === "active" || status === "pending") && isOrderExpired(o)) ||
         (status === "escrow" && isOrderExpired(o) && !hasMyEscrow(o))
       );
