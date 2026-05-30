@@ -80,6 +80,10 @@ interface SolanaWalletForDispute {
     tradeId: number;
     resolution: "release_to_buyer" | "refund_to_seller";
   }) => Promise<{ txHash: string; success: boolean }>;
+  refundEscrow: (params: {
+    creatorPubkey: string;
+    tradeId: number;
+  }) => Promise<{ txHash: string; success: boolean }>;
 }
 
 interface UseDisputeManagementReturn {

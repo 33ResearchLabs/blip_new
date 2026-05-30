@@ -601,6 +601,7 @@ export default function ComplianceDashboard() {
                             setSelectedDispute(d);
                             setShowResolveModal(true);
                           }}
+                          onRefundDepositor={refundDepositor}
                         />
                       ))
                     ) : (

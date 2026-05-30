@@ -144,6 +144,7 @@ interface DisputeCardProps {
   onInvestigate?: (orderId: string) => void;
   onChat: (dispute: DisputeOrder) => void;
   onResolve?: (dispute: DisputeOrder) => void;
+  onRefundDepositor?: (dispute: DisputeOrder) => void;
 }
 
 export default function DisputeCard({
@@ -154,6 +155,7 @@ export default function DisputeCard({
   onInvestigate,
   onChat,
   onResolve,
+  onRefundDepositor,
 }: DisputeCardProps) {
   if (variant === "open") {
     return (
@@ -282,6 +284,16 @@ export default function DisputeCard({
           <Scale className="w-3.5 h-3.5" />
           Resolve
         </motion.button>
+        {dispute.escrow?.tradeId && (
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onRefundDepositor?.(dispute)}
+            title="Refund escrow to depositor on-chain (no arbiter needed)"
+            className="flex items-center gap-1.5 px-3 py-2 bg-amber-500/10 border border-amber-500/40 rounded-lg text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition-all"
+          >
+            ↩ Refund
+          </motion.button>
+        )}
       </div>
     </motion.div>
   );
