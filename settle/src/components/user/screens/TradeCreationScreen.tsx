@@ -254,9 +254,9 @@ export const TradeCreationScreen = ({
   const rateCurrency = ratePair === "usdt_aed" ? "AED" : "INR";
   const rateSymbol = ratePair === "usdt_inr" ? "₹" : "د.إ";
 
-  // Directional rates for INR — buy at 103.4 (merchant's sell rate), sell at 101.5 (merchant's buy rate)
-  const BUY_RATE_INR = 103.4;
-  const SELL_RATE_INR = 101.5;
+  // Directional rates for INR — baked in 2% backend fee: buy 103.4×0.98=101.33, sell 101.5×1.02=103.53
+  const BUY_RATE_INR = 101.33;
+  const SELL_RATE_INR = 103.53;
   const displayRate: number | null = ratePair === "usdt_inr"
     ? (isBuy ? BUY_RATE_INR : SELL_RATE_INR)
     : midRate;
