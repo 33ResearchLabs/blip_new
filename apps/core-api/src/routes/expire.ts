@@ -90,17 +90,21 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
         const hasEscrow = !!order.escrow_tx_hash;
 
         if (hasEscrow) {
-          // Escrowed orders go to disputed (status guard)
-          const disputeResult = await dbQuery(
+          // Buyer never sent payment → treat as abandoned, not a real dispute.
+          // Move to cancelled; the stuck-orders reconciler in payment-deadline-worker
+          // will call refundEscrow on-chain once the buyer payment window expires.
+          const cancelResult = await dbQuery(
             `UPDATE orders
-             SET status = 'disputed'::order_status,
-                 cancellation_reason = 'Order timed out with escrow locked',
+             SET status = 'cancelled'::order_status,
+                 cancelled_at = NOW(),
+                 cancelled_by = 'system',
+                 cancellation_reason = 'Order timed out with escrow locked - buyer did not send payment',
                  order_version = order_version + 1
-             WHERE id = $1 AND status = $2::order_status
+             WHERE id = $1 AND status = $2::order_status AND payment_sent_at IS NULL
              RETURNING id`,
             [order.id, order.status]
           );
-          if (disputeResult.length === 0) continue; // concurrent update, skip
+          if (cancelResult.length === 0) continue; // concurrent update or payment already sent, skip
         } else {
           // Non-escrowed orders get cancelled (status guard)
           const cancelResult = await dbQuery(
@@ -117,8 +121,8 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
           if (cancelResult.length === 0) continue; // concurrent update, skip
         }
 
-        // Event
-        const newStatus = hasEscrow ? 'disputed' : 'cancelled';
+        // Event — escrowed orders with no payment now cancel like non-escrowed ones
+        const newStatus = 'cancelled';
         await dbQuery(
           `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
            VALUES ($1, $2, 'system', 'expiry-endpoint', $3, $4, $5)`,
