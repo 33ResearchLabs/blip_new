@@ -811,19 +811,20 @@ export async function buildResolveDisputeTx(
   const tradeCounterparty = new PublicKey(tradeInfo.data.subarray(40, 72));
   const escrowDepositor = new PublicKey(escrowInfo.data.subarray(104, 136));
 
-  const buyerAta = await getAssociatedTokenAddress(mint, tradeCounterparty);
-  const sellerAta = await getAssociatedTokenAddress(mint, escrowDepositor);
+  // recipient_ata: buyer gets funds on ReleaseToBuyer, seller/depositor on RefundToSeller
+  const recipientOwner = resolution === DisputeResolution.ReleaseToBuyer ? tradeCounterparty : escrowDepositor;
+  const recipientAta = await getAssociatedTokenAddress(mint, recipientOwner);
 
   const transaction = new Transaction();
 
-  // Ensure buyer ATA exists
+  // Ensure recipient ATA exists
   try {
-    await getAccount(connection, buyerAta);
+    await getAccount(connection, recipientAta);
   } catch (error) {
     const createAtaIx = createAssociatedTokenAccountInstruction(
       arbiter,
-      buyerAta,
-      tradeCounterparty,
+      recipientAta,
+      recipientOwner,
       mint
     );
     transaction.add(createAtaIx);
@@ -856,9 +857,9 @@ export async function buildResolveDisputeTx(
       escrow: escrowPda,
       vaultAuthority,
       vaultAta,
-      buyerAta,
-      sellerAta,
+      recipientAta,
       treasuryAta,
+      depositor: escrowDepositor,
       mint,
       tokenProgram: TOKEN_PROGRAM_ID,
     })
