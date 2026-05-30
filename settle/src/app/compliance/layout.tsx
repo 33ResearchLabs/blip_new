@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import ComplianceWalletProvider from "@/components/ComplianceWalletProvider";
 
 export const metadata: Metadata = {
   title: "Blip Market Compliance",
@@ -36,5 +37,5 @@ export default function ComplianceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <ComplianceWalletProvider>{children}</ComplianceWalletProvider>;
 }
