@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ArrowUpRight, ArrowDownRight, Download, ChevronDown,
   ChevronLeft, ChevronRight, Loader2, BookOpen, Filter,
-  TrendingUp, TrendingDown, RefreshCw,
+  TrendingUp, TrendingDown, RefreshCw, Lock,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
@@ -29,6 +29,7 @@ interface LedgerSummary {
   total_credits: number;
   total_debits: number;
   total_transactions: number;
+  in_escrow: number;
 }
 
 interface Pagination {
@@ -151,6 +152,7 @@ async function exportToExcel(entries: LedgerEntry[], summary: LedgerSummary) {
     ['Current Balance', num(summary.current_balance)],
     ['Total Credits', num(summary.total_credits)],
     ['Total Debits', num(summary.total_debits)],
+    ['In Escrow', num(summary.in_escrow)],
     ['Total Transactions', Number(summary.total_transactions) || 0],
   ];
 
@@ -238,7 +240,7 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
           primary visual element. Matches the redesigned ledger mock where
           both cards are the same size and dominate the top of the view. */}
       {summary && (
-        <div className={`grid ${walletBalance != null ? 'lg:grid-cols-3 grid-cols-1' : 'grid-cols-1 md:grid-cols-2'} gap-4`}>
+        <div className={`grid ${walletBalance != null ? 'lg:grid-cols-4 sm:grid-cols-2 grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'} gap-4`}>
           {walletBalance != null && (
             <div className="bg-white/[0.02] rounded-2xl p-5 border border-white/[0.06]">
               <div className="flex items-center gap-3 mb-3">
@@ -277,6 +279,19 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
               -{formatUSDT(summary.total_debits)}
             </p>
             <p className="text-[11px] text-white/35 mt-2">USDT</p>
+          </div>
+
+          <div className="bg-white/[0.02] rounded-2xl p-5 border border-white/[0.06] relative overflow-hidden">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-amber-400" />
+              </div>
+              <span className="text-[14px] font-bold text-white">In Escrow</span>
+            </div>
+            <p className="text-4xl font-bold text-amber-400 font-mono tabular-nums leading-none">
+              {formatUSDT(summary.in_escrow)}
+            </p>
+            <p className="text-[11px] text-white/35 mt-2">USDT held in active orders</p>
           </div>
         </div>
       )}

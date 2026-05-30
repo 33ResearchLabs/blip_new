@@ -32,6 +32,7 @@ interface WalletLedgerSummary {
   total_credits: number;
   total_debits: number;
   total_transactions: number;
+  in_escrow: number;
 }
 
 export async function GET(request: NextRequest) {
@@ -100,16 +101,50 @@ export async function GET(request: NextRequest) {
       [merchantId]
     );
 
+    // Escrow holds are NOT real cash flow until the order they back resolves.
+    // We join each escrow ledger entry to its order and only treat it as a
+    // settled credit/debit once the order is `completed`:
+    //   - ESCROW_LOCK   → a real debit ONLY when the order completed (USDT sold).
+    //                     While the order is in flight it's a hold (see in_escrow);
+    //                     if cancelled it's refunded → nets to zero.
+    //   - ESCROW_RELEASE→ a real credit ONLY when the order completed (USDT received).
+    //   - ESCROW_REFUND → the cancel-offset of a hold we never counted → ignore.
     const summaryRows = await query<{ total_credits: string; total_debits: string; total_transactions: string }>(
       `SELECT
-        COALESCE(SUM(CASE WHEN le.amount > 0 THEN le.amount ELSE 0 END), 0) as total_credits,
-        COALESCE(SUM(CASE WHEN le.amount < 0 THEN ABS(le.amount) ELSE 0 END), 0) as total_debits,
+        COALESCE(SUM(
+          CASE
+            WHEN le.amount <= 0 THEN 0
+            WHEN le.entry_type = 'ESCROW_REFUND' THEN 0
+            WHEN le.entry_type = 'ESCROW_RELEASE' AND COALESCE(o.status, '') <> 'completed' THEN 0
+            ELSE le.amount
+          END
+        ), 0) as total_credits,
+        COALESCE(SUM(
+          CASE
+            WHEN le.amount >= 0 THEN 0
+            WHEN le.entry_type = 'ESCROW_LOCK' AND COALESCE(o.status, '') <> 'completed' THEN 0
+            ELSE ABS(le.amount)
+          END
+        ), 0) as total_debits,
         COUNT(*) as total_transactions
        FROM ledger_entries le
+       LEFT JOIN orders o ON le.related_order_id = o.id
        WHERE le.account_type = 'merchant'
          AND le.account_id = $1::uuid
          AND le.entry_type NOT IN ('FEE', 'FEE_EARNING')${summaryDateFilter}${summaryTypeFilter}`,
       sp
+    );
+
+    // Funds currently locked in escrow by this merchant (live snapshot, not
+    // filtered by the date/type pickers — it's a "right now" figure). These are
+    // the holds excluded from total_debits above.
+    const inEscrowRows = await query<{ in_escrow: string }>(
+      `SELECT COALESCE(SUM(escrow_debited_amount), 0) as in_escrow
+       FROM orders
+       WHERE escrow_debited_entity_type = 'merchant'
+         AND escrow_debited_entity_id = $1::uuid
+         AND status IN ('escrowed', 'payment_sent', 'disputed')`,
+      [merchantId]
     );
 
     const summary: WalletLedgerSummary = {
@@ -117,6 +152,7 @@ export async function GET(request: NextRequest) {
       total_credits: parseFloat(summaryRows[0]?.total_credits || '0'),
       total_debits: parseFloat(summaryRows[0]?.total_debits || '0'),
       total_transactions: parseInt(summaryRows[0]?.total_transactions || '0'),
+      in_escrow: parseFloat(inEscrowRows[0]?.in_escrow || '0'),
     };
 
     // --- Entries ---
