@@ -150,6 +150,7 @@ export const DEVNET_WS_ENDPOINT = (() => {
 // In production, this would be a multi-sig or DAO-controlled wallet
 export const COMPLIANCE_WALLETS: PublicKey[] = [
   new PublicKey('5wA1UMxTdkypE4arpgckZPzA9Gv53QhUUw7dCm7tZYK2'),
+  new PublicKey('AcptbLFa7CrUQFWG5BZr2iycZR2MQwprSbrrHUuAnyYM'),
 ];
 
 // Environment variable override for compliance wallets
