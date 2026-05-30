@@ -149,8 +149,7 @@ export const DEVNET_WS_ENDPOINT = (() => {
 // These wallets have authority to release or refund escrow in disputed orders
 // In production, this would be a multi-sig or DAO-controlled wallet
 export const COMPLIANCE_WALLETS: PublicKey[] = [
-  // Placeholder - user will provide actual compliance wallet addresses
-  // new PublicKey('YOUR_COMPLIANCE_WALLET_HERE'),
+  new PublicKey('5wA1UMxTdkypE4arpgckZPzA9Gv53QhUUw7dCm7tZYK2'),
 ];
 
 // Environment variable override for compliance wallets
