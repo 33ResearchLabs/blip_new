@@ -23,17 +23,17 @@ export default function MerchantLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   // Live tape rows fetched from /api/corridor/dynamic-rate every 60s.
-  // Falls back to realistic P2P rates if fetch fails — INR mid ~97.5
+  // Falls back to realistic P2P rates if fetch fails — INR buy 103.4 / sell 101.5
   // (P2P range 95–100, much higher than FX spot of ~83), AED mid ~3.665
   // (P2P range 3.65–3.67). These match what the merchant dashboard
   // actually shows so the preview reads as "alive" even offline.
   type TapeRow = { pair: string; dir: "bid" | "ask"; px: string; sz: string };
   const [tapeRows, setTapeRows] = useState<TapeRow[]>([
-    { pair: "USDT/INR", dir: "bid", px: "97.5500", sz: "820" },
-    { pair: "USDT/INR", dir: "ask", px: "97.4500", sz: "1,400" },
+    { pair: "USDT/INR", dir: "bid", px: "103.4500", sz: "820" },
+    { pair: "USDT/INR", dir: "ask", px: "101.4500", sz: "1,400" },
     { pair: "USDT/AED", dir: "bid", px: "3.6700", sz: "340" },
-    { pair: "USDT/INR", dir: "bid", px: "97.6500", sz: "920" },
-    { pair: "USDT/INR", dir: "ask", px: "97.3000", sz: "560" },
+    { pair: "USDT/INR", dir: "bid", px: "103.5500", sz: "920" },
+    { pair: "USDT/INR", dir: "ask", px: "101.3000", sz: "560" },
     { pair: "USDT/AED", dir: "ask", px: "3.6600", sz: "650" },
   ]);
 
@@ -108,20 +108,16 @@ export default function MerchantLoginPage() {
           aedData?.success && typeof aedData.data?.ref_price === "number"
             ? aedData.data.ref_price
             : 3.665;
-        const inrRate =
-          inrData?.success && typeof inrData.data?.ref_price === "number"
-            ? inrData.data.ref_price
-            : 97.5;
+        // INR directional rates: buy USDT at 103.4, sell USDT at 101.5
+        const INR_BID = 103.4; // merchant buys (user sells) at this price
+        const INR_ASK = 101.5; // merchant sells (user buys) at this price
 
-        // Generate 6 rows in a 3× INR / 2× AED pattern. P2P spreads are
-        // wider than FX spot — bids land 0.05–0.15 above mid, asks 0.05–
-        // 0.20 below mid for INR; AED uses ±0.005 (~0.15%).
         const rows: TapeRow[] = [
-          { pair: "USDT/INR", dir: "bid", px: (inrRate + 0.05).toFixed(4), sz: "820" },
-          { pair: "USDT/INR", dir: "ask", px: (inrRate - 0.05).toFixed(4), sz: "1,400" },
+          { pair: "USDT/INR", dir: "bid", px: (INR_BID + 0.05).toFixed(4), sz: "820" },
+          { pair: "USDT/INR", dir: "ask", px: (INR_ASK - 0.05).toFixed(4), sz: "1,400" },
           { pair: "USDT/AED", dir: "bid", px: (aedRate + 0.005).toFixed(4), sz: "340" },
-          { pair: "USDT/INR", dir: "bid", px: (inrRate + 0.15).toFixed(4), sz: "920" },
-          { pair: "USDT/INR", dir: "ask", px: (inrRate - 0.20).toFixed(4), sz: "560" },
+          { pair: "USDT/INR", dir: "bid", px: (INR_BID + 0.15).toFixed(4), sz: "920" },
+          { pair: "USDT/INR", dir: "ask", px: (INR_ASK - 0.20).toFixed(4), sz: "560" },
           { pair: "USDT/AED", dir: "ask", px: (aedRate - 0.005).toFixed(4), sz: "650" },
         ];
         setTapeRows(rows);
