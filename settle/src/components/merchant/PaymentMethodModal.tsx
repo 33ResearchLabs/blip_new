@@ -18,6 +18,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { useOnboarding } from "@/contexts/OnboardingContext";
 
 export interface PaymentMethod {
   id: string;
@@ -291,6 +292,7 @@ export function PaymentMethodModal({
   merchantId,
   editingMethod,
 }: PaymentMethodModalProps) {
+  const { refresh } = useOnboarding();
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedType, setSelectedType] = useState<
     "bank" | "cash" | "crypto" | "card" | "mobile" | "upi"
@@ -510,6 +512,7 @@ export function PaymentMethodModal({
           },
         ]);
       }
+      void refresh();
       resetForm();
       setShowAddForm(false);
     } catch (err) {

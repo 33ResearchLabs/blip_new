@@ -58,6 +58,7 @@ import {
   hasTronLink,
 } from "@/lib/lifi/tronWallet";
 import { recordDeposit, type DepositRecord } from "@/lib/wallet/depositHistory";
+import { useOnboarding } from "@/contexts/OnboardingContext";
 
 interface CrossChainDepositModalProps {
   isOpen: boolean;
@@ -112,6 +113,7 @@ export function CrossChainDepositModal({
   actorId,
   onSuccess,
 }: CrossChainDepositModalProps) {
+  const { refresh } = useOnboarding();
   const availableChains = useMemo(
     () => SOURCE_CHAINS.filter((c) => !c.comingSoon),
     [],
@@ -359,6 +361,7 @@ export function CrossChainDepositModal({
 
       if (final.status === "DONE") {
         setPhase("done");
+        void refresh();
         setDestTxHash(final.destinationTxHash ?? null);
         setFinalReceived(final.receivedUsdt ?? null);
         // Persist + notify parent. receivedUsdt is a decimal string from
