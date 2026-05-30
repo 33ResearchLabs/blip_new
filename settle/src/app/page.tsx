@@ -964,8 +964,6 @@ export default function Home() {
               embeddedWallet={embeddedWallet}
               setShowWalletSetup={auth.setShowWalletSetup}
               setShowWalletUnlock={auth.setShowWalletUnlock}
-              copied={copied}
-              setCopied={setCopied}
               resolvedDisputes={resolvedDisputes}
               theme={theme}
               toggleTheme={toggleTheme}
