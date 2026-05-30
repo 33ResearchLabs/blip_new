@@ -1,12 +1,34 @@
-'use client';
+"use client";
 
-import { memo, useRef, useState, useMemo } from 'react';
-import { Shield, Zap, ChevronRight, ChevronDown, ArrowRight, Clock, XCircle, MessageSquare, AlertTriangle, Loader2 } from 'lucide-react';
-import { CountdownRing } from './CountdownRing';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus, MinimalStatus } from '@/lib/orders/statusResolver';
-import { useCorridorPrices, resolveCorridorRef } from '@/hooks/useCorridorPrices';
-import { InfoTooltip, type InfoTooltipItem } from '@/components/shared/InfoTooltip';
+import { memo, useRef, useState, useMemo } from "react";
+import {
+  Shield,
+  Zap,
+  ChevronRight,
+  ChevronDown,
+  ArrowRight,
+  Clock,
+  XCircle,
+  MessageSquare,
+  AlertTriangle,
+  Loader2,
+} from "lucide-react";
+import { CountdownRing } from "./CountdownRing";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  getAuthoritativeStatus,
+  getStatusBadgeConfig,
+  getNextAction as getNextActionFromStatus,
+  MinimalStatus,
+} from "@/lib/orders/statusResolver";
+import {
+  useCorridorPrices,
+  resolveCorridorRef,
+} from "@/hooks/useCorridorPrices";
+import {
+  InfoTooltip,
+  type InfoTooltipItem,
+} from "@/components/shared/InfoTooltip";
 
 // Rule badge content for the "In Progress" header. Items labels are kept
 // short so they fit the 52px min-width label column in InfoTooltip, with
@@ -14,12 +36,36 @@ import { InfoTooltip, type InfoTooltipItem } from '@/components/shared/InfoToolt
 // lifecycle + expiration rules — kept in sync there, so don't change
 // timings here without updating the state machine notes.
 const IN_PROGRESS_RULES: InfoTooltipItem[] = [
-  { label: 'BUY', value: 'You send fiat → receive USDT. Seller locks escrow first; you then mark payment sent and wait for seller to release.' },
-  { label: 'SELL', value: 'You lock USDT in escrow first. Wait for fiat in your account, then confirm payment to release USDT.' },
-  { label: 'PENDING', value: 'Auto-expires 15 min after creation if no one accepts. No funds at risk.' },
-  { label: 'ACCEPTED', value: 'You have 2 hours from accept to lock escrow (if seller) or send payment (if buyer). Auto-cancels otherwise.' },
-  { label: 'PAID', value: 'After "payment sent", seller has 24 h to confirm. Auto-moves to dispute for compliance review if not confirmed.' },
-  { label: 'DISPUTED', value: 'Auto-resolves and refunds escrow to the funder after 24 h if no compliance action.' },
+  {
+    label: "BUY",
+    value:
+      "You send fiat → receive USDT. Seller locks escrow first; you then mark payment sent and wait for seller to release.",
+  },
+  {
+    label: "SELL",
+    value:
+      "You lock USDT in escrow first. Wait for fiat in your account, then confirm payment to release USDT.",
+  },
+  {
+    label: "PENDING",
+    value:
+      "Auto-expires 15 min after creation if no one accepts. No funds at risk.",
+  },
+  {
+    label: "ACCEPTED",
+    value:
+      "You have 2 hours from accept to lock escrow (if seller) or send payment (if buyer). Auto-cancels otherwise.",
+  },
+  {
+    label: "PAID",
+    value:
+      'After "payment sent", seller has 24 h to confirm. Auto-moves to dispute for compliance review if not confirmed.',
+  },
+  {
+    label: "DISPUTED",
+    value:
+      "Auto-resolves and refunds escrow to the funder after 24 h if no compliance action.",
+  },
 ];
 
 interface InProgressPanelProps {
@@ -65,7 +111,10 @@ function getViewerSide(
 // Resolve seller/buyer display names from the raw DB order. Falls back to
 // null on each side when the party hasn't claimed / is a placeholder.
 // Mirrors PendingOrdersPanel.getPartyNames exactly.
-function getPartyNames(db: any): { seller: string | null; buyer: string | null } {
+function getPartyNames(db: any): {
+  seller: string | null;
+  buyer: string | null;
+} {
   if (!db) return { seller: null, buyer: null };
   const userIsPlaceholder =
     typeof db.user?.username === "string" &&
@@ -85,7 +134,16 @@ function getPartyNames(db: any): { seller: string | null; buyer: string | null }
   return { seller: userName, buyer: merchantName };
 }
 
-const WAITING_ACTIONS = ['Wait for Acceptance', 'Wait for Payment', 'Wait for Escrow', 'Wait for Confirmation', 'Waiting for Acceptor', 'Waiting for Confirmation', 'Waiting for Payment', 'Already Claimed'];
+const WAITING_ACTIONS = [
+  "Wait for Acceptance",
+  "Wait for Payment",
+  "Wait for Escrow",
+  "Wait for Confirmation",
+  "Waiting for Acceptor",
+  "Waiting for Confirmation",
+  "Waiting for Payment",
+  "Already Claimed",
+];
 
 const IP_ITEM_HEIGHT = 210; // Estimated row height for in-progress orders (includes hero timer + pricing strip)
 
@@ -137,8 +195,12 @@ const InProgressOrderList = memo(function InProgressOrderList({
             <Shield className="w-5 h-5 text-foreground/20" />
           </div>
           <div className="text-center">
-            <p className="text-[11px] font-medium text-foreground/30 mb-0.5">No active trades</p>
-            <p className="text-[9px] text-foreground/15 font-mono">Accepted orders will appear here</p>
+            <p className="text-[11px] font-medium text-foreground/30 mb-0.5">
+              No active trades
+            </p>
+            <p className="text-[9px] text-foreground/15 font-mono">
+              Accepted orders will appear here
+            </p>
           </div>
         </div>
       </div>
@@ -147,11 +209,18 @@ const InProgressOrderList = memo(function InProgressOrderList({
 
   return (
     <div ref={parentRef} className="flex-1 overflow-y-auto p-1.5">
-      <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: "100%",
+          position: "relative",
+        }}
+      >
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const order = orders[virtualRow.index];
           // Prefer backend-provided action label over frontend computation
-          const nextAction = order.dbOrder?.primaryAction?.label || getNextAction(order);
+          const nextAction =
+            order.dbOrder?.primaryAction?.label || getNextAction(order);
           const isWaiting = WAITING_ACTIONS.includes(nextAction);
 
           return (
@@ -160,10 +229,10 @@ const InProgressOrderList = memo(function InProgressOrderList({
               ref={virtualizer.measureElement}
               data-index={virtualRow.index}
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: 0,
                 left: 0,
-                width: '100%',
+                width: "100%",
                 transform: `translateY(${virtualRow.start}px)`,
               }}
               className="pb-1"
@@ -172,9 +241,19 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 data-testid={`order-card-${order.id}`}
                 onClick={() => onSelectOrder(order)}
                 className="relative p-2.5 rounded-lg cursor-pointer transition-colors"
-                style={{ background: 'var(--card)', border: '1px solid color-mix(in srgb, var(--primary) 50%, transparent)' }}
-                onMouseEnter={(e) => e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--primary) 70%, transparent)'}
-                onMouseLeave={(e) => e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--primary) 50%, transparent)'}
+                style={{
+                  background: "var(--card)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--primary) 50%, transparent)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.borderColor =
+                    "color-mix(in srgb, var(--primary) 70%, transparent)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.borderColor =
+                    "color-mix(in srgb, var(--primary) 50%, transparent)")
+                }
               >
                 {/* Live pulse dot */}
                 <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
@@ -191,43 +270,78 @@ const InProgressOrderList = memo(function InProgressOrderList({
                       const soloName = seller || buyer || order.user || null;
                       return bothKnown ? (
                         <span className="flex items-center gap-1 text-xs font-medium text-foreground/80 min-w-0 flex-1">
-                          <span className="truncate min-w-0" title={`Seller: ${seller}`}>{seller}</span>
+                          <span
+                            className="truncate min-w-0"
+                            title={`Seller: ${seller}`}
+                          >
+                            {seller}
+                          </span>
                           <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
-                          <span className="truncate min-w-0" title={`Buyer: ${buyer}`}>{buyer}</span>
+                          <span
+                            className="truncate min-w-0"
+                            title={`Buyer: ${buyer}`}
+                          >
+                            {buyer}
+                          </span>
                         </span>
                       ) : (
-                        <span className={`text-xs font-medium truncate min-w-0 flex-1 ${soloName ? 'text-foreground/80' : 'text-foreground/40'}`}>
+                        <span
+                          className={`text-xs font-medium truncate min-w-0 flex-1 ${soloName ? "text-foreground/80" : "text-foreground/40"}`}
+                        >
                           {soloName || "—"}
                         </span>
                       );
                     })()}
                     {order.spreadPreference && (
-                      <span className={`shrink-0 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
-                        order.spreadPreference === 'fastest'
-                          ? 'bg-primary/10 border-primary/20 text-primary'
-                          : order.spreadPreference === 'cheap'
-                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                          : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                      }`}>
-                        {order.spreadPreference === 'fastest' && <Zap className="w-2.5 h-2.5" />}
-                        {order.spreadPreference === 'fastest' ? 'FAST' : order.spreadPreference === 'best' ? 'BEST' : 'CHEAP'}
+                      <span
+                        className={`shrink-0 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
+                          order.spreadPreference === "fastest"
+                            ? "bg-primary/10 border-primary/20 text-primary"
+                            : order.spreadPreference === "cheap"
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                              : "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                        }`}
+                      >
+                        {order.spreadPreference === "fastest" && (
+                          <Zap className="w-2.5 h-2.5" />
+                        )}
+                        {order.spreadPreference === "fastest"
+                          ? "FAST"
+                          : order.spreadPreference === "best"
+                            ? "BEST"
+                            : "CHEAP"}
                       </span>
                     )}
                   </div>
                   {/* payment_sent orders don't expire */}
-                  {order.minimalStatus === 'payment_sent' || order.dbOrder?.status === 'payment_sent' || order.dbOrder?.status === 'payment_confirmed' ? (
+                  {order.minimalStatus === "payment_sent" ||
+                  order.dbOrder?.status === "payment_sent" ||
+                  order.dbOrder?.status === "payment_confirmed" ? (
                     <div className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/[0.06]">
                       <Shield className="w-3 h-3 text-emerald-400/60" />
-                      <span className="text-[10px] font-bold font-mono text-emerald-400/60">No expiry</span>
+                      <span className="text-[10px] font-bold font-mono text-emerald-400/60">
+                        No expiry
+                      </span>
                     </div>
                   ) : (
                     <div className="shrink-0 flex items-center gap-1 tabular-nums">
-                      <span className={`text-xs sm:text-sm font-bold font-mono ${
-                        order.expiresIn <= 120 ? 'text-[var(--color-error)]' : 'text-primary'
-                      }`}>
-                        {order.expiresIn > 0 ? formatTimeRemaining(order.expiresIn) : 'Expired'}
+                      <span
+                        className={`text-xs sm:text-sm font-bold font-mono ${
+                          order.expiresIn <= 120
+                            ? "text-[var(--color-error)]"
+                            : "text-primary"
+                        }`}
+                      >
+                        {order.expiresIn > 0
+                          ? formatTimeRemaining(order.expiresIn)
+                          : "Expired"}
                       </span>
-                      <CountdownRing remaining={order.expiresIn} total={7200} size={16} strokeWidth={2.5} />
+                      <CountdownRing
+                        remaining={order.expiresIn}
+                        total={7200}
+                        size={16}
+                        strokeWidth={2.5}
+                      />
                     </div>
                   )}
                 </div>
@@ -239,38 +353,50 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     escalates in tone as the timer drops.
                     Skipped for payment_sent / payment_confirmed — those have
                     a 24h compliance window, not an inactivity timer. */}
-                {order.expiresIn > 0 && order.expiresIn <= 1800 && order.minimalStatus !== 'payment_sent' && order.dbOrder?.status !== 'payment_sent' && order.dbOrder?.status !== 'payment_confirmed' && (
-                  <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 ${
-                    order.expiresIn <= 120
-                      ? 'bg-[var(--color-error)]/10 border border-[var(--color-error)]/20'
-                      : order.expiresIn <= 600
-                        ? 'bg-primary/10 border border-primary/20'
-                        : 'bg-foreground/[0.04] border border-foreground/[0.08]'
-                  }`}>
-                    <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${
-                      order.expiresIn <= 120
-                        ? 'text-[var(--color-error)]'
-                        : order.expiresIn <= 600
-                          ? 'text-primary'
-                          : 'text-foreground/50'
-                    }`} />
-                    <span className={`text-[10px] font-bold ${
-                      order.expiresIn <= 120
-                        ? 'text-[var(--color-error)]'
-                        : order.expiresIn <= 600
-                          ? 'text-primary'
-                          : 'text-foreground/60'
-                    }`}>
-                      {order.expiresIn <= 120
-                        ? 'Order expiring soon! Complete action now'
-                        : `Order expires in ${formatTimeRemaining(order.expiresIn)} — take action`}
-                    </span>
-                  </div>
-                )}
+                {order.expiresIn > 0 &&
+                  order.expiresIn <= 1800 &&
+                  order.minimalStatus !== "payment_sent" &&
+                  order.dbOrder?.status !== "payment_sent" &&
+                  order.dbOrder?.status !== "payment_confirmed" && (
+                    <div
+                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 ${
+                        order.expiresIn <= 120
+                          ? "bg-[var(--color-error)]/10 border border-[var(--color-error)]/20"
+                          : order.expiresIn <= 600
+                            ? "bg-primary/10 border border-primary/20"
+                            : "bg-foreground/[0.04] border border-foreground/[0.08]"
+                      }`}
+                    >
+                      <AlertTriangle
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          order.expiresIn <= 120
+                            ? "text-[var(--color-error)]"
+                            : order.expiresIn <= 600
+                              ? "text-primary"
+                              : "text-foreground/50"
+                        }`}
+                      />
+                      <span
+                        className={`text-[10px] font-bold ${
+                          order.expiresIn <= 120
+                            ? "text-[var(--color-error)]"
+                            : order.expiresIn <= 600
+                              ? "text-primary"
+                              : "text-foreground/60"
+                        }`}
+                      >
+                        {order.expiresIn <= 120
+                          ? "Order expiring soon! Complete action now"
+                          : `Order expires in ${formatTimeRemaining(order.expiresIn)} — take action`}
+                      </span>
+                    </div>
+                  )}
 
                 {/* Cancel Request Banner on order card */}
                 {order.cancelRequestedBy && (
-                  <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 bg-primary/10 border border-primary/20`}>
+                  <div
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 bg-primary/10 border border-primary/20`}
+                  >
                     <XCircle className="w-3.5 h-3.5 text-primary shrink-0" />
                     <span className="text-[10px] font-bold text-primary">
                       Cancel requested — tap to respond
@@ -281,27 +407,38 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 {/* Row 2: Amount — direction based on merchant's role */}
                 {(() => {
                   const iAmSeller =
-                    getViewerSide(order.dbOrder, order, merchantId) === "seller";
+                    getViewerSide(order.dbOrder, order, merchantId) ===
+                    "seller";
                   const crypto = `${Math.round(order.amount).toLocaleString()} ${order.fromCurrency}`;
-                  const fiat = `${Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} ${order.toCurrency || 'INR'}`;
+                  const fiat = `${Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} ${order.toCurrency || "INR"}`;
 
                   return (
                     <div className="mb-1.5">
                       <p className="text-[9px] font-bold text-foreground/30 uppercase tracking-wider mb-1">
-                        {iAmSeller ? 'You Send USDT → Get Fiat' : 'You Get USDT → Pay Fiat'}
+                        {iAmSeller
+                          ? "You Send USDT → Get Fiat"
+                          : "You Get USDT → Pay Fiat"}
                       </p>
                       <div className="flex items-center gap-1.5">
                         {iAmSeller ? (
                           <>
-                            <span className="text-sm font-bold text-foreground tabular-nums">{crypto}</span>
+                            <span className="text-sm font-bold text-foreground tabular-nums">
+                              {crypto}
+                            </span>
                             <ArrowRight className="w-3 h-3 text-foreground/20" />
-                            <span className="text-sm font-bold text-primary tabular-nums">{fiat}</span>
+                            <span className="text-sm font-bold text-primary tabular-nums">
+                              {fiat}
+                            </span>
                           </>
                         ) : (
                           <>
-                            <span className="text-sm font-bold text-primary tabular-nums">{crypto}</span>
+                            <span className="text-sm font-bold text-primary tabular-nums">
+                              {crypto}
+                            </span>
                             <ArrowRight className="w-3 h-3 text-foreground/20" />
-                            <span className="text-sm font-bold text-foreground tabular-nums">{fiat}</span>
+                            <span className="text-sm font-bold text-foreground tabular-nums">
+                              {fiat}
+                            </span>
                           </>
                         )}
                       </div>
@@ -311,7 +448,9 @@ const InProgressOrderList = memo(function InProgressOrderList({
 
                 {/* Row 3: Rate + premium + earnings + status badge */}
                 <div className="flex items-center gap-1.5 mb-2">
-                  <span className="text-[10px] text-foreground/40 font-mono">@ {(order.rate || 3.67).toFixed(2)}</span>
+                  <span className="text-[10px] text-foreground/40 font-mono">
+                    @ {(order.rate || 3.67).toFixed(2)}
+                  </span>
                   {(() => {
                     // Premium = how much this order's rate is above/below the
                     // CURRENT per-corridor reference price. Live prices come
@@ -326,7 +465,9 @@ const InProgressOrderList = memo(function InProgressOrderList({
                       order.dbOrder?.corridor_id,
                       order.toCurrency || order.dbOrder?.fiat_currency,
                     );
-                    const storedRef = Number(order.dbOrder?.ref_price_at_create);
+                    const storedRef = Number(
+                      order.dbOrder?.ref_price_at_create,
+                    );
                     const refPrice =
                       liveRef && liveRef > 0
                         ? liveRef
@@ -340,17 +481,24 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     return (
                       <>
                         {premium !== null && premium !== 0 && (
-                          <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                            premium > 0
-                              ? 'bg-primary/10 text-primary'
-                              : 'bg-foreground/[0.04] text-foreground/30'
-                          }`}>
-                            {premium > 0 ? '+' : ''}{premium.toFixed(2)}%
+                          <span
+                            className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                              premium > 0
+                                ? "bg-primary/10 text-primary"
+                                : "bg-foreground/[0.04] text-foreground/30"
+                            }`}
+                          >
+                            {premium > 0 ? "+" : ""}
+                            {premium.toFixed(2)}%
                           </span>
                         )}
                         {order.protocolFeePercent != null && (
                           <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
-                            +${(order.amount * order.protocolFeePercent / 100).toFixed(2)}
+                            +$
+                            {(
+                              (order.amount * order.protocolFeePercent) /
+                              100
+                            ).toFixed(2)}
                           </span>
                         )}
                       </>
@@ -368,72 +516,74 @@ const InProgressOrderList = memo(function InProgressOrderList({
                       Waiting for other merchant
                     </span>
                   </div>
-                ) : (() => {
-                  const isLockingThis = lockingEscrowOrderId === order.id;
-                  const isConfirmingThis = confirmingOrderId === order.id;
-                  const isAcceptingThis = acceptingOrderId === order.id;
-                  const isCancellingThis = cancellingOrderId === order.id;
-                  // markingDone is a global "mark-paid in flight" flag — we
-                  // only want to show the spinner on a card whose CURRENT
-                  // primary action is actually Send-Payment / I've-Paid, not
-                  // on every card on the screen. Detect via the action label.
-                  const labelLower = (nextAction || '').toLowerCase();
-                  const isPayActionCard =
-                    labelLower.includes('paid') ||
-                    labelLower.includes('send payment') ||
-                    labelLower.includes('mark payment');
-                  const isMarkingPaidThis = !!markingDone && isPayActionCard;
-                  const isActionLoading =
-                    isLockingThis ||
-                    isConfirmingThis ||
-                    isAcceptingThis ||
-                    isCancellingThis ||
-                    isMarkingPaidThis;
-                  const loadingLabel = isLockingThis
-                    ? 'Locking escrow…'
-                    : isConfirmingThis
-                      ? 'Confirming payment…'
-                      : isAcceptingThis
-                        ? 'Accepting…'
-                        : isCancellingThis
-                          ? 'Cancelling…'
-                          : isMarkingPaidThis
-                            ? 'Marking as paid…'
-                            : null;
-                  return (
-                    <button
-                      data-testid="order-primary-action"
-                      disabled={isActionLoading}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isActionLoading) return;
-                        if (onAction) {
-                          onAction(order, nextAction);
-                        } else {
-                          onSelectOrder(order);
-                        }
-                      }}
-                      className={`w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] text-background font-bold transition-colors ${
-                        isActionLoading
-                          ? 'bg-primary/40 cursor-wait'
-                          : 'bg-primary hover:bg-primary/80'
-                      }`}
-                    >
-                      {isActionLoading ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          {loadingLabel}
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-3.5 h-3.5" />
-                          {nextAction}
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </>
-                      )}
-                    </button>
-                  );
-                })()}
+                ) : (
+                  (() => {
+                    const isLockingThis = lockingEscrowOrderId === order.id;
+                    const isConfirmingThis = confirmingOrderId === order.id;
+                    const isAcceptingThis = acceptingOrderId === order.id;
+                    const isCancellingThis = cancellingOrderId === order.id;
+                    // markingDone is a global "mark-paid in flight" flag — we
+                    // only want to show the spinner on a card whose CURRENT
+                    // primary action is actually Send-Payment / I've-Paid, not
+                    // on every card on the screen. Detect via the action label.
+                    const labelLower = (nextAction || "").toLowerCase();
+                    const isPayActionCard =
+                      labelLower.includes("paid") ||
+                      labelLower.includes("send payment") ||
+                      labelLower.includes("mark payment");
+                    const isMarkingPaidThis = !!markingDone && isPayActionCard;
+                    const isActionLoading =
+                      isLockingThis ||
+                      isConfirmingThis ||
+                      isAcceptingThis ||
+                      isCancellingThis ||
+                      isMarkingPaidThis;
+                    const loadingLabel = isLockingThis
+                      ? "Locking escrow…"
+                      : isConfirmingThis
+                        ? "Confirming payment…"
+                        : isAcceptingThis
+                          ? "Accepting…"
+                          : isCancellingThis
+                            ? "Cancelling…"
+                            : isMarkingPaidThis
+                              ? "Marking as paid…"
+                              : null;
+                    return (
+                      <button
+                        data-testid="order-primary-action"
+                        disabled={isActionLoading}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isActionLoading) return;
+                          if (onAction) {
+                            onAction(order, nextAction);
+                          } else {
+                            onSelectOrder(order);
+                          }
+                        }}
+                        className={`w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] text-background font-bold transition-colors ${
+                          isActionLoading
+                            ? "bg-primary/40 cursor-wait"
+                            : "bg-primary hover:bg-primary/80"
+                        }`}
+                      >
+                        {isActionLoading ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            {loadingLabel}
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-3.5 h-3.5" />
+                            {nextAction}
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()
+                )}
 
                 {/* Chat button — always visible */}
                 {onOpenChat && (
@@ -459,7 +609,14 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/[0.08] border border-amber-500/[0.12]">
                     <Clock className="w-3 h-3 text-amber-400 shrink-0" />
                     <span className="text-[10px] text-amber-400/90 font-medium truncate">
-                      {order.dbOrder.extension_requested_by === 'user' ? 'Buyer' : 'Seller'} requested +{order.dbOrder.extension_minutes >= 60 ? `${Math.round(order.dbOrder.extension_minutes / 60)}hr` : `${order.dbOrder.extension_minutes}min`} extension
+                      {order.dbOrder.extension_requested_by === "user"
+                        ? "Buyer"
+                        : "Seller"}{" "}
+                      requested +
+                      {order.dbOrder.extension_minutes >= 60
+                        ? `${Math.round(order.dbOrder.extension_minutes / 60)}hr`
+                        : `${order.dbOrder.extension_minutes}min`}{" "}
+                      extension
                     </span>
                   </div>
                 )}
@@ -475,7 +632,8 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     className="mt-1.5 flex items-center gap-1.5 text-[10px] text-primary/80 font-medium hover:text-primary/80 transition-colors w-full"
                   >
                     <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
-                    {order.unreadCount} new message{order.unreadCount > 1 ? 's' : ''}
+                    {order.unreadCount} new message
+                    {order.unreadCount > 1 ? "s" : ""}
                   </button>
                 )}
               </div>
@@ -487,29 +645,45 @@ const InProgressOrderList = memo(function InProgressOrderList({
   );
 });
 
-type FilterValue = MinimalStatus | 'all' | 'cancel_requested';
+type FilterValue = MinimalStatus | "all" | "cancel_requested";
 
 const STATUS_FILTERS: { value: FilterValue; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'accepted', label: 'Accepted' },
-  { value: 'escrowed', label: 'Escrowed' },
-  { value: 'payment_sent', label: 'Paid' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'disputed', label: 'Disputed' },
-  { value: 'cancel_requested', label: 'Cancel Req' },
+  { value: "all", label: "All" },
+  { value: "accepted", label: "Accepted" },
+  { value: "escrowed", label: "Escrowed" },
+  { value: "payment_sent", label: "Paid" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "disputed", label: "Disputed" },
+  { value: "cancel_requested", label: "Cancel Req" },
 ];
 
-export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId, lockingEscrowOrderId, confirmingOrderId, markingDone, acceptingOrderId, cancellingOrderId }: InProgressPanelProps) {
-  const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
+export const InProgressPanel = memo(function InProgressPanel({
+  orders,
+  onSelectOrder,
+  onAction,
+  onOpenChat,
+  collapsed = false,
+  onCollapseChange,
+  merchantId,
+  lockingEscrowOrderId,
+  confirmingOrderId,
+  markingDone,
+  acceptingOrderId,
+  cancellingOrderId,
+}: InProgressPanelProps) {
+  const [statusFilter, setStatusFilter] = useState<FilterValue>("all");
 
   const filteredOrders = useMemo(() => {
-    if (statusFilter === 'all') return orders;
-    if (statusFilter === 'cancel_requested') return orders.filter((order) => !!order.cancelRequestedBy);
-    return orders.filter((order) => getAuthoritativeStatus(order) === statusFilter);
+    if (statusFilter === "all") return orders;
+    if (statusFilter === "cancel_requested")
+      return orders.filter((order) => !!order.cancelRequestedBy);
+    return orders.filter(
+      (order) => getAuthoritativeStatus(order) === statusFilter,
+    );
   }, [orders, statusFilter]);
 
   const formatTimeRemaining = (seconds: number): string => {
-    if (seconds <= 0) return 'Expired';
+    if (seconds <= 0) return "Expired";
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
@@ -538,7 +712,7 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
   };
 
   return (
-    <div className={`flex flex-col ${collapsed ? '' : 'h-full'}`}>
+    <div className={`flex flex-col ${collapsed ? "" : "h-full"}`}>
       {/* Header */}
       <div
         className="px-3 py-2 border-b border-section-divider cursor-pointer select-none hover:bg-foreground/[0.02] transition-colors"
@@ -546,7 +720,9 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
       >
         <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-2">
-            <ChevronDown className={`w-3 h-3 text-foreground/30 transition-transform duration-200 ${collapsed ? '-rotate-90' : ''}`} />
+            <ChevronDown
+              className={`w-3 h-3 text-foreground/30 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
+            />
             <Shield className="w-3.5 h-3.5 text-foreground/30" />
             <h2 className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">
               In Progress
@@ -565,7 +741,8 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
             </span>
           </div>
           <span className="text-[10px] border border-foreground/[0.08] text-foreground/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
-            {filteredOrders.length}{statusFilter !== 'all' ? `/${orders.length}` : ''}
+            {filteredOrders.length}
+            {statusFilter !== "all" ? `/${orders.length}` : ""}
           </span>
         </div>
         {/* Status Filter Pills */}
@@ -576,23 +753,27 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
           >
             {STATUS_FILTERS.map((f) => {
               const isActive = statusFilter === f.value;
-              const count = f.value === 'all'
-                ? orders.length
-                : f.value === 'cancel_requested'
-                ? orders.filter((o) => !!o.cancelRequestedBy).length
-                : orders.filter((o) => getAuthoritativeStatus(o) === f.value).length;
+              const count =
+                f.value === "all"
+                  ? orders.length
+                  : f.value === "cancel_requested"
+                    ? orders.filter((o) => !!o.cancelRequestedBy).length
+                    : orders.filter(
+                        (o) => getAuthoritativeStatus(o) === f.value,
+                      ).length;
               return (
                 <button
                   key={f.value}
                   onClick={() => setStatusFilter(f.value)}
-                  className={`shrink-0 h-full px-2 xl:px-2.5 [@media(min-height:900px)]:px-2.5 inline-flex items-center justify-center rounded-md text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] font-bold whitespace-nowrap transition-all ${
+                  className={`shrink-0 h-full px-2 xl:px-2 [@media(min-height:900px)]:px-2 inline-flex items-center justify-center rounded-md text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] font-bold whitespace-nowrap transition-all ${
                     isActive
-                      ? 'bg-foreground text-background shadow'
-                      : 'text-foreground/40 hover:text-foreground/60'
+                      ? "bg-foreground text-background shadow"
+                      : "text-foreground/40 hover:text-foreground/60"
                   }`}
                 >
                   <span className="whitespace-nowrap">
-                    {f.label}{count > 0 ? ` ${count}` : ''}
+                    {f.label}
+                    {count > 0 ? ` ${count}` : ""}
                   </span>
                 </button>
               );

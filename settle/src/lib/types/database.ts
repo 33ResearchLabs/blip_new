@@ -111,6 +111,10 @@ export interface Merchant {
   tour_completed_at: string | null;
   buy_rate: number | null;
   sell_rate: number | null;
+  /** Per-merchant editable dashboard layout (migration 146).
+   *  Null means "use the default arrangement". Shape validated by
+   *  dashboardLayoutSchema in src/lib/validation/schemas.ts. */
+  dashboard_layout: unknown | null;
   // Waitlist (migration 131). Existing rows default to 'active'.
   waitlist_status?: WaitlistStatus;
   waitlist_joined_at?: Date | null;

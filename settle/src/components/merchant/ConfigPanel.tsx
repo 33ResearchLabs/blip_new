@@ -25,7 +25,10 @@ import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 // generic 2-input inline form which forced merchants to cram type-specific
 // data (UPI ID, IBAN, etc.) into a free-text "details" field.
 const PaymentMethodModal = dynamic(
-  () => import("@/components/merchant/PaymentMethodModal").then((m) => ({ default: m.PaymentMethodModal })),
+  () =>
+    import("@/components/merchant/PaymentMethodModal").then((m) => ({
+      default: m.PaymentMethodModal,
+    })),
   { ssr: false },
 );
 
@@ -37,7 +40,7 @@ const PaymentMethodModal = dynamic(
 
 interface MerchantPaymentMethod {
   id: string;
-  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile';
+  type: "bank" | "cash" | "crypto" | "card" | "mobile" | "upi";
   name: string;
   details?: string;
   is_default?: boolean;
@@ -57,7 +60,11 @@ interface ConfigPanelProps {
   };
   setOpenTradeForm: (form: any) => void;
   isCreatingTrade: boolean;
-  onCreateOrder: (tradeType?: "buy" | "sell", priorityFee?: number, pair?: "usdt_aed" | "usdt_inr") => void;
+  onCreateOrder: (
+    tradeType?: "buy" | "sell",
+    priorityFee?: number,
+    pair?: "usdt_aed" | "usdt_inr",
+  ) => void;
   refreshBalance: () => void;
 }
 
@@ -180,7 +187,7 @@ export const ConfigPanel = memo(function ConfigPanel({
   merchantId,
   merchantInfo,
   effectiveBalance,
-  activeCorridor = 'USDT_INR',
+  activeCorridor = "USDT_INR",
   openTradeForm,
   setOpenTradeForm,
   isCreatingTrade,
@@ -188,10 +195,13 @@ export const ConfigPanel = memo(function ConfigPanel({
   refreshBalance,
 }: ConfigPanelProps) {
   // Derive pair from activeCorridor (set in StatusCard trading pair selector)
-  const pair = activeCorridor === 'USDT_INR' ? 'usdt_inr' : 'usdt_aed' as const;
+  const pair =
+    activeCorridor === "USDT_INR" ? "usdt_inr" : ("usdt_aed" as const);
 
   // Merchant payment methods (replaces the static Bank/Cash buttons).
-  const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>(
+    [],
+  );
   // showAddPm now toggles the dedicated PaymentMethodModal (bottom of file)
   // instead of an inline 2-input form. The modal renders type-specific fields
   // (bank → IBAN/account/SWIFT, cash → location, mobile → provider/phone,
@@ -239,7 +249,9 @@ export const ConfigPanel = memo(function ConfigPanel({
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const res = await fetchWithAuth(`/api/corridor/dynamic-rate?pair=${pair}`);
+        const res = await fetchWithAuth(
+          `/api/corridor/dynamic-rate?pair=${pair}`,
+        );
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.data.ref_price) {
@@ -297,20 +309,67 @@ export const ConfigPanel = memo(function ConfigPanel({
     !openTradeForm.cryptoAmount ||
     parseFloat(openTradeForm.cryptoAmount) <= 0;
 
+  // SHRINK-TO-FIT stays the default (overflow-hidden, no scroll). But entering
+  // an amount injects three extra shrink-0 rows (the ≈fiat preview, the
+  // BUY/SELL sub-prices, and the spread summary) that can push past a short
+  // panel's height — so once an amount is present we switch to overflow-y-auto
+  // and let it scroll instead of clipping. overflow-x-hidden is paired
+  // explicitly: setting only overflow-y makes the x-axis compute to "auto",
+  // which would add a stray horizontal scrollbar.
+  const overflowClass =
+    cryptoAmount > 0 ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden";
+
+  // Row sizing pairs with overflowClass. While empty, rows are `flex-1
+  // min-h-0` so the shrink-to-fit model can compress all five into the panel
+  // with no scroll. The catch: min-h-0 lets every row shrink to exactly fill
+  // the container, so the rows NEVER collectively overflow — the container's
+  // overflow-y-auto can't fire, and the Amount row's ≈fiat preview line
+  // instead spills out of its own compressed row onto the Payment card below.
+  // So once an amount is entered we drop min-h-0 (keep flex-1): each row is now
+  // at least as tall as its content, the preview stays inside the Amount row
+  // (pushing Payment down rather than overlapping it), and the panel scrolls
+  // once the rows no longer fit.
+  const rowSizing = cryptoAmount > 0 ? "flex-1" : "flex-1 min-h-0";
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {/* Hero amount input */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-1.5">
-              <ArrowRightLeft className="w-3.5 h-3.5 text-primary/60" />
-              <span className="text-[11px] font-bold text-foreground/50 uppercase tracking-wider">
+      {/* SHRINK-TO-FIT responsive model (no scroll while the form is empty).
+          The form is a 5-row vertical flex; every row is `flex-1` (weights
+          below) and grows to fill a tall panel. To survive SHORT panels
+          without scrolling, each control's min-height FLOOR is itself
+          laddered down by height, so the rows keep shrinking until all five
+          fit. `overflow-hidden` enforces the no-scroll contract — EXCEPT once
+          an amount is entered, where it flips to `overflow-y-auto` so the
+          three extra preview rows can scroll rather than clip (see
+          `overflowClass` above the return).
+
+          Breakpoints follow a 7-tier ladder per axis, with each property
+          bound to ONE axis to avoid container-query specificity collisions
+          (width and height variants have equal specificity — source order,
+          not "the tighter axis", would otherwise decide the winner):
+            • vertical-spacing + the hero number  → HEIGHT (@max-h-[…])
+            • horizontal text + show/hide          → WIDTH  (@max-[…])
+          Padding is split px/py so each axis drives the side it controls. */}
+      <div
+        className={`flex-1 min-h-0 flex flex-col px-3 @max-[320px]:px-2.5 @max-[240px]:px-2 @max-[200px]:px-1.5 py-3 @max-h-[480px]:py-2.5 @max-h-[400px]:py-2 @max-h-[320px]:py-1.5 @max-h-[240px]:py-1 gap-4 @max-h-[520px]:gap-3.5 @max-h-[480px]:gap-3 @max-h-[440px]:gap-2.5 @max-h-[400px]:gap-2 @max-h-[320px]:gap-1.5 @max-h-[240px]:gap-1 ${overflowClass}`}
+      >
+        {/* Amount — hero input (weight 1). Grows to fill on tall panels;
+            its floor is laddered down by HEIGHT so it keeps shrinking until
+            all five rows fit without scrolling. Amount + Bank carry the
+            smallest floors since they're single controls (no inner grid), so
+            they yield space first on short panels and don't overlap. */}
+        <div className={`${rowSizing} flex flex-col`}>
+          <div className="flex items-center justify-between mb-2 @max-h-[400px]:mb-1.5 @max-h-[320px]:mb-1 @max-h-[240px]:mb-0.5 gap-1 min-w-0 shrink-0">
+            <div className="flex items-center gap-1.5 @max-[240px]:gap-1 min-w-0">
+              <ArrowRightLeft className="w-3.5 h-3.5 @max-[240px]:w-3 @max-[240px]:h-3 text-primary/60 shrink-0" />
+              <span className="text-[11px] @max-[280px]:text-[10px] @max-[220px]:text-[9px] font-bold text-foreground/50 uppercase tracking-wider">
                 Amount
               </span>
-              {/* Corridor badge — driven by StatusCard trading pair */}
-              <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider bg-primary/10 text-primary border border-primary/20">
-                USDT / {pair === "usdt_inr" ? "INR" : "AED"}
+              {/* Corridor badge — driven by StatusCard trading pair. Below
+                  280px the "USDT /" prefix is dropped to save width. */}
+              <span className="ml-2 @max-[320px]:ml-1 px-1.5 @max-[240px]:px-1 py-0.5 rounded text-[9px] @max-[240px]:text-[8px] font-bold font-mono tracking-wider bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
+                <span className="@max-[280px]:hidden">USDT / </span>
+                {pair === "usdt_inr" ? "INR" : "AED"}
               </span>
             </div>
             <button
@@ -320,36 +379,44 @@ export const ConfigPanel = memo(function ConfigPanel({
                   cryptoAmount: maxAmount.toFixed(0),
                 })
               }
-              className="text-[10px] text-primary/70 hover:text-primary font-mono font-bold transition-colors px-1.5 py-0.5 rounded bg-primary/[0.06] hover:bg-primary/10"
+              className="text-[10px] @max-[280px]:text-[9px] @max-[220px]:text-[8px] text-primary/70 hover:text-primary font-mono font-bold transition-colors px-1.5 @max-[240px]:px-1 py-0.5 rounded bg-primary/[0.06] hover:bg-primary/10 shrink-0 whitespace-nowrap"
             >
-              MAX{" "}
-              {maxAmount.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-              })}
+              MAX
+              {/* The numeric value is dropped below 200px so the button
+                  doesn't crowd out the label. */}
+              <span className="@max-[200px]:hidden">
+                {" "}
+                {maxAmount.toLocaleString(undefined, {
+                  maximumFractionDigits: 0,
+                })}
+              </span>
             </button>
           </div>
-          <div className="relative">
+          {/* Input wrapper fills the section above its floor. The floor is
+              height-laddered so the field stays tappable while shrinking to
+              fit short panels. */}
+          <div className="relative flex-1 min-h-[2.75rem] @max-h-[440px]:min-h-[2.5rem] @max-h-[400px]:min-h-[2.25rem] @max-h-[360px]:min-h-[2rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem]">
             <input
               type="text"
               inputMode="decimal"
               maxLength={14}
               value={openTradeForm.cryptoAmount}
               onChange={(e) => {
-                // Clamp to 10 int + 2 decimal — same rule as the other
-                // amount fields (offer / corridor / trade form) so a single
-                // source of truth governs what a USDT amount looks like.
-                const clamped = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
+                const clamped = clampDecimal(
+                  e.target.value,
+                  DECIMAL_PRESETS.amount,
+                );
                 setOpenTradeForm({ ...openTradeForm, cryptoAmount: clamped });
               }}
               placeholder="0"
-              className="w-full bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-4 py-3 text-xl font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-primary/30 focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
+              className="absolute inset-0 w-full h-full bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-4 @max-[240px]:px-3 text-xl @max-h-[480px]:text-lg @max-h-[400px]:text-base @max-h-[320px]:text-sm @max-h-[240px]:text-xs font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-primary/30 focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/25 font-mono">
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/25 font-mono pointer-events-none">
               USDT
             </span>
           </div>
           {cryptoAmount > 0 && (
-            <div className="flex items-center justify-between mt-1.5 px-1 text-[10px] font-mono">
+            <div className="flex items-center justify-between mt-1.5 px-1 text-[10px] font-mono shrink-0">
               <span className="text-foreground/30">
                 ≈ {fiatSymbol}
                 {(cryptoAmount * currentRate).toLocaleString(undefined, {
@@ -365,41 +432,77 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
         </div>
 
-        {/* Payment Methods — dropdown */}
-        <div className="relative">
+        {/* Payment Methods — dropdown (weight 1). Height-laddered floor so
+            the selector content (icon + name + account number) stays legible
+            while shrinking to fit. */}
+        <div className={`relative ${rowSizing} flex flex-col z-30`}>
+          {/* Label — this row was the ONLY control without one (Amount,
+              Spread, Boost all have a label above their control). That made
+              the gap below the dropdown (gap + the Spread label) read as
+              larger than the gap above it (gap only). Mirrors the Spread
+              label's classes so every row now carries the same label-gap and
+              the box-to-box spacing is even top-and-bottom. */}
+          <label className="text-[10px] @max-[220px]:text-[9px] text-foreground/30 mb-1 @max-h-[360px]:mb-0.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold shrink-0">
+            Payment
+          </label>
           {(() => {
             const pmIcon = (type: string) =>
-              type === 'bank' ? '🏦' : type === 'cash' ? '💵' : type === 'card' ? '💳' : type === 'mobile' ? '📱' : '💰';
+              type === "bank"
+                ? "🏦"
+                : type === "cash"
+                  ? "💵"
+                  : type === "card"
+                    ? "💳"
+                    : type === "mobile" || type === "upi"
+                      ? "📱"
+                      : "💰";
             const selectedPm =
-              paymentMethods.find((pm) => pm.id === openTradeForm.paymentMethodId) ||
-              paymentMethods.find((pm) => pm.type === openTradeForm.paymentMethod);
+              paymentMethods.find(
+                (pm) => pm.id === openTradeForm.paymentMethodId,
+              ) ||
+              paymentMethods.find(
+                (pm) => pm.type === openTradeForm.paymentMethod,
+              );
             return (
               <>
                 <button
                   onClick={() => setShowPmDropdown(!showPmDropdown)}
-                  className="w-full flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
+                  className="w-full flex-[0.75] min-h-[2.75rem] @max-h-[440px]:min-h-[2.5rem] @max-h-[400px]:min-h-[2.25rem] @max-h-[360px]:min-h-[2rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem] flex items-center justify-between gap-2 @max-[240px]:gap-1 px-3 @max-[240px]:px-2 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
                 >
                   {selectedPm ? (
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-[11px] shrink-0">{pmIcon(selectedPm.type)}</span>
+                    <div className="flex items-center gap-2 @max-[240px]:gap-1.5 min-w-0 flex-1">
+                      <span className="text-[11px] @max-[240px]:text-[10px] shrink-0">
+                        {pmIcon(selectedPm.type)}
+                      </span>
                       <div className="min-w-0 flex-1 text-left">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-bold text-foreground/80 truncate">{selectedPm.name}</span>
-                          <span className="text-[9px] text-foreground/30 font-mono uppercase shrink-0">{selectedPm.type}</span>
+                        <div className="flex items-center gap-1.5 @max-[240px]:gap-1">
+                          <span className="text-[11px] @max-[280px]:text-[10px] @max-[220px]:text-[9px] font-bold text-foreground/80 truncate">
+                            {selectedPm.name}
+                          </span>
+                          {/* `type` tag dropped below 240px to free width. */}
+                          <span className="text-[9px] @max-[240px]:hidden text-foreground/30 font-mono uppercase shrink-0">
+                            {selectedPm.type}
+                          </span>
                         </div>
                         {selectedPm.details && (
-                          <div className="text-[10px] text-foreground/45 font-mono truncate">
+                          <div className="text-[10px] @max-[280px]:text-[9px] @max-[220px]:text-[8px] text-foreground/45 font-mono truncate">
                             {selectedPm.details}
                           </div>
                         )}
                       </div>
                     </div>
                   ) : paymentMethods.length === 0 ? (
-                    <span className="text-[11px] text-foreground/30">No payment methods</span>
+                    <span className="text-[11px] text-foreground/30">
+                      No payment methods
+                    </span>
                   ) : (
-                    <span className="text-[11px] text-foreground/40">Select payment method</span>
+                    <span className="text-[11px] text-foreground/40">
+                      Select payment method
+                    </span>
                   )}
-                  <ChevronDown className={`w-3.5 h-3.5 text-foreground/30 transition-transform shrink-0 ${showPmDropdown ? 'rotate-180' : ''}`} />
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 @max-[220px]:w-3 @max-[220px]:h-3 text-foreground/30 transition-transform shrink-0 ${showPmDropdown ? "rotate-180" : ""}`}
+                  />
                 </button>
 
                 {showPmDropdown && (
@@ -414,7 +517,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                           onClick={() => {
                             setOpenTradeForm({
                               ...openTradeForm,
-                              paymentMethod: pm.type as 'bank' | 'cash',
+                              paymentMethod: pm.type as "bank" | "cash",
                               paymentMethodId: pm.id,
                             });
                             setShowPmDropdown(false);
@@ -425,11 +528,17 @@ export const ConfigPanel = memo(function ConfigPanel({
                               : "hover:bg-foreground/[0.04] text-foreground/60"
                           }`}
                         >
-                          <span className="text-[11px] mt-0.5 shrink-0">{pmIcon(pm.type)}</span>
+                          <span className="text-[11px] mt-0.5 shrink-0">
+                            {pmIcon(pm.type)}
+                          </span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] font-bold truncate">{pm.name}</span>
-                              <span className="text-[9px] text-foreground/25 font-mono uppercase shrink-0 ml-auto">{pm.type}</span>
+                              <span className="text-[11px] font-bold truncate">
+                                {pm.name}
+                              </span>
+                              <span className="text-[9px] text-foreground/25 font-mono uppercase shrink-0 ml-auto">
+                                {pm.type}
+                              </span>
                             </div>
                             {pm.details && (
                               <div className="text-[10px] text-foreground/40 font-mono truncate mt-0.5">
@@ -441,11 +550,16 @@ export const ConfigPanel = memo(function ConfigPanel({
                       );
                     })}
                     <button
-                      onClick={() => { setShowAddPm(true); setShowPmDropdown(false); }}
+                      onClick={() => {
+                        setShowAddPm(true);
+                        setShowPmDropdown(false);
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left border-t border-foreground/[0.06] hover:bg-foreground/[0.04] transition-colors"
                     >
                       <Plus className="w-3 h-3 text-primary/60" />
-                      <span className="text-[11px] font-bold text-primary/70">Add Payment Method</span>
+                      <span className="text-[11px] font-bold text-primary/70">
+                        Add Payment Method
+                      </span>
                     </button>
                   </div>
                 )}
@@ -471,22 +585,32 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
         </div>
 
-        {/* Spread Tier */}
-        <div data-tour="spread">
-          <label className="text-[10px] text-foreground/30 mb-1.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold">
+        {/* Spread Tier (weight 1). */}
+        <div data-tour="spread" className={`${rowSizing} flex flex-col`}>
+          <label className="text-[10px] @max-[220px]:text-[9px] text-foreground/30 mb-1 @max-h-[360px]:mb-0.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold shrink-0">
             Spread
             <InfoTooltip
               side="bottom"
               title="Spread"
               description="Your profit margin per trade. Pick the balance between speed and profit."
               items={[
-                { label: 'Fast', value: '+2.5% — matches quickly, lower profit' },
-                { label: 'Best', value: '+2% — balanced speed and profit' },
-                { label: 'Cheap', value: '+1.5% — highest profit, slower match' },
+                {
+                  label: "Fast",
+                  value: "+2.5% — matches quickly, lower profit",
+                },
+                {
+                  label: "Best",
+                  value: "+2% — balanced speed and profit",
+                },
+                {
+                  label: "Cheap",
+                  value: "+1.5% — highest profit, slower match",
+                },
               ]}
             />
           </label>
-          <div className="flex gap-1.5">
+
+          <div className="flex gap-1.5 @max-[240px]:gap-1 flex-1 min-h-[2.5rem] @max-h-[440px]:min-h-[2.25rem] @max-h-[400px]:min-h-[2rem] @max-h-[360px]:min-h-[1.875rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem]">
             {(
               Object.entries(PRICING_TIERS) as [
                 keyof typeof PRICING_TIERS,
@@ -495,6 +619,7 @@ export const ConfigPanel = memo(function ConfigPanel({
             ).map(([key, t]) => {
               const isSelected = openTradeForm.spreadPreference === key;
               const TierIcon = t.icon;
+
               return (
                 <button
                   key={key}
@@ -504,18 +629,28 @@ export const ConfigPanel = memo(function ConfigPanel({
                       spreadPreference: key,
                     })
                   }
-                  className={`flex-1 py-2 px-1.5 rounded-xl transition-all border text-center ${
+                  className={`flex-1 h-full rounded-xl transition-all border flex flex-col items-center justify-center gap-0.5 px-1 min-w-0 ${
                     isSelected
                       ? "bg-primary/[0.08] border-primary/20"
                       : "bg-foreground/[0.02] hover:bg-foreground/[0.04] border-foreground/[0.04]"
                   }`}
                 >
-                  <div className="flex items-center justify-center gap-1 mb-0.5">
+                  {/* icon + label dropped progressively by WIDTH: icon below
+                      240px, label below 200px. The "+2.5%" value always
+                      stays — it's the meaningful part. (Previously these two
+                      classNames had a broken template concat that produced
+                      `@max-h-[500px]:hiddentext-primary`, so the colour never
+                      applied; rewritten cleanly here.) */}
+                  <div className="flex items-center gap-1 @max-[200px]:hidden">
                     <TierIcon
-                      className={`w-3 h-3 ${isSelected ? "text-primary" : "text-foreground/20"}`}
+                      className={`w-3 h-3 shrink-0 @max-[240px]:hidden ${
+                        isSelected ? "text-primary" : "text-foreground/20"
+                      }`}
                     />
                     <span
-                      className={`text-[10px] font-bold ${isSelected ? "text-foreground" : "text-foreground/35"}`}
+                      className={`text-[10px] @max-[280px]:text-[9px] font-bold ${
+                        isSelected ? "text-foreground" : "text-foreground/35"
+                      }`}
                     >
                       {t.label}
                     </span>
@@ -547,10 +682,13 @@ export const ConfigPanel = memo(function ConfigPanel({
                 title="Boost"
                 description="Priority fee that pushes your order ahead of other merchants in the queue."
                 items={[
-                  { label: '0%', value: 'No boost — standard queue priority' },
-                  { label: '5%', value: 'Low boost — slightly faster match' },
-                  { label: '10%', value: 'Medium boost — preferred in busy markets' },
-                  { label: '15%', value: 'High boost — top of the queue' },
+                  { label: "0%", value: "No boost — standard queue priority" },
+                  { label: "5%", value: "Low boost — slightly faster match" },
+                  {
+                    label: "10%",
+                    value: "Medium boost — preferred in busy markets",
+                  },
+                  { label: "15%", value: "High boost — top of the queue" },
                 ]}
               />
             </label>
@@ -561,12 +699,12 @@ export const ConfigPanel = memo(function ConfigPanel({
               {showPriorityInput ? "hide" : "manual"}
             </button>
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 @max-[280px]:gap-1 @max-[240px]:gap-0.5 flex-1 min-h-[2.25rem] @max-h-[400px]:min-h-[2rem] @max-h-[360px]:min-h-[1.875rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem]">
             {[0, 5, 10, 15].map((val) => (
               <button
                 key={val}
                 onClick={() => setPriorityFee(val)}
-                className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold font-mono transition-all border ${
+                className={`flex-1 h-full rounded-lg text-[10px] @max-[280px]:text-[9px] @max-[220px]:text-[8px] font-bold font-mono transition-all border min-w-0 ${
                   priorityFee === val
                     ? "bg-foreground/[0.08] text-foreground/90 border-foreground/[0.12]"
                     : "bg-foreground/[0.02] text-foreground/25 hover:bg-foreground/[0.05] border-foreground/[0.04]"
@@ -609,7 +747,7 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
 
           {priorityFee > 0 && (
-            <div className="mt-1.5 rounded-xl bg-foreground/[0.02] border border-foreground/[0.04] p-1.5">
+            <div className="mt-1.5 @max-h-[400px]:hidden rounded-xl bg-foreground/[0.02] border border-foreground/[0.04] p-1.5">
               <div className="flex items-center justify-between px-1 mb-0.5">
                 <span className="text-[9px] text-foreground/15 font-mono font-bold">
                   DECAY
@@ -632,15 +770,21 @@ export const ConfigPanel = memo(function ConfigPanel({
           </div>
         </div>
 
-        {/* BUY / SELL Buttons */}
-        <div className="flex gap-2 pt-1">
+        {/* BUY / SELL Buttons (weight 1.1).
+            Accurate section weights for this fill model:
+              Amount 1 · Bank 1 · Spread 1 · Boost 1 · BUY/SELL 1.1
+              = 5.1 total → 19.6% / 19.6% / 19.6% / 19.6% / 21.6%.
+            Floor is height-laddered so the buttons stay tappable while the
+            panel shrinks. Label font is HEIGHT-bound; the sub-price font and
+            the gap/radius are WIDTH-bound (one axis per property). */}
+        <div className="flex gap-2 @max-[280px]:gap-1.5 @max-[240px]:gap-1 flex-[1.1] min-h-[2.5rem] @max-h-[440px]:min-h-[2.25rem] @max-h-[400px]:min-h-[2rem] @max-h-[360px]:min-h-[1.875rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem]">
           <button
             onClick={() => {
               setOpenTradeForm({ ...openTradeForm, tradeType: "buy" });
               onCreateOrder("buy", priorityFee, pair);
             }}
             disabled={isDisabled}
-            className="flex-1 py-3 rounded-xl font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5"
+            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5 min-w-0 px-1"
             style={{
               backgroundColor: "var(--primary)",
               color: "var(--background)",
@@ -651,10 +795,14 @@ export const ConfigPanel = memo(function ConfigPanel({
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <span className="text-sm font-black tracking-wide">BUY</span>
+                <span className="text-sm @max-h-[400px]:text-xs @max-h-[320px]:text-[11px] font-black tracking-wide">
+                  BUY
+                </span>
                 {cryptoAmount > 0 && (
-                  <span className="text-[10px] font-mono font-bold opacity-60">
-                    {fiatSymbol}{pricing.buyAed.toFixed(2)}{fiatSuffix || ` ${fiatLabel}`}
+                  <span className="text-[10px] @max-[240px]:text-[9px] @max-[200px]:text-[8px] font-mono font-bold opacity-60 truncate max-w-full px-1">
+                    {fiatSymbol}
+                    {pricing.buyAed.toFixed(2)}
+                    {fiatSuffix || ` ${fiatLabel}`}
                   </span>
                 )}
               </>
@@ -666,16 +814,20 @@ export const ConfigPanel = memo(function ConfigPanel({
               onCreateOrder("sell", priorityFee, pair);
             }}
             disabled={isDisabled}
-            className="flex-1 py-3 rounded-xl bg-foreground/[0.06] text-foreground font-bold hover:bg-foreground/[0.10] transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect border border-foreground/[0.08] flex flex-col items-center justify-center gap-0.5"
+            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg bg-foreground/[0.06] text-foreground font-bold hover:bg-foreground/[0.10] transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect border border-foreground/[0.08] flex flex-col items-center justify-center gap-0.5 min-w-0 px-1"
           >
             {isCreatingTrade && openTradeForm.tradeType === "sell" ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <span className="text-sm font-black tracking-wide">SELL</span>
+                <span className="text-sm @max-h-[400px]:text-xs @max-h-[320px]:text-[11px] font-black tracking-wide">
+                  SELL
+                </span>
                 {cryptoAmount > 0 && (
-                  <span className="text-[10px] font-mono font-bold text-foreground/40">
-                    {fiatSymbol}{pricing.sellAed.toFixed(2)}{fiatSuffix || ` ${fiatLabel}`}
+                  <span className="text-[10px] @max-[240px]:text-[9px] @max-[200px]:text-[8px] font-mono font-bold text-foreground/40 truncate max-w-full px-1">
+                    {fiatSymbol}
+                    {pricing.sellAed.toFixed(2)}
+                    {fiatSuffix || ` ${fiatLabel}`}
                   </span>
                 )}
               </>
@@ -683,7 +835,8 @@ export const ConfigPanel = memo(function ConfigPanel({
           </button>
         </div>
 
-        {/* Spread summary */}
+        {/* Spread summary — least-critical line, hidden on very short
+            panels so the five primary rows always fit without scrolling. */}
         {cryptoAmount > 0 && (
           <div className="flex items-center justify-between px-1 text-[9px] font-mono text-foreground/20">
             {promoActive && (

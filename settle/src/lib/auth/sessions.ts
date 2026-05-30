@@ -9,10 +9,23 @@
  */
 
 import { createHash } from 'crypto';
-import { query, queryOne } from '@/lib/db';
+import { query, queryOne, transaction } from '@/lib/db';
 import { generateRefreshToken, verifyRefreshToken, TokenPayload, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from './sessionToken';
+import { extractClientIp } from './clientIp';
 
 const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Grace window during which a *just-rotated* refresh token is still honoured
+// by FOLLOWING its successor session instead of being rejected. This is what
+// keeps multi-tab / polling refresh "storms" from logging a sibling tab out:
+// only ONE concurrent refresh wins the rotation; the losers present the same
+// (now-rotated) token a few ms later and are routed to the winner's session.
+const ROTATION_GRACE_MS = 30_000;
+
+// A login from a device that already has an active session within this grace
+// is NOT collapsed by the device-dedup pass — protects multi-step logins
+// (password → 2FA) which legitimately create a second session in one flow.
+const LOGIN_DEDUP_GRACE_SECONDS = 10;
 
 /** Hash a refresh token for safe DB storage */
 export function hashToken(token: string): string {
@@ -56,12 +69,11 @@ export async function createSession(
   const tokenHash = hashToken(refreshToken);
   const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS).toISOString();
 
-  // Extract device info from request
+  // Extract device info from request. extractClientIp() handles
+  // Cloudflare/Vercel/proxy headers and returns null for loopback so we never
+  // persist `::1` / 127.0.0.1 for a real user.
   const userAgent = request?.headers?.get?.('user-agent') || null;
-  const ip = request?.headers?.get?.('x-forwarded-for')?.split(',')[0]?.trim()
-    || request?.headers?.get?.('x-real-ip')
-    || request?.ip
-    || null;
+  const ip = extractClientIp(request);
   const deviceInfo = userAgent ? parseDeviceInfo(userAgent) : null;
 
   const session = await queryOne<{ id: string }>(
@@ -73,18 +85,66 @@ export async function createSession(
 
   if (!session) return null;
 
+  // One active session per device. Collapse PRIOR active sessions from the
+  // same device (same entity + user-agent) into this fresh login so that
+  // re-logging-in from the same browser no longer piles up duplicate "active
+  // session" rows — even when the IP changed between logins (different network
+  // / dynamic ISP address). The surviving row carries the latest login's IP.
+  // The LOGIN_DEDUP_GRACE_SECONDS guard skips sessions created moments ago in
+  // the SAME login flow (e.g. password step before 2FA step).
+  // Best-effort: a failure here must never break an otherwise-successful login.
+  try {
+    const collapsed = await query<{ id: string }>(
+      `UPDATE sessions
+          SET is_revoked = true, revoked_at = NOW(), replaced_by = $1
+        WHERE entity_id = $2
+          AND entity_type = $3
+          AND is_revoked = false
+          AND id <> $1
+          AND created_at < NOW() - ($5 || ' seconds')::interval
+          AND user_agent IS NOT DISTINCT FROM $4
+        RETURNING id`,
+      [session.id, payload.actorId, payload.actorType, userAgent, String(LOGIN_DEDUP_GRACE_SECONDS)]
+    );
+    for (const s of collapsed) invalidateSessionCache(s.id);
+  } catch {
+    /* dedup is best-effort — never block a successful login */
+  }
+
   return { refreshToken, sessionId: session.id };
 }
 
 /**
+ * Result of a refresh-token rotation.
+ *   - 'rotated':  this request won; a NEW refresh token was minted and must be
+ *                 set as the cookie.
+ *   - 'followed': a concurrent sibling already rotated the same token within
+ *                 the grace window; no new refresh token — keep the existing
+ *                 cookie and just issue a fresh access token for `sessionId`.
+ */
+export type RotateResult =
+  | { kind: 'rotated'; payload: TokenPayload; newRefreshToken: string; sessionId: string }
+  | { kind: 'followed'; payload: TokenPayload; sessionId: string }
+  | null;
+
+/**
  * Validate and rotate a refresh token.
  * Returns new tokens if valid, null if invalid.
- * Detects token reuse (stolen tokens).
+ * Detects token reuse (stolen tokens) and tolerates concurrent refreshes.
+ *
+ * Concurrency: multi-tab apps + polling loops + Pusher reconnects fire many
+ * /api/auth/refresh calls with the SAME cookie at once. The rotation below is
+ * wrapped in a transaction whose first statement atomically CLAIMS the old
+ * session (UPDATE … WHERE is_revoked = false). Postgres row-locking guarantees
+ * exactly ONE caller wins and inserts the replacement; the losers' claim
+ * matches zero rows, so they insert NOTHING (no orphaned "active" session
+ * rows) and instead FOLLOW the winner. This is the fix for duplicate sessions
+ * accumulating from refresh storms.
  */
 export async function rotateRefreshToken(
   oldToken: string,
   request?: { headers?: { get: (name: string) => string | null }; ip?: string }
-): Promise<{ payload: TokenPayload; newRefreshToken: string; sessionId: string } | null> {
+): Promise<RotateResult> {
   // Verify the token signature/expiry first
   const payload = verifyRefreshToken(oldToken);
   if (!payload) return null;
@@ -92,7 +152,7 @@ export async function rotateRefreshToken(
   const oldHash = hashToken(oldToken);
 
   // Look up the session by token hash
-  const session = await queryOne<Session & { replaced_by: string | null }>(
+  const session = await queryOne<Session & { replaced_by: string | null; revoked_at: string | null }>(
     `SELECT * FROM sessions WHERE refresh_token_hash = $1`,
     [oldHash]
   );
@@ -117,8 +177,13 @@ export async function rotateRefreshToken(
     return null;
   }
 
-  // Check if session is revoked or expired
-  if (session.is_revoked || new Date(session.expires_at) < new Date()) {
+  // Already revoked? Distinguish a concurrent-rotation sibling (replaced_by set
+  // and recent → FOLLOW it so the tab stays logged in) from a genuine
+  // revocation / expiry (logout, revoke-all → reject as before).
+  if (session.is_revoked) {
+    return followIfRecentlyRotated(payload, session.replaced_by, session.revoked_at);
+  }
+  if (new Date(session.expires_at) < new Date()) {
     return null;
   }
 
@@ -129,32 +194,73 @@ export async function rotateRefreshToken(
   const newHash = hashToken(newRefreshToken);
   const newExpiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS).toISOString();
 
-  // Update IP/device info
+  // Carry forward IP/device info (refresh from same device updates IP).
   const userAgent = request?.headers?.get?.('user-agent') || session.user_agent;
-  const ip = request?.headers?.get?.('x-forwarded-for')?.split(',')[0]?.trim()
-    || request?.headers?.get?.('x-real-ip')
-    || session.ip_address;
+  const ip = extractClientIp(request) || session.ip_address;
 
-  // Create new session, revoke old one (atomic rotation)
-  const newSession = await queryOne<{ id: string }>(
-    `INSERT INTO sessions (entity_id, entity_type, refresh_token_hash, device_info, ip_address, user_agent, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id`,
-    [payload.actorId, payload.actorType, newHash, session.device_info, ip, userAgent, newExpiresAt]
-  );
+  // Atomic rotation: claim the old session, then insert + link the new one.
+  // Returns the new session id, or null if we lost the concurrency race.
+  const newSessionId = await transaction<string | null>(async (client) => {
+    const claim = await client.query(
+      `UPDATE sessions SET is_revoked = true, revoked_at = NOW()
+        WHERE id = $1 AND is_revoked = false
+        RETURNING id`,
+      [session.id]
+    );
+    if (claim.rowCount === 0) {
+      // Another concurrent refresh already rotated this session.
+      return null;
+    }
+    const ins = await client.query(
+      `INSERT INTO sessions (entity_id, entity_type, refresh_token_hash, device_info, ip_address, user_agent, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id`,
+      [payload.actorId, payload.actorType, newHash, session.device_info, ip, userAgent, newExpiresAt]
+    );
+    const newId = ins.rows[0].id as string;
+    // Link old → new (FK target now exists within this transaction).
+    await client.query(
+      `UPDATE sessions SET replaced_by = $1 WHERE id = $2`,
+      [newId, session.id]
+    );
+    return newId;
+  });
 
-  if (!newSession) return null;
-
-  // Revoke old session and link to new one
-  await query(
-    `UPDATE sessions SET is_revoked = true, revoked_at = NOW(), replaced_by = $1 WHERE id = $2`,
-    [newSession.id, session.id]
-  );
   // Invalidate the rotated session in the local cache so any in-flight
   // request that arrives after the rotation can't replay the old token.
   invalidateSessionCache(session.id);
 
-  return { payload, newRefreshToken, sessionId: newSession.id };
+  if (!newSessionId) {
+    // Lost the race — re-read to follow the winner's session so this request
+    // still returns a usable access token instead of a spurious logout.
+    const fresh = await queryOne<{ replaced_by: string | null; revoked_at: string | null }>(
+      `SELECT replaced_by, revoked_at FROM sessions WHERE id = $1`,
+      [session.id]
+    );
+    return followIfRecentlyRotated(payload, fresh?.replaced_by ?? null, fresh?.revoked_at ?? null);
+  }
+
+  return { kind: 'rotated', payload, newRefreshToken, sessionId: newSessionId };
+}
+
+/**
+ * If a revoked session was replaced (rotated) very recently, FOLLOW its
+ * successor — lets a concurrent refresh loser stay authenticated. Outside the
+ * grace window, treat as a genuine revocation and reject.
+ */
+function followIfRecentlyRotated(
+  payload: TokenPayload,
+  replacedBy: string | null,
+  revokedAt: string | null,
+): RotateResult {
+  if (
+    replacedBy &&
+    revokedAt &&
+    Date.now() - new Date(revokedAt).getTime() < ROTATION_GRACE_MS
+  ) {
+    return { kind: 'followed', payload, sessionId: replacedBy };
+  }
+  return null;
 }
 
 /**
@@ -164,6 +270,28 @@ export async function revokeSession(sessionId: string): Promise<boolean> {
   const result = await query(
     `UPDATE sessions SET is_revoked = true, revoked_at = NOW() WHERE id = $1 AND is_revoked = false RETURNING id`,
     [sessionId]
+  );
+  if (result.length > 0) {
+    invalidateSessionCache(sessionId);
+  }
+  return result.length > 0;
+}
+
+/**
+ * Revoke a single session, but ONLY if it belongs to the given entity.
+ * Used by the per-session "Revoke" action so a caller can never revoke a
+ * session id that isn't theirs (prevents cross-account session tampering).
+ */
+export async function revokeSessionScoped(
+  sessionId: string,
+  entityId: string,
+  entityType: string,
+): Promise<boolean> {
+  const result = await query(
+    `UPDATE sessions SET is_revoked = true, revoked_at = NOW()
+      WHERE id = $1 AND entity_id = $2 AND entity_type = $3 AND is_revoked = false
+      RETURNING id`,
+    [sessionId, entityId, entityType]
   );
   if (result.length > 0) {
     invalidateSessionCache(sessionId);

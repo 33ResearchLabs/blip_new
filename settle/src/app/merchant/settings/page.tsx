@@ -72,7 +72,7 @@ import {
 
 type MerchantPaymentMethod = {
   id: string;
-  type: "bank" | "cash" | "crypto" | "card" | "mobile";
+  type: "bank" | "cash" | "crypto" | "card" | "mobile" | "upi";
   name: string;
   details: string;
   is_default: boolean;
@@ -116,6 +116,13 @@ const PM_TYPE_META: Record<
     gradient: "from-pink-500/20 to-pink-600/5",
     border: "border-pink-500/30",
     text: "text-pink-400",
+  },
+  upi: {
+    label: "UPI",
+    Icon: Smartphone,
+    gradient: "from-green-500/20 to-green-600/5",
+    border: "border-green-500/30",
+    text: "text-green-400",
   },
 };
 
@@ -206,7 +213,7 @@ export default function MerchantSettingsPage({
   // as "not yet claimed" even if merchants.username has an auto-generated
   // value. Surfaces the editable form so the merchant can run the
   // PATCH /api/merchant/username that flips username_customized_at.
-  const { status: onboardingStatus } = useOnboarding();
+  const { status: onboardingStatus, refresh: refreshOnboarding } = useOnboarding();
   const usernameClaimed = onboardingStatus?.conditions?.usernameSet ?? false;
 
   const [usernameInput, setUsernameInput] = useState("");
@@ -311,12 +318,13 @@ export default function MerchantSettingsPage({
       setUsernameAvailability({ kind: "idle" });
       // Drop back to the read-only display once the new value is committed.
       setIsEditingUsername(false);
+      void refreshOnboarding();
     } catch {
       setUsernameError("Network error — try again.");
     } finally {
       setUsernameSaving(false);
     }
-  }, [usernameInput, usernameAvailability, usernameSaving, setMerchantInfo]);
+  }, [usernameInput, usernameAvailability, usernameSaving, setMerchantInfo, refreshOnboarding]);
 
   // Password change
   const [currentPassword, setCurrentPassword] = useState("");
@@ -499,6 +507,8 @@ export default function MerchantSettingsPage({
       // merchants table that the API call above just updated; on next load
       // /api/auth/me re-reads it from the DB. No localStorage mirror.
       setMerchantInfo((prev: any) => ({ ...prev, ...updates }));
+
+      void refreshOnboarding();
 
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -2526,6 +2536,7 @@ interface SessionData {
   osVersion: string | null;
   deviceName: string | null;
   deviceType: "mobile" | "tablet" | "desktop";
+  isCurrent?: boolean;
   lastUsed: string;
   createdAt: string;
   expiresAt: string;
@@ -3174,6 +3185,7 @@ function ActiveSessionsSection() {
 
   const formatTime = (dateStr: string) => {
     const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "—";
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
     const diffMin = Math.floor(diffMs / 60000);
@@ -3225,8 +3237,12 @@ function ActiveSessionsSection() {
 
       {!isLoading && sessions.length > 0 && (
         <div className="space-y-2">
-          {sessions.map((session, idx) => {
-            const isCurrent = idx === 0;
+          {(() => {
+            // Identify CURRENT by the server-provided session id. Fall back to
+            // the first row only for legacy tokens that carry no session id.
+            const currentId = sessions.find((s) => s.isCurrent)?.id ?? null;
+            return sessions.map((session, idx) => {
+            const isCurrent = currentId ? session.id === currentId : idx === 0;
             const isMobile =
               session.deviceType === "mobile" ||
               session.deviceType === "tablet";
@@ -3290,12 +3306,12 @@ function ActiveSessionsSection() {
 
                       {/* Row 3: IP + Times */}
                       <div className="flex items-center gap-3 mt-1.5 text-[10px] text-white/30">
-                        {session.ip && (
-                          <span className="flex items-center gap-1">
-                            <Globe className="w-3 h-3 text-white/20" />
-                            <span className="font-mono">{session.ip}</span>
+                        <span className="flex items-center gap-1">
+                          <Globe className="w-3 h-3 text-white/20" />
+                          <span className="font-mono">
+                            {session.ip || "Unknown IP"}
                           </span>
-                        )}
+                        </span>
                         <span className="flex items-center gap-1">
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${isCurrent ? "bg-green-400 animate-pulse" : "bg-white/20"}`}
@@ -3325,7 +3341,8 @@ function ActiveSessionsSection() {
                 </div>
               </div>
             );
-          })}
+            });
+          })()}
         </div>
       )}
     </div>

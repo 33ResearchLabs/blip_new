@@ -89,6 +89,79 @@ export const updateUserSchema = z.object({
   push_token: z.string().optional(),
 });
 
+// Merchant dashboard layout — see migration 146 + MerchantDesktopLayout.
+// IDs are mirrored by widgetRegistry.tsx; keep these arrays as the single
+// source of truth for the server-side allowlist.
+export const WIDGET_IDS = [
+  'dashboardWidgets',
+  'configPanel',
+  'pendingOrders',
+  'inProgress',
+  'completedOrders',
+  'leaderboard',
+  'activity',
+  'notifications',
+  'chat',
+] as const;
+export const COLUMN_IDS = [
+  'left',
+  'center-left',
+  'center-right',
+  'transactions',
+  'right',
+] as const;
+
+export const widgetIdSchema = z.enum(WIDGET_IDS);
+export const columnIdSchema = z.enum(COLUMN_IDS);
+
+export const dashboardLayoutSchema = z
+  .object({
+    version: z.literal(1),
+    columns: z
+      .array(
+        z.object({
+          id: columnIdSchema,
+          widgets: z.array(widgetIdSchema).max(WIDGET_IDS.length),
+        }),
+      )
+      .max(COLUMN_IDS.length),
+    hidden: z.array(widgetIdSchema).max(WIDGET_IDS.length),
+  })
+  .superRefine((layout, ctx) => {
+    // A widget can appear at most once across columns + hidden. A buggy
+    // client could otherwise duplicate a widget id and corrupt the render.
+    const seen = new Set<string>();
+    const flag = (id: string, path: (string | number)[]) => {
+      if (seen.has(id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate widget id: ${id}`,
+          path,
+        });
+      }
+      seen.add(id);
+    };
+    layout.columns.forEach((col, ci) =>
+      col.widgets.forEach((w, wi) => flag(w, ['columns', ci, 'widgets', wi])),
+    );
+    layout.hidden.forEach((w, hi) => flag(w, ['hidden', hi]));
+    // Column ids must also be unique — two "left" columns would silently
+    // overwrite each other on render.
+    const colSeen = new Set<string>();
+    layout.columns.forEach((col, ci) => {
+      if (colSeen.has(col.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate column id: ${col.id}`,
+          path: ['columns', ci, 'id'],
+        });
+      }
+      colSeen.add(col.id);
+    });
+  });
+
+export type DashboardLayout = z.infer<typeof dashboardLayoutSchema>;
+
 // Merchant schemas
 export const updateMerchantSchema = z.object({
   avatar_url: z.string().url().optional(),
@@ -98,6 +171,9 @@ export const updateMerchantSchema = z.object({
   bio: z.string().max(200).optional(),
   buy_rate: z.number().min(50).max(200).nullable().optional(),
   sell_rate: z.number().min(50).max(200).nullable().optional(),
+  // `null` resets to the default layout (DB column back to NULL); an object
+  // persists a custom layout. `undefined` (omitted) leaves it untouched.
+  dashboard_layout: dashboardLayoutSchema.nullable().optional(),
 });
 
 export type UpdateMerchantInput = z.infer<typeof updateMerchantSchema>;

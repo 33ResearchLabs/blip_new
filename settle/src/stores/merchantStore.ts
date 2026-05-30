@@ -37,6 +37,12 @@ export interface MerchantStoreState {
   showOrderFilters: boolean;
   soundEnabled: boolean;
 
+  // ─── Dashboard edit mode (Phase 2, migration 146) ────
+  // When true, widgets show drag handles + hide buttons and become
+  // sortable. Always defaults to false so a fresh load is read-only.
+  // Not persisted — merchants should opt-in each session.
+  isEditingLayout: boolean;
+
   // ─── Actions ────────────────────────────────────────
   /** Accepts direct value OR callback (prev => next) — drop-in replacement for useState setter */
   setOrders: (ordersOrFn: any[] | ((prev: any[]) => any[])) => void;
@@ -58,6 +64,7 @@ export interface MerchantStoreState {
   setOrderFilters: (fOrFn: OrderFilters | ((prev: OrderFilters) => OrderFilters)) => void;
   setShowOrderFilters: (v: boolean) => void;
   setSoundEnabled: (v: boolean) => void;
+  setIsEditingLayout: (v: boolean) => void;
 }
 
 export const useMerchantStore = create<MerchantStoreState>()(
@@ -78,6 +85,7 @@ export const useMerchantStore = create<MerchantStoreState>()(
     orderFilters: { type: 'all', amount: 'all', method: 'all', secured: 'all' },
     showOrderFilters: false,
     soundEnabled: true,
+    isEditingLayout: false,
 
     // ─── Actions ────────────────────────────────────────
 
@@ -143,5 +151,6 @@ export const useMerchantStore = create<MerchantStoreState>()(
     },
     setShowOrderFilters: (v) => set({ showOrderFilters: v }),
     setSoundEnabled: (v) => set({ soundEnabled: v }),
+    setIsEditingLayout: (v) => set({ isEditingLayout: v }),
   }))
 );

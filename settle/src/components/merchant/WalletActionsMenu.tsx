@@ -272,7 +272,11 @@ export function WalletActionsMenu({
 
   return (
     <>
-      <div className={`relative ${className ?? ""}`} data-wallet-actions-menu>
+      {/* z-30 on the wrapper so the menu's stacking context sits above
+          the surrounding StatusCard rows (USDT label / balance / actions
+          all sit at z-10). Without this the dropdown was painted behind
+          the later-sibling balance number on the merchant dashboard. */}
+      <div className={`relative z-30 ${className ?? ""}`} data-wallet-actions-menu>
         <button
           type="button"
           onClick={(e) => {

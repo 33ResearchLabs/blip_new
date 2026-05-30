@@ -31,11 +31,8 @@ export default function PWAInstallBanner({
           <div className="max-w-md mx-auto bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
             {/* Header */}
             <div className="flex items-center gap-3 p-4 pb-3">
-              <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-                style={{ backgroundColor: `${accentColor}20` }}
-              >
-                <Download className="w-6 h-6" style={{ color: accentColor }} />
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-black">
+                <Download className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-white">Install {appName}</h3>
@@ -83,8 +80,7 @@ export default function PWAInstallBanner({
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   onClick={install}
-                  className="w-full py-3 rounded-xl text-sm font-bold text-background flex items-center justify-center gap-2 transition-colors"
-                  style={{ backgroundColor: accentColor }}
+                  className="w-full py-3 rounded-xl text-sm font-bold bg-black text-white hover:bg-black/85 flex items-center justify-center gap-2 transition-colors"
                 >
                   <Download className="w-4 h-4" />
                   Install App

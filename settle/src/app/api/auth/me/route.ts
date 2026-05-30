@@ -29,15 +29,39 @@ export async function GET(request: NextRequest) {
 
   try {
     if (auth.actorType === 'merchant') {
-      const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address,
+      // `dashboard_layout` was added in migration 146. If the DB is one
+      // migration behind (e.g. dev forgot to restart core-api so its
+      // runner hasn't applied 146 yet), the column is missing and the
+      // SELECT throws — which used to cascade into a 500 here, then a
+      // wiped client store, then the consecutive-401 counter pushing the
+      // user to /merchant/login?reason=session_expired. Catch the
+      // specific "column does not exist" case and fall back to the
+      // pre-146 projection so auth never collapses over a schema lag.
+      const SELECT_WITH_LAYOUT = `SELECT id, username, display_name, business_name, wallet_address,
+                avatar_url, bio, email, rating, total_trades, is_online, balance,
+                has_ops_access, dashboard_layout,
+                COALESCE(has_compliance_access, false) as has_compliance_access
+         FROM merchants
+         WHERE id = $1 AND status = 'active'`;
+      const SELECT_WITHOUT_LAYOUT = `SELECT id, username, display_name, business_name, wallet_address,
                 avatar_url, bio, email, rating, total_trades, is_online, balance,
                 has_ops_access,
                 COALESCE(has_compliance_access, false) as has_compliance_access
          FROM merchants
-         WHERE id = $1 AND status = 'active'`,
-        [auth.actorId],
-      );
+         WHERE id = $1 AND status = 'active'`;
+      let rows;
+      try {
+        rows = await query(SELECT_WITH_LAYOUT, [auth.actorId]);
+      } catch (err) {
+        // pg error code 42703 = "undefined_column". Other errors propagate.
+        const code = (err as { code?: string })?.code;
+        if (code === '42703') {
+          console.warn('[GET /api/auth/me] dashboard_layout column missing — apply migration 146');
+          rows = await query(SELECT_WITHOUT_LAYOUT, [auth.actorId]);
+        } else {
+          throw err;
+        }
+      }
       if (rows.length === 0) return errorResponse('Merchant not found', 404);
       return successResponse({
         actorType: 'merchant' as const,

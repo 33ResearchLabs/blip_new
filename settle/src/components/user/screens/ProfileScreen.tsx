@@ -3,8 +3,6 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Check,
-  Copy,
   Wallet,
   Sun,
   Moon,
@@ -54,10 +52,10 @@ function ProfileHeaderStats() {
 
   return (
     <div className="flex items-center gap-2 mb-2 flex-wrap">
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-semibold">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-raised border border-border-subtle text-text-secondary text-[11px] font-semibold">
         <Coins size={11} />
-        <span className="tabular-nums">{coins != null ? coins.toLocaleString('en-US') : '—'}</span>
-        <span className="text-amber-300/70">Blip Points</span>
+        <span className="tabular-nums text-text-primary">{coins != null ? coins.toLocaleString('en-US') : '—'}</span>
+        <span className="text-text-tertiary">Blip Points</span>
       </span>
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-raised border border-border-subtle text-text-secondary text-[11px] font-semibold">
         <Shield size={11} />
@@ -67,7 +65,6 @@ function ProfileHeaderStats() {
     </div>
   );
 }
-import { copyToClipboard } from "@/lib/clipboard";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodsManager } from "../PaymentMethodsManager";
@@ -117,9 +114,6 @@ export interface ProfileScreenProps {
   };
   setShowWalletSetup?: (v: boolean) => void;
   setShowWalletUnlock?: (v: boolean) => void;
-  // Copy
-  copied: boolean;
-  setCopied: (v: boolean) => void;
   // Disputes
   resolvedDisputes: Array<{
     id: string;
@@ -161,8 +155,6 @@ export const ProfileScreen = ({
   embeddedWallet,
   setShowWalletSetup,
   setShowWalletUnlock,
-  copied,
-  setCopied,
   resolvedDisputes,
   theme,
   toggleTheme,
@@ -219,13 +211,6 @@ export const ProfileScreen = ({
     ? Math.min(100, Math.max(0, ((tradesCount - prevTierThreshold) / (nextTierThreshold - prevTierThreshold)) * 100))
     : 100;
 
-  const copyAddress = async () => {
-    if (!solanaWallet.walletAddress) return;
-    await copyToClipboard(solanaWallet.walletAddress);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
@@ -243,7 +228,7 @@ export const ProfileScreen = ({
             </div>
             <span
               className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-surface-base ${
-                solanaWallet.connected ? 'bg-success' : 'bg-text-quaternary'
+                solanaWallet.connected ? 'bg-text-primary' : 'bg-text-quaternary'
               }`}
               aria-label={solanaWallet.connected ? 'Wallet connected' : 'Wallet disconnected'}
             />
@@ -256,25 +241,6 @@ export const ProfileScreen = ({
                 the user name so the most important "who am I worth"
                 signals are immediately legible next to the avatar. */}
             <ProfileHeaderStats />
-            {solanaWallet.connected && solanaWallet.walletAddress ? (
-              <motion.button
-                whileTap={{ scale: 0.96 }}
-                onClick={copyAddress}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[10px] bg-surface-raised border border-border-subtle"
-              >
-                <span className="text-[11px] font-semibold text-text-secondary font-mono">
-                  {`${solanaWallet.walletAddress.slice(0, 4)}…${solanaWallet.walletAddress.slice(-4)}`}
-                </span>
-                {copied
-                  ? <Check size={11} className="text-success" />
-                  : <Copy size={11} className="text-text-quaternary" />}
-              </motion.button>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[10px] bg-surface-raised border border-border-subtle">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-quaternary" />
-                <span className="text-[11px] font-semibold text-text-tertiary">Wallet not connected</span>
-              </span>
-            )}
           </div>
         </div>
       </header>
@@ -381,9 +347,9 @@ export const ProfileScreen = ({
               </div>
             </div>
             {solanaWallet.connected && (
-              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-success-dim border border-success-border shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                <span className="text-[9px] font-bold tracking-[0.1em] uppercase text-success">Live</span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface-raised border border-border-subtle shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-text-primary" />
+                <span className="text-[9px] font-bold tracking-[0.1em] uppercase text-text-secondary">Live</span>
               </span>
             )}
           </div>
@@ -416,16 +382,16 @@ export const ProfileScreen = ({
                   <motion.button
                     whileTap={{ scale: 0.96 }}
                     onClick={() => solanaWallet.disconnect()}
-                    className="flex-1 h-9 rounded-[12px] flex items-center justify-center gap-1.5 bg-error-dim border border-error-border text-[11px] font-bold text-error tracking-[0.08em] uppercase"
+                    className="flex-1 h-9 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-active border border-border-subtle text-[11px] font-bold text-text-secondary tracking-[0.08em] uppercase"
                   >
-                    <LogOut size={12} className="text-error" />
+                    <LogOut size={12} className="text-text-tertiary" />
                     Disconnect
                   </motion.button>
                 </div>
 
                 {/* Embedded-wallet management. Surfaced only when the
                     embedded-wallet flag is on. */}
-                {IS_EMBEDDED_WALLET && (
+                {/* {IS_EMBEDDED_WALLET && (
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={() => router.push('/user/wallet')}
@@ -434,7 +400,7 @@ export const ProfileScreen = ({
                     Manage Wallet
                     <ChevronRight size={14} className="text-text-tertiary" />
                   </motion.button>
-                )}
+                )} */}
               </div>
             </>
           )}
@@ -488,9 +454,9 @@ export const ProfileScreen = ({
               {resolvedDisputes.map(dispute => {
                 const badgeClass =
                   dispute.resolvedInFavorOf === 'user'
-                    ? 'bg-success-dim text-success border border-success-border'
+                    ? 'bg-surface-raised text-text-primary border border-border-medium'
                     : dispute.resolvedInFavorOf === 'merchant'
-                    ? 'bg-error-dim text-error border border-error-border'
+                    ? 'bg-surface-active text-text-tertiary border border-border-subtle'
                     : 'bg-surface-active text-text-tertiary';
                 return (
                   <div key={dispute.id} className={`rounded-[16px] px-4 py-3 ${CARD}`}>

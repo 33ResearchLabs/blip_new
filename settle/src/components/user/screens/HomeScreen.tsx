@@ -193,9 +193,9 @@ function WalletBalanceSection({
 
   // ── Token deck — main USDT balance is index 0, swipe-equivalent via page dots
   const tokens = [
-    { symbol: 'USDT', name: 'Tether',   amount: displayBalance,                 dp: 2, color: '#26A17B', hasRate: true  },
-    { symbol: 'SOL',  name: 'Solana',   amount: solanaWallet.solBalance ?? null, dp: 4, color: '#9945FF', hasRate: false },
-    { symbol: 'USDC', name: 'USD Coin', amount: solanaWallet.usdcBalance ?? null, dp: 2, color: '#2775CA', hasRate: true  },
+    { symbol: 'USDT', name: 'Tether',   amount: displayBalance,                 dp: 2, color: 'rgba(255,255,255,0.92)', hasRate: true  },
+    { symbol: 'SOL',  name: 'Solana',   amount: solanaWallet.solBalance ?? null, dp: 4, color: 'rgba(255,255,255,0.92)', hasRate: false },
+    { symbol: 'USDC', name: 'USD Coin', amount: solanaWallet.usdcBalance ?? null, dp: 2, color: 'rgba(255,255,255,0.92)', hasRate: true  },
   ] as const;
   const [tokenIdx, setTokenIdx] = useStateHook(0);
   const t = tokens[tokenIdx];
@@ -210,9 +210,9 @@ function WalletBalanceSection({
     <div className="flex flex-col flex-1 min-h-0">
       {/* Reputation + coin pill — small, sits at the top of the hero. Same
           widget as the merchant + waitlist surfaces. */}
-      <div className="shrink-0 flex items-center justify-center mt-1 mb-2">
-        <ReputationCoinBadge variant="pill" />
-      </div>
+      {/* <div className="shrink-0 flex items-center justify-center mt-1 mb-2">
+        <ReputationCoinBadge variant="pill" hideRep="true" />
+      </div> */}
 
       {/* ── Top group: balance, vertically centered in remaining hero height
               so the empty/ready states feel anchored rather than floating
@@ -294,7 +294,7 @@ function WalletBalanceSection({
                     width: active ? 18 : 6,
                     borderRadius: 999,
                     background: active ? tk.color : 'rgba(255,255,255,0.22)',
-                    boxShadow: active ? `0 0 8px ${tk.color}55` : undefined,
+                    boxShadow: active ? '0 0 8px rgba(255,255,255,0.35)' : undefined,
                     transition: 'width 280ms cubic-bezier(0.22,1,0.36,1), background 280ms ease',
                     border: 0,
                     padding: 0,
@@ -853,11 +853,11 @@ export const HomeScreen = ({
                       className="flex items-center justify-center"
                       style={{
                         width: 18, height: 18, borderRadius: 5,
-                        background: navCopied ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.06)',
-                        border: navCopied ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(255,255,255,0.10)',
+                        background: navCopied ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)',
+                        border: navCopied ? '1px solid rgba(255,255,255,0.30)' : '1px solid rgba(255,255,255,0.10)',
                       }}>
                       {navCopied
-                        ? <Check size={9} style={{ color: '#10b981' }} />
+                        ? <Check size={9} style={{ color: 'rgba(255,255,255,0.95)' }} />
                         : <Copy size={9} style={{ color: 'rgba(255,255,255,0.55)' }} />}
                     </motion.button>
                   </div>
@@ -866,6 +866,8 @@ export const HomeScreen = ({
             </div>
 
             <div className="flex items-center gap-2">
+              <ReputationCoinBadge variant="pill" hideRep />
+              {/* Bug / Report Issue button — hidden
               <motion.button
                 whileTap={{ scale: 0.88 }}
                 onClick={() => void openIssueReporter()}
@@ -880,15 +882,16 @@ export const HomeScreen = ({
               >
                 <Bug size={17} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.65)' }} />
               </motion.button>
+              */}
 
               <motion.button whileTap={{ scale: 0.88 }} onClick={() => setScreen('notifications')}
                 className="relative flex items-center justify-center"
                 style={{
-                  width: 38, height: 38, borderRadius: 13,
+                  width: 28, height: 28, borderRadius: 13,
                   background: 'rgba(255,255,255,0.06)',
                   border: '1px solid rgba(255,255,255,0.10)',
                 }}>
-                <Bell size={17} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.65)' }} />
+                <Bell size={15} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.65)' }} />
                 {notificationCount > 0 && (
                   <div
                     className="absolute -top-[3px] -right-[3px] flex items-center justify-center"

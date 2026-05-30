@@ -16,7 +16,6 @@ import {
   UserPlus,
   Users,
   Send,
-  Twitter,
   Instagram,
   MessageCircle,
   MoreHorizontal,
@@ -101,6 +100,22 @@ function useAnimatedNumber(target: number, duration = 900): number {
   return current;
 }
 
+// X (formerly Twitter) brand mark. Lucide ships the legacy bird as `Twitter`
+// but no first-party X glyph, so this inline SVG matches the brand's current
+// logo. Accepts the same `className` / `strokeWidth` props as a LucideIcon
+// so it can drop into the SharePlatform table without a type widen.
+const XIcon: LucideIcon = (({ className, strokeWidth = 2, ...rest }: { className?: string; strokeWidth?: number; [k: string]: any }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    aria-hidden="true"
+    {...rest}
+  >
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817-5.965 6.817H1.68l7.73-8.835L1.254 2.25h6.825l4.713 6.231 5.452-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644Z" />
+  </svg>
+)) as unknown as LucideIcon;
+
 // ─── Share targets (deep links + share intents) ──────────────────────────
 
 type SharePlatform = {
@@ -156,12 +171,12 @@ const ShareButton = ({ label, Icon, onClick }: ShareButtonProps) => (
     whileHover={{ y: -2 }}
     transition={{ type: "spring", stiffness: 380, damping: 28 }}
     onClick={onClick}
-    className={`min-w-0 flex flex-col items-center gap-1.5 py-3 px-1 rounded-[14px] ${CARD} hover:bg-surface-hover transition-colors`}
+    className={`min-w-0 flex flex-col items-center gap-1 py-2 px-1 rounded-xl ${CARD} hover:bg-surface-hover transition-colors`}
   >
-    <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center shrink-0">
-      <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-text-primary" />
+    <span className="w-7 h-7 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center shrink-0">
+      <Icon className="w-3.5 h-3.5 text-text-primary" />
     </span>
-    <span className="text-[9.5px] sm:text-[10.5px] font-semibold text-text-secondary text-center leading-tight max-w-full truncate w-full px-0.5">
+    <span className="text-[9.5px] font-semibold text-text-secondary text-center leading-tight max-w-full w-full px-0.5">
       {label}
     </span>
   </motion.button>
@@ -198,7 +213,7 @@ const GiftMotif = () => (
 );
 
 const CoinsMotif = () => (
-  <div className="relative w-[80px] h-[64px] shrink-0">
+  <div className=" relative hidden lg:block w-[80px] h-[64px] shrink-0">
     <div className="absolute left-0 bottom-0 w-10 h-10 rounded-full bg-surface-raised border border-border-medium flex items-center justify-center">
       <Coins className="w-4 h-4 text-text-secondary" strokeWidth={1.8} />
     </div>
@@ -302,7 +317,7 @@ export const RewardsScreen = ({
     {
       key: "twitter",
       label: "X (Twitter)",
-      Icon: Twitter,
+      Icon: XIcon,
       href: (msg, url) =>
         `https://twitter.com/intent/tweet?text=${encodeURIComponent(msg)}&url=${encodeURIComponent(url)}`,
     },
@@ -371,7 +386,7 @@ export const RewardsScreen = ({
           >
             <ChevronLeft className="w-5 h-5 text-text-secondary" />
           </motion.button>
-           <h1 className="text-[17px] font-semibold text-text-primary">Refral</h1>
+           <h1 className="text-[17px] font-semibold text-text-primary">Referral</h1>
         </div>
         <motion.section
           initial={{ opacity: 0, y: 8 }}
@@ -474,10 +489,10 @@ export const RewardsScreen = ({
               </p>
               <div className="flex items-stretch gap-2">
                 <div
-                  className={`flex-1 min-w-0 flex items-center px-3.5 rounded-[14px] bg-surface-raised border border-border-subtle`}
+                  className="flex-1 min-w-0 flex items-center px-3.5 py-2.5 rounded-[14px] bg-surface-raised border border-border-subtle"
                 >
                   <span
-                    className="block text-[12.5px] font-medium text-text-secondary "
+                    className="block w-full truncate text-[12.5px] font-medium text-text-secondary"
                     title={referralLink}
                   >
                     {referralLink}
@@ -488,7 +503,8 @@ export const RewardsScreen = ({
                   whileHover={{ y: -1 }}
                   onClick={handleCopyLink}
                   disabled={!hasCode}
-                  className="shrink-0 flex items-center justify-center gap-2 px-4 py-3 rounded-[14px] bg-accent text-accent-text border border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  aria-label={copied ? 'Copied' : 'Copy invite link'}
+                  className="shrink-0 flex items-center justify-center gap-1.5 px-3 sm:px-4 py-3 rounded-[14px] bg-accent text-accent-text border border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <AnimatePresence mode="wait" initial={false}>
                     {copied ? (
@@ -501,7 +517,7 @@ export const RewardsScreen = ({
                         className="flex items-center gap-1.5"
                       >
                         <Check size={14} strokeWidth={2.6} />
-                        <span className="text-[13px] font-bold">Copied</span>
+                        <span className="hidden sm:inline text-[13px] font-bold">Copied</span>
                       </motion.span>
                     ) : (
                       <motion.span
@@ -513,7 +529,7 @@ export const RewardsScreen = ({
                         className="flex items-center gap-1.5"
                       >
                         <Copy size={14} strokeWidth={2.2} />
-                        <span className="text-[13px] font-bold">Copy Link</span>
+                        <span className="hidden sm:inline text-[13px] font-bold">Copy Link</span>
                       </motion.span>
                     )}
                   </AnimatePresence>
@@ -577,7 +593,7 @@ export const RewardsScreen = ({
                 </p>
               </div>
             </div>
-            <motion.button
+            {/* <motion.button
               whileTap={{ scale: 0.96 }}
               whileHover={{ y: -1 }}
               onClick={onLearnMore}
@@ -585,7 +601,7 @@ export const RewardsScreen = ({
             >
               <span className="text-[12px] font-bold">Learn more</span>
               <ChevronRight className="w-3.5 h-3.5 text-text-tertiary" />
-            </motion.button>
+            </motion.button> */}
           </motion.section>
 
           {/* ── 2. Share Via ── */}
@@ -600,15 +616,27 @@ export const RewardsScreen = ({
             className="mb-6"
           >
             <p className={`${SECTION_LABEL} mb-3 px-1`}>Share Via</p>
-            <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
-              {SHARE_PLATFORMS.map((p) => (
-                <ShareButton
-                  key={p.key}
-                  label={p.label}
-                  Icon={p.Icon}
-                  onClick={() => handleShareClick(p)}
-                />
-              ))}
+            <div className="space-y-2 ">
+              <div className="grid grid-cols-3 gap-2">
+                {SHARE_PLATFORMS.slice(0, 3).map((p) => (
+                  <ShareButton
+                    key={p.key}
+                    label={p.label}
+                    Icon={p.Icon}
+                    onClick={() => handleShareClick(p)}
+                  />
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {SHARE_PLATFORMS.slice(3).map((p) => (
+                  <ShareButton
+                    key={p.key}
+                    label={p.label}
+                    Icon={p.Icon}
+                    onClick={() => handleShareClick(p)}
+                  />
+                ))}
+              </div>
             </div>
           </motion.section>
 

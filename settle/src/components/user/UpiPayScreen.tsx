@@ -382,8 +382,8 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
               </>
             ) : (
               <>
-                <div className="w-14 h-14 rounded-full bg-warning/15 flex items-center justify-center">
-                  <AlertCircle className="w-7 h-7 text-warning" />
+                <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+                  <AlertCircle className="w-7 h-7 text-white" />
                 </div>
                 <p className="text-[22px] font-bold tracking-[-0.02em]">No USDT to pay with</p>
                 <p className="text-[12px] text-text-tertiary max-w-[280px]">
