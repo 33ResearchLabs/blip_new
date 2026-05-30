@@ -2393,6 +2393,7 @@ interface SessionData {
   osVersion: string | null;
   deviceName: string | null;
   deviceType: "mobile" | "tablet" | "desktop";
+  isCurrent?: boolean;
   lastUsed: string;
   createdAt: string;
   expiresAt: string;
@@ -3041,6 +3042,7 @@ function ActiveSessionsSection() {
 
   const formatTime = (dateStr: string) => {
     const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "—";
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
     const diffMin = Math.floor(diffMs / 60000);
@@ -3092,8 +3094,12 @@ function ActiveSessionsSection() {
 
       {!isLoading && sessions.length > 0 && (
         <div className="space-y-2">
-          {sessions.map((session, idx) => {
-            const isCurrent = idx === 0;
+          {(() => {
+            // Identify CURRENT by the server-provided session id. Fall back to
+            // the first row only for legacy tokens that carry no session id.
+            const currentId = sessions.find((s) => s.isCurrent)?.id ?? null;
+            return sessions.map((session, idx) => {
+            const isCurrent = currentId ? session.id === currentId : idx === 0;
             const isMobile =
               session.deviceType === "mobile" ||
               session.deviceType === "tablet";
@@ -3157,12 +3163,12 @@ function ActiveSessionsSection() {
 
                       {/* Row 3: IP + Times */}
                       <div className="flex items-center gap-3 mt-1.5 text-[10px] text-white/30">
-                        {session.ip && (
-                          <span className="flex items-center gap-1">
-                            <Globe className="w-3 h-3 text-white/20" />
-                            <span className="font-mono">{session.ip}</span>
+                        <span className="flex items-center gap-1">
+                          <Globe className="w-3 h-3 text-white/20" />
+                          <span className="font-mono">
+                            {session.ip || "Unknown IP"}
                           </span>
-                        )}
+                        </span>
                         <span className="flex items-center gap-1">
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${isCurrent ? "bg-green-400 animate-pulse" : "bg-white/20"}`}
@@ -3192,7 +3198,8 @@ function ActiveSessionsSection() {
                 </div>
               </div>
             );
-          })}
+            });
+          })()}
         </div>
       )}
     </div>

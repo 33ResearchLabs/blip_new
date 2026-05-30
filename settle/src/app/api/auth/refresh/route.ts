@@ -68,7 +68,12 @@ export async function POST(request: NextRequest) {
         actorId: result.payload.actorId,
       },
     });
-    response.cookies.set(REFRESH_TOKEN_COOKIE, result.newRefreshToken, REFRESH_COOKIE_OPTIONS);
+    // Only mint a new refresh cookie when WE won the rotation. On the
+    // 'followed' path a concurrent sibling already rotated the token and set
+    // the freshest cookie — overwriting it here would clobber the live token.
+    if (result.kind === 'rotated') {
+      response.cookies.set(REFRESH_TOKEN_COOKIE, result.newRefreshToken, REFRESH_COOKIE_OPTIONS);
+    }
     response.cookies.set(ACCESS_TOKEN_COOKIE, accessToken, ACCESS_COOKIE_OPTIONS);
 
     return response;
