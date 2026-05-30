@@ -1,36 +1,35 @@
 /**
  * Username derivation for the Google OAuth signup path ONLY.
  *
- * The existing waitlist password-register helper (deriveUsernameFromEmail in
- * settle/src/components/waitlist/RegisterForm.tsx) uses just the email's
- * local part: foo@x.com -> "foo". That collides across all foo@* addresses.
+ * We use just the email's local part (everything before the "@") so the
+ * username reads naturally and never leaks the provider domain:
  *
- * The Google path uses the FULL email so each verified Google identity gets
- * a globally-unique username on first signup:
- *
- *   foo@x.com               -> foo_x_com
- *   john.doe@gmail.com      -> john_doe_gmail_com
- *   verylongname@gmail.com  -> verylongname_gmail_c  (truncated to 20)
+ *   girishavhad1@gmail.com  -> girishavhad1
+ *   john.doe@gmail.com      -> john_doe          (dot -> underscore)
+ *   john+shopping@gmail.com -> john              ("+tag" alias dropped)
+ *   verylongnameherefoobar@gmail.com -> verylongnameherefoob  (truncated to 20)
  *
  * Output must satisfy validateUserUsername in
  * settle/src/lib/validation/userAuth.ts:
  *   - 3-20 characters
  *   - [a-zA-Z0-9_] (we emit lowercase + digits + underscore)
  *
- * On rare exact collision (two long emails truncating to the same 20 chars,
- * or a username that happens to already exist from a non-Google signup),
- * we append "_2", "_3", ... until unique, keeping total length within 20.
+ * Local parts are NOT unique across domains (foo@a.com and foo@b.com both
+ * derive "foo"), and a name may already exist from a non-Google signup, so on
+ * collision we append "_2", "_3", ... until unique, keeping length within 20.
  */
 
 import { USER_USERNAME_MAX_LEN, USER_USERNAME_MIN_LEN } from '@/lib/validation/userAuth';
 
 const MAX_SUFFIX_TRIES = 50;
 
-function sanitizeFullEmail(email: string): string {
-  return email
+function sanitizeEmailLocalPart(email: string): string {
+  const localPart = email.split('@')[0] ?? ''; // girishavhad1@gmail.com -> girishavhad1
+  return localPart
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/\+.*$/, '') // drop "+tag" alias: john+shopping -> john
+    .replace(/[^a-z0-9]+/g, '_') // any leftover punctuation (e.g. dots) -> _
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
 }
@@ -46,7 +45,7 @@ function padToMin(s: string): string {
 }
 
 export function deriveUsernameFromFullEmail(email: string): string {
-  const sanitized = sanitizeFullEmail(email) || 'user';
+  const sanitized = sanitizeEmailLocalPart(email) || 'user';
   return padToMin(clampToMax(sanitized));
 }
 
