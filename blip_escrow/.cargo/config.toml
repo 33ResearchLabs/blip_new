@@ -1,0 +1,8 @@
+[target.x86_64-apple-darwin]
+linker = "/usr/bin/clang"
+
+[target.sbf-solana-solana]
+linker = "/Users/zeus/.cache/solana/v1.51/platform-tools/llvm/bin/ld.lld"
+
+[build]
+target-dir = "target"

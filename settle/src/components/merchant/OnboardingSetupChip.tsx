@@ -36,7 +36,7 @@ export function OnboardingSetupChip({ compact = false }: OnboardingSetupChipProp
   const doneCount = [
     status.conditions.usernameSet,
     status.conditions.walletConnected,
-    status.conditions.hasPaymentMethod,
+    status.conditions.inrRateSet,
   ].filter(Boolean).length;
 
   // Clicking calls resume() unconditionally: when skipped, this clears

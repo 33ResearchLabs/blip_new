@@ -44,34 +44,34 @@ export function OnboardingSetupCard({
 
   const steps: StepView[] = [
     {
-      key: ‘wallet’,
-      label: ‘Connect Wallet’,
-      description: ‘Link your Solana wallet to secure your account.’,
+      key: 'wallet',
+      label: 'Connect Wallet',
+      description: 'Link your Solana wallet to secure your account.',
       icon: Wallet,
       done: conditions.walletConnected,
-      doneLabel: ‘Connected’,
+      doneLabel: 'Connected',
       cta: conditions.walletConnected
         ? null
-        : { label: ‘Connect’, onClick: () => router.push(‘/merchant/wallet’) },
+        : { label: 'Connect', onClick: () => router.push('/merchant/wallet') },
     },
     {
-      key: ‘inr-rate’,
-      label: ‘Set INR Rate’,
-      description: ‘Set your buy/sell rate for the India corridor.’,
+      key: 'inr-rate',
+      label: 'Set INR Rate',
+      description: 'Set your buy/sell rate for the India corridor.',
       icon: TrendingUp,
       done: conditions.inrRateSet,
-      doneLabel: ‘Set’,
+      doneLabel: 'Set',
       cta: conditions.inrRateSet
         ? null
-        : { label: ‘Set Rate’, onClick: () => router.push(‘/merchant/settings?tab=rates’) },
+        : { label: 'Set Rate', onClick: () => router.push('/merchant/settings?tab=rates') },
     },
     {
-      key: ‘trade’,
-      label: ‘Accept First Trade’,
-      description: ‘Accept your first order to complete setup.’,
+      key: 'trade',
+      label: 'Accept First Trade',
+      description: 'Accept your first order to complete setup.',
       icon: Zap,
       done: conditions.hasTrade,
-      doneLabel: ‘Done’,
+      doneLabel: 'Done',
       optional: true,
       cta: null,
     },

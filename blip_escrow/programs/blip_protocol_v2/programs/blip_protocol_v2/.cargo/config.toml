@@ -1,0 +1,5 @@
+[build]
+target = "sbf-solana-solana"
+
+[target.sbf-solana-solana]
+rustflags = []

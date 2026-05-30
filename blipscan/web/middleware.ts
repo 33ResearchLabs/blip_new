@@ -1,41 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// HTTP Basic Auth gate for scan.blip.money. Opt-in via env: when
-// SCAN_DEV_PASSWORD is unset, this middleware is a no-op. Set the
-// password (and optionally the username) on the blipscan/web Railway
-// service to lock the explorer behind the browser's native auth prompt.
+const COOKIE = 'blipscan_access';
+const GATE   = '/gate';
 
-const REALM = 'Blipscan (private preview)';
+function isValidToken(token: string): boolean {
+  const raw = process.env.SCAN_INVITE_CODES || '';
+  if (!raw) return true; // gate disabled when no codes configured
+
+  const codes = raw.split(',').map(s => s.trim()).filter(Boolean);
+  const now = Date.now();
+
+  for (const entry of codes) {
+    const [code, expiry] = entry.split(':');
+    if (token !== code.trim()) continue;
+    if (expiry) {
+      const exp = new Date(expiry.trim()).getTime();
+      if (!isNaN(exp) && now > exp) return false; // expired
+    }
+    return true;
+  }
+  return false;
+}
 
 export function middleware(request: NextRequest) {
-  const expectedPassword = process.env.SCAN_DEV_PASSWORD;
-  if (!expectedPassword) return NextResponse.next();
+  const codesConfigured = !!(process.env.SCAN_INVITE_CODES || '').trim();
+  if (!codesConfigured) return NextResponse.next();
 
-  const expectedUser = process.env.SCAN_DEV_USER || 'blip';
+  const { pathname } = request.nextUrl;
 
-  const header = request.headers.get('authorization') || '';
-  if (header.startsWith('Basic ')) {
-    try {
-      const decoded = atob(header.slice(6));
-      const sep = decoded.indexOf(':');
-      const user = sep >= 0 ? decoded.slice(0, sep) : '';
-      const pass = sep >= 0 ? decoded.slice(sep + 1) : '';
-      if (user === expectedUser && pass === expectedPassword) {
-        return NextResponse.next();
-      }
-    } catch {
-      // fall through to 401
-    }
+  // Always allow the gate page and its API route
+  if (pathname === GATE || pathname.startsWith('/api/auth')) {
+    return NextResponse.next();
   }
 
-  return new NextResponse('Authentication required', {
-    status: 401,
-    headers: { 'WWW-Authenticate': `Basic realm="${REALM}", charset="UTF-8"` },
-  });
+  const token = request.cookies.get(COOKIE)?.value || '';
+  if (isValidToken(token)) return NextResponse.next();
+
+  // Redirect to gate, preserving the intended destination
+  const url = request.nextUrl.clone();
+  url.pathname = GATE;
+  url.searchParams.set('next', request.nextUrl.pathname);
+  return NextResponse.redirect(url);
 }
 
 export const config = {
-  // Skip Next internals and common static assets so the browser doesn't
-  // re-prompt for every chunk; the page request itself is gated.
   matcher: ['/((?!_next/|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|svg|webp|ico|css|js|map)$).*)'],
 };

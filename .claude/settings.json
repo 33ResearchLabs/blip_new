@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Bash(pg_isready*)",
+      "Bash(psql --version)",
+      "Bash(psql -U postgres -d settle -tAc *)",
+      "Bash(brew --version)",
+      "Bash(brew services list)",
+      "Bash(brew services info *)",
+      "Bash(pnpm --version)",
+      "Bash(node --version)",
+      "Bash(railway --version)",
+      "Bash(railway whoami)",
+      "Bash(railway status)"
+    ]
+  }
+}

@@ -11,6 +11,23 @@ function getIP(req: NextRequest): string {
     || 'unknown';
 }
 
+function validateInviteCode(input: string): { ok: boolean; expired?: boolean } {
+  const raw = process.env.APP_INVITE_CODES || '';
+  if (!raw) return { ok: false };
+
+  const now = Date.now();
+  for (const entry of raw.split(',').map(s => s.trim()).filter(Boolean)) {
+    const [code, expiry] = entry.split(':');
+    if (input !== code.trim()) continue;
+    if (expiry) {
+      const exp = new Date(expiry.trim()).getTime();
+      if (!isNaN(exp) && now > exp) return { ok: false, expired: true };
+    }
+    return { ok: true };
+  }
+  return { ok: false };
+}
+
 export async function POST(request: NextRequest) {
   const ip = getIP(request);
   const now = Date.now();
@@ -32,14 +49,6 @@ export async function POST(request: NextRequest) {
     entry.count++;
   }
 
-  const envPassword = process.env.DEV_ACCESS_PASSWORD;
-  if (!envPassword) {
-    return NextResponse.json(
-      { success: false, error: 'Dev lock not configured' },
-      { status: 500 }
-    );
-  }
-
   let body: { password?: string };
   try {
     body = await request.json();
@@ -50,21 +59,46 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!body.password || body.password !== envPassword) {
+  const input = (body.password || '').trim();
+  if (!input) {
+    return NextResponse.json({ success: false, error: 'Code required' }, { status: 400 });
+  }
+
+  const masterPassword = process.env.DEV_ACCESS_PASSWORD || '';
+  const inviteCodes = process.env.APP_INVITE_CODES || '';
+
+  // Must have at least one credential source configured
+  if (!masterPassword && !inviteCodes) {
     return NextResponse.json(
-      { success: false, error: 'Wrong password' },
+      { success: false, error: 'Access not configured' },
+      { status: 500 }
+    );
+  }
+
+  // Accept master password OR a valid invite code
+  const isMaster = masterPassword && input === masterPassword;
+  const invite = !isMaster ? validateInviteCode(input) : null;
+
+  if (!isMaster && invite?.expired) {
+    return NextResponse.json({ success: false, error: 'This invite code has expired.' }, { status: 401 });
+  }
+
+  if (!isMaster && !invite?.ok) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid invite code.' },
       { status: 401 }
     );
   }
 
-  // Success — set httpOnly cookie
-  const response = NextResponse.json({ success: true });
+  // Success — set httpOnly cookie (30 days for invite codes, 7 days for master password)
+  const maxAge = isMaster ? 60 * 60 * 24 * 7 : 60 * 60 * 24 * 30;
+  const response = NextResponse.json({ success: true, redirect: '/' });
   response.cookies.set('dev_access_granted', 'true', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge,
   });
 
   return response;
