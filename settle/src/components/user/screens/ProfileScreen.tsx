@@ -3,8 +3,6 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Check,
-  Copy,
   Wallet,
   Sun,
   Moon,
@@ -67,7 +65,6 @@ function ProfileHeaderStats() {
     </div>
   );
 }
-import { copyToClipboard } from "@/lib/clipboard";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodsManager } from "../PaymentMethodsManager";
@@ -117,9 +114,6 @@ export interface ProfileScreenProps {
   };
   setShowWalletSetup?: (v: boolean) => void;
   setShowWalletUnlock?: (v: boolean) => void;
-  // Copy
-  copied: boolean;
-  setCopied: (v: boolean) => void;
   // Disputes
   resolvedDisputes: Array<{
     id: string;
@@ -161,8 +155,6 @@ export const ProfileScreen = ({
   embeddedWallet,
   setShowWalletSetup,
   setShowWalletUnlock,
-  copied,
-  setCopied,
   resolvedDisputes,
   theme,
   toggleTheme,
@@ -219,13 +211,6 @@ export const ProfileScreen = ({
     ? Math.min(100, Math.max(0, ((tradesCount - prevTierThreshold) / (nextTierThreshold - prevTierThreshold)) * 100))
     : 100;
 
-  const copyAddress = async () => {
-    if (!solanaWallet.walletAddress) return;
-    await copyToClipboard(solanaWallet.walletAddress);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
@@ -256,25 +241,6 @@ export const ProfileScreen = ({
                 the user name so the most important "who am I worth"
                 signals are immediately legible next to the avatar. */}
             <ProfileHeaderStats />
-            {solanaWallet.connected && solanaWallet.walletAddress ? (
-              <motion.button
-                whileTap={{ scale: 0.96 }}
-                onClick={copyAddress}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[10px] bg-surface-raised border border-border-subtle"
-              >
-                <span className="text-[11px] font-semibold text-text-secondary font-mono">
-                  {`${solanaWallet.walletAddress.slice(0, 4)}…${solanaWallet.walletAddress.slice(-4)}`}
-                </span>
-                {copied
-                  ? <Check size={11} className="text-text-primary" />
-                  : <Copy size={11} className="text-text-quaternary" />}
-              </motion.button>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[10px] bg-surface-raised border border-border-subtle">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-quaternary" />
-                <span className="text-[11px] font-semibold text-text-tertiary">Wallet not connected</span>
-              </span>
-            )}
           </div>
         </div>
       </header>
