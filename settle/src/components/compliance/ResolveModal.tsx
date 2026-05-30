@@ -77,7 +77,7 @@ export default function ResolveModal({
                       {getEmoji(selectedDispute.user.name)}
                     </div>
                     <p className="text-xs font-medium">{selectedDispute.user.name}</p>
-                    <p className="text-[10px] text-muted">{selectedDispute.user.trades} trades</p>
+                    <p className="text-[10px] text-muted">{selectedDispute.isM2M ? "Buyer Merchant" : "User"} · {selectedDispute.user.trades} trades</p>
                   </div>
                   <div className="text-[var(--color-text-quaternary)]">vs</div>
                   <div className="flex-1 text-center">
@@ -85,7 +85,7 @@ export default function ResolveModal({
                       {getEmoji(selectedDispute.merchant.name)}
                     </div>
                     <p className="text-xs font-medium">{selectedDispute.merchant.name}</p>
-                    <p className="text-[10px] text-muted">{selectedDispute.merchant.trades} trades</p>
+                    <p className="text-[10px] text-muted">{selectedDispute.isM2M ? "Seller Merchant" : "Merchant"} · {selectedDispute.merchant.trades} trades</p>
                   </div>
                 </div>
 
@@ -101,8 +101,8 @@ export default function ResolveModal({
                           : "border-border hover:border-[var(--color-border-medium)] bg-[var(--color-bg-tertiary)]"
                       }`}
                     >
-                      <span className="text-2xl">{"\u{1F464}"}</span>
-                      <span className="text-xs font-medium">Favor User</span>
+                      <span className="text-2xl">{"\u{1F3EA}"}</span>
+                      <span className="text-xs font-medium">{selectedDispute.isM2M ? "Favor Buyer" : "Favor User"}</span>
                     </button>
 
                     <button

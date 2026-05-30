@@ -50,6 +50,7 @@ interface DisputeOrder {
     rating: number;
     trades: number;
   };
+  isM2M?: boolean;
   buyerMerchant?: {
     id: string;
     name: string;

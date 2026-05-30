@@ -1122,7 +1122,8 @@ export default function ComplianceDashboard() {
                           }}
                           className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 rounded text-blue-400 hover:bg-blue-500/20 transition-colors"
                         >
-                          {"\u{1F464}"} {chatDispute?.user.name || "User"}
+                          {"\u{1F3EA}"} {chatDispute?.user.name || (chatDispute?.isM2M ? "Buyer Merchant" : "User")}
+                          {chatDispute?.isM2M && <span className="ml-1 opacity-60">(Buyer)</span>}
                         </button>
                         <button
                           onClick={() => {
@@ -1141,6 +1142,7 @@ export default function ComplianceDashboard() {
                           className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 rounded text-purple-400 hover:bg-purple-500/20 transition-colors"
                         >
                           {"\u{1F3EA}"} {chatDispute?.merchant.name || "Merchant"}
+                          {chatDispute?.isM2M && <span className="ml-1 opacity-60">(Seller)</span>}
                         </button>
                         <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 rounded text-primary">{"\u{1F6E1}\uFE0F"} You</span>
                       </div>

@@ -607,6 +607,23 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           currentOrder.merchant_id !== actor_id &&
           isPlaceholderUser;
 
+        // Balance check: for M2M SELL orders the accepting merchant becomes the seller
+        // and must lock escrow. Reject early if they don't have enough balance.
+        if (isM2MAcceptance && currentOrder.type === 'sell' && !currentOrder.buyer_merchant_id) {
+          const balResult = await client.query<{ balance: string }>(
+            'SELECT balance FROM merchants WHERE id = $1',
+            [actor_id]
+          );
+          const merchantBalance = parseFloat(balResult.rows[0]?.balance ?? '0');
+          const required = parseFloat(String(currentOrder.crypto_amount));
+          if (merchantBalance < required) {
+            return {
+              success: false as const,
+              error: `Insufficient balance to accept: you need ${required} ${currentOrder.crypto_currency ?? 'USDT'} but have ${merchantBalance}`,
+            };
+          }
+        }
+
         console.log('[CORE-API DEBUG] Accept logic:', {
           m2mUsername,
           isPlaceholderUser,

@@ -195,7 +195,16 @@ export async function GET(request: NextRequest) {
           resolvedAt: row.resolved_at,
           resolutionNotes: row.resolution_notes,
         } : null,
-        user: {
+        // M2M orders: user_id is an open_order_ placeholder — real buyer is buyer_merchant_id.
+        // Swap `user` to show the actual buyer merchant so compliance sees merchant vs merchant.
+        isM2M: !!row.buyer_merchant_id,
+        user: row.buyer_merchant_id ? {
+          id: row.buyer_merchant_id,
+          name: row.buyer_merchant_name || 'Buyer Merchant',
+          wallet: row.buyer_merchant_wallet,
+          rating: parseFloat(row.buyer_merchant_rating || '0'),
+          trades: row.buyer_merchant_trades || 0,
+        } : {
           id: row.user_id,
           name: row.user_name,
           wallet: row.user_wallet,
