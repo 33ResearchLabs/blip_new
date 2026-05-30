@@ -257,7 +257,9 @@ export async function atomicFinalizeDispute(
             logger.warn('[Atomic] Dispute finalize: ledger invariant skipped (no LOCK row, legacy)', {
               orderId, refundTotal, releaseTotal,
             });
-          } else if (Math.abs(lockTotal - releaseTotal - refundTotal) > 0.00000001) {
+          } else if (Math.abs(lockTotal + releaseTotal + refundTotal) > 0.00000001) {
+            // ESCROW_LOCK is a negative debit; ESCROW_RELEASE/REFUND are positive credits.
+            // Conservation: debit + credits == 0.
             throw new Error(
               `LEDGER_INVARIANT_VIOLATION: lock=${lockTotal} release=${releaseTotal} refund=${refundTotal}`
             );
