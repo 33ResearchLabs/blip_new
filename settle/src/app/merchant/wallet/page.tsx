@@ -2250,10 +2250,12 @@ function PinFieldDisplay({
   trailing,
 }: PinFieldDisplayProps) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className={`w-full text-left rounded-xl px-4 py-3 bg-white/[0.02] transition-colors ${
+      onKeyDown={(e) => e.key === 'Enter' && onClick?.()}
+      className={`w-full text-left rounded-xl px-4 py-3 bg-white/[0.02] transition-colors cursor-pointer ${
         active ? "border border-primary" : "border border-white/[0.08]"
       }`}
     >
@@ -2292,6 +2294,6 @@ function PinFieldDisplay({
         </div>
         {trailing}
       </div>
-    </button>
+    </div>
   );
 }

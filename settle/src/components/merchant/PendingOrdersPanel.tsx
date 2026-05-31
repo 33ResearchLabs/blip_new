@@ -539,11 +539,22 @@ const OrderList = memo(function OrderList({
                 )}
                 {/* Waiting banner — top of card for own orders */}
                 {isMyOwnOrder && acceptingOrderId !== order.id && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-foreground/[0.02] border border-foreground/[0.04]">
-                    <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
-                    <span className="text-[9px] text-foreground/30 font-mono font-bold tracking-wider uppercase">
-                      Waiting for acceptance
-                    </span>
+                  <div className="flex items-center justify-between gap-2 px-2 py-1 mb-1.5 rounded bg-foreground/[0.02] border border-foreground/[0.04]">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
+                      <span className="text-[9px] text-foreground/30 font-mono font-bold tracking-wider uppercase">
+                        Waiting for acceptance
+                      </span>
+                    </div>
+                    {onCancelOrder && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
+                        className="text-[9px] font-bold text-red-400/70 hover:text-red-400 transition-colors uppercase tracking-wider"
+                      >
+                        {isMineable ? "Cancel & Refund" : "Cancel"}
+                      </button>
+                    )}
                   </div>
                 )}
                 {/* Row 1: User + tags on left, timer on right */}
