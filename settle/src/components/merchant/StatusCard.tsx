@@ -597,7 +597,7 @@ export const StatusCard = memo(function StatusCard({
             cqi-only makes them scale down as the column narrows. The max
             clamp values are unchanged, so the wide-column look is identical. */}
         {(onOpenSwap || onOpenSend || onOpenDeposit) && (
-          <div className="mt-3 w-full grid grid-cols-4 relative z-10 rounded-2xl overflow-hidden border border-foreground/[0.08] bg-foreground/[0.04]">
+          <div className={`mt-3 w-full grid relative z-10 rounded-2xl overflow-hidden border border-foreground/[0.08] bg-foreground/[0.04] ${[onOpenSwap, onOpenSend, onOpenDeposit, onOpenReceive].filter(Boolean).length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
