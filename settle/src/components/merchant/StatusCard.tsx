@@ -593,77 +593,32 @@ export const StatusCard = memo(function StatusCard({
             cqi-only makes them scale down as the column narrows. The max
             clamp values are unchanged, so the wide-column look is identical. */}
         {(onOpenSwap || onOpenSend || onOpenDeposit) && (
-          <div className="mt-3 w-full grid grid-cols-3 gap-1.5 relative z-10">
+          <div className="mt-2.5 w-full flex items-center gap-2 relative z-10">
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
-                style={{
-                  paddingTop: "clamp(0.2rem, 2.5cqi, 0.6rem)",
-                  paddingBottom: "clamp(0.2rem, 2.5cqi, 0.6rem)",
-                  gap: "clamp(0.1rem, 1.5cqi, 0.35rem)",
-                }}
-                className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-foreground/[0.06] hover:bg-foreground/[0.10] border border-foreground/[0.08] text-foreground/70 hover:text-foreground transition-colors"
               >
-                <ArrowLeftRight
-                  style={{
-                    width: "clamp(0.6rem, 3.5cqi, 1rem)",
-                    height: "clamp(0.6rem, 3.5cqi, 1rem)",
-                  }}
-                />
-                <span
-                  style={{ fontSize: "clamp(7px, 3.5cqi, 10px)" }}
-                  className="font-bold uppercase tracking-wider"
-                >
-                  Swap
-                </span>
+                <ArrowLeftRight className="w-3 h-3 shrink-0" />
+                <span className="text-[11px] font-semibold tracking-wide">Swap</span>
               </button>
             )}
             {onOpenSend && (
               <button
                 onClick={onOpenSend}
-                style={{
-                  paddingTop: "clamp(0.2rem, 2.5cqi, 0.6rem)",
-                  paddingBottom: "clamp(0.2rem, 2.5cqi, 0.6rem)",
-                  gap: "clamp(0.1rem, 1.5cqi, 0.35rem)",
-                }}
-                className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-foreground/[0.06] hover:bg-foreground/[0.10] border border-foreground/[0.08] text-foreground/70 hover:text-foreground transition-colors"
               >
-                <ArrowUpFromLine
-                  style={{
-                    width: "clamp(0.6rem, 3.5cqi, 1rem)",
-                    height: "clamp(0.6rem, 3.5cqi, 1rem)",
-                  }}
-                />
-                <span
-                  style={{ fontSize: "clamp(7px, 3.5cqi, 10px)" }}
-                  className="font-bold uppercase tracking-wider"
-                >
-                  Send
-                </span>
+                <ArrowUpFromLine className="w-3 h-3 shrink-0" />
+                <span className="text-[11px] font-semibold tracking-wide">Send</span>
               </button>
             )}
             {onOpenDeposit && (
               <button
                 onClick={onOpenDeposit}
-                style={{
-                  paddingTop: "clamp(0.2rem, 2.5cqi, 0.6rem)",
-                  paddingBottom: "clamp(0.2rem, 2.5cqi, 0.6rem)",
-                  gap: "clamp(0.1rem, 1.5cqi, 0.35rem)",
-                }}
-                className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-foreground/[0.06] hover:bg-foreground/[0.10] border border-foreground/[0.08] text-foreground/70 hover:text-foreground transition-colors"
               >
-                <ArrowDownToLine
-                  style={{
-                    width: "clamp(0.6rem, 3.5cqi, 1rem)",
-                    height: "clamp(0.6rem, 3.5cqi, 1rem)",
-                  }}
-                />
-                <span
-                  style={{ fontSize: "clamp(7px, 3.5cqi, 10px)" }}
-                  className="font-bold uppercase tracking-wider"
-                >
-                  Deposit
-                </span>
+                <ArrowDownToLine className="w-3 h-3 shrink-0" />
+                <span className="text-[11px] font-semibold tracking-wide">Deposit</span>
               </button>
             )}
           </div>
