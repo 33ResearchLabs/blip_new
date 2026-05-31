@@ -601,7 +601,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1 py-2 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
               >
                 <ArrowLeftRight className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-semibold tracking-widest uppercase">Swap</span>
@@ -610,7 +610,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenSend && (
               <button
                 onClick={onOpenSend}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1 py-2 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
               >
                 <ArrowUpFromLine className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-semibold tracking-widest uppercase">Send</span>
@@ -619,7 +619,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenDeposit && (
               <button
                 onClick={onOpenDeposit}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1 py-2 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
               >
                 <ArrowDownToLine className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-semibold tracking-widest uppercase">Deposit</span>
