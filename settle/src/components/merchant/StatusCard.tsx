@@ -471,7 +471,7 @@ export const StatusCard = memo(function StatusCard({
           height (no overflow:hidden) so SWAP/SEND/DEPOSIT always shows
           — clipping at the bottom of the card is handled by allowing
           the WidgetDashboardWidgets wrapper to scroll when needed. */}
-      <div data-tour="fund-wallet" className="flex-1 flex flex-col items-center justify-between px-4 py-3 relative">
+      <div data-tour="fund-wallet" className="flex-1 flex flex-col items-center justify-center px-4 py-2 gap-2 relative">
         {/* Ambient glow behind amount */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-48 h-24 bg-primary/[0.03] rounded-full blur-[60px]" />
@@ -482,7 +482,7 @@ export const StatusCard = memo(function StatusCard({
             isn't trapped inside a z-10 stacking context — without this
             the later-sibling balance number, wallet row, and SWAP/SEND/
             DEPOSIT buttons paint on top of the dropdown items. */}
-        <div className="flex items-center justify-between mb-1 relative z-30">
+        <div className="flex items-center justify-between w-full relative z-30">
           <div className="flex items-center gap-1.5">
             {walletStatus === 'locked' ? (
               <Lock className="w-3 h-3 text-foreground/30" />
@@ -597,7 +597,7 @@ export const StatusCard = memo(function StatusCard({
             cqi-only makes them scale down as the column narrows. The max
             clamp values are unchanged, so the wide-column look is identical. */}
         {(onOpenSwap || onOpenSend || onOpenDeposit) && (
-          <div className={`mt-3 w-full grid relative z-10 rounded-2xl overflow-hidden border border-foreground/[0.08] bg-foreground/[0.04] ${[onOpenSwap, onOpenSend, onOpenDeposit, onOpenReceive].filter(Boolean).length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          <div className={`mt-1 w-full grid relative z-10 rounded-2xl overflow-hidden border border-foreground/[0.08] bg-foreground/[0.04] ${[onOpenSwap, onOpenSend, onOpenDeposit, onOpenReceive].filter(Boolean).length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
@@ -1109,7 +1109,7 @@ function WalletAddressRow({ onOpenDeposit }: { onOpenDeposit?: () => void }) {
   const [copied, setCopied] = useState(false);
   if (!address) return null;
   return (
-    <div className="mt-2.5 flex items-center justify-center gap-2 relative z-10">
+    <div className="flex items-center justify-center gap-2 relative z-10">
       <button
         onClick={async () => {
           await copyToClipboard(address);
