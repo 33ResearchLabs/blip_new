@@ -21,6 +21,7 @@ import {
   ArrowLeftRight,
   ArrowUpFromLine,
   ArrowDownToLine,
+  QrCode,
   Coins,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -72,6 +73,8 @@ interface StatusCardProps {
   onOpenSend?: () => void;
   /** Open the Deposit / receive-address QR modal. */
   onOpenDeposit?: () => void;
+  /** Open the Receive (QR / address) modal — alias for deposit modal. */
+  onOpenReceive?: () => void;
 }
 
 interface CorridorData {
@@ -104,6 +107,7 @@ export const StatusCard = memo(function StatusCard({
   onOpenSwap,
   onOpenSend,
   onOpenDeposit,
+  onOpenReceive,
 }: StatusCardProps) {
   const [corridor, setCorridor] = useState<CorridorData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -593,7 +597,7 @@ export const StatusCard = memo(function StatusCard({
             cqi-only makes them scale down as the column narrows. The max
             clamp values are unchanged, so the wide-column look is identical. */}
         {(onOpenSwap || onOpenSend || onOpenDeposit) && (
-          <div className="mt-2.5 w-full flex items-center gap-2 relative z-10">
+          <div className="mt-2.5 w-full flex items-center gap-2 relative z-10 flex-wrap">
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
@@ -619,6 +623,15 @@ export const StatusCard = memo(function StatusCard({
               >
                 <ArrowDownToLine className="w-3 h-3 shrink-0" />
                 <span className="text-[11px] font-semibold tracking-wide">Deposit</span>
+              </button>
+            )}
+            {onOpenReceive && (
+              <button
+                onClick={onOpenReceive}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-foreground/[0.06] hover:bg-foreground/[0.10] border border-foreground/[0.08] text-foreground/70 hover:text-foreground transition-colors"
+              >
+                <QrCode className="w-3 h-3 shrink-0" />
+                <span className="text-[11px] font-semibold tracking-wide">Receive</span>
               </button>
             )}
           </div>

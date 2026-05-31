@@ -995,6 +995,7 @@ export default function MerchantDashboard() {
           onOpenSwap={() => setShowSwapModal(true)}
           onOpenSend={() => setShowSendModal(true)}
           onOpenDeposit={() => setShowDepositModal(true)}
+          onOpenReceive={() => setShowDepositModal(true)}
         />
 
         {/* Page-level Swap / Send / Deposit modals — shared between desktop
