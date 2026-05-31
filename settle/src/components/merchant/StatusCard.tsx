@@ -598,20 +598,20 @@ export const StatusCard = memo(function StatusCard({
               <button
                 onClick={onOpenSwap}
                 style={{
-                  paddingTop: "clamp(0.3rem, 4.5cqi, 1.1rem)",
-                  paddingBottom: "clamp(0.3rem, 4.5cqi, 1.1rem)",
-                  gap: "clamp(0.15rem, 2.4cqi, 0.6rem)",
+                  paddingTop: "clamp(0.2rem, 2.5cqi, 0.6rem)",
+                  paddingBottom: "clamp(0.2rem, 2.5cqi, 0.6rem)",
+                  gap: "clamp(0.1rem, 1.5cqi, 0.35rem)",
                 }}
                 className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
                 <ArrowLeftRight
                   style={{
-                    width: "clamp(0.7rem, 5cqi, 1.4rem)",
-                    height: "clamp(0.7rem, 5cqi, 1.4rem)",
+                    width: "clamp(0.6rem, 3.5cqi, 1rem)",
+                    height: "clamp(0.6rem, 3.5cqi, 1rem)",
                   }}
                 />
                 <span
-                  style={{ fontSize: "clamp(7px, 5.5cqi, 14px)" }}
+                  style={{ fontSize: "clamp(7px, 3.5cqi, 10px)" }}
                   className="font-bold uppercase tracking-wider"
                 >
                   Swap
@@ -622,20 +622,20 @@ export const StatusCard = memo(function StatusCard({
               <button
                 onClick={onOpenSend}
                 style={{
-                  paddingTop: "clamp(0.3rem, 4.5cqi, 1.1rem)",
-                  paddingBottom: "clamp(0.3rem, 4.5cqi, 1.1rem)",
-                  gap: "clamp(0.15rem, 2.4cqi, 0.6rem)",
+                  paddingTop: "clamp(0.2rem, 2.5cqi, 0.6rem)",
+                  paddingBottom: "clamp(0.2rem, 2.5cqi, 0.6rem)",
+                  gap: "clamp(0.1rem, 1.5cqi, 0.35rem)",
                 }}
                 className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
                 <ArrowUpFromLine
                   style={{
-                    width: "clamp(0.7rem, 5cqi, 1.4rem)",
-                    height: "clamp(0.7rem, 5cqi, 1.4rem)",
+                    width: "clamp(0.6rem, 3.5cqi, 1rem)",
+                    height: "clamp(0.6rem, 3.5cqi, 1rem)",
                   }}
                 />
                 <span
-                  style={{ fontSize: "clamp(7px, 5.5cqi, 14px)" }}
+                  style={{ fontSize: "clamp(7px, 3.5cqi, 10px)" }}
                   className="font-bold uppercase tracking-wider"
                 >
                   Send
@@ -646,20 +646,20 @@ export const StatusCard = memo(function StatusCard({
               <button
                 onClick={onOpenDeposit}
                 style={{
-                  paddingTop: "clamp(0.3rem, 4.5cqi, 1.1rem)",
-                  paddingBottom: "clamp(0.3rem, 4.5cqi, 1.1rem)",
-                  gap: "clamp(0.15rem, 2.4cqi, 0.6rem)",
+                  paddingTop: "clamp(0.2rem, 2.5cqi, 0.6rem)",
+                  paddingBottom: "clamp(0.2rem, 2.5cqi, 0.6rem)",
+                  gap: "clamp(0.1rem, 1.5cqi, 0.35rem)",
                 }}
                 className="flex flex-col items-center justify-center rounded-xl bg-foreground/[0.05] hover:bg-foreground/[0.09] border border-foreground/[0.08] text-foreground/85 hover:text-foreground transition-colors"
               >
                 <ArrowDownToLine
                   style={{
-                    width: "clamp(0.7rem, 5cqi, 1.4rem)",
-                    height: "clamp(0.7rem, 5cqi, 1.4rem)",
+                    width: "clamp(0.6rem, 3.5cqi, 1rem)",
+                    height: "clamp(0.6rem, 3.5cqi, 1rem)",
                   }}
                 />
                 <span
-                  style={{ fontSize: "clamp(7px, 5.5cqi, 14px)" }}
+                  style={{ fontSize: "clamp(7px, 3.5cqi, 10px)" }}
                   className="font-bold uppercase tracking-wider"
                 >
                   Deposit
