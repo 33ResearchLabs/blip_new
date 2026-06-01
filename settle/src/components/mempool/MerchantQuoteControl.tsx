@@ -122,7 +122,9 @@ export function MerchantQuoteControl({
           <span className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
             Quote Control
           </span>
-          <span className="text-[10px] text-white/40 font-mono ml-auto">{corridorId}</span>
+          <span className="text-[10px] text-white/40 font-mono ml-auto">
+          {/* {corridorId} */} USDT/AED
+          </span>
         </div>
       </div>
 

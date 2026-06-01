@@ -73,7 +73,7 @@ export function MarketSnapshot() {
             Market Snapshot
           </span>
           <span className="text-[10px] text-white/40 font-mono ml-auto">
-            {corridor.corridor_id}
+            {/* {corridor.corridor_id} */}  USDT/AED
           </span>
         </div>
       </div>

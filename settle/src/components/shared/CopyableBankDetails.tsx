@@ -10,6 +10,10 @@ interface CopyableBankDetailsProps {
   iban?: string;
   fallbackText?: string;
   amount?: number;
+  /** Display symbol for the amount's currency (e.g. "₹", "$", "د.إ").
+   *  Falls back to the AED dirham mark to preserve prior behaviour when
+   *  a caller hasn't been updated to pass one. */
+  currencySymbol?: string;
   compact?: boolean;
 }
 
@@ -45,6 +49,7 @@ export function CopyableBankDetails({
   iban,
   fallbackText,
   amount,
+  currencySymbol = "د.إ",
   compact = false,
 }: CopyableBankDetailsProps) {
   // Fallback for legacy plain-text bank details
@@ -58,7 +63,7 @@ export function CopyableBankDetails({
         </div>
         {amount !== undefined && (
           <p className="text-xs text-white/40 mt-2">
-            Amount: {"\u062F.\u0625"} {amount.toLocaleString()}
+            Amount: {currencySymbol} {amount.toLocaleString()}
           </p>
         )}
       </div>
@@ -97,7 +102,7 @@ export function CopyableBankDetails({
           <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
             <span className="text-[12px] text-neutral-500">Amount</span>
             <span className="text-[15px] font-semibold text-white">
-              {"\u062F.\u0625"} {amount.toLocaleString()}
+              {currencySymbol} {amount.toLocaleString()}
             </span>
           </div>
         )}

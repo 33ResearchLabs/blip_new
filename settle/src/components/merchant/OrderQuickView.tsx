@@ -149,7 +149,7 @@ function LockedPaymentMethodCard({
       <div className="flex justify-between items-center pt-2 border-t border-foreground/[0.04]">
         <span className="text-foreground/50 text-sm">Amount</span>
         <span className="text-base font-semibold text-foreground">
-          {"\u062F.\u0625"} {amount.toLocaleString()}
+          {fiatSymbol(currency)} {amount.toLocaleString()}
         </span>
       </div>
     </div>
@@ -356,6 +356,7 @@ export function OrderQuickView({
                     return (
                       <CopyableBankDetails
                         title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
+                        currencySymbol={fiatSymbol(selectedOrder.toCurrency)}
                         bankName={spm.details.bank_name}
                         accountName={spm.details.account_name}
                         iban={spm.details.iban}
@@ -402,6 +403,7 @@ export function OrderQuickView({
                     return (
                       <CopyableBankDetails
                         title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
+                        currencySymbol={fiatSymbol(selectedOrder.toCurrency)}
                         bankName={lpm.details.bank_name}
                         accountName={lpm.details.account_name}
                         iban={lpm.details.iban}
@@ -426,6 +428,7 @@ export function OrderQuickView({
                   return (
                     <CopyableBankDetails
                       title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
+                      currencySymbol={fiatSymbol(selectedOrder.toCurrency)}
                       bankName={selectedOrder.sellerBankDetails.bank_name}
                       accountName={selectedOrder.sellerBankDetails.account_name}
                       iban={selectedOrder.sellerBankDetails.iban}
@@ -443,6 +446,7 @@ export function OrderQuickView({
                   return (
                     <CopyableBankDetails
                       title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
+                      currencySymbol={fiatSymbol(selectedOrder.toCurrency)}
                       bankName={details?.bank_name}
                       accountName={details?.account_name}
                       iban={details?.iban}
