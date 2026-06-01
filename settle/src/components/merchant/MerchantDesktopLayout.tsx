@@ -154,6 +154,8 @@ export interface MerchantDesktopLayoutProps {
   onOpenSend?: () => void;
   /** Open the Deposit / receive-address QR modal. */
   onOpenDeposit?: () => void;
+  /** Alias for onOpenDeposit — receive address QR. */
+  onOpenReceive?: () => void;
 }
 
 export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(props: MerchantDesktopLayoutProps) {
