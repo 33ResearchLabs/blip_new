@@ -151,7 +151,7 @@ export function MarketingLanding() {
             <div className="av">M</div>
             <div className="body">
               <div className="t">+ ₹2,400.00 <span className="it">from Meera</span></div>
-              <div className="s">Mumbai → Dubai · <span className="live">preview</span></div>
+              <div className="s">India → Dubai · <span className="live">preview</span></div>
             </div>
           </div>
         </div>

@@ -409,7 +409,7 @@ export function SwapModal({
               onChange={(e) => setAmountStr(e.target.value)}
               placeholder="0.00"
               maxLength={20}
-              className="flex-1 bg-transparent text-2xl font-bold text-foreground tabular-nums outline-none placeholder:text-foreground/20"
+              className="flex-1 min-w-0 bg-transparent text-xl sm:text-2xl font-bold text-foreground tabular-nums outline-none placeholder:text-foreground/20"
             />
             <TokenSelect
               value={inputToken}
@@ -473,7 +473,7 @@ export function SwapModal({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="flex-1 text-2xl font-bold text-foreground tabular-nums truncate">
+            <span className="flex-1 min-w-0 text-xl sm:text-2xl font-bold text-foreground tabular-nums truncate">
               {quoteLoading ? "…" : outDisplay}
             </span>
             <TokenSelect
@@ -542,11 +542,12 @@ export function SwapModal({
             insufficientFunds ||
             !amountValid
           }
-          className="w-full py-3 rounded-xl bg-foreground text-background text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+          className="w-full py-3 px-3 rounded-xl bg-foreground text-background text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2"
         >
           {swapping ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" /> Swapping…
+              <Loader2 className="w-4 h-4 shrink-0 animate-spin" />{" "}
+              <span className="truncate">Swapping…</span>
             </>
           ) : !walletAddress ? (
             "Connect wallet"
@@ -557,7 +558,9 @@ export function SwapModal({
           ) : !quote ? (
             "Fetching quote…"
           ) : (
-            `Swap ${amountStr} ${inputToken.symbol} → ${outDisplay} ${outputToken.symbol}`
+            <span className="truncate">
+              Swap {amountStr} {inputToken.symbol} → {outDisplay} {outputToken.symbol}
+            </span>
           )}
         </button>
 
@@ -604,7 +607,7 @@ function TokenSelect({
     };
   }, [open]);
   return (
-    <div className="relative" data-token-select>
+    <div className="relative shrink-0" data-token-select>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
