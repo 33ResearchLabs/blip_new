@@ -26,6 +26,7 @@ import { transaction } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { invalidateOrderCache } from '@/lib/cache';
 import { atomicCancelWithRefund } from '@/lib/orders/atomicCancel';
+import { runWorkerTick } from '@/lib/workerHealth';
 
 const WORKER_INTERVAL_MS = 30000; // Check every 30 seconds
 const BATCH_SIZE = 20;
@@ -663,12 +664,22 @@ async function runCycle(): Promise<void> {
 }
 
 async function start() {
+  // Heartbeat-wrapped tick. runCycle's logic is unchanged — the wrapper only
+  // adds a stall timeout + a worker_health heartbeat around each cycle. The
+  // timeout never aborts an in-flight refund/transaction; it just stops the
+  // loop from waiting forever so the next tick is guaranteed to schedule.
+  const tick = () =>
+    runWorkerTick(
+      'payment-deadline-worker',
+      { intervalMs: WORKER_INTERVAL_MS, criticality: 'critical', timeoutMs: 120_000 },
+      runCycle,
+    );
 
   // Initial run
-  await runCycle();
+  await tick();
 
   // Schedule periodic runs
-  setInterval(runCycle, WORKER_INTERVAL_MS);
+  setInterval(tick, WORKER_INTERVAL_MS);
 }
 
 // Handle graceful shutdown

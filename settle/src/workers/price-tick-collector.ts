@@ -19,6 +19,7 @@ import {
   storeTick,
   cleanupOldTicks,
 } from '@/lib/price/usdtInrPrice';
+import { runWorkerTick } from '@/lib/workerHealth';
 
 const TICK_INTERVAL_MS = 25_000;        // 25 seconds
 const CLEANUP_INTERVAL_MS = 3_600_000;  // 1 hour
@@ -103,12 +104,20 @@ async function runCleanup() {
 // ---------------------------------------------------------------------------
 
 async function start() {
+  // Wrapped tick: collectTicks runs unchanged; the wrapper adds a heartbeat +
+  // stall timeout. The hourly runCleanup stays as-is.
+  const tick = () =>
+    runWorkerTick(
+      'price-tick-collector',
+      { intervalMs: TICK_INTERVAL_MS, criticality: 'medium', timeoutMs: 120_000 },
+      collectTicks,
+    );
 
   // Initial run
-  await collectTicks();
+  await tick();
 
   // Schedule periodic tick collection
-  setInterval(collectTicks, TICK_INTERVAL_MS);
+  setInterval(tick, TICK_INTERVAL_MS);
 
   // Schedule hourly cleanup
   setInterval(runCleanup, CLEANUP_INTERVAL_MS);

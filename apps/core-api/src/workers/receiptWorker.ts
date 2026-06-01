@@ -9,13 +9,26 @@ import { Worker } from 'bullmq';
 import { getRedisConnection, type ReceiptJobData } from '../queues/receiptQueue';
 import { createOrderReceipt, updateOrderReceipt } from '../receipts';
 import { logger } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 
 let worker: Worker<ReceiptJobData> | null = null;
+let heartbeatTimer: NodeJS.Timeout | null = null;
+let processedCount = 0;
+let lastReportedCount = 0;
+const HEARTBEAT_INTERVAL_MS = 30_000;
 
 export async function startReceiptWorker() {
   const redis = getRedisConnection();
   if (!redis) {
     logger.warn('[ReceiptWorker] Redis unavailable — worker not started');
+    // Surface the silent non-start: record one failed heartbeat so the worker
+    // appears in worker_health and the checker flags it, instead of it simply
+    // never existing.
+    await runWorkerTick(
+      'receiptWorker',
+      { intervalMs: HEARTBEAT_INTERVAL_MS, criticality: 'medium', timeoutMs: 15_000 },
+      async () => { throw new Error('Redis unavailable at boot — receipt worker not started'); },
+    );
     return;
   }
   // Test connectivity before creating the worker
@@ -24,6 +37,11 @@ export async function startReceiptWorker() {
     await redis.ping();
   } catch {
     logger.warn('[ReceiptWorker] Redis not reachable — worker not started');
+    await runWorkerTick(
+      'receiptWorker',
+      { intervalMs: HEARTBEAT_INTERVAL_MS, criticality: 'medium', timeoutMs: 15_000 },
+      async () => { throw new Error('Redis not reachable at boot — receipt worker not started'); },
+    );
     return;
   }
   worker = new Worker<ReceiptJobData>(
@@ -78,6 +96,7 @@ export async function startReceiptWorker() {
   );
 
   worker.on('completed', (job) => {
+    processedCount++;
     logger.info('[ReceiptWorker] Job completed', {
       jobId: job.id,
       orderId: (job.data as ReceiptJobData).orderId,
@@ -93,10 +112,32 @@ export async function startReceiptWorker() {
     });
   });
 
+  // BullMQ is event-driven (no poll loop), so emit a periodic liveness
+  // heartbeat. The tick pings the worker's Redis lifeline — a wedged Redis
+  // (worker silently stops pulling jobs) surfaces as a failed tick, and a dead
+  // process stops the heartbeat entirely (→ goes stale → checker flags it).
+  // items = jobs completed since the last heartbeat (delta, not cumulative).
+  heartbeatTimer = setInterval(() => {
+    void runWorkerTick(
+      'receiptWorker',
+      { intervalMs: HEARTBEAT_INTERVAL_MS, criticality: 'medium', timeoutMs: 15_000 },
+      async () => {
+        await redis.ping();
+        const delta = processedCount - lastReportedCount;
+        lastReportedCount = processedCount;
+        return { items: delta };
+      },
+    );
+  }, HEARTBEAT_INTERVAL_MS);
+
   logger.info('[ReceiptWorker] Started');
 }
 
 export async function stopReceiptWorker() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
   if (worker) {
     await worker.close();
     worker = null;

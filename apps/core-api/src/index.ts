@@ -36,6 +36,7 @@ import {
   startOnChainReconciliationWorker,
   stopOnChainReconciliationWorker,
 } from './workers/onChainReconciliationWorker';
+import { startWorkerHealthChecker, stopWorkerHealthChecker } from './workers/workerHealthChecker';
 import { registerAllListeners } from './events';
 import { closePool, safeLog } from 'settlement-core';
 import { runPendingMigrations } from './migrationRunner';
@@ -208,6 +209,7 @@ try {
     await startReceiptWorker();
     startReceiptReconciliationWorker();
     startOnChainReconciliationWorker();
+    startWorkerHealthChecker();
   }
 } catch (err) {
   fastify.log.error(err);
@@ -227,6 +229,7 @@ const shutdown = async (signal: string) => {
     stopReputationWorker();
     stopReceiptReconciliationWorker();
     stopOnChainReconciliationWorker();
+    stopWorkerHealthChecker();
     await stopReceiptWorker();
     await closeReceiptQueue();
     closeWebSocketServer();

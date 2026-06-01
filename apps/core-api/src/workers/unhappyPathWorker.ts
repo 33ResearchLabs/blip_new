@@ -31,6 +31,7 @@ import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { broadcastOrderEvent } from '../ws/broadcast';
 import { pusherNotifyExpiryWarning } from '../pusher';
+import { runWorkerTick } from './workerHealth';
 
 config({ path: '../../settle/.env.local' });
 config({ path: '../../settle/.env' });
@@ -635,7 +636,15 @@ export function startUnhappyPathWorker(): void {
 
   const poll = async () => {
     if (!isRunning) return;
-    await processBatch();
+    // processBatch runs unchanged (it keeps its own try/catch + backoff). The
+    // wrapper adds a worker_health heartbeat + a stall timeout. The 120s budget
+    // sits comfortably above MAX_BACKOFF_MS (60s) so a legitimate backoff sleep
+    // never trips it; real stalls are surfaced by the checker via last_tick_at.
+    await runWorkerTick(
+      'unhappyPathWorker',
+      { intervalMs: POLL_INTERVAL_MS, criticality: 'critical', timeoutMs: 120_000 },
+      processBatch,
+    );
     pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
   };
 

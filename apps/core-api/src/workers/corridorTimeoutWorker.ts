@@ -9,6 +9,7 @@
  */
 
 import { transaction, logger } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 
 const POLL_INTERVAL_MS = parseInt(process.env.CORRIDOR_POLL_MS || '60000', 10);
 
@@ -128,13 +129,27 @@ async function processOverdueFulfillments(): Promise<number> {
 async function tick() {
   if (!isRunning) return;
 
-  const count = await processOverdueFulfillments();
-  if (count > 0) {
-    logger.info(`[CorridorTimeout] Processed ${count} overdue fulfillments`);
-  }
-
-  if (isRunning) {
-    pollTimer = setTimeout(tick, POLL_INTERVAL_MS);
+  try {
+    // processOverdueFulfillments runs unchanged; the wrapper adds a stall
+    // timeout + worker_health heartbeat (and surfaces the batch size as items).
+    await runWorkerTick(
+      'corridorTimeoutWorker',
+      { intervalMs: POLL_INTERVAL_MS, criticality: 'critical' },
+      async () => {
+        const count = await processOverdueFulfillments();
+        if (count > 0) {
+          logger.info(`[CorridorTimeout] Processed ${count} overdue fulfillments`);
+        }
+        return { items: count };
+      },
+    );
+  } finally {
+    // Re-arm in finally so the recursive chain can never die from an
+    // unexpected throw (runWorkerTick already swallows — this is belt-and-
+    // suspenders, and closes the silent-death gap the audit flagged here).
+    if (isRunning) {
+      pollTimer = setTimeout(tick, POLL_INTERVAL_MS);
+    }
   }
 }
 

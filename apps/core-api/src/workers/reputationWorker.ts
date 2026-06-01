@@ -9,6 +9,7 @@
  */
 
 import { query as dbQuery, logger } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 import { calculateMerchantReputation, calculateUserReputation } from '../reputation/calculate';
 
 const POLL_INTERVAL_MS = parseInt(process.env.REPUTATION_RECALC_INTERVAL_MS || '300000', 10); // 5 minutes default
@@ -91,11 +92,20 @@ async function recalculateAll(): Promise<void> {
 }
 
 export function startReputationWorker(): void {
+  // Wrapped tick: recalculateAll's logic is unchanged; the wrapper adds a
+  // heartbeat + stall timeout. 120s budget sits above its run duration.
+  const tick = () =>
+    runWorkerTick(
+      'reputationWorker',
+      { intervalMs: POLL_INTERVAL_MS, criticality: 'low', timeoutMs: 120_000 },
+      recalculateAll,
+    );
+
   // Run once on startup after a short delay
-  setTimeout(() => recalculateAll(), 10000);
+  setTimeout(tick, 10000);
 
   // Then run periodically
-  pollTimer = setInterval(() => recalculateAll(), POLL_INTERVAL_MS);
+  pollTimer = setInterval(tick, POLL_INTERVAL_MS);
   logger.info(`[reputation] Worker started, interval=${POLL_INTERVAL_MS}ms`);
 }
 

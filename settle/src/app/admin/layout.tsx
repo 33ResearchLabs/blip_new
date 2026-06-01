@@ -50,6 +50,7 @@ const NAV_ITEMS: { href: string; label: string; exact?: boolean }[] = [
   { href: "/admin/waitlist", label: "Waitlist" },
   { href: "/admin/disputes", label: "Disputes" },
   { href: "/admin/monitor", label: "Monitor" },
+  { href: "/admin/worker-health", label: "Workers" },
   { href: "/admin/observability", label: "Observability" },
   { href: "/admin/usdt-inr-price", label: "Price" },
 ];

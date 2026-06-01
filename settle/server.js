@@ -194,6 +194,14 @@ app.prepare().then(async () => {
     console.warn('> Metrics reporter not available:', metricsErr.message);
   }
 
+  // Background workers. When WORKERS_VIA_PM2=true they run as dedicated PM2
+  // apps (ecosystem.config.cjs) with autorestart, so server.js must NOT also
+  // spawn them here — otherwise every worker runs twice. Flip the env var to
+  // cut over to PM2 supervision; unset it to roll back to in-server spawning.
+  if (process.env.WORKERS_VIA_PM2 === 'true') {
+    console.log('> Workers managed by PM2 (WORKERS_VIA_PM2=true) — server.js will not spawn them');
+  } else {
+
   // Start notification outbox worker
   try {
     const { spawn } = require('child_process');
@@ -332,4 +340,6 @@ app.prepare().then(async () => {
   } catch (reputationErr) {
     console.warn('> Reputation worker not available:', reputationErr.message);
   }
+
+  } // end: server.js spawns workers only when WORKERS_VIA_PM2 !== 'true'
 });

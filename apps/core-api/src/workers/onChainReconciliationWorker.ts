@@ -31,6 +31,7 @@
  */
 
 import { query, queryOne, logger, MOCK_MODE } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 import { fileURLToPath } from 'url';
 import { config } from 'dotenv';
 import { ORDER_EVENT } from '../events';
@@ -306,12 +307,22 @@ export function startOnChainReconciliationWorker(): void {
 
   const poll = async () => {
     if (!isRunning) return;
-    await processBatch();
-    tickCount++;
-    if (tickCount % 10 === 0) {
-      logger.info('[OnChainRecon] Summary', { ticks: tickCount, totalSynced });
+    try {
+      // processBatch runs unchanged; the wrapper adds a heartbeat + stall
+      // timeout. Re-arm moved into finally so the chain can never die from an
+      // unexpected throw (closes the silent-death gap the audit flagged here).
+      await runWorkerTick(
+        'onChainReconciliationWorker',
+        { intervalMs: POLL_INTERVAL_MS, criticality: 'high', timeoutMs: 120_000 },
+        processBatch,
+      );
+      tickCount++;
+      if (tickCount % 10 === 0) {
+        logger.info('[OnChainRecon] Summary', { ticks: tickCount, totalSynced });
+      }
+    } finally {
+      if (isRunning) pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
     }
-    pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
   };
   poll();
 }
