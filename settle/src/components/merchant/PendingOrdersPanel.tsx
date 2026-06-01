@@ -22,6 +22,7 @@ import {
   CircleDot,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -261,11 +262,14 @@ const OrderList = memo(function OrderList({
               >
                 <div
                   onClick={() => onSelectMempoolOrder(mOrder)}
-                  className={`relative p-2.5 rounded-lg border transition-colors cursor-pointer ${
-                    isMyMempoolOrder
-                      ? "bg-white/[0.01] border-foreground/[0.04] opacity-50"
-                      : "glass-card border-white/[0.10] hover:border-primary/30 ring-1 ring-white/[0.04]"
-                  }`}
+                  className={`relative p-2.5 rounded-xl transition-colors cursor-pointer ${isMyMempoolOrder ? "opacity-50" : ""}`}
+                  style={{
+                    background: isMyMempoolOrder ? "rgba(255,255,255,0.01)" : "#111113",
+                    border: isMyMempoolOrder ? "1px solid rgba(255,255,255,0.03)" : "1px solid rgba(249,115,22,0.22)",
+                    borderLeft: isMyMempoolOrder ? undefined : "2px solid rgba(249,115,22,0.45)",
+                  }}
+                  onMouseEnter={(e) => !isMyMempoolOrder && (e.currentTarget.style.borderColor = "rgba(249,115,22,0.38)")}
+                  onMouseLeave={(e) => !isMyMempoolOrder && (e.currentTarget.style.borderColor = "rgba(249,115,22,0.22)")}
                 >
                   {/* Live pulse dot */}
                   <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
@@ -514,477 +518,176 @@ const OrderList = memo(function OrderList({
               <div
                 data-testid={`order-card-${order.id}`}
                 onClick={() => onSelectOrder(order)}
-                className={`group relative p-3 rounded-xl border transition-all cursor-pointer overflow-hidden ${
-                  isMyOwnOrder
-                    ? "bg-foreground/[0.01] border-foreground/[0.04] opacity-50"
-                    : isMineable
-                      ? "bg-gradient-to-br from-foreground/[0.04] via-foreground/[0.02] to-transparent border-foreground/[0.08] hover:border-primary/40 hover:shadow-lg hover:shadow-primary/[0.05] ring-1 ring-white/[0.03]"
-                      : isHighPremium
-                        ? "bg-gradient-to-br from-foreground/[0.03] to-transparent border-foreground/[0.08] hover:border-foreground/[0.15] hover:shadow-lg hover:shadow-black/20"
-                        : "bg-gradient-to-br from-foreground/[0.02] to-transparent border-foreground/[0.06] hover:border-foreground/[0.12] hover:shadow-md hover:shadow-black/20"
-                }`}
+                className={`relative p-3 rounded-xl transition-all cursor-pointer overflow-hidden ${isMyOwnOrder ? "opacity-50" : ""}`}
+                style={{
+                  background: isMyOwnOrder ? "rgba(255,255,255,0.01)" : "#111113",
+                  border: isMineable
+                    ? "1px solid rgba(249,115,22,0.25)"
+                    : "1px solid rgba(255,255,255,0.07)",
+                  borderLeft: isMineable ? "2px solid rgba(249,115,22,0.5)" : undefined,
+                }}
+                onMouseEnter={(e) => !isMyOwnOrder && (e.currentTarget.style.borderColor = "rgba(255,255,255,0.13)")}
+                onMouseLeave={(e) => !isMyOwnOrder && (e.currentTarget.style.borderColor = isMineable ? "rgba(249,115,22,0.25)" : "rgba(255,255,255,0.07)")}
               >
-                {/* Subtle shimmer accent on hover for mineable orders */}
-                {isMineable && !isMyOwnOrder && (
-                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                )}
-                {/* Processing banner */}
-                {acceptingOrderId === order.id && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-primary/10 border border-primary/20">
-                    <Loader2 className="w-3 h-3 text-primary animate-spin" />
-                    <span className="text-[9px] text-primary font-mono font-bold tracking-wider uppercase">
-                      Accepting...
-                    </span>
-                  </div>
-                )}
-                {/* Waiting banner — top of card for own orders */}
-                {isMyOwnOrder && acceptingOrderId !== order.id && (
-                  <div className="flex items-center justify-between gap-2 px-2 py-1 mb-1.5 rounded bg-foreground/[0.02] border border-foreground/[0.04]">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
-                      <span className="text-[9px] text-foreground/30 font-mono font-bold tracking-wider uppercase">
-                        Waiting for acceptance
-                      </span>
-                    </div>
-                    {onCancelOrder && (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
-                        className="text-[9px] font-bold text-red-400/70 hover:text-red-400 transition-colors uppercase tracking-wider"
-                      >
-                        {isMineable ? "Cancel & Refund" : "Cancel"}
-                      </button>
-                    )}
-                  </div>
-                )}
-                {/* Row 1: User + tags on left, timer on right */}
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    {(() => {
-                      const { seller, buyer } = getPartyNames(order.dbOrder);
-                      // Use the canonical roles from getPartyNames — do NOT
-                      // fallback to `order.user` on the seller slot. For a
-                      // U2M BUY order the user IS the buyer; filling that
-                      // name into the seller slot produced "name → name"
-                      // duplicates on unclaimed broadcasts.
-                      const sellerDisp = seller;
-                      const buyerDisp = buyer;
-                      const bothKnown = !!sellerDisp && !!buyerDisp;
-                      // Placer = whichever side is filled when only one is
-                      // known (unclaimed market broadcast shows just their
-                      // name with no arrow or "—" on the empty side). Last
-                      // resort: the list-row `order.user` if neither party
-                      // resolved (very rare — observer view of a broken row).
-                      const soloName =
-                        sellerDisp || buyerDisp || order.user || null;
-                      // Prefer the avatar URL the backend sent with the
-                      // order row; UserAvatar falls back to a DiceBear
-                      // derived from the seed when src is missing.
-                      const avatarSrc =
-                        (order.dbOrder?.user?.avatar_url as string | undefined) ||
-                        (order as any).user_avatar ||
-                        null;
-                      return (
-                        <>
-                          <UserAvatar
-                            src={avatarSrc}
-                            seed={soloName || "U"}
-                            size={32}
-                            className="border border-foreground/[0.08] shadow-sm"
-                          />
-                          <span className="flex items-center gap-1 text-[12px] font-semibold text-white min-w-0">
-                            {bothKnown ? (
-                              <>
-                                <span
-                                  className="whitespace-nowrap"
-                                  title={`Seller: ${sellerDisp}`}
-                                >
-                                  {sellerDisp}
-                                </span>
-                                <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
-                                <span
-                                  className="whitespace-nowrap"
-                                  title={`Buyer: ${buyerDisp}`}
-                                >
-                                  {buyerDisp}
-                                </span>
-                              </>
-                            ) : (
-                              <span
-                                className={`whitespace-nowrap ${soloName ? "" : "text-foreground/40"}`}
-                                title={
-                                  soloName
-                                    ? `Placed by ${soloName}`
-                                    : "No counterparty yet"
-                                }
-                              >
+                {(() => {
+                  // ── Resolve all display data up-front ──────────────────
+                  const { seller, buyer } = getPartyNames(order.dbOrder);
+                  const soloName = seller || buyer || order.user || null;
+                  const username = order.dbOrder?.user?.username || order.user;
+                  const avatarSrc =
+                    (order.dbOrder?.user?.avatar_url as string | undefined) ||
+                    (order as any).user_avatar || null;
+                  const rating = order.dbOrder?.user?.rating;
+                  const trades = order.dbOrder?.user?.total_trades ?? 0;
+                  const tooltipItems: InfoTooltipItem[] = [
+                    { label: "Rating", value: rating != null ? `★ ${Number(rating).toFixed(1)} / 5.0` : "No rating yet" },
+                    { label: "Trades", value: `${trades} completed` },
+                    { label: "Trust", value: trades >= 50 ? "Verified trader" : trades >= 10 ? "Regular trader" : "New trader" },
+                  ];
+                  const pmType = order.lockedPaymentMethod?.type || order.dbOrder?.payment_method || (order.userBankDetails ? "bank" : null);
+                  const pmLabel: Record<string, string> = { bank: "Bank", cash: "Cash", upi: "UPI" };
+                  const effStatus: string = order.status || order.dbOrder?.status || "pending";
+                  const isActivelyPending = effStatus === "pending" && order.expiresIn > 0;
+                  const viewerSide = getViewerSide(order.dbOrder, merchantInfo?.id);
+                  const cryptoAmt = Math.round(order.amount).toLocaleString();
+                  const fiatAmt = Math.round(order.total).toLocaleString();
+                  const primaryAmt = cryptoAmt;
+                  const primaryCcy = order.fromCurrency;
+                  const secondaryAmt = fiatAmt;
+                  const secondaryCcy = order.toCurrency;
+                  const payLabel = viewerSide === "seller" ? "you pay" : "you receive";
+                  const extraPct = order.protocolFeePercent != null
+                    ? order.protocolFeePercent - (order.spreadPreference === "fastest" ? 2.5 : order.spreadPreference === "best" ? 2.0 : 1.5)
+                    : 0;
+
+                  return (
+                    <>
+                      {/* ── Row 1: Avatar / Name / Handle · Action top-right ── */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="relative shrink-0">
+                            <UserAvatar
+                              src={avatarSrc}
+                              seed={soloName || "U"}
+                              size={36}
+                              className="rounded-full border border-white/[0.08]"
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[13px] font-semibold text-white/90 leading-tight truncate">
                                 {soloName || "—"}
                               </span>
+                              <InfoTooltip side="bottom" title={username} description="Counterparty stats." items={tooltipItems} />
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className={`text-[10px] font-mono font-semibold ${order.type === 'buy' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {order.type?.toUpperCase() || "TRADE"}
+                              </span>
+                              {pmType && (
+                                <span className="text-[10px] text-white/20 font-mono">· {pmLabel[pmType] || pmType}</span>
+                              )}
+                              {isMyOwnOrder && (
+                                <span className="text-[10px] text-white/20 font-mono">· yours</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Top-right: status pill or accept button */}
+                        {isActivelyPending && !isMyOwnOrder ? (
+                          <button
+                            data-testid="order-primary-action"
+                            onClick={(e) => { e.stopPropagation(); onAcceptOrder(order); }}
+                            disabled={acceptingOrderId === order.id}
+                            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all press-effect ${
+                              acceptingOrderId === order.id
+                                ? "bg-primary/30 text-white/40 cursor-wait"
+                                : "bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
+                            }`}
+                          >
+                            {acceptingOrderId === order.id ? (
+                              <><Loader2 className="w-3 h-3 animate-spin" /> Accepting…</>
+                            ) : (
+                              <>{order.dbOrder?.primaryAction?.label || (isMineable ? "Mine" : "Accept")} →</>
                             )}
+                          </button>
+                        ) : isActivelyPending && isMyOwnOrder ? (
+                          <span className="flex items-center gap-1 text-[10px] font-mono text-white/20 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/20 animate-pulse" />
+                            waiting
                           </span>
-                        </>
-                      );
-                    })()}
-                    {/* Trader info tooltip */}
-                    {(() => {
-                      const rating = order.dbOrder?.user?.rating;
-                      const trades = order.dbOrder?.user?.total_trades ?? 0;
-                      const username =
-                        order.dbOrder?.user?.username || order.user;
-                      const items: InfoTooltipItem[] = [
-                        {
-                          label: "Rating",
-                          value:
-                            rating != null
-                              ? `★ ${Number(rating).toFixed(1)} / 5.0`
-                              : "No rating yet",
-                        },
-                        { label: "Trades", value: `${trades} completed` },
-                        {
-                          label: "Trust",
-                          value:
-                            trades >= 50
-                              ? "Verified trader"
-                              : trades >= 10
-                                ? "Regular trader"
-                                : "New trader",
-                        },
-                      ];
-                      return (
-                        <InfoTooltip
-                          side="bottom"
-                          title={username}
-                          description="Counterparty stats — check before accepting."
-                          items={items}
-                        />
-                      );
-                    })()}
-                    {order.spreadPreference && (
-                      <span
-                        className={`flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                          order.spreadPreference === "fastest"
-                            ? "bg-primary/10 border-primary/20 text-primary"
-                            : order.spreadPreference === "cheap"
-                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                              : "bg-blue-500/10 border-blue-500/20 text-blue-400"
-                        }`}
-                      >
-                        {order.spreadPreference === "fastest" && (
-                          <Zap className="w-2.5 h-2.5" />
-                        )}
-                        {order.spreadPreference === "fastest"
-                          ? "FAST"
-                          : order.spreadPreference === "best"
-                            ? "BEST"
-                            : "CHEAP"}
-                        {order.protocolFeePercent != null &&
-                          order.protocolFeePercent >
-                            (order.spreadPreference === "fastest"
-                              ? 2.5
-                              : order.spreadPreference === "best"
-                                ? 2.0
-                                : 1.5) && (
-                            <span className="opacity-70">
-                              +
-                              {(
-                                order.protocolFeePercent -
-                                (order.spreadPreference === "fastest"
-                                  ? 2.5
-                                  : order.spreadPreference === "best"
-                                    ? 2.0
-                                    : 1.5)
-                              ).toFixed(1)}
-                              %
-                            </span>
-                          )}
-                      </span>
-                    )}
-                    {isMyOwnOrder && (
-                      <span className="px-1 py-0.5 bg-foreground/[0.04] border border-foreground/[0.06] rounded text-[9px] font-bold text-foreground/40">
-                        YOURS
-                      </span>
-                    )}
-                    {/* {order.hasMessages && order.unreadCount > 0 && (
-                      <span className="px-1 py-0.5 bg-primary text-background text-[9px] font-bold rounded">
-                        {order.unreadCount}
-                      </span>
-                    )} */}
-                  </div>
-                  {/* Top-right slot: live countdown only when the order is
-                      actively pending. Status badge + date for non-pending
-                      orders moved into a compact meta row below the
-                      YOU PAY / RECEIVE block — see further down. */}
-                  {(() => {
-                    const effStatus: string =
-                      order.status || order.dbOrder?.status || "pending";
-                    const isActivelyPending =
-                      effStatus === "pending" && order.expiresIn > 0;
-                    if (!isActivelyPending) return null;
-                    return (
-                      <div
-                        className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
-                          order.expiresIn <= 120
-                            ? "text-red-400"
-                            : "text-primary"
-                        }`}
-                      >
-                        {order.expiresIn >= 3600
-                          ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
-                          : order.expiresIn >= 60
-                            ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
-                            : `${order.expiresIn}s`}
-                        <CountdownRing
-                          remaining={order.expiresIn}
-                          total={900}
-                          size={18}
-                          strokeWidth={2.5}
-                        />
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Row 2: You Pay ⇄ You Receive — premium trading card */}
-                {(() => {
-                  const crypto = {
-                    amount: Math.round(order.amount).toLocaleString(),
-                    currency: order.fromCurrency,
-                  };
-                  const fiat = {
-                    amount: Math.round(order.total).toLocaleString(),
-                    currency: order.toCurrency,
-                  };
-                  // Viewer-perspective labels: seller pays crypto, buyer receives
-                  // crypto. Falls back to merchant-as-seller for U2M BUY when we
-                  // can't determine the viewer's side.
-                  const viewerSide = getViewerSide(
-                    order.dbOrder,
-                    merchantInfo?.id,
-                  );
-                  const left =
-                    viewerSide === "seller"
-                      ? { label: "YOU PAY", ...crypto, isReceive: false }
-                      : { label: "YOU RECEIVE", ...crypto, isReceive: true };
-                  const right =
-                    viewerSide === "seller"
-                      ? { label: "YOU RECEIVE", ...fiat, isReceive: true }
-                      : { label: "YOU PAY", ...fiat, isReceive: false };
-                  return (
-                    <div className="relative mb-2 rounded-xl overflow-hidden backdrop-blur-sm">
-                      {/* Layered gradient backgrounds */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-foreground/[0.05] via-foreground/[0.02] to-transparent" />
-                      <div
-                        className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-emerald-500/[0.08] via-emerald-500/[0.03] to-transparent`}
-                      />
-                      {/* Border with subtle glow */}
-                      <div className="absolute inset-0 rounded-xl border border-foreground/[0.08]" />
-
-                      <div className="relative flex items-stretch">
-                        {/* LEFT panel */}
-                        <div className="flex-1 px-3.5 py-2.5">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
-                            />
-                            <span
-                              className={`text-[9px] font-bold font-mono tracking-[0.15em] ${left.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
-                            >
-                              {left.label}
-                            </span>
-                          </div>
-                          <div className="flex items-baseline gap-1.5">
-                            <span
-                              className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${left.isReceive ? "text-emerald-400" : "text-white"}`}
-                            >
-                              {left.amount}
-                            </span>
-                            <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
-                              {left.currency}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* MIDDLE — floating swap badge with glow */}
-                        <div className="flex items-center shrink-0">
-                          <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-foreground/[0.08] to-background border border-foreground/[0.12] flex items-center justify-center -mx-4 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.5)] z-10 backdrop-blur-sm">
-                            <ArrowRightLeft
-                              className="w-3 h-3 text-foreground/60"
-                              strokeWidth={2.5}
-                            />
-                          </div>
-                          <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
-                        </div>
-
-                        {/* RIGHT panel */}
-                        <div className="flex-1 px-3.5 py-2.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5 mb-1.5">
-                            <span
-                              className={`text-[9px] font-bold font-mono tracking-[0.15em] ${right.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
-                            >
-                              {right.label}
-                            </span>
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
-                            />
-                          </div>
-                          <div className="flex items-baseline justify-end gap-1.5">
-                            <span
-                              className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${right.isReceive ? "text-emerald-400" : "text-white"}`}
-                            >
-                              {right.amount}
-                            </span>
-                            <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
-                              {right.currency}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-                <div className="hidden">
-                  {null}
-                  {order.protocolFeePercent != null &&
-                    order.protocolFeePercent > 0 && (
-                      <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
-                        +$
-                        {(
-                          (order.amount * order.protocolFeePercent) /
-                          100
-                        ).toFixed(2)}
-                      </span>
-                    )}
-                </div>
-
-                {/* Compact meta row: payment method pill (always) + status
-                    badge + completion time (non-pending). Lives BELOW the
-                    YOU PAY/RECEIVE block so the primary numbers read first;
-                    status context is secondary. */}
-                {(() => {
-                  const effStatus: string =
-                    order.status || order.dbOrder?.status || "pending";
-                  const isActivelyPending =
-                    effStatus === "pending" && order.expiresIn > 0;
-                  const showStatus = !isActivelyPending;
-
-                  const badge =
-                    MY_STATUS_BADGE[effStatus] || MY_STATUS_BADGE.pending;
-                  const StatusIcon = badge.Icon;
-                  const ts =
-                    order.dbOrder?.completed_at ||
-                    order.dbOrder?.cancelled_at ||
-                    order.dbOrder?.created_at ||
-                    order.timestamp;
-                  const tsDate =
-                    ts instanceof Date ? ts : ts ? new Date(ts) : null;
-
-                  const pmType =
-                    order.lockedPaymentMethod?.type ||
-                    order.dbOrder?.payment_method ||
-                    (order.userBankDetails ? "bank" : null);
-                  const pmConfig: Record<string, { label: string; icon: string }> = {
-                    bank: { label: "Bank", icon: "🏦" },
-                    cash: { label: "Cash", icon: "💵" },
-                    upi: { label: "UPI", icon: "📱" },
-                  };
-                  const pm = pmType
-                    ? pmConfig[pmType] || { label: pmType.toUpperCase(), icon: "💳" }
-                    : null;
-
-                  if (!showStatus && !pm) return null;
-
-                  return (
-                    <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                      {showStatus && (
-                        <span
-                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}
-                        >
-                          <StatusIcon className="w-2.5 h-2.5" />
-                          {badge.label}
-                        </span>
-                      )}
-                      {showStatus && tsDate && (
-                        <span className="text-[9px] text-foreground/40 font-mono tabular-nums">
-                          {tsDate.toLocaleString([], {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      )}
-                      {pm && (
-                        <span className="ml-auto flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded border border-border text-secondary">
-                          <span className="text-[10px]">{pm.icon}</span>
-                          {pm.label}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Row 3: Rate + premium ... small action button on right */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-foreground/40 font-mono">
-                    @ {order.rate.toFixed(2)}
-                  </span>
-                  {order.protocolFeePercent != null &&
-                    order.protocolFeePercent >
-                      (order.spreadPreference === "fastest"
-                        ? 2.5
-                        : order.spreadPreference === "best"
-                          ? 2.0
-                          : 1.5) && (
-                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                        +
-                        {(
-                          order.protocolFeePercent -
-                          (order.spreadPreference === "fastest"
-                            ? 2.5
-                            : order.spreadPreference === "best"
-                              ? 2.0
-                              : 1.5)
-                        ).toFixed(1)}
-                        %
-                      </span>
-                    )}
-                  <div className="flex-1" />
-                  {(() => {
-                    const effStatus: string =
-                      order.status || order.dbOrder?.status || "pending";
-                    const isActivelyPending =
-                      effStatus === "pending" && order.expiresIn > 0;
-                    if (!isActivelyPending || isMyOwnOrder) return null;
-                    return (
-                      <button
-                        data-testid="order-primary-action"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAcceptOrder(order);
-                        }}
-                        disabled={acceptingOrderId === order.id}
-                        className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
-                          acceptingOrderId === order.id
-                            ? "bg-primary/50 text-black/60 cursor-wait"
-                            : isMineable
-                              ? "bg-primary text-background hover:bg-primary"
-                              : "bg-primary/80 text-background hover:bg-primary"
-                        }`}
-                      >
-                        {acceptingOrderId === order.id ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />{" "}
-                            Accepting...
-                          </>
                         ) : (
-                          order.dbOrder?.primaryAction?.label ||
-                          (isMineable ? "MINE" : "ACCEPT")
+                          (() => {
+                            const badge = MY_STATUS_BADGE[effStatus] || MY_STATUS_BADGE.pending;
+                            const StatusIcon = badge.Icon;
+                            return (
+                              <span className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono font-semibold border shrink-0 ${badge.cls}`}>
+                                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+                                {badge.label}
+                              </span>
+                            );
+                          })()
                         )}
-                      </button>
-                    );
-                  })()}
-                </div>
+                      </div>
+
+                      {/* ── Primary amount — big and left-aligned ── */}
+                      <div className="mb-1">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-[26px] font-bold tabular-nums leading-none text-white/90 tracking-tight">
+                            {primaryAmt}
+                          </span>
+                          <span className="text-[13px] font-medium text-white/35">{primaryCcy}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[11px] text-white/30">→</span>
+                          <span className="text-[12px] font-mono tabular-nums text-white/40">
+                            {secondaryAmt} <span className="text-white/25">{secondaryCcy}</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* ── Timer + rate footer ── */}
+                      <div className="flex items-center gap-2 mt-2">
+                        {isActivelyPending ? (
+                          <div className={`flex items-center gap-1 text-[11px] font-mono tabular-nums ${order.expiresIn <= 120 ? "text-red-400" : "text-white/30"}`}>
+                            <Clock className="w-3 h-3" />
+                            {order.expiresIn >= 3600
+                              ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
+                              : order.expiresIn >= 60
+                                ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
+                                : `${order.expiresIn}s`}
+                          </div>
+                        ) : (
+                          (() => {
+                            const ts = order.dbOrder?.completed_at || order.dbOrder?.cancelled_at || order.dbOrder?.created_at || order.timestamp;
+                            const tsDate = ts instanceof Date ? ts : ts ? new Date(ts) : null;
+                            return tsDate ? (
+                              <span className="text-[10px] text-white/20 font-mono tabular-nums">
+                                {tsDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            ) : null;
+                          })()
+                        )}
+                        <span className="text-[10px] text-white/15 font-mono tabular-nums">
+                          @ {order.rate.toFixed(2)}
+                        </span>
+                        {extraPct > 0 && (
+                          <span className="text-[10px] font-mono text-primary/70">+{extraPct.toFixed(1)}%</span>
+                        )}
+                        {isMyOwnOrder && onCancelOrder && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
+                            className="ml-auto text-[10px] text-red-400/50 hover:text-red-400 transition-colors font-mono"
+                          >
+                            cancel
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
                 {/* Countdown timer bar (bottom) — only for actively-pending orders */}
                 {(() => {
                   const effStatus: string =
@@ -1052,6 +755,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   // Dropdown states
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
 
   // ─── Tab switch: All / Pending / My Orders ─────────────────────────
@@ -1382,173 +1086,89 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
     return true;
   });
 
-  // Right-side header controls, split into two groups so we can move only the
-  // filter (sliders) toggle + count badge into the search row at tablet width
-  // (<xl), while Live / sound / refresh stay in row 1 next to the tabs.
-  const mainControls = (
-    <>
-      <div
-        className="inline-flex items-center justify-center gap-1 h-7 xl:h-8 [@media(min-height:900px)]:h-8 w-7 xl:w-auto [@media(min-height:900px)]:w-auto px-0 xl:px-1.5 [@media(min-height:900px)]:px-1.5 bg-foreground/[0.02] rounded border border-foreground/[0.06] shrink-0"
-        title="Live feed"
-      >
-        <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
-        <span className="hidden xl:inline [@media(min-height:900px)]:inline text-[9px] text-white/35 font-mono">Live</span>
-      </div>
-      <button
-        onClick={() => {
-          const next = !soundEnabled;
-          setSoundEnabled(next);
-          if (next) {
-            setTimeout(() => playSound?.("notification"), 0);
-          }
-        }}
-        className={`shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border transition-all ${
-          soundEnabled
-            ? "bg-primary/15 border-primary/30 text-primary ring-1 ring-primary/20"
-            : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/30 hover:bg-foreground/[0.05]"
-        }`}
-        title={
-          soundEnabled
-            ? "Sound on — click to mute"
-            : "Sound off — click to enable"
-        }
-      >
-        {soundEnabled ? (
-          <Volume2 className="w-3 h-3" />
-        ) : (
-          <VolumeX className="w-3 h-3" />
-        )}
-      </button>
-      <button
-        onClick={fetchOrders}
-        className="shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border border-foreground/[0.06] bg-foreground/[0.02] hover:bg-foreground/[0.05] transition-colors"
-      >
-        <RotateCcw className="w-3 h-3 text-foreground/25 hover:text-foreground/50" />
-      </button>
-    </>
-  );
-
-  const filterControls = (
-    <>
-      <button
-        onClick={() => setShowOrderFilters(!showOrderFilters)}
-        className={`shrink-0 inline-flex items-center justify-center w-7 h-7 xl:w-8 xl:h-8 [@media(min-height:900px)]:w-8 [@media(min-height:900px)]:h-8 rounded border transition-all ${showOrderFilters || Object.values(orderFilters).some((v) => v !== "all") ? "bg-white/[0.08] border-foreground/[0.06] text-foreground/60" : "bg-foreground/[0.02] border-foreground/[0.06] hover:bg-foreground/[0.05] text-foreground/25"}`}
-      >
-        <SlidersHorizontal className="w-3 h-3" />
-      </button>
-      <span className="shrink-0 inline-flex items-center justify-center h-7 xl:h-8 [@media(min-height:900px)]:h-8 min-w-7 xl:min-w-8 [@media(min-height:900px)]:min-w-8 px-1.5 text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] border border-foreground/[0.08] text-foreground/50 rounded-full font-mono tabular-nums">
-        {filteredOrders.length}
-      </span>
-    </>
-  );
-
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-3 py-2 border-b border-section-divider">
-        {/* ─── Row 1: Tabs + controls ─── */}
-        <div className="flex items-center justify-between gap-1 mb-2">
-          <div className="inline-flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] shrink-0">
-            {(["all", "pending", "mine"] as const).map((tab) => {
-              const tooltip =
-                tab === "all"
-                  ? "All market orders + your own orders — the combined feed"
-                  : tab === "pending"
-                    ? "Only orders with pending status — available for you to accept"
-                    : "Only orders you created (includes all statuses: active, completed, cancelled)";
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setView(tab)}
-                  title={tooltip}
-                  className={`h-full px-2 xl:px-3 [@media(min-height:900px)]:px-3 inline-flex items-center rounded-md text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] font-bold transition-all ${
-                    view === tab
-                      ? "bg-foreground text-background shadow"
-                      : "text-foreground/40 hover:text-foreground/60"
-                  }`}
-                >
-                  {tab === "all"
-                    ? "All"
-                    : tab === "pending"
-                      ? "Pending"
-                      : "My Orders"}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex items-center gap-0.5 xl:gap-1 [@media(min-height:900px)]:gap-1 min-w-0">
-            {mainControls}
-            {/* Filter toggle + count: only in row 1 at xl+. Below xl they
-                render in the search row instead (see below). `xl:contents`
-                makes the wrapper transparent at xl+ so the buttons sit
-                directly in this flex container with the same gap. */}
-            <div className="hidden xl:contents">{filterControls}</div>
-          </div>
-        </div>
+      {/* Header — single row */}
+      <div className="px-2 py-1.5 border-b border-section-divider">
+        <div className="flex items-center gap-1 min-w-0">
+          {/* Title */}
+          <span className="text-[11px] font-semibold text-white/70 tracking-tight shrink-0 mr-1">New Orders</span>
 
-        {/* ─── My Orders sub-filter (only when My Orders tab active) ─── */}
-        {view === "mine" && (
-          <div className="flex items-center gap-1 mb-2">
-            {(
-              ["all", "active", "completed", "cancelled", "expired"] as const
-            ).map((f) => (
+          {/* Live glow dot */}
+          <span className="relative flex shrink-0 h-2 w-2 ml-0.5 mr-0.5" title="Live feed">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-60" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.9)]" />
+          </span>
+
+          {/* Tabs */}
+          <div className="inline-flex items-center gap-0.5 h-7 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] shrink-0">
+            {(["all", "pending", "mine"] as const).map((tab) => (
               <button
-                key={f}
-                onClick={() => setMyFilter(f)}
-                className={`px-2 py-1 rounded text-[10px] font-medium transition-all capitalize ${
-                  myFilter === f
-                    ? "bg-white/[0.08] text-white border border-white/[0.12]"
-                    : "text-foreground/30 hover:text-foreground/50"
+                key={tab}
+                onClick={() => setView(tab)}
+                className={`h-full px-2 inline-flex items-center rounded-md text-[9px] font-bold transition-all ${
+                  view === tab
+                    ? "bg-white/[0.08] text-white/90 border border-white/[0.12]"
+                    : "text-foreground/35 hover:text-foreground/60 border border-transparent"
                 }`}
               >
-                {f}
+                {tab === "all" ? "All" : tab === "pending" ? "Pending" : "Mine"}
               </button>
             ))}
           </div>
-        )}
 
-        {/* Search + Filter + Sort */}
-        <div className="flex items-center gap-1.5">
-          <div className="flex-1 flex items-center gap-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors">
-            <Search className="w-3 h-3 text-foreground/20" />
-            <input
-              type="search"
-              role="searchbox"
-              name="orders-search"
-              autoComplete="off"
-              data-1p-ignore="true"
-              data-lpignore="true"
-              data-form-type="other"
-              maxLength={100}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search orders..."
-              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none focus-visible:outline-none font-mono"
-            />
-          </div>
+          <div className="flex-1" />
+
+          {/* Sound */}
+          <button
+            onClick={() => {
+              const next = !soundEnabled;
+              setSoundEnabled(next);
+              if (next) setTimeout(() => playSound?.("notification"), 0);
+            }}
+            className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border transition-all ${
+              soundEnabled
+                ? "bg-primary/15 border-primary/30 text-primary"
+                : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/25 hover:bg-foreground/[0.05]"
+            }`}
+            title={soundEnabled ? "Sound on" : "Sound off"}
+          >
+            {soundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
+          </button>
+
+          {/* Refresh */}
+          <button
+            onClick={fetchOrders}
+            className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border border-foreground/[0.06] bg-foreground/[0.02] hover:bg-foreground/[0.05] transition-colors"
+          >
+            <RotateCcw className="w-3 h-3 text-foreground/25" />
+          </button>
+
+          {/* Search toggle */}
+          <button
+            onClick={() => setSearchVisible((v) => { if (v) setSearchQuery(""); return !v; })}
+            className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border transition-all ${
+              searchVisible || searchQuery
+                ? "bg-primary/[0.12] text-primary border-primary/20"
+                : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/25 hover:bg-foreground/[0.05]"
+            }`}
+            title="Search"
+          >
+            <Search className="w-3 h-3" />
+          </button>
 
           {/* Filter dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
-              className={`flex items-center gap-1 text-[9px] font-mono border rounded-lg px-1.5 py-1.5 cursor-pointer transition-colors ${
+              className={`inline-flex items-center gap-1 h-7 px-1.5 text-[9px] font-mono border rounded transition-colors ${
                 pendingFilter !== "all"
-                  ? "bg-foreground text-background border-transparent shadow"
-                  : "bg-foreground/[0.02] text-white/35 border-foreground/[0.06] hover:border-border-strong"
+                  ? "bg-primary/[0.12] text-primary border-primary/20"
+                  : "bg-foreground/[0.02] text-white/30 border-foreground/[0.06] hover:border-border-strong"
               }`}
             >
-              {
-                {
-                  all: "Filter",
-                  mineable: "Mineable",
-                  premium: "Premium",
-                  large: "Large",
-                  expiring: "Expiring",
-                }[pendingFilter]
-              }
-              <ChevronDown
-                className={`w-2.5 h-2.5 transition-transform ${filterDropdownOpen ? "rotate-180" : ""}`}
-              />
+              {{ all: "Filter", mineable: "Mine", premium: "Prem", large: "Large", expiring: "Exp" }[pendingFilter]}
+              <ChevronDown className={`w-2.5 h-2.5 transition-transform ${filterDropdownOpen ? "rotate-180" : ""}`} />
             </button>
             <AnimatePresence>
               {filterDropdownOpen && (
@@ -1557,32 +1177,17 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-1 z-30 bg-card-solid border border-foreground/[0.08] rounded-lg shadow-xl py-1 min-w-[120px]"
+                  className="absolute right-0 top-full mt-1 z-30 bg-card-solid border border-foreground/[0.08] rounded-lg shadow-xl py-1 min-w-[110px]"
                 >
-                  {(
-                    ["all", "mineable", "premium", "large", "expiring"] as const
-                  ).map((f) => (
+                  {(["all", "mineable", "premium", "large", "expiring"] as const).map((f) => (
                     <button
                       key={f}
-                      onClick={() => {
-                        setPendingFilter(f);
-                        setFilterDropdownOpen(false);
-                      }}
+                      onClick={() => { setPendingFilter(f); setFilterDropdownOpen(false); }}
                       className={`w-full px-3 py-1.5 text-left text-[10px] font-medium transition-colors ${
-                        pendingFilter === f
-                          ? "bg-foreground text-background shadow"
-                          : "text-foreground/60 hover:bg-foreground/[0.04]"
+                        pendingFilter === f ? "bg-primary/[0.10] text-primary" : "text-foreground/60 hover:bg-foreground/[0.04]"
                       }`}
                     >
-                      {f === "all"
-                        ? "All"
-                        : f === "mineable"
-                          ? "Mineable"
-                          : f === "premium"
-                            ? "High Premium"
-                            : f === "large"
-                              ? "Large"
-                              : "Expiring"}
+                      {f === "all" ? "All" : f === "mineable" ? "Mineable" : f === "premium" ? "High Premium" : f === "large" ? "Large" : "Expiring"}
                     </button>
                   ))}
                 </motion.div>
@@ -1591,22 +1196,13 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           </div>
 
           {/* Sort dropdown */}
-          <div className="relative" ref={sortDropdownRef}>
+          <div className="relative shrink-0" ref={sortDropdownRef}>
             <button
               onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-              className="flex items-center gap-1 text-[9px] font-mono text-white/35 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-1.5 py-1.5 cursor-pointer hover:border-border-strong transition-colors"
+              className="inline-flex items-center gap-1 h-7 px-1.5 text-[9px] font-mono text-white/30 bg-foreground/[0.02] border border-foreground/[0.06] rounded hover:border-border-strong transition-colors"
             >
-              {
-                {
-                  time: "Time",
-                  premium: "Premium",
-                  amount: "Size",
-                  rating: "Rating",
-                }[pendingSortBy]
-              }
-              <ChevronDown
-                className={`w-2.5 h-2.5 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`}
-              />
+              {{ time: "Time", premium: "Prem", amount: "Size", rating: "★" }[pendingSortBy]}
+              <ChevronDown className={`w-2.5 h-2.5 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`} />
             </button>
             <AnimatePresence>
               {sortDropdownOpen && (
@@ -1617,30 +1213,16 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                   transition={{ duration: 0.15 }}
                   className="absolute right-0 top-full mt-1 z-50 min-w-[100px] bg-[#1a1a1a] border border-foreground/[0.08] rounded-lg shadow-xl overflow-hidden"
                 >
-                  {(
-                    [
-                      { value: "time", label: "Time" },
-                      { value: "premium", label: "Premium" },
-                      { value: "amount", label: "Size" },
-                      { value: "rating", label: "Rating" },
-                    ] as const
-                  ).map((option) => (
+                  {([{ value: "time", label: "Time" }, { value: "premium", label: "Premium" }, { value: "amount", label: "Size" }, { value: "rating", label: "Rating" }] as const).map((opt) => (
                     <button
-                      key={option.value}
-                      onClick={() => {
-                        setPendingSortBy(option.value);
-                        setSortDropdownOpen(false);
-                      }}
+                      key={opt.value}
+                      onClick={() => { setPendingSortBy(opt.value); setSortDropdownOpen(false); }}
                       className={`w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-mono transition-colors ${
-                        pendingSortBy === option.value
-                          ? "text-foreground/70 bg-foreground/[0.06]"
-                          : "text-white/35 hover:text-foreground/50 hover:bg-foreground/[0.04]"
+                        pendingSortBy === opt.value ? "text-foreground/70 bg-foreground/[0.06]" : "text-white/35 hover:text-foreground/50 hover:bg-foreground/[0.04]"
                       }`}
                     >
-                      {option.label}
-                      {pendingSortBy === option.value && (
-                        <Check className="w-2.5 h-2.5 text-foreground/50" />
-                      )}
+                      {opt.label}
+                      {pendingSortBy === opt.value && <Check className="w-2.5 h-2.5 text-foreground/50" />}
                     </button>
                   ))}
                 </motion.div>
@@ -1648,12 +1230,78 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             </AnimatePresence>
           </div>
 
-          {/* Tablet view (<xl): only the filter toggle + count drop into the
-              search row. Live / sound / refresh stay in row 1 next to tabs. */}
-          <div className="flex xl:hidden items-center gap-1 shrink-0">
-            {filterControls}
-          </div>
+          {/* Count badge */}
+          <span className="shrink-0 inline-flex items-center justify-center h-7 min-w-[1.75rem] px-1.5 text-[9px] border border-foreground/[0.08] text-foreground/40 rounded-full font-mono tabular-nums">
+            {filteredOrders.length}
+          </span>
         </div>
+
+        {/* Search input (shown when toggled) */}
+        {searchVisible && (
+          <div className="flex items-center gap-1.5 mt-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors">
+            <Search className="w-3 h-3 text-foreground/20 shrink-0" />
+            <input
+              type="search" role="searchbox" name="orders-search"
+              autoComplete="off" data-1p-ignore="true" data-lpignore="true" data-form-type="other"
+              maxLength={100} autoFocus
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search orders..."
+              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none focus-visible:outline-none font-mono"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="text-foreground/30 hover:text-foreground/60">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* My Orders sub-filter */}
+        {view === "mine" && (
+          <div className="flex items-center gap-1 mt-1.5">
+            {(["all", "active", "completed", "cancelled", "expired"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setMyFilter(f)}
+                className={`px-2 py-1 rounded text-[10px] font-medium transition-all capitalize ${
+                  myFilter === f
+                    ? "bg-white/[0.06] text-white/80 border border-white/[0.10]"
+                    : "text-foreground/25 hover:text-foreground/50 border border-transparent"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Search (collapsed by default) + Filter + Sort */}
+        {searchVisible && (
+          <div className="flex items-center gap-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors mb-1.5">
+            <Search className="w-3 h-3 text-foreground/20 shrink-0" />
+            <input
+              type="search"
+              role="searchbox"
+              name="orders-search"
+              autoComplete="off"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-form-type="other"
+              maxLength={100}
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search orders..."
+              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none focus-visible:outline-none font-mono"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="text-foreground/30 hover:text-foreground/60">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Advanced Filters */}
         <AnimatePresence>

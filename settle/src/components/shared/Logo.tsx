@@ -49,8 +49,8 @@ export const Logo = memo(function Logo({
       </svg>
 
       <motion.span
-        className={`${className} text-[22px] leading-none flex items-baseline`}
-        style={{ letterSpacing: "-0.045em", fontWeight: 700 }}
+        className={`${className} text-[19px] leading-none flex items-baseline`}
+        style={{ letterSpacing: "-0.04em", fontWeight: 700 }}
         whileHover={{ scale: 1.02 }}
         transition={{ duration: 0.2 }}
       >
@@ -61,15 +61,15 @@ export const Logo = memo(function Logo({
           Blip
         </span>
         <span
-          className={onDark ? "ml-1" : "ml-1 text-foreground"}
           style={{
-            fontStyle: "italic",
             fontWeight: 600,
-            letterSpacing: "-0.045em",
-            ...(onDark ? { color: "#ffffff" } : {}),
+            letterSpacing: "-0.04em",
+            color: "#10b981",
+            fontStyle: "italic",
           }}
+          className="ml-1"
         >
-          money
+          Market
         </span>
       </motion.span>
     </Link>

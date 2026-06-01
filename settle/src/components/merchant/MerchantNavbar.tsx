@@ -68,8 +68,8 @@ interface MerchantNavbarProps {
 
 const pill = (active: boolean) =>
   active
-    ? "px-3 py-[5px] rounded-md text-[12px] font-medium bg-foreground/[0.08] text-foreground transition-colors"
-    : "px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-foreground/[0.04] transition-colors";
+    ? "px-3 py-[5px] rounded-md text-[11px] font-semibold tracking-wide bg-white/[0.08] text-white border border-white/[0.08] transition-colors"
+    : "px-3 py-[5px] rounded-md text-[11px] font-medium tracking-wide text-white/35 hover:text-white/65 hover:bg-white/[0.04] border border-transparent transition-colors";
 
 export function MerchantNavbar({
   activePage,
@@ -138,7 +138,7 @@ export function MerchantNavbar({
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border-strong">
+      <header className="sticky top-0 z-50 bg-[#070710]/96 backdrop-blur-md border-b border-white/[0.06]">
         <div className="relative h-12 lg:h-[50px] flex lg:grid lg:grid-cols-[1fr_auto_1fr] items-center px-3 lg:px-4 gap-3">
           {/* Mobile back button — only on overlay screens that pass onBack */}
           {onBack && (
@@ -151,9 +151,31 @@ export function MerchantNavbar({
             </button>
           )}
 
-          {/* Left: Logo + wordmark. */}
+          {/* Left: Logo on desktop / merchant identity on mobile */}
           <div className="flex items-center shrink-0 lg:justify-self-start min-w-0">
-            <Logo href="/merchant" />
+            {/* Desktop — full logo wordmark */}
+            <span className="hidden lg:flex">
+              <Logo href="/merchant" />
+            </span>
+            {/* Mobile — @username replaces the logo for a native-app feel */}
+            <div className="flex lg:hidden items-center gap-2 min-w-0">
+              {!onBack && (
+                <>
+                  <UserAvatar
+                    src={merchantInfo?.avatar_url}
+                    seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
+                    size={26}
+                    alt={displayName}
+                    className="border border-white/[0.1] shrink-0"
+                  />
+                  <span className="text-[15px] font-semibold text-white/90 tracking-tight truncate">
+                    {merchantInfo?.username
+                      ? `@${merchantInfo.username}`
+                      : merchantInfo?.display_name || "Merchant"}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Center: Nav pills — placed in the centre grid column.
@@ -165,7 +187,7 @@ export function MerchantNavbar({
               shrink before any overlap can occur, and Ops/Compliance fall
               back to icon-only below xl. */}
           <div className="hidden lg:flex items-center justify-center min-w-0">
-            <nav className="flex items-center gap-0.5 bg-foreground/[0.03] rounded-lg p-[3px] min-w-0 max-w-full">
+            <nav className="flex items-center gap-0.5 bg-white/[0.03] border border-white/[0.05] rounded-lg p-[3px] min-w-0 max-w-full">
               <Link
                 href="/merchant"
                 className={pill(activePage === "dashboard")}
@@ -252,11 +274,6 @@ export function MerchantNavbar({
               >
                 <Bug className="w-4 h-4" />
               </button>
-
-              {/* Reputation + Blip Points — inline navbar stats. Sits
-                  to the left of the avatar so they read as the user's
-                  scoreboard at a glance. */}
-              <NavbarRepCoins />
 
               <div className="relative" ref={menuRef}>
                 <button
@@ -386,9 +403,6 @@ export function MerchantNavbar({
                   }))}
                 />
               )} */}
-              {/* Rep + Coins — mobile inline. Same component as desktop;
-                  the compact prop drops the labels and shows numbers only. */}
-              <NavbarRepCoins compact />
               {onOpenNotifications && (
                 <button
                   onClick={onOpenNotifications}
@@ -629,26 +643,26 @@ function NavbarRepCoins({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-1">
       <span
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.08] text-[11px] font-semibold text-foreground shrink-0"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.07] text-[11px] font-mono font-semibold text-white/70 shrink-0 tabular-nums"
         title="Reputation score (300–900)"
       >
-        <Shield className="w-3 h-3 text-foreground/70 shrink-0" />
-        <span className="tabular-nums">{score}</span>
+        <Shield className="w-3 h-3 text-white/40 shrink-0" />
+        <span>{score}</span>
         {!compact && (
-          <span className="hidden xl:inline text-foreground/55 text-[10px]">
-            Rep
+          <span className="hidden xl:inline text-white/30 text-[10px] font-sans">
+            REP
           </span>
         )}
       </span>
       <span
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/[0.04] border border-foreground/[0.08] text-[11px] font-semibold text-foreground shrink-0"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.07] text-[11px] font-mono font-semibold text-white/70 shrink-0 tabular-nums"
         title="Blip Points"
       >
-        <Coins className="w-3 h-3 text-foreground/70 shrink-0" />
-        <span className="tabular-nums">{coins.toLocaleString("en-US")}</span>
+        <Coins className="w-3 h-3 text-primary/70 shrink-0" />
+        <span>{coins.toLocaleString("en-US")}</span>
         {!compact && (
-          <span className="hidden xl:inline text-foreground/55 text-[10px]">
-            Blip Points
+          <span className="hidden xl:inline text-white/30 text-[10px] font-sans">
+            PTS
           </span>
         )}
       </span>

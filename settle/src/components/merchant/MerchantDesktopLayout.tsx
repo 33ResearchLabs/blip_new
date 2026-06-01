@@ -240,52 +240,61 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
               each component's internal `flex-1 overflow-y-auto`, so a
               tall section scrolls inside itself without resizing the
               other section. */}
-          <div className="flex flex-col h-full bg-background p-2 gap-2 border-r border-border">
-            <div
-              className="@container flex-1 min-h-0 rounded-xl overflow-hidden border border-foreground/[0.06] bg-foreground/[0.025]"
-            >
-              <DashboardWidgets
-                todayEarnings={todayEarnings}
-                completedOrders={completedOrders.length}
-                cancelledOrders={cancelledOrders.length}
-                balance={effectiveBalance || 0}
-                lockedInEscrow={lockedInEscrow}
-                isOnline={isMerchantOnline}
-                walletStatus={walletStatus}
-                onAddWallet={onAddWallet}
-                merchantId={merchantId || undefined}
-                activeCorridor={activeCorridor}
-                onCorridorChange={onCorridorChange}
-                onToggleOnline={() => setIsMerchantOnline((prev) => !prev)}
-                onOpenCorridor={() => window.open("/merchant/mempool", "_blank")}
-                onOpenSwap={props.onOpenSwap}
-                onOpenSend={props.onOpenSend}
-                onOpenDeposit={props.onOpenDeposit}
-              />
-            </div>
-            <div className="[container-type:size] flex-1 min-h-0 rounded-xl overflow-hidden border border-foreground/[0.06] bg-foreground/[0.025]">
-              <ConfigPanel
-                merchantId={merchantId}
-                merchantInfo={merchantInfo}
-                effectiveBalance={effectiveBalance}
-                activeCorridor={activeCorridor}
-                openTradeForm={openTradeForm}
-                setOpenTradeForm={setOpenTradeForm}
-                isCreatingTrade={isCreatingTrade}
-                onCreateOrder={handleDirectOrderCreation}
-                refreshBalance={refreshBalance}
-              />
+          <div className="flex flex-col h-full bg-background border-r border-white/[0.05]">
+            <div className="flex flex-col flex-1 p-2 gap-2 min-h-0">
+              <div
+                className="@container min-h-0 rounded-xl overflow-hidden border border-white/[0.08] bg-white/[0.02] shadow-[0_2px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)] flex flex-col"
+                style={{ flex: 2 }}
+              >
+                <CardLabel label="Balance" live />
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <DashboardWidgets
+                    todayEarnings={todayEarnings}
+                    completedOrders={completedOrders.length}
+                    cancelledOrders={cancelledOrders.length}
+                    balance={effectiveBalance || 0}
+                    lockedInEscrow={lockedInEscrow}
+                    isOnline={isMerchantOnline}
+                    walletStatus={walletStatus}
+                    onAddWallet={onAddWallet}
+                    merchantId={merchantId || undefined}
+                    activeCorridor={activeCorridor}
+                    onCorridorChange={onCorridorChange}
+                    onToggleOnline={() => setIsMerchantOnline((prev) => !prev)}
+                    onOpenCorridor={() => window.open("/merchant/mempool", "_blank")}
+                    onOpenSwap={props.onOpenSwap}
+                    onOpenSend={props.onOpenSend}
+                    onOpenDeposit={props.onOpenDeposit}
+                  />
+                </div>
+              </div>
+              <div className="[container-type:size] min-h-0 rounded-xl overflow-hidden border border-white/[0.08] bg-white/[0.02] shadow-[0_2px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)] flex flex-col" style={{ flex: 3 }}>
+                <CardLabel label="Trade" />
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <ConfigPanel
+                    merchantId={merchantId}
+                    merchantInfo={merchantInfo}
+                    effectiveBalance={effectiveBalance}
+                    activeCorridor={activeCorridor}
+                    openTradeForm={openTradeForm}
+                    setOpenTradeForm={setOpenTradeForm}
+                    isCreatingTrade={isCreatingTrade}
+                    onCreateOrder={handleDirectOrderCreation}
+                    refreshBalance={refreshBalance}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </Panel>
-        <PanelResizeHandle className="w-[3px]" />
+        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
         <Panel
           defaultSize={isWideScreen ? "24%" : "27%"}
           minSize="16%"
           maxSize={isWideScreen ? "35%" : "40%"}
           id="center-left"
         >
-          <div className="flex flex-col h-full bg-background border-r border-border" data-tour="pending-panel">
+          <div className="flex flex-col h-full bg-background border-r border-white/[0.05]" data-tour="pending-panel">
             {isWideScreen ? (
               <PendingOrdersPanel
                 orders={pendingOrders}
@@ -332,14 +341,14 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
             )}
           </div>
         </Panel>
-        <PanelResizeHandle className="w-[3px]" />
+        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
         <Panel
           defaultSize={isWideScreen ? "20%" : "27%"}
           minSize={isWideScreen ? "14%" : "18%"}
           maxSize={isWideScreen ? "32%" : "40%"}
           id="center-right"
         >
-          <div className="flex flex-col h-full bg-background border-r border-border">
+          <div className="flex flex-col h-full bg-background border-r border-white/[0.05]">
             <div
               data-tour="inprogress-panel"
               className={`flex flex-col border-b border-foreground/[0.08] transition-all duration-200 ${inProgressCollapsed ? "" : "flex-1 min-h-0"}`}
@@ -396,14 +405,14 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
         </Panel>
         {isWideScreen && (
           <>
-            <PanelResizeHandle className="w-[3px]" />
+            <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
             <Panel
               defaultSize="18%"
               minSize="12%"
               maxSize="30%"
               id="transactions"
             >
-              <div className="flex flex-col h-full bg-background border-r border-border">
+              <div className="flex flex-col h-full bg-background border-r border-white/[0.05]">
                 <div
                   data-tour="leaderboard"
                   className={`flex flex-col border-b border-section-divider transition-all duration-200 ${leaderboardCollapsed ? "" : "flex-1 min-h-0"}`}
@@ -443,14 +452,14 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
             </Panel>
           </>
         )}
-        <PanelResizeHandle className="w-[3px]" />
+        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
         <Panel
           defaultSize={isWideScreen ? "18%" : "22%"}
           minSize={isWideScreen ? "12%" : "15%"}
           maxSize={isWideScreen ? "30%" : "35%"}
           id="right"
         >
-          <div className="flex flex-col h-full bg-background overflow-hidden border-l border-border">
+          <div className="flex flex-col h-full bg-background overflow-hidden border-l border-white/[0.05]">
             <NotificationsPanel
               notifications={notifications}
               onMarkRead={markNotificationRead}
@@ -865,10 +874,10 @@ function MerchantDashboardV2({
             // content to fill the card — no empty card-coloured strip at
             // the bottom that reads as a "gap".
             const wrapperClass = isLeft
-              ? "flex flex-col h-full bg-background p-2 gap-2 border-r border-border"
+              ? "flex flex-col h-full bg-background border-r border-white/[0.05]"
               : isRight
-                ? "flex flex-col h-full bg-background border-l border-border"
-                : "flex flex-col h-full bg-background border-r border-border";
+                ? "flex flex-col h-full bg-background border-l border-white/[0.05]"
+                : "flex flex-col h-full bg-background border-r border-white/[0.05]";
             const evenSize =
               col.widgets.length > 0
                 ? `${Math.floor(100 / col.widgets.length)}%`
@@ -880,7 +889,7 @@ function MerchantDashboardV2({
                     className={
                       isEditing
                         ? "w-[5px] bg-primary/30 hover:bg-primary/60 transition-colors cursor-col-resize"
-                        : "w-[3px] hover:bg-primary/30 transition-colors cursor-col-resize"
+                        : "w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize"
                     }
                   />
                 )}
@@ -900,38 +909,36 @@ function MerchantDashboardV2({
                         <div className="flex-1 flex items-center justify-center text-foreground/30 text-[11px] font-mono uppercase tracking-wider border border-dashed border-foreground/15 m-2 rounded-lg">
                           Drop a widget here
                         </div>
-                      ) : isLeft ? (
-                        // Empty left column in edit mode — still nothing
-                        // to render. The dashed placeholder above covers
-                        // this case.
-                        null
                       ) : null
                     ) : isLeft ? (
-                      // Left column: flex stack, each card flex-1 so two
-                      // cards split the column 50/50 dynamically; their
-                      // internal `h-full flex flex-col` layouts then
-                      // stretch the content (StatusCard / trade form) to
-                      // fill the card's height without leaving an empty
-                      // strip at the bottom.
-                      <SortableContext
-                        items={col.widgets}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        {col.widgets.map((wid) => {
-                          const Widget = WIDGET_REGISTRY[wid];
-                          return (
-                            <div key={wid} className="flex-1 min-h-0">
-                              <WidgetShell
-                                id={wid}
-                                isEditing={isEditing}
-                                onHide={onHide}
-                              >
-                                <Widget ctx={ctx} />
-                              </WidgetShell>
-                            </div>
-                          );
-                        })}
-                      </SortableContext>
+                      // Left column: flex stack inside inner padded wrapper so
+                      // the PanelHeader sits flush at the top without the p-2
+                      // bleed, while the cards below retain their gap+padding.
+                      <div className="flex flex-col flex-1 p-2 gap-2 min-h-0">
+                        <SortableContext
+                          items={col.widgets}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {col.widgets.map((wid) => {
+                            const Widget = WIDGET_REGISTRY[wid];
+                            return (
+                              <div key={wid} className="min-h-0 rounded-xl overflow-hidden flex flex-col border border-white/[0.08] bg-white/[0.02] shadow-[0_2px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]" style={{ flex: wid === "dashboardWidgets" ? 2 : 3 }}>
+                                <CardLabel label={wid === "dashboardWidgets" ? "Balance" : "Trade"} live={wid === "dashboardWidgets"} />
+                                <div className="flex-1 min-h-0 overflow-hidden">
+                                  <WidgetShell
+                                    id={wid}
+                                    isEditing={isEditing}
+                                    onHide={onHide}
+                                    fillHeight={true}
+                                  >
+                                    <Widget ctx={ctx} />
+                                  </WidgetShell>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </SortableContext>
+                      </div>
                     ) : (
                       <SortableContext
                         items={col.widgets}
@@ -1000,6 +1007,24 @@ function MerchantDashboardV2({
     </div>
   );
 }
+
+
+function CardLabel({ label, live }: { label: string; live?: boolean }) {
+  return (
+    <div className="flex items-center gap-2 h-7 px-3 shrink-0 border-b border-white/[0.06] bg-white/[0.015]">
+      {live && (
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-40" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-white/80 shadow-[0_0_6px_rgba(255,255,255,0.8)]" />
+        </span>
+      )}
+      <span className="text-[9px] font-mono tracking-[0.2em] uppercase text-white/35 select-none">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 
 // Column wrapper that's also a dnd-kit droppable so cross-column drag
 // (and drops onto empty columns) works without an inner sentinel widget.
