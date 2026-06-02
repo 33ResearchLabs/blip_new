@@ -119,7 +119,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
   if (isLoading && !data) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-white/[0.09] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -138,7 +138,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
       {/* Period Selector */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-emerald-400" />
+          <BarChart3 className="w-5 h-5 text-[#f5f5f7]" />
           Analytics
         </h2>
         <div className="relative">
@@ -160,7 +160,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
                     setShowPeriodDropdown(false);
                   }}
                   className={`w-full px-4 py-2 text-sm text-left hover:bg-accent-subtle transition-colors
-                    ${period === p.value ? 'text-emerald-400' : 'text-white/80'}`}
+                    ${period === p.value ? 'text-[#f5f5f7]' : 'text-white/80'}`}
                 >
                   {p.label}
                 </button>
@@ -376,7 +376,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
                 className="flex items-center justify-between py-2 px-3 bg-white/5 rounded-lg"
               >
                 <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs
+                  <span className="w-6 h-6 rounded-full bg-white/[0.06] text-[#f5f5f7] text-xs
                                    flex items-center justify-center font-medium">
                     {idx + 1}
                   </span>
@@ -388,7 +388,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium text-emerald-400">
+                  <p className="text-sm font-medium text-[#f5f5f7]">
                     {formatCurrency(customer.totalVolume)}
                   </p>
                 </div>
@@ -401,21 +401,21 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white/5 rounded-xl p-4 border border-white/10 text-center">
-          <Clock className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
+          <Clock className="w-6 h-6 text-white/60 mx-auto mb-2" />
           <p className="text-2xl font-bold text-white">
             {Math.round(data.summary.avgCompletionMinutes)}m
           </p>
           <p className="text-xs text-white/50">Avg. Completion Time</p>
         </div>
         <div className="bg-white/5 rounded-xl p-4 border border-white/10 text-center">
-          <Activity className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+          <Activity className="w-6 h-6 text-white/60 mx-auto mb-2" />
           <p className="text-2xl font-bold text-white">
             {data.summary.pendingTrades}
           </p>
           <p className="text-xs text-white/50">Pending Orders</p>
         </div>
         <div className="bg-white/5 rounded-xl p-4 border border-white/10 text-center">
-          <TrendingUp className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
+          <TrendingUp className="w-6 h-6 text-[#f5f5f7] mx-auto mb-2" />
           <p className="text-2xl font-bold text-white">
             {formatCompact(data.summary.totalCryptoVolume)}
           </p>
@@ -450,9 +450,9 @@ function StatCard({
   color: 'emerald' | 'cyan' | 'purple' | 'amber';
 }) {
   const colorClasses = {
-    emerald: 'text-emerald-400 bg-emerald-500/10',
-    cyan: 'text-cyan-400 bg-cyan-500/10',
-    purple: 'text-purple-400 bg-purple-500/10',
+    emerald: 'text-[#f5f5f7] bg-white/[0.06]',
+    cyan: 'text-white/60 bg-white/[0.06]',
+    purple: 'text-white/60 bg-white/[0.06]',
     amber: 'text-amber-400 bg-amber-500/10',
   };
 
@@ -461,7 +461,7 @@ function StatCard({
       <div className="flex items-center justify-between mb-2">
         <span className={`p-2 rounded-lg ${colorClasses[color]}`}>{icon}</span>
         {trend !== undefined && (
-          <span className={`flex items-center text-xs ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className={`flex items-center text-xs ${trend >= 0 ? 'text-[#f5f5f7]' : 'text-red-400'}`}>
             {trend >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
             {Math.abs(trend)}%
           </span>

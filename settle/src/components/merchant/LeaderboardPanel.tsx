@@ -64,11 +64,11 @@ interface RepLeaderboardEntry {
 
 const TIER_SHORT: Record<string, { label: string; cls: string }> = {
   newcomer: { label: 'NEW', cls: 'text-foreground/30' },
-  bronze: { label: 'BRZ', cls: 'text-primary/70' },
+  bronze: { label: 'BRZ', cls: 'text-[#f5f5f7]/70' },
   silver: { label: 'SLV', cls: 'text-foreground/50' },
   gold: { label: 'GLD', cls: 'text-yellow-400' },
-  platinum: { label: 'PLT', cls: 'text-blue-200' },
-  diamond: { label: 'DIA', cls: 'text-cyan-300' },
+  platinum: { label: 'PLT', cls: 'text-white/60' },
+  diamond: { label: 'DIA', cls: 'text-white/60' },
 };
 
 interface LeaderboardPanelProps {
@@ -286,8 +286,8 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                       with NO reviews doesn't look identical to one with
                       genuine 5/5 reviews. */}
                   {entry.rating != null ? (
-                    <span className="flex items-center gap-0.5 text-[11px] font-bold text-primary tabular-nums shrink-0 min-w-[34px] justify-end">
-                      <Star className="w-3 h-3 fill-primary text-primary" />
+                    <span className="flex items-center gap-0.5 text-[11px] font-bold text-[#f5f5f7] tabular-nums shrink-0 min-w-[34px] justify-end">
+                      <Star className="w-3 h-3 fill-white/50 text-[#f5f5f7]" />
                       {entry.rating.toFixed(1)}
                     </span>
                   ) : (

@@ -86,44 +86,44 @@ const PM_TYPE_META: Record<
   bank: {
     label: "Bank Account",
     Icon: Building2,
-    gradient: "from-blue-500/20 to-blue-600/5",
-    border: "border-blue-500/30",
-    text: "text-blue-400",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/60",
   },
   cash: {
     label: "Cash Meeting",
     Icon: DollarSign,
-    gradient: "from-emerald-500/20 to-emerald-600/5",
-    border: "border-emerald-500/30",
-    text: "text-emerald-400",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/60",
   },
   crypto: {
     label: "Crypto Wallet",
     Icon: WalletIconLucide,
-    gradient: "from-primary/20 to-primary/5",
-    border: "border-primary/30",
-    text: "text-primary",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/60",
   },
   card: {
     label: "Card",
     Icon: CreditCard,
-    gradient: "from-purple-500/20 to-purple-600/5",
-    border: "border-purple-500/30",
-    text: "text-purple-400",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/60",
   },
   mobile: {
     label: "Mobile Money",
     Icon: Smartphone,
-    gradient: "from-pink-500/20 to-pink-600/5",
-    border: "border-pink-500/30",
-    text: "text-pink-400",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/60",
   },
   upi: {
     label: "UPI",
     Icon: Smartphone,
-    gradient: "from-green-500/20 to-green-600/5",
-    border: "border-green-500/30",
-    text: "text-green-400",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/60",
   },
 };
 
@@ -921,7 +921,7 @@ export default function MerchantSettingsPage({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-4 flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-sm text-emerald-400"
+              className="mb-4 flex items-center gap-2 p-3 bg-white/[0.06] border border-white/[0.09] rounded-xl text-sm text-[#f5f5f7]"
             >
               <Check className="w-4 h-4" />
               Changes saved successfully
@@ -986,7 +986,7 @@ export default function MerchantSettingsPage({
                       onClick={() => setSelectedAvatar(url)}
                       className={`relative aspect-square rounded-full overflow-hidden border-2 transition-all ${
                         selectedAvatar === url
-                          ? "border-primary ring-2 ring-primary/30 scale-110"
+                          ? "border-white/60 ring-2 ring-white/20 scale-110"
                           : "border-white/10 hover:border-border-strong"
                       }`}
                     >
@@ -1019,7 +1019,7 @@ export default function MerchantSettingsPage({
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Your username"
                     maxLength={50}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/30 transition-colors"
                   />
                 </div>
 
@@ -1033,7 +1033,7 @@ export default function MerchantSettingsPage({
                     maxLength={200}
                     placeholder="Tell traders about yourself..."
                     rows={3}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 resize-none transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/30 resize-none transition-colors"
                   />
                   <span className="text-[10px] text-white/20 font-mono mt-1 block text-right">
                     {bio.length}/200
@@ -1052,7 +1052,7 @@ export default function MerchantSettingsPage({
                     {phoneVerified &&
                     phone.trim() !== "" &&
                     phone.trim() === ((merchant?.phone as string) || "").trim() ? (
-                      <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-emerald-400">
+                      <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-white/70">
                         <ShieldCheck className="w-3 h-3" />
                         Verified
                       </span>
@@ -1060,7 +1060,7 @@ export default function MerchantSettingsPage({
                       <button
                         type="button"
                         onClick={() => setShowPhoneVerify(true)}
-                        className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-primary hover:opacity-80 transition-opacity"
+                        className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[#f5f5f7] hover:opacity-80 transition-opacity"
                       >
                         <Smartphone className="w-3 h-3" />
                         Verify
@@ -1073,7 +1073,7 @@ export default function MerchantSettingsPage({
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+971 50 123 4567"
                     maxLength={20}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/[0.12] transition-colors"
                   />
                 </div>
               </div>
@@ -1083,7 +1083,7 @@ export default function MerchantSettingsPage({
                 whileTap={{ scale: 0.98 }}
                 onClick={handleSaveProfile}
                 disabled={isSaving}
-                className="w-full py-3 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-[#f5f5f7] text-background font-bold text-sm hover:bg-white/[0.08] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -1188,7 +1188,7 @@ export default function MerchantSettingsPage({
                       className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
                     >
                       {copiedField === "username" ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-[#f5f5f7]" />
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}
@@ -1224,7 +1224,7 @@ export default function MerchantSettingsPage({
                             maxLength={20}
                             className={`w-full bg-black/40 border rounded-lg px-3 py-2 pr-9 text-[13px] text-white placeholder-white/30 focus:outline-none transition-colors ${
                               usernameAvailability.kind === "available"
-                                ? "border-emerald-500/60"
+                                ? "border-white/[0.09]"
                                 : usernameAvailability.kind === "unavailable"
                                 ? "border-red-500/60"
                                 : "border-white/10 focus:border-white/30"
@@ -1235,7 +1235,7 @@ export default function MerchantSettingsPage({
                               <Loader2 className="w-3.5 h-3.5 text-white/40 animate-spin" />
                             )}
                             {usernameAvailability.kind === "available" && (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              <Check className="w-3.5 h-3.5 text-[#f5f5f7]" />
                             )}
                             {usernameAvailability.kind === "unavailable" && (
                               <X className="w-3.5 h-3.5 text-red-400" />
@@ -1246,7 +1246,7 @@ export default function MerchantSettingsPage({
                           <p
                             className={`text-[11px] ${
                               usernameAvailability.kind === "available"
-                                ? "text-emerald-400"
+                                ? "text-[#f5f5f7]"
                                 : usernameAvailability.kind === "unavailable"
                                 ? "text-red-400"
                                 : "text-white/40"
@@ -1325,7 +1325,7 @@ export default function MerchantSettingsPage({
                       className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
                     >
                       {copiedField === "email" ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-[#f5f5f7]" />
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}
@@ -1355,7 +1355,7 @@ export default function MerchantSettingsPage({
                     className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
                   >
                     {copiedField === "merchant_id" ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <Check className="w-3.5 h-3.5 text-[#f5f5f7]" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
                     )}
@@ -1380,7 +1380,7 @@ export default function MerchantSettingsPage({
                       className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
                     >
                       {copiedField === "wallet" ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-[#f5f5f7]" />
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}
@@ -1453,7 +1453,7 @@ export default function MerchantSettingsPage({
                           key={s}
                           className={`w-3.5 h-3.5 ${
                             s <= Math.round(parseFloat(String(merchant?.rating || 5)))
-                              ? "fill-primary text-primary"
+                              ? "fill-white/50 text-[#f5f5f7]"
                               : "text-white/15"
                           }`}
                         />
@@ -1473,7 +1473,7 @@ export default function MerchantSettingsPage({
                       <p
                         className={`text-lg font-bold leading-none ${
                           merchant?.status === "active"
-                            ? "text-emerald-400"
+                            ? "text-[#f5f5f7]"
                             : "text-red-400"
                         }`}
                       >
@@ -1482,8 +1482,8 @@ export default function MerchantSettingsPage({
                       </p>
                     </div>
                     {merchant?.status === "active" && (
-                      <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium shrink-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span className="flex items-center gap-1.5 text-[11px] text-[#f5f5f7] font-medium shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/[0.08]" />
                         Verified
                       </span>
                     )}
@@ -1520,7 +1520,7 @@ export default function MerchantSettingsPage({
                 )}
 
                 {passwordSuccess && (
-                  <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-sm text-emerald-400">
+                  <div className="flex items-center gap-2 p-3 bg-white/[0.06] border border-white/[0.09] rounded-xl text-sm text-[#f5f5f7]">
                     <Check className="w-4 h-4" />
                     Password changed successfully
                   </div>
@@ -1534,7 +1534,7 @@ export default function MerchantSettingsPage({
                     placeholder="Current password"
                     maxLength={24}
                     autoComplete="off"
-                    className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
+                    className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-white/[0.12] transition-colors"
                   />
                   <button
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
@@ -1557,7 +1557,7 @@ export default function MerchantSettingsPage({
                     placeholder="New password (8–24 chars)"
                     maxLength={24}
                     autoComplete="new-password"
-                    className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
+                    className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-white/[0.12] transition-colors"
                   />
                   <button
                     onClick={() => setShowNewPassword(!showNewPassword)}
@@ -1580,7 +1580,7 @@ export default function MerchantSettingsPage({
                     placeholder="Confirm new password"
                     maxLength={24}
                     autoComplete="new-password"
-                    className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
+                    className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-white/[0.12] transition-colors"
                   />
                   <button
                     type="button"
@@ -1693,9 +1693,9 @@ export default function MerchantSettingsPage({
                           key={method.id}
                           className={`rounded-2xl border p-4 transition-colors overflow-hidden ${
                             isBeingEdited
-                              ? "bg-primary/[0.06] border-primary/30 ring-1 ring-primary/20"
+                              ? "bg-white/[0.06] border-white/[0.12] ring-1 ring-white/20"
                               : method.is_default
-                                ? "bg-gradient-to-r from-primary/[0.06] to-transparent border-primary/20"
+                                ? "bg-gradient-to-r from-white/80/[0.06] to-transparent border-white/[0.12]"
                                 : "bg-white/[0.02] border-white/[0.06]"
                           }`}
                         >
@@ -1715,15 +1715,15 @@ export default function MerchantSettingsPage({
                                     {meta.label}
                                   </span>
                                   {method.is_default && (
-                                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded-md">
-                                      <Star className="w-2.5 h-2.5 text-primary fill-primary" />
-                                      <span className="text-[9px] text-primary font-bold uppercase tracking-wider">
+                                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.06] border border-white/[0.12] rounded-md">
+                                      <Star className="w-2.5 h-2.5 text-[#f5f5f7] fill-white/50" />
+                                      <span className="text-[9px] text-[#f5f5f7] font-bold uppercase tracking-wider">
                                         Default
                                       </span>
                                     </span>
                                   )}
                                   {isBeingEdited && (
-                                    <span className="text-[9px] text-primary font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20">
+                                    <span className="text-[9px] text-[#f5f5f7] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.12]">
                                       Editing
                                     </span>
                                   )}
@@ -1739,7 +1739,7 @@ export default function MerchantSettingsPage({
                                   onClick={() =>
                                     handleSetDefaultMethod(method.id)
                                   }
-                                  className="p-2 text-white/20 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                  className="p-2 text-white/20 hover:text-white hover:bg-white/[0.08] rounded-lg transition-colors"
                                   title="Set as default"
                                 >
                                   <Star className="w-4 h-4" />
@@ -1747,7 +1747,7 @@ export default function MerchantSettingsPage({
                               )}
                               <button
                                 onClick={() => startEditMethod(method)}
-                                className="p-2 text-white/20 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                className="p-2 text-white/20 hover:text-white hover:bg-white/[0.08] rounded-lg transition-colors"
                                 title="Edit"
                               >
                                 <Pencil className="w-4 h-4" />
@@ -1980,7 +1980,7 @@ export default function MerchantSettingsPage({
                           }))
                         }
                         className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${
-                          on ? "bg-primary" : "bg-white/[0.10]"
+                          on ? "bg-[#f5f5f7]" : "bg-white/[0.10]"
                         }`}
                       >
                         <div
@@ -1996,7 +1996,7 @@ export default function MerchantSettingsPage({
 
               <button
                 onClick={handleSaveNotifications}
-                className="w-full py-3.5 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-xl bg-[#f5f5f7] text-background font-bold text-sm hover:bg-white/[0.08] transition-colors flex items-center justify-center gap-2"
               >
                 <Save className="w-4 h-4" />
                 Save Preferences
@@ -2050,7 +2050,7 @@ export default function MerchantSettingsPage({
                   },
                 ].map(({ Icon, title, desc }) => (
                   <div key={title} className="flex items-start gap-3">
-                    <Icon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                    <Icon className="w-5 h-5 text-[#f5f5f7] shrink-0 mt-0.5" />
                     <div className="min-w-0">
                       <p className="text-[13px] font-bold text-white leading-tight">
                         {title}
@@ -2254,11 +2254,11 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
         <div className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="md:w-[180px] shrink-0">
             <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-2">
-              <Trophy className="w-4 h-4 text-primary" />
+              <Trophy className="w-4 h-4 text-[#f5f5f7]" />
             </div>
             <p className="text-[14px] font-bold text-white">Your Score</p>
-            <p className="text-[11px] text-emerald-400 flex items-center gap-1.5 mt-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <p className="text-[11px] text-[#f5f5f7] flex items-center gap-1.5 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-white/[0.08]" />
               {standing}
             </p>
             <p className="text-[10px] text-white/30 flex items-center gap-1.5 mt-2">
@@ -2514,7 +2514,7 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
             className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-4 flex flex-col items-center text-center"
           >
             <div className="w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-2">
-              <Icon className="w-4 h-4 text-primary" />
+              <Icon className="w-4 h-4 text-[#f5f5f7]" />
             </div>
             <p className="text-2xl font-bold text-white leading-none">{value}</p>
             <p className="text-[11px] text-white/40 mt-1.5">{label}</p>
@@ -2548,7 +2548,7 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
             </h3>
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                <Award className="w-5 h-5 text-primary" />
+                <Award className="w-5 h-5 text-[#f5f5f7]" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-bold text-white">
@@ -2562,13 +2562,13 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
                     : `${Math.round(pct)}% of the way to ${nextTierLabel}`}
                 </p>
               </div>
-              <span className="text-[14px] font-bold text-primary tabular-nums shrink-0">
+              <span className="text-[14px] font-bold text-[#f5f5f7] tabular-nums shrink-0">
                 {isMaxTier ? "100%" : `${Math.round(pct)}%`}
               </span>
             </div>
             <div className="h-1.5 rounded-full bg-white/[0.06] mt-3">
               <div
-                className="h-full rounded-full bg-primary transition-all"
+                className="h-full rounded-full bg-[#f5f5f7] transition-all"
                 style={{ width: `${isMaxTier ? 100 : pct}%` }}
               />
             </div>
@@ -2820,7 +2820,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
         <div
           className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
             is2FAEnabled
-              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+              ? "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.09]"
               : "bg-white/[0.04] text-white/30 border border-white/[0.06]"
           }`}
         >
@@ -2836,7 +2836,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
       )}
 
       {success && (
-        <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-sm text-emerald-400">
+        <div className="flex items-center gap-2 p-3 bg-white/[0.06] border border-white/[0.09] rounded-xl text-sm text-[#f5f5f7]">
           <Check className="w-4 h-4 shrink-0" />
           {success}
         </div>
@@ -2942,7 +2942,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
               setTimeout(() => setSuccess(null), 4000);
             }}
             disabled={!backupCodesAcked}
-            className="w-full py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 font-medium text-sm hover:bg-emerald-500/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-xl bg-white/[0.06] border border-white/[0.09] text-[#f5f5f7] font-medium text-sm hover:bg-white/[0.06] transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
           >
             <Check className="w-4 h-4" />
             Done
@@ -2966,7 +2966,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
               setRegenCode(e.target.value.replace(/\D/g, "").slice(0, 6))
             }
             placeholder="6-digit authenticator code"
-            className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 text-sm text-foreground text-center font-mono tracking-[0.3em] placeholder:text-foreground/30 placeholder:tracking-normal outline-none focus:border-primary/30 transition-colors"
+            className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 text-sm text-foreground text-center font-mono tracking-[0.3em] placeholder:text-foreground/30 placeholder:tracking-normal outline-none focus:border-white/[0.12] transition-colors"
             autoFocus
           />
           <div className="flex gap-2">
@@ -2983,7 +2983,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
             <button
               onClick={handleRegenerate}
               disabled={isSubmitting || regenCode.length !== 6}
-              className="flex-1 py-3 rounded-xl bg-primary/15 border border-primary/25 text-primary font-medium text-sm hover:bg-primary/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-xl bg-white/[0.06] border border-white/[0.12] text-[#f5f5f7] font-medium text-sm hover:bg-white/[0.08] transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -3043,7 +3043,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
               setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
             }
             placeholder="Enter 6-digit code"
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white text-center font-mono tracking-[0.3em] placeholder:text-white/20 placeholder:tracking-normal outline-none focus:border-primary/30 transition-colors"
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white text-center font-mono tracking-[0.3em] placeholder:text-white/20 placeholder:tracking-normal outline-none focus:border-white/[0.12] transition-colors"
             autoFocus
           />
 
@@ -3061,7 +3061,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
             <button
               onClick={handleVerify}
               disabled={isSubmitting || otpCode.length !== 6}
-              className="flex-1 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 font-medium text-sm hover:bg-emerald-500/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-xl bg-white/[0.06] border border-white/[0.09] text-[#f5f5f7] font-medium text-sm hover:bg-white/[0.06] transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -3088,7 +3088,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
               onChange={(e) => setDisablePassword(e.target.value)}
               placeholder="Current password"
               autoComplete="current-password"
-              className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
+              className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-white/[0.12] transition-colors"
             />
             <button
               type="button"
@@ -3112,7 +3112,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
               setDisableCode(e.target.value.replace(/\D/g, "").slice(0, 6))
             }
             placeholder="6-digit authenticator code"
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white text-center font-mono tracking-[0.3em] placeholder:text-white/20 placeholder:tracking-normal outline-none focus:border-primary/30 transition-colors"
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white text-center font-mono tracking-[0.3em] placeholder:text-white/20 placeholder:tracking-normal outline-none focus:border-white/[0.12] transition-colors"
           />
 
           <div className="flex gap-2">
@@ -3313,21 +3313,21 @@ function ActiveSessionsSection() {
             return (
               <div
                 key={session.id}
-                className={`p-4 rounded-xl border ${isCurrent ? "bg-primary/[0.05] border-primary/20" : "bg-white/[0.03] border-white/[0.04]"}`}
+                className={`p-4 rounded-xl border ${isCurrent ? "bg-white/[0.06] border-white/[0.12]" : "bg-white/[0.03] border-white/[0.04]"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 min-w-0">
                     {/* Device icon */}
                     <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isCurrent ? "bg-primary/10" : "bg-white/[0.06]"}`}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isCurrent ? "bg-white/[0.06]" : "bg-white/[0.06]"}`}
                     >
                       {isMobile ? (
                         <Smartphone
-                          className={`w-5 h-5 ${isCurrent ? "text-primary" : "text-white/40"}`}
+                          className={`w-5 h-5 ${isCurrent ? "text-[#f5f5f7]" : "text-white/40"}`}
                         />
                       ) : (
                         <Monitor
-                          className={`w-5 h-5 ${isCurrent ? "text-primary" : "text-white/40"}`}
+                          className={`w-5 h-5 ${isCurrent ? "text-[#f5f5f7]" : "text-white/40"}`}
                         />
                       )}
                     </div>
@@ -3338,7 +3338,7 @@ function ActiveSessionsSection() {
                           {browserLabel}
                         </p>
                         {isCurrent && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary tracking-wide">
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/[0.06] text-[#f5f5f7] tracking-wide">
                             CURRENT
                           </span>
                         )}
@@ -3369,7 +3369,7 @@ function ActiveSessionsSection() {
                         </span>
                         <span className="flex items-center gap-1">
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${isCurrent ? "bg-green-400 animate-pulse" : "bg-white/20"}`}
+                            className={`w-1.5 h-1.5 rounded-full ${isCurrent ? "bg-white/[0.08] animate-pulse" : "bg-white/20"}`}
                           />
                           Active {formatTime(session.lastUsed)}
                         </span>

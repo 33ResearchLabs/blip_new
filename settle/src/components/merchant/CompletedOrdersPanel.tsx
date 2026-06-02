@@ -150,7 +150,7 @@ function TransactionCard({
       {/* Direction badge tucked beneath the avatar via negative margin so the
           row keeps the same height. Kept tiny for at-a-glance buy/sell scan. */}
       <div className="sr-only" aria-hidden>
-        <Icon className={`${isBuy ? "text-emerald-400" : isSell ? "text-red-400" : "text-foreground/50"}`} />
+        <Icon className={`${isBuy ? "text-[#f5f5f7]" : isSell ? "text-red-400" : "text-foreground/50"}`} />
       </div>
 
       {/* Middle: name + order + time */}
@@ -298,7 +298,7 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
             <ChevronDown
               className={`w-3 h-3 text-foreground/30 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
             />
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500/50" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#f5f5f7]/50" />
             <h2 className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">
               Completed
             </h2>

@@ -266,7 +266,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
                         {conv.order_number}
                       </span>
                       <span className="text-xs text-white/30">•</span>
-                      <span className={`text-xs ${conv.order_type === 'buy' ? 'text-green-400/70' : 'text-primary/70'}`}>
+                      <span className={`text-xs ${conv.order_type === 'buy' ? 'text-[#f5f5f7]/70' : 'text-[#f5f5f7]/70'}`}>
                         {conv.order_type === 'buy' ? 'Send' : 'Receive'}
                       </span>
                       <span className="text-xs text-white/50">

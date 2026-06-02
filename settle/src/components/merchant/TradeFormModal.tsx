@@ -230,7 +230,7 @@ export function TradeFormModal({
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "sell" }))}
                       className={`py-2 rounded-lg text-[12px] font-semibold transition-colors ${
                         openTradeForm.tradeType === "sell"
-                          ? "bg-primary/15 text-primary"
+                          ? "bg-white/[0.08] text-[#f5f5f7]"
                           : "text-foreground/40 hover:text-foreground/70"
                       }`}
                     >
@@ -240,7 +240,7 @@ export function TradeFormModal({
                       onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "buy" }))}
                       className={`py-2 rounded-lg text-[12px] font-semibold transition-colors ${
                         openTradeForm.tradeType === "buy"
-                          ? "bg-emerald-500/15 text-emerald-400"
+                          ? "bg-white/[0.06] text-white/70"
                           : "text-foreground/40 hover:text-foreground/70"
                       }`}
                     >
@@ -377,7 +377,7 @@ export function TradeFormModal({
                               onAddPaymentMethod();
                               setShowPmDropdown(false);
                             }}
-                            className="w-full flex items-center gap-2 px-3 py-2.5 text-left border-t border-white/[0.06] text-primary hover:bg-primary/[0.06] transition-colors"
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-left border-t border-white/[0.06] text-[#f5f5f7] hover:bg-white/[0.06] transition-colors"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             <span className="text-[12px] font-semibold">
@@ -409,7 +409,7 @@ export function TradeFormModal({
                         onClick={() => setOpenTradeForm(prev => ({ ...prev, expiryMinutes: mins as 15 | 90 }))}
                         className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
                           openTradeForm.expiryMinutes === mins
-                            ? 'bg-primary/15 text-primary'
+                            ? 'bg-white/[0.08] text-[#f5f5f7]'
                             : 'text-foreground/40 hover:text-foreground/70'
                         }`}
                       >
@@ -478,10 +478,10 @@ export function TradeFormModal({
                               </span>
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className="text-primary/80">
+                              <span className="text-white/60">
                                 Priority Boost ({boost.toFixed(0)}%)
                               </span>
-                              <span className="tabular-nums font-medium text-primary">
+                              <span className="tabular-nums font-medium text-[#f5f5f7]">
                                 {boostFiat !== null
                                   ? `${openTradeForm.tradeType === "sell" ? "−" : "+"}${formatCrypto(boostFiat)} ${fiatCcy}`
                                   : "—"}
@@ -535,7 +535,7 @@ export function TradeFormModal({
                     <div
                       className={`rounded-xl border ${
                         boostOn
-                          ? "bg-primary/[0.06] border-primary/30"
+                          ? "bg-white/[0.06] border-white/20"
                           : "bg-white/[0.03] border-white/[0.06]"
                       }`}
                     >
@@ -552,18 +552,18 @@ export function TradeFormModal({
                         <span className="flex items-center gap-2">
                           <Zap
                             className={`w-3.5 h-3.5 ${
-                              boostOn ? "text-primary" : "text-foreground/40"
+                              boostOn ? "text-[#f5f5f7]" : "text-foreground/40"
                             }`}
                           />
                           <span
                             className={`text-[11px] font-semibold uppercase tracking-wider ${
-                              boostOn ? "text-primary" : "text-foreground/55"
+                              boostOn ? "text-[#f5f5f7]" : "text-foreground/55"
                             }`}
                           >
                             Priority Boost
                           </span>
                           {boostOn && (
-                            <span className="text-[11px] font-mono tabular-nums text-primary">
+                            <span className="text-[11px] font-mono tabular-nums text-white/70">
                               +{boost.toFixed(0)}%
                             </span>
                           )}
@@ -588,7 +588,7 @@ export function TradeFormModal({
                               }))
                             }
                             aria-label="Priority Boost percentage"
-                            className="w-full accent-primary"
+                            className="w-full accent-white"
                           />
                           <p className="text-[10px] text-foreground/45">
                             Higher boost = faster acceptance from any
@@ -649,7 +649,7 @@ export function TradeFormModal({
                     className={`flex-[2] py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
                       submitDisabled
                         ? "bg-gray-600 text-foreground/40 cursor-not-allowed"
-                        : "bg-primary text-background hover:bg-primary/90"
+                        : "bg-[#f5f5f7] text-[#0b0b0c] hover:bg-white"
                     }`}
                   >
                     {isCreatingTrade ? (

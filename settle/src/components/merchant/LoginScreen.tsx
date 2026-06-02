@@ -286,8 +286,8 @@ export function LoginScreen({
                     className="space-y-4 py-2"
                   >
                     <div className="flex justify-center">
-                      <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                        <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                      <div className="w-16 h-16 rounded-full bg-white/[0.06] flex items-center justify-center">
+                        <CheckCircle2 className="w-8 h-8 text-white/70" />
                       </div>
                     </div>
                     <div className="text-center space-y-2">
@@ -303,8 +303,8 @@ export function LoginScreen({
                       </p>
                     </div>
 
-                    <div className="rounded-xl px-4 py-3 flex items-start gap-3 bg-emerald-500/[0.06] border border-emerald-500/20">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="rounded-xl px-4 py-3 flex items-start gap-3 bg-white/[0.06] border border-white/[0.09]">
+                      <ShieldCheck className="w-4 h-4 text-white/70 shrink-0 mt-0.5" />
                       <p className="text-[11px] text-white/55 leading-relaxed">
                         A verified business email lets us reach you for
                         compliance checks and protects your account from
@@ -323,9 +323,9 @@ export function LoginScreen({
                   </motion.div>
                 ) : (
                   <div className="space-y-3.5">
-                    <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 flex gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
-                        <Mail className="w-4 h-4 text-emerald-400" />
+                    <div className="rounded-xl border border-white/[0.09] bg-white/[0.06] p-4 flex gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center flex-shrink-0">
+                        <Mail className="w-4 h-4 text-white/70" />
                       </div>
                       <div className="text-[13px] leading-relaxed text-white/80">
                         <p>
@@ -423,10 +423,10 @@ export function LoginScreen({
                   Auto-dismissed by the consumer after the next sign-in
                   attempt; the close (×) is a manual escape hatch. */}
               {!pendingVerificationEmail && authTab === "signin" && verificationSuccessNotice && (
-                <div className="mb-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3 flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <div className="mb-3 rounded-xl border border-white/[0.09] bg-white/[0.06] p-3 flex items-start gap-2.5">
+                  <Check className="w-4 h-4 text-white/70 flex-shrink-0 mt-0.5" />
                   <div className="flex-1 text-[13px] text-white/80">
-                    <span className="font-semibold text-emerald-400">Email verified.</span>{" "}
+                    <span className="font-semibold text-[#f5f5f7]">Email verified.</span>{" "}
                     <span className="text-white/65">Sign in below to continue.</span>
                   </div>
                   {onDismissVerificationSuccess && (
@@ -721,7 +721,7 @@ function LeftPanel({ mode }: { mode: "signin" | "create" }) {
     <div className="hidden lg:flex flex-col px-10 xl:px-16 py-8 h-full overflow-hidden relative">
       {/* logo */}
       <div className="absolute top-8 left-10 xl:left-16 flex items-center gap-2">
-        <div className="w-7 h-7 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-[0_0_16px_rgba(255,122,26,0.4)]">
+        <div className="w-7 h-7 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
           <Zap className="w-4 h-4 text-white fill-white" />
         </div>
         <span className="text-[18px] font-bold text-white">
@@ -761,14 +761,14 @@ function SignInLeft() {
           subtitle="Instant transfers, low fees"
         />
         <Feature
-          icon={<Shield className="w-4 h-4 text-emerald-400" />}
-          color="bg-emerald-500/15"
+          icon={<Shield className="w-4 h-4 text-white/70" />}
+          color="bg-white/[0.06]"
           title="Bank-grade Security"
           subtitle="Encrypted & secure infrastructure"
         />
         <Feature
-          icon={<TrendingUp className="w-4 h-4 text-violet-400" />}
-          color="bg-violet-500/15"
+          icon={<TrendingUp className="w-4 h-4 text-white/60" />}
+          color="bg-white/[0.06]"
           title="Growth Rewards"
           subtitle="Earn more as you grow"
         />
@@ -803,8 +803,8 @@ function CreateLeft() {
           subtitle="Instant transfers, low fees"
         />
         <Feature
-          icon={<Shield className="w-4 h-4 text-emerald-400" />}
-          color="bg-emerald-500/15"
+          icon={<Shield className="w-4 h-4 text-[#f5f5f7]" />}
+          color="bg-white/[0.06]"
           title="Bank-grade Security"
           subtitle="Encrypted & secure infrastructure"
         />
@@ -825,8 +825,8 @@ function CreateLeft() {
       <div className="mt-6 flex items-center gap-3 text-white/60 text-[12px] flex-shrink-0">
         <div className="flex -space-x-2">
           <div className="w-6 h-6 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 ring-2 ring-[#070708]" />
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-400 to-violet-600 ring-2 ring-[#070708]" />
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 ring-2 ring-[#070708]" />
+          <div className="w-6 h-6 rounded-full bg-white/[0.15] ring-2 ring-[#070708]" />
+          <div className="w-6 h-6 rounded-full bg-white/[0.10] ring-2 ring-[#070708]" />
         </div>
         <span>
           Trusted by{" "}
@@ -1040,7 +1040,7 @@ function PwdCheck({ ok, label }: { ok: boolean; label: string }) {
   return (
     <div
       className={`flex items-center gap-1.5 text-[12px] transition-colors ${
-        ok ? "text-emerald-400" : "text-white/40"
+        ok ? "text-[#f5f5f7]" : "text-white/40"
       }`}
     >
       <Check className={`w-3.5 h-3.5 ${ok ? "opacity-100" : "opacity-50"}`} />
@@ -1073,7 +1073,7 @@ function PrimaryButton({
       // `bg-white/` to 5% opacity — so `hover:bg-white/90` would trigger
       // that regex and dim the whole CTA. Keeping the hover as a plain
       // neutral-200 avoids the substring match.
-      className="w-full py-2.5 rounded-lg text-[14px] font-bold bg-white hover:bg-neutral-200 text-black shadow-[0_8px_24px_-8px_rgba(255,255,255,0.25)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      className="w-full py-2.5 rounded-lg text-[14px] font-bold bg-[#f5f5f7] hover:bg-neutral-200 text-[#0b0b0c] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
     >
       {loading ? (
         <>

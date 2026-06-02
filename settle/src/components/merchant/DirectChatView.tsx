@@ -426,7 +426,7 @@ export function DirectChatView({
                 {contactName}
               </span>
               {contactType === 'merchant' ? (
-                <Store className="w-2.5 h-2.5 text-primary/60" />
+                <Store className="w-2.5 h-2.5 text-[#f5f5f7]/60" />
               ) : (
                 <User className="w-2.5 h-2.5 text-foreground/25" />
               )}
@@ -435,13 +435,13 @@ export function DirectChatView({
               <div className="flex items-center gap-1 mt-0.5">
                 {isTyping ? (
                   <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                    <span className="text-[12px] font-mono text-green-400">typing...</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/[0.08]" />
+                    <span className="text-[12px] font-mono text-[#f5f5f7]">typing...</span>
                   </>
                 ) : (
                   <>
-                    <span className={`w-1.5 h-1.5 rounded-full ${presence?.isOnline ? 'bg-green-500' : 'bg-white/25'}`} />
-                    <span className={`text-[12px] font-mono ${presence?.isOnline ? 'text-green-400' : 'text-foreground/35'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${presence?.isOnline ? 'bg-white/[0.08]' : 'bg-white/25'}`} />
+                    <span className={`text-[12px] font-mono ${presence?.isOnline ? 'text-[#f5f5f7]' : 'text-foreground/35'}`}>
                       {presence?.isOnline ? 'Online' : `last seen ${formatLastSeen(presence?.lastSeen || null)}`}
                     </span>
                   </>
@@ -456,7 +456,7 @@ export function DirectChatView({
       <div className="flex-1 overflow-y-auto px-3 py-2">
         {isLoading && messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="w-4 h-4 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-white/[0.12] border-t-primary rounded-full animate-spin" />
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-foreground/15">
@@ -540,7 +540,7 @@ export function DirectChatView({
                     /* Outgoing message */
                     <div className={`flex justify-end ${isFirstInGroup ? 'mt-2' : 'mt-0.5'}`}>
                       <div className="max-w-[80%]">
-                        <div className="px-2.5 py-1.5 rounded-lg rounded-br-sm bg-primary/10 border border-primary/15 text-[12px] text-foreground/80">
+                        <div className="px-2.5 py-1.5 rounded-lg rounded-br-sm bg-white/[0.06] border border-white/[0.12] text-[12px] text-foreground/80">
                           {msg.messageType === 'image' && msg.imageUrl && (
                             <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
                               <img
@@ -557,7 +557,7 @@ export function DirectChatView({
                               {formatTime(msg.timestamp)}
                             </span>
                             <CheckCheck className={`w-2.5 h-2.5 ${
-                              msg.isRead ? 'text-primary/60' : 'text-foreground/15'
+                              msg.isRead ? 'text-[#f5f5f7]/60' : 'text-foreground/15'
                             }`} />
                           </span>
                         </div>
@@ -573,7 +573,7 @@ export function DirectChatView({
               .sort((a, b) => a.createdAt - b.createdAt)
               .map((upload) => (
                 <div key={upload.tempId} className="flex justify-end mt-1">
-                  <div className="max-w-[80%] px-2.5 py-1.5 rounded-lg rounded-br-sm bg-primary/10 border border-primary/15">
+                  <div className="max-w-[80%] px-2.5 py-1.5 rounded-lg rounded-br-sm bg-white/[0.06] border border-white/[0.12]">
                     <ImageMessageBubble
                       imageUrl={upload.localUrl}
                       caption={upload.caption || undefined}
@@ -705,8 +705,8 @@ export function DirectChatView({
             disabled={!inputText.trim() && !pendingImage}
             className={`w-7 h-7 rounded-lg border transition-colors disabled:opacity-20 flex items-center justify-center ${
               pendingImage
-                ? 'bg-primary/30 border-primary/40 text-primary/80 hover:bg-primary/40'
-                : 'bg-primary/20 border-primary/30 text-primary hover:bg-primary/30'
+                ? 'bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]/80 hover:bg-white/[0.08]'
+                : 'bg-white/[0.06] border-white/[0.12] text-[#f5f5f7] hover:bg-white/[0.08]'
             }`}
           >
             {isUploading ? (

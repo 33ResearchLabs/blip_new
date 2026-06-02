@@ -129,9 +129,9 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-1">
-        <Droplets className="w-4 h-4 text-blue-400" />
+        <Droplets className="w-4 h-4 text-white/60" />
         <span className="text-sm font-medium text-white/80">LP Assignments</span>
-        <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded-full">
+        <span className="text-[10px] bg-white/[0.06] text-white/60 px-1.5 py-0.5 rounded-full">
           {fulfillments.length}
         </span>
       </div>
@@ -170,7 +170,7 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
                 </div>
               )}
               {isSent && (
-                <span className="flex items-center gap-1 text-xs text-blue-400">
+                <span className="flex items-center gap-1 text-xs text-white/60">
                   <Send className="w-3 h-3" />
                   Sent
                 </span>
@@ -182,7 +182,7 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
               <span className="text-sm font-medium text-white/90">
                 {Number(ff.fiat_amount).toLocaleString()} AED
               </span>
-              <span className="text-[10px] text-green-400/70">
+              <span className="text-[10px] text-[#f5f5f7]/70">
                 +{(ff.corridor_fee / 100).toFixed(2)} AED fee
               </span>
             </div>
@@ -210,7 +210,7 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
                       className="p-0.5"
                     >
                       {copiedField === ff.id + '-iban' ? (
-                        <Check className="w-3 h-3 text-green-400" />
+                        <Check className="w-3 h-3 text-[#f5f5f7]" />
                       ) : (
                         <Copy className="w-3 h-3 text-white/20 hover:text-foreground/40" />
                       )}
@@ -225,7 +225,7 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
               <button
                 onClick={() => handleMarkSent(ff.id)}
                 disabled={sendingId === ff.id}
-                className="w-full py-1.5 rounded bg-blue-600/80 hover:bg-blue-600 text-white text-xs font-medium disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5"
+                className="w-full py-1.5 rounded bg-white/[0.06] hover:bg-white/[0.06] text-white text-xs font-medium disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5"
               >
                 {sendingId === ff.id ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -244,7 +244,7 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
             )}
 
             {isSent && (
-              <div className="flex items-center gap-1.5 text-xs text-blue-300/70 py-1">
+              <div className="flex items-center gap-1.5 text-xs text-white/60/70 py-1">
                 <CheckCircle2 className="w-3 h-3" />
                 <span>Waiting for seller to confirm receipt</span>
               </div>

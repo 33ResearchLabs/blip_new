@@ -110,7 +110,7 @@ export function EscrowLockModal({
                           {isInr ? (
                             <div>
                               <p className="text-lg font-bold text-white">{formatFiat(discountedTotal, currency)}</p>
-                              <p className="text-[10px] text-green-400 mt-0.5 flex items-center gap-1">
+                              <p className="text-[10px] text-[#f5f5f7] mt-0.5 flex items-center gap-1">
                                 🎁 -₹{promoDiscountFiat.toFixed(0)} testing reward
                               </p>
                             </div>
@@ -145,7 +145,7 @@ export function EscrowLockModal({
                         href={`https://solscan.io/account/${counterpartyWallet}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-sm font-mono text-primary hover:text-primary/80 transition-colors"
+                        className="flex items-center gap-1.5 text-sm font-mono text-[#f5f5f7] hover:text-white/80 transition-colors"
                       >
                         {short}
                         <ExternalLink className="w-3 h-3" />
@@ -194,7 +194,7 @@ export function EscrowLockModal({
                           href={getBlipscanTradeUrl(escrowOrder.escrowPda)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-xs text-primary hover:text-primary/80 transition-colors"
+                          className="flex items-center gap-2 text-xs text-[#f5f5f7] hover:text-white/80 transition-colors"
                         >
                           <ExternalLink className="w-3 h-3" />
                           BlipScan
@@ -286,7 +286,7 @@ export function EscrowLockModal({
                         isLockingEscrow ||
                         (effectiveBalance || 0) < escrowOrder.amount
                       }
-                      className="flex-[2] py-3 rounded-xl text-sm font-bold bg-primary hover:bg-primary/80 text-background transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="flex-[2] py-3 rounded-xl text-sm font-bold bg-[#f5f5f7] hover:bg-white/[0.08] text-background transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {isLockingEscrow ? (
                         <>

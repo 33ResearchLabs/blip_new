@@ -356,9 +356,9 @@ export function SwapModal({
               initial={{ scale: 0.6, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 320, damping: 18 }}
-              className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center"
+              className="w-16 h-16 rounded-full bg-white/[0.06] border border-white/[0.09] flex items-center justify-center"
             >
-              <Check className="w-9 h-9 text-emerald-400" strokeWidth={3} />
+              <Check className="w-9 h-9 text-[#f5f5f7]" strokeWidth={3} />
             </motion.div>
             <div className="space-y-0.5">
               <p className="text-sm font-bold text-foreground">Swap confirmed</p>

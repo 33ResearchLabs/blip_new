@@ -234,7 +234,7 @@ export function MerchantNavbar({
                   aria-label="Ops"
                   title="Ops"
                 >
-                  <Activity className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <Activity className="w-3.5 h-3.5 text-[#f5f5f7] shrink-0" />
                   <span className="hidden xl:inline">Ops</span>
                 </Link>
               )}
@@ -246,7 +246,7 @@ export function MerchantNavbar({
                   aria-label="Compliance"
                   title="Compliance"
                 >
-                  <Shield className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <Shield className="w-3.5 h-3.5 text-white/60 shrink-0" />
                   <span className="hidden xl:inline">Compliance</span>
                 </Link>
               )}
@@ -365,12 +365,12 @@ export function MerchantNavbar({
                         </Link>
                       )}
                       {merchantInfo?.has_ops_access && (
-                        <Link href="/ops" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-primary/70 hover:text-primary hover:bg-primary/[0.06] transition-colors">
+                        <Link href="/ops" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-[#f5f5f7]/70 hover:text-white hover:bg-white/[0.06] transition-colors">
                           <Activity className="w-4 h-4" /> Ops Panel
                         </Link>
                       )}
                       {merchantInfo?.has_compliance_access && (
-                        <Link href="/compliance" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/[0.06] transition-colors">
+                        <Link href="/compliance" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/60/70 hover:text-white/60 hover:bg-purple-500/[0.06] transition-colors">
                           <Shield className="w-4 h-4" /> Compliance
                         </Link>
                       )} */}
@@ -422,7 +422,7 @@ export function MerchantNavbar({
                         className={`absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${
                           urgentNotificationCount > 0
                             ? "bg-red-500 text-white"
-                            : "bg-primary text-background"
+                            : "bg-[#f5f5f7] text-background"
                         }`}
                       >
                         {notificationCount > 9 ? "9+" : notificationCount}
@@ -565,7 +565,7 @@ export function MerchantNavbar({
                         setDrawerOpen(false);
                         onNavLinkClick?.();
                       }}
-                      className="flex items-center gap-3 px-4 py-3 text-sm text-primary/70 hover:text-primary hover:bg-primary/[0.04] transition-colors"
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-[#f5f5f7]/70 hover:text-white hover:bg-white/[0.06] transition-colors"
                     >
                       <Activity className="w-5 h-5" /> Ops Panel
                     </Link>
@@ -578,7 +578,7 @@ export function MerchantNavbar({
                       setDrawerOpen(false);
                       onNavLinkClick?.();
                     }}
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/[0.04] transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-white/60/70 hover:text-white/60 hover:bg-purple-500/[0.04] transition-colors"
                   >
                     <Shield className="w-5 h-5" /> Compliance
                   </Link>
@@ -658,7 +658,7 @@ function NavbarRepCoins({ compact = false }: { compact?: boolean }) {
         className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.07] text-[11px] font-mono font-semibold text-white/70 shrink-0 tabular-nums"
         title="Blip Points"
       >
-        <Coins className="w-3 h-3 text-primary/70 shrink-0" />
+        <Coins className="w-3 h-3 text-[#f5f5f7]/70 shrink-0" />
         <span>{coins.toLocaleString("en-US")}</span>
         {!compact && (
           <span className="hidden xl:inline text-white/30 text-[10px] font-sans">

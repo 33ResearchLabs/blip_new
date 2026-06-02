@@ -173,7 +173,7 @@ export function SaedBalancePanel({
           {/* sAED Balance */}
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-white/40 font-mono">sAED</span>
-            <span className="text-lg font-bold text-primary font-mono tabular-nums">
+            <span className="text-lg font-bold text-[#f5f5f7] font-mono tabular-nums">
               {(balances.saed / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
@@ -197,7 +197,7 @@ export function SaedBalancePanel({
                 setShowConversionModal(true);
                 setError(null);
               }}
-              className="py-1.5 px-2 rounded-lg bg-primary/10 hover:bg-primary/15 border border-primary/20 text-[10px] text-primary font-medium transition-all"
+              className="py-1.5 px-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.08] border border-white/[0.12] text-[10px] text-[#f5f5f7] font-medium transition-all"
             >
               USDT → sAED
             </button>
@@ -207,7 +207,7 @@ export function SaedBalancePanel({
                 setShowConversionModal(true);
                 setError(null);
               }}
-              className="py-1.5 px-2 rounded-lg bg-primary/10 hover:bg-primary/15 border border-primary/20 text-[10px] text-primary font-medium transition-all"
+              className="py-1.5 px-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.08] border border-white/[0.12] text-[10px] text-[#f5f5f7] font-medium transition-all"
             >
               sAED → USDT
             </button>
@@ -215,9 +215,9 @@ export function SaedBalancePanel({
 
           {/* Success Message */}
           {successMessage && (
-            <div className="flex items-center gap-2 py-1.5 px-2.5 bg-primary/10 border border-primary/20 rounded">
-              <Check className="w-3.5 h-3.5 text-primary" />
-              <span className="text-[10px] text-primary">{successMessage}</span>
+            <div className="flex items-center gap-2 py-1.5 px-2.5 bg-white/[0.06] border border-white/[0.12] rounded">
+              <Check className="w-3.5 h-3.5 text-[#f5f5f7]" />
+              <span className="text-[10px] text-[#f5f5f7]">{successMessage}</span>
             </div>
           )}
         </div>
@@ -275,7 +275,7 @@ export function SaedBalancePanel({
               <div className="mb-4 py-2.5 px-3 bg-white/[0.02] border border-white/[0.06] rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-white/40 font-mono">You will receive</span>
-                  <span className="text-sm font-bold text-primary font-mono tabular-nums">
+                  <span className="text-sm font-bold text-[#f5f5f7] font-mono tabular-nums">
                     {conversionDirection === 'usdt_to_saed' ? `AED${previewAmount}` : `$${previewAmount}`}
                   </span>
                 </div>
@@ -308,7 +308,7 @@ export function SaedBalancePanel({
               <button
                 onClick={handleConvert}
                 disabled={isConverting || !conversionAmount || parseFloat(conversionAmount) <= 0}
-                className="flex-1 py-2.5 rounded-lg bg-primary hover:bg-primary text-background text-xs font-bold transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-lg bg-[#f5f5f7] hover:bg-white/[0.08] text-background text-xs font-bold transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isConverting ? (
                   <>

@@ -169,8 +169,8 @@ function OrderCardTimer({
     disputed: 100, cancelled: 100, expired: 100,
   };
   const progressPct = progressStages[effStatus] ?? 20;
-  const barColor    = isCompleted ? "#34d399" : isBad ? "#f87171" : "#fb923c";
-  const barGlow     = isCompleted ? "0 0 8px rgba(52,211,153,0.7)" : isBad ? "none" : "0 0 8px rgba(251,146,60,0.7)";
+  const barColor    = isCompleted ? "#f5f5f7" : isBad ? "#f87171" : "#fb923c";
+  const barGlow     = isCompleted ? "none" : isBad ? "none" : "0 0 8px rgba(251,146,60,0.7)";
 
   // Time taken for terminal orders
   const timeTaken = isCompleted || isBad
@@ -181,7 +181,7 @@ function OrderCardTimer({
     return (
       <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 22, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Order skipped</span>
-        <button onClick={() => setDismissed(false)} style={{ fontSize: 12, color: "#b8e9d4", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Undo</button>
+        <button onClick={() => setDismissed(false)} style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Undo</button>
       </div>
     );
   }
@@ -211,7 +211,7 @@ function OrderCardTimer({
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <b style={{ fontSize: 13.5, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</b>
               {isVerified && (
-                <span style={{ color: "#b8e9d4", display: "flex", flexShrink: 0 }}>
+                <span style={{ color: "rgba(255,255,255,0.7)", display: "flex", flexShrink: 0 }}>
                   <Shield style={{ width: 11, height: 11 }} />
                 </span>
               )}
@@ -263,7 +263,7 @@ function OrderCardTimer({
             <div style={{ display: "flex", alignItems: "flex-end", gap: 7 }}>
               <span style={{ fontSize: 25, fontWeight: 800, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", color: "#f5f5f7" }}>{heroFiat}</span>
               {!isMine && isActivelyPending && heroEarning && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2, padding: "3px 8px", borderRadius: 999, background: "rgba(184,233,212,0.12)", border: "1px solid rgba(184,233,212,0.3)", color: "#b8e9d4", fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2, padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.7)", fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap" }}>
                   <svg viewBox="0 0 24 24" width={10} height={10} fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
                   +{heroEarning}
                 </span>
@@ -276,7 +276,7 @@ function OrderCardTimer({
               {Math.round(order.amount)} <span style={{ fontSize: 10.5, color: "#86868b" }}>USDT</span>
             </div>
             <div style={{ color: "#86868b", fontSize: 11, fontWeight: 600, marginTop: 1, whiteSpace: "nowrap" }}>
-              @ {heroRate}{heroSpread && <span style={{ color: "#b8e9d4" }}> · +{heroSpread.replace('+', '')}</span>}
+              @ {heroRate}{heroSpread && <span style={{ color: "rgba(255,255,255,0.5)" }}> · +{heroSpread.replace('+', '')}</span>}
             </div>
           </div>
         </div>
@@ -313,7 +313,7 @@ function OrderCardTimer({
         {/* ── COUNTDOWN FOOTER (pending orders only) ── */}
         {isActivelyPending && !isExpired && (
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
-            <span style={{ width: 6, height: 6, borderRadius: 9, background: low || expiringSoon ? "#ff5a5f" : "#b8e9d4", flexShrink: 0 }} />
+            <span style={{ width: 6, height: 6, borderRadius: 9, background: low || expiringSoon ? "#ff5a5f" : "rgba(255,255,255,0.7)", flexShrink: 0 }} />
             <span style={{ fontWeight: 700, fontSize: 11, color: "#86868b" }}>
               <b style={{ fontVariantNumeric: "tabular-nums", color: low || expiringSoon ? "#ff5a5f" : "#fff" }}>{formatCountdown(countdown)}</b>
               {" "}left to accept
@@ -576,7 +576,7 @@ export function MobileOrdersView({
           onClick={() => setSoundEnabled(!soundEnabled)}
           aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
           aria-pressed={soundEnabled}
-          style={{ width: 42, height: 42, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: soundEnabled ? "#b8e9d4" : "#5a5a60", cursor: "pointer" }}
+          style={{ width: 42, height: 42, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: soundEnabled ? "rgba(255,255,255,0.7)" : "#5a5a60", cursor: "pointer" }}
         >
           {soundEnabled ? <Volume2 style={{ width: 16, height: 16 }} /> : <VolumeX style={{ width: 16, height: 16 }} />}
         </button>

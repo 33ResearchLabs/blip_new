@@ -806,7 +806,7 @@ export default function MerchantDashboard() {
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
         <div className="text-center">
           <div className="w-16 h-16 rounded-2xl bg-card border border-border flex items-center justify-center mx-auto mb-4">
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <Loader2 className="w-8 h-8 text-[#f5f5f7] animate-spin" />
           </div>
           <p className="text-sm text-foreground/40">Loading...</p>
         </div>
@@ -821,7 +821,7 @@ export default function MerchantDashboard() {
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#f5f5f7] animate-spin" />
       </div>
     );
   }

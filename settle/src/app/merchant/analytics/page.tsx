@@ -112,7 +112,7 @@ export default function AnalyticsPage() {
       {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-[#ff6b35]/[0.02] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-emerald-500/[0.02] rounded-full blur-[150px]" />
+        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-white/[0.08]/[0.02] rounded-full blur-[150px]" />
       </div>
 
       {/* Top Navbar */}
@@ -156,21 +156,21 @@ export default function AnalyticsPage() {
               <Wallet className="w-3.5 h-3.5 text-[#ff6b35]" />
               <span className="text-sm font-bold">$12,420</span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-sm font-bold text-emerald-400">+$126</span>
-              <span className="text-[10px] text-emerald-400/60">today</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.06] rounded-lg border border-white/[0.09]">
+              <TrendingUp className="w-3.5 h-3.5 text-[#f5f5f7]" />
+              <span className="text-sm font-bold text-[#f5f5f7]">+$126</span>
+              <span className="text-[10px] text-[#f5f5f7]/60">today</span>
             </div>
           </div>
 
           {/* Online Status */}
-          <div className="flex items-center gap-2 px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+          <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/[0.06] border border-white/[0.09] rounded-full">
             <motion.div
-              className="w-2 h-2 rounded-full bg-emerald-500"
+              className="w-2 h-2 rounded-full bg-white/[0.08]"
               animate={{ opacity: [1, 0.4, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             />
-            <span className="text-[11px] text-emerald-400 font-medium">Online</span>
+            <span className="text-[11px] text-[#f5f5f7] font-medium">Online</span>
           </div>
 
           {/* Profile */}
@@ -234,8 +234,8 @@ export default function AnalyticsPage() {
 
           <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-[#f5f5f7]" />
               </div>
               <span className="text-xs text-foreground/35">Volume</span>
             </div>
@@ -264,8 +264,8 @@ export default function AnalyticsPage() {
 
           <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-purple-400" />
+              <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
+                <Zap className="w-4 h-4 text-white/60" />
               </div>
               <span className="text-xs text-foreground/35">Avg Response</span>
             </div>
@@ -289,7 +289,7 @@ export default function AnalyticsPage() {
                     Volume
                   </div>
                   <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <div className="w-2 h-2 rounded-full bg-white/[0.08]" />
                     Trades
                   </div>
                 </div>
@@ -328,7 +328,7 @@ export default function AnalyticsPage() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs text-foreground/40">Success Rate</span>
-                  <span className="text-sm font-bold text-emerald-400">98.2%</span>
+                  <span className="text-sm font-bold text-[#f5f5f7]">98.2%</span>
                 </div>
                 <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
                   <motion.div
@@ -379,7 +379,7 @@ export default function AnalyticsPage() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs text-foreground/40">Disputes (30d)</span>
-                  <span className="text-sm font-bold text-emerald-400">0</span>
+                  <span className="text-sm font-bold text-[#f5f5f7]">0</span>
                 </div>
                 <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
                   <div className="h-full w-0 bg-red-500 rounded-full" />
@@ -425,15 +425,15 @@ export default function AnalyticsPage() {
                       key={trade.id}
                       className="flex items-center gap-3 p-2.5 bg-[#151515] rounded-lg border border-white/[0.04]"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                        <Check className="w-4 h-4 text-emerald-400" />
+                      <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
+                        <Check className="w-4 h-4 text-[#f5f5f7]" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{trade.user}</p>
                         <p className="text-[10px] text-foreground/35">${trade.amount.toLocaleString()} USDT</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs font-semibold text-emerald-400">+${trade.profit}</p>
+                        <p className="text-xs font-semibold text-[#f5f5f7]">+${trade.profit}</p>
                         <p className="text-[10px] text-gray-600">{trade.time}</p>
                       </div>
                     </div>

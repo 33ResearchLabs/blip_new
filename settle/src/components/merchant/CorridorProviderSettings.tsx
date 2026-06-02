@@ -122,7 +122,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
           previously rendered, so the component is self-contained. */}
       <div className="flex items-start justify-between mb-1">
         <div className="flex items-center gap-2">
-          <Droplets className="w-5 h-5 text-primary" />
+          <Droplets className="w-5 h-5 text-[#f5f5f7]" />
           <span className="text-base font-bold text-white">Liquidity Provider (LP)</span>
         </div>
         <div className="flex items-center gap-2">
@@ -132,7 +132,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
             aria-checked={isActive}
             onClick={() => setIsActive(!isActive)}
             className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${
-              isActive ? 'bg-primary' : 'bg-white/[0.10]'
+              isActive ? 'bg-[#f5f5f7]' : 'bg-white/[0.10]'
             }`}
           >
             <div
@@ -141,7 +141,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
               }`}
             />
           </button>
-          <span className={`text-[12px] font-medium ${isActive ? 'text-emerald-400' : 'text-white/50'}`}>
+          <span className={`text-[12px] font-medium ${isActive ? 'text-[#f5f5f7]' : 'text-white/50'}`}>
             {isActive ? 'Active' : 'Inactive'}
           </span>
         </div>
@@ -164,7 +164,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
             max="10"
             value={feePercentage}
             onChange={(e) => setFeePercentage(e.target.value)}
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-14 text-[15px] text-white font-medium focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-14 text-[15px] text-white font-medium focus:outline-none focus:border-white/[0.12] focus:ring-1 focus:ring-white/20 transition-all"
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[13px] text-white/40 font-medium">%</span>
         </div>
@@ -183,7 +183,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
               min="1"
               value={minAmount}
               onChange={(e) => setMinAmount(e.target.value)}
-              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-14 text-[15px] text-white font-medium focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-14 text-[15px] text-white font-medium focus:outline-none focus:border-white/[0.12] focus:ring-1 focus:ring-white/20 transition-all"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[13px] text-white/40 font-medium">AED</span>
           </div>
@@ -196,7 +196,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
               min="1"
               value={maxAmount}
               onChange={(e) => setMaxAmount(e.target.value)}
-              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-14 text-[15px] text-white font-medium focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-14 text-[15px] text-white font-medium focus:outline-none focus:border-white/[0.12] focus:ring-1 focus:ring-white/20 transition-all"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[13px] text-white/40 font-medium">AED</span>
           </div>
@@ -219,7 +219,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
           aria-checked={autoAccept}
           onClick={() => setAutoAccept(!autoAccept)}
           className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${
-            autoAccept ? 'bg-primary' : 'bg-white/[0.10]'
+            autoAccept ? 'bg-[#f5f5f7]' : 'bg-white/[0.10]'
           }`}
         >
           <div
@@ -234,7 +234,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
       <button
         onClick={handleSave}
         disabled={saving || (max > 0 && min > max)}
-        className="w-full py-3.5 rounded-xl bg-primary hover:bg-primary/90 text-background text-sm font-bold disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+        className="w-full py-3.5 rounded-xl bg-[#f5f5f7] hover:bg-white/[0.08] text-background text-sm font-bold disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
       >
         {saving ? (
           <Loader2 className="w-4 h-4 animate-spin" />

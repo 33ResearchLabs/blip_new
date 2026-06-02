@@ -39,10 +39,10 @@ interface GroupedNotification {
 // Type → icon color. The circular badge background was dropped so the
 // icon stands on its own — pure color carries the meaning.
 const TYPE_STYLES: Record<string, { icon: string }> = {
-  escrow:   { icon: 'text-primary' },
-  payment:  { icon: 'text-blue-400' },
-  complete: { icon: 'text-emerald-400' },
-  message:  { icon: 'text-purple-400' },
+  escrow:   { icon: 'text-[#f5f5f7]' },
+  payment:  { icon: 'text-white/60' },
+  complete: { icon: 'text-[#f5f5f7]' },
+  message:  { icon: 'text-white/60' },
   dispute:  { icon: 'text-red-400' },
   order:    { icon: 'text-foreground/70' },
   system:   { icon: 'text-foreground/55' },
@@ -199,7 +199,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
               <Bell className="w-3.5 h-3.5" />
               Notifications
               {unreadCount > 0 && (
-                <span className="text-[9px] bg-primary text-background font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center shadow-sm shadow-primary/20">
+                <span className="text-[9px] bg-[#f5f5f7] text-background font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center shadow-sm shadow-black/20">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
@@ -247,7 +247,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
               <div className="group relative flex items-center">
                 <button
                   onClick={markAllRead}
-                  className="flex items-center gap-1 px-1.5 py-1 rounded text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors"
+                  className="flex items-center gap-1 px-1.5 py-1 rounded text-[#f5f5f7]/70 hover:text-white hover:bg-white/[0.08] transition-colors"
                   title="Mark all notifications as read"
                   aria-label="Mark all notifications as read"
                 >
@@ -336,13 +336,13 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                   }}
                   className={`group relative w-full text-left p-2.5 rounded-xl border overflow-hidden transition-all ${
                     hasUnread
-                      ? 'bg-gradient-to-br from-primary/[0.04] to-transparent border-primary/15 hover:border-primary/35 hover:shadow-md hover:shadow-primary/[0.06]'
+                      ? 'bg-gradient-to-br from-white/80/[0.04] to-transparent border-white/[0.12] hover:border-white/[0.12] hover:shadow-md hover:shadow-black/20/[0.06]'
                       : 'bg-foreground/[0.015] border-foreground/[0.05] hover:border-foreground/[0.10] opacity-70 hover:opacity-100'
                   }`}
                 >
                   {/* Unread accent stripe */}
                   {hasUnread && (
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-primary/80 to-primary/30 rounded-r" />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-white/70 to-white/60 rounded-r" />
                   )}
 
                   <div className="flex items-start gap-3">
@@ -377,7 +377,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                           {notif.message}
                         </p>
                         <span className={`text-[9px] font-mono tabular-nums shrink-0 ${
-                          hasUnread ? 'text-primary/70' : 'text-foreground/25'
+                          hasUnread ? 'text-[#f5f5f7]/70' : 'text-foreground/25'
                         }`}>
                           {relativeTime(notif.timestamp)}
                         </span>
@@ -386,7 +386,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
 
                     {/* Unread dot */}
                     {hasUnread && (
-                      <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_6px_rgba(255,138,76,0.6)] shrink-0 mt-1.5" />
+                      <div className="w-2 h-2 rounded-full bg-[#f5f5f7] shadow-[0_0_6px_rgba(255,138,76,0.6)] shrink-0 mt-1.5" />
                     )}
                   </div>
                 </button>

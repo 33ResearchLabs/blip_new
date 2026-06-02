@@ -111,7 +111,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
 
   const TypeIcon = orderType === 'buy' ? ArrowDownLeft : ArrowUpRight;
   const typeLabel = orderType === 'buy' ? 'BUY' : 'SELL';
-  const typeColor = orderType === 'buy' ? 'text-green-400 bg-green-500/15 border-green-500/20' : 'text-orange-400 bg-orange-500/15 border-orange-500/20';
+  const typeColor = orderType === 'buy' ? 'text-[#f5f5f7] bg-white/[0.06] border-white/[0.09]' : 'text-orange-400 bg-orange-500/15 border-orange-500/20';
 
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
@@ -140,7 +140,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
           {/* Online / Typing status */}
           <div className="flex items-center gap-1">
             {chatWindow?.isTyping ? (
-              <p className="text-[12px] text-green-400 font-medium">typing...</p>
+              <p className="text-[12px] text-[#f5f5f7] font-medium">typing...</p>
             ) : (
               <>
                 <ConnectionIndicator isConnected={chatWindow?.presence?.some(p => p.actorType === 'user' && p.isOnline) ?? false} />
@@ -188,7 +188,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
           />
         ) : (
           <div className="flex items-center justify-center h-full">
-            <div className="w-5 h-5 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-white/[0.12] border-t-primary rounded-full animate-spin" />
           </div>
         )}
       </div>

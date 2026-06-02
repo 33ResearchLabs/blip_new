@@ -133,7 +133,7 @@ export default function MempoolPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#f5f5f7] animate-spin" />
       </div>
     );
   }
@@ -161,7 +161,7 @@ export default function MempoolPage() {
           <div className="flex items-center gap-2 mx-auto">
             <nav className="flex items-center gap-0.5 bg-white/[0.03] rounded-lg p-[3px]">
               <span className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-white/[0.08] text-white flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-primary" />
+                <Zap className="w-3.5 h-3.5 text-[#f5f5f7]" />
                 Priority Mempool
               </span>
             </nav>
@@ -173,7 +173,7 @@ export default function MempoolPage() {
           {/* Right: Merchant info */}
           <div className="flex items-center gap-2 shrink-0">
             <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.02] rounded border border-white/[0.06]">
-              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+              <div className="w-1.5 h-1.5 bg-[#f5f5f7] rounded-full animate-pulse" />
               <span className="text-[9px] text-white/35 font-mono">Live</span>
             </div>
             <span className="text-[12px] font-medium text-white/60">

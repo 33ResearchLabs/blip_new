@@ -10,8 +10,8 @@ const TIER_COLORS: Record<string, { text: string; bg: string; border: string }> 
   bronze: { text: 'text-amber-700', bg: 'bg-amber-500/15', border: 'border-amber-500/30' },
   silver: { text: 'text-slate-600', bg: 'bg-slate-500/15', border: 'border-slate-400/40' },
   gold: { text: 'text-yellow-600', bg: 'bg-yellow-500/15', border: 'border-yellow-500/30' },
-  platinum: { text: 'text-blue-600', bg: 'bg-blue-500/15', border: 'border-blue-500/30' },
-  diamond: { text: 'text-cyan-500', bg: 'bg-cyan-500/15', border: 'border-cyan-500/30' },
+  platinum: { text: 'text-white/60', bg: 'bg-white/[0.06]', border: 'border-white/[0.09]' },
+  diamond: { text: 'text-white/60', bg: 'bg-white/[0.06]', border: 'border-cyan-500/30' },
 };
 
 const BADGE_ICONS: Record<string, string> = {
@@ -90,7 +90,7 @@ export default function MerchantProfilePage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-6 h-6 text-primary/40 animate-spin" />
+        <Loader2 className="w-6 h-6 text-[#f5f5f7]/40 animate-spin" />
       </div>
     );
   }
@@ -99,7 +99,7 @@ export default function MerchantProfilePage() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <p className="text-foreground/40">{error || 'Profile not found'}</p>
-        <button onClick={() => router.back()} className="text-primary text-sm hover:underline">Go back</button>
+        <button onClick={() => router.back()} className="text-[#f5f5f7] text-sm hover:underline">Go back</button>
       </div>
     );
   }
@@ -143,7 +143,7 @@ export default function MerchantProfilePage() {
                 </div>
               )}
               {merchant.is_online && (
-                <div className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-background rounded-full" />
+                <div className="absolute bottom-0 right-0 w-4 h-4 bg-white/[0.08] border-2 border-background rounded-full" />
               )}
             </div>
 
@@ -191,7 +191,7 @@ export default function MerchantProfilePage() {
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-0.5">
-                <Star className="w-3.5 h-3.5 fill-primary text-primary" />
+                <Star className="w-3.5 h-3.5 fill-white/50 text-[#f5f5f7]" />
                 <span className="text-lg font-bold text-foreground font-mono">
                   {reputation?.breakdown?.reviews?.average_rating
                     ? Number(reputation.breakdown.reviews.average_rating).toFixed(1)
@@ -228,7 +228,7 @@ export default function MerchantProfilePage() {
                 </div>
                 <div className="w-full h-2 bg-foreground/[0.04] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-primary/60 to-primary/60 rounded-full transition-all"
+                    className="h-full bg-gradient-to-r from-white/70 to-white/60 rounded-full transition-all"
                     style={{ width: `${reputation.progress.progress}%` }}
                   />
                 </div>
@@ -245,7 +245,7 @@ export default function MerchantProfilePage() {
                   </div>
                   <div className="w-full h-1.5 bg-foreground/[0.04] rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary/40 rounded-full transition-all"
+                      className="h-full bg-white/[0.06] rounded-full transition-all"
                       style={{ width: `${comp.score}%` }}
                     />
                   </div>
@@ -257,7 +257,7 @@ export default function MerchantProfilePage() {
             {reputation.rank && (
               <div className="mt-4 pt-4 border-t border-foreground/[0.04] flex items-center justify-between">
                 <span className="text-[10px] text-foreground/30 font-mono uppercase">Global Rank</span>
-                <span className="text-sm font-bold text-primary font-mono">#{reputation.rank}</span>
+                <span className="text-sm font-bold text-[#f5f5f7] font-mono">#{reputation.rank}</span>
               </div>
             )}
           </div>

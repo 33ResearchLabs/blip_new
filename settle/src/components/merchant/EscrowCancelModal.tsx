@@ -146,7 +146,7 @@ export function EscrowCancelModal({
                           href={getBlipscanTradeUrl(cancelOrder.escrowPda)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-xs text-primary hover:text-primary/80 transition-colors"
+                          className="flex items-center gap-2 text-xs text-[#f5f5f7] hover:text-white/80 transition-colors"
                         >
                           <ExternalLink className="w-3 h-3" />
                           BlipScan

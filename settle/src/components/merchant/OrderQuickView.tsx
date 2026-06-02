@@ -116,8 +116,8 @@ function LockedPaymentMethodCard({
   return (
     <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <Lock className="w-3.5 h-3.5 text-primary" />
-        <span className="text-[11px] text-primary uppercase tracking-wide font-bold">
+        <Lock className="w-3.5 h-3.5 text-[#f5f5f7]" />
+        <span className="text-[11px] text-[#f5f5f7] uppercase tracking-wide font-bold">
           Send {currency || 'AED'} Here
         </span>
       </div>
@@ -139,7 +139,7 @@ function LockedPaymentMethodCard({
               {value}
             </span>
             {copiedKey === key ? (
-              <Check className="w-3 h-3 text-green-400" />
+              <Check className="w-3 h-3 text-[#f5f5f7]" />
             ) : (
               <Copy className="w-3 h-3 text-foreground/30" />
             )}
@@ -237,7 +237,7 @@ export function OrderQuickView({
                         className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
                           selectedOrder.myRole === "seller"
                             ? "bg-orange-500/15 text-orange-400 border border-orange-500/20"
-                            : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+                            : "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.09]"
                         }`}
                       >
                         {selectedOrder.myRole === "seller"
@@ -283,7 +283,7 @@ export function OrderQuickView({
                         href={getBlipscanTradeUrl(selectedOrder.escrowPda)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
+                        className="flex items-center gap-1 text-xs text-[#f5f5f7]/70 hover:text-white transition-colors"
                       >
                         BlipScan <ExternalLink className="w-3 h-3" />
                       </a>
@@ -341,11 +341,11 @@ export function OrderQuickView({
                   const spm = selectedOrder.sellerPaymentMethod;
                   const typeIcon =
                     spm.type === "upi" ? (
-                      <Smartphone className="w-4 h-4 text-green-400" />
+                      <Smartphone className="w-4 h-4 text-[#f5f5f7]" />
                     ) : spm.type === "bank" ? (
-                      <Building2 className="w-4 h-4 text-blue-400" />
+                      <Building2 className="w-4 h-4 text-white/60" />
                     ) : (
-                      <CreditCard className="w-4 h-4 text-purple-400" />
+                      <CreditCard className="w-4 h-4 text-white/60" />
                     );
 
                   if (
@@ -380,7 +380,7 @@ export function OrderQuickView({
                         {spm.name}
                       </div>
                       <div className="text-xs text-zinc-400">{detailStr}</div>
-                      <div className="text-right text-sm font-semibold text-green-400">
+                      <div className="text-right text-sm font-semibold text-[#f5f5f7]">
                         {Math.round(selectedOrder.total)} {selectedOrder.toCurrency || 'AED'}
                       </div>
                     </div>
@@ -392,11 +392,11 @@ export function OrderQuickView({
                   const lpm = selectedOrder.lockedPaymentMethod;
                   const typeIcon =
                     lpm.type === "upi" ? (
-                      <Smartphone className="w-4 h-4 text-green-400" />
+                      <Smartphone className="w-4 h-4 text-[#f5f5f7]" />
                     ) : lpm.type === "bank" ? (
-                      <Building2 className="w-4 h-4 text-blue-400" />
+                      <Building2 className="w-4 h-4 text-white/60" />
                     ) : (
-                      <CreditCard className="w-4 h-4 text-purple-400" />
+                      <CreditCard className="w-4 h-4 text-white/60" />
                     );
 
                   if (lpm.type === "bank") {
@@ -523,10 +523,10 @@ export function OrderQuickView({
 
               if (counterpartyRequested) {
                 return (
-                  <div className="mx-5 mb-2 rounded-xl border border-primary/30 bg-primary/[0.06] p-3">
+                  <div className="mx-5 mb-2 rounded-xl border border-white/[0.12] bg-white/[0.06] p-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <X className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-semibold text-primary">
+                      <X className="w-4 h-4 text-[#f5f5f7]" />
+                      <span className="text-sm font-semibold text-[#f5f5f7]">
                         Cancel Requested by{" "}
                         {cancelBy === "user" ? "User" : "Merchant"}
                       </span>
@@ -544,7 +544,7 @@ export function OrderQuickView({
                           onRespondToCancel?.(selectedOrder.id, true);
                           onClose();
                         }}
-                        className="flex-1 py-2.5 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-sm font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                        className="flex-1 py-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.08] border border-white/[0.12] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                       >
                         {isRequestingCancel ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -571,10 +571,10 @@ export function OrderQuickView({
 
               // I requested — show waiting status
               return (
-                <div className="mx-5 mb-2 rounded-xl border border-primary/20 bg-primary/[0.04] p-3 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                <div className="mx-5 mb-2 rounded-xl border border-white/[0.12] bg-white/[0.06] p-3 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-[#f5f5f7] animate-spin" />
                   <div>
-                    <p className="text-sm font-medium text-primary">
+                    <p className="text-sm font-medium text-[#f5f5f7]">
                       Cancel Request Sent
                     </p>
                     <p className="text-xs text-foreground/40">
@@ -729,9 +729,9 @@ export function OrderQuickView({
 
                 // Action button styles
                 const PRIMARY_STYLE =
-                  "bg-primary/10 hover:bg-primary/20 border-primary/30 hover:border-primary/40 text-primary";
+                  "bg-white/[0.06] hover:bg-white/[0.08] border-white/[0.12] hover:border-white/[0.12] text-[#f5f5f7]";
                 const PRIMARY_LOADING =
-                  "bg-primary/5 border-primary/10 text-primary/50 cursor-wait";
+                  "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]/50 cursor-wait";
                 const SECONDARY_STYLE =
                   "bg-red-500/10 hover:bg-[var(--color-error)]/20 border-red-500/30 hover:border-[var(--color-error)]/40 text-red-400";
                 const DISABLED_STYLE =

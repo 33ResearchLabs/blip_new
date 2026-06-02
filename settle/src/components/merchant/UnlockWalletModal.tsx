@@ -172,9 +172,9 @@ export function UnlockWalletModal({
               initial={{ scale: 0.6, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 320, damping: 18 }}
-              className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center"
+              className="w-16 h-16 rounded-full bg-white/[0.06] border border-white/[0.09] flex items-center justify-center"
             >
-              <Check className="w-9 h-9 text-emerald-400" strokeWidth={3} />
+              <Check className="w-9 h-9 text-[#f5f5f7]" strokeWidth={3} />
             </motion.div>
             <p className="text-sm font-bold text-foreground">
               {verifiedOldPassword ? "Wallet unlocked" : "Wallet unlocked"}
@@ -184,7 +184,7 @@ export function UnlockWalletModal({
           <>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                <Lock className="w-4 h-4 text-primary" />
+                <Lock className="w-4 h-4 text-[#f5f5f7]" />
                 {mode === "setPinEnter" || mode === "setPinConfirm"
                   ? "Set your PIN"
                   : "Unlock Wallet"}

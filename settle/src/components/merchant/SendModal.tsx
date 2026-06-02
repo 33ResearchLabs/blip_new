@@ -270,7 +270,7 @@ export function SendModal({
               initial={{ opacity: 0, scale: 0.6 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
-              className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full bg-emerald-500/20 blur-3xl"
+              className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full bg-white/[0.06] blur-3xl"
             />
 
             {/* Outer pulse ring */}
@@ -278,7 +278,7 @@ export function SendModal({
               initial={{ scale: 0.4, opacity: 0 }}
               animate={{ scale: [0.4, 1.15, 1], opacity: [0, 0.6, 0] }}
               transition={{ duration: 1.1, times: [0, 0.5, 1], ease: "easeOut" }}
-              className="pointer-events-none absolute top-8 w-24 h-24 rounded-full border-2 border-emerald-400/60"
+              className="pointer-events-none absolute top-8 w-24 h-24 rounded-full border-2 border-white/[0.09]"
             />
 
             {/* Check disc */}

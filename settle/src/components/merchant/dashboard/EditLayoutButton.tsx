@@ -24,7 +24,7 @@ export function EditLayoutButton() {
       onClick={() => setIsEditing(!isEditing)}
       className={`hidden lg:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors border ${
         isEditing
-          ? "bg-primary text-background border-primary"
+          ? "bg-[#f5f5f7] text-background border-white/[0.12]"
           : "bg-white/[0.03] text-foreground/60 border-white/[0.05] hover:bg-card hover:text-foreground/90"
       }`}
       title={isEditing ? "Finish editing layout" : "Edit dashboard layout"}

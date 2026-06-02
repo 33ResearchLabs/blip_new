@@ -289,7 +289,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
             </div>
           </div>
         </Panel>
-        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
+        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize" />
         <Panel
           defaultSize={isWideScreen ? "24%" : "27%"}
           minSize="16%"
@@ -343,7 +343,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
             )}
           </div>
         </Panel>
-        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
+        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize" />
         <Panel
           defaultSize={isWideScreen ? "20%" : "27%"}
           minSize={isWideScreen ? "14%" : "18%"}
@@ -407,7 +407,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
         </Panel>
         {isWideScreen && (
           <>
-            <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
+            <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize" />
             <Panel
               defaultSize="18%"
               minSize="12%"
@@ -454,7 +454,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
             </Panel>
           </>
         )}
-        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
+        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize" />
         <Panel
           defaultSize={isWideScreen ? "18%" : "22%"}
           minSize={isWideScreen ? "12%" : "15%"}
@@ -890,8 +890,8 @@ function MerchantDashboardV2({
                   <PanelResizeHandle
                     className={
                       isEditing
-                        ? "w-[5px] bg-primary/30 hover:bg-primary/60 transition-colors cursor-col-resize"
-                        : "w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize"
+                        ? "w-[5px] bg-white/[0.06] hover:bg-white/[0.08] transition-colors cursor-col-resize"
+                        : "w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize"
                     }
                   />
                 )}
@@ -965,8 +965,8 @@ function MerchantDashboardV2({
                                   <PanelResizeHandle
                                     className={
                                       isEditing
-                                        ? "h-[6px] bg-primary/30 hover:bg-primary/60 transition-colors cursor-row-resize"
-                                        : "h-[2px] bg-foreground/[0.04] hover:bg-primary/40 transition-colors cursor-row-resize"
+                                        ? "h-[6px] bg-white/[0.06] hover:bg-white/[0.08] transition-colors cursor-row-resize"
+                                        : "h-[2px] bg-foreground/[0.04] hover:bg-white/[0.08] transition-colors cursor-row-resize"
                                     }
                                   />
                                 )}
@@ -1046,7 +1046,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={`${className} ${
-        isEditing && isOver ? "ring-2 ring-primary/40 ring-inset" : ""
+        isEditing && isOver ? "ring-2 ring-white/20 ring-inset" : ""
       }`}
     >
       {children}

@@ -759,7 +759,7 @@ export default function WalletPage({
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#f5f5f7] animate-spin" />
       </div>
     );
   }
@@ -787,7 +787,7 @@ export default function WalletPage({
           {/* ========== LOADING VIEW ========== */}
           {view === "loading" && (
             <div className="flex flex-col items-center justify-center pt-24 space-y-4">
-              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              <Loader2 className="w-8 h-8 text-[#f5f5f7] animate-spin" />
               <p className="text-sm text-white/40 font-mono">
                 Loading wallet...
               </p>
@@ -799,8 +799,8 @@ export default function WalletPage({
             <div className="space-y-6">
               {/* Wallet icon hero */}
               <div className="text-center pt-4">
-                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center mb-4">
-                  <Wallet className="w-10 h-10 text-primary" />
+                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-white/70 to-white/60 border border-white/[0.12] flex items-center justify-center mb-4">
+                  <Wallet className="w-10 h-10 text-[#f5f5f7]" />
                 </div>
                 <h1 className="text-2xl font-bold text-white font-mono">
                   Create Your Wallet
@@ -950,7 +950,7 @@ export default function WalletPage({
                         rows={3}
                         className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
                                    text-sm text-white font-mono placeholder:text-white/20 resize-none
-                                   focus:outline-none focus:border-primary/50 transition-colors"
+                                   focus:outline-none focus:border-white/[0.12] transition-colors"
                       />
                     </div>
                     <p className="text-sm font-mono text-center text-white/60">
@@ -1059,8 +1059,8 @@ export default function WalletPage({
           {view === "setup" && pendingKeypair && (
             <div className="space-y-6">
               <div className="text-center pt-4">
-                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center mb-4">
-                  <Shield className="w-10 h-10 text-primary" />
+                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-white/70 to-white/60 border border-white/[0.12] flex items-center justify-center mb-4">
+                  <Shield className="w-10 h-10 text-[#f5f5f7]" />
                 </div>
                 <h1 className="text-2xl font-bold text-white font-mono">
                   Backup Your Wallet
@@ -1116,8 +1116,8 @@ export default function WalletPage({
                   onClick={handleDownloadBackup}
                   className={`w-full py-3.5 rounded-xl font-bold font-mono text-sm flex items-center justify-center gap-2 transition-colors ${
                     backupDownloaded
-                      ? "bg-green-500/20 border border-green-500/30 text-green-400"
-                      : "bg-primary text-background hover:bg-primary/90"
+                      ? "bg-white/[0.06] border border-white/[0.09] text-[#f5f5f7]"
+                      : "bg-[#f5f5f7] text-background hover:bg-white/[0.08]"
                   }`}
                 >
                   {backupDownloaded ? (
@@ -1526,7 +1526,7 @@ export default function WalletPage({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2">
-              <Send className="w-5 h-5 text-primary" />
+              <Send className="w-5 h-5 text-[#f5f5f7]" />
               <h3 className="text-base font-bold text-white font-mono">Send</h3>
             </div>
 
@@ -1536,7 +1536,7 @@ export default function WalletPage({
               </div>
             )}
             {sendSuccess && (
-              <div className="p-2.5 bg-green-500/10 border border-green-500/20 rounded-lg text-xs text-green-400 font-mono">
+              <div className="p-2.5 bg-white/[0.06] border border-white/[0.09] rounded-lg text-xs text-[#f5f5f7] font-mono">
                 {sendSuccess}
               </div>
             )}
@@ -1579,7 +1579,7 @@ export default function WalletPage({
                     placeholder="Solana address..."
                     className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-xl
                                text-sm text-white font-mono placeholder:text-white/20
-                               focus:outline-none focus:border-primary/50 transition-colors"
+                               focus:outline-none focus:border-white/[0.12] transition-colors"
                   />
                 </div>
 
@@ -1600,7 +1600,7 @@ export default function WalletPage({
                             : solanaWallet.usdtBalance || 0;
                         setSendAmount(bal.toString());
                       }}
-                      className="text-[10px] text-primary/70 font-mono hover:text-primary"
+                      className="text-[10px] text-[#f5f5f7]/70 font-mono hover:text-white"
                     >
                       MAX
                     </button>
@@ -1613,7 +1613,7 @@ export default function WalletPage({
                     step="any"
                     className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-xl
                                text-sm text-white font-mono placeholder:text-white/20
-                               focus:outline-none focus:border-primary/50 transition-colors"
+                               focus:outline-none focus:border-white/[0.12] transition-colors"
                   />
                   <div className="text-[10px] text-white/30 font-mono mt-1">
                     Available:{" "}
@@ -1627,8 +1627,8 @@ export default function WalletPage({
                 <button
                   onClick={handleSend}
                   disabled={isSending}
-                  className="w-full py-3 rounded-xl bg-primary text-background font-bold font-mono text-sm
-                             hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-[#f5f5f7] text-background font-bold font-mono text-sm
+                             hover:bg-white/[0.08] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isSending ? (
                     <>
@@ -1671,7 +1671,7 @@ export default function WalletPage({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2">
-              <ArrowDownToLine className="w-5 h-5 text-primary" />
+              <ArrowDownToLine className="w-5 h-5 text-[#f5f5f7]" />
               <h3 className="text-base font-bold text-white font-mono">
                 Receive
               </h3>
@@ -1692,7 +1692,7 @@ export default function WalletPage({
             <div className="flex gap-2">
               <button
                 onClick={handleCopyAddress}
-                className="flex-1 py-2.5 rounded-xl bg-primary/10 border border-primary/25 text-primary text-sm font-mono font-medium hover:bg-primary/15 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.12] text-[#f5f5f7] text-sm font-mono font-medium hover:bg-white/[0.08] transition-colors flex items-center justify-center gap-2"
               >
                 {copied ? (
                   <>
@@ -1740,7 +1740,7 @@ export default function WalletPage({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2">
-              <Key className="w-5 h-5 text-primary" />
+              <Key className="w-5 h-5 text-[#f5f5f7]" />
               <h3 className="text-base font-bold text-white font-mono">
                 Export Private Key
               </h3>
@@ -1776,7 +1776,7 @@ export default function WalletPage({
                     if (e.key === "Enter" && !exportLoading) confirmExportKey();
                   }}
                   placeholder="Enter wallet password"
-                  className="w-full px-3 py-3 pr-10 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors"
+                  className="w-full px-3 py-3 pr-10 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:border-white/[0.12] transition-colors"
                 />
                 <button
                   type="button"
@@ -1803,7 +1803,7 @@ export default function WalletPage({
               <button
                 onClick={confirmExportKey}
                 disabled={exportLoading || !exportPassword}
-                className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-background text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-xl bg-[#f5f5f7] hover:bg-white/[0.08] text-background text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {exportLoading ? (
                   <>
@@ -1891,7 +1891,7 @@ function PinFieldDisplay({
       onClick={onClick}
       onKeyDown={(e) => e.key === 'Enter' && onClick?.()}
       className={`w-full text-left rounded-xl px-4 py-3 bg-white/[0.02] transition-colors cursor-pointer ${
-        active ? "border border-primary" : "border border-white/[0.08]"
+        active ? "border border-white/[0.12]" : "border border-white/[0.08]"
       }`}
     >
       <div className="flex items-center justify-between">

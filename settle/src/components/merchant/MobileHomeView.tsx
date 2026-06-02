@@ -465,7 +465,7 @@ export function MobileHomeView({
                         <p className="text-[11px] text-foreground/40 truncate">{c.country}</p>
                       </span>
                       {isActive ? (
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <Check className="w-4 h-4 text-[#f5f5f7] shrink-0" />
                       ) : !available ? (
                         <span className="text-[9px] font-bold uppercase tracking-wider text-foreground/40 bg-foreground/[0.06] rounded-md px-2 py-0.5 shrink-0">
                           Soon
@@ -805,7 +805,7 @@ export function MobileHomeView({
             <button onClick={() => setInrInputMode("add")} className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors ${inrInputMode === "add" ? "bg-foreground/[0.08] text-foreground/80" : "text-foreground/40"}`}><Plus className="w-3 h-3" />Add</button>
             <button onClick={() => setInrInputMode("subtract")} className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors ${inrInputMode === "subtract" ? "bg-foreground/[0.08] text-foreground/80" : "text-foreground/40"}`}><Minus className="w-3 h-3" />Subtract</button>
           </div>
-          <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-primary/30 transition-colors">
+          <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-white/[0.12] transition-colors">
             <span className="text-sm text-foreground/40 mr-1">₹</span>
             <input type="text" inputMode="decimal" value={inrInputValue}
               onChange={(e) => { const v = e.target.value.replace(/[^\d.]/g, ""); const parts = v.split("."); const sanitized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : v; if (sanitized === "" || sanitized === ".") { setInrInputValue(sanitized); return; } const num = parseFloat(sanitized); if (Number.isNaN(num) || num > MAX_INR_INPUT) return; setInrInputValue(sanitized); }}
@@ -814,14 +814,14 @@ export function MobileHomeView({
           </div>
           <div className="flex gap-2">
             <button onClick={() => { setShowInrPanel(false); setInrInputValue(""); }} className="flex-1 py-2 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] font-semibold text-foreground/60 flex items-center justify-center gap-1"><X className="w-3.5 h-3.5" />Cancel</button>
-            <button onClick={handleInrSubmit} disabled={!inrInputValue || parseFloat(inrInputValue) <= 0 || parseFloat(inrInputValue) > MAX_INR_INPUT} className="flex-1 py-2 rounded-lg bg-primary text-background text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"><Check className="w-3.5 h-3.5" />{inrInputMode === "add" ? "Add INR Cash" : "Subtract"}</button>
+            <button onClick={handleInrSubmit} disabled={!inrInputValue || parseFloat(inrInputValue) <= 0 || parseFloat(inrInputValue) > MAX_INR_INPUT} className="flex-1 py-2 rounded-lg bg-[#f5f5f7] text-background text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"><Check className="w-3.5 h-3.5" />{inrInputMode === "add" ? "Add INR Cash" : "Subtract"}</button>
           </div>
         </div>
       )}
       {showRatePanel && (
         <div className="rounded-2xl border border-foreground/[0.08] bg-foreground/[0.03] px-4 py-4 space-y-3">
           <p className="text-[11px] text-foreground/30 leading-relaxed">Set your {activeCorridorMeta.fiat}/USDT rate. Saved locally for now.</p>
-          <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-primary/30 transition-colors">
+          <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-white/[0.12] transition-colors">
             <input type="number" inputMode="decimal" step="0.0001" value={rateInput}
               onChange={(e) => setRateInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSaveRate(); if (e.key === "Escape") setShowRatePanel(false); }}
@@ -831,7 +831,7 @@ export function MobileHomeView({
           </div>
           <div className="flex gap-2">
             <button onClick={() => { setShowRatePanel(false); setRateInput(""); }} className="flex-1 py-2 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] font-semibold text-foreground/60 flex items-center justify-center gap-1"><X className="w-3.5 h-3.5" />Cancel</button>
-            <button onClick={handleSaveRate} disabled={!rateInput || parseFloat(rateInput) <= 0} className="flex-1 py-2 rounded-lg bg-primary text-background text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"><Check className="w-3.5 h-3.5" />Save Rate</button>
+            <button onClick={handleSaveRate} disabled={!rateInput || parseFloat(rateInput) <= 0} className="flex-1 py-2 rounded-lg bg-[#f5f5f7] text-background text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"><Check className="w-3.5 h-3.5" />Save Rate</button>
           </div>
         </div>
       )}

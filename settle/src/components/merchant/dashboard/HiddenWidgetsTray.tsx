@@ -66,7 +66,7 @@ function HiddenChip({ id, onRestore }: HiddenChipProps) {
         type="button"
         aria-label={`Restore ${WIDGET_LABELS[id]} to layout`}
         onClick={() => onRestore(id)}
-        className="ml-0.5 p-0.5 rounded text-foreground/50 hover:text-primary hover:bg-foreground/[0.06]"
+        className="ml-0.5 p-0.5 rounded text-foreground/50 hover:text-white hover:bg-foreground/[0.06]"
         title="Restore to default column"
       >
         <Plus className="w-3 h-3" strokeWidth={2.5} />
@@ -94,7 +94,7 @@ export function HiddenWidgetsTray({
     <div
       ref={setNodeRef}
       className={`flex items-center gap-2 px-3 py-1.5 border-b border-foreground/[0.06] bg-background overflow-x-auto scrollbar-thin ${
-        isOver ? "ring-2 ring-primary/40 ring-inset" : ""
+        isOver ? "ring-2 ring-white/20 ring-inset" : ""
       }`}
     >
       <span className="shrink-0 text-[10.5px] font-mono uppercase tracking-wider text-foreground/40">

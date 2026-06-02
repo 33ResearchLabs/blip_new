@@ -138,8 +138,8 @@ const PAYMENT_METHOD_TYPES = [
     desc: "Wire & local transfers",
     icon: Building2,
     gradient: "from-blue-500/20 to-blue-600/5",
-    border: "border-blue-500/30",
-    text: "text-blue-400",
+    border: "border-white/[0.09]",
+    text: "text-white/60",
     ring: "ring-blue-500/20",
   },
 
@@ -149,8 +149,8 @@ const PAYMENT_METHOD_TYPES = [
     desc: "Instant India payments",
     icon: Smartphone,
     gradient: "from-green-500/20 to-green-600/5",
-    border: "border-green-500/30",
-    text: "text-green-400",
+    border: "border-white/[0.09]",
+    text: "text-[#f5f5f7]",
     ring: "ring-green-500/20",
   },
   {
@@ -159,19 +159,19 @@ const PAYMENT_METHOD_TYPES = [
     desc: "In-person exchange",
     icon: DollarSign,
     gradient: "from-emerald-500/20 to-emerald-600/5",
-    border: "border-emerald-500/30",
-    text: "text-emerald-400",
-    ring: "ring-emerald-500/20",
+    border: "border-white/[0.09]",
+    text: "text-[#f5f5f7]",
+    ring: "ring-white/20",
   },
   {
     type: "crypto" as const,
     label: "Crypto Wallet",
     desc: "On-chain address",
     icon: Wallet,
-    gradient: "from-primary/20 to-primary/5",
-    border: "border-primary/30",
-    text: "text-primary",
-    ring: "ring-primary/20",
+    gradient: "from-white/70 to-white/60",
+    border: "border-white/[0.12]",
+    text: "text-[#f5f5f7]",
+    ring: "ring-white/20",
   },
   {
     type: "card" as const,
@@ -180,7 +180,7 @@ const PAYMENT_METHOD_TYPES = [
     icon: CreditCard,
     gradient: "from-purple-500/20 to-purple-600/5",
     border: "border-purple-500/30",
-    text: "text-purple-400",
+    text: "text-white/60",
     ring: "ring-purple-500/20",
   },
   {
@@ -196,7 +196,7 @@ const PAYMENT_METHOD_TYPES = [
 ];
 
 const inputClass =
-  "w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all";
+  "w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/[0.12] focus:ring-1 focus:ring-white/20 transition-all";
 
 // Per-field validation. Rejects junk like "kdnfsnjakmokpdijjnewoekfwpolm..."
 // or a 40-digit "account number". Length caps match the server (route.ts)
@@ -788,14 +788,14 @@ export function PaymentMethodModal({
           className="relative w-full max-w-lg bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden"
         >
           {/* Ambient glow */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[120px] bg-primary/[0.04] rounded-full blur-[80px] pointer-events-none" />
+          
 
           {/* Header */}
           <div className="relative px-6 pt-6 pb-4 border-b border-white/[0.06]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-primary" />
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/70 to-white/60 border border-white/[0.12] flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-[#f5f5f7]" />
                 </div>
                 <div>
                   <h2 className="text-[15px] font-bold text-white">
@@ -856,7 +856,7 @@ export function PaymentMethodModal({
                           transition={{ delay: i * 0.05 }}
                           className={`group relative p-3.5 rounded-xl border transition-all overflow-hidden ${
                             method.is_default
-                              ? "bg-gradient-to-r from-primary/[0.06] to-transparent border-primary/20"
+                              ? "bg-gradient-to-r from-white/80/[0.06] to-transparent border-white/[0.12]"
                               : "bg-white/[0.02] border-white/[0.06] hover:border-border-strong"
                           }`}
                         >
@@ -874,9 +874,9 @@ export function PaymentMethodModal({
                                   {method.name}
                                 </p>
                                 {method.is_default && (
-                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded-md">
-                                    <Star className="w-2.5 h-2.5 text-primary fill-primary" />
-                                    <span className="text-[9px] text-primary font-bold uppercase tracking-wider">
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.06] border border-white/[0.12] rounded-md">
+                                    <Star className="w-2.5 h-2.5 text-[#f5f5f7] fill-white/50" />
+                                    <span className="text-[9px] text-[#f5f5f7] font-bold uppercase tracking-wider">
                                       Default
                                     </span>
                                   </span>
@@ -893,7 +893,7 @@ export function PaymentMethodModal({
                                   className="p-1.5 hover:bg-card rounded-lg transition-colors"
                                   title="Set as default"
                                 >
-                                  <Star className="w-3.5 h-3.5 text-white/30 hover:text-primary" />
+                                  <Star className="w-3.5 h-3.5 text-white/30 hover:text-white" />
                                 </button>
                               )}
                               <button
@@ -901,7 +901,7 @@ export function PaymentMethodModal({
                                 className="p-1.5 hover:bg-card rounded-lg transition-colors"
                                 title="Edit"
                               >
-                                <Pencil className="w-3.5 h-3.5 text-white/30 hover:text-primary" />
+                                <Pencil className="w-3.5 h-3.5 text-white/30 hover:text-white" />
                               </button>
                               <button
                                 onClick={() => handleRemoveMethod(method.id)}
@@ -923,7 +923,7 @@ export function PaymentMethodModal({
                       setShowAddForm(true);
                       resetForm();
                     }}
-                    className="w-full py-3 rounded-xl border border-dashed border-white/[0.10] hover:border-primary/30 bg-white/[0.01] hover:bg-primary/[0.04] text-white/40 hover:text-primary font-medium transition-all flex items-center justify-center gap-2 text-[13px]"
+                    className="w-full py-3 rounded-xl border border-dashed border-white/[0.10] hover:border-white/[0.12] bg-white/[0.01] hover:bg-white/[0.06] text-white/40 hover:text-white font-medium transition-all flex items-center justify-center gap-2 text-[13px]"
                   >
                     <Plus className="w-4 h-4" />
                     Add Payment Method
@@ -1018,7 +1018,7 @@ export function PaymentMethodModal({
                     <button
                       onClick={handleSaveMethod}
                       disabled={isLoading}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary to-primary hover:from-primary/90 hover:to-primary/90 rounded-xl text-[12px] text-background font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+                      className="flex-1 px-4 py-2.5 bg-[#f5f5f7] hover:from-white/70 hover:to-white/60 rounded-xl text-[12px] text-background font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-black/20"
                     >
                       {isLoading ? (
                         <>
@@ -1541,7 +1541,7 @@ export function PaymentMethodInlineForm({
         <button
           onClick={handleSave}
           disabled={isLoading}
-          className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 rounded-xl text-[13px] text-background font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="flex-1 px-4 py-3 bg-[#f5f5f7] hover:bg-white/[0.08] rounded-xl text-[13px] text-background font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isLoading ? (
             <>

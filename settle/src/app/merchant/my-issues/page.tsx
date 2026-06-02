@@ -217,7 +217,7 @@ export default function MyIssuesPage() {
                       >
                         {copiedId === issue.id ? (
                           <>
-                            <Check size={10} className="text-emerald-400" />
+                            <Check size={10} className="text-[#f5f5f7]" />
                             Copied
                           </>
                         ) : (
@@ -260,7 +260,7 @@ function StatusBadge({ status }: { status: IssueStatus }) {
     },
     resolved: {
       label: "Resolved",
-      cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25",
+      cls: "bg-white/[0.06] text-[#f5f5f7] border-white/[0.09]",
     },
     rejected: {
       label: "Rejected",

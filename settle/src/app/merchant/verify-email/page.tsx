@@ -91,8 +91,8 @@ function VerifyEmailBody({ nextHref }: { nextHref: string }) {
       >
         <div className="text-center space-y-2">
           <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+            <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-[#f5f5f7]" />
             </div>
           </div>
           <p className="text-[15.5px] font-semibold text-[#1d1d1f]">

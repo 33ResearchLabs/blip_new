@@ -147,8 +147,8 @@ const STATUS_COLORS: Record<
     icon: <Lock className="w-3 h-3" />,
   },
   payment_sent: {
-    bg: "bg-cyan-500/20",
-    text: "text-cyan-400",
+    bg: "bg-white/[0.06]",
+    text: "text-white/60",
     icon: <DollarSign className="w-3 h-3" />,
   },
   payment_confirmed: {
@@ -242,9 +242,9 @@ function TimelineStep({
         };
       case "current":
         return {
-          dot: "bg-primary animate-pulse",
+          dot: "bg-[#f5f5f7] animate-pulse",
           line: "bg-gray-700",
-          text: "text-primary",
+          text: "text-[#f5f5f7]",
         };
       case "failed":
         return {
@@ -254,8 +254,8 @@ function TimelineStep({
         };
       case "warning":
         return {
-          dot: "bg-primary",
-          line: "bg-primary/50",
+          dot: "bg-[#f5f5f7]",
+          line: "bg-white/[0.06]",
           text: "text-white/70",
         };
       default:
@@ -557,7 +557,7 @@ export function TradeChat({
         avatar: (
           <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
             {currentUserType === "merchant" ? (
-              <Store className="w-4 h-4 text-primary" />
+              <Store className="w-4 h-4 text-[#f5f5f7]" />
             ) : (
               <span className="text-sm">
                 {userEmoji || getUserEmoji(userName || "User")}
@@ -565,7 +565,7 @@ export function TradeChat({
             )}
           </div>
         ),
-        color: "text-primary",
+        color: "text-[#f5f5f7]",
       };
     }
 
@@ -594,10 +594,10 @@ export function TradeChat({
           name: otherName,
           avatar: (
             <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-              <Store className="w-4 h-4 text-primary" />
+              <Store className="w-4 h-4 text-[#f5f5f7]" />
             </div>
           ),
-          color: "text-primary",
+          color: "text-[#f5f5f7]",
         };
       } else {
         const otherName =
@@ -721,7 +721,7 @@ export function TradeChat({
             {/* Merchant */}
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-                <Store className="w-3 h-3 text-primary" />
+                <Store className="w-3 h-3 text-[#f5f5f7]" />
               </div>
               <span className="text-foreground/40">
                 {tradeInfo?.merchant.displayName || "Merchant"}
@@ -1059,7 +1059,7 @@ export function TradeChat({
                 onClick={() => setActiveChatTab("order")}
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
                   activeChatTab === "order"
-                    ? "text-primary"
+                    ? "text-[#f5f5f7]"
                     : "text-foreground/35 hover:text-foreground/50"
                 }`}
               >
@@ -1069,7 +1069,7 @@ export function TradeChat({
                   <span
                     className={`text-[12px] px-1.5 py-0.5 rounded-full ${
                       activeChatTab === "order"
-                        ? "bg-primary/20 text-primary"
+                        ? "bg-white/[0.06] text-[#f5f5f7]"
                         : "bg-gray-700 text-foreground/40"
                     }`}
                   >
@@ -1077,7 +1077,7 @@ export function TradeChat({
                   </span>
                 )}
                 {activeChatTab === "order" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#f5f5f7]" />
                 )}
               </button>
 
@@ -1086,14 +1086,14 @@ export function TradeChat({
                 onClick={() => setActiveChatTab("direct")}
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
                   activeChatTab === "direct"
-                    ? "text-primary"
+                    ? "text-[#f5f5f7]"
                     : "text-foreground/35 hover:text-foreground/50"
                 }`}
               >
                 <Users className="w-4 h-4" />
                 <span>Direct Chat</span>
                 {activeChatTab === "direct" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#f5f5f7]" />
                 )}
               </button>
             </div>
@@ -1106,7 +1106,7 @@ export function TradeChat({
               <>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                    <Loader2 className="w-6 h-6 text-[#f5f5f7] animate-spin" />
                   </div>
                 ) : chatMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-foreground/35">
@@ -1235,7 +1235,7 @@ export function TradeChat({
                                     msg.senderType === "compliance"
                                       ? "bg-red-500/20 text-gray-200 border border-red-500/30"
                                       : msg.from === "me"
-                                        ? "bg-primary text-background"
+                                        ? "bg-[#f5f5f7] text-background"
                                         : "bg-[#1f1f1f] text-gray-200"
                                   }`}
                                 >
@@ -1368,7 +1368,7 @@ export function TradeChat({
                   {/* Pill: text input + attach button share one rounded container.
                   min-w-0 + appearance-none strip browser UA chrome so no
                   inner rounded rectangle shows inside the pill. */}
-                  <div className="flex-1 min-w-0 flex items-center gap-1 bg-[#1f1f1f] rounded-full pl-4 pr-1.5 focus-within:ring-1 focus-within:ring-primary/50">
+                  <div className="flex-1 min-w-0 flex items-center gap-1 bg-[#1f1f1f] rounded-full pl-4 pr-1.5 focus-within:ring-1 focus-within:ring-white/20">
                     <input
                       ref={inputRef}
                       data-testid="chat-input"
@@ -1403,7 +1403,7 @@ export function TradeChat({
                     onClick={handleSend}
                     disabled={!messageText.trim() && !pendingImage}
                     className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all ${
-                      pendingImage ? "bg-primary/80" : "bg-primary"
+                      pendingImage ? "bg-white/[0.06]" : "bg-[#f5f5f7]"
                     }`}
                   >
                     {isUploading ? (

@@ -151,13 +151,13 @@ export const ActivityPanel = memo(function ActivityPanel({
       case 'pending':
         return { label: 'PENDING', color: 'text-foreground/40 bg-foreground/[0.04] border-foreground/[0.06]' };
       case 'accepted':
-        return { label: 'ACCEPTED', color: 'text-primary/70 bg-primary/10 border-primary/20' };
+        return { label: 'ACCEPTED', color: 'text-[#f5f5f7]/70 bg-white/[0.06] border-white/[0.12]' };
       case 'escrowed':
-        return { label: 'ESCROWED', color: 'text-primary bg-primary/10 border-primary/20' };
+        return { label: 'ESCROWED', color: 'text-[#f5f5f7] bg-white/[0.06] border-white/[0.12]' };
       case 'payment_sent':
-        return { label: 'PAID', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
+        return { label: 'PAID', color: 'text-white/60 bg-white/[0.06] border-white/[0.09]' };
       case 'payment_confirmed':
-        return { label: 'CONFIRMED', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+        return { label: 'CONFIRMED', color: 'text-[#f5f5f7] bg-white/[0.06] border-white/[0.09]' };
       default:
         return { label: status.toUpperCase() || 'OPEN', color: 'text-foreground/40 bg-foreground/[0.04] border-foreground/[0.06]' };
     }
@@ -279,17 +279,17 @@ export const ActivityPanel = memo(function ActivityPanel({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[11px] font-medium text-foreground/70 truncate">{order.user}</span>
-                          <CheckCircle2 className="w-3 h-3 text-emerald-400/50 shrink-0" />
+                          <CheckCircle2 className="w-3 h-3 text-[#f5f5f7]/50 shrink-0" />
                         </div>
                         <div className="flex items-center gap-1 text-[10px] font-mono text-foreground/30">
                           <span className="tabular-nums">{Math.round(order.amount).toLocaleString()} {order.fromCurrency}</span>
                           <ArrowRight className="w-2.5 h-2.5 text-foreground/15" />
-                          <span className="tabular-nums text-primary/60">{Math.round(order.total ?? (order.amount * (order.rate || 0))).toLocaleString()} {order.toCurrency || ''}</span>
+                          <span className="tabular-nums text-[#f5f5f7]/60">{Math.round(order.total ?? (order.amount * (order.rate || 0))).toLocaleString()} {order.toCurrency || ''}</span>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-0.5 shrink-0">
                         {profit > 0 ? (
-                          <span className="text-[11px] font-bold font-mono tabular-nums text-emerald-400">
+                          <span className="text-[11px] font-bold font-mono tabular-nums text-[#f5f5f7]">
                             +${profit.toFixed(2)}
                           </span>
                         ) : (
@@ -306,7 +306,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                                   key={s}
                                   className={`w-2.5 h-2.5 ${
                                     s <= (order.dbOrder?.merchant_rating || 0)
-                                      ? 'fill-primary text-primary'
+                                      ? 'fill-white/50 text-[#f5f5f7]'
                                       : 'text-foreground/10'
                                   }`}
                                 />
@@ -315,7 +315,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                           ) : (
                             <button
                               onClick={(e) => { e.stopPropagation(); onRateOrder(order); }}
-                              className="flex items-center gap-0.5 text-[9px] text-primary/50 hover:text-primary font-medium transition-colors"
+                              className="flex items-center gap-0.5 text-[9px] text-[#f5f5f7]/50 hover:text-white font-medium transition-colors"
                             >
                               <Star className="w-2.5 h-2.5" />
                               Rate
@@ -367,7 +367,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                         </div>
                         <span className={`flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                           isDisputed
-                            ? 'bg-primary/10 text-primary border-primary/20'
+                            ? 'bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]'
                             : 'bg-foreground/[0.04] text-foreground/30 border-foreground/[0.06]'
                         }`}>
                           {isDisputed ? (
@@ -417,7 +417,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.02 }}
-                    className="p-2.5 glass-card rounded-lg hover:border-primary/[0.15] transition-colors cursor-pointer border border-primary/15 bg-primary/[0.03]"
+                    className="p-2.5 glass-card rounded-lg hover:border-white/[0.12]/[0.15] transition-colors cursor-pointer border border-white/[0.12] bg-white/[0.06]"
                     onClick={() => onSelectOrder?.(order.id)}
                   >
                     <div className="flex items-center justify-between mb-1.5">
@@ -425,7 +425,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                         <UserAvatar seed={order.user} src={order.user_avatar} size={22} />
                         <span className="text-xs font-medium text-foreground/70">{order.user}</span>
                       </div>
-                      <span className="flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/20">
+                      <span className="flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]">
                         <AlertTriangle className="w-3 h-3" />
                         Disputed
                       </span>
@@ -484,7 +484,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                           <span className="text-xs font-medium text-foreground/70 truncate">{order.user}</span>
                           {order.orderType && (
                             <span className={`text-[9px] font-bold font-mono uppercase ${
-                              order.orderType === 'buy' ? 'text-green-400/60' : 'text-primary/60'
+                              order.orderType === 'buy' ? 'text-[#f5f5f7]/60' : 'text-[#f5f5f7]/60'
                             }`}>
                               {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
                             </span>

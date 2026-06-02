@@ -73,7 +73,7 @@ export function MobileBottomNav({
               <div className="relative">
                 <Icon className={`w-[22px] h-[22px] ${isActive ? 'text-foreground' : 'text-foreground/30'}`} />
                 {tab.badge > 0 && (
-                  <span className="absolute -top-1 -right-1.5 w-4 h-4 bg-primary text-background text-[10px] font-bold rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1.5 w-4 h-4 bg-[#f5f5f7] text-background text-[10px] font-bold rounded-full flex items-center justify-center">
                     {tab.badge > 9 ? '9+' : tab.badge}
                   </span>
                 )}

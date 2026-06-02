@@ -70,11 +70,11 @@ const PRESET_AVATARS = [
 
 const TIER_COLORS: Record<string, string> = {
   newcomer: 'text-white/40',
-  bronze: 'text-primary/70',
-  silver: 'text-foreground/60',
+  bronze: 'text-[#f5f5f7]/70',
+  silver: 'text-white/60',
   gold: 'text-yellow-400',
-  platinum: 'text-blue-200',
-  diamond: 'text-cyan-300',
+  platinum: 'text-white/60',
+  diamond: 'text-white/60',
 };
 
 interface MerchantProfileModalProps {
@@ -201,7 +201,7 @@ export function MerchantProfileModal({
                   </div>
                 )}
                 {success && (
-                  <div className="absolute inset-0 bg-green-500/80 rounded-full flex items-center justify-center">
+                  <div className="absolute inset-0 bg-white/[0.06] rounded-full flex items-center justify-center">
                     <Check className="w-6 h-6 text-white" />
                   </div>
                 )}
@@ -219,7 +219,7 @@ export function MerchantProfileModal({
                       <div className="flex items-center gap-1.5 ml-2">
                         <div className="w-16 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-primary/60 rounded-full transition-all"
+                            className="h-full bg-white/[0.06] rounded-full transition-all"
                             style={{ width: `${reputation.progress.progress}%` }}
                           />
                         </div>
@@ -239,17 +239,18 @@ export function MerchantProfileModal({
               <label className="block text-xs text-white/40 font-mono uppercase tracking-wider mb-2">Bio</label>
               <textarea
                 value={bio}
-                onChange={(e) => setBio(e.target.value.slice(0, 200))}
+                onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell traders about yourself..."
                 rows={2}
-                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/30 resize-none transition-colors"
+                maxLength={200}
+                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-none transition-colors"
               />
               <div className="flex items-center justify-between mt-1.5">
                 <span className="text-[10px] text-white/20 font-mono">{bio.length}/200</span>
                 <button
                   onClick={handleSaveBio}
                   disabled={isSavingBio || bio === (currentBio || '')}
-                  className="px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 text-[11px] text-primary font-medium hover:bg-primary/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
+                  className="px-3 py-1 rounded-lg bg-white/[0.06] border border-white/[0.12] text-[11px] text-[#f5f5f7] font-medium hover:bg-white/[0.08] transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
                 >
                   {isSavingBio ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                   Save Bio
@@ -263,7 +264,7 @@ export function MerchantProfileModal({
                 <label className="block text-xs text-white/40 font-mono uppercase tracking-wider mb-2">Badges</label>
                 <div className="flex flex-wrap gap-2">
                   {reputation.score.badges.map((badge: string) => (
-                    <span key={badge} className="px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/60 font-medium">
+                    <span key={badge} className="px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.09] text-[11px] text-white/70 font-medium">
                       {badge.replace(/_/g, ' ')}
                     </span>
                   ))}
@@ -283,13 +284,13 @@ export function MerchantProfileModal({
                   disabled={isUploading}
                   className={`relative aspect-square rounded-full overflow-hidden border-2 transition-all ${
                     selectedPreset === avatarUrl
-                      ? 'border-primary ring-2 ring-primary/30'
+                      ? 'border-white/30 ring-2 ring-white/20'
                       : 'border-white/10 hover:border-border-strong'
                   } ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <img src={avatarUrl} alt={`Avatar ${index + 1}`} className="absolute inset-0 w-full h-full object-cover" />
                   {selectedPreset === avatarUrl && !success && (
-                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-white/[0.06] flex items-center justify-center">
                       {isUploading && <Loader2 className="w-6 h-6 text-white animate-spin" />}
                     </div>
                   )}
