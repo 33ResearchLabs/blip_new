@@ -42,6 +42,7 @@ import { CorridorProviderSettings } from "@/components/merchant/CorridorProvider
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { WalletLedger } from "@/components/merchant/WalletLedger";
 import { PaymentMethodModal, PaymentMethodInlineForm } from "@/components/merchant/PaymentMethodModal";
+import { PhoneVerificationModal } from "@/components/merchant/PhoneVerificationModal";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { useCorridorPrices } from "@/hooks/useCorridorPrices";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
@@ -197,6 +198,10 @@ export default function MerchantSettingsPage({
   const [phone, setPhone] = useState<string>(
     (merchantInfo as any)?.phone || "",
   );
+  const [phoneVerified, setPhoneVerified] = useState<boolean>(
+    Boolean((merchantInfo as any)?.phone_verified),
+  );
+  const [showPhoneVerify, setShowPhoneVerify] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(
     (merchantInfo as any)?.avatar_url || null,
   );
@@ -403,6 +408,7 @@ export default function MerchantSettingsPage({
           if (data.data.buy_rate != null) setBuyRate(String(data.data.buy_rate));
           if (data.data.sell_rate != null) setSellRate(String(data.data.sell_rate));
           setPhone(data.data.phone || "");
+          setPhoneVerified(Boolean(data.data.phone_verified));
           setSelectedAvatar(data.data.avatar_url || null);
         }
       }
@@ -501,6 +507,10 @@ export default function MerchantSettingsPage({
 
       const data = await res.json();
       setMerchant(data.data);
+      // Saving a changed phone clears verification server-side (see
+      // updateMerchant); mirror that here so the "Verified" badge drops
+      // immediately instead of vouching for an unconfirmed number.
+      setPhoneVerified(Boolean(data.data?.phone_verified));
       setSaveSuccess(true);
 
       // Update the in-memory store. The durable copy is the row in the
@@ -1031,9 +1041,32 @@ export default function MerchantSettingsPage({
                 </div>
 
                 <div>
-                  <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-2 block">
-                    Phone
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs text-white/40 font-mono uppercase tracking-wider block">
+                      Phone
+                    </label>
+                    {/* Badge shows only when the number in the field is the one
+                        that was actually verified — editing it (before re-verify
+                        + save) hides the badge so it never vouches for a number
+                        that hasn't been confirmed. */}
+                    {phoneVerified &&
+                    phone.trim() !== "" &&
+                    phone.trim() === ((merchant?.phone as string) || "").trim() ? (
+                      <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-emerald-400">
+                        <ShieldCheck className="w-3 h-3" />
+                        Verified
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowPhoneVerify(true)}
+                        className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-primary hover:opacity-80 transition-opacity"
+                      >
+                        <Smartphone className="w-3 h-3" />
+                        Verify
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="tel"
                     value={phone}
@@ -2059,6 +2092,28 @@ export default function MerchantSettingsPage({
         }}
         merchantId={merchantId || merchant?.id || ""}
         editingMethod={editingPaymentMethod}
+      />
+
+      <PhoneVerificationModal
+        isOpen={showPhoneVerify}
+        onClose={() => setShowPhoneVerify(false)}
+        currentPhone={phone}
+        onVerified={(verifiedPhone) => {
+          // Reflect the verified number everywhere the badge logic reads from,
+          // so the green "Verified" badge appears immediately without a reload.
+          setPhone(verifiedPhone);
+          setPhoneVerified(true);
+          setMerchant((prev: any) => ({
+            ...prev,
+            phone: verifiedPhone,
+            phone_verified: true,
+          }));
+          setMerchantInfo((prev: any) => ({
+            ...prev,
+            phone: verifiedPhone,
+            phone_verified: true,
+          }));
+        }}
       />
     </div>
   );
