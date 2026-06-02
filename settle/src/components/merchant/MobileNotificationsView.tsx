@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactElement } from "react";
 import type { Notification } from "@/types/merchant";
 
 const T = {
@@ -13,7 +14,7 @@ const T = {
 };
 
 /* type → icon SVG + accent color */
-const NT: Record<string, { icon: JSX.Element; color: string }> = {
+const NT: Record<string, { icon: ReactElement; color: string }> = {
   order: {
     icon: <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>,
     color: T.muted2,
