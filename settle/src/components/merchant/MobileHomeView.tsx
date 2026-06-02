@@ -955,21 +955,22 @@ export function MobileHomeView({
                 </div>
 
                 {/* Payment method */}
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#86868b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Payment method</div>
-                <button onClick={() => onOpenPaymentMethods?.()} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", cursor: "pointer", marginBottom: 18 }}>
-                  <span style={{ width: 32, height: 32, borderRadius: 9, background: defaultPaymentMethod ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.05)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#aeaeb2" }}><rect x="2.5" y="5" width="19" height="14" rx="3.2"/><path d="M2.5 9.5h19"/></svg>
-                  </span>
-                  <span style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: 14, fontWeight: 700, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {defaultPaymentMethod ? defaultPaymentMethod.name : "Add payment method"}
-                    </span>
-                    {defaultPaymentMethod && (
-                      <span style={{ display: "block", color: "#86868b", fontSize: 12, marginTop: 1 }}>{defaultPaymentMethod.type.toUpperCase()}</span>
-                    )}
-                  </span>
-                  <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#86868b", flexShrink: 0 }}><path d="m9 6 6 6-6 6"/></svg>
-                </button>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#86868b", textTransform: "uppercase", letterSpacing: "0.1em" }}>Payment</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {defaultPaymentMethod ? (
+                      <button onClick={() => onOpenPaymentMethods?.()} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 9, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", cursor: "pointer" }}>
+                        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#b8e9d4", flexShrink: 0 }}><rect x="2.5" y="5" width="19" height="14" rx="3.2"/><path d="M2.5 9.5h19"/></svg>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#f5f5f7", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{defaultPaymentMethod.name}</span>
+                        <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#5a5a60", flexShrink: 0 }}><path d="m9 6 6 6-6 6"/></svg>
+                      </button>
+                    ) : null}
+                    <button onClick={() => onOpenPaymentMethods?.()} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 9, background: defaultPaymentMethod ? "rgba(255,255,255,0.03)" : "rgba(184,233,212,0.1)", border: defaultPaymentMethod ? "1px solid rgba(255,255,255,0.07)" : "1px solid rgba(184,233,212,0.3)", cursor: "pointer" }}>
+                      <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" style={{ color: defaultPaymentMethod ? "#86868b" : "#b8e9d4", flexShrink: 0 }}><path d="M12 5v14M5 12h14"/></svg>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: defaultPaymentMethod ? "#86868b" : "#b8e9d4", whiteSpace: "nowrap" }}>{defaultPaymentMethod ? "Add" : "Add method"}</span>
+                    </button>
+                  </div>
+                </div>
 
                 {/* Expiry */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
