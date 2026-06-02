@@ -392,6 +392,12 @@ async function processDisputeAutoResolve(): Promise<void> {
        WHERE status = 'disputed'
          AND dispute_auto_resolve_at IS NOT NULL
          AND dispute_auto_resolve_at < NOW()
+         -- FUND SAFETY: never auto-refund the seller once the buyer has marked
+         -- fiat as sent. Auto-resolving these would let a silent or malicious
+         -- seller keep the fiat AND reclaim the escrow. Disputes raised after
+         -- payment_sent require human/compliance resolution — they are excluded
+         -- here and left in 'disputed' until an officer decides.
+         AND payment_sent_at IS NULL
        LIMIT $1`,
       [BATCH_SIZE]
     );
