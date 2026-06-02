@@ -14,8 +14,19 @@ interface SupportMessage {
   created_at: string;
 }
 
-export function SupportBubbleInline() {
+interface SupportBubbleInlineProps {
+  /** Explicit actor for the support session (e.g. a merchant). Falls back to the logged-in user from AppContext. */
+  actorType?: 'user' | 'merchant';
+  actorId?: string;
+}
+
+export function SupportBubbleInline({ actorType, actorId }: SupportBubbleInlineProps = {}) {
   const { user } = useApp();
+  // Prefer an explicitly-passed actor (MerchantChatTabs passes the merchant);
+  // fall back to the logged-in user. This is what lets support work in the
+  // merchant UI, where AppContext.user is not populated.
+  const resolvedId = actorId ?? user?.id;
+  const resolvedType: 'user' | 'merchant' = actorType ?? 'user';
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [input, setInput] = useState('');
   const [wsStatus, setWsStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
@@ -23,9 +34,9 @@ export function SupportBubbleInline() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const connect = useCallback(() => {
-    if (!user?.id || wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (!resolvedId || wsRef.current?.readyState === WebSocket.OPEN) return;
     setWsStatus('connecting');
-    const ws = new WebSocket(`${SUPPORT_WS_URL}?userId=${user.id}`);
+    const ws = new WebSocket(`${SUPPORT_WS_URL}?userId=${resolvedId}&actorType=${resolvedType}`);
     wsRef.current = ws;
     ws.onopen = () => setWsStatus('connected');
     ws.onclose = () => setWsStatus('disconnected');
@@ -37,7 +48,7 @@ export function SupportBubbleInline() {
         else if (data.type === 'message') setMessages(p => [...p, data.message]);
       } catch {}
     };
-  }, [user?.id]);
+  }, [resolvedId, resolvedType]);
 
   useEffect(() => { connect(); return () => wsRef.current?.close(); }, [connect]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
