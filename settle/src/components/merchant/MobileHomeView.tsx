@@ -187,18 +187,6 @@ export function MobileHomeView({
     CORRIDORS.find((c) => c.id === activeCorridor) ?? CORRIDORS[0];
 
   const [corridorPickerOpen, setCorridorPickerOpen] = useState(false);
-  const [corridorSearch, setCorridorSearch] = useState("");
-  const filteredCorridors = useMemo(() => {
-    const q = corridorSearch.trim().toLowerCase();
-    if (!q) return CORRIDORS;
-    return CORRIDORS.filter(
-      (c) =>
-        c.fiat.toLowerCase().includes(q) ||
-        c.country.toLowerCase().includes(q) ||
-        c.id.toLowerCase().includes(q),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [corridorSearch]);
 
   // Merchant custom rate — informational only for now (no backend
   // endpoint to write merchants.synthetic_rate; that column is flagged
@@ -417,7 +405,7 @@ export function MobileHomeView({
       {corridorPickerOpen && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => { setCorridorPickerOpen(false); setCorridorSearch(""); }}
+          onClick={() => setCorridorPickerOpen(false)}
         >
           <motion.div
             initial={{ y: 40, opacity: 0 }}
@@ -428,27 +416,15 @@ export function MobileHomeView({
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-foreground">Select market</h3>
               <button
-                onClick={() => { setCorridorPickerOpen(false); setCorridorSearch(""); }}
+                onClick={() => setCorridorPickerOpen(false)}
                 className="p-1 rounded-lg text-foreground/40 hover:text-foreground/70"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <input
-              type="text"
-              value={corridorSearch}
-              onChange={(e) => setCorridorSearch(e.target.value)}
-              placeholder="Search currency or country…"
-              maxLength={50}
-              autoFocus
-              className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 text-sm text-foreground placeholder-foreground/30 focus:outline-none focus:border-foreground/30 mb-2"
-            />
             <div className="overflow-y-auto -mx-1 px-1 space-y-1">
-              {filteredCorridors.length === 0 ? (
-                <p className="text-[12px] text-foreground/40 text-center py-6">No markets match "{corridorSearch}"</p>
-              ) : (
-                filteredCorridors.map((c) => {
+              {CORRIDORS.map((c) => {
                   const isActive = activeCorridor === c.id;
                   const available = !!c.available;
                   return (
@@ -463,7 +439,6 @@ export function MobileHomeView({
                         // optional-chained.
                         onCorridorChange?.(c.id);
                         setCorridorPickerOpen(false);
-                        setCorridorSearch("");
                       }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
                         isActive
