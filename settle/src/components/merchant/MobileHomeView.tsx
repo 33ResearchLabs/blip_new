@@ -84,6 +84,9 @@ interface MobileHomeViewProps {
   // Quick-action handlers wired into the balance-card button row.
   // Buy/Sell preselect the trade side and open the create-trade modal.
   onStartTrade?: (side: "buy" | "sell") => void;
+  // External trigger to open the trade sheet (used by the FAB in MerchantMobileContent).
+  openSheetSide?: "buy" | "sell" | null;
+  onClearOpenSheet?: () => void;
 
   // Opens the full PaymentMethodModal (same one the desktop uses).
   // When omitted, the "Manage" link inside the default-payment card is hidden.
@@ -129,6 +132,8 @@ export function MobileHomeView({
   activeCorridor = "USDT_INR",
   onCorridorChange,
   onStartTrade,
+  openSheetSide,
+  onClearOpenSheet,
   onOpenPaymentMethods,
   onOpenNotifications,
   onOpenProfile,
@@ -368,6 +373,16 @@ export function MobileHomeView({
   const [tradeSheet, setTradeSheet] = useState<"buy" | "sell" | null>(null);
   const [tradeAmt, setTradeAmt] = useState("");
   const [tradeExpiry, setTradeExpiry] = useState<0 | 1>(0);
+
+  // External FAB trigger — opens the sheet when parent sets openSheetSide.
+  useEffect(() => {
+    if (openSheetSide) {
+      setTradeSheet(openSheetSide);
+      setTradeAmt("");
+      onClearOpenSheet?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSheetSide]);
   const countUpTarget = useRef(effectiveBalance ?? 0);
   useEffect(() => {
     const target = effectiveBalance ?? 0;

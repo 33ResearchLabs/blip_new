@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, Loader2, ArrowDown } from "lucide-react";
 import type { Order } from "@/types/merchant";
@@ -138,6 +138,8 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     notificationCount,
     onRefresh,
   } = props;
+
+  const [fabSheetSide, setFabSheetSide] = useState<"buy" | "sell" | null>(null);
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────
   // Wired to the `<main>` scroll container so it works on every tab. iOS-
@@ -280,6 +282,8 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
                 setOpenTradeForm({ ...openTradeForm, tradeType: side });
                 setShowOpenTradeModal(true);
               }}
+              openSheetSide={fabSheetSide}
+              onClearOpenSheet={() => setFabSheetSide(null)}
             />
           )}
           {mobileView === "orders" && (
@@ -360,14 +364,11 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
         </main>
       </div>
 
-      {/* Mobile FAB — only on Home, where opening a new trade is the
-          natural primary action. Other tabs (Trade list, Chat, Escrow,
-          History) have their own primary tasks and shouldn't be covered
-          by a floating button. */}
+      {/* Mobile FAB — opens the same OpenTradeSheet as the Buy/Sell buttons */}
       {mobileView === "home" && (
         <motion.button
           whileTap={{ scale: 0.9 }}
-          onClick={() => setShowOpenTradeModal(true)}
+          onClick={() => setFabSheetSide("buy")}
           className="lg:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-primary shadow-lg shadow-primary/25 flex items-center justify-center"
         >
           <Plus className="w-6 h-6 text-background" />
