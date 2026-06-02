@@ -14,6 +14,7 @@ import { defaultAvatarUrl } from '@/lib/avatars';
 import { setupWaitlistForActor } from '@/lib/waitlist/signup';
 import { validateFingerprintPayload, persistFingerprintAsync } from '@/lib/threat/devicePersist';
 import { validateBehaviorPayload, persistBehaviorAsync } from '@/lib/threat/behaviorPersist';
+import { triggerRecompute } from '@/lib/threat/recompute';
 
 // Password hashing — PBKDF2 with 100k iterations (OWASP minimum for SHA-512)
 const PBKDF2_ITERATIONS = 100_000;
@@ -466,6 +467,9 @@ export async function POST(request: NextRequest) {
 
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
+
+      // Score the new merchant for admin threat review (fire-and-forget).
+      triggerRecompute('merchant', merchant.id);
 
       // Fire-and-forget: persist client device fingerprint (Phase C waitlist
       // threat detection). Non-fatal — failed persistence just means the
@@ -1204,6 +1208,9 @@ export async function POST(request: NextRequest) {
 
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
+
+      // Score the new merchant for admin threat review (fire-and-forget).
+      triggerRecompute('merchant', merchant.id);
 
       // Fire-and-forget: persist client device fingerprint (Phase C waitlist
       // threat detection). Non-fatal — failed persistence just means the

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserByWallet, createUser } from '@/lib/db/repositories/users';
+import { triggerRecompute } from '@/lib/threat/recompute';
 import { getMerchantByWallet } from '@/lib/db/repositories/merchants';
 import { walletAuthSchema } from '@/lib/validation/schemas';
 import {
@@ -92,6 +93,9 @@ export async function POST(request: NextRequest) {
 
     if (isNewUser) {
       logger.info('New user created', { userId: user.id, walletAddress: wallet_address });
+      // Score the new account for admin threat review. Fire-and-forget —
+      // never blocks or fails auth (errors are swallowed inside).
+      triggerRecompute('user', user.id);
     }
 
     // Issue session + access token so subsequent user-scoped routes

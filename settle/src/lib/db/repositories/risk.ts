@@ -505,41 +505,58 @@ export async function recalculateRiskScore(
 }
 
 /**
+ * Shape of the persisted risk_profiles row we read for the admin profile.
+ * Combines the legacy event-counter fields (risk_score / risk_level /
+ * event_count) with the algorithmic threat-detection fields (wl_*).
+ */
+interface PersistedRiskScore {
+  risk_score: number;
+  risk_level: RiskLevel;
+  event_count: number;
+  last_event_type: string | null;
+  last_event_at: string | null;
+  wl_score: number | null;
+  wl_label: string | null;
+  wl_hypothesis: string | null;
+}
+
+/**
  * Get the persisted risk_profile row (or a default).
  */
 async function getPersistedRiskScore(
   entityId: string,
   entityType: 'user' | 'merchant'
-): Promise<{ risk_score: number; risk_level: RiskLevel; event_count: number; last_event_type: string | null; last_event_at: string | null }> {
-  const row = await queryOne<{
-    risk_score: number;
-    risk_level: RiskLevel;
-    event_count: number;
-    last_event_type: string | null;
-    last_event_at: string | null;
-  }>(
-    `SELECT risk_score, risk_level, event_count, last_event_type, last_event_at
-     FROM risk_profiles WHERE entity_id = $1`,
+): Promise<PersistedRiskScore> {
+  // wl_score / wl_label / wl_hypothesis are the algorithmic threat-detection
+  // fields (settle/src/lib/threat/*). They are the SAME source the admin
+  // merchants table and waitlist screen read from — surfaced here so the
+  // risk-profile detail page shows the same number instead of the stale
+  // legacy event-counter (risk_score / risk_level).
+  const SELECT_COLS =
+    'risk_score, risk_level, event_count, last_event_type, last_event_at, wl_score, wl_label, wl_hypothesis';
+
+  const row = await queryOne<PersistedRiskScore>(
+    `SELECT ${SELECT_COLS} FROM risk_profiles WHERE entity_id = $1`,
     [entityId]
   );
 
   if (row) return row;
 
-  // No profile yet — compute on-demand (first request bootstraps it)
+  // No profile yet — compute on-demand (first request bootstraps it).
+  // NOTE: recalculateRiskScore only populates the legacy event-counter
+  // fields; wl_* stay NULL until the threat detector runs (waitlist flow,
+  // registration trigger, or the admin backfill endpoint).
   await recalculateRiskScore(entityId, entityType);
-  const fresh = await queryOne<{
-    risk_score: number;
-    risk_level: RiskLevel;
-    event_count: number;
-    last_event_type: string | null;
-    last_event_at: string | null;
-  }>(
-    `SELECT risk_score, risk_level, event_count, last_event_type, last_event_at
-     FROM risk_profiles WHERE entity_id = $1`,
+  const fresh = await queryOne<PersistedRiskScore>(
+    `SELECT ${SELECT_COLS} FROM risk_profiles WHERE entity_id = $1`,
     [entityId]
   );
 
-  return fresh ?? { risk_score: 0, risk_level: 'low' as const, event_count: 0, last_event_type: null, last_event_at: null };
+  return fresh ?? {
+    risk_score: 0, risk_level: 'low' as const, event_count: 0,
+    last_event_type: null, last_event_at: null,
+    wl_score: null, wl_label: null, wl_hypothesis: null,
+  };
 }
 
 // ============================================================================
@@ -560,10 +577,18 @@ export interface FullRiskProfile {
 
   // Risk summary
   risk_summary: {
+    // Legacy event-counter score (sum of weighted risk_events). Kept for the
+    // events timeline + as a secondary signal.
     risk_score: number;
     risk_level: RiskLevel;
     total_risk_events: number;
     last_risk_event: { type: string; severity: string; at: string } | null;
+    // Algorithmic threat-detection score (settle/src/lib/threat/*) — the SAME
+    // value the merchants table / waitlist screen show. Null when the threat
+    // detector has not run for this entity yet ("Unscored").
+    threat_score: number | null;
+    threat_label: string | null;
+    threat_hypothesis: string | null;
   };
 
   // Behavioral stats
@@ -824,7 +849,11 @@ export async function getRiskProfile(
 
   const riskScore = riskScoreResult.status === 'fulfilled'
     ? riskScoreResult.value
-    : { risk_score: 0, risk_level: 'low' as const, event_count: 0, last_event_type: null, last_event_at: null };
+    : {
+        risk_score: 0, risk_level: 'low' as const, event_count: 0,
+        last_event_type: null, last_event_at: null,
+        wl_score: null, wl_label: null, wl_hypothesis: null,
+      };
 
   // pg returns numeric/decimal columns as strings — coerce so downstream
   // .toFixed() and arithmetic on financial_stats fields don't blow up.
@@ -890,6 +919,9 @@ export async function getRiskProfile(
       last_risk_event: riskScore.last_event_type
         ? { type: riskScore.last_event_type, severity: events[0]?.severity ?? 'unknown', at: riskScore.last_event_at || '' }
         : null,
+      threat_score: riskScore.wl_score,
+      threat_label: riskScore.wl_label,
+      threat_hypothesis: riskScore.wl_hypothesis,
     },
 
     behavioral_stats: {
