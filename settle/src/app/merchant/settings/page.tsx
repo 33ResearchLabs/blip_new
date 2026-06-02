@@ -1083,7 +1083,7 @@ export default function MerchantSettingsPage({
                 whileTap={{ scale: 0.98 }}
                 onClick={handleSaveProfile}
                 disabled={isSaving}
-                className="w-full py-3 rounded-xl bg-[#f5f5f7] text-background font-bold text-sm hover:bg-white/[0.08] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-[#f5f5f7] text-[#0b0b0c] font-bold text-sm hover:bg-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

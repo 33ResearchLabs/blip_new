@@ -809,8 +809,8 @@ function CreateLeft() {
           subtitle="Encrypted & secure infrastructure"
         />
         <Feature
-          icon={<TrendingUp className="w-4 h-4 text-violet-400" />}
-          color="bg-violet-500/15"
+          icon={<TrendingUp className="w-4 h-4 text-white/60" />}
+          color="bg-white/[0.06]"
           title="Growth Rewards"
           subtitle="Earn more as you grow"
         />

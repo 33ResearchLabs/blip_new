@@ -433,7 +433,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                 </div>
                 <button
                   onClick={() => onTakeOffer(offer)}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#f5f5f7] hover:bg-white/[0.08] text-background rounded-lg text-xs font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-[#f5f5f7] hover:bg-white text-[#0b0b0c] rounded-lg text-xs font-medium transition-colors"
                 >
                   <span>Take Offer</span>
                   <ArrowRight className="w-3.5 h-3.5" />
