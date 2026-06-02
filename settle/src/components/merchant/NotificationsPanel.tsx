@@ -199,7 +199,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
               <Bell className="w-3.5 h-3.5" />
               Notifications
               {unreadCount > 0 && (
-                <span className="text-[9px] bg-[#f5f5f7] text-background font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center shadow-sm shadow-black/20">
+                <span className="text-[9px] bg-[#f5f5f7] text-[#0b0b0c] font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
@@ -336,13 +336,13 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                   }}
                   className={`group relative w-full text-left p-2.5 rounded-xl border overflow-hidden transition-all ${
                     hasUnread
-                      ? 'bg-gradient-to-br from-white/80/[0.04] to-transparent border-white/[0.12] hover:border-white/[0.12] hover:shadow-md hover:shadow-black/20/[0.06]'
+                      ? 'bg-white/[0.055] border-white/[0.12] hover:border-white/20'
                       : 'bg-foreground/[0.015] border-foreground/[0.05] hover:border-foreground/[0.10] opacity-70 hover:opacity-100'
                   }`}
                 >
                   {/* Unread accent stripe */}
                   {hasUnread && (
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-white/70 to-white/60 rounded-r" />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-white/30 rounded-r" />
                   )}
 
                   <div className="flex items-start gap-3">
@@ -377,7 +377,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                           {notif.message}
                         </p>
                         <span className={`text-[9px] font-mono tabular-nums shrink-0 ${
-                          hasUnread ? 'text-[#f5f5f7]/70' : 'text-foreground/25'
+                          hasUnread ? 'text-white/60' : 'text-foreground/25'
                         }`}>
                           {relativeTime(notif.timestamp)}
                         </span>
@@ -386,7 +386,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
 
                     {/* Unread dot */}
                     {hasUnread && (
-                      <div className="w-2 h-2 rounded-full bg-[#f5f5f7] shadow-[0_0_6px_rgba(255,138,76,0.6)] shrink-0 mt-1.5" />
+                      <div className="w-2 h-2 rounded-full bg-[#f5f5f7] shrink-0 mt-1.5" />
                     )}
                   </div>
                 </button>

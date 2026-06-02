@@ -456,7 +456,7 @@ export function DirectChatView({
       <div className="flex-1 overflow-y-auto px-3 py-2">
         {isLoading && messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="w-4 h-4 border-2 border-white/[0.12] border-t-primary rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-foreground/15">
@@ -643,8 +643,8 @@ export function DirectChatView({
 
       {/* No active order info banner — chat still works */}
       {!hasActiveOrder && (
-        <div className="mx-2 mb-1 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-          <p className="text-[12px] text-amber-400/80">
+        <div className="mx-2 mb-1 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.09]">
+          <p className="text-[12px] text-white/70">
             No active trade with this {contactType}. You can still send messages.
           </p>
         </div>
@@ -695,7 +695,7 @@ export function DirectChatView({
             }}
             placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
             className="flex-1 min-w-0 appearance-none px-3 py-1.5 text-[12px] bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg
-                       text-white placeholder:text-foreground/15 focus:outline-none focus:border-white/15 transition-colors font-mono"
+                       text-white placeholder:text-foreground/15 focus:outline-none focus:border-white/30 transition-colors font-mono"
           />
           <button
             onClick={() => {

@@ -1996,7 +1996,7 @@ export default function MerchantSettingsPage({
 
               <button
                 onClick={handleSaveNotifications}
-                className="w-full py-3.5 rounded-xl bg-[#f5f5f7] text-background font-bold text-sm hover:bg-white/[0.08] transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-xl bg-[#f5f5f7] text-[#0b0b0c] font-bold text-sm hover:bg-white transition-colors flex items-center justify-center gap-2"
               >
                 <Save className="w-4 h-4" />
                 Save Preferences
@@ -3618,7 +3618,7 @@ function ThemeSection() {
           <div className="flex gap-2">
             <button
               onClick={handleApply}
-              className="px-3 py-1 rounded-lg text-[11px] font-medium text-background"
+              className="px-3 py-1 rounded-lg text-[11px] font-medium text-[#0b0b0c]"
               style={{ backgroundColor: "var(--primary)" }}
             >
               Apply
