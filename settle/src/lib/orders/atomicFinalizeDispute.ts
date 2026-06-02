@@ -38,6 +38,7 @@
  */
 
 import { transaction } from '@/lib/db';
+import { MOCK_MODE } from 'settlement-core';
 import { Order } from '@/lib/types/database';
 import { logger } from '@/lib/logger';
 import { validateTransition } from './stateMachineMinimal';
@@ -49,6 +50,14 @@ import {
 } from './escrowRefundTarget';
 
 export type DisputeResolution = 'user' | 'merchant' | 'split';
+
+// Bug B (dispute double-credit) fix — OFF by default, so default behavior is
+// byte-for-byte unchanged. When DISPUTE_DOUBLE_CREDIT_FIX=true, the merchant-
+// refund resolution skips the DB-cache credit ONLY when an on-chain refund was
+// already recorded (refundTxHash) in real mode — exactly the double-credit case.
+// It never skips without an on-chain refund, so a legitimate refund can't be lost.
+const DISPUTE_DOUBLE_CREDIT_FIX =
+  (process.env.DISPUTE_DOUBLE_CREDIT_FIX || '').toLowerCase() === 'true';
 
 export interface ComplianceMemberRef {
   id: string;
@@ -172,24 +181,44 @@ export async function atomicFinalizeDispute(
           }
           const balanceBefore = parseFloat(String(balRes.rows[0].balance));
 
-          await client.query(
-            `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
-            [resolved.amount, resolved.entityId]
-          );
+          // ── Bug B (double-credit) guard ──────────────────────────────────
+          // In real mode, if compliance already refunded the seller ON-CHAIN
+          // (refundTxHash recorded), crediting the DB cache here too would
+          // double-count the refund. When the fix flag is on we skip the cache
+          // credit in exactly that case — the chain is the source of truth and
+          // the balance reconciler syncs the cache. We NEVER skip unless an
+          // on-chain refund is recorded, so a legitimate refund can't be lost.
+          // MOCK_MODE always credits (no chain → DB is authoritative); flag off
+          // keeps the prior always-credit behavior unchanged.
+          const skipCacheCredit =
+            DISPUTE_DOUBLE_CREDIT_FIX && !MOCK_MODE && !!refundTxHash;
 
-          // Post-invariant: balance moved by exactly the refund amount.
-          // Any drift (concurrent writer slipped past FOR UPDATE, missing
-          // index, trigger side-effect) throws and triggers ROLLBACK.
-          const verifyRes = await client.query(
-            `SELECT balance FROM ${refundTable} WHERE id = $1`,
-            [resolved.entityId]
-          );
-          const balanceAfter = parseFloat(String(verifyRes.rows[0].balance));
-          const expected = balanceBefore + resolved.amount;
-          if (Math.abs(balanceAfter - expected) > 0.00000001) {
-            throw new Error(
-              `BALANCE_MISMATCH: ${balanceAfter} != ${expected} (refund=${resolved.amount})`
+          let balanceAfter = balanceBefore;
+          if (skipCacheCredit) {
+            logger.info(
+              '[Atomic] Dispute finalize — skipped DB cache credit; on-chain refund already recorded (avoids double-credit)',
+              { orderId, refundTxHash, entityId: resolved.entityId, amount: resolved.amount }
             );
+          } else {
+            await client.query(
+              `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
+              [resolved.amount, resolved.entityId]
+            );
+
+            // Post-invariant: balance moved by exactly the refund amount.
+            // Any drift (concurrent writer slipped past FOR UPDATE, missing
+            // index, trigger side-effect) throws and triggers ROLLBACK.
+            const verifyRes = await client.query(
+              `SELECT balance FROM ${refundTable} WHERE id = $1`,
+              [resolved.entityId]
+            );
+            balanceAfter = parseFloat(String(verifyRes.rows[0].balance));
+            const expected = balanceBefore + resolved.amount;
+            if (Math.abs(balanceAfter - expected) > 0.00000001) {
+              throw new Error(
+                `BALANCE_MISMATCH: ${balanceAfter} != ${expected} (refund=${resolved.amount})`
+              );
+            }
           }
 
           // Idempotent ledger entry — duplicate finalization (e.g. retry
