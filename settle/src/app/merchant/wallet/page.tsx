@@ -1241,640 +1241,275 @@ export default function WalletPage({
 
           {/* ========== MAIN WALLET VIEW ========== */}
           {view === "main" && (
-            // Compact density pass — every card / spacer / font size dropped a
-            // step so the full wallet view fits in a typical viewport (≈ 760px
-            // tall) without scrolling. Same structure as before, just tighter:
-            // outer gap 4→3, hero p-6→p-4, total balance text-5xl→text-4xl,
-            // network status orb 32→24, action buttons py-4→py-3, etc.
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="relative">
+            {/* Ambient mesh */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ zIndex: 0 }}>
+              <div style={{ position: "absolute", width: 340, height: 340, left: "-5%", top: "-8%", borderRadius: "50%", background: "radial-gradient(circle, rgba(120,134,224,0.40), transparent 62%)", mixBlendMode: "screen", filter: "blur(44px)", opacity: 0.85 }} />
+              <div style={{ position: "absolute", width: 300, height: 300, right: "-8%", top: "3%", borderRadius: "50%", background: "radial-gradient(circle, rgba(196,138,224,0.32), transparent 62%)", mixBlendMode: "screen", filter: "blur(44px)", opacity: 0.85 }} />
+            </div>
+            <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-3" style={{ zIndex: 1 }}>
               {/* ── LEFT COLUMN — wallet hero + actions + tokens ────────── */}
               <div className="lg:col-span-2 space-y-3">
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4">
-                  <div className="flex items-center justify-between mb-3">
+                {/* Connected card */}
+                <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, backdropFilter: "blur(20px) saturate(150%)", padding: 17 }}>
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                      <span className="text-[11px] text-green-400 font-mono">
-                        Connected
-                      </span>
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#b8e9d4", boxShadow: "0 0 8px rgba(184,233,212,0.7)" }} />
+                      <span style={{ color: "#b8e9d4", fontWeight: 700, fontSize: 13 }}>Connected</span>
                     </div>
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/25">
-                      <div className="w-1.5 h-1.5 bg-primary rounded-full" />
-                      <span className="text-[10px] text-primary font-mono">
-                        {networkLabel()}
-                      </span>
+                    <div className="flex items-center gap-2 px-3 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", fontSize: 12, fontWeight: 700, color: "#f5f5f7" }}>
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      {networkLabel()}
                     </div>
                   </div>
 
-                  <div className="text-center mb-3">
-                    <div className="flex items-center justify-center gap-1.5 text-[10px] text-white/40 font-mono mb-1">
+                  {/* Total balance */}
+                  <div className="text-center pb-4">
+                    <button onClick={() => setHideBalance((v) => !v)} className="flex items-center justify-center gap-1.5 mx-auto mb-2" style={{ background: "none", border: "none", cursor: "pointer", color: "#86868b", fontSize: 13, fontWeight: 600 }}>
                       Total Balance
-                      <button
-                        onClick={() => setHideBalance((v) => !v)}
-                        title={hideBalance ? "Show balance" : "Hide balance"}
-                        className="p-0.5 rounded hover:bg-white/[0.06] transition-colors"
-                      >
-                        {hideBalance ? (
-                          <EyeOff className="w-3 h-3 text-white/40" />
-                        ) : (
-                          <Eye className="w-3 h-3 text-white/40" />
-                        )}
-                      </button>
-                    </div>
-                    <div className="flex items-baseline justify-center gap-1.5 mb-0.5">
-                      <span className="text-3xl font-bold text-white font-mono tabular-nums leading-none">
-                        {hideBalance
-                          ? "••••••"
-                          : solanaWallet.usdtBalance !== null
-                          ? solanaWallet.usdtBalance.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })
-                          : "—"}
+                      {hideBalance ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                    <div className="flex items-baseline justify-center gap-2 mb-1">
+                      <span style={{ fontSize: 30, fontWeight: 800, color: "#f5f5f7", fontVariantNumeric: "tabular-nums" }}>
+                        {hideBalance ? "••••" : solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
                       </span>
-                      <span className="text-sm text-white/50 font-mono">USDT</span>
+                      <span style={{ color: "#86868b", fontSize: 17, fontWeight: 700 }}>USDT</span>
                     </div>
-                    <div className="text-[10px] text-white/30 font-mono">
-                      ≈ ${hideBalance
-                        ? "••••"
-                        : solanaWallet.usdtBalance !== null
-                        ? solanaWallet.usdtBalance.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })
-                        : "0.00"}
+                    <div style={{ color: "#5a5a60", fontSize: 12.5, fontWeight: 600 }}>
+                      ≈ ${hideBalance ? "••••" : solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
                     </div>
                   </div>
 
+                  {/* SOL balance + address mini tiles */}
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-2 flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-md bg-gradient-to-br from-purple-500/30 to-blue-500/30 flex items-center justify-center border border-purple-500/20 shrink-0">
-                        <span className="text-[11px] font-bold text-purple-300">S</span>
-                      </div>
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "linear-gradient(150deg,#9945ff,#14f195)", fontWeight: 800, fontSize: 15, color: "#fff" }}>◎</div>
                       <div className="min-w-0">
-                        <div className="text-[9px] text-white/40 font-mono uppercase tracking-wider">
-                          SOL Balance
-                        </div>
-                        <div className="text-[12px] font-bold text-white font-mono tabular-nums truncate">
-                          {solanaWallet.solBalance !== null
-                            ? `${solanaWallet.solBalance.toFixed(4)} SOL`
-                            : "— SOL"}
-                        </div>
+                        <div style={{ color: "#86868b", fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>SOL BALANCE</div>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: "#f5f5f7" }} className="truncate">{solanaWallet.solBalance !== null ? `${solanaWallet.solBalance.toFixed(4)} SOL` : "— SOL"}</div>
                       </div>
                     </div>
-
-                    <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-2 flex items-center gap-1.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[9px] text-white/40 font-mono uppercase tracking-wider">
-                          Wallet Address
-                        </div>
-                        <div className="text-[12px] font-bold text-white font-mono truncate">
-                          {truncated}
-                        </div>
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                      <div className="flex-1 min-w-0">
+                        <div style={{ color: "#86868b", fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>WALLET ADDRESS</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: "#f5f5f7" }} className="truncate">{truncated}</div>
                       </div>
-                      <button
-                        onClick={() => setShowReceiveModal(true)}
-                        title="Show receive address"
-                        className="p-1 rounded-md hover:bg-white/[0.06] transition-colors shrink-0"
-                      >
-                        <ArrowDownToLine className="w-3.5 h-3.5 text-white/40" />
+                      <button onClick={() => setShowReceiveModal(true)} title="Show receive address" className="p-1 rounded-md transition-colors shrink-0" style={{ background: "none", border: "none", cursor: "pointer", color: "#aeaeb2" }}>
+                        <ArrowDownToLine className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        onClick={handleCopyAddress}
-                        title={copied ? "Copied" : "Copy address"}
-                        className="p-1 rounded-md hover:bg-white/[0.06] transition-colors shrink-0"
-                      >
-                        {copied ? (
-                          <Check className="w-3.5 h-3.5 text-green-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 text-white/40" />
-                        )}
+                      <button onClick={handleCopyAddress} title={copied ? "Copied" : "Copy address"} className="p-1 rounded-md transition-colors shrink-0" style={{ background: "none", border: "none", cursor: "pointer", color: copied ? "#b8e9d4" : "#aeaeb2" }}>
+                        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* 6-button action row matching the wallet UI mock:
-                    Send / Receive / Swap / Buy / Export Key / More.
-                    Swap and Buy are intentionally non-functional placeholders
-                    — those features aren't wired up yet, but the icons need
-                    to be present in the row for layout parity. They show a
-                    "Coming Soon" alert on click so the click isn't silent.
-                    "More" toggles between Refresh and a future menu — for
-                    now it triggers Refresh so we don't lose that capability.
-                */}
+                {/* Action grid — Send is primary (white), rest are glass */}
                 <div className={`grid ${MOCK_MODE ? "grid-cols-5" : "grid-cols-6"} gap-2`}>
-                  <button
-                    onClick={() => {
-                      setSendError("");
-                      setSendSuccess("");
-                      setShowSendModal(true);
-                    }}
-                    className="py-2.5 rounded-lg bg-primary/10 border border-primary/25 hover:bg-primary/15 transition-colors flex flex-col items-center gap-1"
-                  >
-                    <Send className="w-4 h-4 text-primary" />
-                    <span className="text-[11px] text-primary font-mono font-medium">
-                      Send
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setShowReceiveModal(true)}
-                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
-                  >
-                    <ArrowDownToLine className="w-4 h-4 text-white/70" />
-                    <span className="text-[11px] text-white/60 font-mono">Receive</span>
-                  </button>
-                  <button
-                    onClick={() =>
-                      showAlert("Coming Soon", "Token swap will be available soon.", "info")
-                    }
-                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
-                  >
-                    <ArrowLeftRight className="w-4 h-4 text-white/70" />
-                    <span className="text-[11px] text-white/60 font-mono">Swap</span>
-                  </button>
-                  <button
-                    onClick={() =>
-                      showAlert("Coming Soon", "Buy crypto with fiat will be available soon.", "info")
-                    }
-                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
-                  >
-                    <CreditCard className="w-4 h-4 text-white/70" />
-                    <span className="text-[11px] text-white/60 font-mono">Buy</span>
-                  </button>
-                  {!MOCK_MODE && (
-                    <button
-                      onClick={handleExportKey}
-                      className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1"
-                    >
-                      <KeyRound className="w-4 h-4 text-white/70" />
-                      <span className="text-[11px] text-white/60 font-mono">
-                        Export Key
-                      </span>
+                  {([
+                    { label: "Send", icon: <Send className="w-[18px] h-[18px]" />, active: true, action: () => { setSendError(""); setSendSuccess(""); setShowSendModal(true); } },
+                    { label: "Receive", icon: <ArrowDownToLine className="w-[18px] h-[18px]" />, action: () => setShowReceiveModal(true) },
+                    { label: "Swap", icon: <ArrowLeftRight className="w-[18px] h-[18px]" />, action: () => showAlert("Coming Soon", "Token swap will be available soon.", "info") },
+                    { label: "Buy", icon: <CreditCard className="w-[18px] h-[18px]" />, action: () => showAlert("Coming Soon", "Buy crypto with fiat will be available soon.", "info") },
+                    ...(!MOCK_MODE ? [{ label: "Export Key", icon: <KeyRound className="w-[18px] h-[18px]" />, action: handleExportKey }] : []),
+                    { label: isRefreshing ? "..." : "More", icon: isRefreshing ? <RefreshCw className="w-[18px] h-[18px] animate-spin" /> : <MoreHorizontal className="w-[18px] h-[18px]" />, action: handleRefresh, disabled: isRefreshing },
+                  ] as Array<{ label: string; icon: React.ReactNode; active?: boolean; action: () => void; disabled?: boolean }>).map(({ label, icon, active, action, disabled }) => (
+                    <button key={label} onClick={action} disabled={disabled} style={{ flex: 1, padding: "13px 2px", borderRadius: 15, border: active ? "none" : "1px solid rgba(255,255,255,0.09)", background: active ? "#f5f5f7" : "rgba(255,255,255,0.03)", color: active ? "#0b0b0c" : "#aeaeb2", display: "flex", flexDirection: "column", alignItems: "center", gap: 7, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, fontFamily: "inherit" }}>
+                      {icon}
+                      <span style={{ fontSize: 10, fontWeight: 700, color: active ? "#0b0b0c" : "#86868b", whiteSpace: "nowrap" }}>{label}</span>
                     </button>
-                  )}
-                  <button
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    title="Refresh balances"
-                    className="py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors flex flex-col items-center gap-1 disabled:opacity-50"
-                  >
-                    {isRefreshing ? (
-                      <RefreshCw className="w-4 h-4 text-white/70 animate-spin" />
-                    ) : (
-                      <MoreHorizontal className="w-4 h-4 text-white/70" />
-                    )}
-                    <span className="text-[11px] text-white/60 font-mono">
-                      {isRefreshing ? "..." : "More"}
-                    </span>
-                  </button>
+                  ))}
                 </div>
 
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl">
-                  <div className="px-3 py-2 flex items-center justify-between border-b border-white/[0.06]">
-                    <span className="text-[12px] font-bold text-white">
-                      Your Tokens
-                    </span>
-                    <button className="text-[10px] text-white/40 hover:text-white/70 font-mono transition-colors">
-                      View all
-                    </button>
+                {/* Your Tokens */}
+                <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, backdropFilter: "blur(20px) saturate(150%)", padding: "15px 15px 6px" }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span style={{ fontWeight: 800, fontSize: 16, color: "#f5f5f7" }}>Your Tokens</span>
+                    <button style={{ background: "none", border: "none", cursor: "pointer", color: "#b8e9d4", fontSize: 12.5, fontWeight: 700 }}>View all</button>
                   </div>
-                  <div className="px-3 py-1.5 grid grid-cols-[1fr_1fr_1fr] gap-3 border-b border-white/[0.04]">
-                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Token</span>
-                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Balance</span>
-                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider text-right">Value (USD)</span>
+                  {([
+                    { sym: "SOL", name: "Solana", iconBg: "linear-gradient(150deg,#9945ff,#14f195)", iconLabel: "◎", bal: solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(4) : "0.0000", usd: "$0.00" },
+                    { sym: "USDT", name: usdtLabel(), iconBg: "#1c9c6b", iconLabel: "$", bal: solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : "0.00", usd: `$${solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : "0.00"}` },
+                  ] as Array<{ sym: string; name: string; iconBg: string; iconLabel: string; bal: string; usd: string }>).map((t, i) => (
+                    <div key={t.sym} className="flex items-center gap-3 py-2.5" style={{ borderTop: i ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: t.iconBg, fontWeight: 800, fontSize: 16, color: "#fff" }}>{t.iconLabel}</div>
+                      <div className="flex-1 min-w-0">
+                        <div style={{ fontWeight: 800, fontSize: 14, color: "#f5f5f7" }}>{t.sym}</div>
+                        <div style={{ color: "#86868b", fontSize: 11.5, fontWeight: 600 }}>{t.name}</div>
+                      </div>
+                      <div className="text-right">
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#f5f5f7" }}>{hideBalance ? "••••" : t.bal}</div>
+                        <div style={{ color: "#5a5a60", fontSize: 11, fontWeight: 600 }}>≈ {hideBalance ? "••••" : t.usd}</div>
+                      </div>
+                      <div className="text-right" style={{ minWidth: 52 }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#f5f5f7" }}>{hideBalance ? "••••" : t.usd}</div>
+                        <div style={{ color: "#5a5a60", fontSize: 11, fontWeight: 600 }}>0.00%</div>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2 py-2.5" style={{ borderTop: "1px solid rgba(255,255,255,0.07)", color: "#aeaeb2" }}>
+                    <Wallet className="w-4 h-4" />
+                    <span style={{ fontSize: 13.5, fontWeight: 700, flex: 1 }}>Manage Tokens</span>
+                    <span style={{ fontSize: 16 }}>›</span>
                   </div>
-
-                  <div className="px-3 py-2 grid grid-cols-[1fr_1fr_1fr] gap-3 items-center border-b border-white/[0.04]">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/30 flex items-center justify-center border border-purple-500/20 shrink-0">
-                        <span className="text-[11px] font-bold text-purple-300">S</span>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[12px] font-medium text-white font-mono">SOL</div>
-                        <div className="text-[9px] text-white/30 font-mono">Solana</div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[12px] font-bold text-white font-mono tabular-nums">
-                        {solanaWallet.solBalance !== null
-                          ? solanaWallet.solBalance.toFixed(4)
-                          : "0.0000"}
-                      </div>
-                      <div className="text-[9px] text-white/30 font-mono">
-                        ≈ $0.00
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[12px] font-bold text-white font-mono tabular-nums">
-                        $0.00
-                      </div>
-                      <div className="text-[9px] text-white/30 font-mono">0.00%</div>
-                    </div>
-                  </div>
-
-                  <div className="px-3 py-2 grid grid-cols-[1fr_1fr_1fr] gap-3 items-center border-b border-white/[0.04]">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-green-500/30 to-emerald-500/30 flex items-center justify-center border border-green-500/20 shrink-0">
-                        <span className="text-[11px] font-bold text-green-300">$</span>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[12px] font-medium text-white font-mono">USDT</div>
-                        <div className="text-[9px] text-white/30 font-mono">{usdtLabel()}</div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[12px] font-bold text-white font-mono tabular-nums">
-                        {solanaWallet.usdtBalance !== null
-                          ? solanaWallet.usdtBalance.toFixed(2)
-                          : "0.00"}
-                      </div>
-                      <div className="text-[9px] text-white/30 font-mono">
-                        ≈ ${solanaWallet.usdtBalance !== null
-                          ? solanaWallet.usdtBalance.toFixed(2)
-                          : "0.00"}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[12px] font-bold text-white font-mono tabular-nums">
-                        ${solanaWallet.usdtBalance !== null
-                          ? solanaWallet.usdtBalance.toFixed(2)
-                          : "0.00"}
-                      </div>
-                      <div className="text-[9px] text-white/30 font-mono">0.00%</div>
-                    </div>
-                  </div>
-
-                  <button className="w-full px-3 py-2 flex items-center justify-between text-white/50 hover:text-white/80 hover:bg-white/[0.03] transition-colors">
-                    <div className="flex items-center gap-2">
-                      <Wallet className="w-3.5 h-3.5" />
-                      <span className="text-[12px] font-mono">Manage Tokens</span>
-                    </div>
-                    <span className="text-white/30">›</span>
-                  </button>
                 </div>
 
-                {/* Transaction History — last 5 wallet-ledger entries.
-                    Same data source as Settings → Wallet Ledger; this strip
-                    is the at-a-glance view, with "View all" jumping into
-                    the full filterable list in Settings. */}
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl">
-                  <div className="px-3 py-2 flex items-center justify-between border-b border-white/[0.06]">
-                    <span className="text-[12px] font-bold text-white">
-                      Transaction History
-                    </span>
-                    <button
-                      onClick={() => router.push("/merchant/settings?tab=ledger")}
-                      className="px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[10px] text-white/50 hover:text-white/80 font-mono transition-colors"
-                    >
-                      View all
-                    </button>
-                  </div>
-
-                  {/* Column headers */}
-                  <div className="px-3 py-1.5 grid grid-cols-[100px_88px_1fr_110px_90px_28px] gap-2 border-b border-white/[0.04]">
-                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Type</span>
-                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Status</span>
-                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">From / To</span>
-                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider text-right">Amount</span>
-                    <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider text-right">Time</span>
-                    <span />
+                {/* Transaction History */}
+                <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, backdropFilter: "blur(20px) saturate(150%)", padding: 15 }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span style={{ fontWeight: 800, fontSize: 16, color: "#f5f5f7" }}>Transaction History</span>
+                    <button onClick={() => router.push("/merchant/settings?tab=ledger")} className="px-3 py-1 rounded-full transition-colors" style={{ background: "none", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>View all</button>
                   </div>
 
                   {recentTxsLoading && recentTxs.length === 0 ? (
                     <div className="flex items-center justify-center py-6">
-                      <Loader2 className="w-4 h-4 text-white/30 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#5a5a60" }} />
                     </div>
                   ) : recentTxs.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 gap-2">
-                      <div className="w-9 h-9 rounded-full bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
-                        <ArrowDownRight className="w-4 h-4 text-white/20" />
+                    <div className="flex flex-col items-center justify-center py-8 gap-3">
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ border: "1px solid rgba(255,255,255,0.09)" }}>
+                        <ArrowDownToLine className="w-5 h-5" style={{ color: "#5a5a60" }} />
                       </div>
-                      <p className="text-[11px] text-white/40">No transactions yet</p>
+                      <div style={{ color: "#86868b", fontSize: 13, fontWeight: 500 }}>No transactions yet</div>
                     </div>
                   ) : (
-                    recentTxs.map((tx) => {
-                      const amt = Number(tx.amount) || 0;
-                      const isIncoming = amt >= 0;
-                      const isFailed =
-                        tx.entry_type === "ESCROW_REFUND" ||
-                        tx.entry_type === "ADJUSTMENT" &&
-                          (tx.description || "").toLowerCase().includes("fail");
-                      // Pretty type label — "Send" for outflows, "Receive"
-                      // for inflows, "Swap" for synthetic conversions, fall
-                      // back to the raw entry_type prettified for anything
-                      // exotic (corridor fee, deposit, etc).
-                      const typeLabel =
-                        tx.entry_type === "SYNTHETIC_CONVERSION"
-                          ? "Swap"
-                          : isIncoming
-                            ? "Receive"
-                            : "Send";
-                      // Reuse the same icons as the action button row above
-                      // so a "Send" row visually matches the "Send" button
-                      // (paper plane), Receive row matches the Receive button
-                      // (down arrow), and Swap matches Swap.
-                      const TypeIcon =
-                        typeLabel === "Swap"
-                          ? ArrowLeftRight
-                          : isIncoming
-                            ? ArrowDownToLine
-                            : Send;
-                      const cpRaw = tx.counterparty_name || tx.order_number || "—";
-                      const cpDisplay =
-                        cpRaw.length > 18 ? `${cpRaw.slice(0, 8)}…${cpRaw.slice(-6)}` : cpRaw;
-                      const cpLabel = isIncoming ? "From:" : "To:";
-                      // Relative time string: "2m ago" / "1h ago" / "3d ago"
-                      const ts = new Date(tx.created_at).getTime();
-                      const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-                      const rel =
-                        diffSec < 60
-                          ? "now"
-                          : diffSec < 3600
-                            ? `${Math.floor(diffSec / 60)}m ago`
-                            : diffSec < 86400
-                              ? `${Math.floor(diffSec / 3600)}h ago`
-                              : `${Math.floor(diffSec / 86400)}d ago`;
-                      return (
-                        <div
-                          key={tx.id}
-                          className="px-3 py-2 grid grid-cols-[100px_88px_1fr_110px_90px_28px] gap-2 items-center border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors"
-                        >
-                          {/* Type */}
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <TypeIcon
-                              className={`w-3.5 h-3.5 shrink-0 ${
-                                typeLabel === "Swap"
-                                  ? "text-blue-400"
-                                  : isIncoming
-                                    ? "text-emerald-400"
-                                    : "text-red-400"
-                              }`}
-                            />
-                            <span className="text-[12px] text-white truncate">{typeLabel}</span>
+                    <>
+                      <div className="grid grid-cols-[100px_80px_1fr_110px_80px_28px] gap-2 py-1.5 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                        {["Type", "Status", "From / To", "Amount", "Time", ""].map((h) => (
+                          <span key={h} style={{ fontSize: 9, color: "#5a5a60", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</span>
+                        ))}
+                      </div>
+                      {recentTxs.map((tx) => {
+                        const amt = Number(tx.amount) || 0;
+                        const isIncoming = amt >= 0;
+                        const isFailed = tx.entry_type === "ESCROW_REFUND" || (tx.entry_type === "ADJUSTMENT" && (tx.description || "").toLowerCase().includes("fail"));
+                        const typeLabel = tx.entry_type === "SYNTHETIC_CONVERSION" ? "Swap" : isIncoming ? "Receive" : "Send";
+                        const TypeIcon = typeLabel === "Swap" ? ArrowLeftRight : isIncoming ? ArrowDownToLine : Send;
+                        const cpRaw = tx.counterparty_name || tx.order_number || "—";
+                        const cpDisplay = cpRaw.length > 18 ? `${cpRaw.slice(0, 8)}…${cpRaw.slice(-6)}` : cpRaw;
+                        const ts = new Date(tx.created_at).getTime();
+                        const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+                        const rel = diffSec < 60 ? "now" : diffSec < 3600 ? `${Math.floor(diffSec / 60)}m ago` : diffSec < 86400 ? `${Math.floor(diffSec / 3600)}h ago` : `${Math.floor(diffSec / 86400)}d ago`;
+                        return (
+                          <div key={tx.id} className="grid grid-cols-[100px_80px_1fr_110px_80px_28px] gap-2 items-center py-2 border-b last:border-0" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <TypeIcon className="w-3.5 h-3.5 shrink-0" style={{ color: typeLabel === "Swap" ? "#60a5fa" : isIncoming ? "#b8e9d4" : "#f87171" }} />
+                              <span style={{ fontSize: 12, color: "#f5f5f7" }} className="truncate">{typeLabel}</span>
+                            </div>
+                            <div>
+                              {isFailed ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ fontSize: 10, fontWeight: 600, background: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.2)" }}><XCircle className="w-2.5 h-2.5" />Failed</span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ fontSize: 10, fontWeight: 600, background: "rgba(184,233,212,0.1)", color: "#b8e9d4", border: "1px solid rgba(184,233,212,0.2)" }}><CheckCircle2 className="w-2.5 h-2.5" />Done</span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p style={{ fontSize: 11, color: "#f5f5f7" }} className="truncate">{cpDisplay}</p>
+                              <p style={{ fontSize: 9, color: "#5a5a60" }}>{isIncoming ? "From:" : "To:"}</p>
+                            </div>
+                            <div className="text-right">
+                              <p style={{ fontSize: 12, fontWeight: 700, color: isIncoming ? "#b8e9d4" : "#f87171" }}>{isIncoming ? "+" : ""}{amt.toFixed(2)} USDT</p>
+                            </div>
+                            <div className="text-right">
+                              <p style={{ fontSize: 11, color: "#5a5a60" }}>{rel}</p>
+                            </div>
+                            <button onClick={() => { if (tx.related_order_id) router.push(`/merchant?order=${tx.related_order_id}`); }} className="p-1 rounded transition-colors" style={{ background: "none", border: "none", cursor: "pointer", color: "#5a5a60" }}>
+                              <MoreHorizontal className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-
-                          {/* Status */}
-                          <div>
-                            {isFailed ? (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                                <XCircle className="w-2.5 h-2.5" />
-                                Failed
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                <CheckCircle2 className="w-2.5 h-2.5" />
-                                Confirmed
-                              </span>
-                            )}
-                          </div>
-
-                          {/* From / To */}
-                          <div className="min-w-0">
-                            <p className="text-[11px] text-white font-mono truncate">{cpDisplay}</p>
-                            <p className="text-[9px] text-white/30 font-mono">{cpLabel}</p>
-                          </div>
-
-                          {/* Amount */}
-                          <div className="text-right">
-                            <p
-                              className={`text-[12px] font-bold font-mono tabular-nums ${
-                                isIncoming ? "text-emerald-400" : "text-red-400"
-                              }`}
-                            >
-                              {isIncoming ? "+" : ""}
-                              {amt.toFixed(2)} USDT
-                            </p>
-                          </div>
-
-                          {/* Time */}
-                          <div className="text-right">
-                            <p className="text-[11px] text-white/40 font-mono">{rel}</p>
-                          </div>
-
-                          {/* Action menu placeholder — clicking jumps to the
-                              related order if there is one, otherwise no-op. */}
-                          <button
-                            onClick={() => {
-                              if (tx.related_order_id) {
-                                router.push(`/merchant?order=${tx.related_order_id}`);
-                              }
-                            }}
-                            className="p-1 rounded hover:bg-white/[0.06] text-white/30 hover:text-white/70 transition-colors"
-                            title={tx.related_order_id ? "Open related order" : "No related order"}
-                          >
-                            <MoreHorizontal className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      );
-                    })
+                        );
+                      })}
+                    </>
                   )}
                 </div>
               </div>
 
               {/* ── RIGHT COLUMN — network status + security ──────────── */}
               <div className="space-y-3">
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[12px] font-bold text-white">
-                      Network Status
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 mb-3">
-                    <div
-                      className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                        networkStatus.healthy
-                          ? "bg-green-500/20 border border-green-500/40"
-                          : "bg-red-500/20 border border-red-500/40"
-                      }`}
-                    >
-                      <Check
-                        className={`w-2.5 h-2.5 ${
-                          networkStatus.healthy ? "text-green-400" : "text-red-400"
-                        }`}
-                      />
+                {/* Network Status */}
+                <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, backdropFilter: "blur(20px) saturate(150%)", padding: 15 }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span style={{ fontWeight: 800, fontSize: 15, color: "#f5f5f7" }}>Network Status</span>
+                    <div className="flex items-center gap-1.5" style={{ color: networkStatus.healthy ? "#b8e9d4" : "#f87171", fontSize: 12, fontWeight: 700 }}>
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: networkStatus.healthy ? "#b8e9d4" : "#f87171", boxShadow: networkStatus.healthy ? "0 0 6px rgba(184,233,212,0.7)" : "0 0 6px rgba(248,113,113,0.7)" }} />
+                      {networkStatus.healthy ? "Operational" : "Down"}
                     </div>
-                    <span
-                      className={`text-[12px] font-mono ${
-                        networkStatus.healthy ? "text-green-400" : "text-red-400"
-                      }`}
-                    >
-                      {networkStatus.healthy
-                        ? "All systems operational"
-                        : "RPC unreachable"}
-                    </span>
                   </div>
-
-                  <div className="flex items-center justify-center mb-3">
-                    <div className="w-20 h-20 rounded-full border border-white/[0.06] flex items-center justify-center bg-gradient-to-br from-purple-500/[0.04] to-blue-500/[0.04]">
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500/30 to-cyan-400/30 flex items-center justify-center">
-                        <Wallet className="w-5 h-5 text-white/80" />
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+                    {([
+                      ["Block", networkStatus.blockHeight !== null ? networkStatus.blockHeight.toLocaleString("en-US") : "—"],
+                      ["Latency", networkStatus.latency !== null ? `${networkStatus.latency}ms` : "—"],
+                      ["Network", networkLabel()],
+                    ] as [string, string][]).map(([k, v]) => (
+                      <div key={k} className="text-center">
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#f5f5f7" }}>{v}</div>
+                        <div style={{ color: "#86868b", fontSize: 10.5, fontWeight: 700, marginTop: 2, textTransform: "uppercase", letterSpacing: "0.04em" }}>{k}</div>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-white/50 font-mono">Network</span>
-                      <span className="text-[11px] text-primary font-mono font-bold">
-                        {networkLabel()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-white/50 font-mono">Block Height</span>
-                      <span className="text-[11px] text-white font-mono tabular-nums">
-                        {networkStatus.blockHeight !== null
-                          ? networkStatus.blockHeight.toLocaleString()
-                          : "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-white/50 font-mono">Connection</span>
-                      <span
-                        className={`text-[11px] font-mono ${
-                          networkStatus.healthy ? "text-green-400" : "text-red-400"
-                        }`}
-                      >
-                        {networkStatus.healthy ? "Stable" : "Down"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-white/50 font-mono">Latency</span>
-                      <span className="text-[11px] text-green-400 font-mono tabular-nums">
-                        {networkStatus.latency !== null
-                          ? `${networkStatus.latency}ms`
-                          : "—"}
-                      </span>
-                    </div>
+                    ))}
                   </div>
                 </div>
 
                 {!MOCK_MODE && (
-                  <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden">
-                    <div className="px-3 py-2 border-b border-white/[0.06]">
-                      <span className="text-[12px] font-bold text-white">Security</span>
+                  <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, backdropFilter: "blur(20px) saturate(150%)", overflow: "hidden" }}>
+                    <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(255,255,255,0.09)" }}>
+                      <span style={{ fontWeight: 800, fontSize: 14, color: "#f5f5f7" }}>Security</span>
                     </div>
 
-                    <button
-                      onClick={() => embeddedWallet?.lockWallet()}
-                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04]"
-                    >
-                      <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <Lock className="w-3.5 h-3.5 text-white/60" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="text-[12px] text-white font-mono">Lock Wallet</div>
-                        <div className="text-[10px] text-white/40 font-mono">
-                          Secure your wallet
+                    {([
+                      { icon: <Lock className="w-3.5 h-3.5" />, label: "Lock Wallet", sub: "Secure your wallet", onClick: () => embeddedWallet?.lockWallet(), red: false },
+                      { icon: <Download className="w-3.5 h-3.5" />, label: "Download Backup", sub: "Download your backup file", onClick: handleExportKey, red: false },
+                      { icon: <Trash2 className="w-3.5 h-3.5" />, label: "Delete Wallet", sub: "Permanently delete wallet", onClick: () => setShowDeleteConfirm(true), red: true },
+                    ] as Array<{ icon: React.ReactNode; label: string; sub: string; onClick: () => void; red: boolean }>).map(({ icon, label, sub, onClick, red }, i, arr) => (
+                      <button key={label} onClick={onClick} className="w-full px-4 py-3 flex items-center gap-3 transition-colors" style={{ background: "none", border: "none", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none", cursor: "pointer" }}>
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: red ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.05)", color: red ? "#f87171" : "#aeaeb2" }}>{icon}</div>
+                        <div className="flex-1 text-left">
+                          <div style={{ fontSize: 13, color: red ? "#f87171" : "#f5f5f7", fontWeight: 600 }}>{label}</div>
+                          <div style={{ fontSize: 11, color: "#5a5a60" }}>{sub}</div>
                         </div>
-                      </div>
-                      <span className="text-white/30 text-sm">›</span>
-                    </button>
-
-                    <button
-                      onClick={handleExportKey}
-                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04]"
-                    >
-                      <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <Download className="w-3.5 h-3.5 text-white/60" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="text-[12px] text-white font-mono">Download Backup</div>
-                        <div className="text-[10px] text-white/40 font-mono">
-                          Download your backup file
-                        </div>
-                      </div>
-                      <span className="text-white/30 text-sm">›</span>
-                    </button>
-
-                    <button
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-[var(--color-error)]/5 transition-colors"
-                    >
-                      <div className="w-7 h-7 rounded-md bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
-                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="text-[12px] text-red-400 font-mono">Delete Wallet</div>
-                        <div className="text-[10px] text-white/40 font-mono">
-                          Permanently delete wallet
-                        </div>
-                      </div>
-                      <span className="text-white/30 text-sm">›</span>
-                    </button>
+                        <span style={{ color: "#5a5a60" }}>›</span>
+                      </button>
+                    ))}
                   </div>
                 )}
 
-                {/* Quick Actions — convenience shortcuts that don't fit
-                    elsewhere. Each row reuses an existing handler:
-                      - View on Solscan: opens explorer in a new tab
-                      - Copy Address: same handler the wallet hero uses
-                      - Disconnect Wallet: locks the embedded wallet (the
-                        merchant can re-unlock from setup view) */}
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden">
-                  <div className="px-3 py-2 border-b border-white/[0.06]">
-                    <span className="text-[12px] font-bold text-white">Quick Actions</span>
+                {/* Quick Actions */}
+                <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, backdropFilter: "blur(20px) saturate(150%)", overflow: "hidden" }}>
+                  <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(255,255,255,0.09)" }}>
+                    <span style={{ fontWeight: 800, fontSize: 14, color: "#f5f5f7" }}>Quick Actions</span>
                   </div>
-
                   {address && (
-                    <a
-                      href={explorerUrl("address", address)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04]"
-                    >
-                      <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <ScanSearch className="w-3.5 h-3.5 text-white/60" />
-                      </div>
+                    <a href={explorerUrl("address", address)} target="_blank" rel="noopener noreferrer" className="w-full px-4 py-3 flex items-center gap-3 transition-colors" style={{ textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex" }}>
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(255,255,255,0.05)", color: "#aeaeb2" }}><ScanSearch className="w-3.5 h-3.5" /></div>
                       <div className="flex-1 text-left">
-                        <div className="text-[12px] text-white font-mono">View on Solscan</div>
-                        <div className="text-[10px] text-white/40 font-mono">
-                          View wallet on Solscan
-                        </div>
+                        <div style={{ fontSize: 13, color: "#f5f5f7", fontWeight: 600 }}>View on Solscan</div>
+                        <div style={{ fontSize: 11, color: "#5a5a60" }}>View wallet on Solscan</div>
                       </div>
-                      <ExternalLink className="w-3.5 h-3.5 text-white/30 shrink-0" />
+                      <ExternalLink className="w-3.5 h-3.5 shrink-0" style={{ color: "#5a5a60" }} />
                     </a>
                   )}
-
-                  <button
-                    onClick={handleCopyAddress}
-                    className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04]"
-                  >
-                    <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                      {copied ? (
-                        <Check className="w-3.5 h-3.5 text-green-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5 text-white/60" />
-                      )}
+                  <button onClick={handleCopyAddress} className="w-full px-4 py-3 flex items-center gap-3 transition-colors" style={{ background: "none", border: "none", borderBottom: "1px solid rgba(255,255,255,0.06)", cursor: "pointer" }}>
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(255,255,255,0.05)", color: copied ? "#b8e9d4" : "#aeaeb2" }}>
+                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     </div>
                     <div className="flex-1 text-left">
-                      <div className="text-[12px] text-white font-mono">Copy Address</div>
-                      <div className="text-[10px] text-white/40 font-mono">
-                        Copy wallet address
-                      </div>
+                      <div style={{ fontSize: 13, color: "#f5f5f7", fontWeight: 600 }}>Copy Address</div>
+                      <div style={{ fontSize: 11, color: "#5a5a60" }}>Copy wallet address</div>
                     </div>
-                    <span className="text-white/30 text-sm">›</span>
+                    <span style={{ color: "#5a5a60" }}>›</span>
                   </button>
-
                   {!MOCK_MODE && (
-                    <button
-                      onClick={() => embeddedWallet?.lockWallet()}
-                      className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/[0.04] transition-colors"
-                    >
-                      <div className="w-7 h-7 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <LogOut className="w-3.5 h-3.5 text-white/60" />
-                      </div>
+                    <button onClick={() => embeddedWallet?.lockWallet()} className="w-full px-4 py-3 flex items-center gap-3 transition-colors" style={{ background: "none", border: "none", cursor: "pointer" }}>
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(255,255,255,0.05)", color: "#aeaeb2" }}><LogOut className="w-3.5 h-3.5" /></div>
                       <div className="flex-1 text-left">
-                        <div className="text-[12px] text-white font-mono">Disconnect Wallet</div>
-                        <div className="text-[10px] text-white/40 font-mono">
-                          Lock and disconnect
-                        </div>
+                        <div style={{ fontSize: 13, color: "#f5f5f7", fontWeight: 600 }}>Disconnect Wallet</div>
+                        <div style={{ fontSize: 11, color: "#5a5a60" }}>Lock and disconnect</div>
                       </div>
-                      <LogOut className="w-3.5 h-3.5 text-white/30 shrink-0" />
+                      <LogOut className="w-3.5 h-3.5" style={{ color: "#5a5a60" }} />
                     </button>
                   )}
                 </div>
               </div>
+            </div>
             </div>
           )}
         </div>
