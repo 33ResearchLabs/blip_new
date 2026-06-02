@@ -1,5 +1,5 @@
 /**
- * Balance Reconciler — DETECTION ONLY (Step 1 of the refund-balance fix).
+ * Balance Reconciler — detect (default) + optional auto-correct (refund-balance fix).
  *
  * Why this exists:
  *   The DB `balance` column is a cached snapshot of the on-chain USDT ATA.
@@ -7,23 +7,25 @@
  *   escrow-expiry, dispute auto-resolve, stuck on-chain refunds) deliberately
  *   does NOT credit the cache back — it relies on /api/merchant/sync-balance,
  *   which only the browser calls, and only for merchants. So after automatic
- *   refunds the cache silently drifts below the real on-chain balance.
+ *   refunds the cache silently drifts away from the real on-chain balance.
  *
  * What this does:
  *   For each entity (merchant/user) that had a recent ESCROW_REFUND, it reads
- *   the real on-chain balance and compares it to the cached DB balance. If they
- *   differ it LOGS the drift (safeLog → error_logs → /admin/error-logs). It
- *   writes NOTHING to any balance.
+ *   the real on-chain balance and compares it to the cached DB balance. On drift
+ *   it always LOGS (safeLog → error_logs → /admin/error-logs). If — and only if —
+ *   BALANCE_RECON_WRITE=true it ALSO corrects the cache via syncBalanceFromChain
+ *   (re-reads confident on-chain truth under a per-account lock, writes cache =
+ *   chain). The correction is one-directional and can never lose/double money.
  *
- * Safety:
- *   - READ-ONLY. No UPDATE of any balance/order/escrow. Cannot affect the order
- *     flow — it is not on any order's code path.
+ * Safety / zero-regression:
+ *   - NOT on any order/escrow code path — it cannot affect the order flow. The
+ *     refund/cancel/dispute code is entirely untouched.
+ *   - Two independent off-switches: auto-run needs BALANCE_RECON_ENABLED=true;
+ *     any write needs BALANCE_RECON_WRITE=true. Both default OFF → pure detection.
  *   - Skips uncertain on-chain reads (transient RPC errors) — never acts on bad data.
- *   - Auto-run is OFF unless BALANCE_RECON_ENABLED=true, and skipped in MOCK_MODE.
- *   - Run a one-shot by hand to validate:  npx tsx src/workers/balance-reconciler.ts
- *
- * Step 2 (LATER, behind BALANCE_RECON_WRITE=true): the same drift handler will
- * call a hardened sync to update the DB cache to on-chain truth. Not in Step 1.
+ *   - Skipped entirely in MOCK_MODE (no real chain to compare).
+ *   - One-shot, detect only:      npx tsx src/workers/balance-reconciler.ts
+ *   - One-shot, backfill/correct: BALANCE_RECON_WRITE=true npx tsx src/workers/balance-reconciler.ts
  */
 
 import { query } from '@/lib/db';
@@ -31,9 +33,10 @@ import { logger } from '@/lib/logger';
 import { safeLog } from '@/lib/errorTracking/logger';
 import { MOCK_MODE } from 'settlement-core';
 import { readOnChainUsdtBalance } from '@/lib/solana/readOnChainBalance';
+import { syncBalanceFromChain } from '@/lib/balance/syncOnChainBalance';
 
 const ENABLED = (process.env.BALANCE_RECON_ENABLED || '').toLowerCase() === 'true';
-const WRITE = (process.env.BALANCE_RECON_WRITE || '').toLowerCase() === 'true'; // Step 2 — default off
+const WRITE = (process.env.BALANCE_RECON_WRITE || '').toLowerCase() === 'true'; // Step 3 auto-correct — DEFAULT OFF
 const INTERVAL_MS = parseInt(process.env.BALANCE_RECON_POLL_MS || '300000', 10); // 5 min
 const LOOKBACK_HOURS = parseInt(process.env.BALANCE_RECON_LOOKBACK_HOURS || '48', 10);
 const DRIFT_THRESHOLD = parseFloat(process.env.BALANCE_RECON_DRIFT_THRESHOLD || '0.01');
@@ -71,9 +74,10 @@ async function getDbBalance(c: Candidate): Promise<{ wallet: string | null; bala
 }
 
 /** One detection pass. Returns counts. Never throws. */
-export async function runBalanceReconcileOnce(): Promise<{ scanned: number; checked: number; drifts: number; skipped: number }> {
+export async function runBalanceReconcileOnce(): Promise<{ scanned: number; checked: number; drifts: number; corrected: number; skipped: number }> {
   let checked = 0;
   let drifts = 0;
+  let corrected = 0;
   let skipped = 0;
   let entities: Candidate[] = [];
   try {
@@ -82,7 +86,7 @@ export async function runBalanceReconcileOnce(): Promise<{ scanned: number; chec
     logger.error('[BalanceRecon] failed to load candidates', {
       error: err instanceof Error ? err.message : String(err),
     });
-    return { scanned: 0, checked: 0, drifts: 0, skipped: 0 };
+    return { scanned: 0, checked: 0, drifts: 0, corrected: 0, skipped: 0 };
   }
 
   for (const c of entities) {
@@ -101,11 +105,27 @@ export async function runBalanceReconcileOnce(): Promise<{ scanned: number; chec
       const diff = onChain.balance - db.balance;
       if (Math.abs(diff) > DRIFT_THRESHOLD) {
         drifts++;
+
+        // Step 3 auto-correct: only when BALANCE_RECON_WRITE=true. The reconciler
+        // never mutates a balance itself — it delegates to syncBalanceFromChain,
+        // which re-reads confident on-chain truth under a per-account lock and
+        // writes the cache = chain (one-directional; can never lose/double money).
+        // Because it always writes CURRENT truth and self-corrects next pass, an
+        // in-flight (not-yet-settled) refund needs no special handling.
+        let correction: Awaited<ReturnType<typeof syncBalanceFromChain>> | null = null;
+        if (WRITE) {
+          correction = await syncBalanceFromChain({ type: c.account_type, id: c.account_id });
+          if (correction.ok && correction.changed) corrected++;
+        }
+        const didCorrect = !!(correction && correction.ok && correction.changed);
+
         safeLog({
-          type: 'balance.onchain_drift',
+          type: didCorrect ? 'balance.onchain_drift_corrected' : 'balance.onchain_drift',
           severity: Math.abs(diff) > 1 ? 'ERROR' : 'WARN',
           source: 'worker',
-          message: `Balance drift: ${c.account_type} ${c.account_id} — DB=${db.balance} on-chain=${onChain.balance} (diff ${diff.toFixed(6)})`,
+          message: didCorrect
+            ? `Balance drift CORRECTED: ${c.account_type} ${c.account_id} — DB ${db.balance} → ${onChain.balance} (was off by ${diff.toFixed(6)})`
+            : `Balance drift: ${c.account_type} ${c.account_id} — DB=${db.balance} on-chain=${onChain.balance} (diff ${diff.toFixed(6)})`,
           metadata: {
             account_type: c.account_type,
             account_id: c.account_id,
@@ -113,10 +133,11 @@ export async function runBalanceReconcileOnce(): Promise<{ scanned: number; chec
             onchain_balance: onChain.balance,
             diff,
             wallet: db.wallet,
-            detection_only: !WRITE, // Step 1: always true (we did NOT write)
+            detection_only: !WRITE,
+            corrected: didCorrect,
+            correction: WRITE ? correction : undefined,
           },
         });
-        // Step 1 = DETECTION ONLY. Step 2 (if WRITE) will hardened-sync here.
       }
     } catch (err) {
       // Never let one entity abort the pass.
@@ -127,7 +148,7 @@ export async function runBalanceReconcileOnce(): Promise<{ scanned: number; chec
     }
   }
 
-  return { scanned: entities.length, checked, drifts, skipped };
+  return { scanned: entities.length, checked, drifts, corrected, skipped };
 }
 
 export async function startBalanceReconciler(): Promise<void> {
@@ -141,7 +162,7 @@ export async function startBalanceReconciler(): Promise<void> {
   }
   if (isRunning) return;
   isRunning = true;
-  logger.info('[BalanceRecon] started (DETECTION ONLY)', {
+  logger.info(`[BalanceRecon] started (${WRITE ? 'AUTO-CORRECT' : 'DETECTION ONLY'})`, {
     write: WRITE,
     intervalMs: INTERVAL_MS,
     lookbackHours: LOOKBACK_HOURS,
@@ -150,7 +171,7 @@ export async function startBalanceReconciler(): Promise<void> {
   const poll = async () => {
     if (!isRunning) return;
     const res = await runBalanceReconcileOnce();
-    if (res.drifts > 0 || res.skipped > 0) {
+    if (res.drifts > 0 || res.corrected > 0 || res.skipped > 0) {
       logger.info('[BalanceRecon] pass complete', res);
     }
     pollTimer = setTimeout(poll, INTERVAL_MS);
@@ -166,8 +187,10 @@ export function stopBalanceReconciler(): void {
   }
 }
 
-// One-shot manual validation run (ignores ENABLE flag so you can test on demand):
-//   npx tsx src/workers/balance-reconciler.ts
+// One-shot manual run (ignores ENABLE flag so you can test on demand). It still
+// honours BALANCE_RECON_WRITE: default = detect only; set it to also backfill.
+//   Detect only:        npx tsx src/workers/balance-reconciler.ts
+//   Backfill/correct:   BALANCE_RECON_WRITE=true npx tsx src/workers/balance-reconciler.ts
 if (require.main === module) {
   (async () => {
     if (MOCK_MODE) {
@@ -176,7 +199,11 @@ if (require.main === module) {
     }
     const res = await runBalanceReconcileOnce();
     // eslint-disable-next-line no-console
-    console.log('[BalanceRecon] one-shot complete:', res, '(DETECTION ONLY — no balances changed)');
+    console.log(
+      '[BalanceRecon] one-shot complete:',
+      res,
+      WRITE ? '(AUTO-CORRECT — drifts synced to on-chain truth)' : '(DETECTION ONLY — no balances changed)',
+    );
     process.exit(0);
   })().catch((e) => {
     // eslint-disable-next-line no-console
