@@ -42,6 +42,8 @@ export const SAFE_MERCHANT_COLUMNS = [
   'business_name',
   'email',
   'phone',
+  'phone_verified',
+  'phone_verified_at',
   'avatar_url',
   'bio',
   'wallet_address',
@@ -233,6 +235,12 @@ export async function updateMerchant(
   if (data.phone !== undefined) {
     fields.push(`phone = $${paramIndex++}`);
     values.push(data.phone);
+    // Editing the number through the normal profile PATCH invalidates any prior
+    // SMS verification — a verified badge must never outlive the number it
+    // vouched for. Re-verification happens via /api/merchant/phone/verify-code,
+    // which sets these back to true / NOW().
+    fields.push(`phone_verified = false`);
+    fields.push(`phone_verified_at = NULL`);
   }
   if (data.business_name !== undefined) {
     fields.push(`business_name = $${paramIndex++}`);
@@ -284,6 +292,9 @@ export function serializeMerchant(merchant: {
   avatar_url?: string | null;
   bio?: string | null;
   email?: string;
+  phone?: string | null;
+  phone_verified?: boolean;
+  phone_verified_at?: string | Date | null;
   rating?: number;
   total_trades?: number;
   balance?: number;
@@ -307,6 +318,17 @@ export function serializeMerchant(merchant: {
   if (merchant.avatar_url !== undefined) dto.avatar_url = merchant.avatar_url;
   if (merchant.bio !== undefined) dto.bio = merchant.bio;
   if (merchant.email !== undefined) dto.email = merchant.email;
+  // Phone + its SMS-verification status. Only present on self/admin reads
+  // (getMerchantByIdSafe projects them; the auth/me + login SELECTs don't,
+  // so they stay omitted there). Counterparty-facing merchant payloads use a
+  // separate json_build_object and never touch this serializer, so the phone
+  // number is not leaked to other traders.
+  if (merchant.phone !== undefined) dto.phone = merchant.phone;
+  if (merchant.phone_verified !== undefined) dto.phone_verified = Boolean(merchant.phone_verified);
+  if (merchant.phone_verified_at !== undefined) {
+    const v = merchant.phone_verified_at;
+    dto.phone_verified_at = v == null ? null : v instanceof Date ? v.toISOString() : String(v);
+  }
   if (merchant.balance !== undefined) dto.balance = parseFloat(String(merchant.balance)) || 0;
   if (merchant.has_ops_access !== undefined) dto.has_ops_access = merchant.has_ops_access || false;
   if (merchant.has_compliance_access !== undefined) dto.has_compliance_access = merchant.has_compliance_access || false;

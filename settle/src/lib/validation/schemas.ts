@@ -178,6 +178,22 @@ export const updateMerchantSchema = z.object({
 
 export type UpdateMerchantInput = z.infer<typeof updateMerchantSchema>;
 
+// Phone verification (AWS SNS SMS OTP). The `phone` bound mirrors the
+// `phone` column (VARCHAR(20)) and the updateMerchantSchema limit; the regex
+// keeps it to digits, spaces, and a single leading `+` so we don't hand SNS a
+// malformed `PhoneNumber`. The 6-digit code matches the OTP / PIN input limit.
+export const sendPhoneCodeSchema = z.object({
+  phone: z
+    .string()
+    .min(7, 'Enter a valid phone number')
+    .max(20)
+    .regex(/^\+?[0-9][0-9\s]*$/, 'Enter a valid phone number'),
+});
+
+export const verifyPhoneCodeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+});
+
 export const addBankAccountSchema = z.object({
   bank_name: z.string().min(1, 'Bank name required').max(100),
   account_name: z.string().min(1, 'Account name required').max(100),
