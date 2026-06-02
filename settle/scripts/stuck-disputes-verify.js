@@ -19,6 +19,9 @@
  *      Not a bug, but must be VISIBLE. MEDIUM.
  *   D. state_mismatch   — order no longer 'disputed' but the disputes row is
  *      still open/investigating (or vice-versa) → stranded dispute record. MEDIUM.
+ *   E. proposed_unfinal — order still 'disputed' with a proposed_resolution set but
+ *      the 2-party confirm deadlocked (no timeout/auto-finalize) → resolution
+ *      decided yet never applied; funds held. This is critical issue #3. HIGH.
  *
  * Usage:
  *   node scripts/stuck-disputes-verify.js
@@ -128,11 +131,33 @@ async function run() {
       LIMIT 100`,
   );
 
+  // -------- E: resolution proposed but never finalized — the #3 deadlock --------
+  // Compliance proposed a resolution (dispute → 'investigating', proposed_resolution
+  // set) but the 2-party confirm never completed and nothing auto-finalises it, so
+  // the order stays 'disputed' with funds in escrow. Compliance can force it via
+  // /api/compliance/disputes/[id]/finalize, but nothing surfaces it today.
+  const e = await section(
+    'E. PROPOSED NOT FINALIZED — resolution decided but confirm deadlocked, order still disputed  [HIGH] (#3)',
+    `SELECT o.order_number, d.status AS dispute_status, d.proposed_resolution,
+            d.proposed_at, date_trunc('second', NOW()-d.proposed_at)::text AS proposed_age,
+            d.user_confirmed, d.merchant_confirmed
+       FROM orders o
+       JOIN disputes d ON d.order_id = o.id
+      WHERE o.status = 'disputed'
+        AND d.status = 'investigating'
+        AND d.proposed_resolution IS NOT NULL
+        AND d.proposed_at < NOW() - ($1 || ' hours')::interval
+      ORDER BY d.proposed_at ASC
+      LIMIT 100`,
+    [String(COMPLIANCE_AGE_HOURS)],
+  );
+
   h('SUMMARY');
   console.log(`A never_scheduled : ${a}   [HIGH — never auto-resolves]`);
   console.log(`B overdue_unworked: ${b}   [HIGH — worker missed it]`);
   console.log(`C needs_compliance: ${c}   [MEDIUM — human must resolve via /finalize]`);
   console.log(`D state_mismatch  : ${d}   [MEDIUM — stranded dispute record]`);
+  console.log(`E proposed_unfinal: ${e}   [HIGH — resolution decided but confirm deadlocked (#3)]`);
   console.log('\nDONE — read-only. No rows were written.');
 }
 
