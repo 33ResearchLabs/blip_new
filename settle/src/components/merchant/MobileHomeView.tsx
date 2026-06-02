@@ -464,8 +464,7 @@ export function MobileHomeView({
                       ) : null}
                     </button>
                   );
-                })
-              )}
+                })}
             </div>
           </motion.div>
         </div>

@@ -22,6 +22,7 @@ import {
   ExternalLink,
   Star,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { Screen } from "./types";
 
 // Established constants used across the user screens.
@@ -47,7 +48,7 @@ const SAFE_BACK_SCREENS = new Set<Screen>([
 
 interface QuickActionProps {
   label: string;
-  Icon: React.ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
+  Icon: LucideIcon;
   onClick: () => void;
 }
 
@@ -72,7 +73,7 @@ const QuickAction = ({ label, Icon, onClick }: QuickActionProps) => (
 
 interface IssueCardProps {
   title: string;
-  Icon: React.ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
+  Icon: LucideIcon;
   onClick: () => void;
 }
 
@@ -99,7 +100,7 @@ const IssueCard = ({ title, Icon, onClick }: IssueCardProps) => (
 
 interface ChannelCardProps {
   label: string;
-  Icon: React.ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
+  Icon: LucideIcon;
   badge?: { label: string; recommended?: boolean };
   onClick: () => void;
 }
