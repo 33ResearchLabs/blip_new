@@ -261,18 +261,9 @@ export default function Home() {
   // Onboarding flow — shown whenever a non-authenticated user lands on /
   // without ?welcome=skip. localStorage gate removed so it shows on every
   // fresh visit until the user signs in.
-  // Show onboarding only for users with no saved session (blip_user in
-  // localStorage is set on every successful login and cleared on logout).
-  // This avoids blocking authenticated users who open the app normally.
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    const params = new URLSearchParams(window.location.search);
-    const skipWelcome = params.get("welcome") === "skip";
-    if (skipWelcome) return false;
-    // If a saved user session exists, skip onboarding — they're returning.
-    const hasSession = !!localStorage.getItem("blip_user");
-    return !hasSession;
-  });
+  // Onboarding shown post-login for first-time users only.
+  // Keyed per userId so each new account sees it once, returning users never do.
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [screen, setScreenRaw] = useState<Screen>("welcome");
   const [previousScreen, setPreviousScreen] = useState<Screen>("welcome");
@@ -400,6 +391,15 @@ export default function Home() {
     fetchOrders,
   });
   extensionRequestSetterRef.current = orderActions.setExtensionRequest;
+
+  // Show onboarding once per user (first time only), keyed by userId.
+  useEffect(() => {
+    if (!auth.userId) return;
+    const key = `blip_onb_v1_${auth.userId}`;
+    if (!localStorage.getItem(key)) {
+      setShowOnboarding(true);
+    }
+  }, [auth.userId]);
 
   // Refetch orders when returning to home screen so completed/cancelled orders update.
   // Also drop activeOrderId: otherwise a stale id from a prior order survives into
@@ -620,20 +620,15 @@ export default function Home() {
           }}
         />
       )}
-      {/* New-user mobile onboarding flow — shown to unauthenticated users */}
-      {showOnboarding && !auth.userId && (
+      {/* Onboarding — shown once per new user AFTER they sign in/up */}
+      {showOnboarding && !!auth.userId && (
         <UserOnboardingFlow
-          onComplete={() => { window.location.href = "/?welcome=skip"; }}
-          onGoogleSuccess={auth.handleGoogleSuccess}
-          handleUserLogin={auth.handleUserLogin}
-          loginForm={auth.loginForm}
-          setLoginForm={auth.setLoginForm}
-          isLoggingIn={auth.isLoggingIn}
-          loginError={auth.loginError}
-          setLoginError={auth.setLoginError}
-          authMode={auth.authMode}
-          setAuthMode={auth.setAuthMode}
-          handleUserRegister={auth.handleUserRegister}
+          onComplete={() => {
+            try {
+              localStorage.setItem(`blip_onb_v1_${auth.userId}`, '1');
+            } catch { /* ignore */ }
+            setShowOnboarding(false);
+          }}
         />
       )}
 
