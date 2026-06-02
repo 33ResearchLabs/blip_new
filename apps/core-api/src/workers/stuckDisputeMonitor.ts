@@ -33,6 +33,7 @@
  *   npx tsx src/workers/stuckDisputeMonitor.ts
  */
 
+import { fileURLToPath } from 'node:url';
 import { query, safeLog, logger } from 'settlement-core';
 import { postSlackAlert } from './slackAlert';
 import { captureWorkerAlert } from './sentryAlert';
@@ -194,9 +195,15 @@ export function stopStuckDisputeMonitor(): void {
   if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
 }
 
-// One-shot manual run (ignores the ENABLE flag):
+// One-shot manual run (ignores the ENABLE flag). core-api is ESM, so `require`
+// is undefined — use an ESM-safe main-module check that can never throw at import
+// (a throw here would crash core-api boot, since index.ts imports this module).
 //   npx tsx src/workers/stuckDisputeMonitor.ts
-if (require.main === module) {
+const isCliRun = (() => {
+  try { return !!process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url); }
+  catch { return false; }
+})();
+if (isCliRun) {
   (async () => {
     const res = await runStuckDisputeMonitorOnce();
     // eslint-disable-next-line no-console
