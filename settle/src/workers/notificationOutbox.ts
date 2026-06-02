@@ -10,6 +10,7 @@
  */
 
 import { query, transaction } from '../lib/db';
+import { runWorkerTick } from '../lib/workerHealth';
 import { notifyOrderStatusUpdated } from '../lib/pusher/server';
 import { wsBroadcastOrderUpdate } from '../lib/websocket/broadcast';
 import { logger } from 'settlement-core';
@@ -262,7 +263,11 @@ export function startOutboxWorker(): void {
   const poll = async () => {
     if (!isRunning) return;
 
-    await processBatch();
+    await runWorkerTick(
+      'notificationOutbox-settle',
+      { intervalMs: POLL_INTERVAL_MS, criticality: 'medium', timeoutMs: 120_000 },
+      processBatch,
+    );
 
     // Schedule next poll
     pollTimer = setTimeout(poll, POLL_INTERVAL_MS);

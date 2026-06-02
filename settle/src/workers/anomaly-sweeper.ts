@@ -21,6 +21,7 @@
  */
 
 import { query } from '../lib/db';
+import { runWorkerTick } from '../lib/workerHealth';
 import { safeLog } from '../lib/errorTracking/logger';
 
 const SWEEP_INTERVAL_MS = 60_000; // 1 minute
@@ -300,9 +301,17 @@ async function start(): Promise<void> {
     return;
   }
 
-  // Initial run after a short delay so DB pool is warm
-  setTimeout(() => { runSweep().catch(() => {}); }, 5_000);
-  setInterval(() => { runSweep().catch(() => {}); }, SWEEP_INTERVAL_MS);
+  // Initial run after a short delay so DB pool is warm. runSweep runs
+  // unchanged; the wrapper adds a heartbeat + stall timeout (and never throws,
+  // so the existing .catch would be redundant — kept implicitly via the tick).
+  const tick = () =>
+    runWorkerTick(
+      'anomaly-sweeper',
+      { intervalMs: SWEEP_INTERVAL_MS, criticality: 'medium', timeoutMs: 120_000 },
+      runSweep,
+    );
+  setTimeout(() => { tick(); }, 5_000);
+  setInterval(() => { tick(); }, SWEEP_INTERVAL_MS);
 }
 
 process.on('SIGINT', () => {

@@ -34,6 +34,7 @@
  *   - Toggleable via RECEIPT_RECON_ENABLED=false.
  */
 import { query, logger } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { createOrderReceipt } from '../receipts';
@@ -257,7 +258,11 @@ export function startReceiptReconciliationWorker(): void {
   const poll = async () => {
     if (!isRunning) return;
     try {
-      await processBatch();
+      await runWorkerTick(
+        'receiptReconciliationWorker',
+        { intervalMs: POLL_INTERVAL_MS, criticality: 'medium', timeoutMs: 120_000 },
+        processBatch,
+      );
       tickCount++;
 
       if (tickCount % SUMMARY_INTERVAL_TICKS === 0) {

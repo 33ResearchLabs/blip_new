@@ -40,6 +40,7 @@ import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { getConnection } from '@/lib/solana/escrow';
 import { findTradePda, findEscrowPda } from '@/lib/solana/v2/pdas';
 import { getUsdtMint } from '@/lib/solana/v2/config';
+import { runWorkerTick } from '@/lib/workerHealth';
 
 const POLL_INTERVAL_MS = 10_000;       // 10s — frequent enough for live UX
 const BATCH_SIZE = 25;
@@ -331,7 +332,14 @@ async function main(): Promise<void> {
   while (!stopping) {
     const t0 = Date.now();
     try {
-      await tick(connection);
+      // Heartbeat-wrapped tick — tick(connection) runs unchanged; the wrapper
+      // adds a stall timeout + worker_health heartbeat. The timeout bounds the
+      // wait only; it never aborts an in-flight on-chain read / DB transaction.
+      await runWorkerTick(
+        'escrow-reconciler',
+        { intervalMs: POLL_INTERVAL_MS, criticality: 'critical', timeoutMs: 120_000 },
+        () => tick(connection),
+      );
     } catch (err) {
       logger.error('[EscrowReconciler] tick threw', {
         error: (err as Error).message,

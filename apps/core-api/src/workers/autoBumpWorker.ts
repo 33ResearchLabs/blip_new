@@ -6,6 +6,7 @@
  */
 
 import { query as dbQuery, logger } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 import { broadcastOrderEvent } from '../ws/broadcast';
 import { writeFileSync } from 'fs';
 
@@ -119,7 +120,11 @@ export function startAutoBumpWorker(): void {
 
   const poll = async () => {
     if (!isRunning) return;
-    await processAutoBumps();
+    await runWorkerTick(
+      'autoBumpWorker',
+      { intervalMs: POLL_INTERVAL_MS, criticality: 'medium', timeoutMs: 120_000 },
+      processAutoBumps,
+    );
     pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
   };
 

@@ -8,6 +8,7 @@
  */
 
 import { query as dbQuery, logger } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 import { broadcastPriceEvent } from '../ws/broadcast';
 import { writeFileSync } from 'fs';
 
@@ -170,7 +171,11 @@ export function startPriceFeedWorker(): void {
 
   const poll = async () => {
     if (!isRunning) return;
-    await processCorridors();
+    await runWorkerTick(
+      'priceFeedWorker',
+      { intervalMs: POLL_INTERVAL_MS, criticality: 'medium', timeoutMs: 120_000 },
+      processCorridors,
+    );
     pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
   };
 

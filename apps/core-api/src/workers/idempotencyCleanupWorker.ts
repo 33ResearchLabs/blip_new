@@ -9,6 +9,7 @@
  */
 
 import { query, logger } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 
@@ -75,8 +76,15 @@ function writeHeartbeat(deleted: number): void {
 async function tick(): Promise<void> {
   if (!isRunning) return;
 
-  const deleted = await cleanupBatch();
-  writeHeartbeat(deleted);
+  await runWorkerTick(
+    'idempotencyCleanupWorker',
+    { intervalMs: CLEANUP_INTERVAL_MS, criticality: 'low', timeoutMs: 120_000 },
+    async () => {
+      const deleted = await cleanupBatch();
+      writeHeartbeat(deleted);
+      return { items: deleted };
+    },
+  );
 
   if (isRunning) {
     pollTimer = setTimeout(tick, CLEANUP_INTERVAL_MS);

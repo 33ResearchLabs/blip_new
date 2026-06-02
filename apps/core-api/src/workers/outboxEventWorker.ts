@@ -16,6 +16,7 @@
  *   - Processed events older than 7 days are cleaned up
  */
 import { query, logger } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { orderBus, type OrderEventPayload } from '../events';
@@ -207,7 +208,11 @@ export function startOutboxEventWorker(): void {
   const poll = async () => {
     if (!isRunning) return;
 
-    await processBatch();
+    await runWorkerTick(
+      'outboxEventWorker',
+      { intervalMs: POLL_INTERVAL_MS, criticality: 'high', timeoutMs: 120_000 },
+      processBatch,
+    );
     tickCount++;
 
     // Periodic recovery + summary (every ~30s)

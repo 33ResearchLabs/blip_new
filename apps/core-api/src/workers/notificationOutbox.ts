@@ -6,6 +6,7 @@
  */
 
 import { query, logger } from 'settlement-core';
+import { runWorkerTick } from './workerHealth';
 import { config } from 'dotenv';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -333,7 +334,11 @@ export function startOutboxWorker(): void {
     if (!isRunning) return;
 
     try {
-      await processBatch();
+      await runWorkerTick(
+        'notificationOutbox',
+        { intervalMs: POLL_INTERVAL_MS, criticality: 'medium', timeoutMs: 120_000 },
+        processBatch,
+      );
     } catch (err) {
       // Observability only — log but keep polling so a transient failure
       // doesn't take the worker offline.
