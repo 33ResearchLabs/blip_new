@@ -443,7 +443,7 @@ export const StatusCard = memo(function StatusCard({
             </span>
           )}
           <span className="flex items-center gap-1">
-            <Coins className="w-2.5 h-2.5 text-amber-400/80" />
+            <Coins className="w-2.5 h-2.5 text-white/50" />
             <span className="text-foreground/70 font-bold tabular-nums">
               {coinBalance != null ? coinBalance.toLocaleString('en-US') : "—"}
             </span>
@@ -779,7 +779,7 @@ export const StatusCard = memo(function StatusCard({
                         if (e.key === "Escape") setShowInrInput(false);
                       }}
                       placeholder="0"
-                      className="w-14 bg-foreground/[0.03] border border-foreground/[0.08] rounded px-1 py-0.5 text-[10px] text-white font-mono outline-none focus:border-white/20"
+                      className="w-14 bg-foreground/[0.03] border border-foreground/[0.08] rounded px-1 py-0.5 text-[10px] text-white font-mono outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
                       autoFocus
                     />
                     <button
@@ -981,7 +981,7 @@ export const StatusCard = memo(function StatusCard({
                           }
                           placeholder={marketData.avg_5m.toFixed(2)}
                           step={marketPair === "usdt_aed" ? "0.0001" : "0.01"}
-                          className="flex-1 bg-foreground/[0.02] border border-foreground/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-white/[0.12]"
+                          className="flex-1 bg-foreground/[0.02] border border-foreground/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
                           autoFocus
                         />
                         <button

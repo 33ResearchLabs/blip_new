@@ -370,7 +370,7 @@ export function MerchantNavbar({
                         </Link>
                       )}
                       {merchantInfo?.has_compliance_access && (
-                        <Link href="/compliance" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/60/70 hover:text-white/60 hover:bg-purple-500/[0.06] transition-colors">
+                        <Link href="/compliance" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors">
                           <Shield className="w-4 h-4" /> Compliance
                         </Link>
                       )} */}
@@ -422,7 +422,7 @@ export function MerchantNavbar({
                         className={`absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${
                           urgentNotificationCount > 0
                             ? "bg-red-500 text-white"
-                            : "bg-[#f5f5f7] text-background"
+                            : "bg-[#f5f5f7] text-[#0b0b0c]"
                         }`}
                       >
                         {notificationCount > 9 ? "9+" : notificationCount}
@@ -578,7 +578,7 @@ export function MerchantNavbar({
                       setDrawerOpen(false);
                       onNavLinkClick?.();
                     }}
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-white/60/70 hover:text-white/60 hover:bg-purple-500/[0.04] transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
                   >
                     <Shield className="w-5 h-5" /> Compliance
                   </Link>

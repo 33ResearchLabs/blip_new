@@ -371,15 +371,15 @@ export function OrderQuickView({
                       ? spm.details
                       : JSON.stringify(spm.details);
                   return (
-                    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-3 space-y-2">
-                      <div className="flex items-center gap-2 text-xs text-zinc-400 uppercase tracking-wide">
+                    <div className="bg-white/[0.06] border border-white/[0.09] rounded-xl p-3 space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-white/60 uppercase tracking-wide">
                         {typeIcon}
                         <span>Seller&apos;s Payment Method</span>
                       </div>
                       <div className="text-sm text-foreground font-medium">
                         {spm.name}
                       </div>
-                      <div className="text-xs text-zinc-400">{detailStr}</div>
+                      <div className="text-xs text-white/60">{detailStr}</div>
                       <div className="text-right text-sm font-semibold text-[#f5f5f7]">
                         {Math.round(selectedOrder.total)} {selectedOrder.toCurrency || 'AED'}
                       </div>

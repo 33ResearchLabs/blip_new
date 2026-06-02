@@ -762,7 +762,7 @@ export const ConfigPanel = memo(function ConfigPanel({
         </div>}
 
         {/* Testing rewards banner */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.08]/[0.08] border border-white/[0.09]">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.09]">
           <span className="text-base">🎁</span>
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-bold text-[#f5f5f7] leading-tight">$5 testing rewards</p>
@@ -784,12 +784,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               onCreateOrder("buy", priorityFee, pair);
             }}
             disabled={isDisabled}
-            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5 min-w-0 px-1"
-            style={{
-              backgroundColor: "var(--primary)",
-              color: "var(--background)",
-              boxShadow: "0 2px 12px var(--primary-dim)",
-            }}
+            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg bg-[#f5f5f7] text-[#0b0b0c] font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5 min-w-0 px-1"
           >
             {isCreatingTrade && openTradeForm.tradeType === "buy" ? (
               <Loader2 className="w-4 h-4 animate-spin" />

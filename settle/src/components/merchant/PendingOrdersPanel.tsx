@@ -422,10 +422,10 @@ const OrderList = memo(function OrderList({
                     </span>
                     <ArrowRight className="w-3 h-3 text-foreground/20" />
                     <span className="text-sm tabular-nums">
-                      <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
+                      <span className="text-[10px] text-[#f5f5f7] font-mono mr-1">
                         Get
                       </span>
-                      <span className="font-bold text-[var(--color-success)]">
+                      <span className="font-bold text-[#f5f5f7]">
                         {fiatTotal.toLocaleString()}{" "}
                         {(mOrder as any).corridor_id === "USDT_INR"
                           ? "INR"
@@ -460,7 +460,7 @@ const OrderList = memo(function OrderList({
                         className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
                           acceptingOrderId === mOrder.id
                             ? "bg-white/[0.06] text-black/60 cursor-wait"
-                            : "bg-[#f5f5f7] text-background hover:bg-white/[0.08]"
+                            : "bg-[#f5f5f7] text-[#0b0b0c] hover:bg-white/90"
                         }`}
                       >
                         {acceptingOrderId === mOrder.id ? (
@@ -650,7 +650,7 @@ const OrderList = memo(function OrderList({
                             className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all press-effect ${
                               acceptingOrderId === order.id
                                 ? "bg-white/[0.06] text-white/40 cursor-wait"
-                                : "bg-white/[0.06] border border-white/[0.12] text-[#f5f5f7] hover:bg-white/[0.08]"
+                                : "bg-[#f5f5f7] text-[#0b0b0c] font-bold hover:bg-white/90"
                             }`}
                           >
                             {acceptingOrderId === order.id ? (
@@ -1336,33 +1336,6 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           </div>
         )}
 
-        {/* Search (collapsed by default) + Filter + Sort */}
-        {searchVisible && (
-          <div className="flex items-center gap-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-white/[0.12] transition-colors mb-1.5">
-            <Search className="w-3 h-3 text-foreground/20 shrink-0" />
-            <input
-              type="search"
-              role="searchbox"
-              name="orders-search"
-              autoComplete="off"
-              data-1p-ignore="true"
-              data-lpignore="true"
-              data-form-type="other"
-              maxLength={100}
-              autoFocus
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search orders..."
-              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none focus-visible:outline-none font-mono"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery("")} className="text-foreground/30 hover:text-foreground/60">
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Advanced Filters */}
         <AnimatePresence>
           {showOrderFilters && (
@@ -1539,7 +1512,7 @@ const MY_STATUS_BADGE: Record<
   },
   escrowed: {
     label: "Escrowed",
-    cls: "bg-white/[0.06] text-white/60 border-purple-500/20",
+    cls: "bg-white/[0.06] text-white/60 border-white/[0.09]",
     Icon: CircleDot,
   },
   accepted: {
@@ -1549,12 +1522,12 @@ const MY_STATUS_BADGE: Record<
   },
   payment_pending: {
     label: "Payment Pending",
-    cls: "bg-white/[0.06] text-white/60 border-cyan-500/20",
+    cls: "bg-white/[0.06] text-white/60 border-white/[0.09]",
     Icon: CircleDot,
   },
   payment_sent: {
     label: "Payment Sent",
-    cls: "bg-white/[0.06] text-white/60 border-cyan-500/20",
+    cls: "bg-white/[0.06] text-white/60 border-white/[0.09]",
     Icon: CircleDot,
   },
   payment_confirmed: {
@@ -1690,7 +1663,7 @@ const MyOrdersList = memo(function MyOrdersList({
             {/* Row 1: emoji + name + status badge | timestamp */}
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/70 to-foreground/[0.03] flex items-center justify-center shrink-0 text-sm border border-foreground/[0.08] shadow-sm">
+                <div className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center shrink-0 text-sm border border-foreground/[0.08] shadow-sm">
                   {avatarChar}
                 </div>
                 <span className="flex items-center gap-1 text-[12px] font-semibold text-white min-w-0">
@@ -1746,7 +1719,7 @@ const MyOrdersList = memo(function MyOrdersList({
             <div className="relative mb-2 rounded-xl overflow-hidden backdrop-blur-sm">
               <div className="absolute inset-0 bg-gradient-to-br from-foreground/[0.05] via-foreground/[0.02] to-transparent" />
               <div
-                className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-emerald-500/[0.08] via-emerald-500/[0.03] to-transparent`}
+                className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-white/[0.04] via-white/[0.02] to-transparent`}
               />
               <div className="absolute inset-0 rounded-xl border border-foreground/[0.08]" />
 
@@ -1754,7 +1727,7 @@ const MyOrdersList = memo(function MyOrdersList({
                 <div className="flex-1 px-3.5 py-2.5">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-white/[0.08] shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
+                      className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-white/[0.30]" : "bg-foreground/30"}`}
                     />
                     <span
                       className={`text-[9px] font-bold font-mono tracking-[0.15em] ${left.isReceive ? "text-[#f5f5f7]" : "text-foreground/50"}`}
@@ -1776,7 +1749,7 @@ const MyOrdersList = memo(function MyOrdersList({
 
                 <div className="flex items-center shrink-0">
                   <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-foreground/[0.08] to-background border border-foreground/[0.12] flex items-center justify-center -mx-4 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.5)] z-10 backdrop-blur-sm">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-foreground/[0.08] to-background border border-foreground/[0.12] flex items-center justify-center -mx-4 shadow-black/20 z-10 backdrop-blur-sm">
                     <ArrowRightLeft
                       className="w-3 h-3 text-foreground/60"
                       strokeWidth={2.5}
@@ -1793,7 +1766,7 @@ const MyOrdersList = memo(function MyOrdersList({
                       {right.label}
                     </span>
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-white/[0.08] shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
+                      className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-white/[0.30]" : "bg-foreground/30"}`}
                     />
                   </div>
                   <div className="flex items-baseline justify-end gap-1.5">
