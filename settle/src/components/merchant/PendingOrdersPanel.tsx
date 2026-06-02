@@ -135,6 +135,51 @@ function getPartyNames(db: any): {
   return { seller: userName, buyer: merchantName };
 }
 
+// Rewrite the generic backend cancel placeholder ("Cancelled by <role>") into
+// viewer-perspective copy. A real/custom reason (anything that doesn't match the
+// placeholder shape) is returned verbatim, so this is a pure display
+// normalization with zero behavior change for meaningful reasons.
+//
+// The stored reason encodes the canceller's ROLE (merchant/user/system), not an
+// entity id. That's enough to be correct here:
+//   • user   → in the merchant app the user is always the counterparty customer.
+//   • system → an automated/timeout cancel.
+//   • merchant → attribute to "you" ONLY when the viewer is the sole merchant on
+//     the order (no second merchant could have been the canceller). When another
+//     merchant is present (M2M that was accepted), role alone can't disambiguate
+//     the two merchants, so we keep the original string rather than risk a wrong
+//     attribution — matching today's behaviour exactly for that case.
+function humanizeCancelReason(
+  rawReason: string | null,
+  opts: {
+    db: { merchant_id?: string | null; buyer_merchant_id?: string | null };
+    myId: string | null | undefined;
+    counterpartyName: string | null;
+  },
+): string | null {
+  if (!rawReason) return null;
+  const match = /^cancelled by (merchant|user|system)$/i.exec(rawReason.trim());
+  if (!match) return rawReason;
+  const role = match[1].toLowerCase();
+  const { db, myId, counterpartyName } = opts;
+
+  if (role === "system") return "Auto-cancelled";
+
+  if (role === "user")
+    return counterpartyName
+      ? `Cancelled by ${counterpartyName}`
+      : "Cancelled by the customer";
+
+  // role === "merchant"
+  const iAmAMerchantOnIt =
+    !!myId && (db.merchant_id === myId || db.buyer_merchant_id === myId);
+  const otherMerchantPresent =
+    (!!db.merchant_id && db.merchant_id !== myId) ||
+    (!!db.buyer_merchant_id && db.buyer_merchant_id !== myId);
+  if (iAmAMerchantOnIt && !otherMerchantPresent) return "Cancelled by you";
+  return rawReason;
+}
+
 // ─── Virtualized order list (renders only visible rows) ──────────
 const ITEM_HEIGHT = 170; // Estimated row height in px (mempool cards are taller with earnings hero)
 
@@ -144,6 +189,7 @@ const OrderList = memo(function OrderList({
   onSelectOrder,
   onSelectMempoolOrder,
   onAcceptOrder,
+  onCancelOrder,
   acceptingOrderId,
 }: {
   filteredOrders: any[];
@@ -151,6 +197,7 @@ const OrderList = memo(function OrderList({
   onSelectOrder: (order: any) => void;
   onSelectMempoolOrder: (order: any) => void;
   onAcceptOrder: (order: any) => void;
+  onCancelOrder?: (order: any) => void;
   acceptingOrderId?: string | null;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -1021,6 +1068,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   onSelectOrder,
   onSelectMempoolOrder,
   onAcceptOrder,
+  onCancelOrder,
   acceptingOrderId,
   fetchOrders,
   onLoadMore,
@@ -1363,8 +1411,20 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       )
         return false;
     }
-    if (orderFilters.type !== "all" && order.orderType !== orderFilters.type)
-      return false;
+    if (orderFilters.type !== "all") {
+      // Type filter matches the merchant's VIEWER perspective (what the card
+      // shows as YOU PAY / YOU RECEIVE), NOT the creator-perspective raw
+      // dbOrder.type. viewerSide "buyer" = merchant receives crypto = a BUY to
+      // them; "seller" = merchant pays crypto = a SELL. Uses the exact same
+      // getViewerSide() call as the Row 2 card label so the filter and the
+      // displayed direction never diverge (e.g. an order shown as a buy no
+      // longer leaks into the SELL filter).
+      const viewerType =
+        getViewerSide(order.dbOrder, merchantInfo?.id) === "buyer"
+          ? "buy"
+          : "sell";
+      if (viewerType !== orderFilters.type) return false;
+    }
     if (orderFilters.amount === "small" && order.amount >= 500) return false;
     if (
       orderFilters.amount === "medium" &&
@@ -1734,7 +1794,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                 {/* Escrow */}
                 <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
                   {[
-                    { key: "all", label: "Escrow" },
+                    { key: "all", label: "All" },
                     { key: "yes", label: "Secured" },
                     { key: "no", label: "Open" },
                   ].map(({ key, label }) => (
@@ -1790,6 +1850,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           onSelectOrder={onSelectOrder}
           onSelectMempoolOrder={onSelectMempoolOrder}
           onAcceptOrder={onAcceptOrder}
+          onCancelOrder={onCancelOrder}
           acceptingOrderId={acceptingOrderId}
         />
       )}
@@ -1948,7 +2009,10 @@ const MyOrdersList = memo(function MyOrdersList({
         const avatarChar = myName.charAt(0).toUpperCase();
 
         const cancelReason: string | null = isCancelled
-          ? db.cancellation_reason || db.cancel_request_reason || null
+          ? humanizeCancelReason(
+              db.cancellation_reason || db.cancel_request_reason || null,
+              { db, myId, counterpartyName },
+            )
           : null;
 
         const crypto = {
