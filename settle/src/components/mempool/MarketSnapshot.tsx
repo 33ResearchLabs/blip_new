@@ -13,7 +13,7 @@ interface CorridorData {
   updated_at: string;
 }
 
-export function MarketSnapshot() {
+export function MarketSnapshot({ corridorId = 'USDT_AED' }: { corridorId?: string }) {
   const [corridor, setCorridor] = useState<CorridorData | null>(null);
   const [prevPrice, setPrevPrice] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,16 +22,21 @@ export function MarketSnapshot() {
     fetchCorridorData();
     const interval = setInterval(fetchCorridorData, 30000); // Update every 30s
     return () => clearInterval(interval);
-  }, []);
+  }, [corridorId]);
 
   const fetchCorridorData = async () => {
     try {
-      const res = await fetchWithAuth('/api/mempool?type=corridor&corridor_id=USDT_AED');
+      // Use the same price source as the dashboard (/api/corridor/dynamic-rate).
+      // It supports BOTH corridors via getFinalPrice (admin/live), whereas the
+      // mempool's corridor_prices path is AED-only (the refprice worker only
+      // runs USDT_AED), so INR showed "no market data". dynamic-rate returns
+      // the corridor object directly on data.data.
+      const res = await fetchWithAuth(`/api/corridor/dynamic-rate?pair=${corridorId.toLowerCase()}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.success && data.data.corridor) {
+        if (data.success && data.data) {
           setPrevPrice(corridor?.ref_price || null);
-          setCorridor(data.data.corridor);
+          setCorridor(data.data);
         }
       }
     } catch (error) {
@@ -73,7 +78,7 @@ export function MarketSnapshot() {
             Market Snapshot
           </span>
           <span className="text-[10px] text-white/40 font-mono ml-auto">
-            {/* {corridor.corridor_id} */}  USDT/AED
+            {corridorId.replace('_', '/')}
           </span>
         </div>
       </div>
@@ -101,7 +106,7 @@ export function MarketSnapshot() {
             {Number(corridor.ref_price).toFixed(6)}
           </div>
           <div className="text-[10px] text-white/40 font-mono mt-0.5">
-            AED/USDT
+            {(corridorId.split('_')[1] || 'AED')}/USDT
           </div>
         </div>
 

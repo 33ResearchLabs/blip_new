@@ -51,6 +51,17 @@ export default function MempoolPage() {
     maxAmount: '',
   });
 
+  // Corridor comes from the dashboard via ?corridor=USDT_INR. The Mempool is
+  // opened in a NEW TAB, so React state/context can't carry the selection —
+  // the URL does. Read after mount (SSR/hydration-safe); fall back to USDT_INR.
+  const [corridorId, setCorridorId] = useState('USDT_INR');
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get('corridor');
+    const c = raw ? raw.toUpperCase() : null;
+    if (c === 'USDT_AED' || c === 'USDT_INR') setCorridorId(c);
+  }, []);
+  const corridorLabel = corridorId.replace('_', '/'); // USDT_INR → USDT/INR
+
   // Restore merchant session via cookie-authed /api/auth/me. Uses
   // fetchWithAuth so a transient 401 (access token just expired, slow
   // session check, etc.) gets ONE silent refresh-and-retry via the
@@ -155,7 +166,7 @@ export default function MempoolPage() {
               </span>
             </nav>
             <div className="flex items-center gap-1 px-2 py-1 bg-white/[0.03] rounded-md">
-              <span className="text-[10px] font-mono text-white/40">USDT/AED</span>
+              <span className="text-[10px] font-mono text-white/40">{corridorLabel}</span>
             </div>
           </div>
 
@@ -178,14 +189,14 @@ export default function MempoolPage() {
         <div className="w-[320px] flex flex-col gap-2 shrink-0 overflow-y-auto">
           {/* Market Snapshot Widget */}
           <div className="glass-card rounded-xl overflow-hidden border border-white/[0.06] flex-shrink-0">
-            <MarketSnapshot />
+            <MarketSnapshot corridorId={corridorId} />
           </div>
 
           {/* Merchant Quote Control Widget */}
           <div className="glass-card rounded-xl overflow-hidden border border-white/[0.06] flex-shrink-0">
             <MerchantQuoteControl
               merchantId={merchantId}
-              corridorId="USDT_AED"
+              corridorId={corridorId}
             />
           </div>
 
@@ -204,6 +215,7 @@ export default function MempoolPage() {
           <MempoolWidget
             onSelectOrder={handleOrderSelect}
             selectedOrderId={selectedOrder?.id}
+            corridorId={corridorId}
           />
         </div>
       </div>

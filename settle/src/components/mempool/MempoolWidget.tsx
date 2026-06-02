@@ -28,9 +28,10 @@ interface MempoolOrder {
 interface MempoolWidgetProps {
   onSelectOrder?: (order: MempoolOrder) => void;
   selectedOrderId?: string | null;
+  corridorId?: string;
 }
 
-export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetProps) {
+export function MempoolWidget({ onSelectOrder, selectedOrderId, corridorId = 'USDT_AED' }: MempoolWidgetProps) {
   const [orders, setOrders] = useState<MempoolOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -42,11 +43,11 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
       const interval = setInterval(fetchOrders, 5000); // Refresh every 5s
       return () => clearInterval(interval);
     }
-  }, [autoRefresh]);
+  }, [autoRefresh, corridorId]);
 
   const fetchOrders = async () => {
     try {
-      const res = await fetchWithAuth('/api/mempool?type=orders&corridor_id=USDT_AED&limit=50');
+      const res = await fetchWithAuth(`/api/mempool?type=orders&corridor_id=${corridorId}&limit=50`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -183,7 +184,7 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
                     <span className={`text-base font-bold font-mono ${getPriorityColor(order.premium_bps_current)}`}>
                       {Number(order.current_offer_price).toFixed(6)}
                     </span>
-                    <span className="text-[10px] text-white/40 font-mono">AED</span>
+                    <span className="text-[10px] text-white/40 font-mono">{corridorId.split('_')[1] || 'AED'}</span>
                   </div>
 
                   {/* Premium Info */}

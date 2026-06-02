@@ -304,4 +304,32 @@ app.prepare().then(async () => {
   } else {
     console.log('> Anomaly sweeper skipped (ENABLE_ERROR_TRACKING not true)');
   }
+
+  // Start reputation worker — SOLE writer of the display tables
+  // `reputation_scores` / `reputation_history` (CIBIL 300–900). Without it
+  // running, those rows go stale (core-api no longer writes them) and the
+  // leaderboard drifts from the in-app score. Full back-fill on boot, fast
+  // refresh on a tight cadence, daily maintenance. See
+  // src/workers/reputation-worker.ts.
+  //
+  // This runs under `node server.js` (Railway/Docker production). Under
+  // `next dev` (start-all.sh) server.js isn't executed — the worker is
+  // started in-process by the instrumentation hook instead.
+  try {
+    const { spawn } = require('child_process');
+    const path = require('path');
+    const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const reputationScript = path.join(__dirname, 'src/workers/reputation-worker.ts');
+    const reputationWorker = spawn(npxBin, ['tsx', reputationScript], {
+      stdio: 'inherit',
+      env: { ...process.env },
+      cwd: __dirname,
+    });
+    reputationWorker.on('exit', (code) => {
+      if (code !== 0) console.error(`> Reputation worker exited with code ${code}`);
+    });
+    console.log('> Reputation worker started (pid:', reputationWorker.pid + ')');
+  } catch (reputationErr) {
+    console.warn('> Reputation worker not available:', reputationErr.message);
+  }
 });

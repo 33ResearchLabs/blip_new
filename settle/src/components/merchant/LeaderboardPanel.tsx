@@ -93,16 +93,34 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
   const [repData, setRepData] = useState<RepLeaderboardEntry[]>([]);
 
   useEffect(() => {
-    if (leaderboardTab === 'reputation' && repData.length === 0) {
-      fetchWithAuth('/api/reputation?action=leaderboard&entityType=merchant&limit=20')
+    if (leaderboardTab !== 'reputation') return;
+
+    let cancelled = false;
+    const load = () => {
+      // `cache: 'no-store'` so the browser never serves a stale leaderboard
+      // from its HTTP cache — the score must reflect the live backend row.
+      fetchWithAuth('/api/reputation?action=leaderboard&entityType=merchant&limit=20', { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
+          if (cancelled) return;
           if (data.success && data.data?.leaderboard) {
             setRepData(data.data.leaderboard);
           }
         })
         .catch(() => {});
-    }
+    };
+
+    // Fetch immediately on entering the tab, then poll while it stays open.
+    // The old code fetched once and kept the result in state forever
+    // (`repData.length === 0` guard), so the number was frozen for the
+    // whole session — even after the backend score changed.
+    load();
+    const interval = setInterval(load, 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [leaderboardTab]);
 
   const filteredData =

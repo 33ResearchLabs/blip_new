@@ -284,7 +284,12 @@ export function applyColdStart(rawScore: number, totalTrades: number, threshold:
  */
 export function assignTier(score: number, extraBadgeChecks?: { speed?: number; volume?: number; paymentSpeed?: number; activity?: number; totalTrades?: number }, entityType?: 'merchant' | 'user'): { tier: string; badges: string[]; score1000: number } {
   const badges: string[] = [];
-  const score1000 = Math.round(score * 10); // Convert 0-100 → 0-1000
+  // `score` already arrives on the 0–1000 scale: sub-scores are 0–1000,
+  // the weighted sum is divided by 100, and the cold-start baseline
+  // (constants.ts) is 0–1000 too. The old `* 10` assumed a 0–100 input and
+  // pushed EVERY score past 900, so every entity was tagged 'diamond'
+  // (e.g. cold-start 400 → 4000 → diamond). Bucket off the 0–1000 score.
+  const score1000 = Math.round(score);
 
   let tier: string;
   if (score1000 >= 900) { tier = 'diamond'; }
