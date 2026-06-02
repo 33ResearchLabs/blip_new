@@ -23,7 +23,14 @@ import {
   Volume2,
   VolumeX,
   X,
+  Shield,
+  MessageCircle,
+  User,
+  Landmark,
+  Banknote,
 } from "lucide-react";
+import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
+import { OrderAvatar, HoldSwipe } from "@/components/merchant/OrderCardParts";
 import { AnimatePresence, motion } from "framer-motion";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { CountdownRing } from "./CountdownRing";
@@ -136,8 +143,213 @@ function getPartyNames(db: any): {
   return { seller: userName, buyer: merchantName };
 }
 
+// ─── Per-card component so each card can hold its own dismissed state ───────
+function DesktopOrderCard({ order, merchantId, isMyOwnOrder, onSelectOrder, onAcceptOrder, acceptingOrderId, onCancelOrder }: {
+  order: any; merchantId: string | null | undefined; isMyOwnOrder: boolean;
+  onSelectOrder: (o: any) => void; onAcceptOrder: (o: any) => void;
+  acceptingOrderId?: string | null; onCancelOrder?: (o: any) => void;
+}) {
+  const [dismissed, setDismissed] = useState(false);
+
+  const { seller, buyer } = getPartyNames(order.dbOrder);
+  const soloName = seller || buyer || order.user || "Open Order";
+  const dbUsername = order.dbOrder?.user?.username || "";
+  const isPlaceholder = dbUsername.startsWith("open_order_") || dbUsername.startsWith("m2m_");
+  const displayName = isPlaceholder ? "Open Order" : soloName;
+  const rawAvatarSrc = (order.dbOrder?.user?.avatar_url as string | undefined) || (order as any).user_avatar || undefined;
+  const avatarSrc = rawAvatarSrc && /^https?:\/\/|^\//.test(rawAvatarSrc) ? rawAvatarSrc : undefined;
+  const isVerified = (order.dbOrder?.user?.is_verified as boolean | undefined) ?? false;
+  const rating = order.dbOrder?.user?.rating ?? null;
+  const trades = order.dbOrder?.user?.total_trades ?? null;
+  const completionRate = order.dbOrder?.user?.completion_rate ?? null;
+
+  const pmType = order.lockedPaymentMethod?.type || order.dbOrder?.payment_method || (order.userBankDetails ? "bank" : null);
+  const pmLabelMap: Record<string, string> = { bank: "Bank Transfer", cash: "Cash", upi: "UPI" };
+  const pmLabel = pmLabelMap[pmType] || pmType || null;
+  const PmIcon = pmType === "upi" ? Zap : pmType === "bank" ? Landmark : pmType === "cash" ? Banknote : null;
+
+  const effStatus: string = order.status || order.dbOrder?.status || "pending";
+  const isActivelyPending = effStatus === "pending" && order.expiresIn > 0;
+  const viewerSide = getViewerSide(order.dbOrder, merchantId);
+  const fiatLabel = viewerSide === "seller" ? "YOU RECEIVE" : "YOU PAY OUT";
+  const fiatCur = order.toCurrency || "AED";
+  const cryptoCur = order.fromCurrency || "USDT";
+  const earningFiat = order.amount * (order.protocolFeePercent ?? 0.5) / 100 * (order.rate || 1);
+  const heroFiat = formatFiat(Math.round(order.total), fiatCur).replace(/\.00$/, '');
+  const heroEarning = earningFiat > 0 ? formatFiat(earningFiat, fiatCur).replace(/\.?0+$/, '') : null;
+  const heroRate = (order.rate || 0).toFixed(1);
+  const heroSpread = order.rate && order.protocolFeePercent
+    ? `+${(order.rate * order.protocolFeePercent / 100).toFixed(2)}`
+    : null;
+  const timeFrac = Math.min(1, order.expiresIn / 900);
+  const low = timeFrac < 0.25;
+  const expiringSoon = order.expiresIn > 0 && order.expiresIn <= 120;
+  const urgent = low || expiringSoon;
+  const countdownLabel = order.expiresIn >= 60
+    ? `${Math.floor(order.expiresIn / 60)}:${String(order.expiresIn % 60).padStart(2, "0")}`
+    : `0:${String(Math.max(0, order.expiresIn)).padStart(2, "0")}`;
+
+  if (dismissed) {
+    return (
+      <div className="rounded-[22px] border border-white/[0.06] px-4 py-3 flex items-center justify-between"
+        style={{ background: "rgba(255,255,255,0.02)" }}>
+        <span className="text-[13px] text-white/30 font-semibold">Order skipped</span>
+        <button onClick={() => setDismissed(false)} className="text-[12px] text-primary/70 hover:text-primary font-semibold transition-colors">Undo</button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-testid={`order-card-${order.id}`}
+      onClick={() => onSelectOrder(order)}
+      className="cursor-pointer rounded-[22px] overflow-hidden border border-white/[0.08]"
+      style={{ background: "linear-gradient(180deg,#17171a,#0f0f11)" }}
+    >
+      <div className="p-4">
+        {/* Trust block */}
+        <div className="flex items-start gap-3">
+          <OrderAvatar name={displayName} avatarUrl={avatarSrc} size={40} verified={isVerified} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[14px] font-black text-white leading-none truncate">{displayName}</span>
+              {isVerified && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 shrink-0 whitespace-nowrap">
+                  <Shield className="w-3 h-3" /> Verified
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              {rating != null && (
+                <span className="flex items-center gap-1 text-amber-400/90">
+                  ★<span className="text-[12px] font-black text-white">{Number(rating).toFixed(1)}</span>
+                  {trades != null && <span className="text-[11px] text-white/25">({trades})</span>}
+                </span>
+              )}
+              {rating != null && pmLabel && <span className="text-white/20 text-xs">·</span>}
+              {pmLabel && PmIcon && (
+                <span className="flex items-center gap-1 text-[11px] text-white/40 font-semibold">
+                  <PmIcon className="w-3 h-3" strokeWidth={2} /> {pmLabel}
+                </span>
+              )}
+            </div>
+            {trades != null && (
+              <div className="text-[10px] text-white/25 font-semibold whitespace-nowrap">
+                <span className="font-black text-white/50">{Number(trades).toLocaleString()}</span> orders
+                {completionRate != null && (
+                  <> · <span className="font-black text-emerald-400">{completionRate}%</span></>
+                )}
+              </div>
+            )}
+          </div>
+          {/* Icon buttons */}
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelectOrder(order); }}
+              className="w-[34px] h-[34px] rounded-full border border-white/[0.14] bg-white/[0.02] flex items-center justify-center text-white/50 hover:bg-white/[0.06] hover:text-white transition-all active:scale-95">
+              <MessageCircle className="w-3.5 h-3.5" />
+            </button>
+            <button className="w-[34px] h-[34px] rounded-full border border-white/[0.14] bg-white/[0.02] flex items-center justify-center text-white/50 hover:bg-white/[0.06] hover:text-white transition-all active:scale-95">
+              <User className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Full-bleed divider */}
+        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "13px -16px" }} />
+
+        {/* Payout hero */}
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-[0.07em] text-white/35 mb-1.5">{fiatLabel}</div>
+            <div className="flex items-end gap-2 flex-wrap">
+              <span style={{ fontSize: 32, lineHeight: 0.9, fontWeight: 800, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: "#fff" }}>
+                {heroFiat}
+              </span>
+              {!isMyOwnOrder && isActivelyPending && heroEarning && (
+                <span className="flex items-center gap-1 mb-0.5 whitespace-nowrap"
+                  style={{ padding: "5px 10px", borderRadius: 999, background: "rgba(34,226,154,0.12)", border: "1px solid rgba(34,226,154,0.32)", color: "#22e29a", fontSize: 11, fontWeight: 700, boxShadow: "0 0 16px rgba(34,226,154,0.22)" }}>
+                  <Zap style={{ width: 11, height: 11 }} />
+                  +{heroEarning}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+              {Math.round(order.amount).toLocaleString("en-US")} <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.35)" }}>{cryptoCur}</span>
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, fontWeight: 600, marginTop: 4, whiteSpace: "nowrap" }}>
+              @ <span style={{ color: "#fff", fontWeight: 800 }}>{heroRate}</span>
+              {heroSpread && <> · <span style={{ color: "#22e29a" }}>{heroSpread}</span></>}
+            </div>
+          </div>
+        </div>
+
+        {/* Action row */}
+        {isActivelyPending && (
+          <div className="flex items-center gap-2 mt-3.5" onClick={(e) => e.stopPropagation()}>
+            {!isMyOwnOrder ? (
+              <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setDismissed(true); }}
+                  className="w-[44px] h-[44px] rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95"
+                  style={{ background: "rgba(255,77,79,0.06)", border: "1px solid rgba(255,77,79,0.3)", color: "#ff4d4f" }}>
+                  <X className="w-4 h-4" />
+                </button>
+                <HoldSwipe onAccept={() => onAcceptOrder(order)} loading={acceptingOrderId === order.id} height={44} />
+              </>
+            ) : (
+              <div className="flex items-center gap-2 h-[44px] w-full">
+                <span className="flex items-center gap-2 text-[11px] text-white/25 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/20 animate-pulse" />
+                  Waiting for counterparty…
+                </span>
+                {onCancelOrder && (
+                  <button onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
+                    className="ml-auto text-[11px] text-red-400/50 hover:text-red-400 transition-colors font-mono">
+                    cancel
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Countdown footer */}
+        {isActivelyPending && (
+          <div className="flex items-center gap-2 mt-2.5" style={{ fontSize: 11, fontWeight: 700 }}>
+            <span className="relative flex w-2 h-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                style={{ background: urgent ? "#ff4d4f" : "#22e29a" }} />
+              <span className="relative inline-flex rounded-full w-2 h-2"
+                style={{ background: urgent ? "#ff4d4f" : "#22e29a" }} />
+            </span>
+            <span style={{ color: urgent ? "#ff4d4f" : "#a4a4ac" }}>
+              <span className="font-black tabular-nums">{countdownLabel}</span>
+              {" "}<span style={{ color: "#7c7c82", fontWeight: 600 }}>left to accept</span>
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom progress bar flush to card edge */}
+      {isActivelyPending && (
+        <div style={{ height: 4, background: "rgba(255,255,255,0.06)" }}>
+          <div style={{
+            height: "100%", width: `${timeFrac * 100}%`,
+            background: urgent ? "#ff4d4f" : "#22e29a",
+            transition: "width 1s linear",
+            boxShadow: urgent ? "0 0 8px rgba(255,77,79,0.6)" : "0 0 10px rgba(34,226,154,0.55)",
+          }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Virtualized order list (renders only visible rows) ──────────
-const ITEM_HEIGHT = 170; // Estimated row height in px (mempool cards are taller with earnings hero)
+const ITEM_HEIGHT = 300; // Estimated row height — new reference card design is taller
 
 const OrderList = memo(function OrderList({
   filteredOrders,
@@ -146,6 +358,7 @@ const OrderList = memo(function OrderList({
   onSelectMempoolOrder,
   onAcceptOrder,
   acceptingOrderId,
+  onCancelOrder,
 }: {
   filteredOrders: any[];
   merchantInfo: any;
@@ -153,6 +366,7 @@ const OrderList = memo(function OrderList({
   onSelectMempoolOrder: (order: any) => void;
   onAcceptOrder: (order: any) => void;
   acceptingOrderId?: string | null;
+  onCancelOrder?: (order: any) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const corridorPrices = useCorridorPrices();
@@ -487,11 +701,6 @@ const OrderList = memo(function OrderList({
             : !!order.isMyOrder ||
               (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id);
 
-          const effStatusForDot: string =
-            order.status || order.dbOrder?.status || "pending";
-          const isActivelyPendingForDot =
-            effStatusForDot === "pending" && order.expiresIn > 0;
-
           return (
             <div
               key={order.id}
@@ -504,211 +713,17 @@ const OrderList = memo(function OrderList({
                 width: "100%",
                 transform: `translateY(${virtualRow.start}px)`,
               }}
-              className="pb-1"
+              className="pb-2"
             >
-              {/* Live pulse dot — sits exactly on the card's top-left corner.
-                  Rendered OUTSIDE the overflow-hidden inner wrapper so the
-                  pinging halo isn't clipped. */}
-              {isActivelyPendingForDot && (
-                <span className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 flex h-2.5 w-2.5 z-20 pointer-events-none">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-60 animate-ping" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
-                </span>
-              )}
-              <div
-                data-testid={`order-card-${order.id}`}
-                onClick={() => onSelectOrder(order)}
-                className={`relative p-3 rounded-xl transition-all cursor-pointer overflow-hidden ${isMyOwnOrder ? "opacity-50" : ""}`}
-                style={{
-                  background: isMyOwnOrder ? "rgba(255,255,255,0.01)" : "#111113",
-                  border: isMineable
-                    ? "1px solid rgba(249,115,22,0.25)"
-                    : "1px solid rgba(255,255,255,0.07)",
-                  borderLeft: isMineable ? "2px solid rgba(249,115,22,0.5)" : undefined,
-                }}
-                onMouseEnter={(e) => !isMyOwnOrder && (e.currentTarget.style.borderColor = "rgba(255,255,255,0.13)")}
-                onMouseLeave={(e) => !isMyOwnOrder && (e.currentTarget.style.borderColor = isMineable ? "rgba(249,115,22,0.25)" : "rgba(255,255,255,0.07)")}
-              >
-                {(() => {
-                  // ── Resolve all display data up-front ──────────────────
-                  const { seller, buyer } = getPartyNames(order.dbOrder);
-                  const soloName = seller || buyer || order.user || null;
-                  const username = order.dbOrder?.user?.username || order.user;
-                  const avatarSrc =
-                    (order.dbOrder?.user?.avatar_url as string | undefined) ||
-                    (order as any).user_avatar || null;
-                  const rating = order.dbOrder?.user?.rating;
-                  const trades = order.dbOrder?.user?.total_trades ?? 0;
-                  const tooltipItems: InfoTooltipItem[] = [
-                    { label: "Rating", value: rating != null ? `★ ${Number(rating).toFixed(1)} / 5.0` : "No rating yet" },
-                    { label: "Trades", value: `${trades} completed` },
-                    { label: "Trust", value: trades >= 50 ? "Verified trader" : trades >= 10 ? "Regular trader" : "New trader" },
-                  ];
-                  const pmType = order.lockedPaymentMethod?.type || order.dbOrder?.payment_method || (order.userBankDetails ? "bank" : null);
-                  const pmLabel: Record<string, string> = { bank: "Bank", cash: "Cash", upi: "UPI" };
-                  const effStatus: string = order.status || order.dbOrder?.status || "pending";
-                  const isActivelyPending = effStatus === "pending" && order.expiresIn > 0;
-                  const viewerSide = getViewerSide(order.dbOrder, merchantInfo?.id);
-                  const cryptoAmt = Math.round(order.amount).toLocaleString();
-                  const fiatAmt = Math.round(order.total).toLocaleString();
-                  const primaryAmt = cryptoAmt;
-                  const primaryCcy = order.fromCurrency;
-                  const secondaryAmt = fiatAmt;
-                  const secondaryCcy = order.toCurrency;
-                  const payLabel = viewerSide === "seller" ? "you pay" : "you receive";
-                  const extraPct = order.protocolFeePercent != null
-                    ? order.protocolFeePercent - (order.spreadPreference === "fastest" ? 2.5 : order.spreadPreference === "best" ? 2.0 : 1.5)
-                    : 0;
-
-                  return (
-                    <>
-                      {/* ── Row 1: Avatar / Name / Handle · Action top-right ── */}
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="relative shrink-0">
-                            <UserAvatar
-                              src={avatarSrc}
-                              seed={soloName || "U"}
-                              size={36}
-                              className="rounded-full border border-white/[0.08]"
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[13px] font-semibold text-white/90 leading-tight truncate">
-                                {soloName || "—"}
-                              </span>
-                              <InfoTooltip side="bottom" title={username} description="Counterparty stats." items={tooltipItems} />
-                            </div>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <span className={`text-[10px] font-mono font-semibold ${order.type === 'buy' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {order.type?.toUpperCase() || "TRADE"}
-                              </span>
-                              {pmType && (
-                                <span className="text-[10px] text-white/20 font-mono">· {pmLabel[pmType] || pmType}</span>
-                              )}
-                              {isMyOwnOrder && (
-                                <span className="text-[10px] text-white/20 font-mono">· yours</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Top-right: status pill or accept button */}
-                        {isActivelyPending && !isMyOwnOrder ? (
-                          <button
-                            data-testid="order-primary-action"
-                            onClick={(e) => { e.stopPropagation(); onAcceptOrder(order); }}
-                            disabled={acceptingOrderId === order.id}
-                            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all press-effect ${
-                              acceptingOrderId === order.id
-                                ? "bg-primary/30 text-white/40 cursor-wait"
-                                : "bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
-                            }`}
-                          >
-                            {acceptingOrderId === order.id ? (
-                              <><Loader2 className="w-3 h-3 animate-spin" /> Accepting…</>
-                            ) : (
-                              <>{order.dbOrder?.primaryAction?.label || (isMineable ? "Mine" : "Accept")} →</>
-                            )}
-                          </button>
-                        ) : isActivelyPending && isMyOwnOrder ? (
-                          <span className="flex items-center gap-1 text-[10px] font-mono text-white/20 shrink-0">
-                            <span className="w-1.5 h-1.5 rounded-full bg-white/20 animate-pulse" />
-                            waiting
-                          </span>
-                        ) : (
-                          (() => {
-                            const badge = MY_STATUS_BADGE[effStatus] || MY_STATUS_BADGE.pending;
-                            const StatusIcon = badge.Icon;
-                            return (
-                              <span className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono font-semibold border shrink-0 ${badge.cls}`}>
-                                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
-                                {badge.label}
-                              </span>
-                            );
-                          })()
-                        )}
-                      </div>
-
-                      {/* ── Primary amount — big and left-aligned ── */}
-                      <div className="mb-1">
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-[26px] font-bold tabular-nums leading-none text-white/90 tracking-tight">
-                            {primaryAmt}
-                          </span>
-                          <span className="text-[13px] font-medium text-white/35">{primaryCcy}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className="text-[11px] text-white/30">→</span>
-                          <span className="text-[12px] font-mono tabular-nums text-white/40">
-                            {secondaryAmt} <span className="text-white/25">{secondaryCcy}</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* ── Timer + rate footer ── */}
-                      <div className="flex items-center gap-2 mt-2">
-                        {isActivelyPending ? (
-                          <div className={`flex items-center gap-1 text-[11px] font-mono tabular-nums ${order.expiresIn <= 120 ? "text-red-400" : "text-white/30"}`}>
-                            <Clock className="w-3 h-3" />
-                            {order.expiresIn >= 3600
-                              ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
-                              : order.expiresIn >= 60
-                                ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
-                                : `${order.expiresIn}s`}
-                          </div>
-                        ) : (
-                          (() => {
-                            const ts = order.dbOrder?.completed_at || order.dbOrder?.cancelled_at || order.dbOrder?.created_at || order.timestamp;
-                            const tsDate = ts instanceof Date ? ts : ts ? new Date(ts) : null;
-                            return tsDate ? (
-                              <span className="text-[10px] text-white/20 font-mono tabular-nums">
-                                {tsDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                              </span>
-                            ) : null;
-                          })()
-                        )}
-                        <span className="text-[10px] text-white/15 font-mono tabular-nums">
-                          @ {order.rate.toFixed(2)}
-                        </span>
-                        {extraPct > 0 && (
-                          <span className="text-[10px] font-mono text-primary/70">+{extraPct.toFixed(1)}%</span>
-                        )}
-                        {isMyOwnOrder && onCancelOrder && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
-                            className="ml-auto text-[10px] text-red-400/50 hover:text-red-400 transition-colors font-mono"
-                          >
-                            cancel
-                          </button>
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
-                {/* Countdown timer bar (bottom) — only for actively-pending orders */}
-                {(() => {
-                  const effStatus: string =
-                    order.status || order.dbOrder?.status || "pending";
-                  if (effStatus !== "pending" || order.expiresIn <= 0)
-                    return null;
-                  const total = 900;
-                  const pct = Math.max(
-                    0,
-                    Math.min(100, (order.expiresIn / total) * 100),
-                  );
-                  return (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04]">
-                      <div
-                        className={`h-full transition-[width] duration-1000 ease-linear ${order.expiresIn <= 120 ? "bg-red-400" : "bg-primary"}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  );
-                })()}
-              </div>
+              <DesktopOrderCard
+                order={order}
+                merchantId={merchantInfo?.id}
+                isMyOwnOrder={isMyOwnOrder}
+                onSelectOrder={onSelectOrder}
+                onAcceptOrder={onAcceptOrder}
+                acceptingOrderId={acceptingOrderId}
+                onCancelOrder={onCancelOrder}
+              />
             </div>
           );
         })}
@@ -726,6 +741,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   onAcceptOrder,
   acceptingOrderId,
   fetchOrders,
+  onCancelOrder,
   onLoadMore,
   hasMore = false,
   isLoadingMore = false,
@@ -1439,6 +1455,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           onSelectMempoolOrder={onSelectMempoolOrder}
           onAcceptOrder={onAcceptOrder}
           acceptingOrderId={acceptingOrderId}
+          onCancelOrder={onCancelOrder}
         />
       )}
 

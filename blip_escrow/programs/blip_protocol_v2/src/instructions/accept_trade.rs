@@ -44,7 +44,14 @@ pub struct AcceptTrade<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<AcceptTrade>) -> Result<()> {
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct AcceptTradeParams {
+    /// How long the buyer has to complete fiat payment after locking (seconds).
+    /// None = default 4h. Min 5 min, max 24h.
+    pub payment_window_secs: Option<u64>,
+}
+
+pub fn handler(ctx: Context<AcceptTrade>, params: AcceptTradeParams) -> Result<()> {
     let config = &ctx.accounts.protocol_config;
     let trade = &mut ctx.accounts.trade;
     let escrow = &ctx.accounts.escrow;
@@ -76,6 +83,15 @@ pub fn handler(ctx: Context<AcceptTrade>) -> Result<()> {
     trade.counterparty = acceptor.key();
     trade.status = TradeStatus::Locked;
     trade.locked_at = clock.unix_timestamp;
+
+    // Overwrite expires_at with the payment window deadline.
+    // In Locked state expires_at = absolute deadline for buyer to pay.
+    let window = params.payment_window_secs
+        .unwrap_or(Trade::BUYER_PAY_WINDOW as u64)
+        .max(5 * 60)       // min 5 minutes
+        .min(24 * 60 * 60) // max 24 hours
+        as i64;
+    trade.expires_at = clock.unix_timestamp.checked_add(window).ok_or(ErrorCode::Overflow)?;
 
     // Emit event
     emit!(TradeAcceptedEvent {

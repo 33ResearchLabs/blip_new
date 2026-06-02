@@ -1128,7 +1128,7 @@ export const HomeScreen = ({
       </motion.div>
 
       {/* ── Bottom nav ── */}
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} chatUnreadCount={unreadCount} />
+      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} />
 
       {/* ── UPI Pay (QR scan → amount → hand off to escrow flow) ── */}
       {showUpiPay && (

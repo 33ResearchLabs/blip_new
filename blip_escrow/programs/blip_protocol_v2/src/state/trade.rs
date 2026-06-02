@@ -190,22 +190,29 @@ impl Trade {
         self.status == TradeStatus::Funded && self.is_expired(current_time)
     }
 
-    /// Check if seller can manually cancel/refund in Locked state
-    /// Only after buyer_pay_window has passed
+    /// Check if seller can manually cancel/refund in Locked state.
+    /// Uses expires_at (set to payment window deadline on lock/accept).
+    /// Falls back to locked_at + BUYER_PAY_WINDOW for legacy trades.
     pub fn can_seller_cancel(&self, current_time: i64) -> bool {
-        self.status == TradeStatus::Locked &&
-        current_time > self.locked_at + Self::BUYER_PAY_WINDOW
+        if self.status != TradeStatus::Locked { return false; }
+        let deadline = if self.expires_at > 0 {
+            self.expires_at
+        } else {
+            self.locked_at + Self::BUYER_PAY_WINDOW
+        };
+        current_time > deadline
     }
 
     /// Hard, permissionless timeout in Locked state.
-    /// After `locked_at + BUYER_PAY_WINDOW` (default 4h) ANY caller may
-    /// refund to depositor. Safeguards against a ghosted seller/buyer pair.
-    /// Funds can only ever move to `escrow.depositor` (constraint in handler),
-    /// so a public trigger cannot redirect value.
+    /// Uses expires_at (payment window deadline). Falls back to constant for legacy trades.
     pub fn can_anyone_refund_locked(&self, current_time: i64) -> bool {
-        self.status == TradeStatus::Locked
-            && self.locked_at > 0
-            && current_time > self.locked_at + Self::BUYER_PAY_WINDOW
+        if self.status != TradeStatus::Locked || self.locked_at == 0 { return false; }
+        let deadline = if self.expires_at > 0 {
+            self.expires_at
+        } else {
+            self.locked_at + Self::BUYER_PAY_WINDOW
+        };
+        current_time > deadline
     }
 
     /// Check if trade is terminal (settled)

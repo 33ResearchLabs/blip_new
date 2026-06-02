@@ -41,14 +41,14 @@ pub mod blip_protocol_v2 {
 
     /// Fund escrow WITHOUT counterparty (open for acceptance)
     /// Use this when you want to fund first and let someone join later
-    pub fn fund_escrow(ctx: Context<FundEscrow>) -> Result<()> {
-        instructions::fund_escrow::handler(ctx)
+    pub fn fund_escrow(ctx: Context<FundEscrow>, params: FundEscrowParams) -> Result<()> {
+        instructions::fund_escrow::handler(ctx, params)
     }
 
     /// Accept a funded trade as the counterparty
     /// Transitions trade from Funded → Locked
-    pub fn accept_trade(ctx: Context<AcceptTrade>) -> Result<()> {
-        instructions::accept_trade::handler(ctx)
+    pub fn accept_trade(ctx: Context<AcceptTrade>, params: AcceptTradeParams) -> Result<()> {
+        instructions::accept_trade::handler(ctx, params)
     }
 
     /// Lock escrow (deposit funds WITH counterparty in one step)
@@ -199,5 +199,12 @@ pub mod blip_protocol_v2 {
     /// trade.
     pub fn close_trade(ctx: Context<CloseTrade>) -> Result<()> {
         instructions::close_trade::handler(ctx)
+    }
+
+    /// V2.4: Create a trade and fund its escrow in a single transaction.
+    /// Saves one tx fee (~$0.0008) vs separate create_trade + fund_escrow.
+    /// Result: trade is in Funded state, open for accept_trade.
+    pub fn create_and_fund(ctx: Context<CreateAndFund>, params: CreateAndFundParams) -> Result<()> {
+        instructions::create_and_fund::handler(ctx, params)
     }
 }

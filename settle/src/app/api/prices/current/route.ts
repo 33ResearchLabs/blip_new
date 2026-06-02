@@ -24,17 +24,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Optional order_type param so client gets the exact spread-adjusted rate.
+    const orderType = searchParams.get('order_type'); // 'buy' | 'sell' | null
+
     const [data, feeBps] = await Promise.all([
       getFinalPrice(pairId),
       getCurrentFeeBps(),
     ]);
+
+    // 0.5% spread: BUY orders (user buying USDT from merchant) priced above mid;
+    // SELL orders (user selling USDT to merchant) priced below mid.
+    const SPREAD = 0.005;
+    const adjustedPrice =
+      orderType === 'buy'  ? data.price * (1 + SPREAD) :
+      orderType === 'sell' ? data.price * (1 - SPREAD) :
+      data.price;
 
     return NextResponse.json({
       success: true,
       data: {
         pair: data.pair,
         label: data.label,
-        price: data.price,
+        price: adjustedPrice,
+        basePrice: data.price,
         mode: data.mode,
         livePrice: data.livePrice,
         adminPrice: data.adminPrice,

@@ -1,22 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
-  Check,
   X,
   Shield,
   Activity,
   MessageCircle,
-  ArrowRightLeft,
-  ExternalLink,
+  User,
   Loader2,
   Search,
   Volume2,
   VolumeX,
+  Landmark,
+  Zap,
+  Banknote,
+  CreditCard,
 } from "lucide-react";
-import { UserBadge } from "@/components/merchant/UserBadge";
-import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
+import { formatFiat } from "@/lib/format";
+import { HoldSwipe } from "@/components/merchant/OrderCardParts";
 import { useMerchantStore, type PendingFilter } from "@/stores/merchantStore";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import type { Order } from "@/types/merchant";
@@ -54,6 +55,291 @@ function getViewerSide(
     return orderType === "buy" ? "seller" : "buyer";
   }
   return orderType === "buy" ? "seller" : "buyer";
+}
+
+// Live countdown — ticks every second from the server-supplied expiresIn.
+// Resyncs if the server value shifts by more than 5s (poll correction).
+function useCountdown(expiresIn: number): number {
+  const [secs, setSecs] = useState(expiresIn);
+  const serverRef = useRef(expiresIn);
+
+  useEffect(() => {
+    if (Math.abs(expiresIn - serverRef.current) > 5) {
+      serverRef.current = expiresIn;
+      setSecs(expiresIn);
+    }
+  }, [expiresIn]);
+
+  useEffect(() => {
+    if (secs <= 0) return;
+    const id = setInterval(() => setSecs((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [secs > 0]);
+
+  return secs;
+}
+
+function formatCountdown(secs: number): string {
+  if (secs <= 0) return "00:00";
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function formatTimeTaken(createdAt?: string, updatedAt?: string): string | null {
+  if (!createdAt || !updatedAt) return null;
+  const diffMs = new Date(updatedAt).getTime() - new Date(createdAt).getTime();
+  if (diffMs <= 0) return null;
+  const totalSecs = Math.floor(diffMs / 1000);
+  const m = Math.floor(totalSecs / 60);
+  const s = totalSecs % 60;
+  if (m === 0) return `${s}s`;
+  if (m < 60) return `${m}m ${s}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+/* ── Card with timer hook (no hooks inside .map()) ── */
+function OrderCardTimer({
+  order, merchantId, isCreatedByMe, onAcceptOrder, acceptingOrderId,
+  onOpenChat, setMobileView, onCancelOrder, cancellingOrderId,
+}: {
+  order: Order; merchantId: string | null;
+  isCreatedByMe: (o: Order) => boolean;
+  onAcceptOrder: (o: Order) => void; acceptingOrderId?: string | null;
+  onOpenChat: (o: Order) => void; setMobileView: (v: 'orders'|'escrow'|'chat'|'history'|'marketplace') => void;
+  onCancelOrder?: (o: Order) => void; cancellingOrderId?: string | null;
+}) {
+  const countdown = useCountdown(order.expiresIn);
+  const [dismissed, setDismissed] = useState(false);
+
+  const effStatus: string = (order as any).status || (order as any)?.dbOrder?.status || "pending";
+  const isExpired     = countdown <= 0;
+  const isActivelyPending = effStatus === "pending" && countdown > 0;
+  const isCompleted   = effStatus === "completed";
+  const isBad         = ["disputed","cancelled","expired"].includes(effStatus);
+  const isOngoing     = !isCompleted && !isBad;
+  const isMine        = isCreatedByMe(order);
+  const expiringSoon  = !isExpired && countdown <= 120;
+
+  // Countdown as fraction of 15-min window for the progress bar
+  const timeFrac = Math.min(1, countdown / 900);
+  const low = timeFrac < 0.25;
+
+  // User info
+  const rawName = order.user || (order.dbOrder as any)?.user?.username || (order.dbOrder as any)?.user?.name || "";
+  const isPlaceholder = rawName.startsWith("open_order_") || rawName.startsWith("m2m_") || rawName === "Unknown";
+  const displayName = isPlaceholder ? "Open Order" : rawName;
+  const rawAvatarUrl = order.user_avatar ?? undefined;
+  const avatarUrl = rawAvatarUrl && /^https?:\/\/|^\//.test(rawAvatarUrl) ? rawAvatarUrl : undefined;
+  const isVerified = (order.dbOrder as any)?.user?.is_verified ?? false;
+  const initials = displayName.split(" ").map((w: string) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+
+  // Stats
+  const rating        = (order.dbOrder as any)?.user?.rating        ?? (order.dbOrder as any)?.merchant?.rating        ?? null;
+  const totalTrades   = (order.dbOrder as any)?.user?.total_trades  ?? (order.dbOrder as any)?.merchant?.total_trades  ?? null;
+  const completionRate = (order.dbOrder as any)?.user?.completion_rate ?? null;
+
+  // Payment method
+  const pmType  = order.lockedPaymentMethod?.type || order.dbOrder?.payment_method;
+  const pmName  = order.lockedPaymentMethod?.label || order.lockedPaymentMethod?.details?.name as string | undefined;
+  const pmLabel = pmName || (pmType === "upi" ? "UPI" : pmType === "bank" ? "Bank Transfer" : pmType === "cash" ? "Cash" : pmType ? pmType.toUpperCase() : null);
+  const PmIcon  = pmType === "upi" ? Zap : pmType === "bank" ? Landmark : pmType === "cash" ? Banknote : CreditCard;
+
+  // Amounts
+  const fiatCur   = order.toCurrency   || "AED";
+  const viewerSide = getViewerSide(order.dbOrder, merchantId);
+  const fiatLabel  = viewerSide === "seller" ? "YOU RECEIVE" : "YOU PAY OUT";
+
+  // Hero fiat: integer only — strip all decimals (e.g. "₹2,561" not "₹2,561.25")
+  const heroFiat = formatFiat(Math.round(order.total), fiatCur).replace(/\.00$/, '');
+  // Earnings chip fiat amount (e.g. "+₹12.5")
+  const earningFiat = order.amount * (order.protocolFeePercent ?? 0.5) / 100 * (order.rate || 1);
+  const heroEarning = earningFiat > 0
+    ? formatFiat(earningFiat, fiatCur).replace(/\.?0+$/, '')
+    : null;
+  // Rate display: 1 decimal (e.g. "102.5"), spread next to it (e.g. "+0.50")
+  const heroRate   = (order.rate || 0).toFixed(1);
+  const heroSpread = order.rate && order.protocolFeePercent
+    ? `+${(order.rate * order.protocolFeePercent / 100).toFixed(2)}`
+    : null;
+
+  // Progress bar for non-pending live orders
+  const progressStages: Record<string, number> = {
+    pending: 20, accepted: 40, escrowed: 60, payment_sent: 80, completed: 100,
+    disputed: 100, cancelled: 100, expired: 100,
+  };
+  const progressPct = progressStages[effStatus] ?? 20;
+  const barColor    = isCompleted ? "#34d399" : isBad ? "#f87171" : "#fb923c";
+  const barGlow     = isCompleted ? "0 0 8px rgba(52,211,153,0.7)" : isBad ? "none" : "0 0 8px rgba(251,146,60,0.7)";
+
+  // Time taken for terminal orders
+  const timeTaken = isCompleted || isBad
+    ? formatTimeTaken((order.dbOrder as any)?.created_at, (order.dbOrder as any)?.updated_at)
+    : null;
+
+  if (dismissed) {
+    return (
+      <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 22, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Order skipped</span>
+        <button onClick={() => setDismissed(false)} style={{ fontSize: 12, color: "#b8e9d4", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Undo</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 22, overflow: "hidden", backdropFilter: "blur(20px) saturate(150%)", marginBottom: 12, opacity: isExpired ? 0.62 : 1 }}>
+      <div style={{ padding: 13 }}>
+
+        {/* ── EXPIRED HEADER ── */}
+        {isExpired && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 11 }}>
+            <span style={{ padding: "3px 9px", borderRadius: 999, background: "rgba(255,90,95,0.12)", border: "1px solid rgba(255,90,95,0.3)", color: "#ff7a7e", fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em" }}>EXPIRED</span>
+            <span style={{ color: "#5a5a60", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>0:00 · not accepted</span>
+          </div>
+        )}
+
+        {/* ── TRUST BLOCK ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          {/* 36px gradient avatar with initials */}
+          <span style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: avatarUrl ? "transparent" : "linear-gradient(150deg,#ff8a3d,#ff5d73)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13, overflow: "hidden" }}>
+            {avatarUrl ? <img src={avatarUrl} style={{ width: 36, height: 36, objectFit: "cover" }} alt="" /> : initials}
+          </span>
+
+          {/* Text column */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Row 1: name + verified shield */}
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <b style={{ fontSize: 13.5, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</b>
+              {isVerified && (
+                <span style={{ color: "#b8e9d4", display: "flex", flexShrink: 0 }}>
+                  <Shield style={{ width: 11, height: 11 }} />
+                </span>
+              )}
+            </div>
+            {/* Row 2: star rating + payment method */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, color: "#86868b", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>
+              {rating && (
+                <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#ffb020" }}>
+                  ★<b style={{ color: "#fff" }}>{Number(rating).toFixed(1)}</b>
+                </span>
+              )}
+              {rating && pmLabel && <span style={{ opacity: 0.5 }}>·</span>}
+              {pmLabel && (
+                <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <PmIcon style={{ width: 13, height: 13 }} /> {pmLabel}
+                </span>
+              )}
+            </div>
+            {/* Row 3: completion + release time */}
+            {completionRate != null && (
+              <div style={{ marginTop: 2, color: "#5a5a60", fontSize: 10.5, fontWeight: 600, whiteSpace: "nowrap" }}>
+                {completionRate}% completion · ~2m release
+              </div>
+            )}
+          </div>
+
+          {/* Right: chat + user icon buttons 32×32 */}
+          <div style={{ display: "flex", gap: 7, flexShrink: 0 }}>
+            <button
+              onClick={() => { onOpenChat(order); setMobileView("chat"); }}
+              style={{ width: 32, height: 32, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
+              <MessageCircle style={{ width: 15, height: 15 }} />
+            </button>
+            <button
+              style={{ width: 32, height: 32, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
+              <User style={{ width: 15, height: 15 }} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── FULL-BLEED DIVIDER ── */}
+        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "11px -13px" }} />
+
+        {/* ── PAYOUT HERO ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 11, marginBottom: 14 }}>
+          {/* Left: fiat label + big number + earnings chip */}
+          <div>
+            <div style={{ color: "#86868b", fontWeight: 700, fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{fiatLabel}</div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 7 }}>
+              <span style={{ fontSize: 25, fontWeight: 800, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", color: "#f5f5f7" }}>{heroFiat}</span>
+              {!isMine && isActivelyPending && heroEarning && (
+                <span style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2, padding: "3px 8px", borderRadius: 999, background: "rgba(184,233,212,0.12)", border: "1px solid rgba(184,233,212,0.3)", color: "#b8e9d4", fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap" }}>
+                  <svg viewBox="0 0 24 24" width={10} height={10} fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
+                  +{heroEarning}
+                </span>
+              )}
+            </div>
+          </div>
+          {/* Right: USDT amount + rate */}
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "#f5f5f7" }}>
+              {Math.round(order.amount)} <span style={{ fontSize: 10.5, color: "#86868b" }}>USDT</span>
+            </div>
+            <div style={{ color: "#86868b", fontSize: 11, fontWeight: 600, marginTop: 1, whiteSpace: "nowrap" }}>
+              @ {heroRate}{heroSpread && <span style={{ color: "#b8e9d4" }}> · +{heroSpread.replace('+', '')}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* ── ACTION ROW ── */}
+        {isExpired ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, height: 44, borderRadius: 22, border: "1px dashed rgba(255,255,255,0.16)", color: "#86868b", fontSize: 12.5, fontWeight: 700 }}>
+            <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>
+            Expired · moved to History
+          </div>
+        ) : isActivelyPending ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+            {!isMine ? (
+              <HoldSwipe
+                onAccept={() => onAcceptOrder(order)}
+                loading={acceptingOrderId === order.id}
+                height={48}
+              />
+            ) : (
+              onCancelOrder && (
+                <button
+                  onClick={() => onCancelOrder(order)}
+                  disabled={cancellingOrderId === order.id}
+                  style={{ width: "100%", height: 48, borderRadius: 14, border: "1px solid rgba(255,255,255,0.10)", fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "rgba(255,255,255,0.04)", cursor: cancellingOrderId === order.id ? "not-allowed" : "pointer", opacity: cancellingOrderId === order.id ? 0.4 : 1 }}>
+                  {cancellingOrderId === order.id
+                    ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" />
+                    : <><X style={{ width: 16, height: 16 }} /> Cancel Order</>}
+                </button>
+              )
+            )}
+          </div>
+        ) : null}
+
+        {/* ── COUNTDOWN FOOTER (pending orders only) ── */}
+        {isActivelyPending && !isExpired && (
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 9, background: low || expiringSoon ? "#ff5a5f" : "#b8e9d4", flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, fontSize: 11, color: "#86868b" }}>
+              <b style={{ fontVariantNumeric: "tabular-nums", color: low || expiringSoon ? "#ff5a5f" : "#fff" }}>{formatCountdown(countdown)}</b>
+              {" "}left to accept
+            </span>
+          </div>
+        )}
+
+        {/* Terminal order time taken (when not in stats line) */}
+        {!isActivelyPending && timeTaken && totalTrades == null && (
+          <div style={{ marginTop: 4, fontSize: 10, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }}>{timeTaken}</div>
+        )}
+      </div>
+
+      {/* ── BOTTOM PROGRESS BAR — flush to card edge ── */}
+      {isActivelyPending && !isExpired && (
+        <div style={{ height: 3, margin: "9px -13px -13px", background: "rgba(255,255,255,0.06)" }}>
+          <div style={{ height: "100%", width: `${timeFrac * 100}%`, background: low || expiringSoon ? "#ff5a5f" : "#f5f5f7", boxShadow: low || expiringSoon ? "0 0 8px rgba(255,90,95,0.5)" : "0 0 8px rgba(255,255,255,0.45)", transition: "width 1s linear" }} />
+        </div>
+      )}
+      {isOngoing && !isActivelyPending && (
+        <div style={{ height: 3, background: "rgba(255,255,255,0.06)" }}>
+          <div style={{ height: "100%", width: `${progressPct}%`, backgroundColor: barColor, boxShadow: barGlow, borderRadius: 999, transition: "width 0.6s ease-out" }} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export interface MobileOrdersViewProps {
@@ -136,6 +422,7 @@ export function MobileOrdersView({
   // flag populated at mapping time.
   type ViewTab = "all" | "pending" | "mine";
   const [view, setView] = useState<ViewTab>("pending");
+  const tabIndex = view === "all" ? 0 : view === "pending" ? 1 : 2;
 
   // "All" view = full orders feed from the store, every status (pending /
   //   accepted / escrowed / payment_sent / completed / cancelled / …),
@@ -209,375 +496,109 @@ export function MobileOrdersView({
     return list;
   }, [pendingOrders, allOrders, view, pendingFilter, searchQuery]);
 
+  const tabs = [
+    { id: "all" as ViewTab, label: "All", count: allCount },
+    { id: "pending" as ViewTab, label: "Pending", count: pendingTabCount },
+    { id: "mine" as ViewTab, label: "My Orders", count: myCount },
+  ];
+
   return (
-    <div className="space-y-1">
-      {/* Sticky header — sub-tabs on top, search below.
-          Tab counts come from the un-pending-filtered, un-searched
-          pendingOrders array so a merchant on the Pending tab can still
-          see how many of their own broadcasts are out there. */}
-      <div className="sticky top-0 z-20 -mx-3 -mt-3 px-3 pt-0.5 pb-1.5 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04] space-y-1.5">
-        <div className="inline-flex items-center gap-0.5 p-0.5 h-9 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] w-full overflow-x-auto no-scrollbar">
-          {(
-            [
-              { id: "all", label: "All", count: allCount },
-              { id: "pending", label: "Pending", count: pendingTabCount },
-              { id: "mine", label: "My Orders", count: myCount },
-            ] as const
-          ).map((tab) => {
-            const isActive = view === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setView(tab.id)}
-                className={`flex-1 shrink-0 inline-flex items-center justify-center gap-1 h-full px-2.5 rounded-md text-[12px] font-bold whitespace-nowrap transition-colors ${
-                  isActive
-                    ? "bg-white text-black shadow"
-                    : "text-foreground/60 hover:text-foreground/80"
-                }`}
-              >
-                {tab.label}
-                {tab.count > 0 && (
-                  <span
-                    className={`text-[10px] font-mono tabular-nums ${
-                      isActive ? "text-black/55" : "text-foreground/40"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+    <div>
+      {/* ── TAB STRIP ── */}
+      <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, padding: 3, marginBottom: 12 }}>
+        {/* sliding thumb */}
+        <div style={{
+          position: "absolute", top: 3, bottom: 3, borderRadius: 11,
+          background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
+          transition: "left 0.22s cubic-bezier(0.22,1,0.36,1), width 0.22s",
+          left: `calc(${tabIndex} * (100% - 6px) / 3 + 3px)`,
+          width: "calc((100% - 6px) / 3)",
+          pointerEvents: "none",
+        }} />
+        {tabs.map((tab) => {
+          const isActive = view === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setView(tab.id)}
+              style={{ flex: 1, position: "relative", zIndex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? "rgba(245,245,247,0.55)" : "rgba(134,134,139,0.7)" }}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── SEARCH + FILTER ROW ── */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        {/* Search input */}
+        <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
+          <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "#5a5a60", pointerEvents: "none" }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search orders…"
+            maxLength={100}
+            style={{ width: "100%", height: 42, paddingLeft: 34, paddingRight: searchQuery ? 32 : 14, borderRadius: 14, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", padding: 4, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#5a5a60" }}
+            >
+              <X style={{ width: 12, height: 12 }} />
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/30 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search orders…"
-              maxLength={100}
-              className="w-full h-9 pl-8 pr-8 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                aria-label="Clear search"
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-foreground/[0.06] transition-colors"
-              >
-                <X className="w-3 h-3 text-foreground/40" />
-              </button>
-            )}
-          </div>
-
+        {/* Filter dropdown */}
+        <div style={{ height: 42, display: "flex", alignItems: "center" }}>
           <FilterDropdown<PendingFilter>
             value={pendingFilter}
             onChange={setPendingFilter}
             ariaLabel="Filter pending orders"
             align="right"
             options={PENDING_FILTER_OPTIONS}
-            triggerClassName="!rounded-lg !h-9 !py-0 !text-[12px]"
+            triggerClassName="!rounded-[14px] !h-[42px] !py-0 !text-[12px]"
           />
-
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
-            aria-pressed={soundEnabled}
-            className={`inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors ${
-              soundEnabled
-                ? "bg-primary/10 border-primary/25 text-primary"
-                : "bg-foreground/[0.04] border-foreground/[0.08] text-foreground/40"
-            }`}
-          >
-            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-          </button>
         </div>
+
+        {/* Sound toggle */}
+        <button
+          onClick={() => setSoundEnabled(!soundEnabled)}
+          aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
+          aria-pressed={soundEnabled}
+          style={{ width: 42, height: 42, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: soundEnabled ? "#b8e9d4" : "#5a5a60", cursor: "pointer" }}
+        >
+          {soundEnabled ? <Volume2 style={{ width: 16, height: 16 }} /> : <VolumeX style={{ width: 16, height: 16 }} />}
+        </button>
       </div>
 
-      {/* Whale Orders section removed \u2014 its Contact button was a TODO that
-          did nothing, and the placeholder usernames (open_order_*) confused
-          users. The same orders are visible in the regular Pending list
-          below, where the Accept button actually works. */}
-
-      {/* Sub-tab strip — mirrors desktop PendingOrdersPanel's All/Pending/My
-          Orders split. Tab counts come from the un-pending-filtered, un-
-          searched pendingOrders array so a merchant on the Pending tab can
-          still see how many of their own broadcasts are out there. */}
+      {/* ── ORDER LIST or EMPTY STATE ── */}
       {filteredPendingOrders.length > 0 ? (
-        <div className="space-y-2 py-1">
-          {filteredPendingOrders.map((order) => {
-            const viewerSide = getViewerSide(order.dbOrder, merchantId);
-            const crypto = {
-              amount: Math.round(order.amount).toLocaleString(),
-              currency: order.fromCurrency || "USDT",
-            };
-            const fiat = {
-              amount: Math.round(order.total).toLocaleString(),
-              currency: order.toCurrency || "AED",
-            };
-            const left =
-              viewerSide === "seller"
-                ? { label: "YOU PAY", ...crypto, isReceive: false }
-                : { label: "YOU RECEIVE", ...crypto, isReceive: true };
-            const right =
-              viewerSide === "seller"
-                ? { label: "YOU RECEIVE", ...fiat, isReceive: true }
-                : { label: "YOU PAY", ...fiat, isReceive: false };
-            const isExpired = order.expiresIn <= 0;
-            const expiringSoon = !isExpired && order.expiresIn <= 120;
-            const timeLabel = isExpired
-              ? "Expired"
-              : order.expiresIn >= 3600
-                ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
-                : order.expiresIn >= 60
-                  ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
-                  : `${order.expiresIn}s`;
-
-            return (
-              <motion.div
-                key={order.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="relative p-3 rounded-xl border bg-foreground/[0.02] border-foreground/[0.06] hover:border-foreground/[0.10] transition-colors"
-              >
-                {/* Header — avatar + name + tags + timer/status */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <UserBadge
-                      name={order.user}
-                      emoji={order.emoji}
-                      size="md"
-                      showName={false}
-                    />
-                    <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[13px] font-semibold text-white truncate">
-                        {isCreatedByMe(order) ? "Your offer" : order.user}
-                      </span>
-                      {order.spreadPreference && (
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            order.spreadPreference === "fastest"
-                              ? "bg-red-400"
-                              : "bg-primary"
-                          }`}
-                          title={order.spreadPreference}
-                        />
-                      )}
-                      {isCreatedByMe(order) && (
-                        <span className="px-1.5 py-0.5 bg-foreground/[0.04] border border-foreground/[0.06] rounded text-[9px] font-bold text-foreground/40">
-                          YOURS
-                        </span>
-                      )}
-                      {order.isNew && !isCreatedByMe(order) && (
-                        <span className="px-1.5 py-0.5 bg-white/5 text-white/70 rounded text-[9px] font-bold">
-                          NEW
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {/* Timer (others) or Waiting pill (own) */}
-                  {isCreatedByMe(order) ? (
-                    <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-[10px] font-mono text-amber-300 font-medium">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                      Waiting
-                    </span>
-                  ) : (
-                    <div
-                      className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ${
-                        expiringSoon ? "text-red-400" : "text-primary"
-                      }`}
-                    >
-                      {timeLabel}
-                      <span
-                        className="animate-pulse"
-                        style={{
-                          filter: expiringSoon
-                            ? "drop-shadow(0 0 6px #ef4444)"
-                            : "drop-shadow(0 0 4px #f97316)",
-                        }}
-                      >
-                        🔥
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* You Pay ⇄ You Receive — gradient panel (mirrors desktop) */}
-                <div className="relative mb-2 rounded-xl overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-foreground/[0.05] via-foreground/[0.02] to-transparent" />
-                  <div
-                    className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-emerald-500/[0.08] via-emerald-500/[0.03] to-transparent`}
-                  />
-                  <div className="absolute inset-0 rounded-xl border border-foreground/[0.08]" />
-                  <div className="relative flex items-stretch">
-                    <div className="flex-1 px-3 py-2.5">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
-                        />
-                        <span
-                          className={`text-[9px] font-bold font-mono tracking-[0.15em] ${left.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
-                        >
-                          {left.label}
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-1.5">
-                        <span
-                          className={`text-[16px] font-extrabold tabular-nums leading-none tracking-tight ${left.isReceive ? "text-emerald-400" : "text-white"}`}
-                        >
-                          {left.amount}
-                        </span>
-                        <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
-                          {left.currency}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center shrink-0">
-                      <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-foreground/[0.08] to-background border border-foreground/[0.12] flex items-center justify-center -mx-3.5 z-10">
-                        <ArrowRightLeft
-                          className="w-3 h-3 text-foreground/60"
-                          strokeWidth={2.5}
-                        />
-                      </div>
-                      <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
-                    </div>
-                    <div className="flex-1 px-3 py-2.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5 mb-1">
-                        <span
-                          className={`text-[9px] font-bold font-mono tracking-[0.15em] ${right.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
-                        >
-                          {right.label}
-                        </span>
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
-                        />
-                      </div>
-                      <div className="flex items-baseline justify-end gap-1.5">
-                        <span
-                          className={`text-[16px] font-extrabold tabular-nums leading-none tracking-tight ${right.isReceive ? "text-emerald-400" : "text-white"}`}
-                        >
-                          {right.amount}
-                        </span>
-                        <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
-                          {right.currency}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Rate row + actions */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-foreground/40 font-mono shrink-0">
-                    @ {order.rate.toFixed(2)}
-                  </span>
-                  {!isCreatedByMe(order) && (
-                    <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
-                      +${Math.round(order.amount * 0.005)}
-                    </span>
-                  )}
-                  {/* Escrow TX link for sell orders */}
-                  {order.escrowTxHash && order.orderType === "sell" && (
-                    <a
-                      href={getSolscanTxUrl(order.escrowTxHash)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-1 py-0.5 px-1.5 bg-white/5 rounded text-[9px] font-mono text-white/60 hover:bg-accent-subtle transition-colors"
-                    >
-                      <Shield className="w-2.5 h-2.5" />
-                      TX
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  )}
-                  <div className="flex-1" />
-                  {isCreatedByMe(order) ? (
-                    <>
-                      {onCancelOrder && (
-                        <motion.button
-                          whileTap={{ scale: 0.98 }}
-                          disabled={cancellingOrderId === order.id}
-                          onClick={() => onCancelOrder(order)}
-                          className="h-9 px-3 bg-red-500/10 hover:bg-[var(--color-error)]/15 border border-red-500/25 rounded-lg text-xs font-medium text-red-400 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-                        >
-                          {cancellingOrderId === order.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <>
-                              <X className="w-3.5 h-3.5" /> Cancel
-                            </>
-                          )}
-                        </motion.button>
-                      )}
-                      <button
-                        onClick={() => {
-                          onOpenChat(order);
-                          setMobileView("chat");
-                        }}
-                        className="h-9 w-9 border border-white/10 hover:border-border-strong rounded-lg flex items-center justify-center transition-colors"
-                        aria-label="Open chat"
-                      >
-                        <MessageCircle className="w-4 h-4 text-foreground/40" />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {/* Same gate as desktop PendingOrdersPanel:932 — only
-                          render the Accept button when the order is
-                          actively pending (status === 'pending' AND
-                          expires_in > 0). Already-claimed / escrowed /
-                          accepted / completed rows show no action button. */}
-                      {(() => {
-                        const effStatus: string =
-                          (order as any).status ||
-                          (order as any)?.dbOrder?.status ||
-                          "pending";
-                        const isActivelyPending =
-                          effStatus === "pending" && order.expiresIn > 0;
-                        if (!isActivelyPending) return null;
-                        return (
-                          <motion.button
-                            whileTap={{ scale: 0.98 }}
-                            disabled={acceptingOrderId === order.id}
-                            onClick={() => onAcceptOrder(order)}
-                            className={`h-9 px-3 border rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
-                              acceptingOrderId === order.id
-                                ? "bg-white/[0.03] border-white/[0.06] text-white/50 cursor-wait"
-                                : "bg-primary text-background border-primary hover:bg-primary/90"
-                            }`}
-                          >
-                            {acceptingOrderId === order.id ? (
-                              <>
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Accepting…
-                              </>
-                            ) : (
-                              <>
-                                <Check className="w-3.5 h-3.5" /> Accept
-                              </>
-                            )}
-                          </motion.button>
-                        );
-                      })()}
-                      <button
-                        onClick={() => {
-                          onOpenChat(order);
-                          setMobileView("chat");
-                        }}
-                        className="h-9 w-9 border border-white/10 hover:border-border-strong rounded-lg flex items-center justify-center transition-colors"
-                        aria-label="Open chat"
-                      >
-                        <MessageCircle className="w-4 h-4 text-foreground/40" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
+        <div>
+          {filteredPendingOrders.map((order) => (
+            <OrderCardTimer
+              key={order.id}
+              order={order}
+              merchantId={merchantId}
+              isCreatedByMe={isCreatedByMe}
+              onAcceptOrder={onAcceptOrder}
+              acceptingOrderId={acceptingOrderId}
+              onOpenChat={onOpenChat}
+              setMobileView={setMobileView}
+              onCancelOrder={onCancelOrder}
+              cancellingOrderId={cancellingOrderId}
+            />
+          ))}
         </div>
       ) : (
         (() => {
@@ -602,16 +623,19 @@ export function MobileOrdersView({
             message = "Waiting for orders...";
           }
           return (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-600">
-              <Activity className="w-8 h-8 mb-2 opacity-20" />
-              <p className="text-xs text-foreground/35 font-mono">{message}</p>
+            <div style={{ textAlign: "center", paddingTop: 120 }}>
+              <div style={{ width: 64, height: 64, borderRadius: 22, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: "#86868b" }}>
+                <Activity className="w-7 h-7" />
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#f5f5f7" }}>{message}</div>
+              <div style={{ color: "#86868b", fontSize: 13, fontWeight: 500, marginTop: 5 }}>New opportunities will appear here live.</div>
               {hasActiveFilters && (
                 <button
                   onClick={() => {
                     setSearchQuery("");
                     setPendingFilter("all");
                   }}
-                  className="mt-3 text-[11px] text-primary/70 hover:text-primary font-mono"
+                  style={{ marginTop: 12, padding: "7px 18px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.12)", background: "none", color: "#86868b", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
                 >
                   Clear filters
                 </button>

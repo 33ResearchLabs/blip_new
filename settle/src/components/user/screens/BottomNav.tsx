@@ -1,26 +1,24 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Home, Activity, Zap, User, MessageCircle } from "lucide-react";
+import { Home, Zap, User, HelpCircle } from "lucide-react";
 import type { Screen } from "./types";
 
 interface BottomNavProps {
   screen: Screen;
   setScreen: (s: Screen) => void;
-  maxW: string;
+  maxW?: string;
   notificationCount?: number;
-  chatUnreadCount?: number;
 }
 
 const TABS = [
-  { key: "home",    Icon: Home,          label: "Home" },
-  { key: "trade",   Icon: Zap,           label: "Trade" },
-  { key: "chats",   Icon: MessageCircle, label: "Inbox" },
-  { key: "orders",  Icon: Activity,      label: "Activity" },
-  { key: "profile", Icon: User,          label: "You" },
+  { key: "home",    Icon: Home,        label: "Home" },
+  { key: "trade",   Icon: Zap,         label: "Trade" },
+  { key: "support", Icon: HelpCircle,  label: "Support" },
+  { key: "profile", Icon: User,        label: "You" },
 ] as const;
 
-export const BottomNav = ({ screen, setScreen, chatUnreadCount = 0 }: BottomNavProps) => (
+export const BottomNav = ({ screen, setScreen }: BottomNavProps) => (
   <div
     className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full max-w-110 px-3"
     style={{
@@ -49,7 +47,7 @@ export const BottomNav = ({ screen, setScreen, chatUnreadCount = 0 }: BottomNavP
     >
       {TABS.map(({ key, Icon, label }) => {
         const on = (screen as string) === key;
-        const badge = key === "chats" ? chatUnreadCount : 0;
+        const badge = 0;
         const iconColor = on ? '#0B0F14' : 'rgba(15,23,42,0.45)';
         return (
           <motion.button

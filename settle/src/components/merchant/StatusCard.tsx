@@ -152,6 +152,7 @@ export const StatusCard = memo(function StatusCard({
   const [marketLoading, setMarketLoading] = useState(false);
   const [marketError, setMarketError] = useState(false);
   const [showCashMarket, setShowCashMarket] = useState(false);
+  const [corridorDropdownOpen, setCorridorDropdownOpen] = useState(false);
   const [corridorPrices, setCorridorPrices] = useState<Record<string, number>>(
     {},
   );
@@ -471,18 +472,15 @@ export const StatusCard = memo(function StatusCard({
           height (no overflow:hidden) so SWAP/SEND/DEPOSIT always shows
           — clipping at the bottom of the card is handled by allowing
           the WidgetDashboardWidgets wrapper to scroll when needed. */}
-      <div data-tour="fund-wallet" className="flex-1 flex flex-col items-center justify-center px-4 py-2 gap-2 relative">
-        {/* Ambient glow behind amount */}
+      <div data-tour="fund-wallet" className="flex flex-col items-center justify-start px-4 pt-2 pb-1.5 gap-2 relative">
+        {/* Ambient glow */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-48 h-24 bg-primary/[0.03] rounded-full blur-[60px]" />
+          <div className="w-64 h-32 bg-primary/[0.06] rounded-full blur-[72px]" />
         </div>
 
-        {/* USDT Label + wallet-actions gear menu.
-            z-30 (not the surrounding z-10) so the gear-menu dropdown
-            isn't trapped inside a z-10 stacking context — without this
-            the later-sibling balance number, wallet row, and SWAP/SEND/
-            DEPOSIT buttons paint on top of the dropdown items. */}
+        {/* Header row — label + gear */}
         <div className="flex items-center justify-between w-full relative z-30">
+          <div className="w-6" />{/* spacer to balance the gear icon */}
           <div className="flex items-center gap-1.5">
             {walletStatus === 'locked' ? (
               <Lock className="w-3 h-3 text-foreground/30" />
@@ -492,97 +490,75 @@ export const StatusCard = memo(function StatusCard({
               <Wallet className="w-3 h-3 text-foreground/20" />
             )}
             <span className="text-[10px] text-foreground/30 font-mono uppercase tracking-widest">
-              {walletStatus === 'locked'
-                ? 'Wallet Locked'
-                : walletStatus === 'none'
-                  ? 'No Wallet'
-                  : 'Available Balance'}
+              {walletStatus === 'locked' ? 'Wallet Locked' : walletStatus === 'none' ? 'No Wallet' : 'Available Balance'}
             </span>
           </div>
-          {/* Gear menu — Export Key / Backup / Delete / Init Fee Accounts */}
-          {walletStatus === 'ok' && merchantId && (
-            <WalletActionsMenu actorId={merchantId} />
-          )}
+          <div className="w-6 flex justify-end">
+            {walletStatus === 'ok' && merchantId && (
+              <WalletActionsMenu actorId={merchantId} />
+            )}
+          </div>
         </div>
 
-        {/* Big USDT Amount — branches on wallet state */}
-        <div className="relative z-10 text-center">
+        {/* Big balance */}
+        <div className="relative z-10 text-center w-full">
           {walletStatus === 'locked' ? (
             <>
-              <div className="text-4xl @max-[260px]:text-3xl @max-[200px]:text-2xl font-black text-foreground/30 font-mono tabular-nums tracking-tight leading-none">
+              <div className="text-5xl font-black text-foreground/20 font-mono tracking-tight leading-none">
                 ••••
               </div>
-              {/* Real Unlock button — matches mobile MobileHomeView's
-                  affordance instead of the bare "Unlock to view balance"
-                  text we had before. Reuses onAddWallet (the existing
-                  "go to wallet page" handler) since the unlock password
-                  prompt lives on that page. */}
               {onAddWallet ? (
                 <button
                   type="button"
                   onClick={onAddWallet}
-                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/[0.12] border border-primary/30 text-[11px] font-bold text-primary font-mono hover:bg-primary/[0.18] transition-colors"
+                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/[0.12] border border-primary/30 text-[11px] font-bold text-primary font-mono hover:bg-primary/[0.18] transition-colors"
                 >
                   <Lock className="w-3 h-3" />
                   Unlock Wallet
                 </button>
               ) : (
-                <div className="text-[11px] text-foreground/30 font-mono mt-1">
-                  Unlock to view balance
-                </div>
+                <div className="text-[11px] text-foreground/30 font-mono mt-2">Unlock to view balance</div>
               )}
             </>
           ) : walletStatus === 'none' ? (
             <>
-              <div className="text-4xl @max-[260px]:text-3xl @max-[200px]:text-2xl font-black text-foreground/30 font-mono tabular-nums tracking-tight leading-none">
+              <div className="text-5xl font-black text-foreground/20 font-mono tracking-tight leading-none">
                 ••••
               </div>
               {onAddWallet ? (
                 <button
                   type="button"
                   onClick={onAddWallet}
-                  className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/[0.10] border border-primary/25 text-[10px] font-bold text-primary font-mono hover:bg-primary/15 transition-colors"
+                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/[0.10] border border-primary/25 text-[11px] font-bold text-primary font-mono hover:bg-primary/15 transition-colors"
                 >
                   <Plus className="w-2.5 h-2.5" />
                   Add Wallet
                 </button>
               ) : (
-                <div className="text-[11px] text-foreground/30 font-mono mt-1">
-                  Add a wallet to view balance
-                </div>
+                <div className="text-[11px] text-foreground/30 font-mono mt-2">Add a wallet to view balance</div>
               )}
             </>
           ) : (
             <>
-              {/* @max-[N]: container-query variants shrink the balance
-                  text when the card is narrower than N. Default text-4xl
-                  is unchanged so today's normal-width dashboard looks
-                  identical. */}
-              <div className="text-4xl @max-[260px]:text-3xl @max-[200px]:text-2xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
-                {balance.toLocaleString(undefined, {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                })}
+              {/* Amount with $ prefix */}
+              <div className="flex items-start justify-center gap-1 leading-none">
+                <span className="text-xl font-bold text-white/40 font-mono mt-1.5">$</span>
+                <span className="text-5xl @max-[260px]:text-4xl @max-[200px]:text-3xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
+                  {balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </span>
+                <span className="text-[11px] font-bold text-foreground/30 font-mono mt-2 ml-0.5">USDT</span>
               </div>
-              <div className="text-[11px] text-foreground/20 font-mono mt-1 tabular-nums">
-                ≈{" "}
-                {isInrCorridor ? '₹' : ''}
-                {fiatEquivalent.toLocaleString(undefined, {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                })}
-                {isInrCorridor ? '' : ' AED'}
+              {/* Fiat equivalent */}
+              <div className="mt-1.5 flex items-center justify-center gap-1.5">
+                <span className="text-[11px] text-foreground/25 font-mono tabular-nums">
+                  ≈ {isInrCorridor ? '₹' : ''}{fiatEquivalent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}{isInrCorridor ? '' : ' AED'}
+                </span>
               </div>
             </>
           )}
         </div>
 
-        {/* Wallet address row — matches the mobile home card.
-            Truncated address with copy-on-tap, SOL balance chip, and
-            a QR-icon shortcut that opens the Deposit modal. Mounted
-            inline (just below the balance) instead of as a separate
-            panel so the wallet UI on desktop reads like the mobile
-            version. */}
+        {/* Wallet address row */}
         {walletStatus === 'ok' && (
           <WalletAddressRow onOpenDeposit={onOpenDeposit} />
         )}
@@ -601,7 +577,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenSwap && (
               <button
                 onClick={onOpenSwap}
-                className="flex flex-col items-center justify-center gap-1 py-2 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1 py-4 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
               >
                 <ArrowLeftRight className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-semibold tracking-widest uppercase">Swap</span>
@@ -610,7 +586,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenSend && (
               <button
                 onClick={onOpenSend}
-                className="flex flex-col items-center justify-center gap-1 py-2 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1 py-4 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
               >
                 <ArrowUpFromLine className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-semibold tracking-widest uppercase">Send</span>
@@ -619,7 +595,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenDeposit && (
               <button
                 onClick={onOpenDeposit}
-                className="flex flex-col items-center justify-center gap-1 py-2 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1 py-4 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] border-r border-foreground/[0.08] text-foreground/60 hover:text-foreground transition-colors"
               >
                 <ArrowDownToLine className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-semibold tracking-widest uppercase">Deposit</span>
@@ -628,7 +604,7 @@ export const StatusCard = memo(function StatusCard({
             {onOpenReceive && (
               <button
                 onClick={onOpenReceive}
-                className="flex flex-col items-center justify-center gap-1.5 py-3 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] text-foreground/60 hover:text-foreground transition-colors"
+                className="flex flex-col items-center justify-center gap-1.5 py-4 hover:bg-foreground/[0.07] active:bg-foreground/[0.10] text-foreground/60 hover:text-foreground transition-colors"
               >
                 <QrCode className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-semibold tracking-widest uppercase">Receive</span>
@@ -663,78 +639,12 @@ export const StatusCard = memo(function StatusCard({
           at their natural height. Without it, the `flex-1` hero above
           could squeeze this section down to nothing (or push it past
           the card's overflow:hidden boundary) and the rows disappeared. */}
-      <div className="px-3 pb-2.5 space-y-1.5 shrink-0">
-        {/* Active Corridor Selector — minimal segmented control */}
-        <div
-          className="inline-flex w-full rounded-lg bg-foreground/[0.03] border border-foreground/[0.05] p-0.5"
-          data-tour="corridor-pair"
-        >
-          {CORRIDORS.map((c) => {
-            const isActive = activeCorridor === c.id;
-            const price = corridorPrices[c.id];
-            return (
-              <button
-                key={c.id}
-                onClick={() => onCorridorChange?.(c.id)}
-                style={{
-                  paddingTop: "clamp(0.2rem, 2.2cqi, 0.5rem)",
-                  paddingBottom: "clamp(0.2rem, 2.2cqi, 0.5rem)",
-                  paddingLeft: "clamp(0.3rem, 3cqi, 0.7rem)",
-                  paddingRight: "clamp(0.3rem, 3cqi, 0.7rem)",
-                  gap: "clamp(0.2rem, 2.4cqi, 0.6rem)",
-                }}
-                className={`flex-1 min-w-0 rounded-md flex items-center justify-center transition-all ${
-                  isActive
-                    ? "bg-foreground/[0.07] text-foreground"
-                    : "text-foreground/40 hover:text-foreground/65"
-                }`}
-              >
-                <span
-                  style={{ fontSize: "clamp(7px, 4cqi, 13px)" }}
-                  className="font-medium tracking-tight whitespace-nowrap"
-                >
-                  USDT/{c.fiat}
-                </span>
-                <span
-                  style={{ fontSize: "clamp(6px, 3.5cqi, 12px)" }}
-                  className={`font-mono tabular-nums truncate ${
-                    isActive ? "text-foreground/55" : "text-foreground/30"
-                  }`}
-                >
-                  {price
-                    ? `${c.fiat === "INR" ? "₹" : ""}${price.toFixed(2)}${c.fiat === "AED" ? " AED" : ""}`
-                    : "—"}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
+      <div className="px-3 pb-2 space-y-1 shrink-0">
         {/* (Rep tier + coin balance are surfaced in the LIVE ticker
             strip at the top of this card — no separate badge here, to
             avoid duplication.) */}
 
-        {/* Cash & Market — collapsible */}
-        <button
-          onClick={() => setShowCashMarket(!showCashMarket)}
-          className="w-full flex items-center justify-between py-1.5 px-2.5 glass-card rounded-lg hover:bg-foreground/[0.04] transition-all"
-        >
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] text-foreground/30 font-mono uppercase tracking-wider">
-              Cash & Market
-            </span>
-            {!showCashMarket && inrBalance > 0 && (
-              <span className="text-[9px] text-foreground/40 font-mono">
-                ₹{inrBalance.toLocaleString()}
-              </span>
-            )}
-          </div>
-          <ChevronDown
-            className={`w-3 h-3 text-foreground/25 transition-transform duration-200 ${showCashMarket ? "" : "-rotate-90"}`}
-          />
-        </button>
-
-        {showCashMarket && (
+        {false && (
           <div className="space-y-1.5">
             {/* INR row */}
             <div className="grid grid-cols-1 gap-1.5">
@@ -1053,25 +963,50 @@ export const StatusCard = memo(function StatusCard({
           </div>
         )}
 
-        {/* Corridor button */}
-        <button
-          onClick={onOpenCorridor}
-          className="w-full flex items-center justify-between py-1.5 px-2.5 glass-card rounded-lg hover:bg-foreground/[0.04] transition-all group"
-        >
-          <div className="flex items-center gap-1.5">
-            <Activity className="w-3 h-3 text-foreground/20" />
-            <span className="text-[9px] text-foreground/30 font-mono uppercase tracking-wider">
-              Corridor
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] text-foreground/40 font-mono tabular-nums">
-              {corridor?.active_merchants_count || 0} online · vol{" "}
-              {corridor?.volume_5m ? corridor.volume_5m.toFixed(0) : "0"}
-            </span>
-            <ChevronRight className="w-3 h-3 text-foreground/15 group-hover:text-foreground/30 transition-colors" />
-          </div>
-        </button>
+        {/* Corridor row — same look as before, dropdown instead of mempool */}
+        <div className="relative" data-tour="corridor-pair">
+          <button
+            onClick={() => setCorridorDropdownOpen((v) => !v)}
+            className="w-full flex items-center justify-between py-1.5 px-2.5 glass-card rounded-lg hover:bg-foreground/[0.04] transition-all group"
+          >
+            <div className="flex items-center gap-1.5">
+              <Activity className="w-3 h-3 text-foreground/20" />
+              <span className="text-[9px] text-foreground/30 font-mono uppercase tracking-wider">
+                Corridor
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] text-foreground/40 font-mono">
+                {activeCorridor === "USDT_INR" ? "USDT / INR" : "USDT / AED"}
+              </span>
+              <ChevronRight className="w-3 h-3 text-foreground/15 group-hover:text-foreground/30 transition-colors" />
+            </div>
+          </button>
+          {corridorDropdownOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setCorridorDropdownOpen(false)} />
+              <div className="absolute left-0 right-0 bottom-full mb-1 z-50 rounded-xl border border-foreground/[0.08] bg-card-solid shadow-xl overflow-hidden">
+                {(["USDT_INR", "USDT_AED"] as const).map((id) => {
+                  const isActive = activeCorridor === id;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => { onCorridorChange?.(id); setCorridorDropdownOpen(false); }}
+                      className={`w-full flex items-center justify-between px-4 py-2.5 text-[12px] font-semibold transition-colors ${
+                        isActive
+                          ? "bg-foreground/[0.07] text-foreground"
+                          : "text-foreground/45 hover:bg-foreground/[0.04] hover:text-foreground/75"
+                      }`}
+                    >
+                      {id === "USDT_INR" ? "USDT / INR" : "USDT / AED"}
+                      {isActive && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Quick stats row */}
         <div className="flex items-center justify-between px-1 text-[9px] font-mono text-foreground/20">

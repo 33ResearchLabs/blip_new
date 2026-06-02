@@ -7,8 +7,8 @@
  * 409 tells the client to refresh and re-confirm.
  */
 
-/** Max fractional rate drift tolerated (0.005 = 0.5%). */
-const RATE_DRIFT_MAX = 0.005;
+/** Max fractional rate drift tolerated (0.015 = 1.5%, covers 0.5% spread + 1% market move). */
+const RATE_DRIFT_MAX = 0.015;
 
 export interface DriftInput {
   actualRate: number;

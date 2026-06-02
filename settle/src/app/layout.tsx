@@ -22,6 +22,7 @@ import { AppLockProvider } from "@/context/AppLockContext";
 import ClientWalletProvider from "@/components/ClientWalletProvider";
 import ErrorTrackingBoot from "@/components/ErrorTrackingBoot";
 import { AppLockOverlay } from "@/components/app-lock/AppLockOverlay";
+import { SupportBubble } from "@/components/support/SupportBubble";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -186,6 +187,7 @@ export default async function RootLayout({
                     <AppLockProvider>
                       {children}
                       <AppLockOverlay />
+                      <SupportBubble />
                     </AppLockProvider>
                   </AppProvider>
                 </ModalProvider>

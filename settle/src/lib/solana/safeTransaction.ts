@@ -49,7 +49,7 @@ const PRIORITY_FEE_MICROLAMPORTS: Record<TxPriority, number> = {
 export interface SafeTxOptions {
   /** Connection used to fetch blockhash, send, and confirm */
   connection: Connection;
-  /** Fee payer / signer */
+  /** Fee payer / signer (ignored when gasless: true — backend pays) */
   feePayer: PublicKey;
   /** Function that signs a Transaction (wallet adapter style) */
   signTransaction: (tx: Transaction) => Promise<Transaction>;
@@ -76,6 +76,12 @@ export interface SafeTxOptions {
   priorityFeeMicroLamports?: number;
   /** Progress callback for UI updates */
   onPhase?: (phase: TxPhase, info?: TxPhaseInfo) => void;
+  /**
+   * When true, the backend pays transaction fees — user needs zero SOL.
+   * Calls POST /api/solana/feepayer to get a partial signature from the
+   * backend fee-payer keypair, then user's wallet adds their authority sig.
+   */
+  gasless?: boolean;
 }
 
 export type TxPhase =
@@ -281,6 +287,7 @@ export async function sendAndConfirmSafe(
     priority = 'none',
     priorityFeeMicroLamports,
     onPhase,
+    gasless = false,
   } = opts;
 
   const startTs = Date.now();
@@ -307,21 +314,55 @@ export async function sendAndConfirmSafe(
       // ── Build transaction (no blockhash yet) ──────────────────────
       const tx = new Transaction();
       for (const ix of finalInstructions) tx.add(ix);
-      tx.feePayer = feePayer;
 
-      // ── Fetch FRESH blockhash RIGHT before signing ───────────────
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-      tx.recentBlockhash = blockhash;
-      logger.debug(`[safeTx:${name}] blockhash attached`, {
-        attempt,
-        blockhash,
-        lastValidBlockHeight,
-      });
+      let signedTx: Transaction;
+      let blockhash: string;
+      let lastValidBlockHeight: number;
 
-      // ── Request wallet signature ─────────────────────────────────
-      emit('pending_signature', { attempt, blockhash });
-      emit('awaiting_signature', { attempt, blockhash });
-      const signedTx = await signTransaction(tx);
+      if (gasless) {
+        // ── Gasless: backend pays fees, user only signs as authority ──
+        // Serialize the unsigned tx (no blockhash yet — backend sets it)
+        tx.feePayer = feePayer; // placeholder so serialize works
+        const txBase64 = tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64');
+
+        // Ask backend to set itself as feePayer + partial-sign
+        const res = await fetch('/api/solana/feepayer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tx: txBase64 }),
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'feepayer endpoint failed' }));
+          throw new Error(err.error || `gasless feepayer error: ${res.status}`);
+        }
+        const { tx: partialBase64, blockhash: bh, lastValidBlockHeight: lvbh } = await res.json();
+        blockhash = bh;
+        lastValidBlockHeight = lvbh;
+
+        const partialTx = Transaction.from(Buffer.from(partialBase64, 'base64'));
+        logger.debug(`[safeTx:${name}] gasless: backend signed as feePayer`, { attempt, blockhash });
+
+        // ── Request user's authority signature ───────────────────────
+        emit('pending_signature', { attempt, blockhash });
+        emit('awaiting_signature', { attempt, blockhash });
+        signedTx = await signTransaction(partialTx);
+      } else {
+        // ── Standard: user pays fees ─────────────────────────────────
+        tx.feePayer = feePayer;
+
+        // ── Fetch FRESH blockhash RIGHT before signing ───────────────
+        const latest = await connection.getLatestBlockhash('confirmed');
+        blockhash = latest.blockhash;
+        lastValidBlockHeight = latest.lastValidBlockHeight;
+        tx.recentBlockhash = blockhash;
+        logger.debug(`[safeTx:${name}] blockhash attached`, { attempt, blockhash, lastValidBlockHeight });
+
+        // ── Request wallet signature ─────────────────────────────────
+        emit('pending_signature', { attempt, blockhash });
+        emit('awaiting_signature', { attempt, blockhash });
+        signedTx = await signTransaction(tx);
+      }
 
       // ── Send ─────────────────────────────────────────────────────
       emit('sending', { attempt });

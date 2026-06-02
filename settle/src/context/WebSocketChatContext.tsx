@@ -269,16 +269,17 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
       });
       if (!res.ok) {
         console.warn('[WebSocket] Ticket request failed:', res.status);
-        // 401/403 after fetchWithAuth means the session is genuinely
-        // dead — its silent refresh already tried, failed, and (for this
-        // path, which is NOT in NO_FORCED_LOGOUT_PATHS) triggered
-        // forceLogoutAndRedirect(). The page is about to navigate to
-        // /merchant/login. Stop scheduling reconnects so we don't spam
-        // the console during the redirect window. Transient errors
-        // (5xx, 429, network blips) fall through to the original retry
-        // path so behavior for healthy sessions is unchanged.
         if (res.status === 401 || res.status === 403) {
           setConnectionState('failed');
+          return;
+        }
+        // On 429 back off hard — don't count against MAX_RETRIES, just wait
+        if (res.status === 429) {
+          setConnectionState('reconnecting');
+          if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+          retryTimeoutRef.current = setTimeout(() => {
+            if (isMountedRef.current) void connectRef.current();
+          }, 60_000);
           return;
         }
         setConnectionState(retryCountRef.current >= MAX_RETRIES ? 'failed' : 'reconnecting');

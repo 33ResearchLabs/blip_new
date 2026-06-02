@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useMerchantStore } from '@/stores/merchantStore';
 import { clearAuthStorageOnLogout } from '@/lib/auth/logoutCleanup';
+import { signLoginNonce } from '@/lib/auth/walletAuth';
 
 interface ComplianceMember {
   id: string;
@@ -21,6 +22,7 @@ interface SolanaWalletHook {
   connect: () => void;
   disconnect: () => void;
   openWalletModal: () => void;
+  signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
   solBalance: number | null;
   usdtBalance: number | null;
   refreshBalances: () => Promise<void>;
@@ -107,12 +109,20 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
     setLoginError("");
 
     try {
+      const { nonce, message, signature } = await signLoginNonce(
+        solanaWallet.walletAddress,
+        solanaWallet.signMessage,
+      );
+
       const res = await fetchWithAuth("/api/auth/compliance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           wallet_address: solanaWallet.walletAddress,
           action: "wallet_login",
+          signature,
+          message,
+          nonce,
         }),
       });
 

@@ -126,6 +126,12 @@ const ROLE_COLORS = {
   },
 };
 
+// Whether the conversation has a compliance participant (3-party).
+// Used to decide whether to show sender names above bubbles.
+function hasComplianceParticipant(messages: ChatMessage[]): boolean {
+  return messages.some(m => m.senderType === "compliance");
+}
+
 function getUserEmoji(name: string): string {
   const emojis = [
     "🦊",
@@ -179,29 +185,30 @@ function SenderAvatar({
   senderType?: string;
   senderName?: string;
 }) {
+  const base = "w-7 h-7 rounded-full flex items-center justify-center shrink-0 self-end";
   switch (senderType) {
     case "merchant":
       return (
-        <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+        <div className={`${base} bg-primary/15`}>
           <Store className="w-3.5 h-3.5 text-primary" />
         </div>
       );
     case "compliance":
       return (
-        <div className="w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
-          <Shield className="w-3.5 h-3.5 text-red-400" />
+        <div className={`${base} bg-red-500/15`}>
+          <Shield className="w-3 h-3 text-red-400" />
         </div>
       );
     case "system":
       return (
-        <div className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-          <Bot className="w-3.5 h-3.5 text-amber-400" />
+        <div className={`${base} bg-amber-500/10`}>
+          <Bot className="w-3 h-3 text-amber-400" />
         </div>
       );
     default:
       return (
-        <div className="w-7 h-7 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-          <span className="text-xs">{getUserEmoji(senderName || "User")}</span>
+        <div className={`${base} bg-white/[0.07]`}>
+          <span className="text-xs leading-none">{getUserEmoji(senderName || "User")}</span>
         </div>
       );
   }
@@ -912,7 +919,7 @@ export function ChatRoom({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
+        className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1.5 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
       >
         {/* Older-messages loading spinner — shown at the TOP while fetching history */}
         {isLoadingOlder && (
@@ -983,144 +990,90 @@ export function ChatRoom({
           }
 
           const isMe = msg.from === "me";
+          const isCompliance = msg.senderType === "compliance";
           const displayName = getDisplayName(msg);
-          const roleColor =
-            ROLE_COLORS[msg.senderType || "user"] || ROLE_COLORS.user;
+          // Only show sender names when compliance is in the room (3-party chat).
+          const showSenderName = !isMe && hasComplianceParticipant(messages);
 
           return (
             <div key={msg.id}>
               {showOrderSeparator && (
-                <div
-                  className="flex items-center gap-2 my-3 px-1"
-                  data-order-id={msg.orderId}
-                >
+                <div className="flex items-center gap-2 my-3 px-1" data-order-id={msg.orderId}>
                   <div className="flex-1 h-px bg-white/[0.06]" />
-                  <span
-                    className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                      isFocusedOrder
-                        ? "bg-primary/15 border-primary/30 text-primary/80"
-                        : "bg-white/[0.03] border-white/[0.06] text-gray-500"
-                    }`}
-                  >
+                  <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                    isFocusedOrder
+                      ? "bg-primary/15 border-primary/30 text-primary/80"
+                      : "bg-white/[0.03] border-white/[0.06] text-gray-500"
+                  }`}>
                     Order #{(msg.orderId || "").slice(0, 8)}
                   </span>
                   <div className="flex-1 h-px bg-white/[0.06]" />
                 </div>
               )}
-              <div
-                className={`flex gap-2 ${isMe ? "flex-row-reverse" : "flex-row"} ${msg.isHighlighted ? "ring-1 ring-yellow-500/50 rounded-lg p-1 bg-yellow-500/5" : ""} ${isFocusedOrder ? "opacity-100" : focusOrderId ? "opacity-60" : ""}`}
-              >
-                {/* Avatar */}
-                {!isMe && (
-                  <SenderAvatar
-                    senderType={msg.senderType}
-                    senderName={displayName}
-                  />
-                )}
 
-                {/* Message bubble */}
-                <div
-                  className={`max-w-[75%] ${isMe ? "items-end" : "items-start"}`}
-                >
-                  {/* Sender name + role.
-                      Only the compliance badge is shown — the Buyer/Seller
-                      role is already obvious from the chat context, so the
-                      tag is noise for trader-to-trader messages. */}
-                  {!isMe && (
-                    <div className="flex items-center gap-1.5 mb-0.5 px-1">
-                      <span
-                        className={`text-[11px] font-medium ${roleColor.name}`}
-                      >
-                        {displayName}
-                      </span>
-                      {msg.senderType === "compliance" && (
-                        <span
-                          className={`text-[9px] px-1 py-0.5 rounded ${roleColor.bg} ${roleColor.text}`}
-                        >
-                          {getRoleName(msg.senderType)}
-                        </span>
-                      )}
-                    </div>
+              <div className={`flex items-end gap-1.5 ${isMe ? "flex-row-reverse" : "flex-row"} ${
+                msg.isHighlighted ? "ring-1 ring-yellow-500/50 rounded-xl p-1 bg-yellow-500/5" : ""
+              } ${isFocusedOrder ? "opacity-100" : focusOrderId ? "opacity-60" : ""}`}>
+                {/* Avatar — only for incoming, only one per consecutive group would be ideal but omit for simplicity */}
+                {!isMe && <SenderAvatar senderType={msg.senderType} senderName={displayName} />}
+
+                <div className={`flex flex-col gap-0.5 max-w-[72%] ${isMe ? "items-end" : "items-start"}`}>
+                  {/* Sender label (only in 3-party compliance chats) */}
+                  {showSenderName && (
+                    <span className={`text-[10px] font-medium px-1 ${
+                      isCompliance ? "text-red-400/80" : "text-white/35"
+                    }`}>
+                      {displayName}{isCompliance && " · Compliance"}
+                    </span>
                   )}
 
-                  <div
-                    className={`rounded-2xl px-3 py-2 ${
-                      isMe
-                        ? "bg-primary/20 border border-primary/10"
-                        : msg.from === "compliance"
-                          ? "bg-red-500/10 border border-red-500/10"
-                          : "bg-white/[0.05] border border-white/[0.04]"
-                    }`}
-                  >
-                    {/* Image content */}
+                  {/* Bubble */}
+                  <div className={`relative px-3 py-2 ${
+                    isMe
+                      ? "bg-white/[0.08] text-white/90 rounded-2xl rounded-br-sm"
+                      : "bg-primary/[0.18] text-white/95 rounded-2xl rounded-bl-sm"
+                  }`}>
+                    {/* Image */}
                     {msg.messageType === "image" && msg.imageUrl && (
-                      <ImagePreview
-                        imageUrl={msg.imageUrl}
-                        caption={msg.text !== "Photo" ? msg.text : undefined}
-                      />
+                      <ImagePreview imageUrl={msg.imageUrl} caption={msg.text !== "Photo" ? msg.text : undefined} />
                     )}
 
-                    {/* File content */}
+                    {/* File */}
                     {msg.messageType === "file" && (
-                      <FileAttachment
-                        fileName={msg.fileName}
-                        fileSize={msg.fileSize}
-                        fileUrl={msg.fileUrl}
-                        mimeType={msg.mimeType}
-                      />
+                      <FileAttachment fileName={msg.fileName} fileSize={msg.fileSize} fileUrl={msg.fileUrl} mimeType={msg.mimeType} />
                     )}
 
-                    {/* Text content (skip if it's a pure image/file) */}
-                    {msg.messageType !== "image" &&
-                      msg.messageType !== "file" &&
-                      msg.text && (
-                        <p className="text-sm text-white/90 whitespace-pre-wrap break-words">
-                          {msg.text}
-                        </p>
-                      )}
+                    {/* Text */}
+                    {msg.messageType !== "image" && msg.messageType !== "file" && msg.text && (
+                      <p className="text-[14px] leading-snug whitespace-pre-wrap break-words">{msg.text}</p>
+                    )}
 
-                    {/* Text with file (combined message) */}
-                    {msg.messageType === "file" &&
-                      msg.text &&
-                      msg.text !== msg.fileName && (
-                        <p className="text-sm text-white/90 mt-1">{msg.text}</p>
-                      )}
+                    {/* File + caption */}
+                    {msg.messageType === "file" && msg.text && msg.text !== msg.fileName && (
+                      <p className="text-[13px] mt-1">{msg.text}</p>
+                    )}
 
-                    {/* Timestamp + status */}
-                    <div
-                      className={`flex items-center gap-1 mt-1 ${isMe ? "justify-end" : "justify-start"}`}
-                    >
-                      <span className="text-[10px] text-gray-600">
+                    {/* Timestamp + ticks — inline at bottom right */}
+                    <div className={`flex items-center gap-0.5 mt-1 ${isMe ? "justify-end" : "justify-end"}`}>
+                      <span className="text-[10px] text-white/25">
                         {formatTime(msg.timestamp)}
                       </span>
                       {isMe && <MessageStatusIcon status={msg.status} />}
                     </div>
                   </div>
 
-                  {/* Compliance: highlight button */}
-                  {currentUserType === "compliance" &&
-                    onHighlightMessage &&
-                    !isMe &&
-                    (msg.from as string) !== "system" && (
-                      <button
-                        onClick={() =>
-                          onHighlightMessage(msg.id, !msg.isHighlighted)
-                        }
-                        className={`mt-0.5 px-1.5 py-0.5 text-[9px] rounded transition-colors ${
-                          msg.isHighlighted
-                            ? "bg-yellow-500/20 text-yellow-400"
-                            : "text-gray-600 hover:text-yellow-400 hover:bg-yellow-500/10"
-                        }`}
-                        title={
-                          msg.isHighlighted
-                            ? "Remove highlight"
-                            : "Highlight for investigation"
-                        }
-                      >
-                        <Star className="w-3 h-3 inline mr-0.5" />
-                        {msg.isHighlighted ? "Highlighted" : "Highlight"}
-                      </button>
-                    )}
+                  {/* Compliance highlight */}
+                  {currentUserType === "compliance" && onHighlightMessage && !isMe && msg.from !== "system" && (
+                    <button
+                      onClick={() => onHighlightMessage(msg.id, !msg.isHighlighted)}
+                      className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${
+                        msg.isHighlighted ? "bg-yellow-500/20 text-yellow-400" : "text-gray-600 hover:text-yellow-400"
+                      }`}
+                    >
+                      <Star className="w-3 h-3 inline mr-0.5" />
+                      {msg.isHighlighted ? "Highlighted" : "Highlight"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

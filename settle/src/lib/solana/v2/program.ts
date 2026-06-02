@@ -452,7 +452,8 @@ export async function buildFundEscrowTx(
   program: Program,
   depositor: PublicKey,
   tradePda: PublicKey,
-  mint: PublicKey
+  mint: PublicKey,
+  params?: Pick<FundEscrowParams, 'escrowDurationSecs'>
 ): Promise<Transaction> {
   const [escrowPda] = findEscrowPda(tradePda);
   const [vaultAuthority] = findVaultAuthorityPda(escrowPda);
@@ -460,7 +461,6 @@ export async function buildFundEscrowTx(
   const vaultAta = await getAssociatedTokenAddress(mint, vaultAuthority, true);
   const depositorAta = await getAssociatedTokenAddress(mint, depositor);
 
-  // fundEscrow takes no args - counterparty is set later via acceptTrade
   const instruction = await (program.methods as any)
     .fundEscrow()
     .accounts({
@@ -520,7 +520,8 @@ export async function buildLockEscrowTx(
   depositor: PublicKey,
   tradePda: PublicKey,
   counterparty: PublicKey,
-  mint: PublicKey
+  mint: PublicKey,
+  params?: Pick<LockEscrowParams, 'escrowDurationSecs'>
 ): Promise<Transaction> {
   const [escrowPda] = findEscrowPda(tradePda);
   const [vaultAuthority] = findVaultAuthorityPda(escrowPda);
@@ -528,9 +529,10 @@ export async function buildLockEscrowTx(
   const vaultAta = await getAssociatedTokenAddress(mint, vaultAuthority, true);
   const depositorAta = await getAssociatedTokenAddress(mint, depositor);
 
-  // Pass individual args (flattened) for IDL compatibility
+  const escrowDurationSecs = params?.escrowDurationSecs ?? null;
+
   const instruction = await (program.methods as any)
-    .lockEscrow({ counterparty })
+    .lockEscrow({ counterparty, escrowDurationSecs })
     .accounts({
       depositor,
       protocolConfig: protocolConfigPda,
@@ -607,7 +609,8 @@ export async function buildReleaseEscrowTx(
     transaction.add(createAtaIx);
   }
 
-  // releaseEscrow takes no args per IDL
+  const protocolAuthority = params.protocolAuthority ?? depositor;
+
   const releaseIx = await (program.methods as any)
     .releaseEscrow()
     .accounts({
@@ -620,6 +623,7 @@ export async function buildReleaseEscrowTx(
       counterpartyAta,
       treasuryAta,
       depositor,
+      protocolAuthority,
       mint,
       tokenProgram: TOKEN_PROGRAM_ID,
     })
@@ -675,14 +679,19 @@ export async function buildRefundEscrowTx(
   // program for refund and is silently dropped by Anchor; we leave it
   // here for code-locality with the other instruction builders.
   void creator;
+  const [protocolConfigPda] = findProtocolConfigPda();
+  const protocolAuthority = params.protocolAuthority ?? escrowDepositor;
+
   const accounts: Record<string, any> = {
     signer: refunder,
+    protocolConfig: protocolConfigPda,
     trade: tradePda,
     escrow: escrowPda,
     vaultAuthority,
     vaultAta,
     depositorAta,
     depositor: escrowDepositor,
+    protocolAuthority,
     mint,
     tokenProgram: TOKEN_PROGRAM_ID,
   };

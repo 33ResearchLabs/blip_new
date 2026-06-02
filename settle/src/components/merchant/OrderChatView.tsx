@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { ChevronLeft, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { ChatRoom } from '@/components/chat/ChatRoom';
 import { useRealtimeChat } from '@/hooks/useRealtimeChat';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import { ConnectionIndicator } from '@/components/NotificationToast';
 
 interface OrderChatViewProps {
   orderId: string;
@@ -23,6 +21,12 @@ function getUserEmoji(username: string): string {
   return emojis[hash % emojis.length];
 }
 
+function getInitials(username: string): string {
+  const words = username.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return username.slice(0, 2).toUpperCase();
+}
+
 export function OrderChatView({ orderId, merchantId, userName, orderNumber, orderType, onBack, onSendSound }: OrderChatViewProps) {
   const { chatWindows, openChat, sendMessage, markAsRead, sendTypingIndicator, loadOlderMessages, hasOlderMessages, isLoadingOlderMessages } = useRealtimeChat({
     maxWindows: 1,
@@ -36,10 +40,6 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
   }, [orderId, userName, openChat]);
 
   // Mark all messages read when this chat panel opens (mount / orderId change).
-  // Calls the backend PATCH directly so the server persists the read state to DB
-  // + clears the Redis unread counter. This is the primary "I've seen these
-  // messages" signal — the chat-window-level markAsRead below is a secondary
-  // path for messages that arrive while the panel is already open.
   const mountReadFiredRef = useRef<string | null>(null);
   useEffect(() => {
     if (!orderId || mountReadFiredRef.current === orderId) return;
@@ -48,11 +48,10 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reader_type: 'merchant' }),
-    }).catch(() => { /* best-effort — markAsRead below retries on new messages */ });
+    }).catch(() => { /* best-effort */ });
   }, [orderId]);
 
-  // Also mark read at the chat-window level when new messages arrive while
-  // this panel is open (covers messages that land after mount).
+  // Also mark read at the chat-window level when new messages arrive while open.
   const chatWindowForRead = chatWindows.find(w => w.orderId === orderId);
   const lastMessageCountRef = useRef(0);
   useEffect(() => {
@@ -62,19 +61,13 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
     markAsRead(chatWindowForRead.id);
   }, [chatWindowForRead, chatWindowForRead?.messages.length, markAsRead]);
 
-  // Initial-load gate: flip false once the first fetchMessages round-trip
-  // has had a chance to complete. Without this, `messages.length === 0`
-  // was used as the loading flag — which never turned false for chats
-  // that legitimately have no messages yet, producing an infinite spinner.
+  // Initial-load gate
   const [initialLoadPending, setInitialLoadPending] = useState(true);
   useEffect(() => {
     setInitialLoadPending(true);
     const t = setTimeout(() => setInitialLoadPending(false), 800);
     return () => clearTimeout(t);
   }, [orderId]);
-  // As soon as any message lands, stop showing the spinner — this covers
-  // the common case of chats that do have history and shouldn't wait
-  // the full 800ms to render.
   useEffect(() => {
     const win = chatWindows.find(w => w.orderId === orderId);
     if (win && win.messages.length > 0 && initialLoadPending) {
@@ -82,8 +75,12 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
     }
   }, [chatWindows, orderId, initialLoadPending]);
 
-  // Track order status to gate chat input on terminal statuses
+  // Track order status + amounts for context strip
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
+  const [cryptoAmount, setCryptoAmount] = useState<number | null>(null);
+  const [fiatAmount, setFiatAmount] = useState<number | null>(null);
+  const [fiatCurrency, setFiatCurrency] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -91,7 +88,13 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
         const res = await fetchWithAuth(`/api/orders/${orderId}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled) setOrderStatus(data?.data?.status || data?.status || null);
+        const order = data?.data || data;
+        if (!cancelled) {
+          setOrderStatus(order?.status || null);
+          setCryptoAmount(order?.crypto_amount ?? null);
+          setFiatAmount(order?.fiat_amount ?? null);
+          setFiatCurrency(order?.fiat_currency ?? null);
+        }
       } catch { /* best-effort */ }
     };
     load();
@@ -109,54 +112,88 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
     : null;
   const chatWindow = chatWindows.find(w => w.orderId === orderId);
 
-  const TypeIcon = orderType === 'buy' ? ArrowDownLeft : ArrowUpRight;
-  const typeLabel = orderType === 'buy' ? 'BUY' : 'SELL';
-  const typeColor = orderType === 'buy' ? 'text-green-400 bg-green-500/15 border-green-500/20' : 'text-orange-400 bg-orange-500/15 border-orange-500/20';
+  const isUserOnline = chatWindow?.presence?.some(p => p.actorType === 'user' && p.isOnline) ?? false;
+  const initials = getInitials(userName);
+
+  const fiatSymbol =
+    fiatCurrency === 'INR' ? '₹'
+    : fiatCurrency === 'AED' ? 'د.إ'
+    : fiatCurrency ?? '';
 
   return (
-    <div className="h-full flex flex-col bg-background text-foreground">
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#08080a', color: '#f5f5f7' }}>
       {/* Header */}
-      <div className="px-3 py-2 border-b border-foreground/[0.04] flex items-center gap-2">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.09)', flexShrink: 0 }}>
+        {/* Back button */}
         <button
           onClick={onBack}
-          className="p-1 rounded hover:bg-foreground/[0.06] transition-colors text-foreground/40 hover:text-foreground/70"
+          style={{ width: 38, height: 38, borderRadius: 999, background: 'rgba(255,255,255,0.055)', border: '1px solid rgba(255,255,255,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aeaeb2', cursor: 'pointer', flexShrink: 0 }}
         >
-          <ChevronLeft className="w-4 h-4" />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
         </button>
-        <div className="w-7 h-7 rounded-lg bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center text-sm">
-          {getUserEmoji(userName)}
+
+        {/* Gradient avatar with online dot */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 999, background: 'linear-gradient(150deg,#ff8a3d,#ff5d73)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15 }}>
+            {initials}
+          </div>
+          {isUserOnline && (
+            <span style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: 999, background: '#b8e9d4', boxShadow: '0 0 0 2.5px #08080a' }} />
+          )}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p className="text-xs font-medium text-foreground/80 truncate">
-              {userName}
-            </p>
-            {orderType && (
-              <span className={`text-[12px] px-1 py-0.5 rounded font-mono border ${typeColor}`}>
-                {typeLabel}
+
+        {/* Name + status */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontWeight: 800, fontSize: 16, color: '#f5f5f7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b8e9d4" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </div>
+          <div style={{ color: chatWindow?.isTyping ? '#b8e9d4' : isUserOnline ? '#b8e9d4' : '#86868b', fontSize: 11.5, fontWeight: 600, marginTop: 1 }}>
+            {chatWindow?.isTyping ? 'typing…' : isUserOnline ? 'Active now' : `#${orderNumber}`}
+          </div>
+        </div>
+
+        {/* Profile icon button */}
+        <button style={{ width: 38, height: 38, borderRadius: 999, background: 'rgba(255,255,255,0.055)', border: '1px solid rgba(255,255,255,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aeaeb2', cursor: 'pointer', flexShrink: 0 }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Order context strip */}
+      <div style={{ margin: '10px 16px 2px', padding: '11px 14px', borderRadius: 16, background: 'rgba(255,255,255,0.055)', border: '1px solid rgba(255,255,255,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ fontWeight: 800, fontSize: 15, fontVariantNumeric: 'tabular-nums', color: '#f5f5f7', whiteSpace: 'nowrap' }}>
+              {cryptoAmount != null ? `${Number(cryptoAmount).toFixed(2)} USDT` : `#${orderNumber}`}
+            </span>
+            {cryptoAmount != null && <span style={{ color: '#86868b', display: 'flex' }}>→</span>}
+            {fiatAmount != null && (
+              <span style={{ fontWeight: 800, fontSize: 15, fontVariantNumeric: 'tabular-nums', color: '#f5f5f7', whiteSpace: 'nowrap' }}>
+                {fiatSymbol}{Number(fiatAmount).toLocaleString()}
               </span>
             )}
           </div>
-          {/* Online / Typing status */}
-          <div className="flex items-center gap-1">
-            {chatWindow?.isTyping ? (
-              <p className="text-[12px] text-green-400 font-medium">typing...</p>
-            ) : (
-              <>
-                <ConnectionIndicator isConnected={chatWindow?.presence?.some(p => p.actorType === 'user' && p.isOnline) ?? false} />
-                <p className="text-[12px] text-foreground/30 font-mono truncate">
-                  {chatWindow?.presence?.some(p => p.actorType === 'user' && p.isOnline)
-                    ? 'Online'
-                    : `Order #${orderNumber}`}
-                </p>
-              </>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3, color: '#b8e9d4', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            {orderStatus === 'escrowed'
+              ? 'Awaiting your release'
+              : orderStatus === 'payment_sent'
+                ? 'Awaiting your confirmation'
+                : orderStatus || 'Active'}
           </div>
         </div>
-        {orderStatus && (
-          <span className="text-[12px] px-1.5 py-0.5 bg-foreground/[0.04] text-foreground/40 rounded font-mono uppercase">
-            {orderStatus}
-          </span>
+        {orderStatus === 'escrowed' && (
+          <button style={{ flexShrink: 0, padding: '10px 16px', borderRadius: 12, border: 'none', background: '#f5f5f7', color: '#0b0b0c', fontWeight: 800, fontSize: 13.5, cursor: 'pointer' }}>
+            Release
+          </button>
         )}
       </div>
 
@@ -187,8 +224,8 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
             isLoadingOlder={isLoadingOlderMessages(orderId)}
           />
         ) : (
-          <div className="flex items-center justify-center h-full">
-            <div className="w-5 h-5 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <div style={{ width: 20, height: 20, border: '2px solid rgba(184,233,212,0.3)', borderTopColor: '#b8e9d4', borderRadius: 999, animation: 'spin 0.8s linear infinite' }} />
           </div>
         )}
       </div>

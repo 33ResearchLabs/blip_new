@@ -237,7 +237,8 @@ export async function POST(request: NextRequest) {
           getFinalPrice(pairFromBody),
           getCurrentFeeBps(),
         ]);
-        if (finalPrice.price > 0) sellRate = finalPrice.price;
+        // SELL order: user sells USDT to merchant → merchant buys at 0.5% below mid
+        if (finalPrice.price > 0) sellRate = finalPrice.price * 0.995;
         feeBps = currentFeeBps;
       } catch { /* sellRate stays null */ }
       if (!sellRate || sellRate <= 0) {
@@ -348,7 +349,8 @@ export async function POST(request: NextRequest) {
         getFinalPrice(pairFromBody),
         getCurrentFeeBps(),
       ]);
-      if (finalPrice.price > 0) buyRate = finalPrice.price;
+      // BUY order: user buys USDT from merchant → merchant sells at 0.5% above mid
+      if (finalPrice.price > 0) buyRate = finalPrice.price * 1.005;
       buyFeeBps = currentFeeBps;
     } catch { /* buyRate stays null */ }
     if (!buyRate || buyRate <= 0) {

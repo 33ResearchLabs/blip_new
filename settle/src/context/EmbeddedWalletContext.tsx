@@ -252,7 +252,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     if (walletState === 'unlocked' && keypair) {
       refreshBalances();
-      const interval = setInterval(refreshBalances, 10_000);
+      const interval = setInterval(refreshBalances, 45_000);
       return () => clearInterval(interval);
     }
   }, [walletState, keypair, refreshBalances]);
@@ -515,20 +515,28 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     if (!keypair) throw new Error('Wallet locked');
     touchActivity();
 
-    // Check SOL balance for fees
-    const solBal = await connection.getBalance(keypair.publicKey);
-    if (solBal < 10_000) {
-      throw new Error('Insufficient SOL for transaction fees. Airdrop SOL first from the Wallet page.');
-    }
+    // Gasless: backend pays fees — user needs zero SOL.
+    // Serialize without blockhash (backend sets a fresh one).
+    transaction.feePayer = keypair.publicKey; // placeholder so serialize works
+    const txBase64 = transaction.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64');
 
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = keypair.publicKey;
-    transaction.partialSign(keypair);
-
-    const txHash = await connection.sendRawTransaction(transaction.serialize(), {
-      maxRetries: 5,
+    const feeRes = await fetch('/api/solana/feepayer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tx: txBase64 }),
+      credentials: 'include',
     });
+    if (!feeRes.ok) {
+      const err = await feeRes.json().catch(() => ({ error: 'feepayer endpoint failed' }));
+      throw new Error(err.error || 'Failed to get gasless fee payer signature');
+    }
+    const { tx: partialBase64, lastValidBlockHeight } = await feeRes.json();
+    const partialTx = Transaction.from(Buffer.from(partialBase64, 'base64'));
+
+    // User's keypair adds authority signature
+    partialTx.partialSign(keypair);
+
+    const txHash = await connection.sendRawTransaction(partialTx.serialize(), { maxRetries: 5 });
     return await confirmHttp(connection, txHash, { lastValidBlockHeight });
   }, [keypair, connection, touchActivity]);
 

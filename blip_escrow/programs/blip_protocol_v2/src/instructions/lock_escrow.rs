@@ -71,6 +71,11 @@ pub struct LockEscrow<'info> {
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct LockEscrowParams {
     pub counterparty: Pubkey,
+    /// Listing duration in seconds (Funded→expiry). None = 24h default.
+    pub escrow_duration_secs: Option<i64>,
+    /// How long the buyer has to complete fiat payment after locking (seconds).
+    /// None = default 4h. Min 5 min, max 24h.
+    pub payment_window_secs: Option<u64>,
 }
 
 pub fn handler(
@@ -131,10 +136,16 @@ pub fn handler(
     trade.status = TradeStatus::Locked;
     trade.locked_at = clock.unix_timestamp;
     trade.escrow_bump = escrow.bump;
-    // Set expiration (default 24 hours from locking)
+    // Set expires_at to the payment window deadline.
+    // In Locked state expires_at = when buyer must complete payment by.
+    let window = params.payment_window_secs
+        .unwrap_or(Trade::BUYER_PAY_WINDOW as u64)
+        .max(5 * 60)        // min 5 minutes
+        .min(24 * 60 * 60)  // max 24 hours
+        as i64;
     trade.expires_at = clock
         .unix_timestamp
-        .checked_add(Trade::DEFAULT_ESCROW_DURATION)
+        .checked_add(window)
         .ok_or(ErrorCode::Overflow)?;
 
     // Emit event

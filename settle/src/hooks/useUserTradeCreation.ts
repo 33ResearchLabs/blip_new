@@ -115,7 +115,7 @@ export function useUserTradeCreation({
       // pending until any merchant claims it.
       let liveRate = currentRate;
       try {
-        const priceRes = await fetchWithAuth(`/api/prices/current?pair=${selectedPair}`);
+        const priceRes = await fetchWithAuth(`/api/prices/current?pair=${selectedPair}&order_type=${tradeType}`);
         const priceData = await priceRes.json();
         if (priceData?.success && priceData.data?.price) {
           liveRate = priceData.data.price;

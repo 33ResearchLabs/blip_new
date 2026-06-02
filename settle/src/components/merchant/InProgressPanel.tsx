@@ -6,14 +6,13 @@ import {
   Zap,
   ChevronRight,
   ChevronDown,
-  ArrowRight,
   Clock,
   XCircle,
   MessageSquare,
   AlertTriangle,
   Loader2,
 } from "lucide-react";
-import { CountdownRing } from "./CountdownRing";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   getAuthoritativeStatus,
@@ -145,7 +144,7 @@ const WAITING_ACTIONS = [
   "Already Claimed",
 ];
 
-const IP_ITEM_HEIGHT = 210; // Estimated row height for in-progress orders (includes hero timer + pricing strip)
+const IP_ITEM_HEIGHT = 160;
 
 const InProgressOrderList = memo(function InProgressOrderList({
   orders,
@@ -153,7 +152,6 @@ const InProgressOrderList = memo(function InProgressOrderList({
   onAction,
   onOpenChat,
   formatTimeRemaining,
-  getStatusBadge,
   getNextAction,
   merchantId,
   lockingEscrowOrderId,
@@ -167,7 +165,6 @@ const InProgressOrderList = memo(function InProgressOrderList({
   onAction?: (order: any, action: string) => void;
   onOpenChat?: (order: any) => void;
   formatTimeRemaining: (seconds: number) => string;
-  getStatusBadge: (order: any) => React.ReactNode;
   getNextAction: (order: any) => string;
   merchantId?: string | null;
   lockingEscrowOrderId?: string | null;
@@ -237,406 +234,180 @@ const InProgressOrderList = memo(function InProgressOrderList({
               }}
               className="pb-1"
             >
-              <div
-                data-testid={`order-card-${order.id}`}
-                onClick={() => onSelectOrder(order)}
-                className="relative p-2.5 rounded-lg cursor-pointer transition-colors"
-                style={{
-                  background: "var(--card)",
-                  border:
-                    "1px solid color-mix(in srgb, var(--primary) 50%, transparent)",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.borderColor =
-                    "color-mix(in srgb, var(--primary) 70%, transparent)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.borderColor =
-                    "color-mix(in srgb, var(--primary) 50%, transparent)")
-                }
-              >
-                {/* Live pulse dot */}
-                <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
-                </span>
-                {/* Row 1: Counterparty + type on left, timer on right */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <div className="text-base shrink-0">{order.emoji}</div>
-                    {(() => {
-                      const { seller, buyer } = getPartyNames(order.dbOrder);
-                      const bothKnown = !!seller && !!buyer;
-                      const soloName = seller || buyer || order.user || null;
-                      return bothKnown ? (
-                        <span className="flex items-center gap-1 text-xs font-medium text-foreground/80 min-w-0 flex-1">
-                          <span
-                            className="truncate min-w-0"
-                            title={`Seller: ${seller}`}
-                          >
-                            {seller}
-                          </span>
-                          <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
-                          <span
-                            className="truncate min-w-0"
-                            title={`Buyer: ${buyer}`}
-                          >
-                            {buyer}
-                          </span>
-                        </span>
-                      ) : (
-                        <span
-                          className={`text-xs font-medium truncate min-w-0 flex-1 ${soloName ? "text-foreground/80" : "text-foreground/40"}`}
-                        >
-                          {soloName || "—"}
-                        </span>
-                      );
-                    })()}
-                    {order.spreadPreference && (
-                      <span
-                        className={`shrink-0 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
-                          order.spreadPreference === "fastest"
-                            ? "bg-primary/10 border-primary/20 text-primary"
-                            : order.spreadPreference === "cheap"
-                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                              : "bg-blue-500/10 border-blue-500/20 text-blue-400"
-                        }`}
-                      >
-                        {order.spreadPreference === "fastest" && (
-                          <Zap className="w-2.5 h-2.5" />
-                        )}
-                        {order.spreadPreference === "fastest"
-                          ? "FAST"
-                          : order.spreadPreference === "best"
-                            ? "BEST"
-                            : "CHEAP"}
-                      </span>
-                    )}
-                  </div>
-                  {/* payment_sent orders don't expire */}
-                  {order.minimalStatus === "payment_sent" ||
-                  order.dbOrder?.status === "payment_sent" ||
-                  order.dbOrder?.status === "payment_confirmed" ? (
-                    <div className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/[0.06]">
-                      <Shield className="w-3 h-3 text-emerald-400/60" />
-                      <span className="text-[10px] font-bold font-mono text-emerald-400/60">
-                        No expiry
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="shrink-0 flex items-center gap-1 tabular-nums">
-                      <span
-                        className={`text-xs sm:text-sm font-bold font-mono ${
-                          order.expiresIn <= 120
-                            ? "text-[var(--color-error)]"
-                            : "text-primary"
-                        }`}
-                      >
-                        {order.expiresIn > 0
-                          ? formatTimeRemaining(order.expiresIn)
-                          : "Expired"}
-                      </span>
-                      <CountdownRing
-                        remaining={order.expiresIn}
-                        total={7200}
-                        size={16}
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                  )}
-                </div>
+              {(() => {
+                  const db = order.dbOrder;
+                  const { seller, buyer } = getPartyNames(db);
+                  const iAmSeller = getViewerSide(db, order, merchantId) === "seller";
+                  const counterparty = iAmSeller ? buyer : seller;
+                  const avatarSeed = counterparty || order.id;
+                  const avatarSrc = db?.user?.avatar_url || db?.merchant?.avatar_url || db?.buyer_merchant?.avatar_url || null;
+                  const roleLabel = iAmSeller ? "SELL" : "BUY";
 
-                {/* Expiry warning banner — tiered so the merchant sees this
-                    on the card long before auto-cancellation fires. Matches
-                    the toast thresholds in useMerchantEffects (30 / 10 / 2
-                    min) so the banner appears at the first toast and
-                    escalates in tone as the timer drops.
-                    Skipped for payment_sent / payment_confirmed — those have
-                    a 24h compliance window, not an inactivity timer. */}
-                {order.expiresIn > 0 &&
-                  order.expiresIn <= 1800 &&
-                  order.minimalStatus !== "payment_sent" &&
-                  order.dbOrder?.status !== "payment_sent" &&
-                  order.dbOrder?.status !== "payment_confirmed" && (
-                    <div
-                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 ${
-                        order.expiresIn <= 120
-                          ? "bg-[var(--color-error)]/10 border border-[var(--color-error)]/20"
-                          : order.expiresIn <= 600
-                            ? "bg-primary/10 border border-primary/20"
-                            : "bg-foreground/[0.04] border border-foreground/[0.08]"
-                      }`}
-                    >
-                      <AlertTriangle
-                        className={`w-3.5 h-3.5 shrink-0 ${
-                          order.expiresIn <= 120
-                            ? "text-[var(--color-error)]"
-                            : order.expiresIn <= 600
-                              ? "text-primary"
-                              : "text-foreground/50"
-                        }`}
-                      />
-                      <span
-                        className={`text-[10px] font-bold ${
-                          order.expiresIn <= 120
-                            ? "text-[var(--color-error)]"
-                            : order.expiresIn <= 600
-                              ? "text-primary"
-                              : "text-foreground/60"
-                        }`}
-                      >
-                        {order.expiresIn <= 120
-                          ? "Order expiring soon! Complete action now"
-                          : `Order expires in ${formatTimeRemaining(order.expiresIn)} — take action`}
-                      </span>
-                    </div>
-                  )}
+                  const statusCfg = getStatusBadgeConfig(getAuthoritativeStatus(order));
+                  const noExpiry = order.minimalStatus === "payment_sent" || db?.status === "payment_sent" || db?.status === "payment_confirmed";
+                  const isExpiringSoon = !noExpiry && order.expiresIn > 0 && order.expiresIn <= 1800;
 
-                {/* Cancel Request Banner on order card */}
-                {order.cancelRequestedBy && (
-                  <div
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 bg-primary/10 border border-primary/20`}
-                  >
-                    <XCircle className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="text-[10px] font-bold text-primary">
-                      Cancel requested — tap to respond
-                    </span>
-                  </div>
-                )}
+                  const isLockingThis = lockingEscrowOrderId === order.id;
+                  const isConfirmingThis = confirmingOrderId === order.id;
+                  const isAcceptingThis = acceptingOrderId === order.id;
+                  const isCancellingThis = cancellingOrderId === order.id;
+                  const labelLower = (nextAction || "").toLowerCase();
+                  const isPayActionCard = labelLower.includes("paid") || labelLower.includes("send payment") || labelLower.includes("mark payment");
+                  const isMarkingPaidThis = !!markingDone && isPayActionCard;
+                  const isActionLoading = isLockingThis || isConfirmingThis || isAcceptingThis || isCancellingThis || isMarkingPaidThis;
+                  const loadingLabel = isLockingThis ? "Locking…" : isConfirmingThis ? "Confirming…" : isAcceptingThis ? "Accepting…" : isCancellingThis ? "Cancelling…" : "Marking paid…";
 
-                {/* Row 2: Amount — direction based on merchant's role */}
-                {(() => {
-                  const iAmSeller =
-                    getViewerSide(order.dbOrder, order, merchantId) ===
-                    "seller";
-                  const crypto = `${Math.round(order.amount).toLocaleString()} ${order.fromCurrency}`;
-                  const fiat = `${Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} ${order.toCurrency || "INR"}`;
+                  const liveRef = resolveCorridorRef(corridorPrices, db?.corridor_id, order.toCurrency || db?.fiat_currency);
+                  const storedRef = Number(db?.ref_price_at_create);
+                  const refPrice = liveRef && liveRef > 0 ? liveRef : Number.isFinite(storedRef) && storedRef > 0 ? storedRef : null;
+                  const premium = refPrice && order.rate ? ((order.rate - refPrice) / refPrice) * 100 : null;
+
+                  // Short status label for pill
+                  const minStatus = getAuthoritativeStatus(order);
+                  const SHORT_STATUS: Record<string, string> = {
+                    open: "OPEN", accepted: "ACCEPTED", escrowed: "ESCROWED",
+                    payment_sent: "PAID", completed: "DONE", cancelled: "CANCELLED",
+                    disputed: "DISPUTED", expired: "EXPIRED",
+                  };
+                  const shortLabel = SHORT_STATUS[minStatus] || minStatus.toUpperCase();
 
                   return (
-                    <div className="mb-1.5">
-                      <p className="text-[9px] font-bold text-foreground/30 uppercase tracking-wider mb-1">
-                        {iAmSeller
-                          ? "You Send USDT → Get Fiat"
-                          : "You Get USDT → Pay Fiat"}
-                      </p>
-                      <div className="flex items-center gap-1.5">
-                        {iAmSeller ? (
-                          <>
-                            <span className="text-sm font-bold text-foreground tabular-nums">
-                              {crypto}
+                    <div
+                      data-testid={`order-card-${order.id}`}
+                      onClick={() => onSelectOrder(order)}
+                      className="relative rounded-xl cursor-pointer transition-all overflow-hidden"
+                      style={{ background: "#111113", border: "1px solid rgba(255,255,255,0.07)" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.13)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)")}
+                    >
+                      {/* Top bar: status chip | live dot */}
+                      <div className="flex items-center justify-between px-3 pt-2.5 pb-0">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold font-mono tracking-widest border ${statusCfg.bg} ${statusCfg.border} ${statusCfg.color}`}>
+                          <span className={`w-1 h-1 rounded-full bg-current`} />
+                          {shortLabel}
+                        </span>
+                        <span className="flex h-2 w-2">
+                          <span className="absolute inline-flex h-2 w-2 rounded-full bg-primary opacity-60 animate-ping" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                        </span>
+                      </div>
+
+                      {/* Amount */}
+                      <div className="px-3 pt-2 pb-1">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-[22px] font-bold tabular-nums text-white/90 leading-none tracking-tight">
+                            {Math.round(order.amount).toLocaleString()}
+                          </span>
+                          <span className="text-[12px] font-medium text-white/35">{order.fromCurrency}</span>
+                          {premium !== null && premium !== 0 && (
+                            <span className={`text-[10px] font-mono ml-1 ${premium > 0 ? "text-primary/60" : "text-white/20"}`}>
+                              {premium > 0 ? "+" : ""}{premium.toFixed(1)}%
                             </span>
-                            <ArrowRight className="w-3 h-3 text-foreground/20" />
-                            <span className="text-sm font-bold text-primary tabular-nums">
-                              {fiat}
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-[10px] text-white/20">→</span>
+                          <span className="text-[11px] font-mono tabular-nums text-white/30">
+                            {Math.round(order.amount * (order.rate || 1)).toLocaleString()} {order.toCurrency || "INR"}
+                          </span>
+                          {order.rate && <span className="text-[10px] text-white/15 font-mono ml-1">@ {order.rate.toFixed(2)}</span>}
+                        </div>
+                      </div>
+
+                      {/* Urgent banner — only when really close */}
+                      {isExpiringSoon && order.expiresIn <= 600 && (
+                        <div className={`mx-3 mb-1.5 flex items-center gap-1 px-2 py-1 rounded-md ${order.expiresIn <= 120 ? "bg-red-500/10 border border-red-500/20" : "bg-primary/10 border border-primary/20"}`}>
+                          <AlertTriangle className={`w-2.5 h-2.5 shrink-0 ${order.expiresIn <= 120 ? "text-red-400" : "text-primary"}`} />
+                          <span className={`text-[9px] font-bold ${order.expiresIn <= 120 ? "text-red-400" : "text-primary"}`}>
+                            {order.expiresIn <= 120 ? "Expiring now" : `${formatTimeRemaining(order.expiresIn)} left`}
+                          </span>
+                        </div>
+                      )}
+                      {order.cancelRequestedBy && (
+                        <div className="mx-3 mb-1.5 flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 border border-primary/20">
+                          <XCircle className="w-2.5 h-2.5 text-primary shrink-0" />
+                          <span className="text-[9px] font-bold text-primary">Cancel requested</span>
+                        </div>
+                      )}
+
+                      {/* Footer: avatar + name + timer | action */}
+                      <div className="flex items-center gap-2 px-3 pb-2.5 pt-1">
+                        <UserAvatar src={avatarSrc} seed={avatarSeed} size={22} className="rounded-full shrink-0 border border-white/[0.07]" />
+                        <span className="text-[11px] font-medium text-white/55 truncate min-w-0 flex-1">{counterparty || "—"}</span>
+                        <div className="flex items-center gap-1 shrink-0 text-white/25">
+                          <Clock className="w-2.5 h-2.5" />
+                          {noExpiry ? (
+                            <span className="text-[9px] font-mono text-emerald-400/50">∞</span>
+                          ) : (
+                            <span className={`text-[9px] font-mono tabular-nums ${order.expiresIn <= 120 ? "text-red-400" : order.expiresIn <= 600 ? "text-primary/60" : "text-white/25"}`}>
+                              {order.expiresIn > 0 ? formatTimeRemaining(order.expiresIn) : "—"}
                             </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-sm font-bold text-primary tabular-nums">
-                              {crypto}
-                            </span>
-                            <ArrowRight className="w-3 h-3 text-foreground/20" />
-                            <span className="text-sm font-bold text-foreground tabular-nums">
-                              {fiat}
-                            </span>
-                          </>
+                          )}
+                        </div>
+                        {onOpenChat && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onOpenChat(order); }}
+                            className="shrink-0 text-white/20 hover:text-white/50 transition-colors relative"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            {order.unreadCount > 0 && (
+                              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-primary text-background text-[7px] font-bold flex items-center justify-center">{order.unreadCount}</span>
+                            )}
+                          </button>
                         )}
                       </div>
+
+                      {/* Action button — full width, separated by a faint rule */}
+                      {!isWaiting && (
+                        <div className="border-t border-white/[0.05]">
+                          <button
+                            data-testid="order-primary-action"
+                            disabled={isActionLoading}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isActionLoading) return;
+                              if (onAction) onAction(order, nextAction);
+                              else onSelectOrder(order);
+                            }}
+                            className={`w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold tracking-wide transition-colors rounded-b-xl ${isActionLoading ? "text-primary/40 cursor-wait" : "text-primary hover:bg-primary/[0.08]"}`}
+                          >
+                            {isActionLoading ? (
+                              <><Loader2 className="w-3 h-3 animate-spin" />{loadingLabel}</>
+                            ) : (
+                              <><Zap className="w-3 h-3" />{nextAction}</>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                      {isWaiting && (
+                        <div className="border-t border-white/[0.04] flex items-center justify-center gap-1.5 py-1.5">
+                          <div className="w-1 h-1 bg-white/10 rounded-full animate-breathe" />
+                          <span className="text-[9px] text-white/20 font-mono">Waiting for counterparty</span>
+                        </div>
+                      )}
+
+                      {/* Extension request */}
+                      {db?.extension_requested_by && (
+                        <div className="mx-3 mb-2 mt-1 flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/[0.08] border border-amber-500/[0.12]">
+                          <Clock className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                          <span className="text-[9px] text-amber-400/80 font-medium truncate">
+                            +{db.extension_minutes >= 60 ? `${Math.round(db.extension_minutes / 60)}hr` : `${db.extension_minutes}min`} extension requested
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Urgency bar at bottom */}
+                      {!noExpiry && order.expiresIn > 0 && order.expiresIn <= 7200 && (
+                        <div className="absolute bottom-0 left-0 right-0 h-px bg-white/[0.03]">
+                          <div
+                            className={`h-full transition-[width] duration-1000 ease-linear ${order.expiresIn <= 120 ? "bg-red-400/60" : order.expiresIn <= 600 ? "bg-primary/60" : "bg-primary/20"}`}
+                            style={{ width: `${Math.min(100, (order.expiresIn / 7200) * 100)}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
-
-                {/* Row 3: Rate + premium + earnings + status badge */}
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="text-[10px] text-foreground/40 font-mono">
-                    @ {(order.rate || 3.67).toFixed(2)}
-                  </span>
-                  {(() => {
-                    // Premium = how much this order's rate is above/below the
-                    // CURRENT per-corridor reference price. Live prices come
-                    // from /api/corridor/dynamic-rate (admin manual price, or
-                    // VWAP from corridor_prices) via the shared hook. Falls
-                    // back to the order's stored ref_price_at_create when live
-                    // is unavailable. No hardcoded constants — different fiat
-                    // corridors have different price levels (AED ≈ 3.67,
-                    // INR ≈ 83) and a single fallback breaks for the other.
-                    const liveRef = resolveCorridorRef(
-                      corridorPrices,
-                      order.dbOrder?.corridor_id,
-                      order.toCurrency || order.dbOrder?.fiat_currency,
-                    );
-                    const storedRef = Number(
-                      order.dbOrder?.ref_price_at_create,
-                    );
-                    const refPrice =
-                      liveRef && liveRef > 0
-                        ? liveRef
-                        : Number.isFinite(storedRef) && storedRef > 0
-                          ? storedRef
-                          : null;
-                    const premium =
-                      refPrice && order.rate
-                        ? ((order.rate - refPrice) / refPrice) * 100
-                        : null;
-                    return (
-                      <>
-                        {premium !== null && premium !== 0 && (
-                          <span
-                            className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                              premium > 0
-                                ? "bg-primary/10 text-primary"
-                                : "bg-foreground/[0.04] text-foreground/30"
-                            }`}
-                          >
-                            {premium > 0 ? "+" : ""}
-                            {premium.toFixed(2)}%
-                          </span>
-                        )}
-                        {order.protocolFeePercent != null && (
-                          <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
-                            +$
-                            {(
-                              (order.amount * order.protocolFeePercent) /
-                              100
-                            ).toFixed(2)}
-                          </span>
-                        )}
-                      </>
-                    );
-                  })()}
-                  <div className="flex-1" />
-                  {order.expiresIn > 0 && getStatusBadge(order)}
-                </div>
-
-                {/* Bottom: Action button or waiting */}
-                {isWaiting ? (
-                  <div className="flex items-center gap-1.5 px-1 py-1">
-                    <div className="w-1 h-1 bg-foreground/15 rounded-full animate-breathe" />
-                    <span className="text-[9px] text-foreground/25 font-mono">
-                      Waiting for other merchant
-                    </span>
-                  </div>
-                ) : (
-                  (() => {
-                    const isLockingThis = lockingEscrowOrderId === order.id;
-                    const isConfirmingThis = confirmingOrderId === order.id;
-                    const isAcceptingThis = acceptingOrderId === order.id;
-                    const isCancellingThis = cancellingOrderId === order.id;
-                    // markingDone is a global "mark-paid in flight" flag — we
-                    // only want to show the spinner on a card whose CURRENT
-                    // primary action is actually Send-Payment / I've-Paid, not
-                    // on every card on the screen. Detect via the action label.
-                    const labelLower = (nextAction || "").toLowerCase();
-                    const isPayActionCard =
-                      labelLower.includes("paid") ||
-                      labelLower.includes("send payment") ||
-                      labelLower.includes("mark payment");
-                    const isMarkingPaidThis = !!markingDone && isPayActionCard;
-                    const isActionLoading =
-                      isLockingThis ||
-                      isConfirmingThis ||
-                      isAcceptingThis ||
-                      isCancellingThis ||
-                      isMarkingPaidThis;
-                    const loadingLabel = isLockingThis
-                      ? "Locking escrow…"
-                      : isConfirmingThis
-                        ? "Confirming payment…"
-                        : isAcceptingThis
-                          ? "Accepting…"
-                          : isCancellingThis
-                            ? "Cancelling…"
-                            : isMarkingPaidThis
-                              ? "Marking as paid…"
-                              : null;
-                    return (
-                      <button
-                        data-testid="order-primary-action"
-                        disabled={isActionLoading}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isActionLoading) return;
-                          if (onAction) {
-                            onAction(order, nextAction);
-                          } else {
-                            onSelectOrder(order);
-                          }
-                        }}
-                        className={`w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] text-background font-bold transition-colors ${
-                          isActionLoading
-                            ? "bg-primary/40 cursor-wait"
-                            : "bg-primary hover:bg-primary/80"
-                        }`}
-                      >
-                        {isActionLoading ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            {loadingLabel}
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="w-3.5 h-3.5" />
-                            {nextAction}
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </>
-                        )}
-                      </button>
-                    );
-                  })()
-                )}
-
-                {/* Chat button — always visible */}
-                {onOpenChat && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenChat(order);
-                    }}
-                    className="mt-1.5 w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-[10px] font-bold border border-foreground/[0.08] bg-foreground/[0.03] text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/70 transition-colors"
-                  >
-                    <MessageSquare className="w-3 h-3" />
-                    Chat
-                    {order.unreadCount > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-background text-[8px] font-bold min-w-[16px] text-center">
-                        {order.unreadCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                {/* Extension Request Banner */}
-                {order.dbOrder?.extension_requested_by && (
-                  <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/[0.08] border border-amber-500/[0.12]">
-                    <Clock className="w-3 h-3 text-amber-400 shrink-0" />
-                    <span className="text-[10px] text-amber-400/90 font-medium truncate">
-                      {order.dbOrder.extension_requested_by === "user"
-                        ? "Buyer"
-                        : "Seller"}{" "}
-                      requested +
-                      {order.dbOrder.extension_minutes >= 60
-                        ? `${Math.round(order.dbOrder.extension_minutes / 60)}hr`
-                        : `${order.dbOrder.extension_minutes}min`}{" "}
-                      extension
-                    </span>
-                  </div>
-                )}
-
-                {/* Unread Messages */}
-                {order.hasMessages && order.unreadCount > 0 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onOpenChat) onOpenChat(order);
-                      else onSelectOrder(order);
-                    }}
-                    className="mt-1.5 flex items-center gap-1.5 text-[10px] text-primary/80 font-medium hover:text-primary/80 transition-colors w-full"
-                  >
-                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
-                    {order.unreadCount} new message
-                    {order.unreadCount > 1 ? "s" : ""}
-                  </button>
-                )}
-              </div>
             </div>
           );
         })}
@@ -691,20 +462,6 @@ export const InProgressPanel = memo(function InProgressPanel({
     if (hours > 0) return `${hours}h ${minutes}m`;
     if (minutes > 0) return `${minutes}m ${secs}s`;
     return `${secs}s`;
-  };
-
-  const getStatusBadge = (order: any) => {
-    const minimalStatus = getAuthoritativeStatus(order);
-    const config = getStatusBadgeConfig(minimalStatus);
-
-    return (
-      <div
-        data-testid="order-status"
-        className="px-2 py-0.5 bg-foreground/[0.04] border border-foreground/[0.06] rounded text-[9px] text-foreground/50 font-medium font-mono"
-      >
-        {config.label}
-      </div>
-    );
   };
 
   const getNextAction = (order: any): string => {
@@ -767,8 +524,8 @@ export const InProgressPanel = memo(function InProgressPanel({
                   onClick={() => setStatusFilter(f.value)}
                   className={`shrink-0 h-full px-2 xl:px-2 [@media(min-height:900px)]:px-2 inline-flex items-center justify-center rounded-md text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] font-bold whitespace-nowrap transition-all ${
                     isActive
-                      ? "bg-foreground text-background shadow"
-                      : "text-foreground/40 hover:text-foreground/60"
+                      ? "bg-white/[0.08] text-white/90 border border-white/[0.12]"
+                      : "text-foreground/35 hover:text-foreground/60 border border-transparent"
                   }`}
                 >
                   <span className="whitespace-nowrap">
@@ -790,8 +547,7 @@ export const InProgressPanel = memo(function InProgressPanel({
           onAction={onAction}
           onOpenChat={onOpenChat}
           formatTimeRemaining={formatTimeRemaining}
-          getStatusBadge={getStatusBadge}
-          getNextAction={getNextAction}
+getNextAction={getNextAction}
           merchantId={merchantId}
           lockingEscrowOrderId={lockingEscrowOrderId}
           confirmingOrderId={confirmingOrderId}

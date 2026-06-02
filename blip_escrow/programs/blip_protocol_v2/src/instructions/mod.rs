@@ -29,6 +29,8 @@ pub mod emergency_refund_v2;
 // trades that completed under older binary releases before `close = depositor`
 // landed in release_escrow / refund_escrow).
 pub mod close_trade;
+// V2.4: merged create+fund in single tx, configurable payment window, rent recovery
+pub mod create_and_fund;
 
 pub use initialize_config::*;
 pub use update_config::*;
@@ -61,3 +63,4 @@ pub use emergency_refund_v2::*;
 // to pick up generated client modules (__client_accounts_close_trade etc).
 // `handler` name ambiguity with other modules is just a warning.
 pub use close_trade::*;
+pub use create_and_fund::*;

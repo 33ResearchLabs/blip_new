@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, CloseAccount, Mint, Token, TokenAccount, Transfer};
-use crate::state::{Trade, Escrow, TradeStatus};
+use crate::state::{Trade, Escrow, TradeStatus, ProtocolConfig};
 use crate::errors::ErrorCode;
 use crate::events::TradeRefundedEvent;
 
@@ -27,8 +27,14 @@ pub struct RefundEscrow<'info> {
     pub signer: Signer<'info>,
 
     #[account(
+        seeds = [ProtocolConfig::SEED_PREFIX],
+        bump
+    )]
+    pub protocol_config: Account<'info, ProtocolConfig>,
+
+    #[account(
         mut,
-        close = depositor,
+        close = trade_creator,
         seeds = [
             Trade::SEED_PREFIX,
             trade.creator.as_ref(),
@@ -40,7 +46,7 @@ pub struct RefundEscrow<'info> {
 
     #[account(
         mut,
-        close = depositor,
+        close = trade_creator,
         seeds = [Escrow::SEED_PREFIX, trade.key().as_ref()],
         bump = escrow.bump,
         has_one = trade
@@ -68,9 +74,17 @@ pub struct RefundEscrow<'info> {
     )]
     pub depositor_ata: Account<'info, TokenAccount>,
 
-    /// CHECK: Rent refund recipient — must equal escrow.depositor.
+    /// CHECK: kept for backward compat — no longer receives rent.
     #[account(mut, constraint = depositor.key() == escrow.depositor @ ErrorCode::InvalidDepositor)]
     pub depositor: UncheckedAccount<'info>,
+
+    /// CHECK: Original trade creator — receives Trade + Escrow PDA rent on close.
+    #[account(mut, address = trade.creator @ ErrorCode::Unauthorized)]
+    pub trade_creator: UncheckedAccount<'info>,
+
+    /// CHECK: Protocol authority — receives vault ATA rent on close.
+    #[account(mut, constraint = protocol_authority.key() == protocol_config.authority @ ErrorCode::Unauthorized)]
+    pub protocol_authority: UncheckedAccount<'info>,
 
     #[account(constraint = mint.key() == trade.mint @ ErrorCode::InvalidMint)]
     pub mint: Account<'info, Mint>,
@@ -169,10 +183,10 @@ pub fn handler(ctx: Context<RefundEscrow>) -> Result<()> {
     );
     token::transfer(cpi_ctx, escrow.amount)?;
 
-    // Close vault ATA (rent → depositor — the party who paid for it)
+    // Close vault ATA (rent → protocol_authority — Blip recovers gas float)
     let close_vault = CloseAccount {
         account: ctx.accounts.vault_ata.to_account_info(),
-        destination: ctx.accounts.depositor.to_account_info(),
+        destination: ctx.accounts.protocol_authority.to_account_info(),
         authority: ctx.accounts.vault_authority.to_account_info(),
     };
     let cpi_ctx = CpiContext::new_with_signer(

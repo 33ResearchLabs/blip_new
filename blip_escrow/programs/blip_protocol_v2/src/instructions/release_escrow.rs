@@ -18,7 +18,7 @@ pub struct ReleaseEscrow<'info> {
 
     #[account(
         mut,
-        close = depositor,
+        close = trade_creator,
         seeds = [
             Trade::SEED_PREFIX,
             trade.creator.as_ref(),
@@ -30,7 +30,7 @@ pub struct ReleaseEscrow<'info> {
 
     #[account(
         mut,
-        close = depositor,
+        close = trade_creator,
         seeds = [Escrow::SEED_PREFIX, trade.key().as_ref()],
         bump = escrow.bump,
         has_one = trade
@@ -67,10 +67,17 @@ pub struct ReleaseEscrow<'info> {
     )]
     pub treasury_ata: Account<'info, TokenAccount>,
 
-    /// CHECK: Rent refund recipient — must equal escrow.depositor (the
-    /// party who funded the trade and paid the escrow + vault rent).
+    /// CHECK: Rent refund recipient — must equal escrow.depositor.
     #[account(mut, constraint = depositor.key() == escrow.depositor @ ErrorCode::InvalidDepositor)]
     pub depositor: UncheckedAccount<'info>,
+
+    /// CHECK: Original trade creator — receives Trade + Escrow PDA rent on close.
+    #[account(mut, address = trade.creator @ ErrorCode::Unauthorized)]
+    pub trade_creator: UncheckedAccount<'info>,
+
+    /// CHECK: Protocol authority — receives vault ATA rent on close.
+    #[account(mut, constraint = protocol_authority.key() == protocol_config.authority @ ErrorCode::Unauthorized)]
+    pub protocol_authority: UncheckedAccount<'info>,
 
     #[account(constraint = mint.key() == trade.mint @ ErrorCode::InvalidMint)]
     pub mint: Account<'info, Mint>,
@@ -144,10 +151,10 @@ pub fn handler(ctx: Context<ReleaseEscrow>) -> Result<()> {
     );
     token::transfer(cpi_ctx, fee)?;
 
-    // Close vault ATA (rent to depositor — the party who paid for it)
+    // Close vault ATA (rent to protocol_authority — Blip recovers gas float)
     let close_vault = CloseAccount {
         account: ctx.accounts.vault_ata.to_account_info(),
-        destination: ctx.accounts.depositor.to_account_info(),
+        destination: ctx.accounts.protocol_authority.to_account_info(),
         authority: ctx.accounts.vault_authority.to_account_info(),
     };
     let cpi_ctx = CpiContext::new_with_signer(

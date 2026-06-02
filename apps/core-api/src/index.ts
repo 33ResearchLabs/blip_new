@@ -18,6 +18,8 @@ import { corridorRoutes } from './routes/corridor';
 import { reputationRoutes } from './routes/reputation';
 import { installAuthHook, assertStrictAuthInProduction } from './hooks/auth';
 import { initWebSocketServer, closeWebSocketServer } from './ws/broadcast';
+import { initSupportChatServer, closeSupportChatServer } from './ws/supportChat';
+import { supportRoutes } from './routes/support';
 import { startOutboxWorker, stopOutboxWorker } from './workers/notificationOutbox';
 import { startCorridorTimeoutWorker, stopCorridorTimeoutWorker } from './workers/corridorTimeoutWorker';
 import { startAutoBumpWorker, stopAutoBumpWorker } from './workers/autoBumpWorker';
@@ -161,6 +163,7 @@ await fastify.register(expireRoutes, { prefix: '/v1' });
 await fastify.register(conversionRoutes, { prefix: '/v1' });
 await fastify.register(corridorRoutes, { prefix: '/v1' });
 await fastify.register(reputationRoutes, { prefix: '/v1' });
+await fastify.register(supportRoutes, { prefix: '/v1' });
 await fastify.register(debugRoutes);
 
 // Pre-flight: log DB target, run migrations, validate schema
@@ -197,6 +200,7 @@ try {
   // Only primary (non-worker) runs WS + background workers
   if (!IS_WORKER) {
     initWebSocketServer(fastify.server);
+    initSupportChatServer(fastify.server);
     startOutboxWorker();
     startCorridorTimeoutWorker();
     startAutoBumpWorker();
@@ -230,6 +234,7 @@ const shutdown = async (signal: string) => {
     await stopReceiptWorker();
     await closeReceiptQueue();
     closeWebSocketServer();
+    closeSupportChatServer();
   }
   await fastify.close();
   await closePool();

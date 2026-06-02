@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { MessageCircle, Shield, AlertTriangle, Bell } from "lucide-react";
+import { MessageCircle, Shield, AlertTriangle, Bell, HelpCircle } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
+import { SupportBubbleInline } from "@/components/support/SupportBubbleInline";
 import type { Screen, Order } from "./types";
 
 type TimeFilter = 'today' | '7d' | '30d' | 'all';
@@ -43,7 +44,7 @@ export const ChatListScreen = ({
   maxW,
   notificationCount = 0,
 }: ChatListScreenProps) => {
-  const [activeTab, setActiveTab] = useState<'chats' | 'disputes'>('chats');
+  const [activeTab, setActiveTab] = useState<'chats' | 'disputes' | 'support'>('chats');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
 
   const filterByTime = (list: Order[]) => {
@@ -101,6 +102,7 @@ export const ChatListScreen = ({
   const chatGroups = groupByMerchant(chatOrders);
   const disputeGroups = groupByMerchant(disputeOrders);
   const displayGroups = activeTab === 'chats' ? chatGroups : disputeGroups;
+
 
   const handleOpenChat = (order: Order, group?: Grouped) => {
     setActiveOrderId(order.id);
@@ -178,17 +180,39 @@ export const ChatListScreen = ({
           )}
         </button>
 
-        {/* Time filter — collapsed into a dropdown on the right */}
-        <FilterDropdown
-          className="ml-auto"
-          ariaLabel="Time range filter"
-          value={timeFilter}
-          onChange={setTimeFilter}
-          options={TIME_FILTER_OPTIONS}
-        />
+        <button
+          onClick={() => setActiveTab('support')}
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
+            activeTab === 'support'
+              ? 'bg-accent text-accent-text'
+              : 'bg-surface-hover text-text-tertiary'
+          }`}
+        >
+          <HelpCircle size={13} strokeWidth={2.2} />
+          <span className="text-[12px] font-bold">Support</span>
+        </button>
+
+        {/* Time filter — only for chats/disputes tabs */}
+        {activeTab !== 'support' && (
+          <FilterDropdown
+            className="ml-auto"
+            ariaLabel="Time range filter"
+            value={timeFilter}
+            onChange={setTimeFilter}
+            options={TIME_FILTER_OPTIONS}
+          />
+        )}
       </div>
 
-      {/* ── List ── */}
+      {/* ── Support tab ── */}
+      {activeTab === 'support' && (
+        <div className="flex-1 overflow-hidden">
+          <SupportBubbleInline />
+        </div>
+      )}
+
+      {/* ── List (chats / disputes) ── */}
+      {activeTab !== 'support' && (
       <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto scrollbar-hide">
         {displayGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -293,6 +317,7 @@ export const ChatListScreen = ({
           </div>
         )}
       </div>
+      )}
 
       <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} />
     </div>

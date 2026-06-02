@@ -79,12 +79,8 @@ export function useTradeCreation({
         const offerData = offerRes.ok ? await offerRes.json().catch(() => ({})) : {};
         let matchedOffer: { id: string; merchant?: { wallet_address?: string; display_name?: string } } | null = null;
         if (offerRes.ok && offerData.success && offerData.data) matchedOffer = offerData.data;
-        const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
-        if (!counterpartyWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet)) {
-          setCreateTradeError('No matching merchant with a linked wallet found.');
-          setIsCreatingTrade(false);
-          return;
-        }
+        // If no offer match, continue as an open broadcast order — the escrow is
+        // open (no counterparty required) so no wallet is needed to proceed.
 
         // Pre-validate order payload BEFORE locking escrow on-chain.
         // This prevents the critical scenario where escrow is locked but

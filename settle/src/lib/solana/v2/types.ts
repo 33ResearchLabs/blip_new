@@ -124,6 +124,8 @@ export interface CreateTradeParams {
 export interface FundEscrowParams {
   tradePda: PublicKey;
   mint: PublicKey;
+  /** Duration in seconds from the UI. Defaults to 24h on-chain if omitted. */
+  escrowDurationSecs?: number | null;
 }
 
 // Accept trade params (counterparty joins)
@@ -134,6 +136,8 @@ export interface AcceptTradeParams {
 // Lock escrow params
 export interface LockEscrowParams {
   counterparty: PublicKey;
+  /** Duration in seconds from the UI. Defaults to 24h on-chain if omitted. */
+  escrowDurationSecs?: number | null;
 }
 
 // Release escrow params
@@ -141,6 +145,8 @@ export interface ReleaseEscrowParams {
   tradePda: PublicKey;
   counterparty: PublicKey;
   mint: PublicKey;
+  /** Protocol authority wallet — receives rent from closed PDAs (gasless flow). */
+  protocolAuthority?: PublicKey;
 }
 
 // Refund escrow params
@@ -149,6 +155,8 @@ export interface RefundEscrowParams {
   mint: PublicKey;
   /** Pass protocol_config PDA for authority-initiated refunds (backend signer). */
   protocolConfigPda?: PublicKey;
+  /** Protocol authority wallet — receives rent from closed PDAs (gasless flow). */
+  protocolAuthority?: PublicKey;
 }
 
 // Extend escrow params (depositor only)

@@ -121,7 +121,7 @@ export function BalanceSparkline({
   // signalled by the +/- 24h earnings line above the chart, so painting
   // the line red on a dip felt alarming. Theme-aware via CSS var so the
   // colour follows whichever palette the merchant is on.
-  const color = "var(--color-success)";
+  const color = "var(--color-primary)";
   const glow = color;
   // Unique gradient id per mount so multiple sparklines on one page
   // (e.g. desktop split view) don't clobber each other's defs.

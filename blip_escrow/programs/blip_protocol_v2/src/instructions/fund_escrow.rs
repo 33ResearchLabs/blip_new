@@ -76,7 +76,14 @@ pub struct FundEscrow<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<FundEscrow>) -> Result<()> {
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct FundEscrowParams {
+    /// Escrow duration in seconds from the UI. None = default 24h.
+    /// Capped at MAX_TOTAL_LIFETIME (7 days).
+    pub escrow_duration_secs: Option<i64>,
+}
+
+pub fn handler(ctx: Context<FundEscrow>, params: FundEscrowParams) -> Result<()> {
     let config = &ctx.accounts.protocol_config;
     let trade = &mut ctx.accounts.trade;
     let escrow = &mut ctx.accounts.escrow;
@@ -113,10 +120,15 @@ pub fn handler(ctx: Context<FundEscrow>) -> Result<()> {
     // Update trade state - Funded (counterparty still default)
     trade.status = TradeStatus::Funded;
     trade.escrow_bump = escrow.bump;
-    // Set expiration (default 24 hours from funding)
+    // Set expiration — use caller-supplied duration (from UI) or default 24h.
+    // Capped at 7 days to prevent indefinite fund lockup.
+    let duration = params.escrow_duration_secs
+        .unwrap_or(Trade::DEFAULT_ESCROW_DURATION)
+        .max(60)                          // minimum 1 minute
+        .min(Trade::MAX_TOTAL_LIFETIME);  // maximum 7 days
     trade.expires_at = clock
         .unix_timestamp
-        .checked_add(Trade::DEFAULT_ESCROW_DURATION)
+        .checked_add(duration)
         .ok_or(ErrorCode::Overflow)?;
     // Note: counterparty remains Pubkey::default() until accept_trade
 

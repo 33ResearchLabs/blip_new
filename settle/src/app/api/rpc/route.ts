@@ -114,22 +114,27 @@ function jsonRpcError(id: string | number | null | undefined, code: number, mess
   );
 }
 
-/** Recursively strip `apiVersion` from any response `context` objects.
- *  Returns the original text unchanged when the input doesn't parse or
- *  doesn't contain `apiVersion`. */
-function scrubApiVersion(raw: string): string {
-  if (!raw.includes('"apiVersion"')) return raw;
+/** Recursively strip fields unknown to @solana/web3.js <=1.95 from RPC
+ *  responses. Recent validators (Helius/Triton >=1.18) add `apiVersion`
+ *  and `minContextSlot` to context objects; web3.js superstruct schemas
+ *  reject any extra field with a StructError. Safe to drop — purely
+ *  informational, not used by any SDK code path. */
+function scrubUnknownFields(raw: string): string {
   try {
     const parsed = JSON.parse(raw) as unknown;
+    const CONTEXT_EXTRA = new Set(['apiVersion', 'minContextSlot']);
     const walk = (node: unknown): void => {
       if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) {
-        for (const item of node) walk(item);
-        return;
-      }
+      if (Array.isArray(node)) { node.forEach(walk); return; }
       const obj = node as Record<string, unknown>;
-      if ('apiVersion' in obj && 'slot' in obj) {
-        delete obj.apiVersion;
+      // Strip extra fields from any `context` sub-object
+      if ('context' in obj && obj.context && typeof obj.context === 'object') {
+        const ctx = obj.context as Record<string, unknown>;
+        for (const key of CONTEXT_EXTRA) delete ctx[key];
+      }
+      // Also strip top-level extra fields if they appear
+      for (const key of CONTEXT_EXTRA) {
+        if (key in obj && !('value' in obj)) delete obj[key];
       }
       for (const v of Object.values(obj)) walk(v);
     };
@@ -203,7 +208,7 @@ export async function POST(request: NextRequest) {
     // superstruct schema that rejects the extra field with a StructError.
     // The field is purely informational — safe to drop server-side until
     // the SDK is upgraded.
-    const scrubbed = scrubApiVersion(rawText);
+    const scrubbed = scrubUnknownFields(rawText);
 
     // Pass through upstream's status + (scrubbed) body. Do NOT echo
     // upstream response headers (they may include rate-limit info that

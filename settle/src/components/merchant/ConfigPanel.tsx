@@ -351,15 +351,11 @@ export const ConfigPanel = memo(function ConfigPanel({
             • horizontal text + show/hide          → WIDTH  (@max-[…])
           Padding is split px/py so each axis drives the side it controls. */}
       <div
-        className={`flex-1 min-h-0 flex flex-col px-3 @max-[320px]:px-2.5 @max-[240px]:px-2 @max-[200px]:px-1.5 py-3 @max-h-[480px]:py-2.5 @max-h-[400px]:py-2 @max-h-[320px]:py-1.5 @max-h-[240px]:py-1 gap-4 @max-h-[520px]:gap-3.5 @max-h-[480px]:gap-3 @max-h-[440px]:gap-2.5 @max-h-[400px]:gap-2 @max-h-[320px]:gap-1.5 @max-h-[240px]:gap-1 ${overflowClass}`}
+        className="flex-1 min-h-0 flex flex-col px-3 py-3 gap-3 overflow-y-auto overflow-x-hidden"
       >
-        {/* Amount — hero input (weight 1). Grows to fill on tall panels;
-            its floor is laddered down by HEIGHT so it keeps shrinking until
-            all five rows fit without scrolling. Amount + Bank carry the
-            smallest floors since they're single controls (no inner grid), so
-            they yield space first on short panels and don't overlap. */}
-        <div className={`${rowSizing} flex flex-col`}>
-          <div className="flex items-center justify-between mb-2 @max-h-[400px]:mb-1.5 @max-h-[320px]:mb-1 @max-h-[240px]:mb-0.5 gap-1 min-w-0 shrink-0">
+        {/* Amount — fixed height, no stretching */}
+        <div className="shrink-0 flex flex-col">
+          <div className="flex items-center justify-between mb-1.5 gap-1 min-w-0 shrink-0">
             <div className="flex items-center gap-1.5 @max-[240px]:gap-1 min-w-0">
               <ArrowRightLeft className="w-3.5 h-3.5 @max-[240px]:w-3 @max-[240px]:h-3 text-primary/60 shrink-0" />
               <span className="text-[11px] @max-[280px]:text-[10px] @max-[220px]:text-[9px] font-bold text-foreground/50 uppercase tracking-wider">
@@ -395,7 +391,7 @@ export const ConfigPanel = memo(function ConfigPanel({
           {/* Input wrapper fills the section above its floor. The floor is
               height-laddered so the field stays tappable while shrinking to
               fit short panels. */}
-          <div className="relative flex-1 min-h-[2.75rem] @max-h-[440px]:min-h-[2.5rem] @max-h-[400px]:min-h-[2.25rem] @max-h-[360px]:min-h-[2rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem]">
+          <div className="relative">
             <input
               type="text"
               inputMode="decimal"
@@ -409,9 +405,9 @@ export const ConfigPanel = memo(function ConfigPanel({
                 setOpenTradeForm({ ...openTradeForm, cryptoAmount: clamped });
               }}
               placeholder="0"
-              className="absolute inset-0 w-full h-full bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-4 @max-[240px]:px-3 text-xl @max-h-[480px]:text-lg @max-h-[400px]:text-base @max-h-[320px]:text-sm @max-h-[240px]:text-xs font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-primary/30 focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
+              className="w-full h-12 bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-3 text-lg font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-primary/30 focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/25 font-mono pointer-events-none">
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/25 font-mono pointer-events-none">
               USDT
             </span>
           </div>
@@ -432,17 +428,15 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
         </div>
 
-        {/* Payment Methods — dropdown (weight 1). Height-laddered floor so
-            the selector content (icon + name + account number) stays legible
-            while shrinking to fit. */}
-        <div className={`relative ${rowSizing} flex flex-col z-30`}>
+        {/* Payment Methods — fixed height dropdown */}
+        <div className="relative shrink-0 flex flex-col z-30">
           {/* Label — this row was the ONLY control without one (Amount,
               Spread, Boost all have a label above their control). That made
               the gap below the dropdown (gap + the Spread label) read as
               larger than the gap above it (gap only). Mirrors the Spread
               label's classes so every row now carries the same label-gap and
               the box-to-box spacing is even top-and-bottom. */}
-          <label className="text-[10px] @max-[220px]:text-[9px] text-foreground/30 mb-1 @max-h-[360px]:mb-0.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold shrink-0">
+          <label className="text-[10px] text-foreground/30 mb-1 flex items-center gap-1 font-mono uppercase tracking-wider font-bold shrink-0">
             Payment
           </label>
           {(() => {
@@ -467,7 +461,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               <>
                 <button
                   onClick={() => setShowPmDropdown(!showPmDropdown)}
-                  className="w-full flex-[0.75] min-h-[2.75rem] @max-h-[440px]:min-h-[2.5rem] @max-h-[400px]:min-h-[2.25rem] @max-h-[360px]:min-h-[2rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem] flex items-center justify-between gap-2 @max-[240px]:gap-1 px-3 @max-[240px]:px-2 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
+                  className="w-full h-[2.25rem] flex items-center justify-between gap-2 px-3 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
                 >
                   {selectedPm ? (
                     <div className="flex items-center gap-2 @max-[240px]:gap-1.5 min-w-0 flex-1">
@@ -585,9 +579,9 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
         </div>
 
-        {/* Spread Tier (weight 1). */}
-        <div data-tour="spread" className={`${rowSizing} flex flex-col`}>
-          <label className="text-[10px] @max-[220px]:text-[9px] text-foreground/30 mb-1 @max-h-[360px]:mb-0.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold shrink-0">
+        {/* Spread Tier — shrink-0 so it doesn't stretch */}
+        <div data-tour="spread" className="shrink-0 flex flex-col">
+          <label className="text-[10px] text-foreground/30 mb-1 flex items-center gap-1 font-mono uppercase tracking-wider font-bold shrink-0">
             Spread
             <InfoTooltip
               side="bottom"
@@ -610,7 +604,7 @@ export const ConfigPanel = memo(function ConfigPanel({
             />
           </label>
 
-          <div className="flex gap-1.5 @max-[240px]:gap-1 flex-1 min-h-[2.5rem] @max-h-[440px]:min-h-[2.25rem] @max-h-[400px]:min-h-[2rem] @max-h-[360px]:min-h-[1.875rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem]">
+          <div className={`flex gap-1.5 ${cryptoAmount > 0 ? 'h-12' : 'h-16'} transition-all duration-200`}>
             {(
               Object.entries(PRICING_TIERS) as [
                 keyof typeof PRICING_TIERS,
@@ -770,6 +764,56 @@ export const ConfigPanel = memo(function ConfigPanel({
           </div>
         </div>
 
+        {/* Order receipt — only when an amount is entered */}
+        {cryptoAmount > 0 && (
+          <div className="rounded-xl border border-foreground/[0.07] bg-foreground/[0.03] overflow-hidden text-[11px] font-mono">
+            {/* Buy row */}
+            <div className="px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center justify-between text-foreground/40">
+                <span>You send</span>
+                <span className="font-bold text-foreground/70">{cryptoAmount} USDT</span>
+              </div>
+              <div className="flex items-center justify-between text-foreground/40">
+                <span>Rate (buy)</span>
+                <span>{fiatSymbol}{pricing.buyRate.toFixed(4)}{fiatSuffix}</span>
+              </div>
+              {promoActive && (
+                <div className="flex items-center justify-between text-green-400/80">
+                  <span>🎁 $5 reward</span>
+                  <span>-{fiatSymbol}{(5 * pricing.buyRate).toFixed(2)}{fiatSuffix}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-foreground/40">
+                <span>Blip fee</span>
+                <span className={tier.base === 0 ? "text-green-400" : ""}>{tier.base === 0 ? "0% (promo)" : `${tier.base}%`}</span>
+              </div>
+              <div className="border-t border-foreground/[0.06] pt-1.5 flex items-center justify-between font-bold text-[12px]">
+                <span className="text-foreground/50">BUY — you pay</span>
+                <span className="text-white">{fiatSymbol}{pricing.buyAed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{fiatSuffix || ` ${fiatLabel}`}</span>
+              </div>
+            </div>
+            {/* Divider */}
+            <div className="border-t border-foreground/[0.06]" />
+            {/* Sell row */}
+            <div className="px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center justify-between text-foreground/40">
+                <span>Rate (sell)</span>
+                <span>{fiatSymbol}{pricing.sellRate.toFixed(4)}{fiatSuffix}</span>
+              </div>
+              {promoActive && (
+                <div className="flex items-center justify-between text-green-400/80">
+                  <span>🎁 $5 reward</span>
+                  <span>-{fiatSymbol}{(5 * pricing.sellRate).toFixed(2)}{fiatSuffix}</span>
+                </div>
+              )}
+              <div className="border-t border-foreground/[0.06] pt-1.5 flex items-center justify-between font-bold text-[12px]">
+                <span className="text-foreground/50">SELL — you receive</span>
+                <span className="text-white">{fiatSymbol}{pricing.sellAed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{fiatSuffix || ` ${fiatLabel}`}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* BUY / SELL Buttons (weight 1.1).
             Accurate section weights for this fill model:
               Amount 1 · Bank 1 · Spread 1 · Boost 1 · BUY/SELL 1.1
@@ -777,7 +821,7 @@ export const ConfigPanel = memo(function ConfigPanel({
             Floor is height-laddered so the buttons stay tappable while the
             panel shrinks. Label font is HEIGHT-bound; the sub-price font and
             the gap/radius are WIDTH-bound (one axis per property). */}
-        <div className="flex gap-2 @max-[280px]:gap-1.5 @max-[240px]:gap-1 flex-[1.1] min-h-[2.5rem] @max-h-[440px]:min-h-[2.25rem] @max-h-[400px]:min-h-[2rem] @max-h-[360px]:min-h-[1.875rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem]">
+        <div className={`flex gap-2 shrink-0 transition-all duration-200 ${cryptoAmount > 0 ? 'h-12' : 'h-16'}`}>
           <button
             onClick={() => {
               setOpenTradeForm({ ...openTradeForm, tradeType: "buy" });

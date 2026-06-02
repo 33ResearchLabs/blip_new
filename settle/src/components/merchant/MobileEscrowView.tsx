@@ -12,7 +12,6 @@ import {
   Loader2,
   Check,
   Send,
-  Shield,
 } from "lucide-react";
 import { UserBadge } from "@/components/merchant/UserBadge";
 import { ActionPulse } from "@/components/NotificationToast";
@@ -179,15 +178,13 @@ export function MobileEscrowView({
 
   return (
     <div className="space-y-1">
-      {/* Sticky header — "IN PROGRESS" title + horizontal status tabs */}
-      <div className="sticky top-0 z-20 -mx-3 -mt-3 px-3 pt-0.5 pb-1 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04]">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            {/* <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> */}
-            <Shield className="w-3.5 h-3.5 text-primary/70" />
-            <span className="text-[11px] font-mono font-bold text-primary uppercase tracking-[0.15em]">
-              In Progress
-            </span>
+      {/* Sticky header */}
+      <div className="sticky top-0 z-20 -mx-3 -mt-3 px-3 pt-3 pb-2.5 bg-background/95 backdrop-blur-sm">
+        {/* Title row */}
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-primary shrink-0" style={{ boxShadow: '0 0 6px var(--color-primary)' }} />
+            <span className="text-[15px] font-bold text-white leading-none">In Progress</span>
             <InfoTooltip
               title="In Progress — rules"
               description="Your role (buyer vs seller) and the auto-timeout at each stage."
@@ -196,18 +193,17 @@ export function MobileEscrowView({
               size="xs"
             />
           </div>
-          <span className="text-xs font-mono text-white/70">
-            {filteredOngoingOrders.length}
-            {filteredOngoingOrders.length !== ongoingOrders.length && (
-              <span className="text-foreground/30">
-                {" "}
-                / {ongoingOrders.length}
-              </span>
-            )}
-          </span>
+          {ongoingOrders.length > 0 && (
+            <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-primary/15 border border-primary/25 text-[10px] font-bold text-primary flex items-center justify-center tabular-nums">
+              {filteredOngoingOrders.length !== ongoingOrders.length
+                ? `${filteredOngoingOrders.length}/${ongoingOrders.length}`
+                : ongoingOrders.length}
+            </span>
+          )}
         </div>
+        {/* Filter tabs */}
         <div
-          className="flex items-center gap-0.5 p-0.5 h-9 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] overflow-x-auto scrollbar-hide"
+          className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-0.5"
           role="tablist"
           aria-label="Filter active orders by status"
         >
@@ -219,10 +215,10 @@ export function MobileEscrowView({
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setStatusFilter(opt.key)}
-                className={`shrink-0 inline-flex items-center justify-center h-full px-3 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
+                className={`shrink-0 inline-flex items-center justify-center h-7 px-3 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all ${
                   isActive
-                    ? "bg-white text-black shadow"
-                    : "text-foreground/60 hover:text-foreground/80"
+                    ? "bg-primary text-background shadow-sm"
+                    : "bg-foreground/[0.05] text-foreground/45 hover:text-foreground/70 hover:bg-foreground/[0.08]"
                 }`}
               >
                 {opt.label}

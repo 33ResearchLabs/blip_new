@@ -735,6 +735,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'fundCorridor',
@@ -778,6 +779,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'withdrawCorridor',
@@ -850,6 +852,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'createTrade',
@@ -902,6 +905,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'lockEscrow',
@@ -972,6 +976,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'releaseEscrow',
@@ -1025,6 +1030,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'refundEscrow',
@@ -1076,6 +1082,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'extendEscrow',
@@ -1159,6 +1166,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions,
         name: 'fundEscrow',
@@ -1226,6 +1234,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'acceptTrade',
@@ -1383,6 +1392,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions,
         name: 'depositToEscrow',
@@ -1472,6 +1482,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'confirmPayment',
@@ -1530,6 +1541,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'openDispute',
@@ -1593,6 +1605,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
+        gasless: true,
         signTransaction,
         instructions: builtTx.instructions,
         name: 'resolveDispute',
