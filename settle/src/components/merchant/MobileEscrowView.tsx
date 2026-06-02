@@ -1,73 +1,29 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import {
-  Lock,
-  MessageCircle,
-  ArrowRightLeft,
-  AlertTriangle,
-  Clock,
-  RotateCcw,
-  Loader2,
-  Check,
-  Send,
-  Shield,
-} from "lucide-react";
-import { UserBadge } from "@/components/merchant/UserBadge";
-import { ActionPulse } from "@/components/NotificationToast";
+import { Loader2 } from "lucide-react";
 import type { Order } from "@/types/merchant";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { formatCrypto, formatRate } from "@/lib/format";
-import {
-  InfoTooltip,
-  type InfoTooltipItem,
-} from "@/components/shared/InfoTooltip";
 
-// Mirrors IN_PROGRESS_RULES in InProgressPanel.tsx so the mobile header
-// surfaces the same buy/sell flow + expiry explanation as desktop. Keep
-// in sync there — source of truth is CLAUDE.md order lifecycle.
-const IN_PROGRESS_RULES: InfoTooltipItem[] = [
-  {
-    label: "BUY",
-    value:
-      "You send fiat → receive USDT. Seller locks escrow first; you then mark payment sent and wait for seller to release.",
-  },
-  {
-    label: "SELL",
-    value:
-      "You lock USDT in escrow first. Wait for fiat in your account, then confirm payment to release USDT.",
-  },
-  {
-    label: "PENDING",
-    value:
-      "Auto-expires 15 min after creation if no one accepts. No funds at risk.",
-  },
-  {
-    label: "ACCEPTED",
-    value:
-      "You have 2 hours from accept to lock escrow (if seller) or send payment (if buyer). Auto-cancels otherwise.",
-  },
-  {
-    label: "PAID",
-    value:
-      'After "payment sent", seller has 24 h to confirm. Auto-moves to dispute for compliance review if not confirmed.',
-  },
-  {
-    label: "DISPUTED",
-    value:
-      "Auto-resolves and refunds escrow to the funder after 24 h if no compliance action.",
-  },
-];
+// ── Design tokens (Zoop 2026) ────────────────────────────────────────────────
+const T = {
+  bg: "#08080a",
+  text: "#f5f5f7",
+  muted: "#86868b",
+  muted2: "#aeaeb2",
+  faint: "#5a5a60",
+  hair: "rgba(255,255,255,0.09)",
+  hair2: "rgba(255,255,255,0.16)",
+  glass: "rgba(255,255,255,0.055)",
+  mint: "#b8e9d4",
+  mintBg: "rgba(184,233,212,0.12)",
+  mintBorder: "rgba(184,233,212,0.3)",
+  red: "#ff5a5f",
+};
 
-// Mirrors `getViewerSide` in InProgressPanel.tsx so the mobile escrow card
-// resolves YOU PAY / YOU RECEIVE the same way the desktop in-progress
-// panel does (prefers enriched `myRole`, falls back to DB shape).
-function getViewerSide(
-  db: any,
-  order: any,
-  myId: string | null | undefined,
-): "seller" | "buyer" {
+// ── Viewer side (YOU PAY / YOU RECEIVE) ─────────────────────────────────────
+function getViewerSide(db: any, order: any, myId: string | null | undefined): "seller" | "buyer" {
   const myRole = order?.myRole || order?.my_role || db?.my_role;
   if (myRole === "seller") return "seller";
   if (myRole === "buyer") return "buyer";
@@ -80,65 +36,264 @@ function getViewerSide(
   return orderType === "buy" ? "seller" : "buyer";
 }
 
-// Status pill copy + colour for the in-progress card.
-function statusPill(s: string | undefined): { label: string; cls: string } {
-  switch (s) {
-    case "accepted":
-      return {
-        label: "Awaiting Lock",
-        cls: "bg-amber-500/10 border-amber-500/25 text-amber-300",
-      };
+// ── Stage index ───────────────────────────────────────────────────────────────
+const STAGES = ["Accepted", "Escrowed", "Paid", "Released"];
+function stageIndex(status: string | undefined): number {
+  switch (status) {
+    case "accepted": return 0;
     case "escrowed":
-    case "escrow":
-      return {
-        label: "Locked",
-        cls: "bg-primary/10 border-primary/25 text-primary",
-      };
-    case "payment_sent":
-      return {
-        label: "Payment Sent",
-        cls: "bg-sky-500/10 border-sky-500/25 text-sky-300",
-      };
-    case "payment_confirmed":
-      return {
-        label: "Confirming",
-        cls: "bg-emerald-500/10 border-emerald-500/25 text-emerald-300",
-      };
-    case "disputed":
-      return {
-        label: "Disputed",
-        cls: "bg-red-500/10 border-red-500/25 text-red-400",
-      };
-    default:
-      return {
-        label: (s || "—").toUpperCase(),
-        cls: "bg-foreground/[0.04] border-foreground/[0.08] text-foreground/50",
-      };
+    case "escrow": return 1;
+    case "payment_sent": return 2;
+    case "completed":
+    case "payment_confirmed": return 3;
+    default: return 0;
   }
 }
 
-// Status options match the live escrow workflow steps the merchant cares about.
-// Values are matched against dbOrder.minimal_status / dbOrder.status.
-type EscrowStatusFilter =
-  | "all"
-  | "accepted"
-  | "escrowed"
-  | "payment_sent"
-  | "cancelled"
-  | "disputed";
+// ── Steps stepper ─────────────────────────────────────────────────────────────
+function Steps({ stage }: { stage: number }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", margin: "14px 0 2px" }}>
+      {STAGES.map((s, i) => {
+        const done = i <= stage, cur = i === stage;
+        return (
+          <div key={s} style={{ display: "flex", alignItems: "center", flex: i < STAGES.length - 1 ? "1 1 0" : "0 0 auto" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flex: "0 0 auto" }}>
+              <span style={{
+                width: cur ? 11 : 9, height: cur ? 11 : 9, borderRadius: 999,
+                background: done ? T.mint : "rgba(255,255,255,0.14)",
+                boxShadow: cur ? `0 0 0 3px ${T.mintBg}` : "none",
+                display: "block",
+              }} />
+              <span style={{ fontSize: 9, fontWeight: 700, color: done ? T.mint : T.faint, whiteSpace: "nowrap" }}>{s}</span>
+            </div>
+            {i < STAGES.length - 1 && (
+              <span style={{ flex: 1, height: 2, marginBottom: 14, background: i < stage ? T.mint : "rgba(255,255,255,0.12)" }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-const ESCROW_STATUS_OPTIONS: ReadonlyArray<{
-  key: EscrowStatusFilter;
-  label: string;
-}> = [
+// ── Status pill ───────────────────────────────────────────────────────────────
+function statusPillData(dbStatus: string | undefined, canConfirmPayment: boolean, canMarkPaid: boolean): { label: string; mint: boolean } {
+  if (canConfirmPayment) return { label: "Paid · release now", mint: true };
+  if (dbStatus === "payment_sent") return { label: "Paid · awaiting confirm", mint: false };
+  if (dbStatus === "escrowed" || dbStatus === "escrow") return { label: canMarkPaid ? "Escrowed · pay now" : "Escrowed · awaiting payment", mint: canMarkPaid };
+  if (dbStatus === "accepted") return { label: "Accepted · locking escrow", mint: false };
+  if (dbStatus === "disputed") return { label: "Disputed", mint: false };
+  return { label: (dbStatus || "—").replace(/_/g, " "), mint: false };
+}
+
+// ── Active trade card ─────────────────────────────────────────────────────────
+interface ActiveCardProps {
+  order: Order;
+  merchantId: string | null | undefined;
+  markingDone: boolean;
+  onOpenEscrowModal: (o: Order) => void;
+  onMarkFiatPaymentSent: (o: Order) => void;
+  onConfirmPayment: (o: Order) => void;
+  onOpenChat: (o: Order) => void;
+  onOpenDisputeModal: (id: string) => void;
+  onOpenCancelModal: (o: Order) => void;
+  setMobileView: (v: any) => void;
+}
+
+function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkFiatPaymentSent, onConfirmPayment, onOpenChat, onOpenDisputeModal, onOpenCancelModal, setMobileView }: ActiveCardProps) {
+  const dbStatus = order.dbOrder?.minimal_status || order.dbOrder?.status;
+  const role = order.myRole || "observer";
+  const hasBeenAccepted = !!order.dbOrder?.accepted_at;
+
+  const needsLockEscrow = dbStatus === "accepted" && !order.escrowTxHash && role === "seller";
+  const canMarkPaid = role === "buyer" && dbStatus === "escrowed" && hasBeenAccepted && !!order.escrowTxHash;
+  const canConfirmPayment = dbStatus === "payment_sent" && role === "seller";
+  const canComplete = dbStatus === "payment_confirmed";
+
+  const { label: statusLabel, mint } = statusPillData(dbStatus, canConfirmPayment, canMarkPaid);
+  const stage = stageIndex(dbStatus);
+
+  const viewerSide = getViewerSide(order.dbOrder, order, merchantId);
+  const cryptoAmt = formatCrypto(order.amount);
+  const fiatAmt = formatCrypto(order.total);
+  const cryptoCur = order.fromCurrency || "USDT";
+  const fiatCur = order.toCurrency || "AED";
+
+  // Determine CTA
+  const ctaLabel = needsLockEscrow ? "Lock Escrow"
+    : canMarkPaid ? "I've Paid"
+    : (canConfirmPayment || canComplete) ? "Release"
+    : null;
+
+  const handleCta = () => {
+    if (needsLockEscrow) onOpenEscrowModal(order);
+    else if (canMarkPaid) onMarkFiatPaymentSent(order);
+    else if (canConfirmPayment || canComplete) onConfirmPayment(order);
+  };
+
+  const mins = Math.floor(order.expiresIn / 60);
+  const secs = (order.expiresIn % 60).toString().padStart(2, "0");
+  const countdownStr = `${mins}:${secs} left`;
+
+  const displayName = order.user || "Counterparty";
+  const initials = displayName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
+
+  const unread = order.unreadCount || 0;
+
+  return (
+    <div style={{
+      background: T.glass, border: `1px solid ${T.hair}`, borderRadius: 22,
+      backdropFilter: "blur(20px) saturate(150%)", padding: 15, marginBottom: 12,
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10), 0 12px 40px rgba(0,0,0,0.35)",
+    }}>
+      {/* Status pill + countdown */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
+        <span style={{
+          display: "flex", alignItems: "center", gap: 7, padding: "4px 10px", borderRadius: 999,
+          background: mint ? T.mintBg : "rgba(255,255,255,0.05)",
+          border: `1px solid ${mint ? T.mintBorder : T.hair}`,
+          color: mint ? T.mint : T.muted2,
+          fontSize: 11.5, fontWeight: 800, whiteSpace: "nowrap",
+        }}>
+          {mint
+            ? <span style={{ width: 6, height: 6, borderRadius: 999, background: T.mint, boxShadow: `0 0 0 0 rgba(184,233,212,0.5)`, animation: "z2ep-pulse 2.6s infinite" }} />
+            : <span style={{ width: 6, height: 6, borderRadius: 999, background: T.muted }} />
+          }
+          {statusLabel}
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, color: mint ? T.mint : T.muted2, fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+          <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>
+          {countdownStr}
+        </span>
+      </div>
+
+      {/* Trust block */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+        <span style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: "linear-gradient(150deg,#ff8a3d,#ff5d73)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13 }}>
+          {initials}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <b style={{ fontSize: 13.5, whiteSpace: "nowrap", color: T.text }}>{displayName}</b>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, color: T.muted, fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#ffb020" }}>
+              <svg viewBox="0 0 24 24" width={11} height={11} fill="currentColor"><path d="m12 2.5 2.9 5.9 6.6.9-4.8 4.6 1.2 6.5L12 21.3 6.1 20.4l1.2-6.5L2.5 9.3l6.6-.9L12 2.5Z"/></svg>
+              <b style={{ color: "#fff" }}>{order.dbOrder?.user?.rating ? Number(order.dbOrder.user.rating).toFixed(1) : "—"}</b>
+            </span>
+            <span style={{ opacity: 0.5 }}>·</span>
+            <span>{order.dbOrder?.user?.total_trades ?? 0} orders</span>
+          </div>
+          {(order.dbOrder?.user as any)?.completion_rate != null && (
+            <div style={{ marginTop: 2, color: T.faint, fontSize: 10.5, fontWeight: 600, whiteSpace: "nowrap" }}>
+              {(order.dbOrder?.user as any).completion_rate}% completion
+            </div>
+          )}
+        </div>
+        {/* Chat icon button */}
+        <button
+          onClick={() => { onOpenChat(order); setMobileView("chat"); }}
+          style={{ position: "relative", width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: T.glass, border: `1px solid ${T.hair}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.muted2, cursor: "pointer" }}>
+          <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-6.1A8.4 8.4 0 1 1 21 11.5Z"/></svg>
+          {unread > 0 && (
+            <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 99, background: T.mint, color: "#08221a", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, background: T.hair, margin: "11px -15px" }} />
+
+      {/* Payout hero */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 13 }}>
+        <div>
+          <div style={{ color: T.muted, fontWeight: 700, fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
+            {viewerSide === "seller" ? "You receive" : "You pay out"}
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 7 }}>
+            <span style={{ fontSize: 25, fontWeight: 800, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", color: T.text }}>
+              {viewerSide === "seller" ? cryptoAmt : fiatAmt}
+            </span>
+            <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, marginBottom: 2 }}>
+              {viewerSide === "seller" ? cryptoCur : fiatCur}
+            </span>
+          </div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: T.text }}>
+            {viewerSide === "seller" ? fiatAmt : cryptoAmt}{" "}
+            <span style={{ fontSize: 10.5, color: T.muted }}>{viewerSide === "seller" ? fiatCur : cryptoCur}</span>
+          </div>
+          <div style={{ color: T.muted, fontSize: 11, fontWeight: 600, marginTop: 1, whiteSpace: "nowrap" }}>
+            @ <span style={{ color: T.text }}>{formatRate(order.rate)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment details (when buyer needs to pay) */}
+      {canMarkPaid && (() => {
+        const lpm = order.lockedPaymentMethod;
+        const bank = order.sellerBankDetails || order.userBankDetails;
+        if (lpm) return (
+          <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 12, background: "rgba(255,255,255,0.04)", border: `1px solid ${T.hair}`, fontSize: 11, fontWeight: 600, color: T.muted2 }}>
+            → {lpm.label} ({lpm.type.toUpperCase()})
+            {lpm.type === "upi" && lpm.details?.upi_id && <div style={{ color: T.faint, marginTop: 2 }}>{lpm.details.upi_id}</div>}
+            {lpm.type === "bank" && lpm.details?.iban && <div style={{ color: T.faint, marginTop: 2 }}>{lpm.details.iban}</div>}
+          </div>
+        );
+        if (bank) return (
+          <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 12, background: "rgba(255,255,255,0.04)", border: `1px solid ${T.hair}`, fontSize: 11, fontWeight: 600, color: T.faint }}>
+            → {bank.bank_name}<br />{bank.account_name}<br />{bank.iban}
+          </div>
+        );
+        return null;
+      })()}
+
+      {/* Steps stepper */}
+      <Steps stage={stage} />
+
+      {/* Action row */}
+      <div style={{ display: "flex", gap: 10, marginTop: 13 }}>
+        <button
+          onClick={() => { onOpenChat(order); setMobileView("chat"); }}
+          style={{ display: "flex", alignItems: "center", gap: 7, padding: "11px 16px", borderRadius: 13, background: "rgba(255,255,255,0.04)", border: `1px solid ${T.hair}`, color: T.text, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>
+          <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-6.1A8.4 8.4 0 1 1 21 11.5Z"/></svg>
+          Chat
+        </button>
+        {ctaLabel ? (
+          <button
+            onClick={handleCta}
+            disabled={markingDone}
+            style={{ flex: 1, padding: "11px", borderRadius: 13, border: "none", background: mint ? T.mint : "#f5f5f7", color: mint ? "#08221a" : "#0b0b0c", fontWeight: 800, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: markingDone ? 0.6 : 1 }}>
+            {markingDone ? <Loader2 style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} /> : ctaLabel}
+          </button>
+        ) : (
+          <button
+            onClick={() => onOpenDisputeModal(order.id)}
+            style={{ flex: 1, padding: "11px", borderRadius: 13, border: `1px solid ${T.hair}`, background: "rgba(255,255,255,0.04)", color: T.muted2, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>
+            View
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Filter chips ──────────────────────────────────────────────────────────────
+type EscrowStatusFilter = "all" | "accepted" | "escrowed" | "payment_sent" | "cancelled" | "disputed";
+const FILTERS: { key: EscrowStatusFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "accepted", label: "Accepted" },
   { key: "escrowed", label: "Escrowed" },
   { key: "payment_sent", label: "Paid" },
-  { key: "cancelled", label: "Cancel" },
-  { key: "disputed", label: "Dispute" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "disputed", label: "Disputed" },
 ];
 
+// ── Main view ─────────────────────────────────────────────────────────────────
 export interface MobileEscrowViewProps {
   ongoingOrders: Order[];
   markingDone: boolean;
@@ -148,477 +303,81 @@ export interface MobileEscrowViewProps {
   onOpenDisputeModal: (orderId: string) => void;
   onOpenCancelModal: (order: Order) => void;
   onOpenChat: (order: Order) => void;
-  setMobileView: (
-    view: "orders" | "escrow" | "chat" | "history" | "marketplace",
-  ) => void;
+  setMobileView: (view: "orders" | "escrow" | "chat" | "history" | "marketplace") => void;
 }
 
 export function MobileEscrowView({
-  ongoingOrders,
-  markingDone,
-  onOpenEscrowModal,
-  onMarkFiatPaymentSent,
-  onConfirmPayment,
-  onOpenDisputeModal,
-  onOpenCancelModal,
-  onOpenChat,
-  setMobileView,
+  ongoingOrders, markingDone,
+  onOpenEscrowModal, onMarkFiatPaymentSent, onConfirmPayment,
+  onOpenDisputeModal, onOpenCancelModal, onOpenChat, setMobileView,
 }: MobileEscrowViewProps) {
-  const [statusFilter, setStatusFilter] = useState<EscrowStatusFilter>("all");
-  // Merchant identity for YOU PAY / YOU RECEIVE perspective in the gradient panel.
+  const [filter, setFilter] = useState<EscrowStatusFilter>("all");
   const merchantId = useMerchantStore((s) => s.merchantId);
 
-  // Match against the most specific status the order exposes.
-  const filteredOngoingOrders = useMemo(() => {
-    if (statusFilter === "all") return ongoingOrders;
-    return ongoingOrders.filter((order) => {
-      const dbStatus = order.dbOrder?.minimal_status || order.dbOrder?.status;
-      return dbStatus === statusFilter;
+  const filtered = useMemo(() => {
+    if (filter === "all") return ongoingOrders;
+    return ongoingOrders.filter((o) => {
+      const s = o.dbOrder?.minimal_status || o.dbOrder?.status;
+      return s === filter;
     });
-  }, [ongoingOrders, statusFilter]);
+  }, [ongoingOrders, filter]);
 
   return (
-    <div className="space-y-1">
-      {/* Sticky header — "IN PROGRESS" title + horizontal status tabs */}
-      <div className="sticky top-0 z-20 -mx-3 -mt-3 px-3 pt-0.5 pb-1 bg-background/95 backdrop-blur-sm border-b border-foreground/[0.04]">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            {/* <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> */}
-            <Shield className="w-3.5 h-3.5 text-primary/70" />
-            <span className="text-[11px] font-mono font-bold text-primary uppercase tracking-[0.15em]">
-              In Progress
-            </span>
-            <InfoTooltip
-              title="In Progress — rules"
-              description="Your role (buyer vs seller) and the auto-timeout at each stage."
-              items={IN_PROGRESS_RULES}
-              side="bottom"
-              size="xs"
-            />
-          </div>
-          <span className="text-xs font-mono text-white/70">
-            {filteredOngoingOrders.length}
-            {filteredOngoingOrders.length !== ongoingOrders.length && (
-              <span className="text-foreground/30">
-                {" "}
-                / {ongoingOrders.length}
-              </span>
-            )}
-          </span>
-        </div>
-        <div
-          className="flex items-center gap-0.5 p-0.5 h-9 w-full rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] overflow-x-auto scrollbar-hide"
-          role="tablist"
-          aria-label="Filter active orders by status"
-        >
-          {ESCROW_STATUS_OPTIONS.map((opt) => {
-            const isActive = statusFilter === opt.key;
-            return (
-              <button
-                key={opt.key}
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setStatusFilter(opt.key)}
-                className={`shrink-0 inline-flex items-center justify-center h-full px-3 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
-                  isActive
-                    ? "bg-white text-black shadow"
-                    : "text-foreground/60 hover:text-foreground/80"
-                }`}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
+    <div>
+      <style>{`
+        @keyframes z2ep-pulse { 0%{box-shadow:0 0 0 0 rgba(184,233,212,.5)} 70%{box-shadow:0 0 0 6px rgba(184,233,212,0)} 100%{box-shadow:0 0 0 0 rgba(184,233,212,0)} }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+
+      {/* Section header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, position: "relative", zIndex: 1 }}>
+        <span style={{ width: 6, height: 6, borderRadius: 999, background: T.mint, animation: "z2ep-pulse 2.6s infinite", display: "inline-block" }} />
+        <span style={{ fontWeight: 800, fontSize: 16, color: T.text, whiteSpace: "nowrap" }}>In Progress</span>
+        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ color: T.faint }}><path d="M12 3 5 6v5.5c0 4.3 3 7.3 7 8.5 4-1.2 7-4.2 7-8.5V6l-7-3Z"/></svg>
       </div>
 
-      {filteredOngoingOrders.length > 0 ? (
-        <div className="space-y-2 py-1">
-          {filteredOngoingOrders.map((order) => {
-            const dbStatus =
-              order.dbOrder?.minimal_status || order.dbOrder?.status;
-            const role = order.myRole || "observer";
-            const hasBeenAccepted = !!order.dbOrder?.accepted_at;
-            const needsLockEscrow =
-              dbStatus === "accepted" &&
-              !order.escrowTxHash &&
-              role === "seller";
-            const canMarkPaid =
-              role === "buyer" &&
-              dbStatus === "escrowed" &&
-              hasBeenAccepted &&
-              !!order.escrowTxHash;
-            const canConfirmPayment =
-              dbStatus === "payment_sent" && role === "seller";
-            const canComplete = dbStatus === "payment_confirmed";
-            // What's the merchant waiting on when there's no primary action?
-            // Surfaced as a small pill in the footer so the card never looks
-            // "stuck" with only chat / dispute / cancel icons visible.
-            const hasPrimaryAction =
-              needsLockEscrow ||
-              canMarkPaid ||
-              canConfirmPayment ||
-              canComplete;
-            let waitingFor: string | null = null;
-            if (!hasPrimaryAction) {
-              if (role === "seller") {
-                if (dbStatus === "accepted")
-                  waitingFor = "Waiting for escrow lock";
-                else if (dbStatus === "escrowed")
-                  waitingFor = "Waiting for buyer payment";
-                else if (dbStatus === "disputed")
-                  waitingFor = "Awaiting resolution";
-              } else if (role === "buyer") {
-                if (dbStatus === "accepted")
-                  waitingFor = "Waiting for seller to lock escrow";
-                else if (dbStatus === "payment_sent")
-                  waitingFor = "Waiting for seller to confirm";
-                else if (dbStatus === "disputed")
-                  waitingFor = "Awaiting resolution";
-              }
-            }
+      {/* Filter chips */}
+      <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 12, position: "relative", zIndex: 1, scrollbarWidth: "none" }}>
+        {FILTERS.map(({ key, label }) => {
+          const active = filter === key;
+          return (
+            <button key={key} onClick={() => setFilter(key)} style={{
+              flexShrink: 0, padding: "7px 15px", borderRadius: 999,
+              border: active ? "none" : `1px solid ${T.hair}`,
+              background: active ? "#f5f5f7" : "rgba(255,255,255,0.03)",
+              color: active ? "#0b0b0c" : T.muted2,
+              fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap",
+            }}>{label}</button>
+          );
+        })}
+      </div>
 
-            // YOU PAY / YOU RECEIVE perspective for the gradient panel.
-            const viewerSide = getViewerSide(order.dbOrder, order, merchantId);
-            const crypto = {
-              amount: formatCrypto(order.amount),
-              currency: order.fromCurrency || "USDT",
-            };
-            const fiat = {
-              amount: formatCrypto(order.total),
-              currency: order.toCurrency || "AED",
-            };
-            const left =
-              viewerSide === "seller"
-                ? { label: "YOU PAY", ...crypto, isReceive: false }
-                : { label: "YOU RECEIVE", ...crypto, isReceive: true };
-            const right =
-              viewerSide === "seller"
-                ? { label: "YOU RECEIVE", ...fiat, isReceive: true }
-                : { label: "YOU PAY", ...fiat, isReceive: false };
-
-            const status = statusPill(dbStatus);
-            const mins = Math.floor(order.expiresIn / 60);
-            const secs = (order.expiresIn % 60).toString().padStart(2, "0");
-
-            return (
-              <motion.div
-                key={order.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="relative p-3 rounded-xl border bg-foreground/[0.02] border-foreground/[0.06] hover:border-foreground/[0.10] transition-colors"
-              >
-                {/* Header — avatar + name + spread dot + status pill */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <UserBadge
-                      name={order.user}
-                      emoji={order.emoji}
-                      size="md"
-                      showName={false}
-                    />
-                    <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[13px] font-semibold text-white truncate">
-                        {order.user}
-                      </span>
-                      {order.spreadPreference && (
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            order.spreadPreference === "fastest"
-                              ? "bg-red-400"
-                              : "bg-primary"
-                          }`}
-                          title={order.spreadPreference}
-                        />
-                      )}
-                      {role !== "observer" && (
-                        <span className="px-1.5 py-0.5 bg-foreground/[0.04] border border-foreground/[0.06] rounded text-[9px] font-bold text-foreground/40">
-                          {role === "seller" ? "YOU SEND" : "YOU RECEIVE"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {/* Status pill */}
-                  <span
-                    className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-[10px] font-mono font-bold tracking-wide ${status.cls}`}
-                  >
-                    {canMarkPaid && <ActionPulse size="sm" />}
-                    {status.label}
-                  </span>
-                </div>
-
-                {/* Action banner — surface the next required action prominently */}
-                {needsLockEscrow && (
-                  <div className="mb-2 px-2.5 py-1.5 rounded-md bg-primary/10 border border-primary/20 flex items-center gap-2">
-                    <Lock className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="text-[10px] font-bold text-primary">
-                      Lock escrow to start the trade
-                    </span>
-                  </div>
-                )}
-                {canMarkPaid && (
-                  <div className="mb-2 px-2.5 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center gap-2">
-                    <Send className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                    <span className="text-[10px] font-bold text-amber-200">
-                      Send fiat payment to the seller
-                    </span>
-                  </div>
-                )}
-                {canConfirmPayment && (
-                  <div className="mb-2 px-2.5 py-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="text-[10px] font-bold text-emerald-300">
-                      Buyer says paid — confirm to release escrow
-                    </span>
-                  </div>
-                )}
-
-                {/* You Pay ⇄ You Receive — gradient panel (mirrors desktop) */}
-                <div className="relative mb-2 rounded-xl overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-foreground/[0.05] via-foreground/[0.02] to-transparent" />
-                  <div
-                    className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-emerald-500/[0.08] via-emerald-500/[0.03] to-transparent`}
-                  />
-                  <div className="absolute inset-0 rounded-xl border border-foreground/[0.08]" />
-                  <div className="relative flex items-stretch">
-                    <div className="flex-1 px-3 py-2.5">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
-                        />
-                        <span
-                          className={`text-[9px] font-bold font-mono tracking-[0.15em] ${left.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
-                        >
-                          {left.label}
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-1.5">
-                        <span
-                          className={`text-[16px] font-extrabold tabular-nums leading-none tracking-tight ${left.isReceive ? "text-emerald-400" : "text-white"}`}
-                        >
-                          {left.amount}
-                        </span>
-                        <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
-                          {left.currency}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center shrink-0">
-                      <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-foreground/[0.08] to-background border border-foreground/[0.12] flex items-center justify-center -mx-3.5 z-10">
-                        <ArrowRightLeft
-                          className="w-3 h-3 text-foreground/60"
-                          strokeWidth={2.5}
-                        />
-                      </div>
-                      <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
-                    </div>
-                    <div className="flex-1 px-3 py-2.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5 mb-1">
-                        <span
-                          className={`text-[9px] font-bold font-mono tracking-[0.15em] ${right.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
-                        >
-                          {right.label}
-                        </span>
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
-                        />
-                      </div>
-                      <div className="flex items-baseline justify-end gap-1.5">
-                        <span
-                          className={`text-[16px] font-extrabold tabular-nums leading-none tracking-tight ${right.isReceive ? "text-emerald-400" : "text-white"}`}
-                        >
-                          {right.amount}
-                        </span>
-                        <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
-                          {right.currency}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bank / payment-method details — surfaced only when buyer must pay */}
-                {canMarkPaid &&
-                  (() => {
-                    if (order.lockedPaymentMethod) {
-                      const lpm = order.lockedPaymentMethod;
-                      return (
-                        <div className="mb-2 px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] text-[10px] font-mono space-y-0.5">
-                          <div className="truncate text-primary">
-                            &rarr; {lpm.label} ({lpm.type.toUpperCase()})
-                          </div>
-                          {lpm.type === "bank" && lpm.details.iban && (
-                            <div className="truncate text-white/50">
-                              {lpm.details.iban}
-                            </div>
-                          )}
-                          {lpm.type === "upi" && lpm.details.upi_id && (
-                            <div className="truncate text-white/50">
-                              {lpm.details.upi_id}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-                    const bankDetails =
-                      order.sellerBankDetails || order.userBankDetails;
-                    if (bankDetails) {
-                      return (
-                        <div className="mb-2 px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] text-[10px] font-mono space-y-0.5 text-white/50">
-                          <div className="truncate">
-                            &rarr; {bankDetails.bank_name}
-                          </div>
-                          <div className="truncate">
-                            {bankDetails.account_name}
-                          </div>
-                          <div className="truncate">{bankDetails.iban}</div>
-                        </div>
-                      );
-                    }
-                    if (order.userBankAccount) {
-                      return (
-                        <div className="mb-2 px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] text-[10px] font-mono truncate text-white/50">
-                          &rarr; {order.userBankAccount}
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-
-                {/* Last human message preview — subtle, opens chat on tap */}
-                {order.lastHumanMessage && (
-                  <div
-                    className="flex items-center gap-1.5 mb-2 cursor-pointer"
-                    onClick={() => {
-                      onOpenChat(order);
-                      setMobileView("chat");
-                    }}
-                  >
-                    <MessageCircle className="w-3 h-3 text-foreground/35 shrink-0" />
-                    <span className="text-[10px] text-foreground/40 truncate flex-1">
-                      {order.lastHumanMessageSender === "merchant"
-                        ? "You: "
-                        : ""}
-                      {order.lastHumanMessage.length > 60
-                        ? order.lastHumanMessage.slice(0, 60) + "…"
-                        : order.lastHumanMessage}
-                    </span>
-                    {(order.unreadCount || 0) > 0 && (
-                      <span className="w-4 h-4 bg-primary rounded-full text-[9px] font-bold flex items-center justify-center text-background shrink-0">
-                        {order.unreadCount! > 9 ? "9+" : order.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Footer — rate + countdown + action buttons */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-foreground/40 font-mono shrink-0">
-                    @ {formatRate(order.rate)}
-                  </span>
-                  <span className="flex items-center gap-1 text-[10px] text-foreground/50 font-mono shrink-0">
-                    <Clock className="w-3 h-3" />
-                    {mins}:{secs}
-                  </span>
-                  <div className="flex-1" />
-                  {/* When the merchant has nothing to do right now, surface a
-                      "Waiting for X" pill so the card doesn't look unfinished
-                      / stuck with only icons in the action row. */}
-                  {waitingFor && (
-                    <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[11px] font-medium text-foreground/60">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                      {waitingFor}
-                    </span>
-                  )}
-                  {/* Primary action — mutually exclusive based on state */}
-                  {needsLockEscrow ? (
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => onOpenEscrowModal(order)}
-                      className="h-9 px-3 bg-primary/15 hover:bg-primary/25 border border-primary/30 rounded-lg text-xs font-semibold text-primary flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <Lock className="w-3.5 h-3.5" /> Lock
-                    </motion.button>
-                  ) : canMarkPaid ? (
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => onMarkFiatPaymentSent(order)}
-                      disabled={markingDone}
-                      className="h-9 px-3 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-lg text-xs font-semibold text-amber-200 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-                    >
-                      {markingDone ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <>
-                          <Send className="w-3.5 h-3.5" /> I&apos;ve Paid
-                        </>
-                      )}
-                    </motion.button>
-                  ) : canConfirmPayment || canComplete ? (
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => onConfirmPayment(order)}
-                      className="h-9 px-3 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 rounded-lg text-xs font-semibold text-emerald-300 flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <Check className="w-3.5 h-3.5" /> Confirm
-                    </motion.button>
-                  ) : null}
-                  <button
-                    onClick={() => {
-                      onOpenChat(order);
-                      setMobileView("chat");
-                    }}
-                    className="relative h-9 w-9 border border-white/10 hover:border-border-strong rounded-lg flex items-center justify-center transition-colors"
-                    aria-label="Open chat"
-                  >
-                    <MessageCircle className="w-4 h-4 text-foreground/40" />
-                    {(order.unreadCount || 0) > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full text-[9px] font-bold flex items-center justify-center text-background">
-                        {order.unreadCount! > 9 ? "9+" : order.unreadCount}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => onOpenDisputeModal(order.id)}
-                    className="h-9 w-9 border border-white/10 hover:border-[var(--color-error)]/30 rounded-lg flex items-center justify-center transition-colors group"
-                    aria-label="Dispute"
-                  >
-                    <AlertTriangle className="w-4 h-4 text-foreground/40 group-hover:text-[var(--color-error)]" />
-                  </button>
-                  {order.dbOrder?.status === "escrowed" &&
-                    order.orderType === "buy" &&
-                    order.escrowCreatorWallet && (
-                      <button
-                        onClick={() => onOpenCancelModal(order)}
-                        className="h-9 w-9 border border-white/10 hover:border-border rounded-lg flex items-center justify-center transition-colors group"
-                        title="Cancel & Withdraw"
-                        aria-label="Cancel & Withdraw"
-                      >
-                        <RotateCcw className="w-4 h-4 text-foreground/40 group-hover:text-foreground/70" />
-                      </button>
-                    )}
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-16 text-gray-600">
-          <Lock className="w-8 h-8 mb-2 opacity-20" />
-          <p className="text-xs text-foreground/35 font-mono">
-            {ongoingOrders.length === 0
-              ? "No active trades"
-              : "No trades match this status"}
-          </p>
-          {ongoingOrders.length > 0 && statusFilter !== "all" && (
-            <button
-              onClick={() => setStatusFilter("all")}
-              className="mt-3 text-[11px] text-primary/70 hover:text-primary font-mono"
-            >
-              Show all
-            </button>
-          )}
+      {/* Cards */}
+      {filtered.length > 0 ? filtered.map((order) => (
+        <ActiveCard
+          key={order.id}
+          order={order}
+          merchantId={merchantId}
+          markingDone={markingDone}
+          onOpenEscrowModal={onOpenEscrowModal}
+          onMarkFiatPaymentSent={onMarkFiatPaymentSent}
+          onConfirmPayment={onConfirmPayment}
+          onOpenChat={onOpenChat}
+          onOpenDisputeModal={onOpenDisputeModal}
+          onOpenCancelModal={onOpenCancelModal}
+          setMobileView={setMobileView}
+        />
+      )) : (
+        <div style={{ textAlign: "center", paddingTop: 100 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 22, background: T.glass, border: `1px solid ${T.hair}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: T.muted }}>
+            <svg viewBox="0 0 24 24" width={26} height={26} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 5 6v5.5c0 4.3 3 7.3 7 8.5 4-1.2 7-4.2 7-8.5V6l-7-3Z"/></svg>
+          </div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: T.text }}>No active trades</div>
+          <div style={{ color: T.muted, fontSize: 13, fontWeight: 500, marginTop: 5 }}>
+            {ongoingOrders.length > 0 && filter !== "all"
+              ? <button onClick={() => setFilter("all")} style={{ background: "none", border: "none", color: T.mint, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Show all trades</button>
+              : "Accepted orders in escrow appear here."}
+          </div>
         </div>
       )}
     </div>
