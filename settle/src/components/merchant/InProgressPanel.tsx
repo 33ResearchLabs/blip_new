@@ -723,22 +723,6 @@ export const InProgressPanel = memo(function InProgressPanel({
             <ChevronDown
               className={`w-3 h-3 text-foreground/30 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
             />
-            <Shield className="w-3.5 h-3.5 text-foreground/30" />
-            <h2 className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">
-              In Progress
-            </h2>
-            {/* Info badge — click/hover for buy/sell flow + expiry rules.
-                stopPropagation so the tooltip button doesn't collapse the
-                panel. */}
-            <span onClick={(e) => e.stopPropagation()}>
-              <InfoTooltip
-                title="In Progress — rules"
-                description="Your role (buyer vs seller) and the auto-timeout at each stage."
-                items={IN_PROGRESS_RULES}
-                side="bottom"
-                size="xs"
-              />
-            </span>
           </div>
           <span className="text-[10px] border border-foreground/[0.08] text-foreground/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
             {filteredOrders.length}
