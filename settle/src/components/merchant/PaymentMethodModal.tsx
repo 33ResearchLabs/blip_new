@@ -303,6 +303,19 @@ export function PaymentMethodModal({
 
   const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
 
+  // On the merchant MOBILE view (< lg = 1024px) this modal opens as a bottom
+  // sheet matching the Open Trade / Set rate sheets; on desktop it stays the
+  // centered scale-in modal. `lg` is 1024px, so mobile = max-width 1023px.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
   // Fetch existing payment methods from API
   const fetchMethods = useCallback(async () => {
     if (!merchantId) return;
@@ -351,6 +364,20 @@ export function PaymentMethodModal({
       setError(null);
     }
   }, [isOpen, editingMethod]);
+
+  // Reset the modal's internal view + form state whenever it closes, so the
+  // next open starts on the methods list — not stranded on the add/edit form
+  // the user was on when they dismissed it (e.g. via the backdrop). Opening
+  // directly in edit mode is still handled by the editingMethod effect above.
+  useEffect(() => {
+    if (!isOpen) {
+      setShowAddForm(false);
+      setEditingId(null);
+      setFormData(EMPTY_FORM);
+      setSelectedType("bank");
+      setError(null);
+    }
+  }, [isOpen]);
 
   const resetForm = () => {
     setFormData(EMPTY_FORM);
@@ -759,9 +786,18 @@ export function PaymentMethodModal({
 
   return (
     <AnimatePresence>
-      {/* z-[60] so this overlay sits above the TradeFormModal (z-50) when
-          opened from inside it via the "+ Add payment method" affordance. */}
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      {/* Desktop z-[60] sits above the TradeFormModal (z-50). Mobile z-[210]
+          sits above the Open Trade / Set rate bottom sheets (z-200), which
+          stay open behind it when launched via "+ Add method" — without the
+          bump the modal renders behind the sheet and looks like nothing
+          happened. */}
+      <div
+        className={
+          isMobile
+            ? "fixed inset-0 z-[210]"
+            : "fixed inset-0 z-[60] flex items-center justify-center p-4"
+        }
+      >
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -771,12 +807,39 @@ export function PaymentMethodModal({
         />
 
         <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 10 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-lg bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden"
+          // Mobile: bottom sheet, no entrance animation (matches Open Trade).
+          // Desktop: centered scale-in modal (unchanged).
+          initial={isMobile ? false : { scale: 0.95, opacity: 0, y: 10 }}
+          animate={isMobile ? undefined : { scale: 1, opacity: 1, y: 0 }}
+          exit={isMobile ? undefined : { scale: 0.95, opacity: 0, y: 10 }}
+          transition={
+            isMobile ? undefined : { type: "spring", damping: 25, stiffness: 300 }
+          }
+          className={
+            isMobile
+              ? "absolute bottom-0 left-0 right-0 bg-[#111113] flex flex-col overflow-hidden"
+              : "relative w-full max-w-lg bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden"
+          }
+          style={
+            isMobile
+              ? { borderRadius: "28px 28px 0 0", maxHeight: "92dvh" }
+              : undefined
+          }
         >
+          {/* Drag handle — mobile bottom-sheet only */}
+          {isMobile && (
+            <div className="pt-3 flex justify-center shrink-0">
+              <div
+                style={{
+                  width: 38,
+                  height: 4,
+                  borderRadius: 99,
+                  background: "rgba(255,255,255,0.16)",
+                }}
+              />
+            </div>
+          )}
+
           {/* Header */}
           <div className="relative px-6 pt-6 pb-4 border-b border-white/[0.06]">
             <div className="flex items-center justify-between">

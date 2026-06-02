@@ -573,12 +573,14 @@ export function MobileHomeView({
           </span>
         </button>
 
-        {/* Set rate button */}
+        {/* Set rate button — plus sits inside a round circle badge after the label */}
         <button
           onClick={(e) => { e.stopPropagation(); setShowRatePanel(true); }}
-          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 999, background: savedRate ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", color: savedRate ? "#f5f5f7" : "#86868b", cursor: "pointer", backdropFilter: "blur(20px)", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
-          <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 5px 5px 13px", borderRadius: 999, background: savedRate ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", color: savedRate ? "#f5f5f7" : "#86868b", cursor: "pointer", backdropFilter: "blur(20px)", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
           {savedRate ? `${activeCorridorMeta.fiat} ${savedRate.toFixed(2)}` : "Set rate"}
+          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: 999, background: "rgba(255,255,255,0.12)", color: "#f5f5f7", flexShrink: 0 }}>
+            <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          </span>
         </button>
       </div>
 
@@ -826,23 +828,6 @@ export function MobileHomeView({
           </div>
         </div>
       )}
-      {showRatePanel && (
-        <div className="rounded-2xl border border-foreground/[0.08] bg-foreground/[0.03] px-4 py-4 space-y-3">
-          <p className="text-[11px] text-foreground/30 leading-relaxed">Set your {activeCorridorMeta.fiat}/USDT rate. Saved locally for now.</p>
-          <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-white/[0.12] transition-colors">
-            <input type="number" inputMode="decimal" step="0.0001" value={rateInput}
-              onChange={(e) => setRateInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSaveRate(); if (e.key === "Escape") setShowRatePanel(false); }}
-              placeholder={savedRate !== null ? savedRate.toFixed(2) : "99"} maxLength={10}
-              className="flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-foreground/20 tabular-nums" autoFocus />
-            <span className="text-[11px] text-foreground/40 ml-2">{activeCorridorMeta.fiat}/USDT</span>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => { setShowRatePanel(false); setRateInput(""); }} className="flex-1 py-2 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] font-semibold text-foreground/60 flex items-center justify-center gap-1"><X className="w-3.5 h-3.5" />Cancel</button>
-            <button onClick={handleSaveRate} disabled={!rateInput || parseFloat(rateInput) <= 0} className="flex-1 py-2 rounded-lg bg-[#f5f5f7] text-background text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"><Check className="w-3.5 h-3.5" />Save Rate</button>
-          </div>
-        </div>
-      )}
 
 
       {/* ── Swap modal — Jupiter v6, real on-chain swap, live rates ── */}
@@ -1014,6 +999,68 @@ export function MobileHomeView({
                     style={{ flex: 1, padding: "15px", borderRadius: 16, border: "none", background: valid ? "#f5f5f7" : "rgba(255,255,255,0.08)", color: valid ? "#0b0b0c" : "#5a5a60", fontWeight: 800, fontSize: 15, cursor: valid ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, whiteSpace: "nowrap" }}>
                     <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
                     Open Trade
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Set Rate Sheet (same shell as Open Trade) ── */}
+      {showRatePanel && (() => {
+        const fiatCur = activeCorridorMeta?.fiat || "INR";
+        const rateValid = !!rateInput && parseFloat(rateInput) > 0;
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 200 }}>
+            {/* Backdrop */}
+            <div onClick={() => setShowRatePanel(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)" }} />
+            {/* Sheet */}
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#111113", borderRadius: "28px 28px 0 0", overflow: "hidden", maxHeight: "92dvh", display: "flex", flexDirection: "column" }}>
+              {/* Header */}
+              <div style={{ padding: "12px 20px 14px", borderBottom: "1px solid rgba(255,255,255,0.09)" }}>
+                <div style={{ width: 38, height: 4, borderRadius: 99, background: "rgba(255,255,255,0.16)", margin: "0 auto 12px" }} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: "-0.02em", color: "#f5f5f7" }}>Set rate</span>
+                  <button onClick={() => setShowRatePanel(false)} style={{ width: 34, height: 34, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
+                    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div style={{ overflowY: "auto", padding: "18px 20px 6px", flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#86868b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Your {fiatCur}/USDT rate</div>
+                <div style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderRadius: 14, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", marginBottom: 6 }}>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.0001"
+                    placeholder={savedRate !== null ? savedRate.toFixed(2) : "99"}
+                    value={rateInput}
+                    onChange={(e) => setRateInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveRate(); if (e.key === "Escape") setShowRatePanel(false); }}
+                    maxLength={10}
+                    autoFocus
+                    style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "#f5f5f7", fontVariantNumeric: "tabular-nums" }}
+                  />
+                  <span style={{ color: "#86868b", fontWeight: 700, fontSize: 15 }}>{fiatCur}/USDT</span>
+                </div>
+                <div style={{ height: 16, color: "#aeaeb2", fontSize: 12.5, fontWeight: 600, marginBottom: 16 }}>Saved locally for now.</div>
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: "12px 20px 32px", borderTop: "1px solid rgba(255,255,255,0.09)" }}>
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button onClick={() => { setShowRatePanel(false); setRateInput(""); }} style={{ padding: "15px 22px", borderRadius: 16, color: "#f5f5f7", fontWeight: 700, fontSize: 15, cursor: "pointer", border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.04)" }}>
+                    Cancel
+                  </button>
+                  <button
+                    disabled={!rateValid}
+                    onClick={handleSaveRate}
+                    style={{ flex: 1, padding: "15px", borderRadius: 16, border: "none", background: rateValid ? "#f5f5f7" : "rgba(255,255,255,0.08)", color: rateValid ? "#0b0b0c" : "#5a5a60", fontWeight: 800, fontSize: 15, cursor: rateValid ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, whiteSpace: "nowrap" }}>
+                    <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    Save Rate
                   </button>
                 </div>
               </div>
