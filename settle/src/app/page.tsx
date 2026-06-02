@@ -261,11 +261,17 @@ export default function Home() {
   // Onboarding flow — shown whenever a non-authenticated user lands on /
   // without ?welcome=skip. localStorage gate removed so it shows on every
   // fresh visit until the user signs in.
+  // Show onboarding only for users with no saved session (blip_user in
+  // localStorage is set on every successful login and cleared on logout).
+  // This avoids blocking authenticated users who open the app normally.
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     const params = new URLSearchParams(window.location.search);
     const skipWelcome = params.get("welcome") === "skip";
-    return !skipWelcome;
+    if (skipWelcome) return false;
+    // If a saved user session exists, skip onboarding — they're returning.
+    const hasSession = !!localStorage.getItem("blip_user");
+    return !hasSession;
   });
 
   const [screen, setScreenRaw] = useState<Screen>("welcome");

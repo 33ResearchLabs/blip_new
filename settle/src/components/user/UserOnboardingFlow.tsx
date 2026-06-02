@@ -384,7 +384,7 @@ function ScreenWelcome({ onNext }: { onNext: () => void }) {
         style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <CTA label="Get started" onClick={onNext}
           icon={<ChevronRight size={18} strokeWidth={2.5} />} />
-        <button onClick={onNext} style={{
+        <button onClick={() => { window.location.href = "/?welcome=skip"; }} style={{
           width: "100%", padding: "15px", borderRadius: 18, border: "none",
           background: "transparent", color: "rgba(255,255,255,0.78)",
           fontFamily: "inherit", fontWeight: 700, fontSize: 15, cursor: "pointer",

@@ -306,46 +306,134 @@ function WalletBalanceSection({
 
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-3" style={{ textAlign: 'center', paddingTop: 4 }}>
-          {/* Wave greeting emoji */}
-          <span style={{ fontSize: 36, lineHeight: 1 }}>👋</span>
-          <div>
-            <p style={{
-              fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.15,
-              color: 'rgba(255,255,255,0.96)', marginBottom: 6,
-            }}>
-              {IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked'
-                ? 'Unlock your wallet'
-                : "Let's set you up"}
-            </p>
-            <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1.5, maxWidth: 220, margin: '0 auto' }}>
-              {IS_EMBEDDED_WALLET
-                ? embeddedWallet?.state === 'locked'
-                  ? 'Enter your PIN to view your balance and trade.'
-                  : 'Add money once, then send to friends and pay anyone instantly.'
-                : 'Connect your Solana wallet to trade.'}
-            </p>
-          </div>
+        /* ── New-user state: Pay anyone search + welcome bonus + get started ── */
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 2 }}>
+
+          {/* Search bar — "Pay anyone" */}
           <motion.button
-            whileTap={{ scale: 0.96 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => { setScreen('trade'); }}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              padding: '14px 16px', borderRadius: 16,
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)',
+              cursor: 'pointer', textAlign: 'left',
+            }}
+          >
+            <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="1.9" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/>
+            </svg>
+            <span style={{ flex: 1, color: 'rgba(255,255,255,0.40)', fontWeight: 700, fontSize: 14 }}>
+              Name, phone or UPI ID
+            </span>
+            <div style={{
+              width: 30, height: 30, borderRadius: 999,
+              background: '#ffb02e', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="#0B0F14" strokeWidth="2" strokeLinecap="round">
+                <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/>
+              </svg>
+            </div>
+          </motion.button>
+
+          {/* Welcome bonus / Best rates card */}
+          <motion.button
+            whileTap={{ scale: 0.98 }}
             onClick={() => {
-              if (IS_EMBEDDED_WALLET) {
-                if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
-                else setShowWalletSetup(true);
-              } else { setShowWalletModal(true); }
+              if (IS_EMBEDDED_WALLET) setShowWalletSetup(true);
+              else setShowWalletModal(true);
             }}
             style={{
-              padding: '12px 32px', borderRadius: 16,
-              background: 'linear-gradient(135deg, #ffb02e 0%, #ff8a00 100%)',
-              color: '#0B0F14',
-              fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em',
-              boxShadow: '0 8px 24px -8px rgba(255,176,46,0.55)',
-              border: 'none',
+              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+              padding: '14px 16px', borderRadius: 16,
+              background: 'rgba(255,176,46,0.10)', border: '1px solid rgba(255,176,46,0.28)',
+              cursor: 'pointer', textAlign: 'left',
+            }}
+          >
+            <div style={{
+              width: 42, height: 42, borderRadius: 13, flexShrink: 0,
+              background: 'rgba(255,176,46,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-            {IS_EMBEDDED_WALLET
-              ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Set up wallet'
-              : 'Connect Wallet'}
+              <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#ffb02e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3 5 6v5.5c0 4.3 3 7.3 7 8.5 4-1.2 7-4.2 7-8.5V6l-7-3Z"/>
+                <path d="m9.2 12 2 2 3.6-4"/>
+              </svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.01em' }}>
+                Best rates — beat it &amp; we match it
+              </div>
+              <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: 600, marginTop: 2 }}>
+                Unlocks on your first payment · set up wallet
+              </div>
+            </div>
+            <span style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
+              padding: '3px 8px', borderRadius: 999,
+              background: 'rgba(255,176,46,0.20)', color: '#ffb02e',
+            }}>NEW</span>
           </motion.button>
+
+          {/* Get started list */}
+          <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+            {[
+              {
+                icon: (
+                  <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                ),
+                label: 'Add money',
+                sub: 'Top up via UPI or bank transfer',
+                onClick: () => IS_EMBEDDED_WALLET ? setShowWalletSetup(true) : setShowWalletModal(true),
+              },
+              {
+                icon: (
+                  <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg>
+                ),
+                label: 'Buy USDT',
+                sub: 'Best rate, instantly settled',
+                onClick: () => { setTradeType('buy'); setScreen('trade'); },
+              },
+              {
+                icon: (
+                  <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 11h16v9H4zM2.5 7.5h19V11h-19zM12 7.5V20M12 7.5C12 5 10.5 3.5 8.7 3.5S6 5 6 6c0 1.2 1 1.5 2.5 1.5M12 7.5C12 5 13.5 3.5 15.3 3.5S18 5 18 6c0 1.2-1 1.5-2.5 1.5"/></svg>
+                ),
+                label: 'Invite & earn',
+                sub: 'Refer a friend and get rewarded',
+                onClick: () => setScreen('profile'),
+              },
+            ].map((item, i) => (
+              <motion.button
+                key={item.label}
+                whileTap={{ scale: 0.98 }}
+                onClick={item.onClick}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '13px 16px',
+                  background: 'rgba(255,255,255,0.04)',
+                  borderTop: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                  border: 'none', borderTopColor: i > 0 ? 'rgba(255,255,255,0.07)' : 'transparent',
+                  cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: 11, flexShrink: 0,
+                  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.10)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'rgba(255,255,255,0.7)',
+                }}>
+                  {item.icon}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13.5, color: 'rgba(255,255,255,0.90)' }}>{item.label}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.40)', fontSize: 11.5, fontWeight: 600, marginTop: 1 }}>{item.sub}</div>
+                </div>
+                <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2" strokeLinecap="round">
+                  <path d="m9 6 6 6-6 6"/>
+                </svg>
+              </motion.button>
+            ))}
+          </div>
+
         </div>
       )}
 
