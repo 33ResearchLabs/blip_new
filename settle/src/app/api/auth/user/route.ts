@@ -26,6 +26,7 @@ import { requireTokenAuth } from '@/lib/middleware/auth';
 import { setupWaitlistForActor } from '@/lib/waitlist/signup';
 import { validateFingerprintPayload, persistFingerprintAsync } from '@/lib/threat/devicePersist';
 import { validateBehaviorPayload, persistBehaviorAsync } from '@/lib/threat/behaviorPersist';
+import { triggerRecompute } from '@/lib/threat/recompute';
 
 /**
  * POST /api/auth/user
@@ -113,7 +114,10 @@ export async function POST(request: NextRequest) {
         entityType: 'user',
         action: isNewUser ? 'signup' : 'login',
       }).catch(() => {});
-      if (!isNewUser) {
+      if (isNewUser) {
+        // Score the new account for admin threat review (fire-and-forget).
+        triggerRecompute('user', user.id);
+      } else {
         checkDeviceChangeFrequency(user.id, 'user').catch(() => {});
       }
 
@@ -618,6 +622,12 @@ export async function POST(request: NextRequest) {
       if (behaviorValidated) {
         persistBehaviorAsync('user', user.id, behaviorValidated);
       }
+
+      // Score the new account for admin threat review (fire-and-forget).
+      // Runs whether or not this signup is on the waitlist, so non-waitlist
+      // users are tracked too. Placed after fingerprint/behavior persistence
+      // so the device/behaviour signals are available to the detector.
+      triggerRecompute('user', user.id);
 
       // Issue verification token + send the link. Same shape as the
       // merchant register flow.

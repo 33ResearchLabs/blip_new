@@ -24,6 +24,7 @@ import {
   Flame,
   Sparkles,
 } from "lucide-react";
+import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
 import {
@@ -58,6 +59,8 @@ interface UserItem {
   disputesRaisedByUser: number;
   disputesAgainstUser: number;
   reputationScore: number;
+  riskScore: number | null;
+  riskLevel: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -448,7 +451,7 @@ export default function AdminUsersPage() {
           <div className="bg-card border border-border rounded-lg overflow-hidden">
             {/* Header row */}
             <div className="px-3 py-2.5 border-b border-section-divider bg-card-solid/50">
-              <div className="grid grid-cols-[28px_32px_1fr_72px_84px_88px_60px_70px_60px_72px_72px_56px_64px_100px] gap-2 items-center">
+              <div className="grid grid-cols-[28px_32px_1fr_72px_84px_88px_60px_70px_60px_72px_72px_56px_56px_64px_100px] gap-2 items-center">
                 <input type="checkbox" checked={allOnPageSelected} onChange={togglePageSelection}
                   className="w-3.5 h-3.5 rounded border-border bg-card accent-primary cursor-pointer" />
                 <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">#</span>
@@ -482,6 +485,7 @@ export default function AdminUsersPage() {
                 <button onClick={() => { setSortBy("reputation"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
                   Rep {sortBy === "reputation" && <ChevronDown className="w-2.5 h-2.5" />}
                 </button>
+                <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right" title="Algorithmic threat-detection score (0–100). Click a value to open the full risk profile.">Risk</span>
                 <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right">Joined</span>
                 <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right">Actions</span>
               </div>
@@ -513,7 +517,7 @@ export default function AdminUsersPage() {
                   return (
                     <div
                       key={u.id}
-                      className={`grid grid-cols-[28px_32px_1fr_72px_84px_88px_60px_70px_60px_72px_72px_56px_64px_100px] gap-2 items-center px-3 py-2 border-b border-section-divider/50 hover:bg-accent-subtle transition-colors ${isSelected ? "bg-primary/[0.04]" : ""}`}
+                      className={`grid grid-cols-[28px_32px_1fr_72px_84px_88px_60px_70px_60px_72px_72px_56px_56px_64px_100px] gap-2 items-center px-3 py-2 border-b border-section-divider/50 hover:bg-accent-subtle transition-colors ${isSelected ? "bg-primary/[0.04]" : ""}`}
                     >
                       <input
                         type="checkbox"
@@ -624,6 +628,27 @@ export default function AdminUsersPage() {
                         }`}>
                           {u.reputationScore > 0 ? formatCount(u.reputationScore) : "—"}
                         </span>
+                      </div>
+
+                      {/* Risk — algorithmic threat score (wl_score). "—" when
+                          the threat detector has not scored this user yet. */}
+                      <div className="text-right">
+                        {u.riskScore != null && u.riskScore > 0 ? (
+                          <Link
+                            href={`/admin/risk-profile/${u.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`text-[11px] font-medium tabular-nums hover:underline ${
+                              u.riskScore >= 80 ? "text-[var(--color-error)]" :
+                              u.riskScore >= 60 ? "text-primary" :
+                              u.riskScore >= 30 ? "text-[var(--color-warning)]" :
+                              "text-foreground/30"
+                            }`}
+                          >
+                            {formatCount(u.riskScore)}
+                          </Link>
+                        ) : (
+                          <span className="text-[11px] text-foreground/25 tabular-nums">—</span>
+                        )}
                       </div>
 
                       {/* Joined */}

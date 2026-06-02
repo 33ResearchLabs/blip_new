@@ -23,6 +23,10 @@ interface UserRow {
   disputes_raised_by_user: string;
   disputes_against_user: string;
   reputation_score: string;
+  // Algorithmic threat score (risk_profiles.wl_score / wl_label) — same source
+  // as the merchants table. Nullable: NULL = threat detector never ran.
+  risk_score: string | null;
+  risk_level: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -186,9 +190,14 @@ export async function GET(request: NextRequest) {
           0
         )::text as disputes_against_user,
         COALESCE(u.reputation_score, 0)::text as reputation_score,
+        -- Algorithmic threat score (NOT COALESCEd — nullable so the frontend
+        -- can render a distinct "Unscored" dash vs a misleading 0).
+        rp.wl_score::text as risk_score,
+        rp.wl_label as risk_level,
         u.created_at::text,
         u.updated_at::text
       FROM users u
+      LEFT JOIN risk_profiles rp ON rp.entity_id = u.id
       ${whereClause}
       ${orderClause}
       LIMIT $${limitParam} OFFSET $${offsetParam}
@@ -278,6 +287,10 @@ export async function GET(request: NextRequest) {
       disputesRaisedByUser: parseInt(user.disputes_raised_by_user),
       disputesAgainstUser: parseInt(user.disputes_against_user),
       reputationScore: parseInt(user.reputation_score),
+      // Null when the threat detector has never scored this user — frontend
+      // renders "—" rather than a misleading 0.
+      riskScore: user.risk_score === null ? null : parseInt(user.risk_score),
+      riskLevel: user.risk_level,
       createdAt: user.created_at,
       updatedAt: user.updated_at,
     }));

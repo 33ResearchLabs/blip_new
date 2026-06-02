@@ -36,6 +36,7 @@ import { createSession } from '@/lib/auth/sessions';
 import { setupWaitlistForActor } from '@/lib/waitlist/signup';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 import { defaultAvatarUrl } from '@/lib/avatars';
+import { triggerRecompute } from '@/lib/threat/recompute';
 
 type Role = 'user' | 'merchant';
 type ActorType = 'user' | 'merchant';
@@ -263,6 +264,13 @@ export async function POST(request: NextRequest) {
       await bootstrapNewActor(actorId, actorType);
     } catch {
       /* swallow */
+    }
+
+    // Score brand-new accounts for admin threat review (fire-and-forget).
+    // The waitlist path below triggers its own recompute; a second one is
+    // harmless (idempotent) and this covers non-waitlist Google signups too.
+    if (isNew) {
+      triggerRecompute(actorType, actorId);
     }
 
     if (wantsWaitlist) {

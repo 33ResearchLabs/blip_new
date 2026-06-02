@@ -36,6 +36,11 @@ interface RiskProfile {
     risk_level: string;
     total_risk_events: number;
     last_risk_event: { type: string; severity: string; at: string } | null;
+    // Algorithmic threat score (same source as the merchants table). Null when
+    // the threat detector has never run for this entity ("Unscored").
+    threat_score: number | null;
+    threat_label: string | null;
+    threat_hypothesis: string | null;
   };
   behavioral_stats: {
     total_orders: number;
@@ -99,21 +104,28 @@ interface RiskProfile {
 // HELPERS
 // ============================================
 
-const riskColor = (level: string) => {
-  switch (level) {
-    case "critical": return "text-[var(--color-error)]";
-    case "high": return "text-primary";
-    case "medium": return "text-[var(--color-warning)]";
-    default: return "text-[var(--color-success)]";
+// Threat-detection label → colour. Labels come from settle/src/lib/threat
+// (RiskLabel: TRUSTED | CLEAN | NEUTRAL | SUSPECT | HIGH_RISK | CRITICAL).
+const threatColor = (label: string | null) => {
+  switch (label) {
+    case "CRITICAL": return "text-[var(--color-error)]";
+    case "HIGH_RISK": return "text-primary";
+    case "SUSPECT": return "text-[var(--color-warning)]";
+    case "NEUTRAL": return "text-foreground/60";
+    case "CLEAN":
+    case "TRUSTED": return "text-[var(--color-success)]";
+    default: return "text-foreground/40"; // unscored
   }
 };
 
-const riskBg = (level: string) => {
-  switch (level) {
-    case "critical": return "bg-[var(--color-error)]/15 border-[var(--color-error)]/25";
-    case "high": return "bg-primary/12 border-primary/25";
-    case "medium": return "bg-[var(--color-warning)]/12 border-[var(--color-warning)]/25";
-    default: return "bg-[var(--color-success)]/10 border-[var(--color-success)]/20";
+const threatBg = (label: string | null) => {
+  switch (label) {
+    case "CRITICAL": return "bg-[var(--color-error)]/15 border-[var(--color-error)]/25";
+    case "HIGH_RISK": return "bg-primary/12 border-primary/25";
+    case "SUSPECT": return "bg-[var(--color-warning)]/12 border-[var(--color-warning)]/25";
+    case "CLEAN":
+    case "TRUSTED": return "bg-[var(--color-success)]/10 border-[var(--color-success)]/20";
+    default: return "bg-card border-border"; // neutral / unscored
   }
 };
 
@@ -273,14 +285,31 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
             </div>
           </div>
 
-          {/* Risk Score */}
-          <div className={`w-full md:w-64 border rounded-xl p-5 flex flex-col items-center justify-center ${riskBg(r.risk_level)}`}>
-            <div className={`text-4xl font-bold font-mono tabular-nums ${riskColor(r.risk_level)}`}>{formatCount(r.risk_score)}</div>
-            <div className={`text-[11px] font-mono font-bold uppercase tracking-widest mt-1 ${riskColor(r.risk_level)}`}>{r.risk_level}</div>
-            <div className="text-[9px] font-mono text-foreground/25 mt-2">{formatCount(r.total_risk_events)} events</div>
-            {r.last_risk_event && (
-              <div className="text-[8px] font-mono text-foreground/20 mt-0.5">{r.last_risk_event.type} &middot; {fmtAgo(r.last_risk_event.at)}</div>
+          {/* Threat Score — algorithmic threat-detection score (same source as
+              the admin merchants table). Shows "Unscored" when the detector has
+              never run for this entity. The legacy event-counter score is kept
+              as a small footnote below. */}
+          <div className={`w-full md:w-64 border rounded-xl p-5 flex flex-col items-center justify-center ${threatBg(r.threat_label)}`}>
+            {r.threat_score === null ? (
+              <>
+                <div className="text-3xl font-bold font-mono tabular-nums text-foreground/40">—</div>
+                <div className="text-[11px] font-mono font-bold uppercase tracking-widest mt-1 text-foreground/40">Unscored</div>
+                <div className="text-[9px] font-mono text-foreground/25 mt-2 text-center">threat detector has not run yet</div>
+              </>
+            ) : (
+              <>
+                <div className={`text-4xl font-bold font-mono tabular-nums ${threatColor(r.threat_label)}`}>{formatCount(r.threat_score)}</div>
+                <div className={`text-[11px] font-mono font-bold uppercase tracking-widest mt-1 ${threatColor(r.threat_label)}`}>
+                  {(r.threat_label || "").replace(/_/g, " ")}
+                </div>
+                {r.threat_hypothesis && (
+                  <div className="text-[9px] font-mono text-foreground/35 mt-2 text-center">{r.threat_hypothesis.replace(/_/g, " ")}</div>
+                )}
+              </>
             )}
+            <div className="text-[8px] font-mono text-foreground/20 mt-2 text-center">
+              legacy events: {formatCount(r.total_risk_events)} &middot; score {formatCount(r.risk_score)}
+            </div>
           </div>
 
           {/* Flags */}
