@@ -148,12 +148,12 @@ const STATUS_COLORS: Record<
   },
   payment_sent: {
     bg: "bg-white/[0.06]",
-    text: "text-white/60",
+    text: "text-[#f5f5f7]",
     icon: <DollarSign className="w-3 h-3" />,
   },
   payment_confirmed: {
-    bg: "bg-teal-500/20",
-    text: "text-teal-400",
+    bg: "bg-white/[0.06]",
+    text: "text-[#f5f5f7]",
     icon: <CheckCircle2 className="w-3 h-3" />,
   },
   completed: {
@@ -255,7 +255,7 @@ function TimelineStep({
       case "warning":
         return {
           dot: "bg-[#f5f5f7]",
-          line: "bg-white/[0.06]",
+          line: "bg-white/20",
           text: "text-white/70",
         };
       default:
@@ -280,7 +280,7 @@ function TimelineStep({
           className={`w-3 h-3 rounded-full ${styles.dot} ring-2 ring-black/50`}
         >
           {status === "completed" && (
-            <Check className="w-3 h-3 text-background p-0.5" />
+            <Check className="w-3 h-3 text-[#0b0b0c] p-0.5" />
           )}
         </div>
         <span className={`text-[12px] mt-1 whitespace-nowrap ${styles.text}`}>
@@ -1069,7 +1069,7 @@ export function TradeChat({
                   <span
                     className={`text-[12px] px-1.5 py-0.5 rounded-full ${
                       activeChatTab === "order"
-                        ? "bg-white/[0.06] text-[#f5f5f7]"
+                        ? "bg-white/[0.08] text-[#f5f5f7]"
                         : "bg-gray-700 text-foreground/40"
                     }`}
                   >
@@ -1106,7 +1106,7 @@ export function TradeChat({
               <>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-[#f5f5f7] animate-spin" />
+                    <Loader2 className="w-6 h-6 text-white/60 animate-spin" />
                   </div>
                 ) : chatMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-foreground/35">
@@ -1235,7 +1235,7 @@ export function TradeChat({
                                     msg.senderType === "compliance"
                                       ? "bg-red-500/20 text-gray-200 border border-red-500/30"
                                       : msg.from === "me"
-                                        ? "bg-[#f5f5f7] text-background"
+                                        ? "bg-[#f5f5f7] text-[#0b0b0c]"
                                         : "bg-[#1f1f1f] text-gray-200"
                                   }`}
                                 >
@@ -1403,13 +1403,13 @@ export function TradeChat({
                     onClick={handleSend}
                     disabled={!messageText.trim() && !pendingImage}
                     className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all ${
-                      pendingImage ? "bg-white/[0.06]" : "bg-[#f5f5f7]"
+                      pendingImage ? "bg-[#f5f5f7]/80" : "bg-[#f5f5f7]"
                     }`}
                   >
                     {isUploading ? (
-                      <Loader2 className="w-4 h-4 text-background animate-spin" />
+                      <Loader2 className="w-4 h-4 text-[#0b0b0c] animate-spin" />
                     ) : (
-                      <Send className="w-4 h-4 text-background" />
+                      <Send className="w-4 h-4 text-[#0b0b0c]" />
                     )}
                   </motion.button>
                 </div>

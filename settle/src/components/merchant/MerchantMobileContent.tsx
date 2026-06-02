@@ -278,8 +278,8 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               onOpenNotifications={onOpenNotifications}
               onOpenProfile={onOpenProfile}
               notificationCount={notificationCount}
-              onStartTrade={(side) => {
-                setOpenTradeForm({ ...openTradeForm, tradeType: side });
+              onStartTrade={(side, amount, expiryMinutes) => {
+                setOpenTradeForm({ ...openTradeForm, tradeType: side, cryptoAmount: amount ?? "", expiryMinutes: expiryMinutes ?? 15 });
                 setShowOpenTradeModal(true);
               }}
               openSheetSide={fabSheetSide}

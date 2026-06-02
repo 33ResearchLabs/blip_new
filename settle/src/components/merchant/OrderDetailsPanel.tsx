@@ -1607,7 +1607,7 @@ export function OrderDetailsPanel({
                           className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-[#f5f5f7]/80 text-sm font-semibold hover:bg-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                           {isRequestingCancel ? (
-                            <div className="w-4 h-4 border-2 border-white/[0.12] border-t-primary rounded-full animate-spin" />
+                            <div className="w-4 h-4 border-2 border-white/[0.12] border-t-white/60 rounded-full animate-spin" />
                           ) : null}
                           Agree to Cancel
                         </button>
@@ -1738,7 +1738,7 @@ export function OrderDetailsPanel({
                 >
                   {isRequestingCancel ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white/[0.12] border-t-primary rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-white/[0.12] border-t-white/60 rounded-full animate-spin" />
                       Requesting...
                     </>
                   ) : (

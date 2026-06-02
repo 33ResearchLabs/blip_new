@@ -83,7 +83,7 @@ interface MobileHomeViewProps {
 
   // Quick-action handlers wired into the balance-card button row.
   // Buy/Sell preselect the trade side and open the create-trade modal.
-  onStartTrade?: (side: "buy" | "sell") => void;
+  onStartTrade?: (side: "buy" | "sell", amount?: string, expiryMinutes?: 15 | 90) => void;
   // External trigger to open the trade sheet (used by the FAB in MerchantMobileContent).
   openSheetSide?: "buy" | "sell" | null;
   onClearOpenSheet?: () => void;
@@ -572,6 +572,14 @@ export function MobileHomeView({
             <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
           </span>
         </button>
+
+        {/* Set rate button */}
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowRatePanel(true); }}
+          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 999, background: savedRate ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", color: savedRate ? "#f5f5f7" : "#86868b", cursor: "pointer", backdropFilter: "blur(20px)", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
+          <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          {savedRate ? `${activeCorridorMeta.fiat} ${savedRate.toFixed(2)}` : "Set rate"}
+        </button>
       </div>
 
       {/* ── BUY / SELL ── */}
@@ -707,7 +715,7 @@ export function MobileHomeView({
         ) : pendingOrders.length === 0 ? (
           <div style={{ borderRadius: 20, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", padding: "24px 16px", textAlign: "center" }}>
             <p style={{ color: "#5a5a60", fontSize: 13, margin: 0 }}>No recent activity</p>
-            <button onClick={() => onStartTrade?.("buy")} style={{ marginTop: 10, padding: "8px 18px", borderRadius: 12, border: "1px dashed rgba(255,255,255,0.12)", background: "none", color: "#86868b", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Post your first trade</button>
+            <button onClick={() => { setTradeSheet("buy"); setTradeAmt(""); }} style={{ marginTop: 10, padding: "8px 18px", borderRadius: 12, border: "1px dashed rgba(255,255,255,0.12)", background: "none", color: "#86868b", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Post your first trade</button>
           </div>
         ) : null}
       </div>
@@ -1002,7 +1010,7 @@ export function MobileHomeView({
                   </button>
                   <button
                     disabled={!valid}
-                    onClick={() => { setTradeSheet(null); onStartTrade?.(isBuy ? "buy" : "sell"); }}
+                    onClick={() => { setTradeSheet(null); onStartTrade?.(isBuy ? "buy" : "sell", tradeAmt, tradeExpiry === 1 ? 90 : 15); }}
                     style={{ flex: 1, padding: "15px", borderRadius: 16, border: "none", background: valid ? "#f5f5f7" : "rgba(255,255,255,0.08)", color: valid ? "#0b0b0c" : "#5a5a60", fontWeight: 800, fontSize: 15, cursor: valid ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, whiteSpace: "nowrap" }}>
                     <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
                     Open Trade

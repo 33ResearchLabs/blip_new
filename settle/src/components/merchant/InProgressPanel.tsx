@@ -243,16 +243,13 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 className="relative p-2.5 rounded-lg cursor-pointer transition-colors"
                 style={{
                   background: "var(--card)",
-                  border:
-                    "1px solid color-mix(in srgb, var(--primary) 50%, transparent)",
+                  border: "1px solid rgba(255,255,255,0.12)",
                 }}
                 onMouseEnter={(e) =>
-                  (e.currentTarget.style.borderColor =
-                    "color-mix(in srgb, var(--primary) 70%, transparent)")
+                  (e.currentTarget.style.borderColor = "rgba(255,255,255,0.20)")
                 }
                 onMouseLeave={(e) =>
-                  (e.currentTarget.style.borderColor =
-                    "color-mix(in srgb, var(--primary) 50%, transparent)")
+                  (e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)")
                 }
               >
                 {/* Live pulse dot */}
@@ -317,7 +314,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   {order.minimalStatus === "payment_sent" ||
                   order.dbOrder?.status === "payment_sent" ||
                   order.dbOrder?.status === "payment_confirmed" ? (
-                    <div className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/[0.08]/[0.06]">
+                    <div className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/[0.06]">
                       <Shield className="w-3 h-3 text-[#f5f5f7]/60" />
                       <span className="text-[10px] font-bold font-mono text-[#f5f5f7]/60">
                         No expiry
@@ -562,10 +559,10 @@ const InProgressOrderList = memo(function InProgressOrderList({
                             onSelectOrder(order);
                           }
                         }}
-                        className={`w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] text-background font-bold transition-colors ${
+                        className={`w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] font-bold transition-colors ${
                           isActionLoading
-                            ? "bg-white/[0.06] cursor-wait"
-                            : "bg-[#f5f5f7] hover:bg-white/[0.08]"
+                            ? "bg-white/[0.06] text-white/50 cursor-wait"
+                            : "bg-[#f5f5f7] text-[#0b0b0c] hover:bg-white/90"
                         }`}
                       >
                         {isActionLoading ? (
@@ -597,7 +594,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     <MessageSquare className="w-3 h-3" />
                     Chat
                     {order.unreadCount > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-[#f5f5f7] text-background text-[8px] font-bold min-w-[16px] text-center">
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-[#f5f5f7] text-[#0b0b0c] text-[8px] font-bold min-w-[16px] text-center">
                         {order.unreadCount}
                       </span>
                     )}
@@ -606,9 +603,9 @@ const InProgressOrderList = memo(function InProgressOrderList({
 
                 {/* Extension Request Banner */}
                 {order.dbOrder?.extension_requested_by && (
-                  <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/[0.08] border border-amber-500/[0.12]">
-                    <Clock className="w-3 h-3 text-amber-400 shrink-0" />
-                    <span className="text-[10px] text-amber-400/90 font-medium truncate">
+                  <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.09]">
+                    <Clock className="w-3 h-3 text-white/70 shrink-0" />
+                    <span className="text-[10px] text-white/70 font-medium truncate">
                       {order.dbOrder.extension_requested_by === "user"
                         ? "Buyer"
                         : "Seller"}{" "}

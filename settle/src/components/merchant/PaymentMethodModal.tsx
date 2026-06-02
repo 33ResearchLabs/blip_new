@@ -137,10 +137,10 @@ const PAYMENT_METHOD_TYPES = [
     label: "Bank Account",
     desc: "Wire & local transfers",
     icon: Building2,
-    gradient: "from-blue-500/20 to-blue-600/5",
-    border: "border-white/[0.09]",
-    text: "text-white/60",
-    ring: "ring-blue-500/20",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/70",
+    ring: "ring-white/20",
   },
 
   {
@@ -148,29 +148,19 @@ const PAYMENT_METHOD_TYPES = [
     label: "UPI",
     desc: "Instant India payments",
     icon: Smartphone,
-    gradient: "from-green-500/20 to-green-600/5",
-    border: "border-white/[0.09]",
-    text: "text-[#f5f5f7]",
-    ring: "ring-green-500/20",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/70",
+    ring: "ring-white/20",
   },
   {
     type: "cash" as const,
     label: "Cash Meeting",
     desc: "In-person exchange",
     icon: DollarSign,
-    gradient: "from-emerald-500/20 to-emerald-600/5",
-    border: "border-white/[0.09]",
-    text: "text-[#f5f5f7]",
-    ring: "ring-white/20",
-  },
-  {
-    type: "crypto" as const,
-    label: "Crypto Wallet",
-    desc: "On-chain address",
-    icon: Wallet,
-    gradient: "from-white/70 to-white/60",
+    gradient: "from-white/[0.06] to-white/[0.02]",
     border: "border-white/[0.12]",
-    text: "text-[#f5f5f7]",
+    text: "text-white/70",
     ring: "ring-white/20",
   },
   {
@@ -178,25 +168,25 @@ const PAYMENT_METHOD_TYPES = [
     label: "Card Payment",
     desc: "Debit or credit card",
     icon: CreditCard,
-    gradient: "from-purple-500/20 to-purple-600/5",
-    border: "border-purple-500/30",
-    text: "text-white/60",
-    ring: "ring-purple-500/20",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/70",
+    ring: "ring-white/20",
   },
   {
     type: "mobile" as const,
     label: "Mobile Money",
     desc: "Digital wallet apps",
     icon: Smartphone,
-    gradient: "from-pink-500/20 to-pink-600/5",
-    border: "border-pink-500/30",
-    text: "text-pink-400",
-    ring: "ring-pink-500/20",
+    gradient: "from-white/[0.06] to-white/[0.02]",
+    border: "border-white/[0.12]",
+    text: "text-white/70",
+    ring: "ring-white/20",
   },
 ];
 
 const inputClass =
-  "w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/[0.12] focus:ring-1 focus:ring-white/20 transition-all";
+  "w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10 transition-all";
 
 // Per-field validation. Rejects junk like "kdnfsnjakmokpdijjnewoekfwpolm..."
 // or a 40-digit "account number". Length caps match the server (route.ts)
@@ -787,15 +777,12 @@ export function PaymentMethodModal({
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
           className="relative w-full max-w-lg bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl max-h-[85vh] flex flex-col overflow-hidden"
         >
-          {/* Ambient glow */}
-          
-
           {/* Header */}
           <div className="relative px-6 pt-6 pb-4 border-b border-white/[0.06]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/70 to-white/60 border border-white/[0.12] flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-[#f5f5f7]" />
+                <div className="w-10 h-10 rounded-xl bg-white/[0.055] border border-white/[0.12] flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-white/60" />
                 </div>
                 <div>
                   <h2 className="text-[15px] font-bold text-white">
@@ -856,7 +843,7 @@ export function PaymentMethodModal({
                           transition={{ delay: i * 0.05 }}
                           className={`group relative p-3.5 rounded-xl border transition-all overflow-hidden ${
                             method.is_default
-                              ? "bg-gradient-to-r from-white/80/[0.06] to-transparent border-white/[0.12]"
+                              ? "bg-white/[0.055] border-white/[0.12]"
                               : "bg-white/[0.02] border-white/[0.06] hover:border-border-strong"
                           }`}
                         >
@@ -874,9 +861,9 @@ export function PaymentMethodModal({
                                   {method.name}
                                 </p>
                                 {method.is_default && (
-                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.06] border border-white/[0.12] rounded-md">
-                                    <Star className="w-2.5 h-2.5 text-[#f5f5f7] fill-white/50" />
-                                    <span className="text-[9px] text-[#f5f5f7] font-bold uppercase tracking-wider">
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.06] border border-white/[0.09] rounded-md">
+                                    <Star className="w-2.5 h-2.5 text-white/70 fill-white/50" />
+                                    <span className="text-[9px] text-white/70 font-bold uppercase tracking-wider">
                                       Default
                                     </span>
                                   </span>
@@ -923,7 +910,7 @@ export function PaymentMethodModal({
                       setShowAddForm(true);
                       resetForm();
                     }}
-                    className="w-full py-3 rounded-xl border border-dashed border-white/[0.10] hover:border-white/[0.12] bg-white/[0.01] hover:bg-white/[0.06] text-white/40 hover:text-white font-medium transition-all flex items-center justify-center gap-2 text-[13px]"
+                    className="w-full py-3 rounded-xl border border-dashed border-white/[0.10] hover:border-white/20 bg-white/[0.01] hover:bg-white/[0.04] text-white/40 hover:text-white font-medium transition-all flex items-center justify-center gap-2 text-[13px]"
                   >
                     <Plus className="w-4 h-4" />
                     Add Payment Method
@@ -1018,7 +1005,7 @@ export function PaymentMethodModal({
                     <button
                       onClick={handleSaveMethod}
                       disabled={isLoading}
-                      className="flex-1 px-4 py-2.5 bg-[#f5f5f7] hover:from-white/70 hover:to-white/60 rounded-xl text-[12px] text-background font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-black/20"
+                      className="flex-1 px-4 py-2.5 bg-[#f5f5f7] hover:bg-white rounded-xl text-[12px] text-[#0b0b0c] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {isLoading ? (
                         <>
@@ -1541,7 +1528,7 @@ export function PaymentMethodInlineForm({
         <button
           onClick={handleSave}
           disabled={isLoading}
-          className="flex-1 px-4 py-3 bg-[#f5f5f7] hover:bg-white/[0.08] rounded-xl text-[13px] text-background font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="flex-1 px-4 py-3 bg-[#f5f5f7] hover:bg-white rounded-xl text-[13px] text-[#0b0b0c] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isLoading ? (
             <>
