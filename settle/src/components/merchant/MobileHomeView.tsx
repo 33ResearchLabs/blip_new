@@ -33,6 +33,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
+import { AppDownloadSection } from "@/components/merchant/AppDownloadSection";
 import { BalanceSparkline } from "./BalanceSparkline";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { loadSwaps, type SwapRecord } from "@/lib/wallet/swapHistory";

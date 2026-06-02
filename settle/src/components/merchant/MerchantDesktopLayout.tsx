@@ -55,6 +55,7 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
+import { AppDownloadSection } from "@/components/merchant/AppDownloadSection";
 
 // Phase 1 (migration 146): when this flag is on, the wide-screen render
 // path is data-driven from the merchant's saved dashboard_layout (falls
@@ -1006,6 +1007,7 @@ function MerchantDashboardV2({
           ) : null}
         </DragOverlay>
       </DndContext>
+      <AppDownloadSection />
     </div>
   );
 }
