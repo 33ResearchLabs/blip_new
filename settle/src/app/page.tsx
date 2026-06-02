@@ -258,15 +258,14 @@ export default function Home() {
     };
   }, [rawToast, addNotification]);
 
-  // Onboarding flow — shown once to new mobile users before the auth form.
-  // Stored in localStorage so it only appears on the first visit.
+  // Onboarding flow — shown whenever a non-authenticated user lands on /
+  // without ?welcome=skip. localStorage gate removed so it shows on every
+  // fresh visit until the user signs in.
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
-    const seen = localStorage.getItem("blip_onb_seen");
     const params = new URLSearchParams(window.location.search);
     const skipWelcome = params.get("welcome") === "skip";
-    // Don't show onboarding if user is returning via ?welcome=skip or has seen it
-    return !seen && !skipWelcome;
+    return !skipWelcome;
   });
 
   const [screen, setScreenRaw] = useState<Screen>("welcome");
@@ -615,12 +614,11 @@ export default function Home() {
           }}
         />
       )}
-      {/* New-user mobile onboarding flow — shown once before the auth form */}
-      {showOnboarding && (
+      {/* New-user mobile onboarding flow — shown to unauthenticated users */}
+      {showOnboarding && !auth.userId && (
         <UserOnboardingFlow
           onComplete={() => {
-            try { localStorage.setItem("blip_onb_seen", "1"); } catch { /* ignore */ }
-            setShowOnboarding(false);
+            window.location.href = "/?welcome=skip";
           }}
         />
       )}

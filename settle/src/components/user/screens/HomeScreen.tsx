@@ -306,24 +306,28 @@ function WalletBalanceSection({
 
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-2" style={{ textAlign: 'center' }}>
-          {/* Compact dash placeholder — kept small (font-size 32, not 60)
-              so the stack stays short enough to fit inside the flex-1
-              centered area on mobile viewports without overflowing into
-              the action-tile row below. */}
-          <span className="" style={{
-            fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1,
-            color: 'rgba(255,255,255,0.22)',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          }}>
-            ---
-          </span>
-          <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1, maxWidth: 240 }}>
-            {IS_EMBEDDED_WALLET
-              ? embeddedWallet?.state === 'locked' ? 'Unlock your wallet to view balance' : 'Set up a wallet to start trading'
-              : 'Connect your Solana wallet to trade'}
-          </p>
-          <motion.button whileTap={{ scale: 0.96 }}
+        <div className="flex flex-col items-center gap-3" style={{ textAlign: 'center', paddingTop: 4 }}>
+          {/* Wave greeting emoji */}
+          <span style={{ fontSize: 36, lineHeight: 1 }}>👋</span>
+          <div>
+            <p style={{
+              fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.15,
+              color: 'rgba(255,255,255,0.96)', marginBottom: 6,
+            }}>
+              {IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked'
+                ? 'Unlock your wallet'
+                : "Let's set you up"}
+            </p>
+            <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1.5, maxWidth: 220, margin: '0 auto' }}>
+              {IS_EMBEDDED_WALLET
+                ? embeddedWallet?.state === 'locked'
+                  ? 'Enter your PIN to view your balance and trade.'
+                  : 'Add money once, then send to friends and pay anyone instantly.'
+                : 'Connect your Solana wallet to trade.'}
+            </p>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
             onClick={() => {
               if (IS_EMBEDDED_WALLET) {
                 if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
@@ -331,12 +335,15 @@ function WalletBalanceSection({
               } else { setShowWalletModal(true); }
             }}
             style={{
-              padding: '11px 26px', borderRadius: 14,
-              background: '#ffffff', color: '#0B0F14',
-              fontSize: 14, fontWeight: 800, letterSpacing: '-0.005em',
+              padding: '12px 32px', borderRadius: 16,
+              background: 'linear-gradient(135deg, #ffb02e 0%, #ff8a00 100%)',
+              color: '#0B0F14',
+              fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em',
+              boxShadow: '0 8px 24px -8px rgba(255,176,46,0.55)',
+              border: 'none',
             }}>
             {IS_EMBEDDED_WALLET
-              ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Create Wallet'
+              ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Set up wallet'
               : 'Connect Wallet'}
           </motion.button>
         </div>
