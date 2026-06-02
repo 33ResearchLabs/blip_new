@@ -454,6 +454,10 @@ async function processDisputeAutoResolves(): Promise<number> {
      WHERE status = 'disputed'
        AND dispute_auto_resolve_at IS NOT NULL
        AND dispute_auto_resolve_at < NOW()
+       -- FUND SAFETY: never auto-refund the seller once the buyer has marked
+       -- fiat as sent (payment_sent_at set). These disputes must be resolved
+       -- by a human/compliance, never auto-cancelled in the seller's favour.
+       AND payment_sent_at IS NULL
      ORDER BY dispute_auto_resolve_at ASC
      LIMIT $1
      FOR UPDATE SKIP LOCKED`,
