@@ -623,9 +623,17 @@ export default function Home() {
       {/* New-user mobile onboarding flow — shown to unauthenticated users */}
       {showOnboarding && !auth.userId && (
         <UserOnboardingFlow
-          onComplete={() => {
-            window.location.href = "/?welcome=skip";
-          }}
+          onComplete={() => { window.location.href = "/?welcome=skip"; }}
+          onGoogleSuccess={auth.handleGoogleSuccess}
+          handleUserLogin={auth.handleUserLogin}
+          loginForm={auth.loginForm}
+          setLoginForm={auth.setLoginForm}
+          isLoggingIn={auth.isLoggingIn}
+          loginError={auth.loginError}
+          setLoginError={auth.setLoginError}
+          authMode={auth.authMode}
+          setAuthMode={auth.setAuthMode}
+          handleUserRegister={auth.handleUserRegister}
         />
       )}
 

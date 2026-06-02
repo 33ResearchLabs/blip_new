@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Shield, Zap, TrendingUp, Check } from "lucide-react";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 
 /* ── Accent / brand tokens ─────────────────────────────────────────────── */
 const ACC = "#ffb02e";        // warm amber / copper — Blip brand
@@ -638,7 +639,7 @@ function ScreenPin({ onNext }: { onNext: () => void }) {
             <path d="M15 5l-7 7 7 7" />
           </svg>
         </button>
-        <Dots step={5} total={6} />
+        <Dots step={5} total={7} />
         <span style={{ width: 40 }} />
       </div>
 
@@ -726,16 +727,251 @@ function ScreenPin({ onNext }: { onNext: () => void }) {
   );
 }
 
+/* ── Screen: Sign In ───────────────────────────────────────────────────── */
+interface ScreenSignInProps {
+  onNext: () => void;
+  onGoogleSuccess: (token: string) => void;
+  handleUserLogin: () => void;
+  loginForm: { username: string; password: string };
+  setLoginForm: (f: { username: string; password: string }) => void;
+  isLoggingIn: boolean;
+  loginError: string;
+  setLoginError: (e: string) => void;
+  authMode: 'login' | 'register';
+  setAuthMode: (m: 'login' | 'register') => void;
+  handleUserRegister: () => void;
+}
+
+function ScreenSignIn({
+  onNext, onGoogleSuccess, handleUserLogin, loginForm, setLoginForm,
+  isLoggingIn, loginError, setLoginError, authMode, setAuthMode, handleUserRegister,
+}: ScreenSignInProps) {
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = () => {
+    setLoginError("");
+    if (authMode === 'login') handleUserLogin();
+    else handleUserRegister();
+  };
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      {/* Top bar */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "54px 22px 0",
+      }}>
+        <div style={{ width: 40 }} />
+        <Dots step={4} total={7} />
+        <span style={{ width: 40 }} />
+      </div>
+
+      <div style={{
+        flex: 1, display: "flex", flexDirection: "column",
+        padding: "24px 22px 28px",
+      }}>
+        {/* Headline */}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+          <div style={{
+            fontFamily: "'Georgia', 'Cambria', serif",
+            fontSize: 40, lineHeight: 1.1, letterSpacing: "-0.01em", color: TEXT,
+            marginBottom: 6,
+          }}>
+            <span style={{ display: "block" }}>Let's get</span>
+            <span style={{ display: "block", fontStyle: "italic" }}>you in.</span>
+          </div>
+        </motion.div>
+
+        {/* Tab switcher */}
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
+          style={{
+            display: "flex", gap: 0,
+            background: SURFACE, borderRadius: 14,
+            padding: 4, marginBottom: 20, marginTop: 10,
+          }}
+        >
+          {(['login', 'register'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => { setAuthMode(mode); setLoginError(""); }}
+              style={{
+                flex: 1, padding: "9px", borderRadius: 10, border: "none",
+                background: authMode === mode ? "#fff" : "transparent",
+                color: authMode === mode ? "#0b0b0d" : MUTED,
+                fontFamily: "inherit", fontWeight: 700, fontSize: 14,
+                cursor: "pointer",
+                boxShadow: authMode === mode ? "0 2px 8px rgba(0,0,0,0.20)" : "none",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {mode === 'login' ? 'Sign in' : 'Register'}
+            </button>
+          ))}
+        </motion.div>
+
+        {/* Google button */}
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+          <GoogleSignInButton
+            role="user"
+            source="onboarding"
+            onSuccess={(data) => {
+              onGoogleSuccess(data);
+              onNext();
+            }}
+            onError={(msg) => setLoginError(msg)}
+            theme="dark"
+          />
+        </motion.div>
+
+        {/* OR divider */}
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
+          style={{
+            display: "flex", alignItems: "center", gap: 12,
+            margin: "16px 0",
+          }}
+        >
+          <div style={{ flex: 1, height: 1, background: HAIR }} />
+          <span style={{ color: MUTED, fontSize: 12, fontWeight: 700 }}>or</span>
+          <div style={{ flex: 1, height: 1, background: HAIR }} />
+        </motion.div>
+
+        {/* Email + Password */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+          style={{ display: "flex", flexDirection: "column", gap: 10 }}
+        >
+          <input
+            type="email"
+            placeholder="Email or username"
+            maxLength={254}
+            value={loginForm.username}
+            onChange={(e) => { setLoginForm({ ...loginForm, username: e.target.value }); setLoginError(""); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
+            style={{
+              width: "100%", padding: "15px 16px", borderRadius: 14, border: `1px solid ${HAIR2}`,
+              background: SURFACE, color: TEXT, fontFamily: "inherit",
+              fontSize: 15, fontWeight: 600, outline: "none", boxSizing: "border-box",
+            }}
+          />
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              maxLength={100}
+              value={loginForm.password}
+              onChange={(e) => { setLoginForm({ ...loginForm, password: e.target.value }); setLoginError(""); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
+              style={{
+                width: "100%", padding: "15px 46px 15px 16px", borderRadius: 14, border: `1px solid ${HAIR2}`,
+                background: SURFACE, color: TEXT, fontFamily: "inherit",
+                fontSize: 15, fontWeight: 600, outline: "none", boxSizing: "border-box",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              style={{
+                position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", cursor: "pointer", padding: 4,
+                color: MUTED,
+              }}
+            >
+              <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                {showPassword
+                  ? <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>
+                  : <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>
+                }
+              </svg>
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Error */}
+        {loginError && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ marginTop: 10, color: "#f87171", fontSize: 13, fontWeight: 600 }}
+          >
+            {loginError}
+          </motion.div>
+        )}
+
+        <div style={{ flex: 1 }} />
+
+        {/* Submit */}
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.28 }}
+          style={{ marginTop: 16 }}
+        >
+          <CTA
+            label={isLoggingIn ? "Please wait…" : authMode === 'login' ? "Sign in" : "Create account"}
+            onClick={handleSubmit}
+            icon={!isLoggingIn ? <ChevronRight size={18} strokeWidth={2.5} /> : undefined}
+          />
+        </motion.div>
+
+        <button
+          onClick={() => { window.location.href = "/?welcome=skip"; }}
+          style={{
+            width: "100%", padding: "13px", marginTop: 10,
+            borderRadius: 14, border: "none", background: "transparent",
+            color: "rgba(255,255,255,0.50)", fontFamily: "inherit",
+            fontWeight: 600, fontSize: 14, cursor: "pointer",
+          }}
+        >
+          Skip for now
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main component ────────────────────────────────────────────────────── */
 export interface UserOnboardingFlowProps {
   onComplete: () => void;
+  onGoogleSuccess?: (token: string) => void;
+  handleUserLogin?: () => void;
+  loginForm?: { username: string; password: string };
+  setLoginForm?: (f: { username: string; password: string }) => void;
+  isLoggingIn?: boolean;
+  loginError?: string;
+  setLoginError?: (e: string) => void;
+  authMode?: 'login' | 'register';
+  setAuthMode?: (m: 'login' | 'register') => void;
+  handleUserRegister?: () => void;
 }
 
-const SCREENS = ["welcome", "f1", "f2", "f3", "pin", "done"] as const;
+const SCREENS = ["welcome", "f1", "f2", "f3", "signin", "pin", "done"] as const;
 type StepKey = typeof SCREENS[number];
 
-export function UserOnboardingFlow({ onComplete }: UserOnboardingFlowProps) {
+export function UserOnboardingFlow({
+  onComplete,
+  onGoogleSuccess,
+  handleUserLogin,
+  loginForm,
+  setLoginForm,
+  isLoggingIn,
+  loginError,
+  setLoginError,
+  authMode,
+  setAuthMode,
+  handleUserRegister,
+}: UserOnboardingFlowProps) {
   const [step, setStep] = useState<number>(0);
+  // Local fallback auth state (when props not provided)
+  const [localAuthMode, setLocalAuthMode] = useState<'login' | 'register'>('login');
+  const [localLoginForm, setLocalLoginForm] = useState({ username: "", password: "" });
+  const [localLoginError, setLocalLoginError] = useState("");
+
+  const resolvedAuthMode = authMode ?? localAuthMode;
+  const resolvedSetAuthMode = setAuthMode ?? setLocalAuthMode;
+  const resolvedLoginForm = loginForm ?? localLoginForm;
+  const resolvedSetLoginForm = setLoginForm ?? setLocalLoginForm;
+  const resolvedLoginError = loginError ?? localLoginError;
+  const resolvedSetLoginError = setLoginError ?? setLocalLoginError;
+  const resolvedIsLoggingIn = isLoggingIn ?? false;
 
   const next = useCallback(() => setStep(s => Math.min(s + 1, SCREENS.length - 1)), []);
   const back = useCallback(() => setStep(s => Math.max(s - 1, 0)), []);
@@ -760,7 +996,7 @@ export function UserOnboardingFlow({ onComplete }: UserOnboardingFlowProps) {
           {key === "welcome" && <ScreenWelcome onNext={next} />}
           {key === "f1" && (
             <ScreenFeature
-              step={1} total={6} num="1" badge="INSTANT"
+              step={1} total={7} num="1" badge="INSTANT"
               title="Send & get paid in" ital="seconds."
               body="Pay any contact, UPI ID or QR code. Money lands instantly — any day, any time."
               hero={<HeroInstant />}
@@ -769,7 +1005,7 @@ export function UserOnboardingFlow({ onComplete }: UserOnboardingFlowProps) {
           )}
           {key === "f2" && (
             <ScreenFeature
-              step={2} total={6} num="2" badge="BEST RATE"
+              step={2} total={7} num="2" badge="BEST RATE"
               title="Always the" ital="best rate."
               body="We compare every exchange in real time. Best rates, beat it and we match it — automatically."
               hero={<HeroBestRate />}
@@ -778,12 +1014,27 @@ export function UserOnboardingFlow({ onComplete }: UserOnboardingFlowProps) {
           )}
           {key === "f3" && (
             <ScreenFeature
-              step={3} total={6} num="3" badge="SECURE"
+              step={3} total={7} num="3" badge="SECURE"
               title="Safe by" ital="design."
               body="Funds stay in escrow until settled. Two-factor and a passcode on every payment."
               hero={<HeroSecurity />}
               last
               onNext={next} onBack={back}
+            />
+          )}
+          {key === "signin" && (
+            <ScreenSignIn
+              onNext={next}
+              onGoogleSuccess={onGoogleSuccess ?? (() => {})}
+              handleUserLogin={handleUserLogin ?? (() => {})}
+              loginForm={resolvedLoginForm}
+              setLoginForm={resolvedSetLoginForm}
+              isLoggingIn={resolvedIsLoggingIn}
+              loginError={resolvedLoginError}
+              setLoginError={resolvedSetLoginError}
+              authMode={resolvedAuthMode}
+              setAuthMode={resolvedSetAuthMode}
+              handleUserRegister={handleUserRegister ?? (() => {})}
             />
           )}
           {key === "pin" && <ScreenPin onNext={next} />}

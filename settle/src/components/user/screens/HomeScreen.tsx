@@ -781,7 +781,7 @@ export const HomeScreen = ({
       // No `touch-action` override — the hook's preventDefault on touchmove
       // does all the gating; setting `pan-y` here would let the browser's
       // compositor claim the gesture before JS can cancel it.
-      style={{ background: '#fff' }}
+      style={{ background: '#0b0b0d' }}
     >
       {/* ══════════════════════════════════════════════════════════════════
           PULL-TO-REFRESH INDICATOR — pill is positioned absolutely at the
@@ -867,11 +867,12 @@ export const HomeScreen = ({
           remaining space and the CTA row pins to the bottom edge.
          ══════════════════════════════════════════════ */}
       <div
-        className="relative shrink-0 h-[60dvh] flex flex-col"
+        className="relative shrink-0 h-auto flex flex-col"
         style={{
-          background: 'linear-gradient(180deg, #161B26 0%, #0B0F17 55%, #07090F 100%)',
+          background: '#161619',
           borderBottomLeftRadius: 44,
           borderBottomRightRadius: 44,
+          paddingBottom: 52,
         }}
       >
 
@@ -929,6 +930,12 @@ export const HomeScreen = ({
                 </div>
               </motion.button>
               <div className="flex flex-col gap-0.5">
+                <span style={{
+                  fontSize: 11, fontWeight: 600, letterSpacing: '0.02em',
+                  color: 'rgba(255,255,255,0.38)',
+                }}>
+                  Pay anyone
+                </span>
                 <span style={{
                   fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em',
                   color: 'rgba(255,255,255,0.96)',
@@ -1015,6 +1022,30 @@ export const HomeScreen = ({
               </motion.button>
             </div>
           </div>
+
+          {/* ── Pay anyone search bar ── */}
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setScreen('trade')}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              padding: '13px 16px', borderRadius: 14, marginBottom: 16,
+              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)',
+              cursor: 'pointer', textAlign: 'left',
+            }}
+          >
+            <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="rgba(255,255,255,0.40)" strokeWidth="1.9" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/>
+            </svg>
+            <span style={{ flex: 1, color: 'rgba(255,255,255,0.35)', fontWeight: 700, fontSize: 13.5 }}>
+              Pay anyone — name, phone or UPI
+            </span>
+            <div style={{ width: 28, height: 28, borderRadius: 999, background: '#ffb02e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="#0B0F14" strokeWidth="2" strokeLinecap="round">
+                <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/>
+              </svg>
+            </div>
+          </motion.button>
 
           {/* ── Balance section (fills remaining hero space) ── */}
           <WalletBalanceSection
@@ -1123,29 +1154,29 @@ export const HomeScreen = ({
         transition={{ delay: 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         className="relative z-10 pb-24 overflow-y-auto no-scrollbar"
         style={{
-          height: '40dvh',
-          background: '#ffffff',
+          flex: 1,
+          background: '#0b0b0d',
           overscrollBehaviorY: 'contain',
           WebkitOverflowScrolling: 'touch',
-          // ── Force light tokens locally — overrides .user-scope (dark) tokens
-          ['--color-surface-base' as any]: '#ffffff',
-          ['--color-surface-raised' as any]: '#f7f8fa',
-          ['--color-surface-overlay' as any]: '#eef0f3',
-          ['--color-surface-card' as any]: 'rgba(15,23,42,0.035)',
-          ['--color-surface-hover' as any]: 'rgba(15,23,42,0.055)',
-          ['--color-surface-active' as any]: 'rgba(15,23,42,0.075)',
-          ['--color-text-primary' as any]: 'rgba(15,23,42,0.95)',
-          ['--color-text-secondary' as any]: 'rgba(15,23,42,0.60)',
-          ['--color-text-tertiary' as any]: 'rgba(15,23,42,0.42)',
-          ['--color-text-quaternary' as any]: 'rgba(15,23,42,0.20)',
-          ['--color-border-subtle' as any]: 'rgba(15,23,42,0.06)',
-          ['--color-border-medium' as any]: 'rgba(15,23,42,0.10)',
-          ['--color-border-strong' as any]: 'rgba(15,23,42,0.16)',
-          ['--color-success' as any]: '#059669',
-          ['--color-success-dim' as any]: 'rgba(5,150,105,0.10)',
-          ['--color-success-border' as any]: 'rgba(5,150,105,0.28)',
-          ['--accent' as any]: '#0f172a',
-          ['--accent-text' as any]: '#ffffff',
+          // ── Dark tokens for the transactions section
+          ['--color-surface-base' as any]: '#0b0b0d',
+          ['--color-surface-raised' as any]: 'rgba(255,255,255,0.05)',
+          ['--color-surface-overlay' as any]: 'rgba(255,255,255,0.08)',
+          ['--color-surface-card' as any]: 'rgba(255,255,255,0.04)',
+          ['--color-surface-hover' as any]: 'rgba(255,255,255,0.06)',
+          ['--color-surface-active' as any]: 'rgba(255,255,255,0.09)',
+          ['--color-text-primary' as any]: 'rgba(255,255,255,0.92)',
+          ['--color-text-secondary' as any]: 'rgba(255,255,255,0.60)',
+          ['--color-text-tertiary' as any]: 'rgba(255,255,255,0.38)',
+          ['--color-text-quaternary' as any]: 'rgba(255,255,255,0.20)',
+          ['--color-border-subtle' as any]: 'rgba(255,255,255,0.07)',
+          ['--color-border-medium' as any]: 'rgba(255,255,255,0.10)',
+          ['--color-border-strong' as any]: 'rgba(255,255,255,0.16)',
+          ['--color-success' as any]: '#10b981',
+          ['--color-success-dim' as any]: 'rgba(16,185,129,0.12)',
+          ['--color-success-border' as any]: 'rgba(16,185,129,0.28)',
+          ['--accent' as any]: '#ffffff',
+          ['--accent-text' as any]: '#0b0b0d',
         }}
       >
         <div className={`${maxW} mx-auto px-5 pt-2`}>
@@ -1153,7 +1184,7 @@ export const HomeScreen = ({
           {/* Section title — sticky so it stays visible while rows scroll under it */}
           <div
             className="sticky top-0 z-10 flex items-center justify-between py-2 -mx-5 px-5"
-            style={{ background: '#ffffff' }}
+            style={{ background: '#0b0b0d' }}
           >
             <h2 className="text-[13px] font-bold text-text-secondary tracking-[-0.01em]">
               Transactions
