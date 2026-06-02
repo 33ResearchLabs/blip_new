@@ -56,7 +56,7 @@ interface MerchantItem {
 // it live here matches the same approach /api/reputation/me takes for the
 // merchant + waitlist dashboards.
 const getReputationStyle = (
-  score: number
+  score: number,
 ): { label: string; className: string } => {
   if (!score || score <= 0) {
     return { label: "—", className: "text-foreground/35" };
@@ -64,8 +64,7 @@ const getReputationStyle = (
   const tier = getTierFromScore(score);
   if (tier === "platinum" || tier === "diamond")
     return { label: "Platinum", className: "text-[#E5E4E2]" };
-  if (tier === "gold")
-    return { label: "Gold", className: "text-[#FFD700]" };
+  if (tier === "gold") return { label: "Gold", className: "text-[#FFD700]" };
   if (tier === "silver")
     return { label: "Silver", className: "text-[#C0C0C0]" };
   if (tier === "bronze")
@@ -770,9 +769,10 @@ function FilterOption({
 //   CRITICAL  >= 85   HIGH_RISK >= 65   SUSPECT >= 45
 //   NEUTRAL   >= 25   CLEAN     >= 10   TRUSTED >= 0
 // A null label is the "no algo run yet" state — distinct from TRUSTED.
-function getRiskStyle(
-  level: string | null
-): { label: string; className: string } {
+function getRiskStyle(level: string | null): {
+  label: string;
+  className: string;
+} {
   switch ((level || "").toUpperCase()) {
     case "CRITICAL":
       return {
@@ -812,8 +812,7 @@ function getRiskStyle(
       // tell at a glance which actors haven't been evaluated.
       return {
         label: "Unscored",
-        className:
-          "bg-foreground/5 border-foreground/10 text-foreground/40",
+        className: "bg-foreground/5 border-foreground/10 text-foreground/40",
       };
   }
 }
