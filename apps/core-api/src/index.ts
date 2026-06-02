@@ -37,6 +37,7 @@ import {
   stopOnChainReconciliationWorker,
 } from './workers/onChainReconciliationWorker';
 import { startWorkerHealthChecker, stopWorkerHealthChecker } from './workers/workerHealthChecker';
+import { startStuckDisputeMonitor, stopStuckDisputeMonitor } from './workers/stuckDisputeMonitor';
 import { registerAllListeners } from './events';
 import { closePool, safeLog } from 'settlement-core';
 import { runPendingMigrations } from './migrationRunner';
@@ -210,6 +211,7 @@ try {
     startReceiptReconciliationWorker();
     startOnChainReconciliationWorker();
     startWorkerHealthChecker();
+    void startStuckDisputeMonitor(); // gated by STUCK_DISPUTE_ALERTS_ENABLED (off by default)
   }
 } catch (err) {
   fastify.log.error(err);
@@ -230,6 +232,7 @@ const shutdown = async (signal: string) => {
     stopReceiptReconciliationWorker();
     stopOnChainReconciliationWorker();
     stopWorkerHealthChecker();
+    stopStuckDisputeMonitor();
     await stopReceiptWorker();
     await closeReceiptQueue();
     closeWebSocketServer();
