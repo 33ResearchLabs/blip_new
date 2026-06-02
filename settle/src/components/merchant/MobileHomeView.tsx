@@ -966,17 +966,6 @@ export function MobileHomeView({
                   </div>
                 </div>
 
-                {/* Priority Boost */}
-                <button style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 15px", borderRadius: 14, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", cursor: "pointer", marginBottom: 12 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 9, color: "#f5f5f7" }}>
-                    <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg>
-                    <b style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>PRIORITY BOOST</b>
-                  </span>
-                  <span style={{ color: "#b8e9d4", fontWeight: 800, fontSize: 13 }}>Add</span>
-                </button>
-                <div style={{ color: "#5a5a60", fontSize: 11.5, fontWeight: 500, lineHeight: 1.45, textAlign: "center", padding: "0 6px", marginBottom: 6 }}>
-                  No processing fee on regular trades. Priority Boost is an optional incentive to merchants for faster matching.
-                </div>
               </div>
 
               {/* Footer */}
