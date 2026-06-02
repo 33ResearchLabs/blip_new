@@ -939,9 +939,9 @@ export function MobileHomeView({
                     value={tradeAmt}
                     onChange={(e) => setTradeAmt(e.target.value)}
                     maxLength={14}
-                    style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "#f5f5f7", fontVariantNumeric: "tabular-nums" }}
+                    style={{ flex: 1, minWidth: 0, background: "none", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "#f5f5f7", fontVariantNumeric: "tabular-nums" }}
                   />
-                  <span style={{ color: "#86868b", fontWeight: 700, fontSize: 15 }}>USDT</span>
+                  <span style={{ color: "#86868b", fontWeight: 700, fontSize: 15, flexShrink: 0, marginLeft: 8 }}>USDT</span>
                 </div>
                 <div style={{ height: 16, color: "#aeaeb2", fontSize: 12.5, fontWeight: 600, marginBottom: 16 }}>
                   {valid ? `≈ ${fiatSymbol}${fiatEst.toLocaleString("en-US")} at ${fiatSymbol}${liveRate2.toFixed(2)}` : ""}
@@ -1042,9 +1042,9 @@ export function MobileHomeView({
                     onKeyDown={(e) => { if (e.key === "Enter") handleSaveRate(); if (e.key === "Escape") setShowRatePanel(false); }}
                     maxLength={10}
                     autoFocus
-                    style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "#f5f5f7", fontVariantNumeric: "tabular-nums" }}
+                    style={{ flex: 1, minWidth: 0, background: "none", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "#f5f5f7", fontVariantNumeric: "tabular-nums" }}
                   />
-                  <span style={{ color: "#86868b", fontWeight: 700, fontSize: 15 }}>{fiatCur}/USDT</span>
+                  <span style={{ color: "#86868b", fontWeight: 700, fontSize: 15, flexShrink: 0, marginLeft: 8 }}>{fiatCur}/USDT</span>
                 </div>
                 <div style={{ height: 16, color: "#aeaeb2", fontSize: 12.5, fontWeight: 600, marginBottom: 16 }}>Saved locally for now.</div>
               </div>
