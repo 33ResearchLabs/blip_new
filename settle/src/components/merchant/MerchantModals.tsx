@@ -363,7 +363,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
       {merchantId && (
         <MerchantQuoteModal
           merchantId={merchantId}
-          corridorId="USDT_AED"
+          corridorId={activeCorridor || "USDT_AED"}
           isOpen={showMerchantQuoteModal}
           onClose={() => setShowMerchantQuoteModal(false)}
         />

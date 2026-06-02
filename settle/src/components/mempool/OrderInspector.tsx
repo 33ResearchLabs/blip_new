@@ -211,7 +211,7 @@ export function OrderInspector({
                   <div className="text-2xl font-bold text-primary font-mono">
                     {Number(order.current_offer_price).toFixed(6)}
                   </div>
-                  <div className="text-[10px] text-white/40 font-mono">AED/USDT</div>
+                  <div className="text-[10px] text-white/40 font-mono">{(order.corridor_id?.split('_')[1] || 'AED')}/USDT</div>
                 </div>
               </div>
 

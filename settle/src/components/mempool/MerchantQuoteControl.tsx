@@ -37,7 +37,7 @@ export function MerchantQuoteControl({
   const [minSize, setMinSize] = useState('10');
   const [maxSize, setMaxSize] = useState('10000');
   const [slaMinutes, setSlaMinutes] = useState('15');
-  const [liquidity, setLiquidity] = useState('0');
+  const [liquidity, setLiquidity] = useState(''); // empty → show placeholder, not a literal 0
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
@@ -59,14 +59,37 @@ export function MerchantQuoteControl({
           setMinSize(q.min_size_usdt.toString());
           setMaxSize(q.max_size_usdt.toString());
           setSlaMinutes(q.sla_minutes.toString());
-          setLiquidity(q.available_liquidity_usdt.toString());
+          // Show the placeholder (not "0") when saved liquidity is zero/empty.
+          setLiquidity(q.available_liquidity_usdt > 0 ? q.available_liquidity_usdt.toString() : '');
           setIsOnline(q.is_online);
+        } else {
+          // No saved quote for this corridor — prefill the min price with the
+          // corridor's live ref price (corridor-correct) instead of the
+          // hardcoded AED default, so an INR merchant doesn't see 3.67.
+          await prefillMinPriceFromRefPrice();
         }
       }
     } catch (error) {
       console.error('Failed to fetch merchant quote:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Pull the corridor's current ref price (same source as the dashboard +
+  // Market Snapshot) to seed the min-price field when no quote exists yet.
+  const prefillMinPriceFromRefPrice = async () => {
+    try {
+      const res = await fetchWithAuth(
+        `/api/corridor/dynamic-rate?pair=${corridorId.toLowerCase()}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const ref = data?.success ? Number(data?.data?.ref_price) : NaN;
+        if (Number.isFinite(ref) && ref > 0) setMinPrice(ref.toString());
+      }
+    } catch {
+      /* keep the existing default if the ref price can't be fetched */
     }
   };
 
@@ -83,7 +106,7 @@ export function MerchantQuoteControl({
           min_size_usdt: parseFloat(minSize),
           max_size_usdt: parseFloat(maxSize),
           sla_minutes: parseInt(slaMinutes, 10),
-          available_liquidity_usdt: parseFloat(liquidity),
+          available_liquidity_usdt: parseFloat(liquidity) || 0,
           is_online: isOnline,
         }),
       });
@@ -123,7 +146,7 @@ export function MerchantQuoteControl({
             Quote Control
           </span>
           <span className="text-[10px] text-white/40 font-mono ml-auto">
-          {/* {corridorId} */} USDT/AED
+          {corridorId.replace('_', '/')}
           </span>
         </div>
       </div>
@@ -154,7 +177,7 @@ export function MerchantQuoteControl({
         <div>
           <label className="block text-[10px] text-white/50 font-mono uppercase mb-2 flex items-center gap-1.5">
             <DollarSign className="w-3 h-3" />
-            Minimum Price (AED/USDT)
+            Minimum Price ({corridorId.split('_')[1] || 'AED'}/USDT)
           </label>
           <input
             type="number"
@@ -163,7 +186,7 @@ export function MerchantQuoteControl({
             onChange={(e) => setMinPrice(e.target.value)}
             className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
                        text-white font-mono text-sm focus:outline-none focus:border-primary/50"
-            placeholder="3.67"
+            placeholder="0.00"
           />
           <p className="text-[9px] text-white/30 font-mono mt-1">
             Only accept orders at or above this price

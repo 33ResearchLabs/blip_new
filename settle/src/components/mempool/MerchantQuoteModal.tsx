@@ -36,11 +36,11 @@ export function MerchantQuoteModal({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [minPrice, setMinPrice] = useState('3.67');
+  const [minPrice, setMinPrice] = useState(''); // prefilled from corridor ref price; never a hardcoded AED value
   const [minSize, setMinSize] = useState('10');
   const [maxSize, setMaxSize] = useState('10000');
   const [slaMinutes, setSlaMinutes] = useState('15');
-  const [liquidity, setLiquidity] = useState('0');
+  const [liquidity, setLiquidity] = useState(''); // empty → show placeholder, not a literal 0
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
@@ -51,6 +51,16 @@ export function MerchantQuoteModal({
 
   const fetchQuote = async () => {
     setIsLoading(true);
+    // Reset to a clean slate first so switching corridors never carries stale
+    // values from the previous corridor into a save (e.g. AED min price/limits
+    // lingering when the merchant has no quote yet for the new corridor).
+    setQuote(null);
+    setMinPrice('');
+    setMinSize('10');
+    setMaxSize('10000');
+    setSlaMinutes('15');
+    setLiquidity('');
+    setIsOnline(true);
     try {
       const res = await fetchWithAuth(
         `/api/merchant-quotes?merchant_id=${merchantId}&corridor_id=${corridorId}`
@@ -66,12 +76,31 @@ export function MerchantQuoteModal({
           setSlaMinutes(q.sla_minutes.toString());
           setLiquidity(q.available_liquidity_usdt.toString());
           setIsOnline(q.is_online);
+        } else {
+          // No saved quote — seed the min price from the corridor's live ref
+          // price (corridor-correct) instead of the hardcoded AED default.
+          await prefillMinPriceFromRefPrice();
         }
       }
     } catch (error) {
       console.error('Failed to fetch merchant quote:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const prefillMinPriceFromRefPrice = async () => {
+    try {
+      const res = await fetchWithAuth(
+        `/api/corridor/dynamic-rate?pair=${corridorId.toLowerCase()}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const ref = data?.success ? Number(data?.data?.ref_price) : NaN;
+        if (Number.isFinite(ref) && ref > 0) setMinPrice(ref.toString());
+      }
+    } catch {
+      /* keep the existing default if the ref price can't be fetched */
     }
   };
 
@@ -84,11 +113,11 @@ export function MerchantQuoteModal({
         body: JSON.stringify({
           merchant_id: merchantId,
           corridor_id: corridorId,
-          min_price_aed_per_usdt: parseFloat(minPrice),
+          min_price_aed_per_usdt: parseFloat(minPrice) || 0,
           min_size_usdt: parseFloat(minSize),
           max_size_usdt: parseFloat(maxSize),
           sla_minutes: parseInt(slaMinutes, 10),
-          available_liquidity_usdt: parseFloat(liquidity),
+          available_liquidity_usdt: parseFloat(liquidity) || 0,
           is_online: isOnline,
         }),
       });
@@ -182,7 +211,7 @@ export function MerchantQuoteModal({
                                text-sm text-white/90 focus:outline-none focus:border-white/[0.12] transition-colors"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/30">
-                    AED
+                    {corridorId.split('_')[1] || 'AED'}
                   </span>
                 </div>
               </div>

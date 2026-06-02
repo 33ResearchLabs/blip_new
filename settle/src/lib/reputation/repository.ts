@@ -23,6 +23,53 @@ import {
 } from './calculator';
 
 // ============================================================================
+// BADGES COLUMN BINDING (schema-drift safe)
+// ============================================================================
+//
+// `reputation_scores.badges` was declared TEXT[] in migration 030, but some
+// environments drifted to JSONB. The two need DIFFERENT bindings:
+//   - text[] : pass a JS array — node-pg converts it to a Postgres array.
+//   - jsonb  : pass a JSON string.
+// Binding `JSON.stringify([])` ('"[]"') into a text[] column throws
+// "malformed array literal: []" and silently fails EVERY score write — which
+// is exactly why the leaderboard cache went stale once settle became the sole
+// writer. Detect the actual column type once and cache it.
+type BadgesColumnFormat = 'array' | 'json';
+let badgesFormat: BadgesColumnFormat | null = null;
+let badgesFormatProbe: Promise<BadgesColumnFormat> | null = null;
+
+async function detectBadgesFormat(): Promise<BadgesColumnFormat> {
+  if (badgesFormat) return badgesFormat;
+  if (badgesFormatProbe) return badgesFormatProbe;
+  badgesFormatProbe = (async (): Promise<BadgesColumnFormat> => {
+    try {
+      const rows = await query<{ data_type: string }>(
+        `SELECT data_type FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'reputation_scores'
+            AND column_name = 'badges'`
+      );
+      const dt = rows[0]?.data_type;
+      // information_schema reports 'ARRAY' for text[]; 'json'/'jsonb' otherwise.
+      const fmt: BadgesColumnFormat = dt === 'json' || dt === 'jsonb' ? 'json' : 'array';
+      badgesFormat = fmt;
+      return fmt;
+    } catch {
+      // Probe failed — default to 'array' (matches the original migration).
+      badgesFormat = 'array';
+      return 'array';
+    } finally {
+      badgesFormatProbe = null;
+    }
+  })();
+  return badgesFormatProbe;
+}
+
+function bindBadges(badges: string[], fmt: BadgesColumnFormat): string | string[] {
+  return fmt === 'json' ? JSON.stringify(badges) : badges;
+}
+
+// ============================================================================
 // TABLE INITIALIZATION
 // ============================================================================
 
@@ -553,6 +600,10 @@ export async function updateReputationScore(
 
   const score = calculateReputationScore(stats);
 
+  // Bind badges to match the actual `badges` column type (text[] vs jsonb) —
+  // a JSON string into a text[] column throws "malformed array literal".
+  const badgesFmt = await detectBadgesFormat();
+
   // Upsert score
   await query(
     `INSERT INTO reputation_scores (
@@ -581,7 +632,7 @@ export async function updateReputationScore(
       score.consistency_score,
       score.trust_score,
       score.tier,
-      JSON.stringify(score.badges || []),
+      bindBadges(score.badges || [], badgesFmt),
     ]
   );
 

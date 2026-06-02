@@ -64,6 +64,38 @@ export function installNodeProcessHandlers(): void {
   });
 }
 
+/**
+ * Dev-only: start the reputation worker IN-PROCESS under `next dev`.
+ *
+ * In production the worker runs as a separate process spawned by server.js.
+ * But `next dev` never executes server.js, so without this the DISPLAY tables
+ * (`reputation_scores` / `reputation_history`) have NO writer in dev —
+ * core-api only writes the matching columns — and the leaderboard shows
+ * stale scores forever. Guarded to development so it never double-runs
+ * alongside the server.js spawn in production, and to once-per-process.
+ */
+export function startReputationWorkerInDev(): void {
+  if (process.env.NODE_ENV !== "development") return;
+  if (!process.on) return;
+  if ((globalThis as Record<string, unknown>).__reputationWorkerStarted) return;
+  (globalThis as Record<string, unknown>).__reputationWorkerStarted = true;
+
+  void (async () => {
+    try {
+      // Dynamic import so the worker (and its `pg` deps) never enters the
+      // Edge bundle — this module is only loaded for NEXT_RUNTIME === "nodejs".
+      const { start } = await import("@/workers/reputation-worker");
+      await start();
+    } catch (err) {
+      // Best-effort in dev — never block server startup.
+      console.warn(
+        "[instrumentation] reputation worker (dev) failed to start:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  })();
+}
+
 export async function logRouteExceptionToErrorLogs(
   err: unknown,
   request: {
