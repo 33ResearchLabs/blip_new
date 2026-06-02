@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Bell, Plus, Loader2, History, X } from "lucide-react";
+import { Plus, Loader2, History } from "lucide-react";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { getNotifPrefs } from "@/hooks/useNotifPrefs";
@@ -50,6 +50,7 @@ import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayo
 import { MerchantTour } from "@/components/merchant/MerchantTour";
 import { useMerchantTour } from "@/hooks/useMerchantTour";
 import { MerchantMobileContent } from "@/components/merchant/MerchantMobileContent";
+import { MobileNotificationsView } from "@/components/merchant/MobileNotificationsView";
 import { MobilePriceTicker } from "@/components/merchant/MobilePriceTicker";
 import { OnboardingProvider } from "@/contexts/OnboardingContext";
 import { OnboardingTour } from "@/components/merchant/OnboardingTour";
@@ -896,11 +897,6 @@ export default function MerchantDashboard() {
           }
         />
 
-        {/* Mobile live-price ticker — only shown on the Home tab so other
-          tabs (History, Chat, Orders, Escrow, Marketplace) aren't crowded
-          by the corridor strip. The hook is shared, so re-mounting it on
-          tab switch is cheap and doesn't trigger extra network traffic. */}
-        {mobileView === "home" && <MobilePriceTicker />}
 
         <MerchantDesktopLayout
           isWideScreen={isWideScreen}
@@ -1123,131 +1119,18 @@ export default function MerchantDashboard() {
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setShowNotifications(false)}
             />
-            <div className="absolute inset-0 bg-card-solid flex flex-col animate-in slide-in-from-right duration-200">
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-section-divider">
-                <div className="flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-foreground/40" />
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Notifications
-                  </h2>
-                  {notifications.filter((n) => !n.read).length > 0 && (
-                    <span className="text-[10px] bg-primary text-background font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                      {notifications.filter((n) => !n.read).length}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1">
-                  {notifications.some((n) => !n.read) && (
-                    <button
-                      onClick={markAllNotificationsRead}
-                      className="text-[11px] font-semibold text-primary px-2 py-1 rounded-md hover:bg-primary/10 transition-colors"
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setShowNotifications(false)}
-                    className="p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors"
-                  >
-                    <X className="w-5 h-5 text-foreground/40" />
-                  </button>
-                </div>
-              </div>
-              {/* List */}
-              <div className="flex-1 overflow-y-auto p-2">
-                {notifications.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-foreground/20 p-8">
-                    <Bell className="w-8 h-8 mb-2 opacity-30" />
-                    <p className="text-xs">No notifications</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {notifications.map((n) => {
-                      const iconBg =
-                        n.type === "complete"
-                          ? "bg-emerald-500/10"
-                          : n.type === "escrow"
-                            ? "bg-primary/10"
-                            : n.type === "payment"
-                              ? "bg-blue-500/10"
-                              : n.type === "dispute"
-                                ? "bg-red-500/10"
-                                : n.type === "order"
-                                  ? "bg-primary/10"
-                                  : "bg-foreground/[0.04]";
-                      const iconColor =
-                        n.type === "complete"
-                          ? "text-emerald-400"
-                          : n.type === "escrow"
-                            ? "text-primary"
-                            : n.type === "payment"
-                              ? "text-blue-400"
-                              : n.type === "dispute"
-                                ? "text-red-400"
-                                : n.type === "order"
-                                  ? "text-primary"
-                                  : "text-foreground/40";
-                      const secAgo = Math.floor(
-                        (Date.now() - n.timestamp) / 1000,
-                      );
-                      const relTime =
-                        secAgo < 60
-                          ? "Just now"
-                          : secAgo < 3600
-                            ? `${Math.floor(secAgo / 60)}m ago`
-                            : secAgo < 86400
-                              ? `${Math.floor(secAgo / 3600)}h ago`
-                              : `${Math.floor(secAgo / 86400)}d ago`;
-
-                      return (
-                        <button
-                          key={n.id}
-                          onClick={() => {
-                            markNotificationRead(n.id);
-                            // If the notification is tied to an order, open its
-                            // quick-view popup so the merchant lands on the
-                            // relevant info instead of hunting for the order.
-                            if (n.orderId) {
-                              const target = orders.find(
-                                (o) => o.id === n.orderId,
-                              );
-                              if (target) setSelectedOrderPopup(target);
-                            }
-                            setShowNotifications(false);
-                          }}
-                          className={`w-full text-left p-3 rounded-xl border transition-colors ${
-                            n.read
-                              ? "opacity-50 border-transparent"
-                              : "bg-foreground/[0.02] border-foreground/[0.06] hover:border-foreground/[0.10]"
-                          }`}
-                        >
-                          <div className="flex items-start gap-2.5">
-                            <div
-                              className={`w-7 h-7 rounded-lg ${iconBg} flex items-center justify-center shrink-0 mt-0.5`}
-                            >
-                              <div
-                                className={`w-2 h-2 rounded-full ${iconColor.replace("text-", "bg-")}`}
-                              />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[13px] text-text-primary leading-snug">
-                                {n.message}
-                              </p>
-                              <p className="text-[11px] text-text-secondary mt-1">
-                                {relTime}
-                              </p>
-                            </div>
-                            {!n.read && (
-                              <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+            <div className="absolute inset-0 overflow-y-auto p-4" style={{ background: "#08080a" }}>
+              <MobileNotificationsView
+                notifications={notifications}
+                onMarkRead={markNotificationRead}
+                onMarkAllRead={markAllNotificationsRead}
+                onSelectOrder={(orderId) => {
+                  const target = orders.find((o) => o.id === orderId);
+                  if (target) setSelectedOrderPopup(target);
+                  setShowNotifications(false);
+                }}
+                onClose={() => setShowNotifications(false)}
+              />
             </div>
           </div>
         )}

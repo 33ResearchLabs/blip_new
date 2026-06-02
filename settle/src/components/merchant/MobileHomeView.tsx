@@ -45,7 +45,8 @@ import {
   clearSessionKeypair,
 } from "@/lib/wallet/embeddedWallet";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatFiat } from "@/lib/format";
+import { useCorridorPrices, resolveCorridorRef } from "@/hooks/useCorridorPrices";
 import type { Order } from "@/types/merchant";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { OnboardingSetupCard } from "@/components/merchant/OnboardingSetupCard";
@@ -101,12 +102,12 @@ const PM_TYPE_META: Record<
   MerchantPaymentMethod["type"],
   { label: string; Icon: typeof Building2; cls: string }
 > = {
-  bank: { label: "Bank Account", Icon: Building2, cls: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
-  cash: { label: "Cash Meeting", Icon: DollarSign, cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
-  crypto: { label: "Crypto Wallet", Icon: Wallet, cls: "text-primary bg-primary/10 border-primary/20" },
-  card: { label: "Card Payment", Icon: CreditCard, cls: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
-  mobile: { label: "Mobile Money", Icon: Smartphone, cls: "text-pink-400 bg-pink-500/10 border-pink-500/20" },
-  upi: { label: "UPI", Icon: Smartphone, cls: "text-green-400 bg-green-500/10 border-green-500/20" },
+  bank: { label: "Bank Account", Icon: Building2, cls: "text-foreground/60 bg-foreground/[0.04] border-foreground/[0.08]" },
+  cash: { label: "Cash Meeting", Icon: DollarSign, cls: "text-foreground/60 bg-foreground/[0.04] border-foreground/[0.08]" },
+  crypto: { label: "Crypto Wallet", Icon: Wallet, cls: "text-foreground/60 bg-foreground/[0.04] border-foreground/[0.08]" },
+  card: { label: "Card Payment", Icon: CreditCard, cls: "text-foreground/60 bg-foreground/[0.04] border-foreground/[0.08]" },
+  mobile: { label: "Mobile Money", Icon: Smartphone, cls: "text-foreground/60 bg-foreground/[0.04] border-foreground/[0.08]" },
+  upi: { label: "UPI", Icon: Smartphone, cls: "text-foreground/60 bg-foreground/[0.04] border-foreground/[0.08]" },
 };
 
 export function MobileHomeView({
@@ -133,6 +134,7 @@ export function MobileHomeView({
   // it inline next to the USDT balance — saves a tile in the action
   // grid and matches the "everything you need to know in one card" UX.
   const solanaWallet = useSolanaWallet();
+  const [cardVariant, setCardVariant] = useState<1 | 2 | 3>(3);
   const [addressCopied, setAddressCopied] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
@@ -363,6 +365,35 @@ export function MobileHomeView({
     (m) => m.id !== defaultPaymentMethod?.id,
   );
 
+  // ── Live corridor price for the market switch pill ──────────────────
+  const corridorPrices = useCorridorPrices();
+  const liveRate = resolveCorridorRef(corridorPrices, activeCorridor, activeCorridorMeta.fiat);
+
+  // ── Balance count-up on mount ─────────────────────────────────────────
+  const [displayBalance, setDisplayBalance] = useState(effectiveBalance ?? 0);
+  const countUpTarget = useRef(effectiveBalance ?? 0);
+  useEffect(() => {
+    const target = effectiveBalance ?? 0;
+    countUpTarget.current = target;
+    const dur = 1150, t0 = performance.now();
+    let raf: number;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / dur);
+      setDisplayBalance(target * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else setDisplayBalance(target);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [effectiveBalance]);
+
+  // ── Greeting ──────────────────────────────────────────────────────────
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const dateLabel = now.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "short" });
+  const avatarLetter = (merchantInfo?.display_name || merchantInfo?.business_name || "M")[0].toUpperCase();
+
   // Recent activity — merge pending + ongoing + recent completed
   const recentOrders = [
     ...pendingOrders.slice(0, 5),
@@ -371,25 +402,7 @@ export function MobileHomeView({
   ].slice(0, 6);
 
   return (
-    <div className="space-y-4">
-      {/* ── Corridor selector ──
-          Tappable pill showing the active corridor; opens a searchable
-          dropdown sheet so the merchant can pick from any supported
-          market. The active state is owned by the parent merchant page,
-          so this propagates into desktop navbar + trade flows. */}
-      {onCorridorChange && (
-        <button
-          onClick={() => setCorridorPickerOpen(true)}
-          className="inline-flex items-center gap-1.5 self-start bg-foreground/[0.04] hover:bg-foreground/[0.06] rounded-full pl-2 pr-2.5 py-1 text-left transition-colors"
-          aria-label={`Market: USDT to ${activeCorridorMeta.fiat} · ${activeCorridorMeta.country}`}
-        >
-          <span className="text-[13px] leading-none">{activeCorridorMeta.flag}</span>
-          <span className="text-[11px] font-semibold text-foreground tabular-nums leading-none">
-            USDT → {activeCorridorMeta.fiat}
-          </span>
-          <ChevronDown className="w-3 h-3 text-foreground/40" />
-        </button>
-      )}
+    <div className="space-y-4" style={{ position: "relative" }}>
 
       {/* ── Corridor picker sheet ── */}
       {corridorPickerOpen && (
@@ -474,874 +487,356 @@ export function MobileHomeView({
         </div>
       )}
 
-      {/* ── Balance Card ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-foreground/[0.03] border border-foreground/[0.06] rounded-3xl p-6"
-      >
-        <div className="flex items-center justify-between mb-1 gap-2">
-          <span className="text-[11px] text-foreground/40 uppercase tracking-wider font-medium">
-            Available Balance
-          </span>
-          {/* Shared wallet-actions menu — same component the desktop
-              StatusCard renders. Owns its own state and modals so
-              MobileHomeView stays slim. */}
-          <WalletActionsMenu actorId={merchantIdForWallet} />
+
+      {/* ── AMBIENT MESH ── */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "55%", pointerEvents: "none", zIndex: 0, overflow: "hidden", filter: "blur(46px)", opacity: 0.9 }}>
+        <div style={{ position: "absolute", width: 280, height: 280, left: "-6%", top: "-10%", borderRadius: "50%", background: "radial-gradient(circle, rgba(120,134,224,0.55), transparent 62%)", mixBlendMode: "screen", animation: "z2drift1 16s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", width: 260, height: 260, right: "-10%", top: "0%", borderRadius: "50%", background: "radial-gradient(circle, rgba(196,138,224,0.42), transparent 62%)", mixBlendMode: "screen", animation: "z2drift2 19s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", width: 240, height: 240, left: "30%", top: "14%", borderRadius: "50%", background: "radial-gradient(circle, rgba(224,176,128,0.30), transparent 64%)", mixBlendMode: "screen", animation: "z2drift1 22s ease-in-out infinite reverse" }} />
+      </div>
+      <style>{`
+        @keyframes z2drift1{0%{transform:translate(0,0) scale(1)} 50%{transform:translate(12%,8%) scale(1.18)} 100%{transform:translate(0,0) scale(1)}}
+        @keyframes z2drift2{0%{transform:translate(0,0) scale(1.1)} 50%{transform:translate(-10%,10%) scale(0.92)} 100%{transform:translate(0,0) scale(1.1)}}
+        @keyframes z2pulse{0%{box-shadow:0 0 0 0 rgba(184,233,212,.5)} 70%{box-shadow:0 0 0 7px rgba(184,233,212,0)} 100%{box-shadow:0 0 0 0 rgba(184,233,212,0)}}
+        @keyframes z2rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+        .z2tick{width:7px;height:7px;border-radius:999px;background:#b8e9d4;animation:z2pulse 2.6s infinite;flex-shrink:0}
+        .z2rise{animation:z2rise 0.85s cubic-bezier(0.22,1,0.36,1) backwards}
+        @media(prefers-reduced-motion:reduce){.z2rise,.z2tick{animation:none!important}}
+      `}</style>
+
+      {/* ── HEADER ── */}
+      <div className="z2rise" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1, paddingBottom: 4, animationDelay: "40ms" }}>
+        <div>
+          <div style={{ color: "#86868b", fontSize: 12.5, fontWeight: 600 }}>{dateLabel}</div>
+          <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 1, color: "#f5f5f7" }}>{greeting}</div>
         </div>
-        {/* Locked / no wallet → hide the misleading "0.00" and surface a CTA */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => onOpenPaymentMethods?.()}
+            style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", position: "relative", cursor: "pointer" }}>
+            <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3.2"/><path d="M2.5 9.5h19"/></svg>
+            {defaultPaymentMethod && (
+              <span style={{ position: "absolute", top: 6, right: 6, width: 9, height: 9, borderRadius: 9, background: "#7b54e0", boxShadow: "0 0 0 2px #08080a" }} />
+            )}
+          </button>
+          <button style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
+            <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          </button>
+          <div style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", overflow: "hidden" }}>
+            {merchantInfo?.avatar_url && /^https?:|^\//.test(merchantInfo.avatar_url)
+              ? <img src={merchantInfo.avatar_url} style={{ width: 42, height: 42, objectFit: "cover" }} alt="" />
+              : <span style={{ fontWeight: 800, color: "#f5f5f7", fontSize: 17 }}>{avatarLetter}</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* ── HERO BALANCE ── */}
+      <div className="z2rise" style={{ position: "relative", zIndex: 1, paddingTop: 18, animationDelay: "120ms" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span className="z2tick" />
+          <span style={{ color: "#86868b", fontSize: 12, fontWeight: 700, letterSpacing: "0.16em" }}>LIVE BALANCE</span>
+        </div>
         {embeddedWalletState === "locked" ? (
-          <div className="mt-2 space-y-3">
-            <div className="flex items-center gap-2">
-              <Lock className="w-4 h-4 text-foreground/40" />
-              <span className="text-base font-semibold text-foreground/60">
-                Wallet Locked
-              </span>
-            </div>
-            <p className="text-[12px] text-foreground/40">
-              Unlock your wallet to view your balance and start trading.
-            </p>
-            <button
-              onClick={openWallet}
-              className="w-full py-2.5 rounded-xl bg-primary text-background font-semibold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-            >
-              <Unlock className="w-4 h-4" />
-              Unlock Wallet
-            </button>
-          </div>
+          <button onClick={openWallet} style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px", borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#aeaeb2", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Unlock to view balance
+          </button>
         ) : embeddedWalletState === "none" ? (
-          <div className="mt-2 space-y-3">
-            <div className="flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-foreground/40" />
-              <span className="text-base font-semibold text-foreground/60">
-                No Wallet
-              </span>
-            </div>
-            <p className="text-[12px] text-foreground/40">
-              Create or import a wallet to view your balance.
-            </p>
-            <button
-              onClick={openWallet}
-              className="w-full py-2.5 rounded-xl bg-primary text-background font-semibold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-            >
-              <Wallet className="w-4 h-4" />
-              Set Up Wallet
-            </button>
-          </div>
+          <button onClick={openWallet} style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px", borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#aeaeb2", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+            Set Up Wallet
+          </button>
         ) : (
-          <>
-            <div className="flex items-center gap-3 mt-1">
-              <div className="flex items-baseline gap-1.5 shrink-0">
-                <span className="text-5xl font-bold text-foreground tracking-tight">
-                  {effectiveBalance !== null
-                    ? effectiveBalance.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })
-                    : "0.00"}
-                </span>
-                <span className="text-base text-foreground/40 font-medium">
-                  USDT
-                </span>
-              </div>
-              {/* Balance trend sparkline — sits to the right of the
-                  number, fills the remaining card width. Replays recent
-                  completed orders backwards from effectiveBalance.
-                  Returns null when there's no trade history yet. */}
-              <div className="flex-1 min-w-0 self-stretch">
-                <BalanceSparkline
-                  currentBalance={effectiveBalance}
-                  completedOrders={completedOrders}
-                  height={56}
-                />
-              </div>
-            </div>
-
-            {/* Wallet address — truncated, tap to copy, with a QR shortcut
-                next to it that opens the deposit (receive) sheet. Pulled
-                Deposit out of the action grid so we stay at 4 buttons —
-                the address row IS the deposit affordance. */}
-            {solanaWallet?.walletAddress && (
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  onClick={async () => {
-                    await copyToClipboard(solanaWallet.walletAddress!);
-                    setAddressCopied(true);
-                    setTimeout(() => setAddressCopied(false), 1400);
-                  }}
-                  className="flex items-center gap-1.5 text-foreground/40 hover:text-foreground/70 transition-colors"
-                  aria-label="Copy wallet address"
-                >
-                  <span className="text-[11px] font-mono tabular-nums">
-                    {solanaWallet.walletAddress.slice(0, 6)}…{solanaWallet.walletAddress.slice(-4)}
-                  </span>
-                  {addressCopied ? (
-                    <Check className="w-3 h-3 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                  {solanaWallet?.solBalance !== null && solanaWallet?.solBalance !== undefined && (
-                    <span className="ml-2 text-[11px] text-foreground/30 font-mono tabular-nums">
-                      · {solanaWallet.solBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} SOL
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => setDepositOpen(true)}
-                  className="p-1 rounded-md text-foreground/40 hover:text-foreground/70 hover:bg-foreground/[0.04] transition-colors"
-                  aria-label="Show deposit QR"
-                  title="Show deposit QR"
-                >
-                  <QrCode className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-            {todayEarnings !== 0 && (
-              <div className="flex items-center gap-1 mt-2">
-                <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-[12px] text-emerald-400 font-medium">
-                  +{todayEarnings.toFixed(2)} USDT (24h)
-                </span>
-              </div>
-            )}
-
-            {/* Quick actions. Deposit is now a first-class tile so new
-                merchants can fund the wallet without spelunking into the
-                tiny QR icon next to the address. Five cells fit on a
-                320px viewport with the labels at text-[10px]. */}
-            <div className="grid grid-cols-5 gap-2 mt-4">
-              <button
-                onClick={() => setDepositOpen(true)}
-                className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-colors ${
-                  (effectiveBalance ?? 0) <= 0
-                    ? "bg-primary text-background border-primary/40 hover:bg-primary/90"
-                    : "bg-foreground/[0.05] border-foreground/[0.08] text-foreground hover:bg-foreground/[0.08]"
-                }`}
-              >
-                <ArrowDownToLine className="w-4 h-4" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">
-                  Deposit
-                </span>
-              </button>
-              <button
-                onClick={() => onStartTrade?.("buy")}
-                className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-foreground/[0.05] border border-foreground/[0.08] text-foreground hover:bg-foreground/[0.08] transition-colors"
-              >
-                <ArrowDownRight className="w-4 h-4" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">
-                  Buy
-                </span>
-              </button>
-              <button
-                onClick={() => onStartTrade?.("sell")}
-                className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-foreground/[0.05] border border-foreground/[0.08] text-foreground hover:bg-foreground/[0.08] transition-colors"
-              >
-                <ArrowUpRight className="w-4 h-4" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">
-                  Sell
-                </span>
-              </button>
-              <button
-                onClick={() => setSwapOpen(true)}
-                className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-foreground/[0.05] border border-foreground/[0.08] text-foreground hover:bg-foreground/[0.08] transition-colors"
-              >
-                <ArrowLeftRight className="w-4 h-4" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">
-                  Swap
-                </span>
-              </button>
-              <button
-                onClick={() => setSendOpen(true)}
-                className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-foreground/[0.05] border border-foreground/[0.08] text-foreground hover:bg-foreground/[0.08] transition-colors"
-              >
-                <ArrowUpFromLine className="w-4 h-4" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">
-                  Send
-                </span>
-              </button>
-            </div>
-
-            {/* Default Payment Method — compact row showing the merchant's
-                default method (type + name), with a chevron to expand the
-                rest inline and a "Manage" link that opens the full modal. */}
-            {paymentMethodsLoaded && defaultPaymentMethod && (() => {
-              const meta = PM_TYPE_META[defaultPaymentMethod.type];
-              const Icon = meta.Icon;
-              const canExpand = otherPaymentMethods.length > 0;
-              return (
-                <div className="mt-4">
-                  <button
-                    onClick={() =>
-                      canExpand
-                        ? setPaymentMethodsExpanded((v) => !v)
-                        : onOpenPaymentMethods?.()
-                    }
-                    aria-expanded={paymentMethodsExpanded}
-                    className="w-full flex items-center gap-2.5 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl px-3 py-2.5 hover:bg-foreground/[0.05] transition-colors text-left"
-                  >
-                    <div
-                      className={`shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center ${meta.cls}`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[9px] text-foreground/40 uppercase tracking-wider font-medium truncate">
-                        Default Payment · {meta.label}
-                      </p>
-                      <p className="text-[13px] font-semibold text-foreground truncate">
-                        {defaultPaymentMethod.name}
-                      </p>
-                    </div>
-                    {canExpand && (
-                      <ChevronDown
-                        className={`shrink-0 w-4 h-4 text-foreground/40 transition-transform ${
-                          paymentMethodsExpanded ? "rotate-180" : ""
-                        }`}
-                      />
-                    )}
-                  </button>
-
-                  {paymentMethodsExpanded && (
-                    <div className="mt-1.5 space-y-1.5">
-                      {otherPaymentMethods.map((pm) => {
-                        const m = PM_TYPE_META[pm.type];
-                        const I = m.Icon;
-                        return (
-                          <div
-                            key={pm.id}
-                            className="w-full flex items-center gap-2.5 bg-foreground/[0.02] border border-foreground/[0.05] rounded-xl px-3 py-2"
-                          >
-                            <div
-                              className={`shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ${m.cls}`}
-                            >
-                              <I className="w-3.5 h-3.5" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[9px] text-foreground/40 uppercase tracking-wider font-medium truncate">
-                                {m.label}
-                              </p>
-                              <p className="text-[12px] font-semibold text-foreground/80 truncate">
-                                {pm.name}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {onOpenPaymentMethods && (
-                        <button
-                          onClick={onOpenPaymentMethods}
-                          className="w-full py-2 rounded-xl border border-dashed border-foreground/[0.10] text-[11px] font-semibold text-foreground/60 hover:text-foreground hover:border-foreground/30 transition-colors"
-                        >
-                          View more
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* No payment methods yet — surface a CTA to add one */}
-            {paymentMethodsLoaded && !defaultPaymentMethod && onOpenPaymentMethods && (
-              <button
-                onClick={onOpenPaymentMethods}
-                className="mt-4 w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-foreground/[0.10] text-[11px] font-semibold text-foreground/50 hover:text-foreground hover:border-foreground/30 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add payment method
-              </button>
-            )}
-
-            {/* INR Cash + My Rate — minimal inline row, no boxes. Each
-                "pill" is just a tap target with the value inline next to
-                the label. Separated by a subtle vertical hairline.
-                Removes the heavy box-on-box stacking that the boxed
-                version was producing. */}
-            <div className="mt-4 flex items-center justify-between px-1">
-              <button
-                onClick={() => setShowInrPanel((v) => !v)}
-                aria-expanded={showInrPanel}
-                className="flex items-center gap-2 py-1.5 -m-1 px-1 rounded-md hover:bg-foreground/[0.04] transition-colors"
-              >
-                <span className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium">
-                  INR
-                </span>
-                <span className="text-sm font-semibold text-foreground tabular-nums">
-                  ₹{inrBalance.toLocaleString()}
-                </span>
-                <ChevronDown
-                  className={`w-3 h-3 text-foreground/30 transition-transform ${showInrPanel ? "rotate-180" : ""}`}
-                />
-              </button>
-
-              <span className="w-px h-4 bg-foreground/[0.06]" />
-
-              <button
-                onClick={() => setShowRatePanel((v) => !v)}
-                aria-expanded={showRatePanel}
-                className="flex items-center gap-2 py-1.5 -m-1 px-1 rounded-md hover:bg-foreground/[0.04] transition-colors"
-              >
-                <span className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium">
-                  Rate
-                </span>
-                <span className="text-sm font-semibold text-foreground tabular-nums">
-                  {savedRate !== null ? savedRate.toFixed(2) : "—"}
-                </span>
-                <ChevronDown
-                  className={`w-3 h-3 text-foreground/30 transition-transform ${showRatePanel ? "rotate-180" : ""}`}
-                />
-              </button>
-            </div>
-
-            {/* INR cash editor — appears below the paired row when its
-                pill is tapped. */}
-            <div>
-              {showInrPanel && (
-                <div className="mt-2 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 space-y-2.5">
-                  {/* Add / subtract toggle */}
-                  <div className="flex bg-foreground/[0.04] rounded-lg p-0.5">
-                    <button
-                      onClick={() => setInrInputMode("add")}
-                      className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors ${
-                        inrInputMode === "add"
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "text-foreground/40"
-                      }`}
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add
-                    </button>
-                    <button
-                      onClick={() => setInrInputMode("subtract")}
-                      className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors ${
-                        inrInputMode === "subtract"
-                          ? "bg-rose-500/15 text-rose-400"
-                          : "text-foreground/40"
-                      }`}
-                    >
-                      <Minus className="w-3 h-3" />
-                      Subtract
-                    </button>
-                  </div>
-
-                  {/* Amount input */}
-                  <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-primary/30 transition-colors">
-                    <span className="text-sm text-foreground/40 mr-1">₹</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={inrInputValue}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/[^\d.]/g, "");
-                        const parts = v.split(".");
-                        const sanitized =
-                          parts.length > 2
-                            ? `${parts[0]}.${parts.slice(1).join("")}`
-                            : v;
-                        if (sanitized === "" || sanitized === ".") {
-                          setInrInputValue(sanitized);
-                          return;
-                        }
-                        const num = parseFloat(sanitized);
-                        if (Number.isNaN(num) || num > MAX_INR_INPUT) return;
-                        setInrInputValue(sanitized);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleInrSubmit();
-                        if (e.key === "Escape") setShowInrPanel(false);
-                      }}
-                      placeholder="0"
-                      maxLength={14}
-                      className="flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-foreground/20 tabular-nums"
-                      autoFocus
-                    />
-                  </div>
-
-                  {/* Submit / cancel */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setShowInrPanel(false);
-                        setInrInputValue("");
-                      }}
-                      className="flex-1 py-2 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] font-semibold text-foreground/60 hover:bg-foreground/[0.06] transition-colors flex items-center justify-center gap-1"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleInrSubmit}
-                      disabled={
-                        !inrInputValue ||
-                        parseFloat(inrInputValue) <= 0 ||
-                        parseFloat(inrInputValue) > MAX_INR_INPUT
-                      }
-                      className="flex-1 py-2 rounded-lg bg-primary text-background text-[12px] font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center justify-center gap-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      {inrInputMode === "add" ? "Add INR Cash" : "Subtract"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* My Rate editor — the pill itself is in the paired row at
-                the top of this section; here we just render the editor
-                that opens when that pill is tapped. Same persistence
-                contract as INR cash (localStorage only for now). */}
-            <div>
-              {showRatePanel && (
-                <div className="mt-2 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 space-y-2.5">
-                  <p className="text-[11px] text-foreground/40 leading-relaxed">
-                    Set the {activeCorridorMeta.fiat} per USDT rate you want to honor. Saved locally for now — backend wiring lands in the next PR.
-                  </p>
-                  <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-primary/30 transition-colors">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.0001"
-                      value={rateInput}
-                      onChange={(e) => setRateInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveRate();
-                        if (e.key === "Escape") setShowRatePanel(false);
-                      }}
-                      placeholder={savedRate !== null ? savedRate.toFixed(2) : "99"}
-                      maxLength={10}
-                      className="flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-foreground/20 tabular-nums"
-                      autoFocus
-                    />
-                    <span className="text-[11px] text-foreground/40 ml-2">{activeCorridorMeta.fiat}/USDT</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setShowRatePanel(false);
-                        setRateInput("");
-                      }}
-                      className="flex-1 py-2 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] font-semibold text-foreground/60 flex items-center justify-center gap-1"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSaveRate}
-                      disabled={!rateInput || parseFloat(rateInput) <= 0}
-                      className="flex-1 py-2 rounded-lg bg-primary text-background text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      Save Rate
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </motion.div>
-
-      {/* ── Onboarding setup checklist — under the balance card so the
-          wallet/balances are the first thing the merchant sees, with
-          progressive setup right below as the next call-to-action.
-          Self-hides via internal conditions (status null / all-done /
-          skipped). ── */}
-      <OnboardingSetupCard onOpenSettings={openWallet} />
-
-      {/* Quick Trade card removed — the floating + FAB at the bottom-right
-          opens the full trade modal. */}
-
-      {/* ── Recent Activity ── (formerly "Active Market" — the label was
-          misleading because this section shows the merchant's own recent
-          orders, not the marketplace feed.) */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="space-y-3"
-      >
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-primary" />
-            <span className="text-sm font-semibold text-foreground">
-              Recent Activity
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+            <span style={{ fontSize: 64, lineHeight: 0.92, fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", color: "#f5f5f7" }}>
+              {displayBalance.toFixed(2)}
             </span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: "#86868b" }}>USDT</span>
           </div>
-          {/* Three tabs — All / Trades / TX. The "All" link button next
-              to the tab strip was removed so the strip's width is stable
-              when switching tabs (no layout shift). */}
-          <div className="flex items-center bg-foreground/[0.04] rounded-lg p-0.5">
-            {(["all", "trades", "tx"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setActivityTab(t)}
-                className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors ${
-                  activityTab === t
-                    ? "bg-foreground/[0.08] text-foreground"
-                    : "text-foreground/40"
-                }`}
-              >
-                {t === "all" ? "All" : t === "trades" ? "Trades" : "TX"}
-              </button>
-            ))}
+        )}
+
+        {/* Market switch pill */}
+        <button
+          onClick={() => setCorridorPickerOpen(true)}
+          style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 9, padding: "8px 14px", borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", cursor: "pointer", backdropFilter: "blur(20px)" }}>
+          <span style={{ fontSize: 14 }}>{activeCorridorMeta.flag}</span>
+          <span style={{ fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}>USDT / {activeCorridorMeta.fiat}</span>
+          {liveRate && <>
+            <span style={{ width: 1, height: 13, background: "rgba(255,255,255,0.16)", flexShrink: 0 }} />
+            <span style={{ fontWeight: 800, fontSize: 13.5, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {formatFiat(liveRate, activeCorridorMeta.fiat).replace(/\.00$/, '')}
+            </span>
+          </>}
+          <span style={{ color: "#86868b", display: "flex" }}>
+            <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
+          </span>
+        </button>
+      </div>
+
+      {/* ── BUY / SELL ── */}
+      {embeddedWalletState !== "locked" && embeddedWalletState !== "none" && (
+        <div className="z2rise" style={{ display: "flex", gap: 12, position: "relative", zIndex: 1, animationDelay: "200ms" }}>
+          {/* Buy — blocked, priority feature coming soon */}
+          <div style={{ flex: 1, padding: 16, borderRadius: 18, background: "#f5f5f7", color: "#0b0b0c", textAlign: "left", opacity: 0.45, position: "relative", overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M17 7 7 17"/></svg>
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(0,0,0,0.12)", borderRadius: 6, padding: "2px 6px" }}>Soon</span>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 16 }}>Buy</div>
+            <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.55 }}>Acquire USDT</div>
+          </div>
+          {/* Sell — blocked, priority feature coming soon */}
+          <div style={{ flex: 1, padding: 16, borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.16)", color: "#f5f5f7", textAlign: "left", backdropFilter: "blur(20px)", opacity: 0.45, position: "relative", overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#aeaeb2" }}>
+              <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 17H7V7M7 17 17 7"/></svg>
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(255,255,255,0.10)", borderRadius: 6, padding: "2px 6px", color: "#86868b" }}>Soon</span>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 16 }}>Sell</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#86868b" }}>Offload USDT</div>
           </div>
         </div>
+      )}
 
-        {/* ── Unified activity list ──
-            ONE container, ONE map. The items array is derived from the
-            active tab — when the user toggles tabs the container stays
-            mounted, only its children change. No layout shift, no
-            transitional "Loading…" when re-entering a tab whose data
-            is already cached. ── */}
-        {(() => {
-          type Item =
-            | { kind: "trade"; key: string; ts: number; data: typeof recentOrders[number] }
-            | { kind: "swap"; key: string; ts: number; data: SwapRecord }
-            | { kind: "deposit"; key: string; ts: number; data: DepositRecord }
-            | { kind: "tx"; key: string; ts: number; data: OnChainTx };
-          const items: Item[] = [];
+      {/* ── QUICK ACTIONS ── */}
+      {embeddedWalletState !== "locked" && embeddedWalletState !== "none" && (
+        <div className="z2rise" style={{ display: "flex", gap: 10, position: "relative", zIndex: 1, animationDelay: "280ms" }}>
+          {([
+            { label: "Deposit", action: () => setDepositOpen(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg> },
+            { label: "Swap", action: () => setSwapOpen(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg> },
+            { label: "Send", action: () => setSendOpen(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V8m0 0-4 4m4-4 4 4M5 4h14"/></svg> },
+          ] as const).map(({ label, action, icon }) => (
+            <button
+              key={label} onClick={action}
+              style={{ flex: 1, padding: "14px 0", borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#aeaeb2", display: "flex", flexDirection: "column", alignItems: "center", gap: 7, cursor: "pointer", backdropFilter: "blur(20px)", transition: "transform 0.14s" }}
+              onPointerDown={(e) => (e.currentTarget.style.transform = "scale(0.96)")}
+              onPointerUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+              onPointerLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            >
+              {icon}
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: "#86868b" }}>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
-          // Swaps live alongside trades — they're a first-class merchant
-          // activity (SOL↔USDT through Jupiter), not just a raw on-chain
-          // signature. Surface them under both "trades" and "all" so a
-          // merchant who flips the tab away from raw TX still sees them.
-          // The swapHistoryTick value below is read so the closure
-          // re-evaluates whenever a new swap completes.
-          void swapHistoryTick;
-          const swaps = loadSwaps(merchantIdForWallet);
-          if (activityTab === "trades" || activityTab === "all") {
-            for (const s of swaps) {
-              items.push({
-                kind: "swap",
-                key: `s-${s.signature}`,
-                ts: s.blockTime ?? 0,
-                data: s,
-              });
-            }
-          }
+      {/* ── RECENT ACTIVITY ── */}
+      <div className="z2rise" style={{ position: "relative", zIndex: 1, animationDelay: "380ms" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
+          <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.01em", color: "#f5f5f7" }}>Recent activity</span>
+          <button
+            onClick={() => setMobileView("history")}
+            style={{ display: "flex", alignItems: "center", gap: 3, color: "#86868b", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", background: "none", border: "none", cursor: "pointer" }}>
+            See all
+            <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
+        </div>
 
-          // Cross-chain deposits (LI.FI). Same surfacing rules as swaps —
-          // they're a first-class wallet activity that lands on Solana
-          // out-of-band of the order pipeline. Reading the tick keeps the
-          // closure reactive when a new deposit completes.
-          void depositHistoryTick;
-          const deposits = loadDeposits(merchantIdForWallet);
-          if (activityTab === "trades" || activityTab === "all") {
-            for (const d of deposits) {
-              items.push({
-                kind: "deposit",
-                key: `d-${d.destSignature}`,
-                ts: d.blockTime ?? 0,
-                data: d,
-              });
-            }
-          }
-
-          if (activityTab === "trades" || activityTab === "all") {
-            for (const o of recentOrders) {
-              const dt = (o.dbOrder as { created_at?: string } | undefined)?.created_at;
-              items.push({
-                kind: "trade",
-                key: `t-${o.id}`,
-                ts: dt ? new Date(dt).getTime() / 1000 : Date.now() / 1000,
-                data: o,
-              });
-            }
-          }
-          if (activityTab === "tx" || activityTab === "all") {
-            for (const t of (onchainTxs ?? []).slice(0, TX_LIMIT)) {
-              items.push({
-                kind: "tx",
-                key: `x-${t.signature}`,
-                ts: t.blockTime ?? 0,
-                data: t,
-              });
-            }
-          }
-          // Always sort newest-first so a fresh swap appears at the top
-          // regardless of which tab is active.
-          items.sort((a, b) => b.ts - a.ts);
-
-          // Loading is only shown if we're on a TX-needing tab AND haven't
-          // resolved the fetch yet — Trades tab never blocks for RPC.
-          const txFetchActive =
-            (activityTab === "tx" || activityTab === "all") && onchainTxsLoading && !onchainTxs;
-
+        {/* New order highlight — shows first pending order */}
+        {pendingOrders.length > 0 && (() => {
+          const o = pendingOrders[0];
+          const fiatCur = (o as any).toCurrency || activeCorridorMeta.fiat;
+          const fiatTotal = formatFiat(Math.round((o as any).total ?? 0), fiatCur).replace(/\.00$/, '');
+          const cryptoAmt = Math.round((o as any).amount ?? 0);
+          const earningFiat = ((o as any).amount ?? 0) * ((o as any).protocolFeePercent ?? 0.5) / 100 * ((o as any).rate || 1);
+          const earnLabel = earningFiat > 0 ? `+${formatFiat(earningFiat, fiatCur).replace(/\.?0+$/, '')}` : null;
           return (
-            <div className="space-y-2">
-              {txFetchActive ? (
-                <div className="bg-foreground/[0.03] border border-foreground/[0.06] rounded-2xl p-6 text-center">
-                  <p className="text-sm text-foreground/30">Loading transactions…</p>
-                </div>
-              ) : items.length === 0 ? (
-                <div className="bg-foreground/[0.03] border border-foreground/[0.06] rounded-2xl p-8 text-center">
-                  <Clock className="w-8 h-8 text-foreground/15 mx-auto mb-2" />
-                  <p className="text-sm text-foreground/30">
-                    {activityTab === "tx" ? "No on-chain transactions" : "No recent activity"}
-                  </p>
-                  {activityTab !== "tx" && (
-                    <p className="text-[11px] text-foreground/20 mt-1">
-                      Your trades will appear here
-                    </p>
-                  )}
-                </div>
-              ) : (
-                items.map((item) => {
-                  if (item.kind === "trade") {
-                    const order = item.data;
-                    const isBuy =
-                      order.orderType === "buy" || order.dbOrder?.type === "buy";
-                    const status = order.dbOrder?.status || order.status;
-                    const statusLabel =
-                      status === "completed"
-                        ? "COMPLETED"
-                        : status === "cancelled"
-                          ? "CANCELLED"
-                          : status === "escrowed" || status === "escrow"
-                            ? "IN PROGRESS"
-                            : status === "payment_sent"
-                              ? "PAYMENT SENT"
-                              : "PENDING";
-                    const statusColor =
-                      status === "completed"
-                        ? "text-emerald-400"
-                        : status === "cancelled"
-                          ? "text-red-400"
-                          : "text-primary";
-                    return (
-                      <button
-                        key={item.key}
-                        onClick={() => {
-                          if (status === "completed" || status === "cancelled") {
-                            setMobileView("history");
-                          } else if (status === "pending") {
-                            setMobileView("orders");
-                          } else {
-                            setMobileView("escrow");
-                          }
-                        }}
-                        className="w-full flex items-center gap-3 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 hover:bg-foreground/[0.05] transition-colors text-left"
-                      >
-                        <div
-                          className="relative shrink-0"
-                          aria-label={isBuy ? "Buy" : "Sell"}
-                        >
-                          <UserAvatar
-                            src={
-                              ((order.dbOrder?.user as { avatar_url?: string } | undefined)?.avatar_url) ||
-                              (order as { user_avatar?: string }).user_avatar ||
-                              null
-                            }
-                            seed={order.user || "Unknown"}
-                            size={40}
-                            className="border border-foreground/[0.08]"
-                          />
-                          {/* Direction badge tucked into the corner so the
-                              row still reads buy/sell at a glance without
-                              losing the user identity to a plain icon. */}
-                          <span
-                            className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-2 border-background ${
-                              isBuy
-                                ? "bg-emerald-500/90 text-white"
-                                : "bg-primary/90 text-background"
-                            }`}
-                          >
-                            {isBuy ? (
-                              <ArrowDownLeft className="w-3 h-3" strokeWidth={3} />
-                            ) : (
-                              <ArrowUpRight className="w-3 h-3" strokeWidth={3} />
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            {order.user}
-                          </p>
-                          {/* Sub-label: BUY / SELL side instead of the order
-                              number, which read like a personal "BM" code
-                              and confused merchants. Direction label here is
-                              redundant with the corner badge but the wording
-                              makes the row scannable without colour cues. */}
-                          <p className="text-[11px] text-foreground/40 font-semibold uppercase tracking-wide">
-                            {isBuy ? "Buy" : "Sell"}
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-foreground">
-                            {order.amount} USDT
-                          </p>
-                          <p className={`text-[10px] font-medium ${statusColor}`}>
-                            {statusLabel}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  }
-
-                  // Swap row — Jupiter SOL↔USDT (and friends). Tap
-                  // opens the explorer for the signature; rendering
-                  // mirrors the on-chain TX row for visual consistency
-                  // but the label is the swap pair so it's obvious at
-                  // a glance.
-                  if (item.kind === "swap") {
-                    const s = item.data;
-                    const ageSec = s.blockTime
-                      ? Math.max(0, Math.floor(Date.now() / 1000 - s.blockTime))
-                      : null;
-                    const ageLabel = !ageSec
-                      ? "—"
-                      : ageSec < 60
-                        ? `${ageSec}s`
-                        : ageSec < 3600
-                          ? `${Math.floor(ageSec / 60)}m`
-                          : ageSec < 86400
-                            ? `${Math.floor(ageSec / 3600)}h`
-                            : `${Math.floor(ageSec / 86400)}d`;
-                    return (
-                      <a
-                        key={item.key}
-                        href={`${explorerBaseUrl.includes("?") ? explorerBaseUrl.replace("/?", `/tx/${s.signature}?`) : `${explorerBaseUrl}/tx/${s.signature}`}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full flex items-center gap-3 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 hover:bg-foreground/[0.05] transition-colors"
-                      >
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center bg-foreground/[0.06] text-foreground/70 shrink-0"
-                          aria-label="Swap"
-                        >
-                          <ArrowLeftRight className="w-5 h-5" strokeWidth={2.5} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            Swap {s.inputSymbol} → {s.outputSymbol}
-                          </p>
-                          <p className="text-[11px] text-foreground/40 tabular-nums">
-                            {s.inputAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {s.inputSymbol}
-                            {" → "}
-                            {s.outputAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {s.outputSymbol}
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-foreground tabular-nums">
-                            {s.outputAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {s.outputSymbol}
-                          </p>
-                          <p className="text-[10px] text-foreground/40">
-                            {ageLabel} ago
-                          </p>
-                        </div>
-                      </a>
-                    );
-                  }
-
-                  // Deposit row — cross-chain USDT bridged via LI.FI.
-                  // Tap opens the Solana destination tx in the explorer
-                  // (the source-chain hash lives in the record for future
-                  // "view source" links). Visual treatment mirrors the
-                  // swap row so the activity feed stays scannable.
-                  if (item.kind === "deposit") {
-                    const d = item.data;
-                    const ageSec = d.blockTime
-                      ? Math.max(0, Math.floor(Date.now() / 1000 - d.blockTime))
-                      : null;
-                    const ageLabel = !ageSec
-                      ? "—"
-                      : ageSec < 60
-                        ? `${ageSec}s`
-                        : ageSec < 3600
-                          ? `${Math.floor(ageSec / 60)}m`
-                          : ageSec < 86400
-                            ? `${Math.floor(ageSec / 3600)}h`
-                            : `${Math.floor(ageSec / 86400)}d`;
-                    return (
-                      <a
-                        key={item.key}
-                        href={`${explorerBaseUrl.includes("?") ? explorerBaseUrl.replace("/?", `/tx/${d.destSignature}?`) : `${explorerBaseUrl}/tx/${d.destSignature}`}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full flex items-center gap-3 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 hover:bg-foreground/[0.05] transition-colors"
-                      >
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-500/15 text-emerald-400 shrink-0"
-                          aria-label="Deposit"
-                        >
-                          <ArrowDownLeft className="w-5 h-5" strokeWidth={2.5} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            Deposit from {d.sourceChain}
-                          </p>
-                          <p className="text-[11px] text-foreground/40 tabular-nums">
-                            +{d.amountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-emerald-400 tabular-nums">
-                            +{d.amountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                          </p>
-                          <p className="text-[10px] text-foreground/40">
-                            {ageLabel} ago
-                          </p>
-                        </div>
-                      </a>
-                    );
-                  }
-
-                  // tx row
-                  const tx = item.data;
-                  const success = !tx.err;
-                  const ageSec = tx.blockTime
-                    ? Math.max(0, Math.floor(Date.now() / 1000 - tx.blockTime))
-                    : null;
-                  const ageLabel = !ageSec
-                    ? "—"
-                    : ageSec < 60
-                      ? `${ageSec}s`
-                      : ageSec < 3600
-                        ? `${Math.floor(ageSec / 60)}m`
-                        : ageSec < 86400
-                          ? `${Math.floor(ageSec / 3600)}h`
-                          : `${Math.floor(ageSec / 86400)}d`;
-                  return (
-                    <a
-                      key={item.key}
-                      href={`${explorerBaseUrl.includes("?") ? explorerBaseUrl.replace("/?", `/tx/${tx.signature}?`) : `${explorerBaseUrl}/tx/${tx.signature}`}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center gap-3 bg-foreground/[0.03] border border-foreground/[0.06] rounded-xl p-3 hover:bg-foreground/[0.05] transition-colors"
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${success ? "bg-emerald-400" : "bg-rose-400"}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-mono text-foreground/80 truncate">
-                          {tx.signature.slice(0, 8)}…{tx.signature.slice(-8)}
-                        </p>
-                        <p className="text-[10px] text-foreground/40">
-                          Slot {tx.slot.toLocaleString()} · {ageLabel} ago
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-medium text-foreground/30 shrink-0">
-                        {success ? "OK" : "FAIL"} ↗
-                      </span>
-                    </a>
-                  );
-                })
-              )}
-              {onchainTxsError && (activityTab === "tx" || activityTab === "all") && (
-                <p className="text-[10px] text-rose-400/70 text-center">
-                  {onchainTxsError}
-                </p>
-              )}
-            </div>
+            <button
+              onClick={() => setMobileView("orders")}
+              style={{ width: "100%", textAlign: "left", padding: 13, borderRadius: 18, display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(184,233,212,0.28)", backdropFilter: "blur(20px)", cursor: "pointer", marginBottom: 10, boxSizing: "border-box", transition: "transform 0.14s" }}
+              onPointerDown={(e) => (e.currentTarget.style.transform = "scale(0.98)")}
+              onPointerUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+              onPointerLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            >
+              <span style={{ width: 40, height: 40, borderRadius: 13, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(184,233,212,0.12)", color: "#b8e9d4" }}>
+                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M17 7 7 17"/></svg>
+              </span>
+              <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span className="z2tick" />
+                  <span style={{ fontWeight: 800, fontSize: 14, color: "#fff", whiteSpace: "nowrap" }}>New order</span>
+                </span>
+                <span style={{ display: "block", color: "#aeaeb2", fontSize: 12.5, fontWeight: 600, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {cryptoAmt} USDT → {fiatTotal}
+                  {earnLabel && <> · earn <b style={{ color: "#b8e9d4" }}>{earnLabel}</b></>}
+                </span>
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                <span style={{ color: "#5a5a60", fontSize: 11, fontWeight: 700 }}>now</span>
+                <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="#aeaeb2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+              </span>
+            </button>
           );
         })()}
-      </motion.div>
 
-      {/* Delete / Export / Backup / Init-fees flows moved into the
-          shared <WalletActionsMenu /> component rendered above next to
-          the balance card. Deleted blocks removed below. */}
+        {/* Events list */}
+        {recentOrders.length > 0 ? (
+          <div style={{ borderRadius: 20, overflow: "hidden", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", backdropFilter: "blur(20px)" }}>
+            {recentOrders.map((order, idx) => {
+              const isBuy = order.orderType === "buy" || order.dbOrder?.type === "buy";
+              const status = order.dbOrder?.status || order.status;
+              const statusLabel = status === "completed" ? "Completed" : status === "cancelled" ? "Cancelled" : status === "escrowed" || status === "escrow" ? "In Progress" : status === "payment_sent" ? "Pmt Sent" : "Pending";
+              const statusColor = status === "completed" ? "#22e29a" : status === "cancelled" ? "#ff4d4f" : "#b8e9d4";
+              const fiatCur = (order as any).toCurrency || activeCorridorMeta.fiat;
+              const dt = (order.dbOrder as { created_at?: string } | undefined)?.created_at;
+              const ageSec = dt ? Math.floor((Date.now() - new Date(dt).getTime()) / 1000) : null;
+              const ageLabel = !ageSec ? "" : ageSec < 60 ? `${ageSec}s` : ageSec < 3600 ? `${Math.floor(ageSec / 60)}m` : ageSec < 86400 ? `${Math.floor(ageSec / 3600)}h` : `${Math.floor(ageSec / 86400)}d`;
+              return (
+                <button
+                  key={order.id}
+                  onClick={() => { if (status === "completed" || status === "cancelled") setMobileView("history"); else if (status === "pending") setMobileView("orders"); else setMobileView("escrow"); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", borderTop: idx === 0 ? "none" : "1px solid rgba(255,255,255,0.09)", boxSizing: "border-box" }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ width: 36, height: 36, borderRadius: 11, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", color: "#aeaeb2" }}>
+                      {isBuy
+                        ? <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M17 7 7 17"/></svg>
+                        : <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 17H7V7M7 17 17 7"/></svg>}
+                    </span>
+                    <span style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
+                      <span style={{ fontWeight: 700, fontSize: 13.5, color: "#f5f5f7" }}>{isBuy ? "Buy" : "Sell"} · {order.user || "Open Order"}</span>
+                      <span style={{ color: statusColor, fontSize: 11.5, fontWeight: 600, marginTop: 2 }}>{statusLabel}</span>
+                    </span>
+                  </span>
+                  <span style={{ textAlign: "right" }}>
+                    <div style={{ fontVariantNumeric: "tabular-nums", fontSize: 13.5, fontWeight: 700, color: "#f5f5f7", whiteSpace: "nowrap" }}>{(order as any).amount} USDT</div>
+                    <div style={{ color: "#5a5a60", fontSize: 11, fontWeight: 600, marginTop: 2 }}>{ageLabel}</div>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : pendingOrders.length === 0 ? (
+          <div style={{ borderRadius: 20, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", padding: "24px 16px", textAlign: "center" }}>
+            <p style={{ color: "#5a5a60", fontSize: 13, margin: 0 }}>No recent activity</p>
+            <button onClick={() => onStartTrade?.("buy")} style={{ marginTop: 10, padding: "8px 18px", borderRadius: 12, border: "1px dashed rgba(255,255,255,0.12)", background: "none", color: "#86868b", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Post your first trade</button>
+          </div>
+        ) : null}
+      </div>
 
-      {/* Init-fee-accounts toast moved into <WalletActionsMenu />. */}
+      {/* ── Onboarding ── */}
+      <OnboardingSetupCard onOpenSettings={openWallet} />
+
+      {/* ── Activity feed (advanced — TX / Swaps / Deposits) ── */}
+      {(onchainTxs !== null || swapHistoryTick >= 0) && (() => {
+        type Item =
+          | { kind: "swap"; key: string; ts: number; data: ReturnType<typeof loadSwaps>[number] }
+          | { kind: "deposit"; key: string; ts: number; data: ReturnType<typeof loadDeposits>[number] }
+          | { kind: "tx"; key: string; ts: number; data: OnChainTx };
+        const items: Item[] = [];
+        void swapHistoryTick;
+        const swaps = loadSwaps(merchantIdForWallet);
+        for (const s of swaps) items.push({ kind: "swap", key: `s-${s.signature}`, ts: s.blockTime ?? 0, data: s });
+        void depositHistoryTick;
+        const deposits = loadDeposits(merchantIdForWallet);
+        for (const d of deposits) items.push({ kind: "deposit", key: `d-${d.destSignature}`, ts: d.blockTime ?? 0, data: d });
+        for (const t of (onchainTxs ?? []).slice(0, TX_LIMIT)) items.push({ kind: "tx", key: `x-${t.signature}`, ts: t.blockTime ?? 0, data: t });
+        items.sort((a, b) => b.ts - a.ts);
+        if (items.length === 0) return null;
+        return (
+          <div style={{ borderRadius: 20, overflow: "hidden", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", backdropFilter: "blur(20px)" }}>
+            {items.map((item, idx) => {
+              const ageSec = Math.max(0, Math.floor(Date.now() / 1000 - item.ts));
+              const ageLabel = ageSec < 60 ? `${ageSec}s` : ageSec < 3600 ? `${Math.floor(ageSec / 60)}m` : ageSec < 86400 ? `${Math.floor(ageSec / 3600)}h` : `${Math.floor(ageSec / 86400)}d`;
+              const borderTop = idx > 0 ? "1px solid rgba(255,255,255,0.09)" : "none";
+              if (item.kind === "swap") {
+                const s = item.data;
+                return (
+                  <a key={item.key} href={`${explorerBaseUrl}/tx/${s.signature}`} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderTop, textDecoration: "none" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ width: 36, height: 36, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", color: "#aeaeb2", flexShrink: 0 }}>
+                        <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
+                      </span>
+                      <span style={{ display: "flex", flexDirection: "column" }}>
+                        <span style={{ fontWeight: 700, fontSize: 13.5, color: "#f5f5f7" }}>Swap {s.inputSymbol} → {s.outputSymbol}</span>
+                        <span style={{ color: "#86868b", fontSize: 11.5, fontWeight: 600, marginTop: 2 }}>{s.inputAmount.toFixed(2)} {s.inputSymbol}</span>
+                      </span>
+                    </span>
+                    <span style={{ textAlign: "right" }}>
+                      <div style={{ fontVariantNumeric: "tabular-nums", fontSize: 13.5, fontWeight: 700, color: "#f5f5f7", whiteSpace: "nowrap" }}>+{s.outputAmount.toFixed(2)} {s.outputSymbol}</div>
+                      <div style={{ color: "#5a5a60", fontSize: 11, fontWeight: 600, marginTop: 2 }}>{ageLabel}</div>
+                    </span>
+                  </a>
+                );
+              }
+              if (item.kind === "deposit") {
+                const d = item.data;
+                return (
+                  <a key={item.key} href={`${explorerBaseUrl}/tx/${d.destSignature}`} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderTop, textDecoration: "none" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ width: 36, height: 36, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(34,226,154,0.1)", color: "#22e29a", flexShrink: 0 }}>
+                        <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
+                      </span>
+                      <span style={{ display: "flex", flexDirection: "column" }}>
+                        <span style={{ fontWeight: 700, fontSize: 13.5, color: "#f5f5f7" }}>Deposit · {d.sourceChain}</span>
+                        <span style={{ color: "#86868b", fontSize: 11.5, fontWeight: 600, marginTop: 2 }}>Bank</span>
+                      </span>
+                    </span>
+                    <span style={{ textAlign: "right" }}>
+                      <div style={{ fontVariantNumeric: "tabular-nums", fontSize: 13.5, fontWeight: 700, color: "#22e29a", whiteSpace: "nowrap" }}>+{d.amountUsdt.toFixed(2)} USDT</div>
+                      <div style={{ color: "#5a5a60", fontSize: 11, fontWeight: 600, marginTop: 2 }}>{ageLabel}</div>
+                    </span>
+                  </a>
+                );
+              }
+              const tx = item.data;
+              return (
+                <a key={item.key} href={`${explorerBaseUrl}/tx/${tx.signature}`} target="_blank" rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderTop, textDecoration: "none" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: !tx.err ? "#22e29a" : "#ff4d4f", flexShrink: 0, marginLeft: 14 }} />
+                    <span style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontWeight: 700, fontSize: 12, fontFamily: "monospace", color: "#f5f5f7" }}>{tx.signature.slice(0, 8)}…{tx.signature.slice(-6)}</span>
+                      <span style={{ color: "#86868b", fontSize: 11.5, fontWeight: 600, marginTop: 2 }}>Slot {tx.slot.toLocaleString()}</span>
+                    </span>
+                  </span>
+                  <span style={{ color: "#5a5a60", fontSize: 11, fontWeight: 600 }}>{ageLabel}</span>
+                </a>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* ── INR / Rate panels (utility, toggled by payment method header icon) ── */}
+      {showInrPanel && (
+        <div className="rounded-2xl border border-foreground/[0.08] bg-foreground/[0.03] px-4 py-4 space-y-3">
+          <div className="flex bg-foreground/[0.04] rounded-lg p-0.5">
+            <button onClick={() => setInrInputMode("add")} className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors ${inrInputMode === "add" ? "bg-foreground/[0.08] text-foreground/80" : "text-foreground/40"}`}><Plus className="w-3 h-3" />Add</button>
+            <button onClick={() => setInrInputMode("subtract")} className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors ${inrInputMode === "subtract" ? "bg-foreground/[0.08] text-foreground/80" : "text-foreground/40"}`}><Minus className="w-3 h-3" />Subtract</button>
+          </div>
+          <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-primary/30 transition-colors">
+            <span className="text-sm text-foreground/40 mr-1">₹</span>
+            <input type="text" inputMode="decimal" value={inrInputValue}
+              onChange={(e) => { const v = e.target.value.replace(/[^\d.]/g, ""); const parts = v.split("."); const sanitized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : v; if (sanitized === "" || sanitized === ".") { setInrInputValue(sanitized); return; } const num = parseFloat(sanitized); if (Number.isNaN(num) || num > MAX_INR_INPUT) return; setInrInputValue(sanitized); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleInrSubmit(); if (e.key === "Escape") setShowInrPanel(false); }}
+              placeholder="0" maxLength={14} className="flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-foreground/20 tabular-nums" autoFocus />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => { setShowInrPanel(false); setInrInputValue(""); }} className="flex-1 py-2 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] font-semibold text-foreground/60 flex items-center justify-center gap-1"><X className="w-3.5 h-3.5" />Cancel</button>
+            <button onClick={handleInrSubmit} disabled={!inrInputValue || parseFloat(inrInputValue) <= 0 || parseFloat(inrInputValue) > MAX_INR_INPUT} className="flex-1 py-2 rounded-lg bg-primary text-background text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"><Check className="w-3.5 h-3.5" />{inrInputMode === "add" ? "Add INR Cash" : "Subtract"}</button>
+          </div>
+        </div>
+      )}
+      {showRatePanel && (
+        <div className="rounded-2xl border border-foreground/[0.08] bg-foreground/[0.03] px-4 py-4 space-y-3">
+          <p className="text-[11px] text-foreground/30 leading-relaxed">Set your {activeCorridorMeta.fiat}/USDT rate. Saved locally for now.</p>
+          <div className="flex items-center bg-foreground/[0.04] border border-foreground/[0.08] rounded-lg px-3 py-2 focus-within:border-primary/30 transition-colors">
+            <input type="number" inputMode="decimal" step="0.0001" value={rateInput}
+              onChange={(e) => setRateInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSaveRate(); if (e.key === "Escape") setShowRatePanel(false); }}
+              placeholder={savedRate !== null ? savedRate.toFixed(2) : "99"} maxLength={10}
+              className="flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-foreground/20 tabular-nums" autoFocus />
+            <span className="text-[11px] text-foreground/40 ml-2">{activeCorridorMeta.fiat}/USDT</span>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => { setShowRatePanel(false); setRateInput(""); }} className="flex-1 py-2 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] font-semibold text-foreground/60 flex items-center justify-center gap-1"><X className="w-3.5 h-3.5" />Cancel</button>
+            <button onClick={handleSaveRate} disabled={!rateInput || parseFloat(rateInput) <= 0} className="flex-1 py-2 rounded-lg bg-primary text-background text-[12px] font-semibold disabled:opacity-40 flex items-center justify-center gap-1"><Check className="w-3.5 h-3.5" />Save Rate</button>
+          </div>
+        </div>
+      )}
+
 
       {/* ── Swap modal — Jupiter v6, real on-chain swap, live rates ── */}
       <SwapModal
