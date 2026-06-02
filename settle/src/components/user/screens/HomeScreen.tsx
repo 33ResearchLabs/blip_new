@@ -866,7 +866,19 @@ export const HomeScreen = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <ReputationCoinBadge variant="pill" hideRep />
+              {/* Best-rates promo pill — replaces the coins badge */}
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                style={{
+                  background: 'rgba(255,176,46,0.14)',
+                  border: '1px solid rgba(255,176,46,0.32)',
+                }}
+              >
+                <ShieldCheck size={11} strokeWidth={2.4} style={{ color: '#ffb02e', flexShrink: 0 }} />
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#ffb02e', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+                  Best rates
+                </span>
+              </div>
               {/* Bug / Report Issue button — hidden
               <motion.button
                 whileTap={{ scale: 0.88 }}

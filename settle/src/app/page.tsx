@@ -2,7 +2,8 @@
 
 import "@/components/user/styles/user-theme.css";
 import { LandingPage } from "@/components/user/LandingPage";
-import { MarketingLanding } from "@/components/marketing/MarketingLanding";
+import { AppLaunchPage } from "@/components/AppLaunchPage";
+import { UserOnboardingFlow } from "@/components/user/UserOnboardingFlow";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 // TransactionProgress removed — simple loading on buttons instead
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
@@ -256,6 +257,17 @@ export default function Home() {
       ),
     };
   }, [rawToast, addNotification]);
+
+  // Onboarding flow — shown once to new mobile users before the auth form.
+  // Stored in localStorage so it only appears on the first visit.
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const seen = localStorage.getItem("blip_onb_seen");
+    const params = new URLSearchParams(window.location.search);
+    const skipWelcome = params.get("welcome") === "skip";
+    // Don't show onboarding if user is returning via ?welcome=skip or has seen it
+    return !seen && !skipWelcome;
+  });
 
   const [screen, setScreenRaw] = useState<Screen>("welcome");
   const [previousScreen, setPreviousScreen] = useState<Screen>("welcome");
@@ -603,6 +615,16 @@ export default function Home() {
           }}
         />
       )}
+      {/* New-user mobile onboarding flow — shown once before the auth form */}
+      {showOnboarding && (
+        <UserOnboardingFlow
+          onComplete={() => {
+            try { localStorage.setItem("blip_onb_seen", "1"); } catch { /* ignore */ }
+            setShowOnboarding(false);
+          }}
+        />
+      )}
+
       {/* TransactionProgress removed — simple loading on buttons instead */}
       {/* Crossfade host: relative + flex-1 so absolute-positioned <Panel>s
           stack on top of each other during transitions. Dropping mode="wait"
@@ -628,7 +650,7 @@ export default function Home() {
             // chooser) which routes them back here with ?welcome=skip
             // for the actual auth form.
             if (!skipWelcome) {
-              return <MarketingLanding />;
+              return <AppLaunchPage />;
             }
             return (
               <LandingPage
