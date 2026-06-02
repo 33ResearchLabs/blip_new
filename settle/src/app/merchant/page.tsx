@@ -854,6 +854,7 @@ export default function MerchantDashboard() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-white/[0.01] rounded-full blur-[200px]" />
         </div>
 
+        <div className={mobileView === "home" ? "hidden lg:block" : ""}>
         <MerchantNavbar
           activePage="dashboard"
           merchantInfo={merchantInfo}
@@ -896,7 +897,7 @@ export default function MerchantDashboard() {
             </>
           }
         />
-
+        </div>
 
         <MerchantDesktopLayout
           isWideScreen={isWideScreen}
@@ -1099,6 +1100,9 @@ export default function MerchantDashboard() {
           onCorridorChange={setActiveCorridor}
           totalUnread={totalUnread}
           onOpenPaymentMethods={() => setShowPaymentMethods(true)}
+          onOpenNotifications={() => setShowNotifications(!showNotifications)}
+          onOpenProfile={() => setShowProfileModal(true)}
+          notificationCount={notifications.filter((n) => !n.read).length}
           onRefresh={async () => {
             // Broad refetch — covers data for every mobile tab in parallel.
             // Spinner stays up until the slowest request resolves.

@@ -88,6 +88,9 @@ interface MobileHomeViewProps {
   // Opens the full PaymentMethodModal (same one the desktop uses).
   // When omitted, the "Manage" link inside the default-payment card is hidden.
   onOpenPaymentMethods?: () => void;
+  onOpenNotifications?: () => void;
+  onOpenProfile?: () => void;
+  notificationCount?: number;
 }
 
 type MerchantPaymentMethod = {
@@ -127,6 +130,9 @@ export function MobileHomeView({
   onCorridorChange,
   onStartTrade,
   onOpenPaymentMethods,
+  onOpenNotifications,
+  onOpenProfile,
+  notificationCount = 0,
 }: MobileHomeViewProps) {
   const openWallet = onOpenWallet ?? onShowWalletModal;
 
@@ -519,13 +525,22 @@ export function MobileHomeView({
               <span style={{ position: "absolute", top: 6, right: 6, width: 9, height: 9, borderRadius: 9, background: "#7b54e0", boxShadow: "0 0 0 2px #08080a" }} />
             )}
           </button>
-          <button style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
+          <button
+            onClick={() => onOpenNotifications?.()}
+            style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer", position: "relative" }}>
             <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            {notificationCount > 0 && (
+              <span style={{ position: "absolute", top: 5, right: 5, minWidth: 18, height: 18, borderRadius: 99, background: "#b8e9d4", color: "#08221a", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxShadow: "0 0 0 2px #08080a" }}>
+                {notificationCount > 9 ? "9+" : notificationCount}
+              </span>
+            )}
           </button>
-          <div style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", overflow: "hidden" }}>
+          <div
+            onClick={() => onOpenProfile?.()}
+            style={{ width: 42, height: 42, borderRadius: 999, border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden", background: merchantInfo?.avatar_url && /^https?:|^\//.test(merchantInfo.avatar_url) ? "transparent" : "linear-gradient(150deg,#ff8a3d,#ff5d73)" }}>
             {merchantInfo?.avatar_url && /^https?:|^\//.test(merchantInfo.avatar_url)
               ? <img src={merchantInfo.avatar_url} style={{ width: 42, height: 42, objectFit: "cover" }} alt="" />
-              : <span style={{ fontWeight: 800, color: "#f5f5f7", fontSize: 17 }}>{avatarLetter}</span>}
+              : <span style={{ fontWeight: 800, color: "#fff", fontSize: 17 }}>{avatarLetter}</span>}
           </div>
         </div>
       </div>

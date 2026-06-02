@@ -98,6 +98,9 @@ export interface MerchantMobileContentProps {
 
   // Opens the shared PaymentMethodModal (state lives on merchant/page.tsx).
   onOpenPaymentMethods?: () => void;
+  onOpenNotifications?: () => void;
+  onOpenProfile?: () => void;
+  notificationCount?: number;
 
   /**
    * Pull-to-refresh handler. Wired to the mobile `<main>` scroll container
@@ -130,6 +133,9 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     activeCorridor, onCorridorChange,
     totalUnread,
     onOpenPaymentMethods,
+    onOpenNotifications,
+    onOpenProfile,
+    notificationCount,
     onRefresh,
   } = props;
 
@@ -267,6 +273,9 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               activeCorridor={activeCorridor}
               onCorridorChange={onCorridorChange}
               onOpenPaymentMethods={onOpenPaymentMethods}
+              onOpenNotifications={onOpenNotifications}
+              onOpenProfile={onOpenProfile}
+              notificationCount={notificationCount}
               onStartTrade={(side) => {
                 setOpenTradeForm({ ...openTradeForm, tradeType: side });
                 setShowOpenTradeModal(true);
