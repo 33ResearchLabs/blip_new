@@ -591,24 +591,22 @@ export function MobileHomeView({
       {/* ── BUY / SELL ── */}
       {embeddedWalletState !== "locked" && embeddedWalletState !== "none" && (
         <div className="z2rise" style={{ display: "flex", gap: 12, position: "relative", zIndex: 1, animationDelay: "200ms" }}>
-          {/* Buy — blocked, priority feature coming soon */}
-          <div style={{ flex: 1, padding: 16, borderRadius: 18, background: "#f5f5f7", color: "#0b0b0c", textAlign: "left", opacity: 0.45, position: "relative", overflow: "hidden" }}>
+          <button onClick={() => onStartTrade?.("buy")} style={{ flex: 1, padding: 16, borderRadius: 18, background: "#f5f5f7", color: "#0b0b0c", textAlign: "left", cursor: "pointer", border: "none" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M17 7 7 17"/></svg>
-              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(0,0,0,0.12)", borderRadius: 6, padding: "2px 6px" }}>Soon</span>
+              <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="m9 6 6 6-6 6"/></svg>
             </div>
             <div style={{ fontSize: 16, fontWeight: 800, marginTop: 16 }}>Buy</div>
             <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.55 }}>Acquire USDT</div>
-          </div>
-          {/* Sell — blocked, priority feature coming soon */}
-          <div style={{ flex: 1, padding: 16, borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.16)", color: "#f5f5f7", textAlign: "left", backdropFilter: "blur(20px)", opacity: 0.45, position: "relative", overflow: "hidden" }}>
+          </button>
+          <button onClick={() => onStartTrade?.("sell")} style={{ flex: 1, padding: 16, borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.16)", color: "#f5f5f7", textAlign: "left", backdropFilter: "blur(20px)", cursor: "pointer" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#aeaeb2" }}>
               <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 17H7V7M7 17 17 7"/></svg>
-              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(255,255,255,0.10)", borderRadius: 6, padding: "2px 6px", color: "#86868b" }}>Soon</span>
+              <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="m9 6 6 6-6 6"/></svg>
             </div>
             <div style={{ fontSize: 16, fontWeight: 800, marginTop: 16 }}>Sell</div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#86868b" }}>Offload USDT</div>
-          </div>
+          </button>
         </div>
       )}
 
