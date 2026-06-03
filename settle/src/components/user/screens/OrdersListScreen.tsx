@@ -94,7 +94,7 @@ export const OrdersListScreen = ({
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
       {/* ── Header ── */}
-      <header className="px-5 pt-10 pb-4 shrink-0">
+      <header className="px-5 pt-4 pb-4 shrink-0">
         <p className={`${SECTION_LABEL} mb-1`}>Overview</p>
         <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none mb-4">Activity</p>
 
@@ -120,7 +120,7 @@ export const OrdersListScreen = ({
       {/* ── Unified List ── */}
       <div className="flex-1 px-5 pt-2 pb-28 overflow-y-auto scrollbar-hide">
         {filteredOrders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="flex flex-col items-center justify-center text-center pt-8">
             <div className={`w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 ${CARD}`}>
               <Clock size={22} className="text-text-tertiary" />
             </div>

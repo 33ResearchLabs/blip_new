@@ -206,7 +206,7 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
       {/* ── Header — back + title on the left, "My Tickets" pill on the right ── */}
-      <header className="px-5 pt-10 pb-3 shrink-0 flex items-center gap-3">
+      <header className="px-5 pt-4 pb-3 shrink-0 flex items-center gap-3">
         <motion.button
           whileTap={{ scale: 0.92 }}
           onClick={handleBack}
