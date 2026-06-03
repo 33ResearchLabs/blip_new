@@ -452,10 +452,21 @@ export function UserOnboardingFlow({ onComplete, userId, onPasscodeSet }: UserOn
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 9999,
-      background: BG, display: "flex", flexDirection: "column",
-      fontFamily: "'Manrope', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-      WebkitFontSmoothing: "antialiased", color: TEXT, overflow: "hidden",
+      // Frame the flow as the centered phone column (like the rest of the app)
+      // instead of stretching full-width on desktop. The surrounding "desk"
+      // uses the same --user-frame color the app shell uses; on a phone the
+      // 440px column simply fills the screen.
+      background: "var(--user-frame, #080810)",
+      display: "flex", justifyContent: "center",
     }}>
+      <div style={{
+        position: "relative", width: "100%", maxWidth: 440,
+        display: "flex", flexDirection: "column",
+        background: BG, color: TEXT, overflow: "hidden",
+        fontFamily: "'Manrope', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        WebkitFontSmoothing: "antialiased",
+        boxShadow: "0 0 40px rgba(0,0,0,0.25)",
+      }}>
       <AnimatePresence mode="wait">
         <motion.div key={key} {...screenAnim} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {key === "welcome" && <ScreenWelcome onNext={next} />}
@@ -466,6 +477,7 @@ export function UserOnboardingFlow({ onComplete, userId, onPasscodeSet }: UserOn
           {key === "done" && <ScreenDone onNext={onComplete} />}
         </motion.div>
       </AnimatePresence>
+      </div>
     </div>
   );
 }
