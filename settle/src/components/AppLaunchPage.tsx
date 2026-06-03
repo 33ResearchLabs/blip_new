@@ -126,7 +126,7 @@ export function AppLaunchPage() {
         </nav>
 
         {/* ── MAIN STAGE ── */}
-        <div style={{
+        <div className="blip-main" style={{
           flex: 1, minHeight: 0, position: "relative", overflow: "hidden",
           display: "flex", flexDirection: "column", alignItems: "center",
           justifyContent: "center", padding: "0 clamp(24px,5vw,72px)",
@@ -267,8 +267,9 @@ export function AppLaunchPage() {
             .blip-links{display:none !important;}
             .blip-status{display:none !important;}
             .blip-nav{display:none !important;}
-            .blip-main{overflow-y:auto !important; justify-content:flex-start !important; padding-top:32px !important;}
-            .blip-h1{font-size:clamp(34px,9vw,52px) !important;}
+            .blip-main{overflow-y:auto !important; overflow-x:hidden !important; justify-content:flex-start !important; padding-top:40px !important; padding-bottom:40px !important;}
+            .blip-main-content{width:100% !important;}
+            .blip-h1{font-size:clamp(2.4rem,10vw,3.2rem) !important; letter-spacing:-0.04em !important;}
           }
         `}</style>
       </div>
