@@ -189,7 +189,7 @@ export const ChatListScreen = ({
       </div>
 
       {/* ── List ── */}
-      <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pt-2 pb-28 overflow-y-auto scrollbar-hide">
         {displayGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 border bg-surface-card border-border-subtle">
