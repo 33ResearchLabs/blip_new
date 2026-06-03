@@ -73,6 +73,10 @@ export function AppLaunchPage() {
   }
 
   const openUserApp = () => { window.location.href = "/?welcome=skip"; };
+  // Platform download buttons for user app also attempt PWA install
+  const downloadUserApp = state === "installed"
+    ? openUserApp
+    : install;
   // Merchant always attempts PWA install first
   const openMerchantApp = state === "installed"
     ? () => { window.location.href = "/merchant/login"; }
@@ -220,8 +224,8 @@ export function AppLaunchPage() {
                   Download the app
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <PlatBtn icon="ios" label="iOS" onClick={openUserApp} />
-                  <PlatBtn icon="android" label="Android" onClick={openUserApp} />
+                  <PlatBtn icon="ios" label="iOS" onClick={downloadUserApp} />
+                  <PlatBtn icon="android" label="Android" onClick={downloadUserApp} />
                 </div>
               </div>
 
