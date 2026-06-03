@@ -144,8 +144,8 @@ export function UnlockWalletPrompt({
         }}
       >
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: colors.surface.active }}>
-            <Lock className="w-4 h-4" style={{ color: '#fff' }} />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: colors.accent.subtle }}>
+            <Lock className="w-4 h-4" style={{ color: colors.accent.primary }} />
           </div>
           <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>
             {mode === 'setPinEnter' || mode === 'setPinConfirm' ? 'Set your PIN' : 'Unlock Wallet'}
@@ -187,6 +187,7 @@ export function UnlockWalletPrompt({
                     length={PIN_LENGTH}
                     errorTick={errorTick}
                     disabled={busy}
+                    theme="light"
                   />
                 </motion.div>
               )}
@@ -231,6 +232,7 @@ export function UnlockWalletPrompt({
                     onComplete={() => setMode('setPinConfirm')}
                     length={PIN_LENGTH}
                     disabled={busy}
+                    theme="light"
                   />
                 </motion.div>
               )}
@@ -244,6 +246,7 @@ export function UnlockWalletPrompt({
                     length={PIN_LENGTH}
                     errorTick={errorTick}
                     disabled={busy}
+                    theme="light"
                   />
                 </motion.div>
               )}

@@ -60,7 +60,7 @@ const slide = {
   transition: { duration: 0.26, ease: [0.22, 1, 0.36, 1] as const },
 } as const;
 const darkBg = { background: "#080810" } as const;
-const lightPanelBg = { background: "#ffffff" } as const;
+const lightPanelBg = { background: "#f4f3f1" } as const;
 function Panel({
   k,
   anim = fade,
@@ -396,12 +396,17 @@ export default function Home() {
   });
   extensionRequestSetterRef.current = orderActions.setExtensionRequest;
 
-  // Show onboarding once per user (first time only), keyed by userId.
+  // Show onboarding exactly once per user, keyed by userId. We mark it as shown
+  // the moment it's displayed — NOT only on full completion — so it never
+  // reappears even if the user closes/refreshes mid-flow. Previously the gate
+  // key was written solely in onComplete (the final "Start paying" tap), so any
+  // incomplete run left the key unset and the flow popped up again every load.
   useEffect(() => {
     if (!auth.userId) return;
     const key = `blip_onb_v1_${auth.userId}`;
     if (!localStorage.getItem(key)) {
       setShowOnboarding(true);
+      try { localStorage.setItem(key, '1'); } catch { /* storage blocked — falls back to per-session */ }
     }
   }, [auth.userId]);
 
