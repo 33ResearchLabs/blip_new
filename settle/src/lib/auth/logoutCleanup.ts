@@ -53,11 +53,13 @@ const ALWAYS_CLEAR_SESSION_KEYS = [
   'pending_compliance_wallet_login',
 ] as const;
 
-/** localStorage prefixes that hold unlocked-only-in-memory material.
- *  These are namespaced by actorId. We sweep by prefix so a logout
- *  catches every previously-unlocked account on the same device, not
- *  only the one whose id we happen to know at the call site. */
-const SESSION_SECRET_LOCAL_PREFIXES = [
+/** Storage prefixes that hold unlocked-only-in-memory material. These are
+ *  namespaced by actorId. We sweep by prefix so a logout catches every
+ *  previously-unlocked account on the same device, not only the one whose
+ *  id we happen to know at the call site. Swept from BOTH stores below:
+ *  sessionStorage is the current home of the decrypted key (P1); the
+ *  localStorage sweep purges copies left there by older builds. */
+const SESSION_SECRET_PREFIXES = [
   // Decrypted wallet keypair (bs58). MUST NOT survive any logout.
   'blip_wallet_session:',
 ] as const;
@@ -120,6 +122,9 @@ export function clearAuthStorageOnLogout(): void {
   // Sweep all unlocked-secret material across every namespaced actor.
   // Done as a prefix scan so a stale session from a prior account
   // (whose id the current code path doesn't know) is still cleared.
-  sweepPrefix(window.localStorage, SESSION_SECRET_LOCAL_PREFIXES, safeRemoveLocal);
+  // sessionStorage is the current home of the decrypted key; localStorage
+  // is swept too to purge any copy left by an older build.
+  sweepPrefix(window.sessionStorage, SESSION_SECRET_PREFIXES, safeRemoveSession);
+  sweepPrefix(window.localStorage, SESSION_SECRET_PREFIXES, safeRemoveLocal);
   sweepPrefix(window.sessionStorage, SESSION_UNLOCK_FLAG_SESSION_PREFIXES, safeRemoveSession);
 }

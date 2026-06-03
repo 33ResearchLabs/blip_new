@@ -213,6 +213,12 @@ export const HomeScreen = ({
 
   const displayBalance = IS_MOCK_MODE ? (userBalance ?? 0) : solanaWallet.usdtBalance;
   const isWalletReady = IS_MOCK_MODE ? (userBalance !== undefined && userBalance !== null) : solanaWallet.connected;
+  // A wallet can EXIST but be locked (needs PIN) — e.g. after logout or
+  // re-opening the browser once the decrypted session is cleared. That is
+  // NOT the same as having no wallet, so we prompt to Unlock instead of
+  // showing the "Set up wallet" new-user state. Embedded-mode only; mock /
+  // external-wallet modes never report a 'locked' state so this stays false.
+  const isWalletLocked = IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked';
   const fiatLabel = selectedPair === 'usdt_aed' ? 'AED' : 'INR';
   const fiatSymbol = selectedPair === 'usdt_aed' ? 'د.إ' : '₹';
 
@@ -428,6 +434,27 @@ export const HomeScreen = ({
               <div style={{ fontSize: 12.5, fontWeight: 700, opacity: 0.7, marginTop: 6 }}>
                 {displayBalance?.toFixed(2)} USDT · ≈ {fiatLabel} {balFiat}
               </div>
+            </div>
+          ) : isWalletLocked ? (
+            <div style={{ marginTop: 26 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                {"Welcome back 👋"}
+              </div>
+              <div style={{
+                fontSize: 13, fontWeight: 600, opacity: 0.8, marginTop: 7,
+                lineHeight: 1.5, maxWidth: 280,
+              }}>
+                Your wallet is locked. Enter your PIN to see your balance and pay.
+              </div>
+              <button
+                onClick={() => setShowWalletUnlock(true)}
+                style={{
+                  marginTop: 16, background: '#fff', color: '#161619', border: 'none', cursor: 'pointer',
+                  padding: '13px 28px', borderRadius: 14, fontSize: 15, fontWeight: 800,
+                }}
+              >
+                Unlock wallet
+              </button>
             </div>
           ) : (
             <div style={{ marginTop: 26 }}>
@@ -649,7 +676,7 @@ export const HomeScreen = ({
                 )}
               </div>
             </>
-          ) : (
+          ) : isWalletLocked ? null : (
             /* NEW USER STATE */
             <>
               {/* Welcome bonus card */}
