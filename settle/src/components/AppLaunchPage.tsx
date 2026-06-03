@@ -33,18 +33,18 @@ export function AppLaunchPage() {
 
   return (
     <div style={{
-      position: "absolute", inset: 0, background: "#000",
+      position: "absolute", inset: 0, background: "#f5f5f7",
       overflowY: "auto", overflowX: "hidden",
       display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center",
       fontFamily: "-apple-system, 'SF Pro Display', BlinkMacSystemFont, sans-serif",
     }}>
 
-      {/* Grain */}
+      {/* Subtle grid */}
       <div aria-hidden style={{
-        position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.025,
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-        backgroundSize: "160px",
+        position: "absolute", inset: 0, pointerEvents: "none",
+        backgroundImage: "radial-gradient(rgba(20,21,26,0.06) 1px, transparent 1px)",
+        backgroundSize: "28px 28px",
       }} />
 
 
@@ -54,9 +54,9 @@ export function AppLaunchPage() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}
           style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 52 }}>
           <svg viewBox="0 0 70 60" width={16} height={14} fill="none">
-            <path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#fff" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#14151a" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <span style={{ fontSize: 13, fontWeight: 400, letterSpacing: "0.01em", color: "rgba(255,255,255,0.35)" }}>Blip Money</span>
+          <span style={{ fontSize: 13, fontWeight: 400, letterSpacing: "0.01em", color: "rgba(20,21,26,0.45)" }}>Blip Money</span>
         </motion.div>
 
         {/* Headline */}
@@ -64,14 +64,14 @@ export function AppLaunchPage() {
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease: E, delay: 0.08 }}
           style={{ fontSize: "clamp(40px, 7vw, 80px)", fontWeight: 600, letterSpacing: "-0.055em",
-            lineHeight: 0.95, color: "#f5f5f7", textAlign: "center", margin: "0 0 18px" }}
+            lineHeight: 0.95, color: "#14151a", textAlign: "center", margin: "0 0 18px" }}
         >
           Two apps.<br/>
-          <span style={{ color: "rgba(255,255,255,0.2)" }}>One network.</span>
+          <span style={{ color: "rgba(20,21,26,0.22)" }}>One network.</span>
         </motion.h1>
 
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.2 }}
-          style={{ fontSize: 15, color: "rgba(255,255,255,0.3)", textAlign: "center",
+          style={{ fontSize: 15, color: "rgba(20,21,26,0.45)", textAlign: "center",
             lineHeight: 1.65, letterSpacing: "-0.01em", maxWidth: 320, marginBottom: 52 }}>
           Send money or run a merchant desk — same settlement layer beneath both.
         </motion.p>
@@ -89,12 +89,12 @@ export function AppLaunchPage() {
           }}
         >
           <Card
-            inverted={false}
+            inverted={true}
             index="01"
             eyebrow="For users"
             title="Send money to anyone"
             description="Real merchants compete on rate. Escrow on-chain. Settled in seconds."
-            mockup={<PhoneMockup inverted={false} />}
+            mockup={<PhoneMockup inverted={true} />}
             onInstall={state === "ready" ? install : undefined}
             installHref="/?welcome=skip"
           />
@@ -112,15 +112,15 @@ export function AppLaunchPage() {
         {/* Coming soon */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.5 }}
           style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 44, flexWrap: "wrap", justifyContent: "center" }}>
-          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(255,255,255,0.12)" }}>Coming soon</span>
-          <span style={{ width: 1, height: 10, background: "rgba(255,255,255,0.08)", display: "inline-block" }} />
+          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(20,21,26,0.25)" }}>Coming soon</span>
+          <span style={{ width: 1, height: 10, background: "rgba(20,21,26,0.12)", display: "inline-block" }} />
           {["Native iOS & Android", "Telegram Bot", "Developer API"].map(l => (
-            <span key={l} style={{ fontSize: 11, color: "rgba(255,255,255,0.18)", padding: "3px 10px", borderRadius: 99, border: "1px solid rgba(255,255,255,0.07)" }}>{l}</span>
+            <span key={l} style={{ fontSize: 11, color: "rgba(20,21,26,0.35)", padding: "3px 10px", borderRadius: 99, border: "1px solid rgba(20,21,26,0.12)" }}>{l}</span>
           ))}
         </motion.div>
       </div>
 
-      <div style={{ position: "absolute", bottom: 18, fontSize: 9, letterSpacing: "0.08em", color: "rgba(255,255,255,0.08)", fontFamily: "var(--font-mono), monospace" }}>
+      <div style={{ position: "absolute", bottom: 18, fontSize: 9, letterSpacing: "0.08em", color: "rgba(20,21,26,0.2)", fontFamily: "var(--font-mono), monospace" }}>
         © 2026 Blip Money
       </div>
     </div>
