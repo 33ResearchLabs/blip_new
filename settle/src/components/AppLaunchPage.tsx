@@ -47,10 +47,6 @@ export function AppLaunchPage() {
         backgroundSize: "160px",
       }} />
 
-      {/* Globe */}
-      <div aria-hidden style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-        <GlobeArt />
-      </div>
 
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 900, padding: "40px 24px 40px", display: "flex", flexDirection: "column", alignItems: "center" }}>
 
