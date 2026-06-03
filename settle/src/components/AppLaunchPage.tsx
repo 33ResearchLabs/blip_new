@@ -82,8 +82,8 @@ export function AppLaunchPage() {
                        radial-gradient(620px 520px at 100% 4%, rgba(240,105,30,.05), transparent 55%)`,
         }} />
 
-        {/* ── NAV (dark bar) ── */}
-        <nav style={{
+        {/* ── NAV (dark bar, hidden on mobile) ── */}
+        <nav className="blip-nav" style={{
           height: 62, flexShrink: 0,
           display: "flex", alignItems: "center", gap: 22,
           padding: "0 clamp(20px,3vw,40px)",
@@ -266,6 +266,7 @@ export function AppLaunchPage() {
             .blip-deco{display:none !important;}
             .blip-links{display:none !important;}
             .blip-status{display:none !important;}
+            .blip-nav{display:none !important;}
             .blip-main{overflow-y:auto !important; justify-content:flex-start !important; padding-top:32px !important;}
             .blip-h1{font-size:clamp(34px,9vw,52px) !important;}
           }
