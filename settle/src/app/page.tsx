@@ -24,6 +24,7 @@ import { useUserTradeCreation } from "@/hooks/useUserTradeCreation";
 import { useUserOrderActions } from "@/hooks/useUserOrderActions";
 import { useUserEffects } from "@/hooks/useUserEffects";
 import { useSolanaWalletSafe } from "@/hooks/useSolanaWalletSafe";
+import { useAppLock } from "@/context/AppLockContext";
 import { useOrphanedEscrowRecovery } from "@/hooks/useOrphanedEscrowRecovery";
 import { IssueReporter } from "@/components/IssueReporter";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
@@ -118,6 +119,9 @@ export default function Home() {
   const { playSound } = useSounds();
   const rawToast = useToast();
   const solanaWallet = useSolanaWalletSafe();
+  // App-lock state — the onboarding passcode step sets the real App Lock PIN,
+  // so we refresh the provider's visible lock state once it's saved.
+  const { refreshPinStatus } = useAppLock();
 
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
     | {
@@ -623,6 +627,8 @@ export default function Home() {
       {/* Onboarding — shown once per new user AFTER they sign in/up */}
       {showOnboarding && !!auth.userId && (
         <UserOnboardingFlow
+          userId={auth.userId}
+          onPasscodeSet={refreshPinStatus}
           onComplete={() => {
             try {
               localStorage.setItem(`blip_onb_v1_${auth.userId}`, '1');

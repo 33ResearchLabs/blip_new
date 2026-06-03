@@ -554,11 +554,22 @@ function PinFieldDisplay({
   const dotEmpty = isLight ? 'rgba(15,23,42,0.22)' : 'rgba(255,255,255,0.18)';
   const digitColor = isLight ? '#0f172a' : '#fff';
 
+  // Root is a div (not a button): it carries an interactive `trailing` button
+  // (the show/hide eye toggle), and a <button> may not contain another
+  // <button> — that nesting triggers a React hydration error. role/tabIndex/
+  // keydown preserve the tap-to-focus button semantics.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="w-full text-left rounded-xl px-4 py-3 transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className="w-full text-left rounded-xl px-4 py-3 transition-colors cursor-pointer"
       style={{
         background: fieldBg,
         border: `1px solid ${active ? colors.accent.primary : fieldBorder}`,
@@ -602,6 +613,6 @@ function PinFieldDisplay({
         </div>
         {trailing}
       </div>
-    </button>
+    </div>
   );
 }

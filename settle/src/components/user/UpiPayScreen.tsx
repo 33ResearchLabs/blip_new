@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import jsQR from "jsqr";
-import { ChevronLeft, Loader2, Check, AlertCircle, ImagePlus } from "lucide-react";
+import { ChevronLeft, Loader2, Check, AlertCircle, ImagePlus, Wallet } from "lucide-react";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 import { UpiProcessingOverlay } from "@/components/user/UpiProcessingOverlay";
 import { FEE_UI_V2 } from "@/lib/featureFlags";
@@ -100,16 +100,30 @@ interface Props {
   currentRate: number | null;
   /** User's spendable USDT balance. `null` = still loading. */
   usdtBalance: number | null;
+  /** Whether the wallet is connected/unlocked. When false the screen shows a
+   *  "wallet not connected" gate instead of the camera or the balance spinner.
+   *  Without this, a locked/absent embedded wallet reports `usdtBalance = null`
+   *  forever, leaving the user stuck on "Checking your balance…". */
+  walletReady: boolean;
+  /** Label + handler for the connect CTA shown when `walletReady` is false.
+   *  The label differs by mode — "Unlock wallet" (locked), "Set up wallet"
+   *  (none), "Connect wallet" (external). The handler should open the matching
+   *  modal (and typically close this screen first). */
+  walletCta: { label: string; onClick: () => void };
   onConfirm: (data: UpiPayConfirm) => void;
 }
 
 const UPI_BASE = process.env.NEXT_PUBLIC_UPI_PAY_BASE_URL || "";
 
-export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: Props) {
+export function UpiPayScreen({ onClose, currentRate, usdtBalance, walletReady, walletCta, onConfirm }: Props) {
   // Hard gate: no balance → can't pay. Block before camera even opens so
   // we never produce an on-chain order the escrow flow would reject anyway.
   const balanceReady = usdtBalance !== null;
   const hasBalance = balanceReady && usdtBalance > 0;
+  // A locked / absent embedded wallet never reports a balance, so the
+  // balance spinner alone would hang forever. Gate the whole scan flow on
+  // the wallet being connected first, then on having spendable USDT.
+  const canScan = walletReady && hasBalance;
 
   // PIN gating removed (wallet-password = 6-digit PIN unification): the
   // wallet-unlock prompt downstream (during escrow lock) is the single
@@ -147,9 +161,9 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   // ── Camera lifecycle ──────────────────────────────────────────────────
   useEffect(() => {
     if (stage !== "scanning") return;
-    // No balance → don't even start the camera. The UI below shows the
-    // "fund your wallet" state in this case.
-    if (!hasBalance) return;
+    // Wallet not connected or no balance → don't even start the camera. The
+    // UI below shows the "connect wallet" / "fund your wallet" state instead.
+    if (!canScan) return;
     let cancelled = false;
 
     const stop = () => {
@@ -228,7 +242,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
       cancelled = true;
       stop();
     };
-  }, [stage, acceptRaw, hasBalance]);
+  }, [stage, acceptRaw, canScan]);
 
   // ── Image upload fallback ────────────────────────────────────────────
   // Hardening guards on the upload path (audit F-7). The decode pipeline
@@ -364,16 +378,35 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
       </div>
 
       <AnimatePresence mode="wait">
-        {/* ── BALANCE GATE ─────────────────────────────────────────── */}
-        {stage === "scanning" && !hasBalance && (
+        {/* ── WALLET / BALANCE GATE ────────────────────────────────── */}
+        {stage === "scanning" && !canScan && (
           <motion.div
-            key="no-balance"
+            key="gate"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="flex-1 flex flex-col items-center justify-center px-6 gap-4 text-center"
           >
-            {!balanceReady ? (
+            {!walletReady ? (
+              /* Wallet locked / not set up / not connected. Without this the
+                 screen hung on the balance spinner forever, because a locked
+                 embedded wallet never reports a balance. */
+              <>
+                <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+                  <Wallet className="w-7 h-7 text-white" />
+                </div>
+                <p className="text-[22px] font-bold tracking-[-0.02em]">Wallet not connected</p>
+                <p className="text-[12px] text-text-tertiary max-w-[280px]">
+                  Connect your wallet to scan &amp; pay. You&apos;ll also need USDT in it to cover the payment.
+                </p>
+                <button
+                  onClick={walletCta.onClick}
+                  className="mt-2 px-5 py-2.5 rounded-xl bg-accent text-accent-text text-sm font-bold"
+                >
+                  {walletCta.label}
+                </button>
+              </>
+            ) : !balanceReady ? (
               <>
                 <Loader2 className="w-7 h-7 animate-spin text-text-tertiary" />
                 <p className="text-[12px] tracking-[0.2em] uppercase text-text-tertiary">
@@ -387,7 +420,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
                 </div>
                 <p className="text-[22px] font-bold tracking-[-0.02em]">No USDT to pay with</p>
                 <p className="text-[12px] text-text-tertiary max-w-[280px]">
-                  Your wallet has 0 USDT. Top up first, then come back here to scan & pay.
+                  Your wallet has 0 USDT. Top up first, then come back here to scan &amp; pay.
                 </p>
                 <button
                   onClick={onClose}
@@ -401,7 +434,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
         )}
 
         {/* ── SCANNING ──────────────────────────────────────────────── */}
-        {stage === "scanning" && hasBalance && (
+        {stage === "scanning" && canScan && (
           <motion.div
             key="scan"
             initial={{ opacity: 0 }}

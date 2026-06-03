@@ -901,6 +901,21 @@ export const HomeScreen = ({
           onClose={() => setShowUpiPay(false)}
           currentRate={currentRate}
           usdtBalance={IS_MOCK_MODE ? (userBalance ?? null) : solanaWallet.usdtBalance}
+          walletReady={isWalletReady}
+          walletCta={(() => {
+            // Close the scanner first so the wallet modal (rendered at the
+            // page level, below this z-[100] overlay) is visible, then open
+            // the right flow for the wallet's current state. Mirrors the
+            // EscrowLockScreen onConnectWallet handler in page.tsx.
+            const close = () => setShowUpiPay(false);
+            if (IS_EMBEDDED_WALLET && embeddedWallet) {
+              if (embeddedWallet.state === 'none')
+                return { label: 'Set up wallet', onClick: () => { close(); setShowWalletSetup(true); } };
+              if (embeddedWallet.state === 'locked')
+                return { label: 'Unlock wallet', onClick: () => { close(); setShowWalletUnlock(true); } };
+            }
+            return { label: 'Connect wallet', onClick: () => { close(); setShowWalletModal(true); } };
+          })()}
           onConfirm={(data) => {
             setShowUpiPay(false);
             onUpiPayConfirm?.(data);

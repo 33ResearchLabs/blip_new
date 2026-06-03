@@ -9,6 +9,8 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Shield, Check } from "lucide-react";
+import { AppPinPad } from "@/components/app-lock/AppPinPad";
+import { setAppPin, markSessionUnlocked, validateAppPinStrength, APP_PIN_LENGTH } from "@/lib/auth/appPin";
 
 /* ── Light theme tokens ───────────────────────────────────────────────── */
 const ACC     = "#ffb02e";
@@ -188,29 +190,6 @@ function CTA({ label, ghost, onClick, icon }: { label: string; ghost?: boolean; 
   );
 }
 
-/* ── Keypad ───────────────────────────────────────────────────────────── */
-function Keypad({ onKey }: { onKey: (k: string) => void }) {
-  const keys = ["1","2","3","4","5","6","7","8","9","","0","del"];
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", rowGap: 4, width: "100%", maxWidth: 320 }}>
-      {keys.map((k, i) => (
-        <button key={i} disabled={k===""} onClick={() => k && onKey(k)} style={{
-          height: 58, border: "none", background: "transparent", color: TEXT,
-          fontFamily: "inherit", fontWeight: 600, fontSize: 26,
-          cursor: k===""?"default":"pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12,
-        }}>
-          {k==="del" ? (
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 5H8L2 12l6 7h13a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"/><path d="M17 9l-5 6M12 9l5 6"/>
-            </svg>
-          ) : k}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /* ── Hero image wrapper ───────────────────────────────────────────────── */
 function HeroBox({ children }: { children: React.ReactNode }) {
   return (
@@ -305,39 +284,64 @@ function ScreenFeature({ step, num, badge, title, ital, body, hero, last, onNext
   );
 }
 
-/* ── PIN screen ───────────────────────────────────────────────────────── */
-function ScreenPin({ onNext }: { onNext: () => void }) {
+/* ── PIN screen — sets the real App Lock PIN ──────────────────────────────
+ * The passcode entered here is the user's APP LOCK PIN (locks the app on
+ * reopen / background, via the appPin verifier system). It is NOT the wallet
+ * PIN — the wallet keeps its own separate 6-digit PIN, set later in
+ * EmbeddedWalletSetup, which this flow deliberately does not touch.
+ *
+ * Uses the shared AppPinPad so hardware-keyboard digits + Backspace work on
+ * desktop alongside on-screen taps (the pad renders its own dots/shake). */
+function ScreenPin({ onNext, userId, onPasscodeSet }: {
+  onNext: () => void;
+  userId: string | null;
+  onPasscodeSet?: () => void;
+}) {
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [phase, setPhase] = useState<"enter"|"confirm">("enter");
   const [error, setError] = useState("");
-  const [shake, setShake] = useState(false);
+  const [errorTick, setErrorTick] = useState(0);
+  const [busy, setBusy] = useState(false);
 
-  const onKey = useCallback((k: string) => {
-    if (phase === "enter") {
-      if (k === "del") { setPin(p => p.slice(0,-1)); return; }
-      if (pin.length >= 6) return;
-      const next = pin + k;
-      setPin(next);
-      if (next.length === 6) setTimeout(() => setPhase("confirm"), 350);
-    } else {
-      if (k === "del") { setConfirmPin(p => p.slice(0,-1)); return; }
-      if (confirmPin.length >= 6) return;
-      const next = confirmPin + k;
-      setConfirmPin(next);
-      if (next.length === 6) {
-        if (next === pin) {
-          try { localStorage.setItem("blip_onb_pin", pin); } catch {}
-          setTimeout(onNext, 350);
-        } else {
-          setShake(true); setError("PINs don't match — try again");
-          setTimeout(() => { setShake(false); setConfirmPin(""); setError(""); }, 700);
-        }
+  const flash = (msg: string) => { setError(msg); setErrorTick(t => t + 1); };
+
+  // First entry: reject weak PINs (1234 / 0000 …) before asking to confirm —
+  // same strength gate the rest of the app-lock UI uses.
+  const handleEnter = useCallback((val: string) => {
+    const weak = validateAppPinStrength(val);
+    if (weak) { flash(weak); setPin(""); return; }
+    setError("");
+    setPin(val);
+    setPhase("confirm");
+  }, []);
+
+  // Confirm: must match, then persist via the canonical app-lock helper.
+  const handleConfirm = useCallback(async (val: string) => {
+    if (val !== pin) { flash("Passcodes don't match — try again"); setConfirmPin(""); return; }
+    // No userId (shouldn't happen — onboarding is gated on auth.userId) →
+    // don't dead-end the flow; just advance without persisting.
+    if (!userId) { setTimeout(onNext, 250); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await setAppPin(userId, val);
+      if (!res.ok) {
+        flash(res.message ?? "Couldn't save passcode. Try again.");
+        setConfirmPin(""); setBusy(false);
+        return;
       }
+      // Mark THIS session unlocked so the lock screen doesn't immediately
+      // pop, then let the provider refresh its visible state.
+      markSessionUnlocked(userId);
+      onPasscodeSet?.();
+      setTimeout(onNext, 250);
+    } catch {
+      flash("Couldn't save passcode. Try again.");
+      setConfirmPin(""); setBusy(false);
     }
-  }, [pin, confirmPin, phase, onNext]);
+  }, [pin, userId, onNext, onPasscodeSet]);
 
-  const currentPin = phase === "enter" ? pin : confirmPin;
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", justifyContent: "center", padding: "20px 22px 0" }}>
@@ -356,20 +360,33 @@ function ScreenPin({ onNext }: { onNext: () => void }) {
             <span style={{ display: "block", fontStyle: "italic" }}>passcode.</span>
           </div>
           <div style={{ color: MUTED, fontSize: 14, fontWeight: 600, marginTop: 14 }}>
-            {phase === "enter" ? "6 digits to secure every payment." : "Enter the same 6 digits again."}
+            {phase === "enter"
+              ? `${APP_PIN_LENGTH} digits to unlock the app.`
+              : `Enter the same ${APP_PIN_LENGTH} digits again.`}
           </div>
         </motion.div>
 
-        <motion.div animate={shake ? { x: [-6,6,-6,6,0] } : { x: 0 }} transition={{ duration: 0.35 }} style={{ display: "flex", gap: 16, marginTop: 28 }}>
-          {Array.from({length:6}).map((_,i) => (
-            <span key={i} style={{ width: 16, height: 16, borderRadius: 999, background: i < currentPin.length ? TEXT : "transparent", border: `2px solid ${i < currentPin.length ? TEXT : HAIR2}`, transition: "background 0.15s" }} />
-          ))}
-        </motion.div>
-
-        {error && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ marginTop: 12, color: "#dc2626", fontSize: 13, fontWeight: 600 }}>{error}</motion.div>}
+        {error && (
+          <motion.div key={errorTick} initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ marginTop: 16, color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
+            {error}
+          </motion.div>
+        )}
 
         <div style={{ flex: 1 }} />
-        <Keypad onKey={onKey} />
+        <div style={{ width: "100%", maxWidth: 320 }}>
+          <AppPinPad
+            value={phase === "enter" ? pin : confirmPin}
+            onChange={(v) => {
+              if (phase === "enter") setPin(v); else setConfirmPin(v);
+              if (error) setError("");
+            }}
+            onComplete={phase === "enter" ? handleEnter : handleConfirm}
+            length={APP_PIN_LENGTH}
+            errorTick={errorTick}
+            disabled={busy}
+            theme="light"
+          />
+        </div>
       </div>
     </div>
   );
@@ -415,12 +432,18 @@ function ScreenDone({ onNext }: { onNext: () => void }) {
 /* ── Main export ──────────────────────────────────────────────────────── */
 export interface UserOnboardingFlowProps {
   onComplete: () => void;
+  /** Authenticated user id — required to persist the App Lock PIN set in the
+   *  passcode step. The flow only renders when a user is signed in. */
+  userId: string | null;
+  /** Fired right after the App Lock PIN is saved, so the AppLockProvider can
+   *  refresh its visible lock state (e.g. refreshPinStatus). */
+  onPasscodeSet?: () => void;
 }
 
 const SCREENS = ["welcome", "f1", "f2", "f3", "pin", "done"] as const;
 type StepKey = typeof SCREENS[number];
 
-export function UserOnboardingFlow({ onComplete }: UserOnboardingFlowProps) {
+export function UserOnboardingFlow({ onComplete, userId, onPasscodeSet }: UserOnboardingFlowProps) {
   const [step, setStep] = useState(0);
   const next = useCallback(() => setStep(s => Math.min(s + 1, SCREENS.length - 1)), []);
   const back = useCallback(() => setStep(s => Math.max(s - 1, 0)), []);
@@ -439,7 +462,7 @@ export function UserOnboardingFlow({ onComplete }: UserOnboardingFlowProps) {
           {key === "f1" && <ScreenFeature step={1} num="1" badge="INSTANT" title="Send & get paid in" ital="seconds." body="Pay any contact, UPI ID or QR code. Money lands instantly — any day, any time." hero={<HeroInstant />} onNext={next} onBack={back} />}
           {key === "f2" && <ScreenFeature step={2} num="2" badge="BEST RATE" title="Always the" ital="best rate." body="Best rates — beat it and we match it. We compare every exchange in real time, automatically." hero={<HeroBestRate />} onNext={next} onBack={back} />}
           {key === "f3" && <ScreenFeature step={3} num="3" badge="SECURE" title="Safe by" ital="design." body="Funds stay in escrow until settled. Two-factor and a passcode on every payment." hero={<HeroSecurity />} last onNext={next} onBack={back} />}
-          {key === "pin"  && <ScreenPin onNext={next} />}
+          {key === "pin"  && <ScreenPin onNext={next} userId={userId} onPasscodeSet={onPasscodeSet} />}
           {key === "done" && <ScreenDone onNext={onComplete} />}
         </motion.div>
       </AnimatePresence>
