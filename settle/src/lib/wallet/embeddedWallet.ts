@@ -419,25 +419,113 @@ export function hasEncryptedWallet(actorId: string): boolean {
   return localStorage.getItem(storageKey(actorId)) !== null;
 }
 
-/** Save decrypted keypair to localStorage under the given actor's session slot. */
-export function saveSessionKeypair(actorId: string, keypair: Keypair): void {
-  localStorage.setItem(sessionKey(actorId), bs58.encode(keypair.secretKey));
+/**
+ * Ask the browser to KEEP this origin's storage so the encrypted wallet
+ * survives automatic eviction — e.g. Safari/WebKit's 7-day cap on
+ * script-writable storage, or low-disk cleanup. Without this, an imported
+ * wallet can silently vanish after a few days even though our own code
+ * never deletes it.
+ *
+ * Security & regression notes:
+ *   - This changes NOTHING about where/how the wallet is stored. Storage
+ *     persistence applies to the whole origin bucket, so the existing
+ *     localStorage blob (still encrypted with the user's PIN) is covered
+ *     as-is. No data is moved, re-keyed, or exposed.
+ *   - It only affects the ENCRYPTED blob's lifetime. The decrypted session
+ *     key (`blip_wallet_session:*`) is untouched and is still wiped on
+ *     logout / auto-lock exactly as before.
+ *   - Best-effort and side-effect-free: never throws, and no-ops if the
+ *     API is unavailable, on the server, or persistence is already granted.
+ *
+ * Returns whether storage is persisted after the call (for diagnostics
+ * only — callers may ignore it).
+ */
+export async function requestPersistentStorage(): Promise<boolean> {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.storage) return false;
+    if (typeof navigator.storage.persisted === 'function') {
+      // Already granted — nothing to do.
+      if (await navigator.storage.persisted()) return true;
+    }
+    if (typeof navigator.storage.persist === 'function') {
+      return await navigator.storage.persist();
+    }
+    return false;
+  } catch {
+    // Storage API can throw in private/embedded contexts — never let a
+    // best-effort durability request break wallet flows.
+    return false;
+  }
 }
 
-/** Load decrypted keypair for the given actor, or null if no live session. */
+/** Save the decrypted keypair for the given actor.
+ *
+ *  SECURITY (P1): the decrypted secret key is the most sensitive value in
+ *  the app. It is stored in **sessionStorage**, NOT localStorage, so the
+ *  browser clears it automatically when the tab/window closes — shrinking
+ *  the XSS/device-theft exposure window from days down to a single tab
+ *  session. The ENCRYPTED wallet blob still lives in localStorage (and is
+ *  kept across browser eviction via requestPersistentStorage), so funds
+ *  are never lost; only the "stay unlocked without re-typing the PIN"
+ *  convenience resets when the tab closes. Any decrypted copy left in
+ *  durable localStorage by an older build is purged here. */
+export function saveSessionKeypair(actorId: string, keypair: Keypair): void {
+  const encoded = bs58.encode(keypair.secretKey);
+  try {
+    sessionStorage.setItem(sessionKey(actorId), encoded);
+  } catch {
+    // sessionStorage unavailable (private mode / disabled). Fail closed:
+    // the wallet simply re-locks on next load rather than persisting the
+    // plaintext key somewhere durable.
+  }
+  // Never leave the decrypted key in durable storage.
+  localStorage.removeItem(sessionKey(actorId));
+}
+
+/** Load the decrypted keypair for the given actor, or null if no live
+ *  session. Reads sessionStorage (the current home). If a legacy copy is
+ *  found in localStorage — from an older build, or just written by the
+ *  legacy-wallet migration — it is moved into sessionStorage and deleted
+ *  from localStorage, so a previously-unlocked user stays unlocked across
+ *  this upgrade while the durable plaintext copy is purged. */
 export function loadSessionKeypair(actorId: string): Keypair | null {
-  const raw = localStorage.getItem(sessionKey(actorId));
+  let raw: string | null = null;
+  try {
+    raw = sessionStorage.getItem(sessionKey(actorId));
+  } catch {
+    raw = null;
+  }
+  if (!raw) {
+    const legacy = localStorage.getItem(sessionKey(actorId));
+    if (legacy) {
+      raw = legacy;
+      try {
+        sessionStorage.setItem(sessionKey(actorId), legacy);
+      } catch {
+        // Couldn't move it — still return the key below; the durable copy
+        // is removed regardless so it doesn't linger.
+      }
+      localStorage.removeItem(sessionKey(actorId));
+    }
+  }
   if (!raw) return null;
   try {
     return Keypair.fromSecretKey(bs58.decode(raw));
   } catch {
-    localStorage.removeItem(sessionKey(actorId));
+    clearSessionKeypair(actorId);
     return null;
   }
 }
 
-/** Clear session keypair for the given actor. */
+/** Clear the session keypair for the given actor — from BOTH sessionStorage
+ *  (current location) and localStorage (legacy), so no decrypted key
+ *  survives a lock or logout in either store. */
 export function clearSessionKeypair(actorId: string): void {
+  try {
+    sessionStorage.removeItem(sessionKey(actorId));
+  } catch {
+    // ignore — best-effort
+  }
   localStorage.removeItem(sessionKey(actorId));
 }
 
