@@ -40,6 +40,36 @@ function parseUpiUrl(raw: string): ParsedUpi | null {
   }
 }
 
+// Server schema (schemas.ts `upi_vpa`) only accepts this VPA shape. Match it
+// exactly so anything we hand off downstream also passes server validation.
+const VPA_RE = /^[\w.\-]{2,256}@[\w.\-]{2,64}$/;
+
+// Interpret manually-typed input as a payee — so a UPI ID or phone "behaves
+// like a QR". Accepts:
+//   • a full upi:// URL          → parsed normally
+//   • a bare UPI ID (name@bank)  → used directly as the payee VPA
+//   • an Indian mobile number    → passed through as the NPCI handle
+//                                  `<phone>@upi` (a valid VPA the fulfilling
+//                                  merchant's UPI app resolves on payout)
+// The phone path is best-effort pass-through: we can't verify the number here,
+// so an unregistered one only fails when the merchant tries to pay it.
+// Returns null when the text is none of the above.
+function parsePayeeInput(raw: string): ParsedUpi | null {
+  const s = raw.trim();
+  if (!s) return null;
+  if (s.toLowerCase().startsWith("upi://")) return parseUpiUrl(s);
+  if (VPA_RE.test(s)) return { pa: s, pn: "", am: "", tn: "" };
+  // Indian mobile: 10 digits starting 6-9. Strip a country/trunk prefix only
+  // when the length implies one — so a real 10-digit number that happens to
+  // begin "91" (e.g. 9123456789) isn't corrupted by an over-eager strip.
+  let d = s.replace(/[\s\-()]/g, "");
+  if (d.startsWith("+91")) d = d.slice(3);
+  else if (d.startsWith("91") && d.length === 12) d = d.slice(2);
+  else if (d.startsWith("0") && d.length === 11) d = d.slice(1);
+  if (/^[6-9]\d{9}$/.test(d)) return { pa: `${d}@upi`, pn: "", am: "", tn: "" };
+  return null;
+}
+
 // ── QR decoder: native BarcodeDetector → jsQR fallback with size tiering ──
 // Mirrors the prototype's create.html logic. The multi-size jsQR retry catches
 // QRs that fail at the source resolution because of moiré / aliasing.
@@ -143,6 +173,22 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, walletReady, w
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Manual entry (typed UPI ID / phone / pasted upi:// link). Lenient parser —
+  // unlike the camera path it accepts a bare VPA or a phone number too. Changing
+  // stage to "entering" tears down the camera via the lifecycle effect below.
+  const acceptManual = useCallback((raw: string) => {
+    const p = parsePayeeInput(raw);
+    if (!p) {
+      setErrorMsg("Enter a UPI ID (name@bank) or a 10-digit phone number.");
+      return;
+    }
+    setErrorMsg("");
+    setParsed(p);
+    setAmount(p.am || "");
+    setNote(p.tn || "");
+    setStage("entering");
+  }, []);
 
   const acceptRaw = useCallback((raw: string): boolean => {
     const p = parseUpiUrl(raw);
@@ -498,21 +544,29 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, walletReady, w
               </button>
             </div>
 
-            {/* Manual paste fallback */}
-            <div className="mt-3 w-full max-w-[360px] flex gap-2">
-              <input
-                type="text"
-                value={manualUrl}
-                onChange={(e) => setManualUrl(e.target.value)}
-                placeholder="paste upi://pay?pa=...&am=..."
-                className="flex-1 rounded-xl px-3 py-2 text-[12px] outline-none bg-surface-hover border border-border-subtle text-text-primary placeholder:text-text-tertiary font-mono"
-              />
-              <button
-                onClick={() => manualUrl && acceptRaw(manualUrl.trim())}
-                className="px-3 py-2 rounded-xl text-[12px] font-bold bg-surface-card hover:bg-surface-hover border border-border-medium text-text-primary"
-              >
-                Use
-              </button>
+            {/* Pay by UPI ID or phone — no QR needed. Also accepts a pasted
+                upi:// link. Phone numbers are sent as <phone>@upi. */}
+            <div className="mt-4 w-full max-w-[360px]">
+              <p className="mb-2 text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary text-center">
+                or pay by UPI ID / phone
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={manualUrl}
+                  maxLength={256}
+                  onChange={(e) => setManualUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && manualUrl.trim()) acceptManual(manualUrl.trim()); }}
+                  placeholder="name@bank or 9876543210"
+                  className="flex-1 rounded-xl px-3 py-2 text-[12px] outline-none bg-surface-hover border border-border-subtle text-text-primary placeholder:text-text-tertiary"
+                />
+                <button
+                  onClick={() => manualUrl.trim() && acceptManual(manualUrl.trim())}
+                  className="px-4 py-2 rounded-xl text-[12px] font-bold bg-accent text-accent-text"
+                >
+                  Pay
+                </button>
+              </div>
             </div>
           </motion.div>
         )}

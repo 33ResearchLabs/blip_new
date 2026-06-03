@@ -12,16 +12,13 @@ import {
   Check,
   X,
   Loader2,
-  Home,
-  Activity,
   Gift,
-  User,
-  Send,
   Plus,
   MoreHorizontal,
 } from "lucide-react";
 import * as QRCode from "qrcode";
 import { UpiPayScreen } from "@/components/user/UpiPayScreen";
+import { BottomNav } from "./BottomNav";
 import { useState as useStateHook, useEffect, useRef } from "react";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ArrowDown } from "lucide-react";
@@ -369,17 +366,18 @@ export const HomeScreen = ({
               </div>
             </div>
 
-            {/* Right: scan + bell */}
+            {/* Right: rewards + bell (scan moved into the search bar) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
-                onClick={() => setShowUpiPay(true)}
+                onClick={() => setScreen('rewards')}
+                aria-label="Rewards"
                 style={{
                   width: 38, height: 38, borderRadius: 999, border: 'none', cursor: 'pointer',
                   background: 'rgba(255,255,255,0.12)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <ScanIcon size={17} color="rgba(255,255,255,0.85)" />
+                <Gift size={17} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.85)' }} />
               </button>
               <button
                 onClick={() => setScreen('notifications')}
@@ -490,31 +488,43 @@ export const HomeScreen = ({
       }}>
         <div style={{ padding: '20px 22px 100px', minHeight: 380 }}>
 
-          {/* SEARCH BAR */}
-          <button
-            onClick={() => setScreen('trade')}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-              padding: '16px 18px', borderRadius: 22, cursor: 'pointer',
-              background: '#fff', border: '1px solid rgba(20,21,26,0.08)',
-              boxSizing: 'border-box',
-              boxShadow: '0 2px 8px rgba(20,21,26,0.06)',
-            }}
-          >
-            <svg viewBox="0 0 24 24" width={20} height={20} fill="none"
-              stroke="rgba(20,21,26,0.35)" strokeWidth="1.9" strokeLinecap="round">
-              <circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" />
-            </svg>
-            <span style={{ flex: 1, color: 'rgba(20,21,26,0.35)', fontWeight: 700, fontSize: 14.5, textAlign: 'left' }}>
-              Name, phone or UPI ID
-            </span>
-            <div style={{
-              width: 32, height: 32, borderRadius: 999,
-              background: '#ffb02e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
+          {/* SEARCH BAR — the text area opens the send/search (trade) flow; the
+              QR pill is a SEPARATE sibling button that opens the scanner. They
+              must not be nested (the QR tap used to bubble to the search button
+              and just navigate to Trade instead of scanning). */}
+          <div style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+            padding: '16px 18px', borderRadius: 22,
+            background: '#fff', border: '1px solid rgba(20,21,26,0.08)',
+            boxSizing: 'border-box',
+            boxShadow: '0 2px 8px rgba(20,21,26,0.06)',
+          }}>
+            <button
+              onClick={() => setShowUpiPay(true)}
+              style={{
+                flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12,
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              }}
+            >
+              <svg viewBox="0 0 24 24" width={20} height={20} fill="none"
+                stroke="rgba(20,21,26,0.35)" strokeWidth="1.9" strokeLinecap="round">
+                <circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" />
+              </svg>
+              <span style={{ flex: 1, color: 'rgba(20,21,26,0.35)', fontWeight: 700, fontSize: 14.5, textAlign: 'left' }}>
+                Name, phone or UPI ID
+              </span>
+            </button>
+            <button
+              onClick={() => setShowUpiPay(true)}
+              aria-label="Scan QR to pay"
+              style={{
+                width: 32, height: 32, borderRadius: 999, border: 'none', cursor: 'pointer',
+                background: '#ffb02e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+            >
               <ScanIcon size={17} color="#0b0b0d" />
-            </div>
-          </button>
+            </button>
+          </div>
 
           {/* FUNDED / RETURNING STATE — show if wallet is connected (even 0 balance).
               Only show new-user onboarding if wallet has never been set up. */}
@@ -811,89 +821,15 @@ export const HomeScreen = ({
         </div>
       </div>
 
-      {/* BOTTOM NAV — absolutely pinned to bottom of root */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-        padding: '8px 20px 28px',
-        borderTop: '1px solid rgba(20,21,26,0.07)',
-        background: '#f4f3f1',
-        backdropFilter: 'blur(12px)',
-      }}>
-        {/* Home */}
-        <button
-          onClick={() => setScreen('home')}
-          style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: screen === 'home' ? '#14151a' : 'rgba(20,21,26,0.35)',
-            fontSize: 9.5, fontWeight: 700, padding: '4px 0',
-          }}
-        >
-          <Home size={20} strokeWidth={screen === 'home' ? 2.4 : 1.8} />
-          <span>Home</span>
-        </button>
-
-        {/* Activity */}
-        <button
-          onClick={() => setScreen('orders')}
-          style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: screen === 'orders' ? '#14151a' : 'rgba(20,21,26,0.35)',
-            fontSize: 9.5, fontWeight: 700, padding: '4px 0',
-          }}
-        >
-          <Activity size={20} strokeWidth={screen === 'orders' ? 2.4 : 1.8} />
-          <span>Activity</span>
-        </button>
-
-        {/* Center Send FAB */}
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-          <motion.button
-            whileTap={{ scale: 0.92 }}
-            onClick={() => setScreen('trade')}
-            style={{
-              width: 58, height: 58, borderRadius: 999,
-              background: '#ffb02e', color: '#0b0b0d', border: 'none', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginTop: -22,
-              boxShadow: '0 10px 26px rgba(255,176,46,0.45)',
-              flexShrink: 0,
-            }}
-          >
-            <Send size={22} strokeWidth={2.2} />
-          </motion.button>
-        </div>
-
-        {/* Rewards */}
-        <button
-          onClick={() => setScreen('rewards')}
-          style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: screen === 'rewards' ? '#14151a' : 'rgba(20,21,26,0.35)',
-            fontSize: 9.5, fontWeight: 700, padding: '4px 0',
-          }}
-        >
-          <Gift size={20} strokeWidth={screen === 'rewards' ? 2.4 : 1.8} />
-          <span>Rewards</span>
-        </button>
-
-        {/* You */}
-        <button
-          onClick={() => setScreen('profile')}
-          style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: screen === 'profile' ? '#14151a' : 'rgba(20,21,26,0.35)',
-            fontSize: 9.5, fontWeight: 700, padding: '4px 0',
-          }}
-        >
-          <User size={20} strokeWidth={screen === 'profile' ? 2.4 : 1.8} />
-          <span>You</span>
-        </button>
-      </div>
+      {/* BOTTOM NAV — shared component so every user screen matches.
+          Inbox carries the chat-unread badge; Rewards now lives in the
+          top header above. */}
+      <BottomNav
+        screen={screen}
+        setScreen={setScreen}
+        maxW={maxW}
+        chatUnreadCount={unreadCount}
+      />
 
       {/* ── UPI Pay (QR scan → amount → hand off to escrow flow) ── */}
       {showUpiPay && (

@@ -1229,6 +1229,9 @@ export const TradeCreationScreen = ({
         </motion.button>
       </motion.div>
 
+      {/* Spacer so the CTA can scroll clear of the fixed bottom nav + FAB. */}
+      <div aria-hidden style={{ height: 96 }} />
+
       <BottomNav
         screen={screen}
         setScreen={setScreen}

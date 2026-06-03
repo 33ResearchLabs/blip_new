@@ -246,7 +246,7 @@ export const ProfileScreen = ({
       </header>
 
       {/* ── Scrollable content ── */}
-      <div className="flex-1 px-5 pb-24 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pb-28 overflow-y-auto scrollbar-hide">
 
         {/* Identity card \u2014 combines reputation + stats into a single cohesive
             block. Reputation row sits on top with a progress bar showing
