@@ -43,6 +43,11 @@ interface PaymentMethodSelectorProps {
    *  container" matching the AppLockSettingsCard pattern on the profile
    *  screen. Trade / Escrow screens keep their default loose-cards look. */
   groupContainer?: boolean;
+  /** Render the method list open and skip the collapsed dropdown trigger, so
+   *  the in-list "Add New Payment Method" button is always visible. Used when
+   *  the selector lives in a dedicated sheet/modal (e.g. the Trade screen's
+   *  Payment methods bottom sheet) where there's nothing to collapse into. */
+  alwaysExpanded?: boolean;
 }
 
 // Each method type maps to a semantic token via its CSS variable.
@@ -62,10 +67,11 @@ export const PaymentMethodSelector = ({
   onSelect,
   hideHeader = false,
   groupContainer = false,
+  alwaysExpanded = false,
 }: PaymentMethodSelectorProps) => {
   const [methods, setMethods] = useState<PaymentMethodItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(alwaysExpanded);
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
   // Two-tap delete: first tap arms `confirmDeleteId`, second tap within
@@ -283,7 +289,7 @@ export const PaymentMethodSelector = ({
           match the legacy Bank Accounts card row (ProfileScreen) so both
           render as visually identical sibling cards in the unified
           Payment Methods group container. */}
-      {methods.length > 0 && !showAddForm && (
+      {methods.length > 0 && !showAddForm && !alwaysExpanded && (
         <button
           onClick={() => setExpanded(!expanded)}
           className="w-full rounded-2xl px-4 py-3 flex items-start gap-3 text-left bg-surface-card border border-border-subtle"
@@ -320,7 +326,7 @@ export const PaymentMethodSelector = ({
 
       {/* Dropdown list */}
       <AnimatePresence>
-        {expanded && !showAddForm && (
+        {(expanded || alwaysExpanded) && !showAddForm && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
