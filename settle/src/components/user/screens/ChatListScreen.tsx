@@ -119,7 +119,7 @@ export const ChatListScreen = ({
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
       {/* ── Header ── */}
-      <header className="px-5 pt-10 pb-3 shrink-0">
+      <header className="px-5 pt-4 pb-3 shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase mb-1">Inbox</p>

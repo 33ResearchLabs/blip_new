@@ -376,7 +376,7 @@ export const RewardsScreen = ({
       {/* ── Header — small back chip on top, big hero title + subtitle below.
               Matches the Support page "Need help?" pattern so both screens
               read consistently. ── */}
-      <header className="px-5 pt-10 pb-3 shrink-0">
+      <header className="px-5 pt-4 pb-3 shrink-0">
         <div className="flex items-center gap-2">
           <motion.button
             whileTap={{ scale: 0.92 }}

@@ -217,7 +217,7 @@ export const ProfileScreen = ({
       {/* ── Header ── Hero profile banner: avatar with connection dot, name,
           tier line, and a tappable wallet pill (replaces the separate copy
           button for a cleaner one-tap interaction). */}
-      <header className="px-5 pt-10 pb-5 shrink-0">
+      <header className="px-5 pt-6 pb-5 shrink-0">
         <p className={`${SECTION_LABEL} mb-3`}>Account</p>
         <div className="flex items-start gap-4">
           <div className="relative shrink-0">
