@@ -88,26 +88,25 @@ export function AppLaunchPage() {
           background: T.black, color: T.onBlack,
           position: "relative", zIndex: 10,
         }}>
-          {/* Brand */}
-          <a href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", color: T.onBlack }}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(214,96,58,.15)", border: "1px solid rgba(214,96,58,.3)", display: "grid", placeItems: "center" }}>
-              <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke={T.coral} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 12h4l2.5-7 4 14 2.5-9 1.5 2H22"/>
-              </svg>
-            </span>
-            <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-0.02em" }}>
-              Blip <em style={{ fontStyle: "italic", fontWeight: 600, color: T.onBlackMut }}>money</em>
+          {/* Brand — matches blip.money logo exactly */}
+          <a href="/" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", color: T.onBlack }}>
+            <svg viewBox="0 0 70 60" height={17} style={{ width: "auto" }} fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#ffffff" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span style={{ fontWeight: 700, fontSize: 19, letterSpacing: "-0.04em", display: "flex", alignItems: "baseline" }}>
+              <span style={{ color: "#ffffff" }}>Blip</span>
+              <em style={{ fontStyle: "italic", fontWeight: 600, color: T.coral, marginLeft: 4 }}>money</em>
             </span>
           </a>
 
           {/* Live status */}
-          <span style={{ display: "flex", alignItems: "center", gap: 7, fontFamily: T.mono, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.14em", color: T.onBlackMut, paddingLeft: 18, borderLeft: `1px solid ${T.onBlackLine}` }}>
+          <span className="blip-status" style={{ display: "flex", alignItems: "center", gap: 7, fontFamily: T.mono, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.14em", color: T.onBlackMut, paddingLeft: 18, borderLeft: `1px solid ${T.onBlackLine}` }}>
             <span style={{ width: 6, height: 6, borderRadius: 999, background: T.greenLt, boxShadow: `0 0 6px ${T.greenLt}` }} />
             MAINNET · LIVE
           </span>
 
           {/* Links */}
-          <div style={{ display: "flex", gap: 24, marginLeft: "auto" }}>
+          <div className="blip-links" style={{ display: "flex", gap: 24, marginLeft: "auto" }}>
             {["How it works", "Network"].map(l => (
               <a key={l} href="#" style={{ color: T.onBlackMut, fontSize: 14, fontWeight: 500, textDecoration: "none" }}>{l}</a>
             ))}
@@ -133,17 +132,17 @@ export function AppLaunchPage() {
         }}>
 
           {/* Decorative phone (bottom-left) */}
-          <div aria-hidden style={{ position: "absolute", left: -46, bottom: -150, transform: "rotate(12deg) scale(.92)", zIndex: 1, pointerEvents: "none" }}>
+          <div aria-hidden className="blip-deco" style={{ position: "absolute", left: -46, bottom: -150, transform: "rotate(12deg) scale(.92)", zIndex: 1, pointerEvents: "none" }}>
             <PhoneMock />
           </div>
 
           {/* Decorative dashboard (bottom-right) */}
-          <div aria-hidden style={{ position: "absolute", right: -70, bottom: -120, width: 420, transform: "rotate(-9deg) scale(.96)", zIndex: 1, pointerEvents: "none" }}>
+          <div aria-hidden className="blip-deco" style={{ position: "absolute", right: -70, bottom: -120, width: 420, transform: "rotate(-9deg) scale(.96)", zIndex: 1, pointerEvents: "none" }}>
             <DashMock />
           </div>
 
           {/* Content */}
-          <div style={{ position: "relative", zIndex: 3 }}>
+          <div className="blip-main-content" style={{ position: "relative", zIndex: 3 }}>
             {/* Eyebrow */}
             <div style={{ display: "inline-flex", alignItems: "center", gap: 9, marginBottom: 18, fontFamily: T.mono, fontSize: 11.5, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: T.muted }}>
               <span style={{ width: 6, height: 6, borderRadius: 999, background: T.coral, animation: "blipPulse 2.4s infinite" }} />
@@ -151,12 +150,12 @@ export function AppLaunchPage() {
             </div>
 
             {/* Headline */}
-            <h1 style={{ fontWeight: 800, lineHeight: 0.92, letterSpacing: "-0.035em", fontSize: "clamp(40px,6vw,76px)", color: T.ink, margin: "0 0 0" }}>
+            <h1 className="blip-h1" style={{ fontWeight: 800, lineHeight: 0.92, letterSpacing: "-0.035em", fontSize: "clamp(40px,6vw,76px)", color: T.ink, margin: "0 0 0" }}>
               Two apps. <em style={{ fontStyle: "italic" }}>One network.</em>
             </h1>
 
             {/* Two-card chooser */}
-            <div style={{
+            <div className="blip-chooser" style={{
               display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20,
               maxWidth: 800, margin: "34px auto 0", textAlign: "left",
             }}>
@@ -247,8 +246,18 @@ export function AppLaunchPage() {
           </div>
         </div>
 
-        {/* Pulse keyframe */}
-        <style>{`@keyframes blipPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}`}</style>
+        {/* Styles */}
+        <style>{`
+          @keyframes blipPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+          @media(max-width:820px){
+            .blip-chooser{grid-template-columns:1fr !important;}
+            .blip-deco{display:none !important;}
+            .blip-links{display:none !important;}
+            .blip-status{display:none !important;}
+            .blip-main{overflow-y:auto !important; justify-content:flex-start !important; padding-top:32px !important;}
+            .blip-h1{font-size:clamp(34px,9vw,52px) !important;}
+          }
+        `}</style>
       </div>
     </>
   );
