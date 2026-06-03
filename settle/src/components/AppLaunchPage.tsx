@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { InstallPWAButton } from "@/components/InstallPWAButton";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -221,7 +220,8 @@ export function AppLaunchPage() {
                   Download the app
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <InstallPWAButton app="user" />
+                  <PlatBtn icon="ios" label="iOS" onClick={downloadUserApp} />
+                  <PlatBtn icon="android" label="Android" onClick={downloadUserApp} />
                 </div>
               </div>
 
@@ -265,7 +265,8 @@ export function AppLaunchPage() {
                   Download the app
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <InstallPWAButton app="merchant" />
+                  <PlatBtn icon="android" label="Mobile" onClick={openMerchantApp} />
+                  <PlatBtn icon="mac" label="Desktop" onClick={openMerchantApp} />
                 </div>
               </div>
             </div>
