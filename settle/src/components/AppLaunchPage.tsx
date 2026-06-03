@@ -10,8 +10,8 @@ type InstallState = "unavailable" | "ready" | "installing" | "installed";
 
 /* ── design tokens (from styles.css) ── */
 const T = {
-  bg: "#ffffff",
-  bgWarm: "#faf8f5",
+  bg: "#FAF8F5",
+  bgWarm: "#F0EDE8",
   ink: "#100e0c",
   inkSoft: "#2c2825",
   muted: "#8a857d",
@@ -33,8 +33,8 @@ const T = {
   green: "#3a9e6a",
   greenLt: "#4cc98c",
   red: "#d6493f",
-  font: "'Archivo', system-ui, sans-serif",
-  mono: "'JetBrains Mono', ui-monospace, monospace",
+  font: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+  mono: "'SF Mono', Monaco, 'Courier New', monospace",
 };
 
 export function AppLaunchPage() {
@@ -58,13 +58,15 @@ export function AppLaunchPage() {
     setPrompt(null);
   }
 
-  const openApp = state === "ready" ? install : () => { window.location.href = "/?welcome=skip"; };
+  // PWA install is merchant-only; user app always opens the web app URL
+  const openUserApp = () => { window.location.href = "/?welcome=skip"; };
+  const openMerchantApp = state === "ready" ? install : () => { window.location.href = "/merchant/login"; };
 
   return (
     <>
       {/* Google Fonts */}
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,600;1,700;1,800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap&display=swap');`}</style>
 
       <div style={{
         position: "absolute", inset: 0,
@@ -95,7 +97,7 @@ export function AppLaunchPage() {
             </svg>
             <span style={{ fontWeight: 700, fontSize: 19, letterSpacing: "-0.04em", display: "flex", alignItems: "baseline" }}>
               <span style={{ color: "#ffffff" }}>Blip</span>
-              <em style={{ fontStyle: "italic", fontWeight: 600, color: T.coral, marginLeft: 4 }}>money</em>
+              <em style={{ fontStyle: "italic", fontWeight: 600, color: "#ffffff", marginLeft: 4 }}>money</em>
             </span>
           </a>
 
@@ -150,8 +152,9 @@ export function AppLaunchPage() {
             </div>
 
             {/* Headline */}
-            <h1 className="blip-h1" style={{ fontWeight: 800, lineHeight: 0.92, letterSpacing: "-0.035em", fontSize: "clamp(40px,6vw,76px)", color: T.ink, margin: "0 0 0" }}>
-              Two apps. <em style={{ fontStyle: "italic" }}>One network.</em>
+            <h1 className="blip-h1" style={{ fontWeight: 700, lineHeight: 0.98, letterSpacing: "-0.06em", fontSize: "clamp(3.2rem,11vw,3.9rem)", color: T.ink, margin: "0 0 0" }}>
+              Two apps.{" "}
+              <em style={{ fontStyle: "italic", fontWeight: 600 }}>One network.</em>
             </h1>
 
             {/* Two-card chooser */}
@@ -170,8 +173,10 @@ export function AppLaunchPage() {
               >
                 {/* Head */}
                 <div style={{ display: "flex", alignItems: "center", gap: 14, paddingBottom: 22, marginBottom: 22, borderBottom: `1px solid ${T.line}` }}>
-                  <span style={{ width: 50, height: 50, borderRadius: 15, flexShrink: 0, display: "grid", placeItems: "center", background: "linear-gradient(150deg,#e6794f,#c0512c)", boxShadow: "0 10px 24px -10px rgba(214,96,58,.6)" }}>
-                    <svg viewBox="0 0 24 24" width={26} height={26} fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l2.5-7 4 14 2.5-9 1.5 2H22"/></svg>
+                  <span style={{ width: 50, height: 50, borderRadius: 15, flexShrink: 0, display: "grid", placeItems: "center", background: "#fff", border: `1px solid ${T.line2}` }}>
+                    <svg viewBox="0 0 70 60" width={28} height={24} fill="none">
+                      <path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#000" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </span>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: 21, letterSpacing: "-0.02em", lineHeight: 1, color: T.ink }}>
@@ -182,21 +187,25 @@ export function AppLaunchPage() {
                 </div>
 
                 {/* CTA */}
-                <div style={{ fontFamily: T.mono, fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase", color: T.faint, marginBottom: 10 }}>Use it now</div>
-                <button onClick={openApp} style={{
+                <div style={{ fontFamily: T.mono, fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase", color: "#6b6560", marginBottom: 10 }}>Use it now</div>
+                <button onClick={openUserApp} style={{
                   width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
-                  padding: "15px 18px", borderRadius: 14, border: "none", cursor: "pointer",
-                  background: T.coral, color: "#fff", fontFamily: T.font, fontWeight: 700, fontSize: 15.5, letterSpacing: "-0.01em",
-                  boxShadow: `0 10px 28px -10px rgba(214,96,58,.55)`,
+                  padding: "15px 18px", borderRadius: 14, cursor: "pointer",
+                  background: "#fff", color: T.coral,
+                  border: `2px solid ${T.coral}`,
+                  fontFamily: T.font, fontWeight: 700, fontSize: 15.5, letterSpacing: "-0.01em",
                 }}>
                   <GlobeIcon /> Open web app
                 </button>
 
                 {/* Download */}
-                <div style={{ fontFamily: T.mono, fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase", color: T.faint, marginTop: 18, marginBottom: 10 }}>Download the app</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: T.mono, fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase", color: "#6b6560", marginTop: 18, marginBottom: 10 }}>
+                  <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12M8 12l4 4 4-4M4 20h16"/></svg>
+                  Download the app
+                </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <PlatBtn icon="ios" label="iOS" onClick={openApp} />
-                  <PlatBtn icon="android" label="Android" onClick={openApp} />
+                  <PlatBtn icon="ios" label="iOS" onClick={openUserApp} />
+                  <PlatBtn icon="android" label="Android" onClick={openUserApp} />
                 </div>
               </div>
 
@@ -211,8 +220,10 @@ export function AppLaunchPage() {
               >
                 {/* Head */}
                 <div style={{ display: "flex", alignItems: "center", gap: 14, paddingBottom: 22, marginBottom: 22, borderBottom: `1px solid ${T.line}` }}>
-                  <span style={{ width: 50, height: 50, borderRadius: 15, flexShrink: 0, display: "grid", placeItems: "center", background: T.black, border: "1px solid rgba(214,96,58,.4)" }}>
-                    <svg viewBox="0 0 24 24" width={26} height={26} fill="none" stroke={T.coral} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4v16h16M8 14l3-4 3 3 4-6"/></svg>
+                  <span style={{ width: 50, height: 50, borderRadius: 15, flexShrink: 0, display: "grid", placeItems: "center", background: T.black }}>
+                    <svg viewBox="0 0 70 60" width={28} height={24} fill="none">
+                      <path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#fff" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </span>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: 21, letterSpacing: "-0.02em", lineHeight: 1, color: T.ink }}>
@@ -223,23 +234,24 @@ export function AppLaunchPage() {
                 </div>
 
                 {/* CTA */}
-                <div style={{ fontFamily: T.mono, fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase", color: T.faint, marginBottom: 10 }}>Use it now</div>
-                <a href="/merchant/login" style={{ textDecoration: "none" }}>
-                  <button style={{
-                    width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
-                    padding: "15px 18px", borderRadius: 14, border: "none", cursor: "pointer",
-                    background: T.black, color: T.onBlack, fontFamily: T.font, fontWeight: 700, fontSize: 15.5, letterSpacing: "-0.01em",
-                  }}>
-                    <MonitorIcon /> Open web app
-                  </button>
-                </a>
+                <div style={{ fontFamily: T.mono, fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase", color: "#6b6560", marginBottom: 10 }}>Use it now</div>
+                <button onClick={openMerchantApp} style={{
+                  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
+                  padding: "15px 18px", borderRadius: 14, border: "none", cursor: "pointer",
+                  background: T.black, color: T.onBlack, fontFamily: T.font, fontWeight: 700, fontSize: 15.5, letterSpacing: "-0.01em",
+                }}>
+                  <MonitorIcon /> Open web app
+                </button>
 
                 {/* Download */}
-                <div style={{ fontFamily: T.mono, fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase", color: T.faint, marginTop: 18, marginBottom: 10 }}>Download the app</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: T.mono, fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase", color: "#6b6560", marginTop: 18, marginBottom: 10 }}>
+                  <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12M8 12l4 4 4-4M4 20h16"/></svg>
+                  Download the app
+                </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <PlatBtn icon="ios" label="iOS" onClick={() => {}} />
-                  <PlatBtn icon="android" label="Android" onClick={() => {}} />
-                  <PlatBtn icon="mac" label="Mac" onClick={() => {}} />
+                  <PlatBtn icon="ios" label="iOS" onClick={openMerchantApp} />
+                  <PlatBtn icon="android" label="Android" onClick={openMerchantApp} />
+                  <PlatBtn icon="mac" label="Desktop" onClick={openMerchantApp} />
                 </div>
               </div>
             </div>
@@ -272,9 +284,24 @@ function PlatBtn({ icon, label, onClick }: { icon: "ios"|"android"|"mac"; label:
       background: T.bgWarm, color: T.inkSoft, fontFamily: T.font, fontWeight: 600, fontSize: 13.5,
       cursor: "pointer", transition: "background .2s",
     }}>
-      {icon === "ios" && <svg viewBox="0 0 24 24" width={16} height={16} fill={T.inkSoft}><path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-1-2.5-3.8zM14.3 5.4c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 .1 2-.5 2.7-1.3z"/></svg>}
-      {icon === "android" && <svg viewBox="0 0 24 24" width={16} height={16} fill={T.inkSoft}><path d="M17.6 9.5l1.6-2.8a.3.3 0 00-.5-.3l-1.6 2.8A9.3 9.3 0 0012 8c-1.9 0-3.7.5-5.1 1.2L5.3 6.4a.3.3 0 10-.5.3l1.6 2.8C3.6 11.1 2 13.7 2 16.7h20c0-3-1.6-5.6-4.4-7.2zM7 14.4a.9.9 0 110-1.8.9.9 0 010 1.8zm10 0a.9.9 0 110-1.8.9.9 0 010 1.8z"/></svg>}
-      {icon === "mac" && <svg viewBox="0 0 24 24" width={16} height={16} fill={T.inkSoft}><path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-1-2.5-3.8zM14.3 5.4c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 .1 2-.5 2.7-1.3z"/></svg>}
+      {/* Apple logo — only for iOS */}
+      {icon === "ios" && (
+        <svg viewBox="0 0 24 24" width={15} height={15} fill={T.inkSoft}>
+          <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.46 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701z"/>
+        </svg>
+      )}
+      {/* Desktop — generic monitor */}
+      {icon === "mac" && (
+        <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke={T.inkSoft} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+        </svg>
+      )}
+      {/* Android logo — official bugdroid */}
+      {icon === "android" && (
+        <svg viewBox="0 0 24 24" width={16} height={16} fill="#3DDC84">
+          <path d="M17.523 15.341c-.551 0-.999-.449-.999-1s.448-.999.999-.999c.551 0 .999.448.999.999 0 .551-.448 1-.999 1m-11.046 0c-.551 0-.999-.449-.999-1s.448-.999.999-.999c.551 0 .999.448.999.999 0 .551-.448 1-.999 1m11.405-6.02l1.997-3.459a.416.416 0 00-.152-.568.416.416 0 00-.568.152l-2.022 3.503A10.97 10.97 0 0012 7.851c-1.86 0-3.59.393-5.137 1.099L4.841 5.447a.416.416 0 00-.568-.152.416.416 0 00-.152.568l1.997 3.459C2.689 11.187.343 14.659 0 18.761h24c-.344-4.102-2.689-7.574-6.118-9.44"/>
+        </svg>
+      )}
       {label}
     </button>
   );
