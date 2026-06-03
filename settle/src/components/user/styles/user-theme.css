@@ -1,3 +1,8 @@
+/* Manrope — HomeScreen declares this font but it was never loaded, so every
+   screen (Home included) silently fell back to system sans. Load it here, the
+   one stylesheet the whole user route imports. */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
 /* ==========================================================================
    USER MODULE — scoped theme tokens (dark + light)
    --------------------------------------------------------------------------
@@ -22,6 +27,9 @@
    isn't needed — same specificity (one class) wins because .user-scope is a
    nearer ancestor of the user-screen elements. */
 .user-scope {
+  /* Typography — Manrope on every user screen, matching HomeScreen. */
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+
   /* Backgrounds */
   --background:           #0B0F14;
   --foreground:           #ffffff;
@@ -85,50 +93,51 @@
 
 /* ----- Light-mode design tokens (scoped) ----- */
 .user-scope.user-light {
-  --background: #ffffff;
-  --foreground: #0f172a;
+  /* Cream look matching HomeScreen — this is the user app's default theme. */
+  --background: #f4f3f1;
+  --foreground: #14151a;
 
   /* Background hierarchy */
-  --color-bg-primary:   #ffffff;
-  --color-bg-secondary: #f7f8fa;
+  --color-bg-primary:   #f4f3f1;
+  --color-bg-secondary: #ffffff;
   --color-bg-tertiary:  #eef0f3;
 
   /* Surface hierarchy (used by bg-surface-base / -raised / -overlay) */
-  --color-surface-base:    #ffffff;
-  --color-surface-raised:  #f7f8fa;
-  --color-surface-overlay: #eef0f3;
+  --color-surface-base:    #f4f3f1;
+  --color-surface-raised:  #ffffff;
+  --color-surface-overlay: #ffffff;
 
-  /* Text hierarchy — dark on white */
-  --color-text-primary:    rgba(15, 23, 42, 0.95);
-  --color-text-secondary:  rgba(15, 23, 42, 0.60);
-  --color-text-tertiary:   rgba(15, 23, 42, 0.38);
-  --color-text-quaternary: rgba(15, 23, 42, 0.18);
+  /* Text hierarchy — dark on cream (HomeScreen #14151a / #80828c) */
+  --color-text-primary:    #14151a;
+  --color-text-secondary:  #80828c;
+  --color-text-tertiary:   rgba(20, 21, 26, 0.35);
+  --color-text-quaternary: rgba(20, 21, 26, 0.18);
 
   /* Borders */
-  --border:                  rgba(15, 23, 42, 0.08);
-  --color-border-subtle:     rgba(15, 23, 42, 0.06);
-  --color-border-medium:     rgba(15, 23, 42, 0.10);
-  --color-border-strong:     rgba(15, 23, 42, 0.16);
+  --border:                  rgba(20, 21, 26, 0.07);
+  --color-border-subtle:     rgba(20, 21, 26, 0.07);
+  --color-border-medium:     rgba(20, 21, 26, 0.10);
+  --color-border-strong:     rgba(20, 21, 26, 0.16);
 
-  /* Glass surfaces */
-  --color-surface-card:   rgba(15, 23, 42, 0.035);
-  --color-surface-hover:  rgba(15, 23, 42, 0.055);
-  --color-surface-active: rgba(15, 23, 42, 0.075);
+  /* Surfaces — solid white cards like HomeScreen */
+  --color-surface-card:   #ffffff;
+  --color-surface-hover:  rgba(20, 21, 26, 0.04);
+  --color-surface-active: rgba(20, 21, 26, 0.06);
 
-  --card: rgba(15, 23, 42, 0.035);
+  --card: #ffffff;
   --card-solid: #ffffff;
 
-  --muted: #64748b;
-  --muted-bg: #f1f5f9;
+  --muted: #80828c;
+  --muted-bg: #f4f3f1;
 
-  /* Accent CTA flips to dark on white */
-  --accent: #0f172a;
-  --accent-bright: #1e293b;
-  --accent-dark: #020617;
-  --accent-dim: rgba(15, 23, 42, 0.70);
-  --accent-subtle: rgba(15, 23, 42, 0.06);
-  --accent-glow: rgba(15, 23, 42, 0.08);
-  --accent-text: #ffffff;
+  /* Accent CTA — HomeScreen golden pill, dark text */
+  --accent: #ffb02e;
+  --accent-bright: #ffbf4d;
+  --accent-dark: #e89a1c;
+  --accent-dim: rgba(255, 176, 46, 0.70);
+  --accent-subtle: rgba(255, 176, 46, 0.12);
+  --accent-glow: rgba(255, 176, 46, 0.18);
+  --accent-text: #0b0b0d;
 
   /* Semantic — slightly deeper for AA contrast on white */
   --color-success: #059669;

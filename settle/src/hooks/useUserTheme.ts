@@ -16,7 +16,9 @@ export type UserTheme = 'dark' | 'light';
 const STORAGE_KEY = 'user_theme';
 
 export function useUserTheme() {
-  const [theme, setThemeState] = useState<UserTheme>('dark');
+  // User app ships in the light (cream) look by default; dark stays available
+  // via the toggle for anyone who saved that preference.
+  const [theme, setThemeState] = useState<UserTheme>('light');
 
   useEffect(() => {
     try {
