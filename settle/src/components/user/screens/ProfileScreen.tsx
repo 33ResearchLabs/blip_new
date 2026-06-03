@@ -391,7 +391,7 @@ export const ProfileScreen = ({
 
                 {/* Embedded-wallet management. Surfaced only when the
                     embedded-wallet flag is on. */}
-                {/* {IS_EMBEDDED_WALLET && (
+                {IS_EMBEDDED_WALLET && (
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={() => router.push('/user/wallet')}
@@ -400,7 +400,7 @@ export const ProfileScreen = ({
                     Manage Wallet
                     <ChevronRight size={14} className="text-text-tertiary" />
                   </motion.button>
-                )} */}
+                )}
               </div>
             </>
           )}

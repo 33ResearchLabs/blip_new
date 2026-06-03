@@ -434,9 +434,9 @@ export function SendModal({
                   onChange={(e) => setAmountStr(e.target.value)}
                   placeholder="0.00"
                   maxLength={20}
-                  className="flex-1 bg-transparent text-2xl font-bold text-foreground tabular-nums outline-none placeholder:text-foreground/20"
+                  className="flex-1 min-w-0 bg-transparent text-2xl font-bold text-foreground tabular-nums outline-none placeholder:text-foreground/20"
                 />
-                <span className="text-sm font-semibold text-foreground/80 bg-foreground/[0.06] rounded-lg px-3 py-1.5">
+                <span className="shrink-0 text-sm font-semibold text-foreground/80 bg-foreground/[0.06] rounded-lg px-3 py-1.5">
                   {token.symbol}
                 </span>
               </div>
