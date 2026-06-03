@@ -249,8 +249,7 @@ export function AppLaunchPage() {
                   Download the app
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <PlatBtn icon="ios" label="iOS" onClick={openMerchantApp} />
-                  <PlatBtn icon="android" label="Android" onClick={openMerchantApp} />
+                  <PlatBtn icon="android" label="Mobile" onClick={openMerchantApp} />
                   <PlatBtn icon="mac" label="Desktop" onClick={openMerchantApp} />
                 </div>
               </div>
