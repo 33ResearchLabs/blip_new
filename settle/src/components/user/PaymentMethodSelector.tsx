@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { colors } from "@/lib/design/theme";
+import { useUserPaymentMethods } from "@/context/AppContext";
 
 export interface PaymentMethodItem {
   id: string;
@@ -69,8 +70,12 @@ export const PaymentMethodSelector = ({
   groupContainer = false,
   alwaysExpanded = false,
 }: PaymentMethodSelectorProps) => {
-  const [methods, setMethods] = useState<PaymentMethodItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Seed from the context preload (fetched at login) so the list shows
+  // instantly — no skeleton flash. The on-mount fetch below still runs as a
+  // background refresh + fallback if the preload hasn't landed.
+  const { paymentMethods: preloaded, paymentMethodsLoaded, fetchPaymentMethods: syncPreloaded } = useUserPaymentMethods();
+  const [methods, setMethods] = useState<PaymentMethodItem[]>(preloaded);
+  const [loading, setLoading] = useState(!paymentMethodsLoaded);
   const [expanded, setExpanded] = useState(alwaysExpanded);
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -98,10 +103,12 @@ export const PaymentMethodSelector = ({
     ? [selected, ...methods.filter((m) => m.id !== selected.id)]
     : methods;
 
-  // Fetch payment methods
+  // Fetch payment methods — background refresh + fallback. Only blanks to the
+  // skeleton when the context preload hasn't completed, so a seeded list never
+  // flickers on open.
   useEffect(() => {
     if (!userId) return;
-    setLoading(true);
+    if (!paymentMethodsLoaded) setLoading(true);
     fetchWithAuth(`/api/users/${userId}/payment-methods`)
       .then((res) => res.json())
       .then((data) => {
@@ -159,6 +166,8 @@ export const PaymentMethodSelector = ({
         // If the deleted one was selected, clear the selection so callers
         // don't render a stale chip.
         if (selectedId === methodId) onSelect(null);
+        // Keep the login-time cache fresh so the next open is instant + correct.
+        void syncPreloaded();
       }
     } catch {
       // Best-effort — leave the row in place if the API call failed.
@@ -225,6 +234,8 @@ export const PaymentMethodSelector = ({
         resetForm();
         setShowAddForm(false);
         setExpanded(false);
+        // Keep the login-time cache fresh so the next open is instant + correct.
+        void syncPreloaded();
       } else {
         // Map machine codes / HTTP status to friendly messages
         if (res.status === 401 || data.code === 'SESSION_EXPIRED') {
@@ -259,11 +270,41 @@ export const PaymentMethodSelector = ({
   };
 
   if (loading) {
+    // Skeleton card rows (not a collapse-to-spinner) so the bottom sheet keeps
+    // a stable height and content fades in smoothly — matches the merchant
+    // mobile modal feel instead of a "stuck" loading flash on every open.
+    const skeletonRows = alwaysExpanded ? 2 : 1;
     return (
-      <div className="w-full rounded-2xl p-4 flex items-center justify-center gap-2"
-        style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
-        <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
-        <span className="text-[13px] text-text-tertiary">Loading payment methods...</span>
+      <div
+        className={
+          groupContainer
+            ? "w-full rounded-xl bg-white/[0.02] border border-white/[0.06] p-3"
+            : "w-full"
+        }
+      >
+        {!hideHeader && (
+          <div className="flex items-center gap-2 mb-2">
+            <CreditCard className="w-4 h-4 text-text-tertiary" />
+            <span className="text-[12px] text-text-tertiary uppercase tracking-wide font-semibold">
+              Your Payment Method
+            </span>
+          </div>
+        )}
+        <div className="space-y-1">
+          {Array.from({ length: skeletonRows }).map((_, i) => (
+            <div
+              key={i}
+              className="w-full rounded-2xl px-4 py-3 flex items-center gap-3"
+              style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
+            >
+              <div className="w-9 h-9 rounded-xl shrink-0 bg-surface-hover animate-pulse" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="h-3 w-1/2 rounded bg-surface-hover animate-pulse" />
+                <div className="h-2.5 w-1/3 rounded bg-surface-hover animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

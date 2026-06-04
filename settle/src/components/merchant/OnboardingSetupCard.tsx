@@ -52,7 +52,7 @@ export function OnboardingSetupCard({
       doneLabel: 'Connected',
       cta: conditions.walletConnected
         ? null
-        : { label: 'Connect', onClick: () => router.push('/merchant/wallet') },
+        : { label: 'Connect', onClick: () => router.push('/market/wallet') },
     },
     {
       key: 'inr-rate',
@@ -63,7 +63,7 @@ export function OnboardingSetupCard({
       doneLabel: 'Set',
       cta: conditions.inrRateSet
         ? null
-        : { label: 'Set Rate', onClick: () => router.push('/merchant/settings?tab=rates') },
+        : { label: 'Set Rate', onClick: () => router.push('/market/settings?tab=rates') },
     },
     {
       key: 'trade',

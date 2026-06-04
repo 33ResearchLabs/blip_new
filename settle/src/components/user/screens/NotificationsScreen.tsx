@@ -101,10 +101,9 @@ export const NotificationsScreen = ({
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
       {/* ── Header ── */}
-      <header className="px-5 pt-4 pb-3 shrink-0">
+      <header className="px-5 pt-4 pb-4 shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase mb-1">Updates</p>
             <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Notifications</p>
           </div>
           {unreadCount > 0 && (

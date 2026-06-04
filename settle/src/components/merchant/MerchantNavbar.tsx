@@ -126,7 +126,7 @@ export function MerchantNavbar({
       // any unlocked wallet session material across actors. UX prefs
       // (theme, remember-me, notif settings) are preserved.
       clearAuthStorageOnLogout();
-      window.location.href = "/merchant";
+      window.location.href = "/market";
     }
   };
 
@@ -155,7 +155,7 @@ export function MerchantNavbar({
           <div className="flex items-center shrink-0 lg:justify-self-start min-w-0">
             {/* Desktop — full logo wordmark */}
             <span className="hidden lg:flex">
-              <Logo href="/merchant" />
+              <Logo href="/market" />
             </span>
             {/* Mobile — @username replaces the logo for a native-app feel */}
             <div className="flex lg:hidden items-center gap-2 min-w-0">
@@ -189,7 +189,7 @@ export function MerchantNavbar({
           <div className="hidden lg:flex items-center justify-center min-w-0">
             <nav className="flex items-center gap-0.5 bg-white/[0.03] border border-white/[0.05] rounded-lg p-[3px] min-w-0 max-w-full">
               <Link
-                href="/merchant"
+                href="/market"
                 className={pill(activePage === "dashboard")}
                 onClick={onNavLinkClick}
               >
@@ -204,7 +204,7 @@ export function MerchantNavbar({
                 </button>
               ) : (
                 <Link
-                  href="/merchant/wallet"
+                  href="/market/wallet"
                   className={pill(activePage === "wallet")}
                   onClick={onNavLinkClick}
                 >
@@ -220,7 +220,7 @@ export function MerchantNavbar({
                 </button>
               ) : (
                 <Link
-                  href="/merchant/settings"
+                  href="/market/settings"
                   className={pill(activePage === "settings")}
                 >
                   Settings
@@ -348,7 +348,7 @@ export function MerchantNavbar({
                           <Wallet className="w-4 h-4" /> Wallet
                         </button>
                       ) : (
-                        <Link href="/merchant/wallet" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
+                        <Link href="/market/wallet" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
                           <Wallet className="w-4 h-4" /> Wallet
                         </Link>
                       )} */}
@@ -360,7 +360,7 @@ export function MerchantNavbar({
                           <Settings className="w-4 h-4" /> Settings
                         </button>
                       ) : (
-                        <Link href="/merchant/settings" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
+                        <Link href="/market/settings" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
                           <Settings className="w-4 h-4" /> Settings
                         </Link>
                       )}
@@ -509,7 +509,7 @@ export function MerchantNavbar({
               {/* Drawer menu items */}
               <div className="flex-1 overflow-y-auto py-2">
                 <Link
-                  href="/merchant"
+                  href="/market"
                   onClick={() => {
                     setDrawerOpen(false);
                     onNavLinkClick?.();
@@ -530,7 +530,7 @@ export function MerchantNavbar({
                   </button>
                 ) : (
                   <Link
-                    href="/merchant/wallet"
+                    href="/market/wallet"
                     onClick={() => setDrawerOpen(false)}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
                   >
@@ -549,7 +549,7 @@ export function MerchantNavbar({
                   </button>
                 ) : (
                   <Link
-                    href="/merchant/settings"
+                    href="/market/settings"
                     onClick={() => setDrawerOpen(false)}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
                   >

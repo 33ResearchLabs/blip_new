@@ -157,20 +157,33 @@ export function AppLockScreen() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center overflow-y-auto"
-      style={{
-        background: isLight ? 'rgba(248,250,252,0.96)' : 'rgba(6,6,6,0.96)',
-        backdropFilter: 'blur(20px)',
-        paddingTop: 'max(env(safe-area-inset-top, 16px), 16px)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 16px)',
-        paddingLeft: 'max(env(safe-area-inset-left, 16px), 16px)',
-        paddingRight: 'max(env(safe-area-inset-right, 16px), 16px)',
-      }}
+      className="fixed inset-0 z-[200] flex justify-center"
+      // Transparent so the app's own frame (var(--user-frame), rendered
+      // behind this overlay) shows through on the sides — the lock then
+      // matches the app's frame colour on desktop without re-deriving the
+      // theme here. The centred 440px panel below still covers all content.
+      style={{ background: 'transparent' }}
       role="dialog"
       aria-modal="true"
       aria-label="App locked"
     >
-      <div className="w-full max-w-sm space-y-4 sm:space-y-6 my-auto">
+      {/* Phone-width column — mirrors the app's max-w-[440px] frame so the
+          lock screen lines up with the rest of the app on desktop instead of
+          spanning the whole window. The frosted panel + blur live here; the
+          outer fill above is the app-frame colour, shown on the sides. */}
+      <div
+        className="relative w-full max-w-[440px] flex items-start sm:items-center justify-center overflow-y-auto"
+        style={{
+          background: isLight ? 'rgba(248,250,252,0.96)' : 'rgba(6,6,6,0.96)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          paddingTop: 'max(env(safe-area-inset-top, 16px), 16px)',
+          paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 16px)',
+          paddingLeft: 'max(env(safe-area-inset-left, 16px), 16px)',
+          paddingRight: 'max(env(safe-area-inset-right, 16px), 16px)',
+        }}
+      >
+        <div className="w-full space-y-4 sm:space-y-6 my-auto">
         {/* Header */}
         <div className="flex flex-col items-center gap-2 sm:gap-3 pt-1 sm:pt-2">
           <div
@@ -250,6 +263,7 @@ export function AppLockScreen() {
           {loggingOut ? <Loader2 className="w-3 h-3 animate-spin" /> : <LogOut className="w-3 h-3" />}
           {loggingOut ? 'Signing out…' : 'Sign out instead'}
         </button>
+        </div>
       </div>
     </motion.div>
   );

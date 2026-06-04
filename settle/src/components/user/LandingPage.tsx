@@ -131,7 +131,7 @@ export function LandingPage({
   const onSwipeEnd = (_: unknown, info: PanInfo) => {
     if (hideMerchantLinks) return;
     if (info.offset.x < -80 || info.velocity.x < -400) {
-      router.push("/merchant/login?tab=signin");
+      router.push("/market/login?tab=signin");
     }
   };
   // Derived directly from the `skipWelcome` prop (which is itself read from
@@ -313,7 +313,7 @@ export function LandingPage({
               ? []
               : [
                   {
-                    href: "/merchant/login?tab=signin",
+                    href: "/market/login?tab=signin",
                     label: "Merchant",
                     sub: "Run a P2P desk",
                     Icon: Store,
@@ -510,7 +510,7 @@ export function LandingPage({
           <InstallPWAButton app="user" />
           {!hideMerchantLinks && (
             <Link
-              href="/merchant/login"
+              href="/market/login"
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#1d1d1f] bg-white border border-[#dcd4c5] hover:border-[#1d1d1f] transition-colors"
             >
               Merchant
@@ -981,7 +981,7 @@ export function LandingPage({
               {/* Merchant promo */}
               {!hideMerchantLinks && (
                 <Link
-                  href="/merchant/login?tab=register"
+                  href="/market/login?tab=register"
                   className="relative overflow-hidden mt-4 flex items-center justify-between rounded-xl px-4 py-3 transition-colors group bg-[#fdfbf7] border border-[#ece6dc] hover:border-[#cc785c]"
                 >
                   <div className="relative">

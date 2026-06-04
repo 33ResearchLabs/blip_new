@@ -326,7 +326,7 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                                 // outer row's order-detail click doesn't
                                 // also fire.
                                 <a
-                                  href={`/merchant/profile/${entry.counterparty_id}`}
+                                  href={`/market/profile/${entry.counterparty_id}`}
                                   onClick={(e) => e.stopPropagation()}
                                   className="text-foreground/55 truncate hover:text-foreground hover:underline transition-colors"
                                 >

@@ -65,7 +65,7 @@ export default function AnalyticsPage() {
   // the canonical login URL instead of rendering empty state.
   useEffect(() => {
     if (isLoading) return;
-    if (!isLoggedIn || !merchantId) router.replace("/merchant/login");
+    if (!isLoggedIn || !merchantId) router.replace("/market/login");
   }, [isLoading, isLoggedIn, merchantId, router]);
 
   // Load merchant info from localStorage
@@ -129,19 +129,19 @@ export default function AnalyticsPage() {
           {/* Nav Links */}
           <nav className="flex items-center gap-1 ml-4">
             <Link
-              href="/merchant"
+              href="/market"
               className="px-3 py-1.5 text-xs font-medium text-foreground/40 hover:text-foreground hover:bg-card rounded-lg transition-all"
             >
               Console
             </Link>
             <Link
-              href="/merchant/analytics"
+              href="/market/analytics"
               className="px-3 py-1.5 text-xs font-medium bg-white/[0.08] rounded-lg text-white"
             >
               Analytics
             </Link>
             <Link
-              href="/merchant/settings"
+              href="/market/settings"
               className="px-3 py-1.5 text-xs font-medium text-foreground/40 hover:text-foreground hover:bg-card rounded-lg transition-all"
             >
               Settings

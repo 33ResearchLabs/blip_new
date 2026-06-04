@@ -385,7 +385,7 @@ export default function MerchantSettingsPage({
   // identity is the cookie's signed token, not anything the client wrote.
   useEffect(() => {
     if (!merchantId && !isLoggedIn) {
-      router.replace("/merchant/login");
+      router.replace("/market/login");
     }
   }, [merchantId, isLoggedIn, router]);
 
@@ -774,7 +774,7 @@ export default function MerchantSettingsPage({
     // before the redirect. The merchant's encrypted blob stays in place
     // for re-unlock on next login.
     clearAuthStorageOnLogout();
-    window.location.href = "/merchant";
+    window.location.href = "/market";
   };
 
   if (isLoading) {
@@ -820,7 +820,7 @@ export default function MerchantSettingsPage({
         }
         onOpenWallet={onOpenWallet}
         onNavLinkClick={onClose}
-        onBack={onClose ?? (() => router.push("/merchant"))}
+        onBack={onClose ?? (() => router.push("/market"))}
       />
 
       {/* Constrained layout — capped at 1080px and centered to match the
@@ -1100,7 +1100,7 @@ export default function MerchantSettingsPage({
               {/* View Public Profile Link */}
               {merchantId && (
                 <Link
-                  href={`/merchant/profile/${merchantId}`}
+                  href={`/market/profile/${merchantId}`}
                   className="flex items-center justify-center gap-2 text-sm text-white/40 hover:text-foreground/60 transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -3225,7 +3225,7 @@ function ActiveSessionsSection() {
         }
         // Hard navigation so the new page tree boots without any cached
         // auth context, which is exactly what we want after a global logout.
-        window.location.href = "/merchant?logged_out=all";
+        window.location.href = "/market?logged_out=all";
       } else {
         alert(
           data.error || "Failed to log out of all devices. Please try again.",

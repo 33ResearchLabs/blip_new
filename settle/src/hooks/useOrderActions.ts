@@ -1022,6 +1022,14 @@ export function useOrderActions({
           // Order committed — release the per-submission key.
           directBuySubmitIdRef.current = null;
           const newOrder = mapDbOrderToUI(data.data, merchantId);
+          // The raw create response from core-api doesn't carry the
+          // per-merchant `is_my_order` flag — only the GET list query
+          // (getAllPendingOrdersForMerchant) computes it. Without this, the
+          // optimistic insert briefly lands in the "Pending" tab with an
+          // Accept slider until fetchOrders() re-enriches it a few seconds
+          // later. We just created it, so it's unambiguously ours — flag it
+          // now so it goes straight to "My Orders" with a Cancel control.
+          newOrder.isMyOrder = true;
           setOrders((prev: Order[]) => [newOrder, ...prev]);
           playSound('trade_complete');
         }

@@ -78,7 +78,7 @@ export function MarketingLanding() {
           <p className="lead">Send across borders in <b style={{ color: "var(--ink)" }}>under 60 seconds</b>. Real merchants compete on rate. Escrow on-chain. No FX hidden in the spread.</p>
           <div className="hero-cta">
             <Link href="/?welcome=skip&tab=signin" className="btn btn-ink">Send money →</Link>
-            <a href="/merchant/login" target="_top" className="btn btn-outline">Run a desk · Blip Market</a>
+            <a href="/market/login" target="_top" className="btn btn-outline">Run a desk · Blip Market</a>
           </div>
           
           <div className="channels" aria-label="Coming soon channels">
@@ -486,7 +486,7 @@ export function MarketingLanding() {
               <div className="kr"><span>Founding fee</span><span className="v green">0.00%</span></div>
               <div className="kr total"><span>KYB</span><span className="v">24–48h</span></div>
             </div>
-            <a href="/merchant/login" target="_top" className="btn btn-accent" style={{ alignSelf: "flex-start" }}>Apply to run a desk →</a>
+            <a href="/market/login" target="_top" className="btn btn-accent" style={{ alignSelf: "flex-start" }}>Apply to run a desk →</a>
           </div>
         </div>
       </section>
@@ -498,7 +498,7 @@ export function MarketingLanding() {
           <p>122 users and 38 desks already on the network. Open the app or apply to run a desk — both take less than a minute.</p>
           <div className="cta-row">
             <Link href="/?welcome=skip&tab=signin" className="btn btn-ink">Send money →</Link>
-            <a href="/merchant/login" target="_top" className="btn btn-accent">Apply to run a desk</a>
+            <a href="/market/login" target="_top" className="btn btn-accent">Apply to run a desk</a>
           </div>
         </div>
       </section>

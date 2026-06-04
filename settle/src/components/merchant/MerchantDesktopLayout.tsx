@@ -263,7 +263,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                     activeCorridor={activeCorridor}
                     onCorridorChange={onCorridorChange}
                     onToggleOnline={() => setIsMerchantOnline((prev) => !prev)}
-                    onOpenCorridor={() => window.open(`/merchant/mempool?corridor=${activeCorridor}`, "_blank")}
+                    onOpenCorridor={() => window.open(`/market/mempool?corridor=${activeCorridor}`, "_blank")}
                     onOpenSwap={props.onOpenSwap}
                     onOpenSend={props.onOpenSend}
                     onOpenDeposit={props.onOpenDeposit}

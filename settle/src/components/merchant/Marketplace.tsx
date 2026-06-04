@@ -366,7 +366,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                 {/* Offer Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <a href={`/merchant/profile/${offer.merchant.id}`} className="text-sm font-medium text-white truncate hover:opacity-80 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                    <a href={`/market/profile/${offer.merchant.id}`} className="text-sm font-medium text-white truncate hover:opacity-80 transition-opacity" onClick={(e) => e.stopPropagation()}>
                       {offer.merchant.display_name}
                     </a>
                     {offer.blipScore && (

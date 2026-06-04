@@ -162,12 +162,12 @@ export function LoginScreen({
       <MerchantWelcomePage
         onGetStarted={() => {
           if (typeof window !== "undefined") {
-            window.location.href = "/merchant/login?tab=register";
+            window.location.href = "/market/login?tab=register";
           }
         }}
         onSignIn={() => {
           if (typeof window !== "undefined") {
-            window.location.href = "/merchant/login?tab=signin";
+            window.location.href = "/market/login?tab=signin";
           }
         }}
       />
@@ -490,7 +490,7 @@ export function LoginScreen({
                     onEnter={onLogin}
                     trailingLabel={
                       <Link
-                        href="/merchant/forgot-password"
+                        href="/market/forgot-password"
                         className="text-[12px] text-white/70 hover:text-white transition-colors"
                       >
                         Forgot password?

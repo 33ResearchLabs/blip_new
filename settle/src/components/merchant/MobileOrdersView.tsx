@@ -7,7 +7,6 @@ import {
   Activity,
   MessageCircle,
   User,
-  Loader2,
   Search,
   Volume2,
   VolumeX,
@@ -297,14 +296,12 @@ function OrderCardTimer({
               />
             ) : (
               onCancelOrder && (
-                <button
-                  onClick={() => onCancelOrder(order)}
-                  disabled={cancellingOrderId === order.id}
-                  style={{ width: "100%", height: 48, borderRadius: 14, border: "1px solid rgba(255,255,255,0.10)", fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "rgba(255,255,255,0.04)", cursor: cancellingOrderId === order.id ? "not-allowed" : "pointer", opacity: cancellingOrderId === order.id ? 0.4 : 1 }}>
-                  {cancellingOrderId === order.id
-                    ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" />
-                    : <><X style={{ width: 16, height: 16 }} /> Cancel Order</>}
-                </button>
+                <HoldSwipe
+                  onAccept={() => onCancelOrder(order)}
+                  loading={cancellingOrderId === order.id}
+                  height={48}
+                  variant="cancel"
+                />
               )
             )}
           </div>

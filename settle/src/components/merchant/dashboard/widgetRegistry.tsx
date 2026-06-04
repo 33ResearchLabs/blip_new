@@ -206,7 +206,7 @@ const WidgetDashboardWidgets: React.FC<{ ctx: DashboardContext }> = ({ ctx }) =>
       activeCorridor={ctx.activeCorridor}
       onCorridorChange={ctx.onCorridorChange}
       onToggleOnline={() => ctx.setIsMerchantOnline((prev) => !prev)}
-      onOpenCorridor={() => window.open(`/merchant/mempool?corridor=${ctx.activeCorridor}`, "_blank")}
+      onOpenCorridor={() => window.open(`/market/mempool?corridor=${ctx.activeCorridor}`, "_blank")}
       onOpenSwap={ctx.onOpenSwap}
       onOpenSend={ctx.onOpenSend}
       onOpenDeposit={ctx.onOpenDeposit}

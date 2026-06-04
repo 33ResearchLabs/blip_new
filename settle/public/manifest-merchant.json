@@ -1,10 +1,10 @@
 {
-  "id": "/merchant",
+  "id": "/market",
   "name": "Blip Money Merchant",
   "short_name": "Blip Merchant",
   "description": "Run a P2P desk on Blip Money",
-  "start_url": "/merchant/login?pwa=merchant",
-  "scope": "/merchant",
+  "start_url": "/market/login?pwa=merchant",
+  "scope": "/market",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
@@ -29,7 +29,7 @@
       "name": "Orders",
       "short_name": "Orders",
       "description": "View pending orders",
-      "url": "/merchant?view=orders"
+      "url": "/market?view=orders"
     }
   ]
 }

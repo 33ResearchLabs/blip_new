@@ -77,7 +77,7 @@ export default function MempoolPage() {
         });
         if (!res.ok) {
           setIsLoading(false);
-          router.push('/merchant/login');
+          router.push('/market/login');
           return;
         }
         const data = await res.json();
@@ -93,11 +93,11 @@ export default function MempoolPage() {
           return;
         }
         setIsLoading(false);
-        router.push('/merchant/login');
+        router.push('/market/login');
       } catch (err) {
         console.error('Failed to restore merchant session:', err);
         setIsLoading(false);
-        router.push('/merchant/login');
+        router.push('/market/login');
       }
     };
 
@@ -150,12 +150,12 @@ export default function MempoolPage() {
         <div className="h-[50px] flex items-center px-4 gap-3">
           {/* Left: Back + Logo */}
           <button
-            onClick={() => router.push('/merchant')}
+            onClick={() => router.push('/market')}
             className="p-1.5 rounded-lg hover:bg-card transition-colors"
           >
             <ArrowLeft className="w-4 h-4 text-white/40" />
           </button>
-          <Logo href="/merchant" onDark />
+          <Logo href="/market" onDark />
 
           {/* Center: Page title pill */}
           <div className="flex items-center gap-2 mx-auto">

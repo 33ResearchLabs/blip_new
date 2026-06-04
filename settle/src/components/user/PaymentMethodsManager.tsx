@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { useUserPaymentMethods } from '@/context/AppContext';
 import { useUserTheme } from '@/hooks/useUserTheme';
 import type { PaymentMethodItem } from './PaymentMethodSelector';
 
@@ -47,8 +48,11 @@ type FormMode = { kind: 'closed' } | { kind: 'add' } | { kind: 'edit'; method: P
  * adds one new dependency: PUT /payment-methods/[methodId]/default.
  */
 export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
-  const [methods, setMethods] = useState<PaymentMethodItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Seed from the login-time preload so the profile list shows instantly with
+  // no loading flash; refresh() still runs as a background sync + fallback.
+  const { paymentMethods: preloaded, paymentMethodsLoaded, fetchPaymentMethods: syncPreloaded } = useUserPaymentMethods();
+  const [methods, setMethods] = useState<PaymentMethodItem[]>(preloaded);
+  const [loading, setLoading] = useState(!paymentMethodsLoaded);
 
   // Per-row pending states so several rows can be acted on without their
   // spinners stomping on each other.
@@ -60,7 +64,8 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
 
   const refresh = useCallback(async () => {
     if (!userId) return;
-    setLoading(true);
+    // Only show the loading state when there's nothing preloaded to display.
+    if (!paymentMethodsLoaded) setLoading(true);
     try {
       const res = await fetchWithAuth(`/api/users/${userId}/payment-methods`);
       const data = await res.json();
@@ -72,7 +77,7 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, paymentMethodsLoaded]);
 
   useEffect(() => {
     void refresh();
@@ -100,6 +105,7 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
             .map((m) => ({ ...m, is_default: m.id === method.id }))
             .sort((a, b) => Number(b.is_default ?? false) - Number(a.is_default ?? false)),
         );
+        void syncPreloaded();
       }
     } catch {
       /* swallow — next refresh will reconcile */
@@ -118,6 +124,7 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
       );
       if (res.ok) {
         setMethods((prev) => prev.filter((m) => m.id !== methodId));
+        void syncPreloaded();
       }
     } catch {
       /* leave the row in place */
@@ -140,6 +147,8 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
         (a, b) => Number(b.is_default ?? false) - Number(a.is_default ?? false),
       );
     });
+    // Keep the login-time cache fresh so other screens stay consistent.
+    void syncPreloaded();
     closeForm();
   };
 
@@ -411,22 +420,30 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
           />
           <motion.div
             key="sheet"
-            initial={{ opacity: 0, scale: 0.95, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 8 }}
-            transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 pointer-events-none"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 36, stiffness: 380 }}
+            className="fixed inset-x-0 bottom-0 z-50 flex justify-center pointer-events-none"
           >
             <div
-              className="pointer-events-auto w-full max-w-[420px] rounded-[20px] overflow-hidden shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+              className="pointer-events-auto w-full max-w-[440px] max-h-[92dvh] overflow-y-auto rounded-t-[24px] shadow-[0_-20px_60px_-12px_rgba(0,0,0,0.5)]"
               style={{
                 background: isLight
                   ? 'linear-gradient(180deg,#ffffff 0%,#f7f8fa 100%)'
                   : 'linear-gradient(180deg,rgba(28,28,32,0.98) 0%,rgba(18,18,22,0.98) 100%)',
                 border: `1px solid ${isLight ? 'rgba(15,23,42,0.10)' : 'rgba(255,255,255,0.08)'}`,
+                borderBottom: 'none',
               }}
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Drag handle — bottom-sheet affordance */}
+              <div className="flex justify-center pt-3 pb-1">
+                <span
+                  className="block w-9 h-1 rounded-full"
+                  style={{ background: isLight ? 'rgba(15,23,42,0.18)' : 'rgba(255,255,255,0.18)' }}
+                />
+              </div>
               <div
                 className="flex items-center justify-between px-5 py-4"
                 style={{ borderBottom: `1px solid ${isLight ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.06)'}` }}
@@ -629,7 +646,7 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                 )}
               </div>
 
-              <div className="px-5 pb-5 pt-1">
+              <div className="px-5 pt-1" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}>
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.98 }}

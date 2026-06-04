@@ -54,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 Try Again
               </button>
               <button
-                onClick={() => window.location.href = '/merchant'}
+                onClick={() => window.location.href = '/market'}
                 className="px-4 py-2.5 rounded-xl bg-primary text-background text-sm font-bold hover:bg-primary transition-colors"
               >
                 Go to Dashboard

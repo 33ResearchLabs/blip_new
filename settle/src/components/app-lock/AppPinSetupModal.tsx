@@ -84,90 +84,97 @@ export function AppPinSetupModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
-      onClick={() => { if (dismissible && !busy) onClose?.(); }}
-    >
+    <>
+      {/* Dimmed backdrop — tap to dismiss (unless mandatory or mid-save). */}
+      <div
+        className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm"
+        onClick={() => { if (dismissible && !busy) onClose?.(); }}
+      />
+
+      {/* Bottom sheet — theme-aware surface so it matches the cream (light)
+          user theme as well as dark. Slides up from the bottom edge. */}
       <motion.div
-        initial={{ scale: 0.97, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-sm rounded-3xl p-6 space-y-5 shadow-2xl"
-        style={{
-          background: isLight ? '#ffffff' : '#0d0d0d',
-          border: `1px solid ${isLight ? 'rgba(15,23,42,0.10)' : 'rgba(255,255,255,0.06)'}`,
-        }}
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+        className="fixed inset-x-0 bottom-0 z-[121] bg-surface-base text-text-primary rounded-t-3xl border-t border-border-medium shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl flex items-center justify-center bg-accent/20">
-              <ShieldCheck className="w-4 h-4 text-accent" />
+        <div className="mx-auto max-w-[420px] px-5 pt-3 pb-[max(env(safe-area-inset-bottom,16px),20px)] space-y-5">
+          {/* Grab handle */}
+          <div className="mx-auto h-1 w-9 rounded-full bg-text-tertiary/40" />
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-2xl flex items-center justify-center bg-accent-subtle">
+                <ShieldCheck className="w-4 h-4 text-accent" />
+              </div>
+              <h3 className="text-base font-bold text-text-primary">
+                {mode === 'change' ? 'Change App PIN' : 'Set App PIN'}
+              </h3>
             </div>
-            <h3 className="text-base font-bold text-white font-mono">
-              {mode === 'change' ? 'Change App PIN' : 'Set App PIN'}
-            </h3>
+            {dismissible && (
+              <button
+                type="button"
+                onClick={() => onClose?.()}
+                disabled={busy}
+                className="p-1.5 rounded-lg text-text-tertiary hover:bg-surface-hover disabled:opacity-40"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-          {dismissible && (
+
+          <p className="text-[12px] text-text-secondary leading-relaxed">
+            {step === 'enter'
+              ? `Choose a ${APP_PIN_LENGTH}-digit PIN to unlock the app. Use something you can remember but others can’t guess.`
+              : 'Re-enter the same PIN to confirm.'}
+          </p>
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg text-[11px] bg-error-dim border border-error-border text-error">
+              {error}
+            </div>
+          )}
+
+          {step === 'enter' ? (
+            <AppPinPad
+              value={first}
+              onChange={(v) => { setFirst(v); if (error) setError(''); }}
+              onComplete={handleFirstComplete}
+              errorTick={errorTick}
+              disabled={busy}
+              theme={pinPadTheme}
+            />
+          ) : (
+            <AppPinPad
+              value={confirm}
+              onChange={(v) => { setConfirm(v); if (error) setError(''); }}
+              onComplete={handleConfirmComplete}
+              errorTick={errorTick}
+              disabled={busy}
+              theme={pinPadTheme}
+            />
+          )}
+
+          {step === 'confirm' && !busy && (
             <button
               type="button"
-              onClick={() => onClose?.()}
-              disabled={busy}
-              className="p-1.5 rounded-lg text-white/40 hover:bg-white/[0.04] disabled:opacity-40"
-              aria-label="Close"
+              onClick={() => { setStep('enter'); setConfirm(''); setError(''); }}
+              className="w-full py-2 rounded-lg text-[11px] text-text-secondary hover:bg-surface-hover"
             >
-              <X className="w-4 h-4" />
+              ← Use a different PIN
             </button>
           )}
+
+          {busy && (
+            <div className="flex items-center justify-center gap-2 text-[11px] text-text-tertiary">
+              <Loader2 className="w-3 h-3 animate-spin" /> Saving…
+            </div>
+          )}
         </div>
-
-        <p className="text-[12px] text-white/55 font-mono leading-relaxed">
-          {step === 'enter'
-            ? `Choose a ${APP_PIN_LENGTH}-digit PIN to unlock the app. Use something you can remember but others can’t guess.`
-            : 'Re-enter the same PIN to confirm.'}
-        </p>
-
-        {error && (
-          <div className="px-3 py-2 rounded-lg text-[11px] font-mono bg-red-500/10 border border-red-500/20 text-red-400">
-            {error}
-          </div>
-        )}
-
-        {step === 'enter' ? (
-          <AppPinPad
-            value={first}
-            onChange={(v) => { setFirst(v); if (error) setError(''); }}
-            onComplete={handleFirstComplete}
-            errorTick={errorTick}
-            disabled={busy}
-            theme={pinPadTheme}
-          />
-        ) : (
-          <AppPinPad
-            value={confirm}
-            onChange={(v) => { setConfirm(v); if (error) setError(''); }}
-            onComplete={handleConfirmComplete}
-            errorTick={errorTick}
-            disabled={busy}
-            theme={pinPadTheme}
-          />
-        )}
-
-        {step === 'confirm' && !busy && (
-          <button
-            type="button"
-            onClick={() => { setStep('enter'); setConfirm(''); setError(''); }}
-            className="w-full py-2 rounded-lg text-[11px] text-white/50 font-mono hover:bg-white/[0.04]"
-          >
-            ← Use a different PIN
-          </button>
-        )}
-
-        {busy && (
-          <div className="flex items-center justify-center gap-2 text-[11px] text-white/50 font-mono">
-            <Loader2 className="w-3 h-3 animate-spin" /> Saving…
-          </div>
-        )}
       </motion.div>
-    </div>
+    </>
   );
 }

@@ -58,7 +58,7 @@ export function AppLaunchPage() {
       setPrompt(null);
     } else {
       // No native prompt yet — open the app; browser install button appears in address bar
-      window.location.href = "/?welcome=skip";
+      window.location.href = "/user?welcome=skip";
     }
   }
 
@@ -70,12 +70,13 @@ export function AppLaunchPage() {
       setState(outcome === "accepted" ? "installed" : "ready");
       setPrompt(null);
     } else {
-      window.location.href = "/merchant/login";
+      window.location.href = "/market/login";
     }
   }
 
-  const openUserApp = () => { window.location.href = "/?welcome=skip"; };
+  const openUserApp = () => { window.location.href = "/user?welcome=skip"; };
   const downloadUserApp = install;
+  // Merchant attempts PWA install first; falls back to /market/login.
   const openMerchantApp = installMerchant;
 
   return (
@@ -132,7 +133,7 @@ export function AppLaunchPage() {
 
           {/* Sign in */}
           <div style={{ marginLeft: 24 }}>
-            <a href="/?welcome=skip" style={{
+            <a href="/user?welcome=skip" style={{
               padding: "9px 16px", fontSize: 13.5, fontWeight: 700,
               border: `1px solid ${T.onBlackLine}`, borderRadius: 10,
               color: T.onBlackMut, background: "transparent", cursor: "pointer",

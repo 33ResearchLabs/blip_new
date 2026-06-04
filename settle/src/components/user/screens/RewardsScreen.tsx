@@ -153,7 +153,7 @@ const StatCell = ({ label, value, Icon, isLast = false }: StatCellProps) => (
         {value}
       </span>
     </div>
-    <p className="text-[10.5px] font-medium text-center text-text-tertiary leading-tight">
+    <p className="text-[11px] font-medium text-center text-text-tertiary leading-tight">
       {label}
     </p>
   </div>
@@ -176,7 +176,7 @@ const ShareButton = ({ label, Icon, onClick }: ShareButtonProps) => (
     <span className="w-7 h-7 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center shrink-0">
       <Icon className="w-3.5 h-3.5 text-text-primary" />
     </span>
-    <span className="text-[9.5px] font-semibold text-text-secondary text-center leading-tight max-w-full w-full px-0.5">
+    <span className="text-[10px] font-semibold text-text-secondary text-center leading-tight max-w-full w-full px-0.5">
       {label}
     </span>
   </motion.button>
@@ -394,7 +394,7 @@ export const RewardsScreen = ({
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           className="pt-4"
         >
-          <h2 className="text-[40px] font-extrabold tracking-[-0.035em] leading-[1.02] text-text-primary">
+          <h2 className="text-[26px] font-extrabold tracking-[-0.03em] leading-[1.02] text-text-primary">
             Refer &amp; Earn
           </h2>
           <p className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-text-secondary">
@@ -422,7 +422,7 @@ export const RewardsScreen = ({
               <div className="flex-1 min-w-0">
                 <p className={SECTION_LABEL}>Your Referral Code</p>
                 <div className="mt-2 flex items-center gap-2 min-w-0">
-                  <p className="text-[32px] font-extrabold tracking-[-0.01em] text-text-primary leading-none  select-all">
+                  <p className="text-[24px] font-extrabold tracking-[-0.01em] text-text-primary leading-none  select-all">
                     {referralCode}
                   </p>
                   <motion.button
@@ -471,7 +471,7 @@ export const RewardsScreen = ({
                     className="w-3.5 h-3.5 text-text-secondary"
                     strokeWidth={2.4}
                   />
-                  <span className="text-[10.5px] font-bold text-text-secondary">
+                  <span className="text-[11px] font-bold text-text-secondary">
                     Valid &amp; Active
                   </span>
                 </div>
@@ -484,7 +484,7 @@ export const RewardsScreen = ({
 
             {/* Bottom row — invite link + Copy Link */}
             <div className="px-5 pt-4 pb-5">
-              <p className="text-[11.5px] font-semibold text-text-secondary mb-2">
+              <p className="text-[12px] font-semibold text-text-secondary mb-2">
                 Your Invite Link
               </p>
               <div className="flex items-stretch gap-2">
@@ -492,7 +492,7 @@ export const RewardsScreen = ({
                   className="flex-1 min-w-0 flex items-center px-3.5 py-2.5 rounded-[14px] bg-surface-raised border border-border-subtle"
                 >
                   <span
-                    className="block w-full truncate text-[12.5px] font-medium text-text-secondary"
+                    className="block w-full truncate text-[13px] font-medium text-text-secondary"
                     title={referralLink}
                   >
                     {referralLink}
@@ -588,7 +588,7 @@ export const RewardsScreen = ({
                 <p className="text-[14px] font-extrabold text-text-primary tracking-[-0.01em] leading-tight">
                   More friends, more rewards
                 </p>
-                <p className="mt-1 text-[11.5px] font-medium text-text-secondary leading-snug">
+                <p className="mt-1 text-[12px] font-medium text-text-secondary leading-snug">
                   You get 20% of trading fees from your friends. They get 10% off.
                 </p>
               </div>
@@ -660,7 +660,7 @@ export const RewardsScreen = ({
                       className="w-[15px] h-[15px] text-text-tertiary shrink-0 mt-px"
                       strokeWidth={2}
                     />
-                    <span className="text-[12.5px] font-medium text-text-secondary leading-snug">
+                    <span className="text-[13px] font-medium text-text-secondary leading-snug">
                       {tip}
                     </span>
                   </li>
