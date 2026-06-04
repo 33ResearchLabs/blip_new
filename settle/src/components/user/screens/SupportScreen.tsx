@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Screen } from "./types";
+import { openIssueReporter } from "@/plugins/issue-reporter";
 
 // Established constants used across the user screens.
 const CARD = "bg-surface-card border border-border-subtle";
@@ -171,6 +173,7 @@ export interface SupportScreenProps {
 }
 
 export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps) => {
+  const router = useRouter();
   const [query, setQuery] = useState("");
 
   const handleBack = () => {
@@ -191,9 +194,16 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
     window.open(TELEGRAM_COMMUNITY_URL, "_blank", "noopener,noreferrer");
   };
 
-  // Stub: a future "/support/tickets" route would land here. For now defer
-  // to Telegram so the affordance is never a dead-end.
-  const handleMyTickets = () => openTelegramDm();
+  // "My Tickets" opens the user's own ticket list (GET /api/issues,
+  // user-scoped) where they can track status + read our replies.
+  const handleMyTickets = () => router.push("/user/my-issues");
+
+  // "Raise a ticket" reuses the existing IssueReporter modal — its submit
+  // hits POST /api/issues/create, which stamps the logged-in user as the
+  // owner, so the new ticket shows up under My Tickets immediately.
+  const raiseTicket = () => {
+    void openIssueReporter();
+  };
 
   // Filter the issues grid by the search query so the empty state is real
   // (something the user can hit with a typo or unrelated term).
@@ -255,9 +265,8 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
             className="mb-5"
           >
             <div className="grid grid-cols-2 gap-2.5">
-              {/* <QuickAction label="Live Chat"   Icon={MessageCircle} onClick={openTelegramDm} /> */}
-              <QuickAction label="Telegram"    Icon={Send}          onClick={openTelegramDm} />
-              <QuickAction label="Help Center" Icon={BookOpen}      onClick={openTelegramDm} />
+              <QuickAction label="Raise a ticket" Icon={Ticket} onClick={raiseTicket} />
+              <QuickAction label="Telegram"       Icon={Send}   onClick={openTelegramDm} />
             </div>
           </motion.section>
 
@@ -331,7 +340,7 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
                     key={key}
                     title={title}
                     Icon={Icon}
-                    onClick={openTelegramDm}
+                    onClick={raiseTicket}
                   />
                 ))}
               </div>
