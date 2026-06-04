@@ -30,7 +30,7 @@ function configureVapid(): boolean {
 export interface PushPayload {
   title: string;
   body: string;
-  /** Click target. Defaults to '/' for user, '/merchant' for merchant. */
+  /** Click target. Defaults to '/' for user, '/market' for merchant. */
   url?: string;
   /** Optional tag — pushes with the same tag replace each other instead of
    *  stacking. Useful for "order accepted" type events that only need to

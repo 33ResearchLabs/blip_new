@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Loader2, ShieldCheck, X } from 'lucide-react';
 import { AppPinPad } from './AppPinPad';
 import { verifyAppPin, APP_PIN_LENGTH, MAX_PIN_FAILURES } from '@/lib/auth/appPin';
+import { useUserTheme } from '@/hooks/useUserTheme';
 
 interface AppLockPromptModalProps {
   userId: string;
@@ -28,6 +29,9 @@ export function AppLockPromptModal({
   onClose,
   onLockout,
 }: AppLockPromptModalProps) {
+  const { theme } = useUserTheme();
+  const isLight = theme === 'light';
+
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [errorTick, setErrorTick] = useState(0);
@@ -65,60 +69,72 @@ export function AppLockPromptModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
-      onClick={() => { if (!busy) onClose(); }}
-    >
+    <>
+      {/* Dimmed backdrop — tap to dismiss (unless mid-verify). */}
+      <div
+        className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm"
+        onClick={() => { if (!busy) onClose(); }}
+      />
+
+      {/* Bottom sheet — theme-aware surface so it reads correctly in the
+          cream (light) user theme as well as dark. Slides up from the
+          bottom edge. */}
       <motion.div
-        initial={{ scale: 0.97, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-sm rounded-3xl p-6 space-y-5 border border-white/[0.06] shadow-2xl"
-        style={{ background: '#0d0d0d' }}
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+        className="fixed inset-x-0 bottom-0 z-[131] bg-surface-base text-text-primary rounded-t-3xl border-t border-border-medium shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl flex items-center justify-center bg-accent/20">
-              <ShieldCheck className="w-4 h-4 text-accent" />
+        <div className="mx-auto max-w-[420px] px-5 pt-3 pb-[max(env(safe-area-inset-bottom,16px),20px)] space-y-5">
+          {/* Grab handle */}
+          <div className="mx-auto h-1 w-9 rounded-full bg-text-tertiary/40" />
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-2xl flex items-center justify-center bg-accent-subtle">
+                <ShieldCheck className="w-4 h-4 text-accent" />
+              </div>
+              <h3 className="text-base font-bold text-text-primary">{title}</h3>
             </div>
-            <h3 className="text-base font-bold text-white font-mono">{title}</h3>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              className="p-1.5 rounded-lg text-text-tertiary hover:bg-surface-hover disabled:opacity-40"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
+
+          {description && (
+            <p className="text-[12px] text-text-secondary leading-relaxed">{description}</p>
+          )}
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg text-[11px] text-center bg-error-dim border border-error-border text-error">
+              {error}
+            </div>
+          )}
+
+          <AppPinPad
+            value={pin}
+            onChange={(v) => { setPin(v); if (error) setError(''); }}
+            onComplete={handleComplete}
+            length={APP_PIN_LENGTH}
+            errorTick={errorTick}
             disabled={busy}
-            className="p-1.5 rounded-lg text-white/40 hover:bg-white/[0.04] disabled:opacity-40"
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
+            theme={isLight ? 'light' : 'dark'}
+          />
+
+          {busy && (
+            <div className="flex items-center justify-center gap-2 text-[11px] text-text-tertiary">
+              <Loader2 className="w-3 h-3 animate-spin" /> Verifying…
+            </div>
+          )}
         </div>
-
-        {description && (
-          <p className="text-[12px] text-white/55 font-mono leading-relaxed">{description}</p>
-        )}
-
-        {error && (
-          <div className="px-3 py-2 rounded-lg text-[11px] font-mono text-center bg-red-500/10 border border-red-500/20 text-red-400">
-            {error}
-          </div>
-        )}
-
-        <AppPinPad
-          value={pin}
-          onChange={(v) => { setPin(v); if (error) setError(''); }}
-          onComplete={handleComplete}
-          length={APP_PIN_LENGTH}
-          errorTick={errorTick}
-          disabled={busy}
-        />
-
-        {busy && (
-          <div className="flex items-center justify-center gap-2 text-[11px] text-white/50 font-mono">
-            <Loader2 className="w-3 h-3 animate-spin" /> Verifying…
-          </div>
-        )}
       </motion.div>
-    </div>
+    </>
   );
 }

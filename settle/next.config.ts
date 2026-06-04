@@ -20,6 +20,18 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['framer-motion', '@solana/web3.js', 'lucide-react'],
   },
+  // Back-compat for the merchant route rename (/merchant → /market). Protects
+  // existing bookmarks and already-installed merchant PWAs (old start_url was
+  // /merchant/login). Query strings (?tab=, ?pwa=merchant, ?order=) are
+  // preserved automatically. `permanent: false` (307) so it isn't cached hard
+  // during rollout — can be promoted to permanent once /market is settled.
+  // Note: /api/merchant/* is NOT redirected — those API routes are unchanged.
+  async redirects() {
+    return [
+      { source: '/merchant', destination: '/market', permanent: false },
+      { source: '/merchant/:path*', destination: '/market/:path*', permanent: false },
+    ];
+  },
 };
 
 // Wrap with Sentry only when a DSN is configured. Without a DSN there's

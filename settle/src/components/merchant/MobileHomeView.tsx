@@ -370,15 +370,12 @@ export function MobileHomeView({
 
   // ── Balance count-up on mount ─────────────────────────────────────────
   const [displayBalance, setDisplayBalance] = useState(effectiveBalance ?? 0);
-  const [tradeSheet, setTradeSheet] = useState<"buy" | "sell" | null>(null);
-  const [tradeAmt, setTradeAmt] = useState("");
-  const [tradeExpiry, setTradeExpiry] = useState<0 | 1>(0);
-
-  // External FAB trigger — opens the sheet when parent sets openSheetSide.
+  // External FAB trigger — opens the full trade modal when parent sets
+  // openSheetSide. The old in-home "Open Trade" sheet was a redundant second
+  // step before TradeFormModal; we now go straight to the modal.
   useEffect(() => {
     if (openSheetSide) {
-      setTradeSheet(openSheetSide);
-      setTradeAmt("");
+      onStartTrade?.(openSheetSide);
       onClearOpenSheet?.();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -587,7 +584,7 @@ export function MobileHomeView({
       {/* ── BUY / SELL ── */}
       {embeddedWalletState !== "locked" && embeddedWalletState !== "none" && (
         <div className="z2rise" style={{ display: "flex", gap: 12, position: "relative", zIndex: 1, animationDelay: "200ms" }}>
-          <button onClick={() => { setTradeSheet("buy"); setTradeAmt(""); }} style={{ flex: 1, padding: 16, borderRadius: 18, background: "#f5f5f7", color: "#0b0b0c", textAlign: "left", cursor: "pointer", border: "none" }}>
+          <button onClick={() => onStartTrade?.("buy")} style={{ flex: 1, padding: 16, borderRadius: 18, background: "#f5f5f7", color: "#0b0b0c", textAlign: "left", cursor: "pointer", border: "none" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M17 7 7 17"/></svg>
               <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="m9 6 6 6-6 6"/></svg>
@@ -595,7 +592,7 @@ export function MobileHomeView({
             <div style={{ fontSize: 16, fontWeight: 800, marginTop: 16 }}>Buy</div>
             <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.55 }}>Acquire USDT</div>
           </button>
-          <button onClick={() => { setTradeSheet("sell"); setTradeAmt(""); }} style={{ flex: 1, padding: 16, borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.16)", color: "#f5f5f7", textAlign: "left", backdropFilter: "blur(20px)", cursor: "pointer" }}>
+          <button onClick={() => onStartTrade?.("sell")} style={{ flex: 1, padding: 16, borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.16)", color: "#f5f5f7", textAlign: "left", backdropFilter: "blur(20px)", cursor: "pointer" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#aeaeb2" }}>
               <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 17H7V7M7 17 17 7"/></svg>
               <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="m9 6 6 6-6 6"/></svg>
@@ -717,7 +714,7 @@ export function MobileHomeView({
         ) : pendingOrders.length === 0 ? (
           <div style={{ borderRadius: 20, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", padding: "24px 16px", textAlign: "center" }}>
             <p style={{ color: "#5a5a60", fontSize: 13, margin: 0 }}>No recent activity</p>
-            <button onClick={() => { setTradeSheet("buy"); setTradeAmt(""); }} style={{ marginTop: 10, padding: "8px 18px", borderRadius: 12, border: "1px dashed rgba(255,255,255,0.12)", background: "none", color: "#86868b", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Post your first trade</button>
+            <button onClick={() => onStartTrade?.("buy")} style={{ marginTop: 10, padding: "8px 18px", borderRadius: 12, border: "1px dashed rgba(255,255,255,0.12)", background: "none", color: "#86868b", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Post your first trade</button>
           </div>
         ) : null}
       </div>
@@ -877,135 +874,6 @@ export function MobileHomeView({
       />
 
       {/* Export/Backup password modal moved into <WalletActionsMenu />. */}
-
-      {/* ── Open Trade Sheet (Zoop 2026) ── */}
-      {tradeSheet && (() => {
-        const isBuy = tradeSheet === "buy";
-        const num = parseFloat(tradeAmt) || 0;
-        const liveRate2 = liveRate ?? 102.5;
-        const fiatEst = Math.round(num * liveRate2);
-        const valid = num > 0;
-        const fiatCur2 = activeCorridorMeta?.fiat || "INR";
-        const fiatSymbol = fiatCur2 === "INR" ? "₹" : fiatCur2 === "AED" ? "AED " : fiatCur2 + " ";
-
-        return (
-          <div style={{ position: "fixed", inset: 0, zIndex: 200 }}>
-            {/* Backdrop */}
-            <div onClick={() => setTradeSheet(null)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)" }} />
-            {/* Sheet */}
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#111113", borderRadius: "28px 28px 0 0", overflow: "hidden", maxHeight: "92dvh", display: "flex", flexDirection: "column" }}>
-              {/* Header */}
-              <div style={{ padding: "12px 20px 14px", borderBottom: "1px solid rgba(255,255,255,0.09)" }}>
-                <div style={{ width: 38, height: 4, borderRadius: 99, background: "rgba(255,255,255,0.16)", margin: "0 auto 12px" }} />
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: "-0.02em", color: "#f5f5f7" }}>Open Trade</span>
-                  <button onClick={() => setTradeSheet(null)} style={{ width: 34, height: 34, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
-                    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Body */}
-              <div style={{ overflowY: "auto", padding: "18px 20px 6px", flex: 1 }}>
-                {/* Pair */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#86868b", textTransform: "uppercase", letterSpacing: "0.1em" }}>Pair</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 12, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)" }}>
-                    <span style={{ display: "inline-flex", flexDirection: "column", width: 14, height: 10, borderRadius: 2, overflow: "hidden", flexShrink: 0 }}>
-                      <span style={{ background: "#ff9933", flex: 1 }} /><span style={{ background: "#fff", flex: 1 }} /><span style={{ background: "#138808", flex: 1 }} />
-                    </span>
-                    <span style={{ fontWeight: 800, fontSize: 14, color: "#f5f5f7", whiteSpace: "nowrap" }}>USDT / {fiatCur2}</span>
-                  </span>
-                </div>
-
-                {/* Trade type toggle */}
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#86868b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Trade type</div>
-                <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 14, padding: 3, marginBottom: 8, position: "relative" }}>
-                  <div style={{ position: "absolute", top: 3, bottom: 3, width: "calc(50% - 3px)", borderRadius: 11, background: "#f5f5f7", transition: "transform 0.2s", transform: isBuy ? "translateX(calc(100% + 0px))" : "translateX(0)" }} />
-                  <button onClick={() => setTradeSheet("sell")} style={{ flex: 1, padding: "11px 0", fontSize: 14, fontWeight: 700, color: !isBuy ? "#0b0b0c" : "#86868b", background: "none", border: "none", cursor: "pointer", position: "relative", zIndex: 1, transition: "color 0.2s" }}>Sell USDT</button>
-                  <button onClick={() => setTradeSheet("buy")} style={{ flex: 1, padding: "11px 0", fontSize: 14, fontWeight: 700, color: isBuy ? "#0b0b0c" : "#86868b", background: "none", border: "none", cursor: "pointer", position: "relative", zIndex: 1, transition: "color 0.2s" }}>Buy USDT</button>
-                </div>
-                <div style={{ color: "#86868b", fontSize: 12.5, fontWeight: 500, marginBottom: 18 }}>
-                  {isBuy ? `You send ${fiatCur2}, get USDT` : `You send USDT, get ${fiatCur2}`}
-                </div>
-
-                {/* Amount */}
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#86868b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Amount</div>
-                <div style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderRadius: 14, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", marginBottom: 6 }}>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={tradeAmt}
-                    onChange={(e) => setTradeAmt(e.target.value)}
-                    maxLength={14}
-                    style={{ flex: 1, minWidth: 0, background: "none", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "#f5f5f7", fontVariantNumeric: "tabular-nums" }}
-                  />
-                  <span style={{ color: "#86868b", fontWeight: 700, fontSize: 15, flexShrink: 0, marginLeft: 8 }}>USDT</span>
-                </div>
-                <div style={{ height: 16, color: "#aeaeb2", fontSize: 12.5, fontWeight: 600, marginBottom: 16 }}>
-                  {valid ? `≈ ${fiatSymbol}${fiatEst.toLocaleString("en-US")} at ${fiatSymbol}${liveRate2.toFixed(2)}` : ""}
-                </div>
-
-                {/* Payment method */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#86868b", textTransform: "uppercase", letterSpacing: "0.1em" }}>Payment</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {defaultPaymentMethod ? (
-                      <button onClick={() => onOpenPaymentMethods?.()} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 9, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", cursor: "pointer" }}>
-                        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#b8e9d4", flexShrink: 0 }}><rect x="2.5" y="5" width="19" height="14" rx="3.2"/><path d="M2.5 9.5h19"/></svg>
-                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#f5f5f7", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{defaultPaymentMethod.name}</span>
-                        <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#5a5a60", flexShrink: 0 }}><path d="m9 6 6 6-6 6"/></svg>
-                      </button>
-                    ) : null}
-                    <button onClick={() => onOpenPaymentMethods?.()} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 9, background: defaultPaymentMethod ? "rgba(255,255,255,0.03)" : "rgba(184,233,212,0.1)", border: defaultPaymentMethod ? "1px solid rgba(255,255,255,0.07)" : "1px solid rgba(184,233,212,0.3)", cursor: "pointer" }}>
-                      <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" style={{ color: defaultPaymentMethod ? "#86868b" : "#b8e9d4", flexShrink: 0 }}><path d="M12 5v14M5 12h14"/></svg>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: defaultPaymentMethod ? "#86868b" : "#b8e9d4", whiteSpace: "nowrap" }}>{defaultPaymentMethod ? "Add" : "Add method"}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Expiry */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#86868b", textTransform: "uppercase", letterSpacing: "0.1em" }}>Expires in</span>
-                  <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 11, padding: 3, position: "relative" }}>
-                    <div style={{ position: "absolute", top: 3, bottom: 3, width: "calc(50% - 3px)", borderRadius: 8, background: "#f5f5f7", transition: "transform 0.2s", transform: tradeExpiry === 1 ? "translateX(calc(100% + 0px))" : "translateX(0)" }} />
-                    <button onClick={() => setTradeExpiry(0)} style={{ padding: "7px 16px", fontSize: 12.5, fontWeight: 700, color: tradeExpiry === 0 ? "#0b0b0c" : "#86868b", background: "none", border: "none", cursor: "pointer", position: "relative", zIndex: 1, transition: "color 0.2s", whiteSpace: "nowrap" }}>15 min</button>
-                    <button onClick={() => setTradeExpiry(1)} style={{ padding: "7px 16px", fontSize: 12.5, fontWeight: 700, color: tradeExpiry === 1 ? "#0b0b0c" : "#86868b", background: "none", border: "none", cursor: "pointer", position: "relative", zIndex: 1, transition: "color 0.2s", whiteSpace: "nowrap" }}>90 min</button>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Footer */}
-              <div style={{ padding: "12px 20px 32px", borderTop: "1px solid rgba(255,255,255,0.09)" }}>
-                {!valid ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, color: "#e2b770", fontSize: 13, fontWeight: 700, marginBottom: 11, whiteSpace: "nowrap" }}>
-                    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17.4v.01"/></svg>
-                    Enter a USDT amount to continue
-                  </div>
-                ) : (
-                  <div style={{ color: "#b8e9d4", fontSize: 13, fontWeight: 700, marginBottom: 11 }}>
-                    {isBuy ? `Get ${num} USDT for ≈ ${fiatSymbol}${fiatEst.toLocaleString("en-US")}` : `Get ≈ ${fiatSymbol}${fiatEst.toLocaleString("en-US")} for ${num} USDT`}
-                  </div>
-                )}
-                <div style={{ display: "flex", gap: 12 }}>
-                  <button onClick={() => setTradeSheet(null)} style={{ padding: "15px 22px", borderRadius: 16, color: "#f5f5f7", fontWeight: 700, fontSize: 15, cursor: "pointer", border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.04)" }}>
-                    Cancel
-                  </button>
-                  <button
-                    disabled={!valid}
-                    onClick={() => { setTradeSheet(null); onStartTrade?.(isBuy ? "buy" : "sell", tradeAmt, tradeExpiry === 1 ? 90 : 15); }}
-                    style={{ flex: 1, padding: "15px", borderRadius: 16, border: "none", background: valid ? "#f5f5f7" : "rgba(255,255,255,0.08)", color: valid ? "#0b0b0c" : "#5a5a60", fontWeight: 800, fontSize: 15, cursor: valid ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, whiteSpace: "nowrap" }}>
-                    <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
-                    Open Trade
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Set Rate Sheet (same shell as Open Trade) ── */}
       {showRatePanel && (() => {

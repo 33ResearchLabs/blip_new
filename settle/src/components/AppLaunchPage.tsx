@@ -72,10 +72,10 @@ export function AppLaunchPage() {
     }
   }
 
-  const openUserApp = () => { window.location.href = "/?welcome=skip"; };
+  const openUserApp = () => { window.location.href = "/user?welcome=skip"; };
   // Merchant always attempts PWA install first
   const openMerchantApp = state === "installed"
-    ? () => { window.location.href = "/merchant/login"; }
+    ? () => { window.location.href = "/market/login"; }
     : install;
 
   return (
@@ -132,7 +132,7 @@ export function AppLaunchPage() {
 
           {/* Sign in */}
           <div style={{ marginLeft: 24 }}>
-            <a href="/?welcome=skip" style={{
+            <a href="/user?welcome=skip" style={{
               padding: "9px 16px", fontSize: 13.5, fontWeight: 700,
               border: `1px solid ${T.onBlackLine}`, borderRadius: 10,
               color: T.onBlackMut, background: "transparent", cursor: "pointer",

@@ -161,7 +161,7 @@ export default function UserWalletPage() {
         });
         if (!res.ok) {
           setIsLoading(false);
-          router.push("/");
+          router.push("/user");
           return;
         }
         const data = await res.json();
@@ -176,10 +176,10 @@ export default function UserWalletPage() {
           return;
         }
         setIsLoading(false);
-        router.push("/");
+        router.push("/user");
       } catch {
         setIsLoading(false);
-        router.push("/");
+        router.push("/user");
       }
     };
     restoreSession();
@@ -652,7 +652,7 @@ export default function UserWalletPage() {
             cards below. */}
         <div className="px-5 pt-4 pb-4 shrink-0 flex items-center justify-between">
           <button
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/user")}
             className="flex items-center gap-1.5 text-[13px] font-semibold text-text-tertiary hover:text-text-primary transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

@@ -51,7 +51,7 @@ function ResetPasswordForm() {
             please request a fresh one.
           </p>
         </div>
-        <EmailFlowPrimaryCta href="/merchant/forgot-password">
+        <EmailFlowPrimaryCta href="/market/forgot-password">
           Request new link →
         </EmailFlowPrimaryCta>
       </div>

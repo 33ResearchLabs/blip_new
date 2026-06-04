@@ -39,14 +39,14 @@ export default function MerchantLoginPage() {
 
   // Mirror of useDashboardAuth.handleLogin's success path — Google sign-in
   // skips the password flow but lands the same store updates so the
-  // existing `/merchant` redirect (useEffect below) takes over.
+  // existing `/market` redirect (useEffect below) takes over.
   const handleGoogleSuccess = (data: any) => {
     if (data?.merchant) {
       setMerchantId(data.merchant.id);
       setMerchantInfo(data.merchant);
       setIsLoggedIn(true);
       if (data.token) setSessionToken(data.token);
-      router.replace("/merchant");
+      router.replace("/market");
     }
   };
 
@@ -83,7 +83,7 @@ export default function MerchantLoginPage() {
   }, []);
 
   useEffect(() => {
-    if (isLoggedIn && merchantId) router.replace("/merchant");
+    if (isLoggedIn && merchantId) router.replace("/market");
   }, [isLoggedIn, merchantId, router]);
 
   // Fetch live corridor prices every 60s and generate tape rows.
@@ -864,7 +864,7 @@ export default function MerchantLoginPage() {
                           reset and the backend rejects). */}
                       {isSignIn && (
                         <Link
-                          href="/merchant/forgot-password"
+                          href="/market/forgot-password"
                           className="text-[12px] font-medium transition-colors hover:text-[#cc785c]"
                           style={{ color: "#3a3a3c" }}
                         >

@@ -30,10 +30,20 @@ export function OrderAvatar({ name, avatarUrl, size = 44, verified = false }: {
   );
 }
 
-/* ── HoldSwipe: drag knob right OR press-and-hold 950ms to confirm ── */
-export function HoldSwipe({ onAccept, loading = false, height = 52 }: {
-  onAccept: () => void; loading?: boolean; height?: number;
+/* ── HoldSwipe: drag knob right OR press-and-hold 950ms to confirm ──
+   variant 'accept' (green, default) or 'cancel' (red). The cancel variant is
+   used for the merchant's own pending orders so cancelling takes the same
+   deliberate slide gesture as accepting — no accidental taps. */
+export function HoldSwipe({ onAccept, loading = false, height = 52, variant = 'accept' }: {
+  onAccept: () => void; loading?: boolean; height?: number; variant?: 'accept' | 'cancel';
 }) {
+  const isCancel = variant === 'cancel';
+  const FILL = isCancel ? '#ff5a5f' : '#22e29a';
+  const FILL_LOADING = isCancel ? 'rgba(255,90,95,0.5)' : 'rgba(34,226,154,0.5)';
+  const DONE_TEXT = isCancel ? '#1a0405' : '#04130c';
+  const SHADOW = isCancel ? '0 4px 16px rgba(255,90,95,0.4)' : '0 4px 16px rgba(34,226,154,0.4)';
+  const LABEL = isCancel ? 'Hold or slide to cancel' : 'Hold or slide to accept';
+  const DONE_LABEL = isCancel ? 'Cancelled' : 'Accepted';
   const trackRef = useRef<HTMLDivElement>(null);
   const [x, setXRaw] = useState(0);
   const [done, setDone] = useState(false);
@@ -96,7 +106,7 @@ export function HoldSwipe({ onAccept, loading = false, height = 52 }: {
     >
       {/* Fill */}
       <div style={{
-        position: 'absolute', inset: 0, borderRadius: height / 2, background: '#22e29a',
+        position: 'absolute', inset: 0, borderRadius: height / 2, background: FILL,
         opacity: done ? 1 : 0.16 + frac * 0.55,
         width: done ? '100%' : x + knob + 8,
         transition: active ? 'none' : 'width .28s, opacity .28s',
@@ -105,11 +115,11 @@ export function HoldSwipe({ onAccept, loading = false, height = 52 }: {
       <div style={{
         position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
         justifyContent: 'center', gap: 8, fontWeight: 700, fontSize: 14,
-        color: done ? '#04130c' : 'rgba(255,255,255,0.5)',
+        color: done ? DONE_TEXT : 'rgba(255,255,255,0.5)',
         opacity: done ? 1 : Math.max(0, 1 - frac * 1.4),
         paddingLeft: knob, userSelect: 'none',
       }}>
-        {done ? <><Check className="w-4 h-4" /> Accepted</> : 'Hold or slide to accept'}
+        {done ? <><Check className="w-4 h-4" /> {DONE_LABEL}</> : LABEL}
       </div>
       {/* Knob */}
       {!done && (
@@ -119,12 +129,12 @@ export function HoldSwipe({ onAccept, loading = false, height = 52 }: {
           style={{
             position: 'absolute', top: 4, left: 4, width: knob, height: knob,
             borderRadius: '999px',
-            background: loading ? 'rgba(34,226,154,0.5)' : '#22e29a',
-            color: '#04130c', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: loading ? FILL_LOADING : FILL,
+            color: DONE_TEXT, display: 'flex', alignItems: 'center', justifyContent: 'center',
             transform: `translateX(${x}px)`,
             transition: active ? 'none' : 'transform .28s',
             cursor: active ? 'grabbing' : 'grab',
-            boxShadow: '0 4px 16px rgba(34,226,154,0.4)',
+            boxShadow: SHADOW,
             touchAction: 'none',
           }}
         >

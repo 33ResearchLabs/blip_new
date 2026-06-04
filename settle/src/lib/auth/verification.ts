@@ -55,7 +55,7 @@ interface MerchantVerifyLookup {
 
 function buildVerifyLink(role: 'user' | 'merchant', actorId: string, token: string): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const path = role === 'merchant' ? '/merchant/verify-email' : '/user/verify-email';
+  const path = role === 'merchant' ? '/market/verify-email' : '/user/verify-email';
   return `${appUrl}${path}?token=${token}&id=${actorId}`;
 }
 

@@ -151,7 +151,7 @@ export default function MyIssueDetailPage({
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
         <div>
           <Link
-            href="/merchant/my-issues"
+            href="/market/my-issues"
             className="inline-flex items-center gap-1 text-[12px] text-foreground/50 hover:text-foreground/80"
           >
             <ArrowLeft size={12} />

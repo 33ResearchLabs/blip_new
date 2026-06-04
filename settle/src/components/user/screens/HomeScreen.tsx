@@ -15,6 +15,7 @@ import {
   Gift,
   Plus,
   MoreHorizontal,
+  Clock,
 } from "lucide-react";
 import * as QRCode from "qrcode";
 import { UpiPayScreen } from "@/components/user/UpiPayScreen";
@@ -234,6 +235,15 @@ export const HomeScreen = ({
   const [showUpiPay, setShowUpiPay] = useStateHook(false);
   const [qrDataUrl, setQrDataUrl] = useStateHook<string | null>(null);
   const [depositCopied, setDepositCopied] = useStateHook(false);
+  // "Coming soon" toast for not-yet-shipped actions (e.g. Request). The toast
+  // auto-dismisses via the effect below, so the click handler stays ref-free.
+  const [comingSoon, setComingSoon] = useStateHook(false);
+  const showComingSoon = () => setComingSoon(true);
+  useEffect(() => {
+    if (!comingSoon) return;
+    const t = setTimeout(() => setComingSoon(false), 1900);
+    return () => clearTimeout(t);
+  }, [comingSoon]);
 
   useEffect(() => {
     if (!showDeposit || !solanaWallet.walletAddress) return;
@@ -588,7 +598,7 @@ export const HomeScreen = ({
               {/* Action chips — button grid first */}
               <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Request', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V5m0 15-5-5m5 5 5-5M5 4h14"/></svg> },
+                  { label: 'Request', fn: () => showComingSoon(), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V5m0 15-5-5m5 5 5-5M5 4h14"/></svg> },
                   { label: 'Deposit', fn: () => setShowDeposit(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0-4-4m4 4 4-4M5 20h14"/></svg> },
                   { label: 'Send', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
                   { label: 'Scan', fn: () => setShowUpiPay(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/></svg> },
@@ -732,7 +742,7 @@ export const HomeScreen = ({
               {/* Action chips — exact from source PLAY_CHIPS */}
               <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Request', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V5m0 15-5-5m5 5 5-5M5 4h14"/></svg> },
+                  { label: 'Request', fn: () => showComingSoon(), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V5m0 15-5-5m5 5 5-5M5 4h14"/></svg> },
                   { label: 'Deposit', fn: () => setShowDeposit(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0-4-4m4 4 4-4M5 20h14"/></svg> },
                   { label: 'Send', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
                   { label: 'Scan', fn: () => setShowUpiPay(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/></svg> },
@@ -884,30 +894,31 @@ export const HomeScreen = ({
             >
               <div style={{
                 maxWidth: 440, margin: '0 auto', padding: '18px 20px 22px',
-                borderRadius: 28, background: 'rgba(20,24,32,0.92)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 28, background: 'var(--color-surface-card)',
+                border: '1px solid var(--color-border-subtle)',
                 backdropFilter: 'blur(28px)',
-                boxShadow: '0 -20px 50px -10px rgba(0,0,0,0.55)',
+                boxShadow: '0 -20px 50px -10px rgba(0,0,0,0.35)',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
-                  <span style={{ width: 36, height: 4, borderRadius: 999, background: 'rgba(255,255,255,0.18)', display: 'block' }} />
+                  <span style={{ width: 36, height: 4, borderRadius: 999, background: 'var(--color-border-medium)', display: 'block' }} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                   <div>
-                    <h2 style={{ fontSize: 17, fontWeight: 800, color: 'rgba(255,255,255,0.96)' }}>Receive USDT</h2>
-                    <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>Solana network · SPL token</p>
+                    <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--color-text-primary)' }}>Receive USDT</h2>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-tertiary)', marginTop: 2 }}>Solana network · SPL token</p>
                   </div>
                   <button onClick={() => setShowDeposit(false)} style={{
                     width: 30, height: 30, borderRadius: 999, border: 'none', cursor: 'pointer',
-                    background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'var(--color-surface-active)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <X size={14} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.55)' }} />
+                    <X size={14} strokeWidth={2.4} style={{ color: 'var(--color-text-tertiary)' }} />
                   </button>
                 </div>
                 <div style={{
                   width: 232, height: 232, padding: 14, borderRadius: 24, background: '#fff',
                   margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 16px 36px -12px rgba(0,0,0,0.55)',
+                  boxShadow: '0 16px 36px -12px rgba(0,0,0,0.25)',
+                  border: '1px solid var(--color-border-subtle)',
                 }}>
                   {qrDataUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -919,11 +930,11 @@ export const HomeScreen = ({
                 <div style={{ display: 'flex', alignItems: 'center', marginTop: 20, gap: 8 }}>
                   <div style={{
                     flex: 1, padding: '11px 14px', borderRadius: 14, minWidth: 0,
-                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'var(--color-surface-base)', border: '1px solid var(--color-border-subtle)',
                   }}>
                     <span style={{
                       display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.78)',
+                      fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)',
                       fontFamily: 'ui-monospace, monospace',
                     }}>
                       {solanaWallet.walletAddress || '—'}
@@ -939,24 +950,55 @@ export const HomeScreen = ({
                     }}
                     style={{
                       width: 44, height: 44, borderRadius: 14, border: 'none', cursor: 'pointer', flexShrink: 0,
-                      background: depositCopied ? 'rgba(16,185,129,0.18)' : '#fff',
+                      background: depositCopied ? 'rgba(16,185,129,0.18)' : 'var(--color-text-primary)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
                   >
                     {depositCopied
-                      ? <Check size={16} strokeWidth={2.6} style={{ color: '#10B981' }} />
-                      : <Copy size={15} strokeWidth={2.4} style={{ color: '#0B0F14' }} />}
+                      ? <Check size={16} strokeWidth={2.6} style={{ color: 'var(--color-success)' }} />
+                      : <Copy size={15} strokeWidth={2.4} style={{ color: 'var(--color-surface-card)' }} />}
                   </button>
                 </div>
                 <p style={{
                   textAlign: 'center', fontSize: 10.5, fontWeight: 600,
-                  color: 'rgba(255,255,255,0.42)', marginTop: 14, lineHeight: 1.4,
+                  color: 'var(--color-text-tertiary)', marginTop: 14, lineHeight: 1.4,
                 }}>
                   Send only USDT (SPL) on Solana. Other tokens or networks will be lost.
                 </p>
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* ── "Coming soon" toast ── shown when a not-yet-shipped action
+          (e.g. Request) is tapped. Auto-dismisses. */}
+      <AnimatePresence>
+        {comingSoon && (
+          <motion.div
+            key="coming-soon-toast"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            style={{
+              position: 'fixed', left: 0, right: 0, zIndex: 200,
+              bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
+              display: 'flex', justifyContent: 'center', padding: '0 24px',
+              pointerEvents: 'none',
+            }}
+          >
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '11px 18px', borderRadius: 999,
+              background: 'rgba(20,21,26,0.92)', backdropFilter: 'blur(10px)',
+              color: '#fff', fontSize: 13, fontWeight: 700,
+              boxShadow: '0 10px 30px -8px rgba(0,0,0,0.5)',
+            }}>
+              <Clock size={15} strokeWidth={2.2} />
+              Request is coming soon
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

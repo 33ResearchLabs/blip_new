@@ -68,7 +68,7 @@ export function UserWelcomePage({ onGetStarted, onSignIn }: UserWelcomePageProps
 
   const goToMerchant = () => {
     if (typeof window !== "undefined") {
-      window.location.href = "/merchant/login";
+      window.location.href = "/market/login";
     }
   };
 
@@ -693,7 +693,7 @@ export function UserWelcomePage({ onGetStarted, onSignIn }: UserWelcomePageProps
               <a href="#" className="hover:text-text-secondary transition-colors">Privacy</a>
               <a href="#" className="hover:text-text-secondary transition-colors">Terms</a>
               <a href="#" className="hover:text-text-secondary transition-colors">Risk</a>
-              <a href="/merchant" className="hover:text-text-secondary transition-colors">Merchant Portal</a>
+              <a href="/market" className="hover:text-text-secondary transition-colors">Merchant Portal</a>
             </div>
           </div>
         </footer>

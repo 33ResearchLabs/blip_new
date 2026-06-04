@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import WalletPage from '@/app/merchant/wallet/page';
+import WalletPage from '@/app/market/wallet/page';
 
 interface MerchantWalletOverlayProps {
   open: boolean;

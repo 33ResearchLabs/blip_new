@@ -11,7 +11,7 @@ import EmailFlowShell, {
 
 type VerifyState = "verifying" | "success" | "already" | "error";
 
-const ALLOWED_NEXT = new Set(["/merchant/login", "/waitlist/merchant-login"]);
+const ALLOWED_NEXT = new Set(["/market/login", "/waitlist/merchant-login"]);
 
 function safeNext(raw: string | null): string {
   if (raw && ALLOWED_NEXT.has(raw)) return raw;

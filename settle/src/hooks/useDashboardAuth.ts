@@ -534,7 +534,7 @@ export function useDashboardAuth({
     if (solanaWallet.disconnect) {
       solanaWallet.disconnect();
     }
-    window.location.href = '/merchant';
+    window.location.href = '/market';
   }, [solanaWallet, setSessionToken]);
 
   // Session restore on mount.

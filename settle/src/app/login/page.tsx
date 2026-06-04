@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * /login — redirects to /?welcome=skip&tab=… so visitors land directly
+ * /login — redirects to /user?welcome=skip&tab=… so visitors land directly
  * on the user login form.
  *
  * The role chooser that previously sat here was removed: the marketing
  * landing at `/` already forks the User vs Merchant paths via its hero
- * CTAs ("Send money" → user form, "Run a desk" → /merchant/login), and
+ * CTAs ("Send money" → user form, "Run a desk" → /market/login), and
  * the navbar Sign-in pill is meant for returning users — sending them
  * through an extra "Choose your portal" step was friction.
  *
@@ -27,7 +27,7 @@ export default function LoginPage() {
     const tab = searchParams.get("tab") === "register" ? "register" : "signin";
     const reason = searchParams.get("reason");
     const reasonParam = reason ? `&reason=${reason}` : "";
-    router.replace(`/?welcome=skip&tab=${tab}${reasonParam}`);
+    router.replace(`/user?welcome=skip&tab=${tab}${reasonParam}`);
   }, [router, searchParams]);
 
   return (

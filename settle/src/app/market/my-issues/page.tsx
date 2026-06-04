@@ -184,7 +184,7 @@ export default function MyIssuesPage() {
                 className="rounded-lg border border-border bg-foreground/[0.02] hover:bg-foreground/[0.04] transition"
               >
                 <Link
-                  href={`/merchant/my-issues/${issue.id}`}
+                  href={`/market/my-issues/${issue.id}`}
                   className="flex items-start gap-3 px-4 py-3"
                 >
                   <div className="flex-1 min-w-0">

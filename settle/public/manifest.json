@@ -3,7 +3,7 @@
   "name": "Blip Money",
   "short_name": "Blip",
   "description": "P2P settlement. Send crypto to anyone.",
-  "start_url": "/?pwa=user",
+  "start_url": "/user?pwa=user",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
@@ -37,7 +37,7 @@
       "name": "Trade",
       "short_name": "Trade",
       "description": "Start a new trade",
-      "url": "/?action=trade"
+      "url": "/user?action=trade"
     }
   ]
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Wallet,
@@ -206,7 +206,7 @@ export default function WalletPage({
         });
         if (!res.ok) {
           setIsLoading(false);
-          router.push("/merchant/login");
+          router.push("/market/login");
           return;
         }
         const data = await res.json();
@@ -220,10 +220,10 @@ export default function WalletPage({
           return;
         }
         setIsLoading(false);
-        router.push("/merchant/login");
+        router.push("/market/login");
       } catch {
         setIsLoading(false);
-        router.push("/merchant/login");
+        router.push("/market/login");
       }
     };
     restoreSession();
@@ -273,6 +273,21 @@ export default function WalletPage({
         break;
     }
   }, [isLoading, embeddedWallet?.state, solanaWallet.connected]);
+
+  // When this wallet page is rendered inside the merchant home overlay
+  // (`onClose` provided) and the merchant just unlocked from the PIN screen
+  // (unlock → main), drop straight back to the Home screen — where the live
+  // balance is already shown — instead of parking on the full wallet page.
+  // Only fires on the unlock → main transition, so opening an already-unlocked
+  // wallet to actually use it still works normally. The standalone
+  // /merchant/wallet route has no `onClose`, so it is unaffected.
+  const prevViewRef = useRef<WalletView>("loading");
+  useEffect(() => {
+    if (onClose && prevViewRef.current === "unlock" && view === "main") {
+      onClose();
+    }
+    prevViewRef.current = view;
+  }, [view, onClose]);
 
   // ── Network status polling ────────────────────────────────────────────
   // Calls our server-side proxy at /api/solana/network-status instead of
@@ -773,7 +788,7 @@ export default function WalletPage({
         onOpenSettings={onOpenSettingsProp ?? (() => setShowSettings(true))}
         onOpenWallet={onClose ? () => { /* already in wallet */ } : undefined}
         onNavLinkClick={onClose}
-        onBack={onClose ?? (() => router.push("/merchant"))}
+        onBack={onClose ?? (() => router.push("/market"))}
       />
 
       {/* Main content — wider on desktop so the redesigned wallet view can
@@ -1358,7 +1373,7 @@ export default function WalletPage({
                 <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, backdropFilter: "blur(20px) saturate(150%)", padding: 15 }}>
                   <div className="flex items-center justify-between mb-2">
                     <span style={{ fontWeight: 800, fontSize: 16, color: "#f5f5f7" }}>Transaction History</span>
-                    <button onClick={() => router.push("/merchant/settings?tab=ledger")} className="px-3 py-1 rounded-full transition-colors" style={{ background: "none", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>View all</button>
+                    <button onClick={() => router.push("/market/settings?tab=ledger")} className="px-3 py-1 rounded-full transition-colors" style={{ background: "none", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>View all</button>
                   </div>
 
                   {recentTxsLoading && recentTxs.length === 0 ? (
@@ -1413,7 +1428,7 @@ export default function WalletPage({
                             <div className="text-right">
                               <p style={{ fontSize: 11, color: "#5a5a60" }}>{rel}</p>
                             </div>
-                            <button onClick={() => { if (tx.related_order_id) router.push(`/merchant?order=${tx.related_order_id}`); }} className="p-1 rounded transition-colors" style={{ background: "none", border: "none", cursor: "pointer", color: "#5a5a60" }}>
+                            <button onClick={() => { if (tx.related_order_id) router.push(`/market?order=${tx.related_order_id}`); }} className="p-1 rounded transition-colors" style={{ background: "none", border: "none", cursor: "pointer", color: "#5a5a60" }}>
                               <MoreHorizontal className="w-3.5 h-3.5" />
                             </button>
                           </div>

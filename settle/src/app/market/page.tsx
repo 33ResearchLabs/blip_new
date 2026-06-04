@@ -76,6 +76,13 @@ export default function MerchantDashboard() {
     } catch {}
   }, []);
 
+  // Preload payment methods into the store the moment we know the merchant id,
+  // so the trade modal opens already populated instead of fetching on open
+  // (no loading flash). Background refreshes still run from the modal itself.
+  useEffect(() => {
+    if (merchantId) useMerchantStore.getState().fetchPaymentMethods(merchantId);
+  }, [merchantId]);
+
   // Onboarding tour — env-controlled, shows once per merchant on first login.
   // Pass DB completion timestamp so the hook can suppress the tour across
   // browsers / incognito / cleared localStorage. Falls back to localStorage
@@ -259,7 +266,7 @@ export default function MerchantDashboard() {
     solanaRefreshBalances: solanaWallet.refreshBalances,
   });
 
-  // Login form / 2FA state live on `/merchant/login` now. This page only
+  // Login form / 2FA state live on `/market/login` now. This page only
   // needs the post-login handlers (logout, username prompt, profile sync).
   const { handleLogout, handleMerchantUsername, handleProfileUpdated } =
     useDashboardAuth({
@@ -269,7 +276,7 @@ export default function MerchantDashboard() {
       setShowUsernameModal,
     });
 
-  // When the merchant isn't authenticated, bounce to `/merchant/login` (the
+  // When the merchant isn't authenticated, bounce to `/market/login` (the
   // canonical login URL). Any inbound query params (`?tab=register`,
   // `?reason=session_expired`, etc.) are forwarded so the login page can
   // render the right tab / surface the right error.
@@ -277,7 +284,7 @@ export default function MerchantDashboard() {
     if (isLoading) return;
     if (isLoggedIn) return;
     const qs = searchParams.toString();
-    router.replace(`/merchant/login${qs ? `?${qs}` : ""}`);
+    router.replace(`/market/login${qs ? `?${qs}` : ""}`);
   }, [isLoading, isLoggedIn, searchParams, router]);
 
   const {
@@ -815,7 +822,7 @@ export default function MerchantDashboard() {
   }
 
   // Logged-out → the redirect effect above is sending the merchant to
-  // `/merchant/login`. Show a spinner during the brief flash before the
+  // `/market/login`. Show a spinner during the brief flash before the
   // route change commits, instead of mounting the LoginScreen here (which
   // would duplicate the login UI on two routes).
   if (!isLoggedIn) {
@@ -936,7 +943,7 @@ export default function MerchantDashboard() {
             if (embeddedWallet?.state === "locked") {
               setShowUnlockModal(true);
             } else {
-              router.push("/merchant/wallet");
+              router.push("/market/wallet");
             }
           }}
           activeCorridor={activeCorridor}

@@ -260,8 +260,8 @@ export default function WelcomeA() {
           </span>
         </div>
         <div className="flex items-center gap-5">
-          <Link href="/merchant/login?tab=signin" className="text-[14px] font-medium text-white/50">Sign In</Link>
-          <Link href="/merchant/login?tab=register" className="text-[14px] font-semibold px-6 py-2.5 rounded-full bg-white text-[#060606]">Get Started</Link>
+          <Link href="/market/login?tab=signin" className="text-[14px] font-medium text-white/50">Sign In</Link>
+          <Link href="/market/login?tab=register" className="text-[14px] font-semibold px-6 py-2.5 rounded-full bg-white text-[#060606]">Get Started</Link>
         </div>
       </motion.header>
 
@@ -288,12 +288,12 @@ export default function WelcomeA() {
             </motion.p>
 
             <motion.div custom={4} variants={fadeUp} initial="hidden" animate="show" className="flex items-center gap-4 mt-10">
-              <Link href="/merchant/login?tab=register">
+              <Link href="/market/login?tab=register">
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} className="px-7 py-3.5 rounded-xl text-[15px] font-bold bg-white text-[#060606]">
                   Start Your Desk
                 </motion.button>
               </Link>
-              <Link href="/merchant/login?tab=signin">
+              <Link href="/market/login?tab=signin">
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} className="px-7 py-3.5 rounded-xl text-[15px] font-bold border border-white/[0.12] bg-white/[0.03] text-white">
                   Login to Dashboard
                 </motion.button>

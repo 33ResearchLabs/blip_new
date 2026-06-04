@@ -412,9 +412,9 @@ export function middleware(request: NextRequest) {
       pathname === '/user/verify-email' ||
       pathname === '/user/forgot-password' ||
       pathname === '/user/reset-password' ||
-      pathname === '/merchant/verify-email' ||
-      pathname === '/merchant/forgot-password' ||
-      pathname === '/merchant/reset-password';
+      pathname === '/market/verify-email' ||
+      pathname === '/market/forgot-password' ||
+      pathname === '/market/reset-password';
 
     if (!isDevExempt) {
       const devCookie = request.cookies.get('dev_access_granted');

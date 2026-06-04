@@ -2,13 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Clock, Check, TrendingUp, TrendingDown, X } from "lucide-react";
+import { Clock, Check, TrendingUp, TrendingDown, X, Bell } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
 import type { Screen, Order } from "./types";
 
 const CARD = "bg-surface-card border border-border-subtle";
-const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
 
 // Status filter — matches OrderStatus union from types.ts plus "all" / "active".
 // "active" = anything not in a terminal state (pending/payment/waiting).
@@ -45,6 +44,7 @@ export interface OrdersListScreenProps {
   completedOrders: Order[];
   cancelledOrders: Order[];
   maxW: string;
+  notificationCount?: number;
 }
 
 export const OrdersListScreen = ({
@@ -55,6 +55,7 @@ export const OrdersListScreen = ({
   completedOrders,
   cancelledOrders,
   maxW,
+  notificationCount = 0,
 }: OrdersListScreenProps) => {
   // ── Filters ──
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -94,9 +95,21 @@ export const OrdersListScreen = ({
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
       {/* ── Header ── */}
-      <header className="px-5 pt-4 pb-4 shrink-0">
-        <p className={`${SECTION_LABEL} mb-1`}>Overview</p>
-        <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none mb-4">Activity</p>
+      <header className="px-5 pt-4 pb-2 shrink-0">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Activity</p>
+          <button
+            onClick={() => setScreen("notifications")}
+            className="relative p-2.5 rounded-[14px] bg-surface-card border border-border-subtle"
+          >
+            <Bell size={18} className="text-text-tertiary" />
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 rounded-full flex items-center justify-center bg-text-primary text-surface-base text-[9px] font-extrabold px-1">
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </span>
+            )}
+          </button>
+        </div>
 
         {/* Status + Time filter dropdowns */}
         <div className="flex items-center gap-2">
@@ -120,9 +133,9 @@ export const OrdersListScreen = ({
       {/* ── Unified List ── */}
       <div className="flex-1 px-5 pt-2 pb-28 overflow-y-auto scrollbar-hide">
         {filteredOrders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center pt-8">
+          <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className={`w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 ${CARD}`}>
-              <Clock size={22} className="text-text-tertiary" />
+              <Clock size={22} className="text-text-quaternary" />
             </div>
             <p className="text-[18px] font-extrabold tracking-[-0.02em] text-text-primary mb-1.5">No orders found</p>
             <p className="text-[13px] font-medium text-text-tertiary">Try a different filter or time range</p>

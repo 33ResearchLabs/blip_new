@@ -355,7 +355,7 @@ function StatTab({ completedOrders, totalTradedVolume, todayEarnings, pendingEar
 
           {/* Settings link */}
           <Link
-            href="/merchant/settings"
+            href="/market/settings"
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", textDecoration: "none", borderBottom: `1px solid ${T.hair}` }}
           >
             <span style={{ fontWeight: 600, fontSize: 14, color: T.muted2 }}>Settings & Profile</span>
@@ -365,7 +365,7 @@ function StatTab({ completedOrders, totalTradedVolume, todayEarnings, pendingEar
           {/* Public profile */}
           {merchantId && (
             <Link
-              href={`/merchant/profile/${merchantId}`}
+              href={`/market/profile/${merchantId}`}
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", textDecoration: "none", borderBottom: `1px solid ${T.hair}` }}
             >
               <span style={{ fontWeight: 600, fontSize: 14, color: T.muted2 }}>View Public Profile</span>

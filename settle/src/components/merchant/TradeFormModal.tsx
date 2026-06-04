@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { Order } from "@/types/merchant";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
-import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { useMerchantStore } from "@/stores/merchantStore";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import { useCorridorPrices, resolveCorridorRef } from "@/hooks/useCorridorPrices";
 import { formatCrypto, formatRate } from "@/lib/format";
@@ -27,14 +27,6 @@ const CORRIDOR_OPTIONS = [
 // Map a corridor id to its fiat currency code for labels in the preview row.
 function corridorFiat(corridorId: string | undefined): "AED" | "INR" {
   return corridorId === "USDT_INR" ? "INR" : "AED";
-}
-
-interface MerchantPaymentMethod {
-  id: string;
-  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile' | 'upi';
-  name: string;
-  details?: string;
-  is_default?: boolean;
 }
 
 export interface OpenTradeFormState {
@@ -91,7 +83,12 @@ export function TradeFormModal({
   onCorridorChange,
   onAddPaymentMethod,
 }: TradeFormModalProps) {
-  const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
+  // Payment methods come from the merchant store, preloaded at dashboard load
+  // (market/page.tsx) so this modal opens already populated — no fetch-on-open
+  // flash. We still refresh in the background on open + dropdown reopen.
+  const paymentMethods = useMerchantStore((s) => s.paymentMethods);
+  const paymentMethodsLoaded = useMerchantStore((s) => s.paymentMethodsLoaded);
+  const refreshPaymentMethods = useMerchantStore((s) => s.fetchPaymentMethods);
   const [showPmDropdown, setShowPmDropdown] = useState(false);
   // Live ref price for the active corridor — drives the Trade Preview row
   // so it always matches what the user picked at the top (USDT/AED vs USDT/INR).
@@ -119,33 +116,27 @@ export function TradeFormModal({
   })();
   const submitDisabled = isCreatingTrade || disabledReason !== null;
 
-  // Refetch helper — also called when the dropdown reopens so a payment
-  // method just added via the management overlay shows up immediately.
-  const loadPaymentMethods = useCallback(async () => {
+  // Background refresh — pulls the latest into the store. Called on open and on
+  // dropdown reopen so a method just added via the management overlay shows up.
+  const loadPaymentMethods = useCallback(() => {
     if (!merchantId) return;
-    try {
-      const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
-        setPaymentMethods(data.data);
-        // Auto-select default method if nothing is selected yet
-        if (!openTradeForm.paymentMethodId) {
-          const defaultPm = data.data.find((pm: MerchantPaymentMethod) => pm.is_default) || data.data[0];
-          if (defaultPm) {
-            setOpenTradeForm(prev => ({
-              ...prev,
-              paymentMethod: (defaultPm.type === 'cash' ? 'cash' : 'bank') as 'bank' | 'cash',
-              paymentMethodId: defaultPm.id,
-            }));
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch payment methods:", err);
+    void refreshPaymentMethods(merchantId);
+  }, [merchantId, refreshPaymentMethods]);
+
+  // Auto-select the merchant's default the instant methods are available
+  // (preloaded or refreshed) and nothing is chosen yet — so the row is correct
+  // immediately, without waiting on the background refresh.
+  useEffect(() => {
+    if (!isOpen || openTradeForm.paymentMethodId || paymentMethods.length === 0) return;
+    const defaultPm = paymentMethods.find((pm) => pm.is_default) || paymentMethods[0];
+    if (defaultPm) {
+      setOpenTradeForm((prev) => ({
+        ...prev,
+        paymentMethod: (defaultPm.type === 'cash' ? 'cash' : 'bank') as 'bank' | 'cash',
+        paymentMethodId: defaultPm.id,
+      }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [merchantId]);
+  }, [isOpen, paymentMethods, openTradeForm.paymentMethodId, setOpenTradeForm]);
 
   useEffect(() => {
     if (!isOpen || !merchantId) return;
@@ -298,7 +289,16 @@ export function TradeFormModal({
                       }}
                       className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.15] transition-all"
                     >
-                      {selectedPm ? (
+                      {(!paymentMethodsLoaded && paymentMethods.length === 0) ? (
+                        // Slow-internet fallback: skeleton placeholder while the
+                        // first load is still in flight (preload normally beats
+                        // this, so it rarely shows). Keeps the row from flashing
+                        // "Add a payment method" before the real default lands.
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="w-4 h-4 rounded-md bg-white/[0.08] animate-pulse shrink-0" />
+                          <span className="h-3 w-28 rounded bg-white/[0.08] animate-pulse" />
+                        </div>
+                      ) : selectedPm ? (
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-[12px] shrink-0">{pmIcon(selectedPm.type)}</span>
                           <div className="min-w-0 flex-1 text-left">

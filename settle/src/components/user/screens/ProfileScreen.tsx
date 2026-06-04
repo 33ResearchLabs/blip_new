@@ -16,17 +16,38 @@ import {
   Mail,
   Gift,
   Coins,
+  Star,
+  Sparkles,
+  BadgeCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { useUser } from "@/context/AppContext";
 
 /**
- * Compact stats row shown in the profile header next to the avatar.
- * Surfaces the two numbers a user cares about most at a glance:
- *   - "{n} Blip Points" with the coin glyph
- *   - reputation score (300–900)
+ * Account card shown at the top of the profile screen. Membership badge,
+ * avatar with online dot, name + (phone-verified) check, and Blip Points /
+ * Reputation stat tiles.
+ *
+ * Blip Points + reputation come from the same endpoints the old header chip
+ * row used. The blue verified check is gated on a `phone_verified` flag read
+ * defensively off the auth user — user-side phone verification isn't built
+ * yet, so this stays off until that ships, then lights up automatically.
  */
-function ProfileHeaderStats() {
+function AccountCard({
+  userName,
+  walletConnected,
+  tier,
+}: {
+  userName: string;
+  walletConnected: boolean;
+  tier: string | null;
+}) {
+  const { user } = useUser();
+  const phoneVerified = Boolean(
+    (user as { phone_verified?: boolean } | null)?.phone_verified,
+  );
+
   const [coins, setCoins] = useState<number | null>(null);
   const [repScore, setRepScore] = useState<number | null>(null);
 
@@ -50,18 +71,70 @@ function ProfileHeaderStats() {
     return () => { cancelled = true; };
   }, []);
 
+  const initial = (userName || 'U').charAt(0).toUpperCase();
+  const subtitle = phoneVerified ? 'Verified Pro Trader' : tier ? tier : 'Unverified';
+
   return (
-    <div className="flex items-center gap-2 mb-2 flex-wrap">
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-raised border border-border-subtle text-text-secondary text-[11px] font-semibold">
-        <Coins size={11} />
-        <span className="tabular-nums text-text-primary">{coins != null ? coins.toLocaleString('en-US') : '—'}</span>
-        <span className="text-text-tertiary">Blip Points</span>
-      </span>
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-raised border border-border-subtle text-text-secondary text-[11px] font-semibold">
-        <Shield size={11} />
-        <span className="tabular-nums text-text-primary">{repScore != null ? repScore : '—'}</span>
-        <span className="text-text-tertiary">Rep</span>
-      </span>
+    <div className={`rounded-[20px] p-4 ${CARD}`}>
+      {/* Membership badge + accent flourish */}
+      <div className="flex items-start justify-between mb-4">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-warning/10 border border-warning/20 text-warning text-[10px] font-bold tracking-[0.12em] uppercase">
+          <Star size={11} className="fill-warning text-warning" />
+          Regular Member
+        </span>
+        <Sparkles size={16} className="text-warning shrink-0" />
+      </div>
+
+      {/* Identity row */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative shrink-0">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-surface-raised border border-border-medium">
+            <span className="text-[20px] font-bold tracking-[-0.03em] text-text-primary">
+              {initial}
+            </span>
+          </div>
+          <span
+            className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-surface-card ${walletConnected ? '' : 'bg-text-quaternary'}`}
+            style={walletConnected ? { background: 'var(--color-success)' } : undefined}
+            aria-label={walletConnected ? 'Online' : 'Offline'}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="text-[17px] font-bold tracking-[-0.02em] text-text-primary truncate">
+              {userName || 'User'}
+            </p>
+            {phoneVerified && (
+              <BadgeCheck size={16} className="shrink-0" style={{ color: 'var(--color-info)' }} />
+            )}
+          </div>
+          <p className="text-[12px] font-medium text-text-tertiary truncate mt-0.5">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="rounded-[14px] px-3 py-2.5 bg-surface-base border border-border-subtle">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Coins size={12} className="text-text-tertiary" />
+            <span className={CARD_LABEL}>Blip Points</span>
+          </div>
+          <p className="text-[18px] font-bold tracking-[-0.02em] text-text-primary tabular-nums leading-none">
+            {coins != null ? coins.toLocaleString('en-US') : '—'}
+          </p>
+        </div>
+        <div className="rounded-[14px] px-3 py-2.5 bg-surface-base border border-border-subtle">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Shield size={12} className="text-text-tertiary" />
+            <span className={CARD_LABEL}>Reputation</span>
+          </div>
+          <p className="text-[18px] font-bold tracking-[-0.02em] text-text-primary tabular-nums leading-none">
+            {repScore != null ? repScore : '—'}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -214,39 +287,40 @@ export const ProfileScreen = ({
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
-      {/* ── Header ── Hero profile banner: avatar with connection dot, name,
-          tier line, and a tappable wallet pill (replaces the separate copy
-          button for a cleaner one-tap interaction). */}
-      <header className="px-5 pt-6 pb-5 shrink-0">
-        <p className={`${SECTION_LABEL} mb-3`}>Account</p>
-        <div className="flex items-start gap-4">
-          <div className="relative shrink-0">
-            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center bg-surface-raised border border-border-medium">
-              <span className="text-[24px] font-bold tracking-[-0.03em] text-text-primary">
-                {(userName || 'U').charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <span
-              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-surface-base ${
-                solanaWallet.connected ? 'bg-text-primary' : 'bg-text-quaternary'
-              }`}
-              aria-label={solanaWallet.connected ? 'Wallet connected' : 'Wallet disconnected'}
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[22px] font-bold tracking-[-0.03em] text-text-primary leading-none truncate mb-1.5">
-              {userName || 'User'}
-            </p>
-            {/* Rep score + Blip Points chip row — sits directly below
-                the user name so the most important "who am I worth"
-                signals are immediately legible next to the avatar. */}
-            <ProfileHeaderStats />
-          </div>
+      {/* ── Header ── matches the Messages screen: big title + a rounded-square
+          icon button. Static; the account card + the rest scroll underneath. */}
+      <header className="px-5 pt-4 pb-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+            Profile
+          </p>
+          <button
+            onClick={toggleTheme}
+            aria-label="Toggle appearance"
+            className="relative p-2.5 rounded-[14px] bg-surface-card border border-border-subtle"
+          >
+            {theme === 'dark' ? (
+              <Moon size={18} className="text-text-tertiary" />
+            ) : (
+              <Sun size={18} className="text-text-tertiary" />
+            )}
+          </button>
         </div>
       </header>
 
       {/* ── Scrollable content ── */}
-      <div className="flex-1 px-5 pb-28 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pt-4 pb-28 overflow-y-auto scrollbar-hide">
+
+        {/* Account card — membership badge, avatar + online dot, name +
+            (phone-verified) check, and Blip Points / Reputation tiles. */}
+        <p className={`${SECTION_LABEL} mb-2`}>Account</p>
+        <div className="mb-3">
+          <AccountCard
+            userName={userName}
+            walletConnected={solanaWallet.connected}
+            tier={tier}
+          />
+        </div>
 
         {/* Identity card \u2014 combines reputation + stats into a single cohesive
             block. Reputation row sits on top with a progress bar showing

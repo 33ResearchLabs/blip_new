@@ -78,7 +78,7 @@ export function PwaAppGuard({ expected }: Props) {
 
   const wrongKind = actual === "user" ? "User" : "Merchant";
   const rightKind = expected === "user" ? "User" : "Merchant";
-  const rightUrl = expected === "user" ? "/" : "/merchant/login";
+  const rightUrl = expected === "user" ? "/user" : "/market/login";
 
   return (
     <motion.div

@@ -48,10 +48,12 @@ export const BottomNav = ({
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "space-between",
-        // Match HomeScreen's bar; honour the home-indicator inset on notched
-        // devices while keeping the same visual base padding everywhere.
-        padding: "8px 20px 28px",
-        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 28px)",
+        // Honour the home-indicator / gesture-bar inset on notched devices,
+        // but take the MAX of the inset and a base padding rather than summing
+        // them — summing left a tall empty band between the tabs and the
+        // phone's bottom nav on gesture-nav devices.
+        padding: "8px 20px",
+        paddingBottom: "max(env(safe-area-inset-bottom, 0px), 14px)",
         borderTop: "1px solid rgba(20,21,26,0.07)",
         background: "#f4f3f1",
         backdropFilter: "blur(12px)",

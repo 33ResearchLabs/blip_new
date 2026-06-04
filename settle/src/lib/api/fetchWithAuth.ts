@@ -328,8 +328,8 @@ function forceLogoutAndRedirect(): void {
   const path = window.location.pathname;
   let target = '/login';
   let bannerQs = hadAuthEvidence ? '?reason=session_expired' : '';
-  if (path.startsWith('/merchant')) {
-    target = '/merchant/login';
+  if (path.startsWith('/market')) {
+    target = '/market/login';
   } else if (path.startsWith('/admin')) {
     target = '/admin';
     bannerQs = hadAuthEvidence ? '?session=expired' : '';
