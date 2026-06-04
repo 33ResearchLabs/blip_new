@@ -30,6 +30,9 @@ const nextConfig: NextConfig = {
     return [
       { source: '/merchant', destination: '/market', permanent: false },
       { source: '/merchant/:path*', destination: '/market/:path*', permanent: false },
+      // FAQ moved under the user app so the URL carries /user. Redirect the old
+      // top-level path for any existing links / bookmarks.
+      { source: '/faq', destination: '/user/faq', permanent: false },
     ];
   },
 };

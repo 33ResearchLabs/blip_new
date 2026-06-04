@@ -93,6 +93,9 @@ interface MobileHomeViewProps {
   onOpenPaymentMethods?: () => void;
   onOpenNotifications?: () => void;
   onOpenProfile?: () => void;
+  // Opens the merchant settings overlay. Rendered as a gear in the top-right
+  // of the home header.
+  onOpenSettings?: () => void;
   notificationCount?: number;
 }
 
@@ -137,6 +140,7 @@ export function MobileHomeView({
   onOpenPaymentMethods,
   onOpenNotifications,
   onOpenProfile,
+  onOpenSettings,
   notificationCount = 0,
 }: MobileHomeViewProps) {
   const openWallet = onOpenWallet ?? onShowWalletModal;
@@ -495,11 +499,22 @@ export function MobileHomeView({
 
       {/* ── HEADER ── */}
       <div className="z2rise" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1, paddingBottom: 4, animationDelay: "40ms" }}>
-        <div>
-          <div style={{ color: "#86868b", fontSize: 12.5, fontWeight: 600 }}>{dateLabel}</div>
-          <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 1, color: "#f5f5f7" }}>{greeting}</div>
+        {/* Left: profile avatar (top-left corner) + greeting */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div
+            onClick={() => onOpenProfile?.()}
+            style={{ width: 42, height: 42, borderRadius: 999, border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden", flexShrink: 0, background: merchantInfo?.avatar_url && /^https?:|^\//.test(merchantInfo.avatar_url) ? "transparent" : "linear-gradient(150deg,#ff8a3d,#ff5d73)" }}>
+            {merchantInfo?.avatar_url && /^https?:|^\//.test(merchantInfo.avatar_url)
+              ? <img src={merchantInfo.avatar_url} style={{ width: 42, height: 42, objectFit: "cover" }} alt="" />
+              : <span style={{ fontWeight: 800, color: "#fff", fontSize: 17 }}>{avatarLetter}</span>}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: "#86868b", fontSize: 12.5, fontWeight: 600 }}>{dateLabel}</div>
+            <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 1, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{greeting}</div>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        {/* Right: payment + notifications + settings (settings = top-right corner) */}
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           <button
             onClick={() => onOpenPaymentMethods?.()}
             style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", position: "relative", cursor: "pointer" }}>
@@ -518,13 +533,14 @@ export function MobileHomeView({
               </span>
             )}
           </button>
-          <div
-            onClick={() => onOpenProfile?.()}
-            style={{ width: 42, height: 42, borderRadius: 999, border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden", background: merchantInfo?.avatar_url && /^https?:|^\//.test(merchantInfo.avatar_url) ? "transparent" : "linear-gradient(150deg,#ff8a3d,#ff5d73)" }}>
-            {merchantInfo?.avatar_url && /^https?:|^\//.test(merchantInfo.avatar_url)
-              ? <img src={merchantInfo.avatar_url} style={{ width: 42, height: 42, objectFit: "cover" }} alt="" />
-              : <span style={{ fontWeight: 800, color: "#fff", fontSize: 17 }}>{avatarLetter}</span>}
-          </div>
+          {onOpenSettings && (
+            <button
+              onClick={() => onOpenSettings()}
+              aria-label="Settings"
+              style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
+              <Settings style={{ width: 18, height: 18 }} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -553,10 +569,14 @@ export function MobileHomeView({
           </div>
         )}
 
+        {/* Market + Set rate row — equal height with a small gap between them.
+            alignItems:stretch grows the shorter pill to match the taller one,
+            and gap replaces the old inline-whitespace that let them overlap. */}
+        <div style={{ marginTop: 14, display: "flex", alignItems: "stretch", gap: 8, flexWrap: "wrap" }}>
         {/* Market switch pill */}
         <button
           onClick={() => setCorridorPickerOpen(true)}
-          style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 9, padding: "8px 14px", borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", cursor: "pointer", backdropFilter: "blur(20px)" }}>
+          style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "8px 14px", borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", cursor: "pointer", backdropFilter: "blur(20px)" }}>
           <span style={{ fontSize: 14 }}>{activeCorridorMeta.flag}</span>
           <span style={{ fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}>USDT / {activeCorridorMeta.fiat}</span>
           {liveRate && <>
@@ -579,6 +599,7 @@ export function MobileHomeView({
             <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
           </span>
         </button>
+        </div>
       </div>
 
       {/* ── BUY / SELL ── */}

@@ -18,6 +18,7 @@ import {
 import { formatFiat } from "@/lib/format";
 import { HoldSwipe } from "@/components/merchant/OrderCardParts";
 import { useMerchantStore, type PendingFilter } from "@/stores/merchantStore";
+import { useSounds } from "@/hooks/useSounds";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import type { Order } from "@/types/merchant";
 
@@ -374,6 +375,10 @@ export function MobileOrdersView({
   const setPendingFilter = useMerchantStore((s) => s.setPendingFilter);
   const soundEnabled = useMerchantStore((s) => s.soundEnabled);
   const setSoundEnabled = useMerchantStore((s) => s.setSoundEnabled);
+  // Play a confirmation chime when sound is switched on. The tap is also the
+  // user gesture that unlocks the Web Audio context on mobile — without it the
+  // AudioContext stays suspended and later new_order alerts never play.
+  const { playSound } = useSounds();
   // For YOU PAY / YOU RECEIVE perspective in the gradient amounts panel.
   const merchantId = useMerchantStore((s) => s.merchantId);
   // Pull the FULL orders array from the same store the desktop pending
@@ -570,7 +575,14 @@ export function MobileOrdersView({
 
         {/* Sound toggle */}
         <button
-          onClick={() => setSoundEnabled(!soundEnabled)}
+          onClick={() => {
+            const next = !soundEnabled;
+            setSoundEnabled(next);
+            // setSoundEnabled writes the Zustand store synchronously, so the
+            // store's soundEnabled gate already reads `true` here — play the
+            // chime inside the gesture to also unlock mobile audio.
+            if (next) playSound("notification");
+          }}
           aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
           aria-pressed={soundEnabled}
           style={{ width: 42, height: 42, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: soundEnabled ? "rgba(255,255,255,0.7)" : "#5a5a60", cursor: "pointer" }}

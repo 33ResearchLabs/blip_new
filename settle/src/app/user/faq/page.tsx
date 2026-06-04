@@ -287,7 +287,7 @@ export default function FaqPage() {
       >
         <div className="px-4 h-14 flex items-center gap-3 max-w-[480px] mx-auto">
           <Link
-            href="/"
+            href="/user"
             className="p-2 -ml-2 rounded-lg transition-colors"
             style={{ color: T.iconHi }}
             aria-label="Back"

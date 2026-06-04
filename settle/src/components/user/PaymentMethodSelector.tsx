@@ -167,7 +167,7 @@ export const PaymentMethodSelector = ({
         // don't render a stale chip.
         if (selectedId === methodId) onSelect(null);
         // Keep the login-time cache fresh so the next open is instant + correct.
-        void syncPreloaded();
+        void syncPreloaded(userId ?? undefined);
       }
     } catch {
       // Best-effort — leave the row in place if the API call failed.
@@ -235,7 +235,7 @@ export const PaymentMethodSelector = ({
         setShowAddForm(false);
         setExpanded(false);
         // Keep the login-time cache fresh so the next open is instant + correct.
-        void syncPreloaded();
+        void syncPreloaded(userId ?? undefined);
       } else {
         // Map machine codes / HTTP status to friendly messages
         if (res.status === 401 || data.code === 'SESSION_EXPIRED') {

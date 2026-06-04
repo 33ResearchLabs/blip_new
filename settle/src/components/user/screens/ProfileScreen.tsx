@@ -155,7 +155,12 @@ const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 // for places where we compose with extra utility classes inline.
 const CARD = "bg-surface-card border border-border-subtle";
 const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
-const CARD_LABEL = SECTION_LABEL;
+// In-card labels (stat/balance labels, …) use a darker shade than section
+// headers so they stay legible on card backgrounds.
+const CARD_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-secondary uppercase";
+// Strong in-card label — uses the primary text color, matching the app-lock
+// PIN screen. Applied to the Reputation + Solana network labels.
+const CARD_LABEL_STRONG = "text-[10px] font-bold tracking-[0.22em] text-text-primary uppercase";
 
 // Reputation bar heights (index → tailwind h-*)
 const REP_BAR_H = ["h-2", "h-3", "h-4", "h-5", "h-6"]; // 8,12,16,20,24px
@@ -335,7 +340,7 @@ export const ProfileScreen = ({
                     <Shield size={13} className="text-text-secondary" />
                   </div>
                   <div>
-                    <p className={`${CARD_LABEL} leading-none mb-1`}>Reputation</p>
+                    <p className={`${CARD_LABEL_STRONG} leading-none mb-1`}>Reputation</p>
                     <p className="text-[15px] font-bold tracking-[-0.02em] text-text-primary leading-none">
                       {tier}
                     </p>
@@ -370,8 +375,8 @@ export const ProfileScreen = ({
                 <Shield size={13} className="text-text-tertiary" />
               </div>
               <div>
-                <p className={`${CARD_LABEL} leading-none mb-1`}>Reputation</p>
-                <p className="text-[13px] font-semibold text-text-tertiary leading-none">
+                <p className={`${CARD_LABEL_STRONG} leading-none mb-1`}>Reputation</p>
+                <p className="text-[13px] font-semibold text-text-secondary leading-none">
                   Complete your first trade to earn a tier
                 </p>
               </div>
@@ -410,10 +415,10 @@ export const ProfileScreen = ({
                 <Wallet size={15} className={solanaWallet.connected ? 'text-text-primary' : 'text-text-tertiary'} />
               </div>
               <div className="min-w-0">
-                <p className={`${CARD_LABEL} mb-0.5`}>
+                <p className={`${CARD_LABEL_STRONG} mb-0.5`}>
                   {solanaWallet.connected ? networkLabel() : 'Not Connected'}
                 </p>
-                <p className="text-[13px] font-bold text-text-primary font-mono truncate">
+                <p className="text-[13px] font-semibold text-text-secondary font-mono truncate">
                   {solanaWallet.connected && solanaWallet.walletAddress
                     ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
                     : 'Connect your wallet'}
@@ -469,10 +474,10 @@ export const ProfileScreen = ({
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={() => router.push('/user/wallet')}
-                    className="w-full mt-2 h-10 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-raised border border-border-subtle text-[12px] font-bold text-text-secondary tracking-[-0.01em]"
+                    className="w-full mt-2 h-10 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-raised border border-border-subtle text-[12px] font-bold text-text-primary tracking-[-0.01em]"
                   >
                     Manage Wallet
-                    <ChevronRight size={14} className="text-text-tertiary" />
+                    <ChevronRight size={14} className="text-text-secondary" />
                   </motion.button>
                 )}
               </div>
@@ -597,7 +602,7 @@ export const ProfileScreen = ({
         {/* ── 6. Help & Support ── */}
         <SettingsGroup label="Help & Support" icon={<LifeBuoy className="w-3.5 h-3.5" />}>
           <SettingsRow
-            href="/faq"
+            href="/user/faq"
             icon={<HelpCircle className="w-[15px] h-[15px]" />}
             title="FAQs"
             subtitle="Common questions answered"

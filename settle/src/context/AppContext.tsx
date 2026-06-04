@@ -49,8 +49,9 @@ interface AppContextType extends AppState {
   fetchBankAccounts: () => Promise<void>;
   addBankAccount: (data: { bank_name: string; account_name: string; iban: string }) => Promise<void>;
 
-  // Payment method actions
-  fetchPaymentMethods: () => Promise<void>;
+  // Payment method actions. Accepts an explicit userId because the user app
+  // identifies via useUserAuth, not AppContext.user.
+  fetchPaymentMethods: (userId?: string) => Promise<void>;
 
   // Settings
   setTradePreference: (pref: 'fast' | 'cheap' | 'best') => void;
@@ -256,10 +257,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Fetch payment methods — cached in context so the trade screen's selector
   // can seed from it instantly. Never throws; the selector still has its own
   // fetch as a fallback, so a failure here just means it loads on open as before.
-  const fetchPaymentMethods = useCallback(async () => {
-    if (!state.user?.id) return;
+  const fetchPaymentMethods = useCallback(async (userId?: string) => {
+    const uid = userId ?? state.user?.id;
+    if (!uid) return;
     try {
-      const res = await fetchWithAuth(`/api/users/${state.user.id}/payment-methods`);
+      const res = await fetchWithAuth(`/api/users/${uid}/payment-methods`);
       if (!res.ok) return;
       const data = await res.json();
       if (data?.success && Array.isArray(data.data)) {

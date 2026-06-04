@@ -285,6 +285,40 @@ export async function updateIssue(
 }
 
 /**
+ * Append a staff answer to a ticket's user-visible timeline WITHOUT changing
+ * its status. Powers the support "reply" flow: an admin can answer a user's
+ * ticket at any point, and the note shows up on the user's detail-page
+ * timeline pinned to the ticket's current status. `updateIssue` only appends
+ * history alongside a status change, so this is the answer-only path.
+ */
+export async function appendIssueReply(
+  id: string,
+  reply: {
+    note: string;
+    byType: IssueStatusHistoryEntry['by_type'];
+    byId?: string | null;
+  },
+): Promise<IssueRow | null> {
+  const current = await getIssueById(id);
+  if (!current) return null;
+  const entry: IssueStatusHistoryEntry = {
+    status: current.status,
+    at: new Date().toISOString(),
+    by_type: reply.byType,
+    by_id: reply.byId ?? null,
+    note: reply.note,
+  };
+  return queryOne<IssueRow>(
+    `UPDATE issues
+        SET status_history = status_history || $1::jsonb,
+            updated_at = NOW()
+      WHERE id = $2
+      RETURNING *`,
+    [JSON.stringify([entry]), id],
+  );
+}
+
+/**
  * User-scoped listing for the "My Issues" page. Filters strictly on
  * (actor_type, created_by) — never returns an issue that wasn't filed
  * by the supplied actor. Anonymous reports (created_by = NULL) are

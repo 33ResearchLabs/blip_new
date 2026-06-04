@@ -7,8 +7,11 @@
  * Body for PATCH (all fields optional — send only what's changing):
  *   { status?: 'open' | 'in_progress' | 'resolved' | 'closed' | 'rejected',
  *     priority?: 'low' | 'medium' | 'high' | 'critical',
- *     note?: string,          // appended to admin_notes
- *     statusNote?: string,    // appended to status_history (user-visible)
+ *     note?: string,          // appended to admin_notes (internal-only)
+ *     statusNote?: string,    // appended to status_history (user-visible).
+ *                             //   With a status change → recorded alongside it.
+ *                             //   Without a status change → posted as a staff
+ *                             //   answer/reply at the ticket's current status.
  *     resolvedBy?: string }   // recorded when status → resolved/closed/rejected
  */
 
@@ -17,6 +20,7 @@ import { requireAdminAuth } from '@/lib/middleware/auth';
 import { ISSUE_REPORTING_ENABLED } from '@/lib/issueReporter/featureFlag';
 import {
   appendAdminNote,
+  appendIssueReply,
   getIssueById,
   IssuePriority,
   IssueStatus,
@@ -106,6 +110,19 @@ export async function PATCH(
     });
     if (!row) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+    }
+
+    // Answer-only path: a user-visible note with no status change isn't
+    // recorded by updateIssue (it only appends to the timeline alongside a
+    // status transition). Post it as a staff reply at the current status so
+    // an admin can answer a ticket without forcing it into a new state.
+    if (!body.status && trimmedStatusNote) {
+      const replied = await appendIssueReply(id, {
+        note: trimmedStatusNote,
+        byType: 'admin',
+        byId: body.resolvedBy ?? null,
+      });
+      if (replied) row = replied;
     }
 
     if (typeof body.note === 'string' && body.note.trim()) {

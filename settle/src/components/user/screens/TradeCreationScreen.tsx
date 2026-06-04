@@ -26,6 +26,7 @@ import {
   type PaymentMethodItem,
 } from "../PaymentMethodSelector";
 import { BottomNav } from "./BottomNav";
+import { useUserPaymentMethods } from "@/context/AppContext";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 import { formatCrypto, formatFiat, formatPercentage } from "@/lib/format";
@@ -227,6 +228,26 @@ export const TradeCreationScreen = ({
   // button (merchant trade-form pattern). Local so the buy flow reflects the
   // pick immediately; the order itself carries it via onSelectPaymentMethod.
   const [chosenMethod, setChosenMethod] = useState<PaymentMethodItem | null>(null);
+
+  // Pre-select the default payment method from the login-time cache so the
+  // "Pay With" / "Receive To" row shows it immediately — without the user
+  // having to open the sheet first. Works for both Buy and Sell.
+  const { paymentMethods: cachedPaymentMethods } = useUserPaymentMethods();
+  useEffect(() => {
+    if (chosenMethod || !cachedPaymentMethods.length) return;
+    const pick =
+      (selectedPaymentMethodId
+        ? cachedPaymentMethods.find((m) => m.id === selectedPaymentMethodId)
+        : null) ??
+      cachedPaymentMethods.find((m) => m.is_default) ??
+      cachedPaymentMethods[0];
+    if (!pick) return;
+    setChosenMethod(pick);
+    if (!selectedPaymentMethodId) onSelectPaymentMethod(pick);
+    setPaymentMethod(pick.type === "cash" ? "cash" : "bank");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cachedPaymentMethods, chosenMethod, selectedPaymentMethodId]);
+
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
@@ -879,12 +900,9 @@ export const TradeCreationScreen = ({
           </p>
         </div>
 
-        {isBuy ? (
-          <>
-            {/* Chosen payment method shows as a card to the LEFT of the
-                "Add payment method" button (merchant trade-form pattern).
-                Selecting / adding happens in the bottom sheet. */}
-            <div className="flex items-center gap-2 mb-3">
+        {/* Chosen payment method shows as a card left of the "Add" button —
+            same UI for Buy and Sell. Selecting / adding happens in the sheet. */}
+        <div className="flex items-center gap-2 mb-3">
               {chosenMethod ? (
                 <button
                   onClick={() => setShowAddMethods(true)}
@@ -924,17 +942,7 @@ export const TradeCreationScreen = ({
                 <Plus size={15} strokeWidth={2.6} />
                 Add
               </motion.button>
-            </div>
-          </>
-        ) : (
-          <div className="mb-4">
-            <PaymentMethodSelector
-              userId={userId}
-              selectedId={selectedPaymentMethodId}
-              onSelect={onSelectPaymentMethod}
-            />
-          </div>
-        )}
+        </div>
 
         {/* Priority — sliding segmented */}
         <p
@@ -1018,7 +1026,7 @@ export const TradeCreationScreen = ({
                       style={{
                         fontSize: 11,
                         fontWeight: 800,
-                        color: fee === "0%" ? (on ? "#4ade80" : "#22c55e") : (on ? T.activeTileSubText : T.lo),
+                        color: fee === "0%" ? (on ? "#15803d" : "#22c55e") : (on ? T.activeTileSubText : T.lo),
                         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                       }}
                     >
