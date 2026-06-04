@@ -56,27 +56,28 @@ export function AppLaunchPage() {
       const { outcome } = await prompt.userChoice;
       setState(outcome === "accepted" ? "installed" : "ready");
       setPrompt(null);
-      return;
-    }
-    // No native prompt — guide user based on platform
-    const ua = navigator.userAgent;
-    const isIOS = /ipad|iphone|ipod/i.test(ua);
-    const isAndroid = /android/i.test(ua);
-    if (isIOS) {
-      alert('To install: tap the Share button (□↑) in Safari, then "Add to Home Screen".');
-    } else if (isAndroid) {
-      alert('To install: tap the ⋮ menu in Chrome, then "Add to Home screen" or "Install app".');
     } else {
-      // Desktop: look for browser install icon in address bar
-      alert('To install: click the install icon (⊕) in your browser address bar, or use the browser menu → "Install app".');
+      // No native prompt yet — open the app; browser install button appears in address bar
+      window.location.href = "/user?welcome=skip";
+    }
+  }
+
+  async function installMerchant() {
+    if (prompt) {
+      setState("installing");
+      await prompt.prompt();
+      const { outcome } = await prompt.userChoice;
+      setState(outcome === "accepted" ? "installed" : "ready");
+      setPrompt(null);
+    } else {
+      window.location.href = "/market/login";
     }
   }
 
   const openUserApp = () => { window.location.href = "/user?welcome=skip"; };
-  // Merchant always attempts PWA install first
-  const openMerchantApp = state === "installed"
-    ? () => { window.location.href = "/market/login"; }
-    : install;
+  const downloadUserApp = install;
+  // Merchant attempts PWA install first; falls back to /market/login.
+  const openMerchantApp = installMerchant;
 
   return (
     <>
@@ -220,8 +221,8 @@ export function AppLaunchPage() {
                   Download the app
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <PlatBtn icon="ios" label="iOS" onClick={openUserApp} />
-                  <PlatBtn icon="android" label="Android" onClick={openUserApp} />
+                  <PlatBtn icon="ios" label="iOS" onClick={downloadUserApp} />
+                  <PlatBtn icon="android" label="Android" onClick={downloadUserApp} />
                 </div>
               </div>
 
