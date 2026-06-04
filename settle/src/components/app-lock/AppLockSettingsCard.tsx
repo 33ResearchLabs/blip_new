@@ -443,7 +443,7 @@ function StatusBadge({ status }: { status: StatusPill }) {
         : 'text-white/45 bg-white/[0.03] border-white/[0.05]';
   return (
     <span
-      className={`inline-flex items-center gap-1.5 h-[22px] px-2 rounded-full text-[10px] font-semibold tracking-[0.04em] border ${toneCls}`}
+      className={`inline-flex items-center gap-1.5 h-[28px] px-2.5 rounded-full text-[10px] font-semibold tracking-[0.04em] border ${toneCls}`}
     >
       {status.tone === 'on' && (
         <span className="w-1 h-1 rounded-full bg-black" />

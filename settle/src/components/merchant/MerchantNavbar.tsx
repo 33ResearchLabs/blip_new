@@ -59,6 +59,14 @@ interface MerchantNavbarProps {
   // When provided, the mobile navbar shows a back arrow that calls this.
   // Used by overlay screens (wallet, settings) where there is no real route to "back" to.
   onBack?: () => void;
+  // Mobile-only: title shown on the left of the header (the active tab name,
+  // e.g. "New Order"). When set, it replaces the avatar + @username on mobile
+  // so each tab reads as its own screen. Desktop is unaffected.
+  mobileTitle?: string;
+  // Mobile-only: small muted context line under `mobileTitle` (e.g.
+  // "3 orders waiting"). Turns the header into a two-line large-title bar.
+  // Only rendered alongside `mobileTitle`; ignored on desktop.
+  mobileSubtitle?: string;
   // Active corridor (e.g. "USDT_AED" / "USDT_INR"). When both are provided,
   // the mobile navbar exposes a dropdown so the user can switch trading pair
   // from any tab. On desktop the corridor lives in StatusCard.
@@ -85,6 +93,8 @@ export function MerchantNavbar({
   urgentNotificationCount = 0,
   onOpenNotifications,
   onBack,
+  mobileTitle,
+  mobileSubtitle,
   activeCorridor,
   onCorridorChange,
 }: MerchantNavbarProps) {
@@ -139,7 +149,12 @@ export function MerchantNavbar({
   return (
     <>
       <header className="sticky top-0 z-50 bg-[#070710]/96 backdrop-blur-md border-b border-white/[0.06]">
-        <div className="relative h-12 lg:h-[50px] flex lg:grid lg:grid-cols-[1fr_auto_1fr] items-center px-3 lg:px-4 gap-3">
+        {/* Per-tab mobile screens (mobileTitle set) get a taller two-line
+            large-title bar; desktop is fixed at 50px and overlay/home screens
+            keep the compact 48px height. */}
+        <div
+          className={`relative ${mobileTitle ? "h-[68px]" : "h-12"} lg:h-[50px] flex lg:grid lg:grid-cols-[1fr_auto_1fr] items-center px-3 lg:px-4 gap-3`}
+        >
           {/* Mobile back button — only on overlay screens that pass onBack */}
           {onBack && (
             <button
@@ -157,23 +172,41 @@ export function MerchantNavbar({
             <span className="hidden lg:flex">
               <Logo href="/market" />
             </span>
-            {/* Mobile — @username replaces the logo for a native-app feel */}
+            {/* Mobile — the active tab name reads as the screen title. Falls
+                back to @username only if no title was supplied. */}
             <div className="flex lg:hidden items-center gap-2 min-w-0">
               {!onBack && (
-                <>
-                  <UserAvatar
-                    src={merchantInfo?.avatar_url}
-                    seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
-                    size={26}
-                    alt={displayName}
-                    className="border border-white/[0.1] shrink-0"
-                  />
-                  <span className="text-[15px] font-semibold text-white/90 tracking-tight truncate">
-                    {merchantInfo?.username
-                      ? `@${merchantInfo.username}`
-                      : merchantInfo?.display_name || "Merchant"}
-                  </span>
-                </>
+                mobileTitle ? (
+                  // Two-line large-title block. No negative margin: the header
+                  // padding (px-3 = 12px) already matches the content column
+                  // below (<main> p-3 = 12px), so the title's left edge lines up
+                  // with the tab strip / search field / order cards on every tab.
+                  <div className="flex flex-col justify-center min-w-0">
+                    <span className="text-[22px] font-bold text-white tracking-tight truncate leading-none">
+                      {mobileTitle}
+                    </span>
+                    {mobileSubtitle && (
+                      <span className="mt-[5px] text-[12.5px] font-medium text-white/45 truncate leading-none">
+                        {mobileSubtitle}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <UserAvatar
+                      src={merchantInfo?.avatar_url}
+                      seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
+                      size={26}
+                      alt={displayName}
+                      className="border border-white/[0.1] shrink-0"
+                    />
+                    <span className="text-[15px] font-semibold text-white/90 tracking-tight truncate">
+                      {merchantInfo?.username
+                        ? `@${merchantInfo.username}`
+                        : merchantInfo?.display_name || "Merchant"}
+                    </span>
+                  </>
+                )
               )}
             </div>
           </div>
@@ -406,7 +439,7 @@ export function MerchantNavbar({
               {onOpenNotifications && (
                 <button
                   onClick={onOpenNotifications}
-                  className="relative p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors"
+                  className="relative w-10 h-10 flex items-center justify-center rounded-full bg-white/[0.055] border border-white/[0.09] hover:bg-white/[0.08] transition-colors"
                   aria-label={
                     urgentNotificationCount > 0
                       ? `Notifications — ${urgentNotificationCount} require action`
@@ -414,12 +447,12 @@ export function MerchantNavbar({
                   }
                 >
                   <Bell
-                    className={`w-5 h-5 ${urgentNotificationCount > 0 ? "text-red-400" : "text-foreground/50"}`}
+                    className={`w-[18px] h-[18px] ${urgentNotificationCount > 0 ? "text-red-400" : "text-foreground/60"}`}
                   />
                   {notificationCount > 0 && (
                     <>
                       <span
-                        className={`absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${
+                        className={`absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ring-2 ring-[#070710] ${
                           urgentNotificationCount > 0
                             ? "bg-red-500 text-white"
                             : "bg-[#f5f5f7] text-[#0b0b0c]"
@@ -428,25 +461,30 @@ export function MerchantNavbar({
                         {notificationCount > 9 ? "9+" : notificationCount}
                       </span>
                       {urgentNotificationCount > 0 && (
-                        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 animate-ping opacity-60 pointer-events-none" />
+                        <span className="absolute -top-0.5 -right-0.5 w-[18px] h-[18px] rounded-full bg-red-500 animate-ping opacity-60 pointer-events-none" />
                       )}
                     </>
                   )}
                 </button>
               )}
-              <button
-                onClick={() => setDrawerOpen(true)}
-                className="p-0.5 rounded-full hover:ring-2 hover:ring-foreground/10 transition-shadow"
-                aria-label="Open menu"
-                title="Menu"
-              >
-                <UserAvatar
-                  src={merchantInfo?.avatar_url}
-                  seed={displayName || merchantInfo?.username || "merchant"}
-                  size={32}
-                  className="border border-foreground/[0.08]"
-                />
-              </button>
+              {/* The avatar/hamburger menu is hidden on the per-tab screens
+                  (where mobileTitle is set) so the header is just "tab name +
+                  bell". Overlay screens (back arrow) keep the menu. */}
+              {!mobileTitle && (
+                <button
+                  onClick={() => setDrawerOpen(true)}
+                  className="p-0.5 rounded-full hover:ring-2 hover:ring-foreground/10 transition-shadow"
+                  aria-label="Open menu"
+                  title="Menu"
+                >
+                  <UserAvatar
+                    src={merchantInfo?.avatar_url}
+                    seed={displayName || merchantInfo?.username || "merchant"}
+                    size={32}
+                    className="border border-foreground/[0.08]"
+                  />
+                </button>
+              )}
             </div>
           </div>
         </div>

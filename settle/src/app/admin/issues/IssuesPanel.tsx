@@ -1362,7 +1362,10 @@ function DetailPanel({
             </button>
           </div>
 
-          {/* Optional reply note */}
+          {/* Reply to reporter. Sending here posts to the reporter's
+              timeline WITHOUT changing status (answer-only path). When a
+              status change is applied, this same draft rides along as the
+              status note instead — see applyPendingStatus. */}
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-foreground/40 mb-1">
               Reply (visible to reporter)
@@ -1375,6 +1378,24 @@ function DetailPanel({
               placeholder="Add an optional reply that will appear in the reporter's timeline…"
               className="w-full px-2.5 py-1.5 rounded-md bg-background border border-border text-foreground/80 placeholder:text-foreground/30 focus:outline-none focus:border-foreground/30"
             />
+            <div className="flex items-center justify-between gap-2 mt-1.5">
+              <span className="text-[10px] text-foreground/35">
+                Posts to the reporter&apos;s timeline — no status change.
+              </span>
+              <button
+                type="button"
+                disabled={saving || !statusNoteDraft.trim()}
+                onClick={async () => {
+                  const note = statusNoteDraft.trim();
+                  if (!note) return;
+                  await onPatch(issue.id, { statusNote: note });
+                  setStatusNoteDraft('');
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border bg-foreground/[0.04] hover:bg-foreground/[0.08] text-foreground/80 text-[11px] font-medium disabled:opacity-50"
+              >
+                <MessageSquarePlus size={11} /> Send reply
+              </button>
+            </div>
           </div>
 
           {/* Priority quick-set */}

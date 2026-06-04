@@ -25,6 +25,7 @@ import { useUserOrderActions } from "@/hooks/useUserOrderActions";
 import { useUserEffects } from "@/hooks/useUserEffects";
 import { useSolanaWalletSafe } from "@/hooks/useSolanaWalletSafe";
 import { useAppLock } from "@/context/AppLockContext";
+import { useApp } from "@/context/AppContext";
 import { useOrphanedEscrowRecovery } from "@/hooks/useOrphanedEscrowRecovery";
 import { IssueReporter } from "@/components/IssueReporter";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
@@ -332,6 +333,15 @@ export default function Home() {
     if (!embeddedWallet) return;
     embeddedWallet.setActorId(auth.userId ?? null);
   }, [embeddedWallet, auth.userId]);
+
+  // Preload saved payment methods into AppContext the moment we know the user
+  // id (the user app identifies via auth.userId, not AppContext.user). This
+  // fills the cache before any sheet opens, so the trade screen's payment
+  // selector renders instantly — mirrors the merchant dashboard preload.
+  const { fetchPaymentMethods: preloadPaymentMethods } = useApp();
+  useEffect(() => {
+    if (auth.userId) preloadPaymentMethods(auth.userId);
+  }, [auth.userId, preloadPaymentMethods]);
 
   // Heal any on-chain sell escrows whose POST /api/orders failed in a
   // previous session. The hook reads `blip_orphan_sell_<txHash>` localStorage

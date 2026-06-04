@@ -100,6 +100,9 @@ export interface MerchantMobileContentProps {
   onOpenPaymentMethods?: () => void;
   onOpenNotifications?: () => void;
   onOpenProfile?: () => void;
+  // Opens the merchant settings overlay — surfaced as a gear in the mobile
+  // home header (top-right).
+  onOpenSettings?: () => void;
   notificationCount?: number;
 
   /**
@@ -135,6 +138,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     onOpenPaymentMethods,
     onOpenNotifications,
     onOpenProfile,
+    onOpenSettings,
     notificationCount,
     onRefresh,
   } = props;
@@ -277,6 +281,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               onOpenPaymentMethods={onOpenPaymentMethods}
               onOpenNotifications={onOpenNotifications}
               onOpenProfile={onOpenProfile}
+              onOpenSettings={onOpenSettings}
               notificationCount={notificationCount}
               onStartTrade={(side, amount, expiryMinutes) => {
                 setOpenTradeForm({ ...openTradeForm, tradeType: side, cryptoAmount: amount ?? "", expiryMinutes: expiryMinutes ?? 15 });

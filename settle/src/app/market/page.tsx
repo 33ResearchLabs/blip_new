@@ -37,7 +37,7 @@ import { useMerchantConversations } from "@/hooks/useMerchantConversations";
 import { useTradeCreation } from "@/hooks/useTradeCreation";
 import { useMerchantRealtimeEvents } from "@/hooks/useMerchantRealtimeEvents";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
-import { formatCrypto } from "@/lib/format";
+import { formatCrypto, formatCount } from "@/lib/format";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { MerchantModals } from "@/components/merchant/MerchantModals";
 import { MerchantUpiPayModal } from "@/components/merchant/MerchantUpiPayModal";
@@ -841,11 +841,12 @@ export default function MerchantDashboard() {
         data-testid="merchant-dashboard"
         className="h-screen bg-background text-white flex flex-col overflow-hidden"
       >
-        {/* Offset clears the sticky MerchantNavbar (h-12 mobile / h-[50px] desktop)
-          so warning toasts don't overlap the bug-icon and avatar dropdown. */}
+        {/* Offset clears the sticky MerchantNavbar (up to 68px on per-tab mobile
+          screens / h-[50px] desktop) so warning toasts don't overlap the
+          bug-icon and avatar dropdown. */}
         <NotificationToastContainer
           position="top-right"
-          topOffsetClass="top-14 lg:top-[58px]"
+          topOffsetClass="top-[76px] lg:top-[58px]"
         />
         {tour.enabled && (
           <MerchantTour run={tour.isRunning} onComplete={tour.completeTour} />
@@ -864,6 +865,42 @@ export default function MerchantDashboard() {
         <div className={mobileView === "home" ? "hidden lg:block" : ""}>
         <MerchantNavbar
           activePage="dashboard"
+          mobileTitle={
+            (
+              {
+                home: "Home",
+                orders: "New Order",
+                escrow: "Active Order",
+                chat: "Chat",
+                history: "History",
+                marketplace: "Marketplace",
+              } as Record<typeof mobileView, string>
+            )[mobileView]
+          }
+          // Live context line under the large title. Counts route through
+          // formatCount per the formatting rules; falls back to a calm
+          // "all clear" phrase when the relevant count is zero.
+          mobileSubtitle={
+            (
+              {
+                home: "",
+                orders:
+                  pendingOrders.length > 0
+                    ? `${formatCount(pendingOrders.length)} ${pendingOrders.length === 1 ? "order" : "orders"} waiting`
+                    : "No new orders",
+                escrow:
+                  ongoingOrders.length > 0
+                    ? `${formatCount(ongoingOrders.length)} in progress`
+                    : "Nothing active",
+                chat:
+                  totalUnread > 0
+                    ? `${formatCount(totalUnread)} unread`
+                    : "All caught up",
+                history: "Completed & cancelled",
+                marketplace: "Browse open offers",
+              } as Record<typeof mobileView, string>
+            )[mobileView]
+          }
           merchantInfo={merchantInfo}
           embeddedWalletState={embeddedWallet?.state}
           onLogout={handleLogout}
@@ -1109,6 +1146,7 @@ export default function MerchantDashboard() {
           onOpenPaymentMethods={() => setShowPaymentMethods(true)}
           onOpenNotifications={() => setShowNotifications(!showNotifications)}
           onOpenProfile={() => setShowProfileModal(true)}
+          onOpenSettings={() => setShowSettings(true)}
           notificationCount={notifications.filter((n) => !n.read).length}
           onRefresh={async () => {
             // Broad refetch — covers data for every mobile tab in parallel.

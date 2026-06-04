@@ -105,7 +105,7 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
             .map((m) => ({ ...m, is_default: m.id === method.id }))
             .sort((a, b) => Number(b.is_default ?? false) - Number(a.is_default ?? false)),
         );
-        void syncPreloaded();
+        void syncPreloaded(userId ?? undefined);
       }
     } catch {
       /* swallow — next refresh will reconcile */
@@ -124,7 +124,7 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
       );
       if (res.ok) {
         setMethods((prev) => prev.filter((m) => m.id !== methodId));
-        void syncPreloaded();
+        void syncPreloaded(userId ?? undefined);
       }
     } catch {
       /* leave the row in place */
