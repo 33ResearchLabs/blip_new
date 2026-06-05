@@ -111,12 +111,14 @@
   --color-surface-raised:  #ffffff;
   --color-surface-overlay: #ffffff;
 
-  /* Text hierarchy — dark on cream (HomeScreen #14151a / #80828c) */
+  /* Text hierarchy — dark on cream. Secondary intentionally darkened from
+     #80828c → #5e606a so section labels (SECTION_LABEL → text-secondary) and
+     all secondary text read with stronger contrast on the light background. */
   --color-text-primary:    #14151a;
-  --color-text-secondary:  #80828c;
+  --color-text-secondary:  #5e606a;
   /* Between secondary and primary — for labels that need extra weight. */
   --color-text-secondary-strong: rgba(20, 21, 26, 0.72);
-  --color-text-tertiary:   rgba(20, 21, 26, 0.35);
+  --color-text-tertiary:   rgba(20, 21, 26, 0.50); /* darkened from 0.35 — faint labels (RECOVERY PHRASE, PUBLIC ADDRESS, word numbers, etc.) read too light on cream */
   /* Stronger than tertiary for faint labels that read too light on cream. */
   --color-text-tertiary-strong: rgba(20, 21, 26, 0.60);
   --color-text-quaternary: rgba(20, 21, 26, 0.18);
@@ -164,6 +166,17 @@
      a visible color shift during tab cross-fades. */
   --user-frame: #080810;
 }
+
+/* ----- Phantom-utility fix: text-secondary-strong / text-tertiary-strong -----
+   These two classes are used by SECTION_LABEL / SettingsGroup / CardLabel, but
+   Tailwind never generates them: their tokens (--color-text-secondary-strong /
+   --color-text-tertiary-strong) have no base value in globals.css @theme, so the
+   utility is never emitted and the label falls back to an inherited colour
+   (white-ish → invisible on the light cream background). Define them explicitly
+   here, scoped to .user-scope, mapped to the working secondary / tertiary vars
+   (which ARE theme-aware, so they read correctly in both dark and light). */
+.user-scope .text-text-secondary-strong { color: var(--color-text-secondary); }
+.user-scope .text-text-tertiary-strong  { color: var(--color-text-tertiary); }
 
 /* ----- Raw class overrides for any remaining hardcoded dark-mode markup ----- */
 .user-scope.user-light .bg-neutral-950 { background-color: #f8fafc !important; }

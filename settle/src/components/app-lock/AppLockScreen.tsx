@@ -161,18 +161,21 @@ export function AppLockScreen() {
       // Transparent so the app's own frame (var(--user-frame), rendered
       // behind this overlay) shows through on the sides — the lock then
       // matches the app's frame colour on desktop without re-deriving the
-      // theme here. The centred 440px panel below still covers all content.
+      // theme here. The centred panel below (440px phone / 720px tablet,
+      // matching the app frame) still covers all content.
       style={{ background: 'transparent' }}
       role="dialog"
       aria-modal="true"
       aria-label="App locked"
     >
-      {/* Phone-width column — mirrors the app's max-w-[440px] frame so the
-          lock screen lines up with the rest of the app on desktop instead of
-          spanning the whole window. The frosted panel + blur live here; the
-          outer fill above is the app-frame colour, shown on the sides. */}
+      {/* App-width column — mirrors the app frame (max-w-[440px] phone,
+          md:max-w-[720px] tablet) so the lock lines up with — and fully
+          covers — the widened app content instead of leaking it on the sides.
+          On desktop the transparent outer shows the app-frame colour beside
+          the panel instead of spanning the whole window. Frosted panel + blur
+          live here. */}
       <div
-        className="relative w-full max-w-[440px] flex items-start sm:items-center justify-center overflow-y-auto"
+        className="relative w-full max-w-[440px] md:max-w-[720px] flex items-start sm:items-center justify-center overflow-y-auto"
         style={{
           background: isLight ? 'rgba(248,250,252,0.96)' : 'rgba(6,6,6,0.96)',
           backdropFilter: 'blur(20px)',
@@ -183,7 +186,10 @@ export function AppLockScreen() {
           paddingRight: 'max(env(safe-area-inset-right, 16px), 16px)',
         }}
       >
-        <div className="w-full space-y-4 sm:space-y-6 my-auto">
+        {/* Frosted panel bg spans the full app width (covers all content), but
+            the PIN UI stays a comfortable ~440px centred so the keypad doesn't
+            stretch on a 720px tablet panel. */}
+        <div className="w-full max-w-[440px] mx-auto space-y-4 sm:space-y-6 my-auto">
         {/* Header */}
         <div className="flex flex-col items-center gap-2 sm:gap-3 pt-1 sm:pt-2">
           <div

@@ -459,19 +459,25 @@ export const PaymentMethodSelector = ({
                 );
               })}
 
-              {/* Add new button */}
-              <button
-                onClick={() => { resetForm(); setShowAddForm(true); }}
-                className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors"
-                style={groupContainer ? {} : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
-              >
-                <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center shrink-0">
-                  <Plus className="w-3.5 h-3.5 text-text-tertiary" />
-                </div>
-                <span className="text-[13px] text-text-secondary font-medium">
-                  Add New Payment Method
-                </span>
-              </button>
+              {/* Add-new button — only once the user already has a method.
+                  With zero methods this would duplicate the descriptive
+                  empty-state card below ("Add Payment Method / Required to
+                  receive fiat payments"), which is the sole CTA in that case
+                  (the bug seen in the alwaysExpanded bottom sheet). */}
+              {methods.length > 0 && (
+                <button
+                  onClick={() => { resetForm(); setShowAddForm(true); }}
+                  className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors"
+                  style={groupContainer ? {} : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center shrink-0">
+                    <Plus className="w-3.5 h-3.5 text-text-tertiary" />
+                  </div>
+                  <span className="text-[13px] text-text-secondary font-medium">
+                    Add New Payment Method
+                  </span>
+                </button>
+              )}
             </div>
           </motion.div>
         )}

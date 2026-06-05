@@ -5,6 +5,7 @@ import { Loader2, Lock, Key, AlertTriangle, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { colors } from "@/lib/design/theme";
 import { AppPinPad } from '@/components/app-lock/AppPinPad';
+import { useUserTheme } from '@/hooks/useUserTheme';
 
 const PIN_LENGTH = 6;
 
@@ -38,6 +39,11 @@ export function UnlockWalletPrompt({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [errorTick, setErrorTick] = useState(0);
+  // The lock card themes itself via CSS vars (light/dark), but AppPinPad takes
+  // a JS `theme` prop. Keep them in sync — it was hardcoded "light" (near-black
+  // keys), which rendered invisible on the dark card in dark mode.
+  const { theme } = useUserTheme();
+  const padTheme: 'light' | 'dark' = theme === 'light' ? 'light' : 'dark';
 
   const resetError = () => { setError(''); };
 
@@ -187,7 +193,7 @@ export function UnlockWalletPrompt({
                     length={PIN_LENGTH}
                     errorTick={errorTick}
                     disabled={busy}
-                    theme="light"
+                    theme={padTheme}
                   />
                 </motion.div>
               )}
@@ -232,7 +238,7 @@ export function UnlockWalletPrompt({
                     onComplete={() => setMode('setPinConfirm')}
                     length={PIN_LENGTH}
                     disabled={busy}
-                    theme="light"
+                    theme={padTheme}
                   />
                 </motion.div>
               )}
@@ -246,7 +252,7 @@ export function UnlockWalletPrompt({
                     length={PIN_LENGTH}
                     errorTick={errorTick}
                     disabled={busy}
-                    theme="light"
+                    theme={padTheme}
                   />
                 </motion.div>
               )}

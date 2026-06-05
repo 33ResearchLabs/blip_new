@@ -879,7 +879,9 @@ export const HomeScreen = ({
               transition={{ duration: 0.25 }}
               onClick={() => setShowDeposit(false)}
               style={{
-                position: 'fixed', inset: 0, zIndex: 50,
+                // zIndex 55: above the BottomNav (z-50) so the nav is dimmed
+                // behind the backdrop while the deposit sheet is open.
+                position: 'fixed', inset: 0, zIndex: 55,
                 background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)',
               }}
             />
@@ -888,12 +890,19 @@ export const HomeScreen = ({
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 380, damping: 36 }}
               style={{
-                position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50,
+                // zIndex 60: above the BottomNav (z-50) so the sheet (and its
+                // copy button) sit on top of the nav instead of behind it.
+                position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60,
                 padding: '0 12px', paddingBottom: 'calc(env(safe-area-inset-bottom, 12px) + 16px)',
               }}
             >
-              <div style={{
-                maxWidth: 440, margin: '0 auto', padding: '18px 20px 22px',
+              <div
+                // Tablet: widen the deposit sheet to match the 720px column
+                // (md:) instead of a 440px card stranded in the middle. mx-auto
+                // keeps it centred; phone stays 440 via the base cap.
+                className="w-full max-w-[440px] md:max-w-[720px] mx-auto"
+                style={{
+                padding: '18px 20px 22px',
                 borderRadius: 28, background: 'var(--color-surface-card)',
                 border: '1px solid var(--color-border-subtle)',
                 backdropFilter: 'blur(28px)',
