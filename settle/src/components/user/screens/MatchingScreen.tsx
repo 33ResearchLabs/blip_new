@@ -35,7 +35,7 @@ export const MatchingScreen = ({
   toast,
 }: MatchingScreenProps) => {
   return (
-    <div className="bg-surface-base min-h-full">
+    <div className="bg-surface-base flex-1 min-h-0 overflow-y-auto scrollbar-hide">
       <div className="h-12" />
 
       {/* Header */}
@@ -140,9 +140,9 @@ export const MatchingScreen = ({
               {matchingTimeLeft < 60 ? 'Order will expire soon!' : 'Hurry! Time is running out'}
             </motion.p>
           )}
-          <div className="w-full h-1.5 rounded-full mt-3 overflow-hidden bg-surface-card">
+          <div className="w-full h-1.5 rounded-full mt-3 overflow-hidden bg-surface-active">
             <motion.div
-              className={`h-full rounded-full ${matchingTimeLeft < 60 ? 'bg-error' : 'bg-border-medium'}`}
+              className={`h-full rounded-full ${matchingTimeLeft < 60 ? 'bg-error' : 'bg-text-primary'}`}
               initial={{ width: '100%' }}
               animate={{ width: `${(matchingTimeLeft / (15 * 60)) * 100}%` }}
               transition={{ duration: 0.5 }}

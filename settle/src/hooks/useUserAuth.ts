@@ -38,6 +38,7 @@ export function useUserAuth({
   const [userId, setUserId] = useState<string | null>(null);
   const [userWallet, setUserWallet] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("Guest");
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [userBalance, setUserBalance] = useState<number>(0);
   const [newUserName, setNewUserName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
@@ -131,6 +132,7 @@ export function useUserAuth({
         setUserId(user.id);
         setUserWallet(walletAddress);
         setUserName(user.name || 'User');
+        setUserAvatar(user.avatar_url || null);
         localStorage.setItem('blip_wallet', walletAddress);
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
         fetchOrders(user.id);
@@ -215,6 +217,7 @@ export function useUserAuth({
         setUserId(user.id);
         setUserWallet(user.wallet_address);
         setUserName(user.username || user.name || 'User');
+        setUserAvatar(user.avatar_url || null);
         setUserBalance(user.balance || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
@@ -264,6 +267,7 @@ export function useUserAuth({
         setUserId(user.id);
         setUserWallet(user.wallet_address);
         setUserName(user.username || user.name || 'User');
+        setUserAvatar(user.avatar_url || null);
         setUserBalance(user.balance || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
@@ -308,6 +312,7 @@ export function useUserAuth({
     setUserId(user.id);
     setUserWallet(user.wallet_address);
     setUserName(user.username || user.name || 'User');
+    setUserAvatar(user.avatar_url || null);
     setUserBalance(user.balance || 0);
     localStorage.setItem('blip_user', JSON.stringify(user));
     if (data.token) useMerchantStore.getState().setSessionToken(data.token);
@@ -406,6 +411,7 @@ export function useUserAuth({
         setUserId(user.id);
         setUserWallet(user.wallet_address);
         setUserName(user.username || user.name || 'User');
+        setUserAvatar(user.avatar_url || null);
         setUserBalance(user.balance || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
@@ -536,6 +542,7 @@ export function useUserAuth({
             if (checkData.success && checkData.data?.valid) {
               setUserId(user.id);
               setUserName(user.username || user.name || 'User');
+              setUserAvatar(user.avatar_url || null);
               setUserBalance(user.balance || 0);
               if (checkData.data.token) useMerchantStore.getState().setSessionToken(checkData.data.token);
               if (savedWallet) {
@@ -585,6 +592,7 @@ export function useUserAuth({
     userId, setUserId,
     userWallet, setUserWallet,
     userName, setUserName,
+    userAvatar, setUserAvatar,
     userBalance, setUserBalance,
     newUserName, setNewUserName,
     isLoading, setIsLoading,

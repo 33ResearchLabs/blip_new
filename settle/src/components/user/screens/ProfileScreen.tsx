@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Wallet,
+  Copy,
+  Check,
   Sun,
   Moon,
   ChevronRight,
@@ -19,10 +21,14 @@ import {
   Star,
   Sparkles,
   BadgeCheck,
+  Camera,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { copyToClipboard } from "@/lib/clipboard";
 import { useUser } from "@/context/AppContext";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { UserAvatarModal } from "@/components/user/UserAvatarModal";
 
 /**
  * Account card shown at the top of the profile screen. Membership badge,
@@ -35,11 +41,17 @@ import { useUser } from "@/context/AppContext";
  * yet, so this stays off until that ships, then lights up automatically.
  */
 function AccountCard({
+  userId,
   userName,
+  userAvatar,
+  setUserAvatar,
   walletConnected,
   tier,
 }: {
+  userId: string | null;
   userName: string;
+  userAvatar: string | null;
+  setUserAvatar: (v: string | null) => void;
   walletConnected: boolean;
   tier: string | null;
 }) {
@@ -50,6 +62,25 @@ function AccountCard({
 
   const [coins, setCoins] = useState<number | null>(null);
   const [repScore, setRepScore] = useState<number | null>(null);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+
+  // Persist the new avatar into both the lifted profile state (so the card
+  // re-renders immediately) and the cached session user in localStorage — the
+  // session-restore path reads avatar_url off blip_user, so without this the
+  // pick would visually reset on the next reload.
+  const handleAvatarUpdated = (url: string) => {
+    setUserAvatar(url);
+    try {
+      const raw = localStorage.getItem('blip_user');
+      if (raw) {
+        const cached = JSON.parse(raw);
+        cached.avatar_url = url;
+        localStorage.setItem('blip_user', JSON.stringify(cached));
+      }
+    } catch {
+      /* localStorage unavailable — in-memory state still updated */
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -71,10 +102,10 @@ function AccountCard({
     return () => { cancelled = true; };
   }, []);
 
-  const initial = (userName || 'U').charAt(0).toUpperCase();
   const subtitle = phoneVerified ? 'Verified Pro Trader' : tier ? tier : 'Unverified';
 
   return (
+    <>
     <div className={`rounded-[20px] p-4 ${CARD}`}>
       {/* Membership badge + accent flourish */}
       <div className="flex items-start justify-between mb-4">
@@ -87,18 +118,31 @@ function AccountCard({
 
       {/* Identity row */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="relative shrink-0">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-surface-raised border border-border-medium">
-            <span className="text-[20px] font-bold tracking-[-0.03em] text-text-primary">
-              {initial}
-            </span>
-          </div>
+        <button
+          type="button"
+          onClick={() => setShowAvatarModal(true)}
+          aria-label="Change avatar"
+          className="relative shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <UserAvatar
+            src={userAvatar}
+            seed={userName}
+            size={48}
+            className="border border-border-medium"
+            alt={userName || 'Your avatar'}
+          />
+          {/* Wallet status dot — moved to the top-right so the edit badge
+              owns the bottom-right corner. */}
           <span
-            className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-surface-card ${walletConnected ? '' : 'bg-text-quaternary'}`}
+            className={`absolute top-0 right-0 w-3 h-3 rounded-full border-2 border-surface-card ${walletConnected ? '' : 'bg-text-quaternary'}`}
             style={walletConnected ? { background: 'var(--color-success)' } : undefined}
             aria-label={walletConnected ? 'Online' : 'Offline'}
           />
-        </div>
+          {/* Edit affordance — tap to open the avatar picker. */}
+          <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-accent border-2 border-surface-card flex items-center justify-center">
+            <Camera size={10} className="text-accent-text" />
+          </span>
+        </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="text-[17px] font-bold tracking-[-0.02em] text-text-primary truncate">
@@ -136,6 +180,16 @@ function AccountCard({
         </div>
       </div>
     </div>
+
+    <UserAvatarModal
+      isOpen={showAvatarModal}
+      onClose={() => setShowAvatarModal(false)}
+      userId={userId}
+      currentAvatar={userAvatar}
+      userName={userName}
+      onAvatarUpdated={handleAvatarUpdated}
+    />
+    </>
   );
 }
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
@@ -170,6 +224,8 @@ export interface ProfileScreenProps {
   setScreen: (s: Screen) => void;
   userId: string | null;
   userName: string;
+  userAvatar: string | null;
+  setUserAvatar: (v: string | null) => void;
   completedOrders: Order[];
   timedOutOrders: Order[];
   // Solana wallet
@@ -226,6 +282,8 @@ export const ProfileScreen = ({
   setScreen,
   userId,
   userName,
+  userAvatar,
+  setUserAvatar,
   completedOrders,
   timedOutOrders,
   solanaWallet,
@@ -251,6 +309,15 @@ export const ProfileScreen = ({
   maxW,
 }: ProfileScreenProps) => {
   const router = useRouter();
+
+  // Copy the connected Solana wallet address with a brief check-mark confirm.
+  const [copiedAddr, setCopiedAddr] = useState(false);
+  const handleCopyAddress = async () => {
+    if (!solanaWallet.walletAddress) return;
+    await copyToClipboard(solanaWallet.walletAddress);
+    setCopiedAddr(true);
+    setTimeout(() => setCopiedAddr(false), 1600);
+  };
 
   // Derived identity metrics — kept at render-top so header + identity card
   // can reference the same numbers without re-deriving them inline.
@@ -321,7 +388,10 @@ export const ProfileScreen = ({
         <p className={`${SECTION_LABEL} mb-2`}>Account</p>
         <div className="mb-3">
           <AccountCard
+            userId={userId}
             userName={userName}
+            userAvatar={userAvatar}
+            setUserAvatar={setUserAvatar}
             walletConnected={solanaWallet.connected}
             tier={tier}
           />
@@ -418,16 +488,31 @@ export const ProfileScreen = ({
                 <p className={`${CARD_LABEL_STRONG} mb-0.5`}>
                   {solanaWallet.connected ? networkLabel() : 'Not Connected'}
                 </p>
-                <p className="text-[13px] font-semibold text-text-secondary font-mono truncate">
-                  {solanaWallet.connected && solanaWallet.walletAddress
-                    ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
-                    : 'Connect your wallet'}
-                </p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-[13px] font-semibold text-text-secondary font-mono truncate">
+                    {solanaWallet.connected && solanaWallet.walletAddress
+                      ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
+                      : 'Connect your wallet'}
+                  </p>
+                  {solanaWallet.connected && solanaWallet.walletAddress && (
+                    <button
+                      onClick={handleCopyAddress}
+                      aria-label="Copy wallet address"
+                      className="shrink-0 p-1 -m-0.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+                    >
+                      {copiedAddr ? (
+                        <Check size={13} className="text-success" />
+                      ) : (
+                        <Copy size={13} />
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
             {solanaWallet.connected && (
               <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface-raised border border-border-subtle shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-primary" />
+                <span className="w-1.5 h-1.5 rounded-full bg-success" />
                 <span className="text-[9px] font-bold tracking-[0.1em] uppercase text-text-secondary">Live</span>
               </span>
             )}

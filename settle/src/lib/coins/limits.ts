@@ -118,7 +118,13 @@ async function getReputationMultiplier(
 
 /**
  * USD volume traded by this actor in the trailing 24h, used to enforce
- * the daily limit. Pulls from completed orders.
+ * the (USD-denominated) daily limit. Pulls from completed orders.
+ *
+ * Sums crypto_amount, NOT fiat_amount: the crypto leg is a USD stablecoin
+ * (USDT ≈ $1), so crypto_amount is the USD notional. fiat_amount is stored
+ * in each order's local currency (INR/AED), so summing it would (a) compare
+ * a fiat number against a USD cap and (b) silently add INR + AED together
+ * across corridors. crypto_amount normalizes both problems.
  */
 export async function getTrailing24hVolumeUsd(
   actorId: string,
@@ -129,7 +135,7 @@ export async function getTrailing24hVolumeUsd(
       ? '(merchant_id = $1 OR buyer_merchant_id = $1)'
       : 'user_id = $1';
   const row = await queryOne<{ vol: number }>(
-    `SELECT COALESCE(SUM(fiat_amount), 0) AS vol
+    `SELECT COALESCE(SUM(crypto_amount), 0) AS vol
        FROM orders
       WHERE ${actorCol}
         AND status IN ('completed','accepted','escrowed','payment_sent')
