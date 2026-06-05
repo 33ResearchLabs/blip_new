@@ -11,6 +11,7 @@ import {
 import {
   requireAuth,
   requireTokenAuth,
+  requireApiKeyScope,
   verifyUser,
   forbiddenResponse,
   validationErrorResponse,
@@ -58,6 +59,8 @@ export async function GET(request: NextRequest) {
     // Authorization: require authenticated user
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:read');
+    if (scopeErr) return scopeErr;
     const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden('GET /api/orders', auth.actorId, 'Not order owner');
@@ -129,6 +132,8 @@ export async function POST(request: NextRequest) {
     // so we can see the migration curve.
     const auth = await requireTokenAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErr) return scopeErr;
     const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden('POST /api/orders', auth.actorId, 'Creating order for different user');
@@ -186,6 +191,50 @@ export async function POST(request: NextRequest) {
 
     if (!userExists) {
       return validationErrorResponse(['User not found']);
+    }
+
+    // ── BUY order guards ─────────────────────────────────────────────────
+    // 1. Phone verification: buyer must have a verified phone number.
+    //    One real phone = one real person; cheapest identity signal.
+    // 2. Active buy cap: max 2 concurrent unfulfilled buy orders per user.
+    //    Once at cap, the user must complete or cancel existing orders first.
+    if (type === 'buy') {
+      const [userRow, activeBuyRow] = await Promise.all([
+        dbQuery<{ phone_verified: boolean }>(
+          'SELECT phone_verified FROM users WHERE id = $1',
+          [user_id]
+        ),
+        dbQuery<{ count: string }>(
+          `SELECT COUNT(*) AS count FROM orders
+           WHERE user_id = $1
+             AND type = 'buy'
+             AND status IN ('pending', 'accepted', 'escrowed', 'payment_sent')`,
+          [user_id]
+        ),
+      ]);
+
+      if (!userRow[0]?.phone_verified) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'PHONE_VERIFICATION_REQUIRED',
+            message: 'Please verify your phone number before placing a buy order.',
+          },
+          { status: 403 }
+        );
+      }
+
+      const activeBuyCount = parseInt(activeBuyRow[0]?.count ?? '0', 10);
+      if (activeBuyCount >= 2) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'ACTIVE_BUY_LIMIT',
+            message: 'You have 2 active buy orders. Complete or cancel them before placing a new one.',
+          },
+          { status: 429 }
+        );
+      }
     }
 
     let verifiedPaymentMethodId: string | undefined;
