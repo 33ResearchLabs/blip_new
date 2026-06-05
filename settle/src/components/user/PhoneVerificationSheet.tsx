@@ -86,11 +86,17 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
   async function setupRecaptcha() {
     const authInstance = getFirebaseAuth();
     if (recaptchaVerifierRef.current) {
-      recaptchaVerifierRef.current.clear();
+      try { recaptchaVerifierRef.current.clear(); } catch { /* ignore */ }
       recaptchaVerifierRef.current = null;
     }
+    // Re-create the container div so reCAPTCHA always gets a fresh DOM node
+    if (recaptchaRef.current) recaptchaRef.current.innerHTML = '';
     recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, recaptchaRef.current!, {
       size: 'invisible',
+      callback: () => {},
+      'expired-callback': () => {
+        recaptchaVerifierRef.current = null;
+      },
     });
     await recaptchaVerifierRef.current.render();
     return recaptchaVerifierRef.current;

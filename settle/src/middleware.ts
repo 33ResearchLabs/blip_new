@@ -319,7 +319,7 @@ export function buildCsp(nonce: string): string {
     // LI.FI cross-chain quotes (li.quest) — needed by the cross-chain
     // deposit flow. Without it the browser blocks every quote request
     // and the modal sits on "Couldn't get a quote right now".
-    `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag https://li.quest https://accounts.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com`,
+    `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag https://li.quest https://accounts.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com/recaptcha/`,
     // 'self' kept for any same-origin frames we may need; Google entry
     // stays scoped to accounts.google.com for the GIS auth popup.
     "frame-src 'self' https://accounts.google.com https://blipmoney-1508d.firebaseapp.com https://www.google.com/recaptcha/",
