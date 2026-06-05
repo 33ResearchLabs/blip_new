@@ -264,7 +264,10 @@ export async function POST(request: NextRequest) {
       const limitCheck = await checkTradeAgainstLimits({
         actorId: user_id,
         actorType: 'user',
-        fiatAmountUsd: fiatAmount,
+        // Limits are USD-denominated. The crypto is a USD stablecoin
+        // (USDT ≈ $1), so crypto_amount IS the USD notional. fiatAmount
+        // is in local fiat (INR/AED) and must NOT be used here.
+        fiatAmountUsd: crypto_amount,
       });
       if (!limitCheck.allowed) {
         return NextResponse.json(
@@ -372,7 +375,8 @@ export async function POST(request: NextRequest) {
     const limitCheckBuy = await checkTradeAgainstLimitsBuy({
       actorId: user_id,
       actorType: 'user',
-      fiatAmountUsd: fiatAmount,
+      // USD notional = crypto_amount (USDT ≈ $1), not local-fiat fiatAmount.
+      fiatAmountUsd: crypto_amount,
     });
     if (!limitCheckBuy.allowed) {
       return NextResponse.json(
