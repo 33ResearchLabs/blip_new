@@ -62,7 +62,10 @@ export const BottomNav = ({
         // capped so it reads as an intentional dock at every width — including
         // the wide tablet column, where a full bar looked sparse/mismatched.
         width: "min(420px, calc(100% - 28px))",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)",
+        // Sits just above the phone's gesture/nav bar (env safe-area) with a
+        // small 4px float — tightened from 10px to shrink the gap between this
+        // dock and the system navigation bar.
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "space-between",
