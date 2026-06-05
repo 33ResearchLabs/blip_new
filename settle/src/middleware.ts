@@ -219,6 +219,9 @@ function csrfCheck(request: NextRequest): NextResponse | null {
 
   if (!host) return null; // Can't verify without host
 
+  // Allow Chrome/Brave extension origins
+  if (origin && origin.startsWith('chrome-extension://')) return null;
+
   // At least one of origin/referer must be present and match
   if (origin) {
     try {
