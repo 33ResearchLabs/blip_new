@@ -314,7 +314,7 @@ export function buildCsp(nonce: string): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/client https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://apis.google.com`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
-    "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com",
+    "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com https://lh3.googleusercontent.com https://*.googleusercontent.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     // LI.FI cross-chain quotes (li.quest) — needed by the cross-chain
     // deposit flow. Without it the browser blocks every quote request
