@@ -86,13 +86,14 @@ function Panel({
       // (falls back to var(--user-frame) when no `style` is provided) makes
       // sure nothing behind the panel ever shows through.
       //
-      // Width: 440px phone column, widening to 720px on tablet (≥768px) so the
-      // app fills a wide screen instead of sitting as a narrow column on an
-      // empty "desk". Tablet-only — the `md:` prefix leaves every phone width
-      // (<768px) byte-for-byte unchanged. Focused FORM screens (Trade, Escrow)
-      // keep their own internal max-w-[440px] so they stay centred and don't
-      // stretch; list/dashboard screens fill the full 720px.
-      className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] md:max-w-[720px] flex flex-col ${className}`}
+      // Width: 440px phone column (<768px, unchanged). At ≥768px it fills the
+      // screen up to 1100px via min(1100px, 97vw) — ONE proportional cap instead
+      // of fixed breakpoint steps. Foldables (Samsung Fold unfolded) report a
+      // CSS width in the md range (not the 1075 device px), so an lg-gated
+      // (≥1024px) step never fired. 97vw leaves only a thin edge margin (~1.5%
+      // a side) and the 1100px cap is high enough that even a wide Fold isn't
+      // clipped. Form screens (Trade, Escrow) keep their own narrower cap.
+      className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] md:max-w-[min(1100px,97vw)] flex flex-col ${className}`}
       style={{ background: 'var(--user-frame)', ...style }}
     >
       {children}

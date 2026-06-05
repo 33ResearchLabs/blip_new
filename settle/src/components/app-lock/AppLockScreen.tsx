@@ -168,14 +168,14 @@ export function AppLockScreen() {
       aria-modal="true"
       aria-label="App locked"
     >
-      {/* App-width column — mirrors the app frame (max-w-[440px] phone,
-          md:max-w-[720px] tablet) so the lock lines up with — and fully
-          covers — the widened app content instead of leaking it on the sides.
-          On desktop the transparent outer shows the app-frame colour beside
-          the panel instead of spanning the whole window. Frosted panel + blur
-          live here. */}
+      {/* App-width column — must mirror the app frame EXACTLY (page.tsx Panel:
+          max-w-[440px] phone, md:max-w-[min(1100px,97vw)] ≥768px) so the lock
+          fully covers the widened app content instead of leaking it on the
+          sides (e.g. on a foldable). Keep these two in sync. On desktop the
+          transparent outer shows the app-frame colour beside the panel. The
+          frosted panel + blur live here; the inner PIN UI stays centred ~440. */}
       <div
-        className="relative w-full max-w-[440px] md:max-w-[720px] flex items-start sm:items-center justify-center overflow-y-auto"
+        className="relative w-full max-w-[440px] md:max-w-[min(1100px,97vw)] flex items-start sm:items-center justify-center overflow-y-auto"
         style={{
           background: isLight ? 'rgba(248,250,252,0.96)' : 'rgba(6,6,6,0.96)',
           backdropFilter: 'blur(20px)',

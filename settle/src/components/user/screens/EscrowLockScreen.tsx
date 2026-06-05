@@ -145,7 +145,7 @@ export const EscrowLockScreen = ({
       />
 
       {/* ── Header ── */}
-      <header className="relative z-10 max-w-[440px] md:max-w-[720px] mx-auto w-full px-5 pt-5">
+      <header className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 pt-5">
         <div className="flex items-center justify-between">
           <motion.button
             whileTap={{ scale: 0.92 }}
@@ -175,7 +175,7 @@ export const EscrowLockScreen = ({
       </header>
 
       {/* ── Content ── */}
-      <div className="relative z-10 max-w-[440px] md:max-w-[720px] mx-auto w-full px-5 pt-7 pb-32 flex flex-col" style={{ gap: 14 }}>
+      <div className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 pt-7 pb-32 flex flex-col" style={{ gap: 14 }}>
         {/* Hero — lock medallion + title + subtitle */}
         <div className="flex items-center" style={{ gap: 14 }}>
           <div
