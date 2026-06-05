@@ -293,10 +293,11 @@ function ScreenFeature({ step, num, badge, title, ital, body, hero, last, onNext
  *
  * Uses the shared AppPinPad so hardware-keyboard digits + Backspace work on
  * desktop alongside on-screen taps (the pad renders its own dots/shake). */
-function ScreenPin({ onNext, userId, onPasscodeSet }: {
-  onNext: () => void;
-  userId: string | null;
-  onPasscodeSet?: () => void;
+function ScreenPin({ onConfirmed }: {
+  /** Called with the confirmed PIN. The PIN is deliberately NOT persisted here
+   *  — it's saved together with onboarding completion on the final "Done"
+   *  action, so a refresh anywhere before then leaves nothing half-set. */
+  onConfirmed: (pin: string) => void;
 }) {
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -317,31 +318,14 @@ function ScreenPin({ onNext, userId, onPasscodeSet }: {
     setPhase("confirm");
   }, []);
 
-  // Confirm: must match, then persist via the canonical app-lock helper.
-  const handleConfirm = useCallback(async (val: string) => {
+  // Confirm: must match the first entry. Hand the PIN up and advance (the brief
+  // pause lets the filled dots register). Persistence happens on "Done".
+  const handleConfirm = useCallback((val: string) => {
     if (val !== pin) { flash("Passcodes don't match — try again"); setConfirmPin(""); return; }
-    // No userId (shouldn't happen — onboarding is gated on auth.userId) →
-    // don't dead-end the flow; just advance without persisting.
-    if (!userId) { setTimeout(onNext, 250); return; }
-    setBusy(true);
     setError("");
-    try {
-      const res = await setAppPin(userId, val);
-      if (!res.ok) {
-        flash(res.message ?? "Couldn't save passcode. Try again.");
-        setConfirmPin(""); setBusy(false);
-        return;
-      }
-      // Mark THIS session unlocked so the lock screen doesn't immediately
-      // pop, then let the provider refresh its visible state.
-      markSessionUnlocked(userId);
-      onPasscodeSet?.();
-      setTimeout(onNext, 250);
-    } catch {
-      flash("Couldn't save passcode. Try again.");
-      setConfirmPin(""); setBusy(false);
-    }
-  }, [pin, userId, onNext, onPasscodeSet]);
+    setBusy(true);
+    setTimeout(() => onConfirmed(val), 250);
+  }, [pin, onConfirmed]);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
@@ -608,7 +592,13 @@ function ScreenUsername({ onNext, onBack, userId }: {
 }
 
 /* ── All set screen ───────────────────────────────────────────────────── */
-function ScreenDone({ onNext }: { onNext: () => void }) {
+function ScreenDone({ onFinish, finishing, error }: {
+  /** Saves the chosen PIN + marks onboarding complete. The single commit
+   *  point for the whole flow — nothing is persisted before this. */
+  onFinish: () => void;
+  finishing: boolean;
+  error: string;
+}) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "30px 22px", textAlign: "center" }}>
@@ -638,7 +628,25 @@ function ScreenDone({ onNext }: { onNext: () => void }) {
       </div>
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.5 }} style={{ padding: "0 22px 30px" }}>
-        <CTA label="Start paying" onClick={onNext} icon={<ChevronRight size={18} strokeWidth={2.5} />} />
+        {error && (
+          <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 600, textAlign: "center", marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+        <motion.button
+          whileTap={finishing ? undefined : { scale: 0.97 }}
+          onClick={onFinish}
+          disabled={finishing}
+          style={{
+            width: "100%", padding: "19px", borderRadius: 18, border: "none",
+            background: TEXT, color: "#fff", fontFamily: "inherit", fontWeight: 800, fontSize: 16.5,
+            cursor: finishing ? "default" : "pointer", opacity: finishing ? 0.7 : 1,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
+            boxShadow: "0 10px 28px rgba(20,21,26,0.18)", letterSpacing: "-0.01em",
+          }}
+        >
+          {finishing ? <Loader2 size={18} className="animate-spin" /> : <>Start paying<ChevronRight size={18} strokeWidth={2.5} /></>}
+        </motion.button>
       </motion.div>
     </div>
   );
@@ -663,6 +671,37 @@ export function UserOnboardingFlow({ onComplete, userId, onPasscodeSet }: UserOn
   const next = useCallback(() => setStep(s => Math.min(s + 1, SCREENS.length - 1)), []);
   const back = useCallback(() => setStep(s => Math.max(s - 1, 0)), []);
   const key = SCREENS[step] as StepKey;
+
+  // The PIN is collected in the passcode step but only persisted on the final
+  // "Done" tap — together with onboarding completion — so a refresh anywhere
+  // mid-flow leaves nothing half-saved (no PIN set without onboarding complete).
+  const [chosenPin, setChosenPin] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState("");
+
+  const handleFinish = useCallback(async () => {
+    if (finishing) return;
+    setFinishing(true);
+    setFinishError("");
+    try {
+      if (chosenPin && userId) {
+        const res = await setAppPin(userId, chosenPin);
+        if (!res.ok) {
+          setFinishError(res.message ?? "Couldn't save your passcode. Try again.");
+          setFinishing(false);
+          return;
+        }
+        // Mark THIS session unlocked so the lock screen doesn't immediately pop,
+        // then let the provider refresh its visible state.
+        markSessionUnlocked(userId);
+        onPasscodeSet?.();
+      }
+      onComplete();
+    } catch {
+      setFinishError("Couldn't save your passcode. Try again.");
+      setFinishing(false);
+    }
+  }, [finishing, chosenPin, userId, onComplete, onPasscodeSet]);
 
   return (
     <div style={{
@@ -689,8 +728,8 @@ export function UserOnboardingFlow({ onComplete, userId, onPasscodeSet }: UserOn
           {key === "f2" && <ScreenFeature step={2} num="2" badge="BEST RATE" title="Always the" ital="best rate." body="Best rates — beat it and we match it. We compare every exchange in real time, automatically." hero={<HeroBestRate />} onNext={next} onBack={back} />}
           {key === "f3" && <ScreenFeature step={3} num="3" badge="SECURE" title="Safe by" ital="design." body="Funds stay in escrow until settled. Two-factor and a passcode on every payment." hero={<HeroSecurity />} onNext={next} onBack={back} />}
           {key === "username" && <ScreenUsername onNext={next} onBack={back} userId={userId} />}
-          {key === "pin"  && <ScreenPin onNext={next} userId={userId} onPasscodeSet={onPasscodeSet} />}
-          {key === "done" && <ScreenDone onNext={onComplete} />}
+          {key === "pin"  && <ScreenPin onConfirmed={(p) => { setChosenPin(p); next(); }} />}
+          {key === "done" && <ScreenDone onFinish={handleFinish} finishing={finishing} error={finishError} />}
         </motion.div>
       </AnimatePresence>
       </div>

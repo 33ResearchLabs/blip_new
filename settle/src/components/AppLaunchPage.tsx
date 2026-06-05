@@ -58,7 +58,7 @@ export function AppLaunchPage() {
       setPrompt(null);
     } else {
       // No native prompt yet — open the app; browser install button appears in address bar
-      window.location.href = "/user?welcome=skip";
+      window.location.href = "/user/login";
     }
   }
 
@@ -74,10 +74,14 @@ export function AppLaunchPage() {
     }
   }
 
-  const openUserApp = () => { window.location.href = "/user?welcome=skip"; };
+  const openUserApp = () => { window.location.href = "/user/login"; };
   const downloadUserApp = install;
-  // Merchant attempts PWA install first; falls back to /market/login.
-  const openMerchantApp = installMerchant;
+  // Open the merchant web app — direct navigation, matching the user card.
+  // (Previously aliased to installMerchant, which fired the PWA install
+  // prompt instead of navigating whenever beforeinstallprompt had fired.)
+  const openMerchantApp = () => { window.location.href = "/market/login"; };
+  // Download/install the merchant PWA — used by the Mobile/Desktop buttons.
+  const downloadMerchantApp = installMerchant;
 
   return (
     <>
@@ -133,7 +137,7 @@ export function AppLaunchPage() {
 
           {/* Sign in */}
           <div style={{ marginLeft: 24 }}>
-            <a href="/user?welcome=skip" style={{
+            <a href="/user/login" style={{
               padding: "9px 16px", fontSize: 13.5, fontWeight: 700,
               border: `1px solid ${T.onBlackLine}`, borderRadius: 10,
               color: T.onBlackMut, background: "transparent", cursor: "pointer",
@@ -266,8 +270,8 @@ export function AppLaunchPage() {
                   Download the app
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <PlatBtn icon="android" label="Mobile" onClick={openMerchantApp} />
-                  <PlatBtn icon="mac" label="Desktop" onClick={openMerchantApp} />
+                  <PlatBtn icon="android" label="Mobile" onClick={downloadMerchantApp} />
+                  <PlatBtn icon="mac" label="Desktop" onClick={downloadMerchantApp} />
                 </div>
               </div>
             </div>

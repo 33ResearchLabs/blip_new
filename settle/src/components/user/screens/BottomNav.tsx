@@ -27,7 +27,14 @@ export const BottomNav = ({
   const inboxBadge = chatUnreadCount || notificationCount || 0;
 
   const tab = (key: Screen, label: string) => ({
-    flex: 1,
+    // Fixed width (not flex:1) so the bar can use `space-between` to spread the
+    // tabs — with flex:1 every tab filled a fifth-of-the-bar column and the
+    // icon centred inside it, leaving the Home and You icons ~60px in from the
+    // edge. With `space-between` the first/last tabs sit against the bar's
+    // padding edge, so the end-icon centre lands at (sidePadding + width/2)
+    // from the frame edge. The four equal-width side tabs keep the centre FAB
+    // perfectly centred.
+    width: 44,
     display: "flex",
     flexDirection: "column" as const,
     alignItems: "center" as const,
@@ -53,10 +60,12 @@ export const BottomNav = ({
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "space-between",
-        // Honour the home-indicator / gesture-bar inset on notched devices,
-        // but take the MAX of the inset and a base padding rather than summing
-        // them — summing left a tall empty band between the tabs and the
-        // phone's bottom nav on gesture-nav devices.
+        // 20px side padding gives the Home / You tabs breathing room from the
+        // screen edges (end-icon centres land ~42px in: 20 padding + 22 half-
+        // tab). Honour the home-indicator / gesture-bar inset on notched
+        // devices, but take the MAX of the inset and a base padding rather than
+        // summing them — summing left a tall empty band between the tabs and
+        // the phone's bottom nav on gesture-nav devices.
         padding: "8px 20px",
         paddingBottom: "max(env(safe-area-inset-bottom, 0px), 14px)",
         borderTop: "1px solid rgba(20,21,26,0.07)",
@@ -77,8 +86,9 @@ export const BottomNav = ({
         <span>Activity</span>
       </button>
 
-      {/* Center Trade FAB */}
-      <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
+      {/* Center Trade FAB — natural width; the two equal-width tabs on each
+          side keep it centred under `space-between`. */}
+      <div style={{ display: "flex", justifyContent: "center" }}>
         <motion.button
           whileTap={{ scale: 0.92 }}
           onClick={() => setScreen("trade")}

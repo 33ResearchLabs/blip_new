@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * /login — redirects to /user?welcome=skip&tab=… so visitors land directly
- * on the user login form.
+ * /login — redirects to /user/login so visitors land directly on the user
+ * sign-in form.
  *
  * The role chooser that previously sat here was removed: the marketing
  * landing at `/` already forks the User vs Merchant paths via its hero
@@ -10,9 +10,8 @@
  * the navbar Sign-in pill is meant for returning users — sending them
  * through an extra "Choose your portal" step was friction.
  *
- * `?tab` and `?reason` are forwarded so deep links keep working
- * (e.g. /login?tab=register from the merchant promo card,
- * /login?reason=session_expired from the auth client).
+ * `?reason` is forwarded so deep links keep working
+ * (e.g. /login?reason=session_expired from the auth client).
  */
 
 import { useEffect } from "react";
@@ -24,10 +23,9 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const tab = searchParams.get("tab") === "register" ? "register" : "signin";
     const reason = searchParams.get("reason");
-    const reasonParam = reason ? `&reason=${reason}` : "";
-    router.replace(`/user?welcome=skip&tab=${tab}${reasonParam}`);
+    const reasonParam = reason ? `?reason=${reason}` : "";
+    router.replace(`/user/login${reasonParam}`);
   }, [router, searchParams]);
 
   return (

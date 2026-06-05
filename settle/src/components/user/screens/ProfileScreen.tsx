@@ -644,7 +644,9 @@ export const ProfileScreen = ({
             if (solanaWallet.disconnect) {
               solanaWallet.disconnect();
             }
-            window.location.href = '/';
+            // Send logged-out users to the dedicated login route, not the
+            // root "/" marketing landing.
+            window.location.href = '/user/login';
           }}
           className="w-full h-12 flex items-center justify-center gap-2 rounded-lg bg-white border border-white text-[14px] font-bold text-black tracking-[-0.01em]">
           <LogOut size={16} className="text-invert" />
