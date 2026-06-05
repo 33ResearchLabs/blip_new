@@ -1017,6 +1017,8 @@ export default function Home() {
               setScreen={setScreen}
               userId={auth.userId}
               userName={auth.userName}
+              userAvatar={auth.userAvatar}
+              setUserAvatar={auth.setUserAvatar}
               completedOrders={completedOrders}
               timedOutOrders={timedOutOrders}
               solanaWallet={solanaWallet}
