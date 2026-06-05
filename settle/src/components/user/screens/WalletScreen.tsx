@@ -182,7 +182,7 @@ export const WalletScreen = ({
           />
           <div
             className="absolute bottom-0 right-0 w-40 h-40 translate-x-[38%] translate-y-[38%]"
-            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)' }}
+            style={{ background: 'radial-gradient(circle, var(--accent-glow) 0%, transparent 70%)' }}
           />
 
           <div className="relative z-10 p-6">

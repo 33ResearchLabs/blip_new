@@ -159,7 +159,7 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
       <div className="flex items-center justify-between mb-2 px-1">
         <div className="flex items-center gap-1.5">
           <CreditCard className="w-3.5 h-3.5 text-white/40" />
-          <span className="text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase">
+          <span className="text-[10px] font-bold tracking-[0.22em] text-text-secondary-strong uppercase">
             Payment Methods
           </span>
         </div>
@@ -214,7 +214,7 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
             <div key={m.id} className="px-4 py-3.5 flex items-center gap-3">
               <span
                 className="w-9 h-9 shrink-0 rounded-[11px] flex items-center justify-center border border-white/[0.06] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]"
-                style={{ background: `${cfg.color}1f` }}
+                style={{ background: `color-mix(in srgb, ${cfg.color} 12%, transparent)` }}
               >
                 <Icon className="w-4 h-4" style={{ color: cfg.color }} />
               </span>

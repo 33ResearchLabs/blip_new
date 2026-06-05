@@ -339,6 +339,7 @@
   --color-foreground: var(--foreground);
   --color-text-primary: var(--color-text-primary);
   --color-text-secondary: var(--color-text-secondary);
+  --color-text-secondary-strong: var(--color-text-secondary-strong);
   --color-text-tertiary: var(--color-text-tertiary);
   --color-text-quaternary: var(--color-text-quaternary);
   --color-card: var(--card);

@@ -32,8 +32,8 @@ export function SettingsGroup({ label, icon, trailing, children }: SettingsGroup
     <section className="mb-6">
       <div className="flex items-center justify-between mb-2 px-1">
         <div className="flex items-center gap-1.5">
-          {icon && <span className="text-white/40">{icon}</span>}
-          <span className="text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase">
+          {icon && <span className="text-text-secondary-strong">{icon}</span>}
+          <span className="text-[10px] font-bold tracking-[0.22em] text-text-secondary-strong uppercase">
             {label}
           </span>
         </div>

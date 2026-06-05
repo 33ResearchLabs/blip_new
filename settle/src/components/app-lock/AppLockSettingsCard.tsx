@@ -428,7 +428,7 @@ function SecurityRow({
       )}
 
       {expanded && children && (
-        <div className="px-4 pb-3.5 pl-[60px] -mt-1">{children}</div>
+        <div className="px-4 pt-1 pb-4 pl-[60px]">{children}</div>
       )}
     </div>
   );

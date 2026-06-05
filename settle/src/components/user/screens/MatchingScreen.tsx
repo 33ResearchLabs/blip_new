@@ -41,8 +41,8 @@ export const MatchingScreen = ({
       {/* Header */}
       <div className="px-5 py-4 flex items-center justify-between">
         <button onClick={() => setScreen("home")}
-          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised">
-          <ChevronLeft className="w-5 h-5 text-text-primary" />
+          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle">
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
         <h1 className="text-[17px] font-semibold text-text-primary">Order Placed</h1>
         <div className="w-10" />

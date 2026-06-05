@@ -484,7 +484,7 @@ export const TradeCreationScreen = ({
       </header>
 
       {/* ── Hero amount stack ── */}
-      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 flex flex-col items-center justify-start pt-2">
+      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 flex flex-col items-center justify-center flex-1 pt-2">
         {/* Animated You Buy / You Sell label */}
         <AnimatePresence mode="wait">
           <motion.p
@@ -1083,9 +1083,6 @@ export const TradeCreationScreen = ({
           )}
         </motion.button>
       </motion.div>
-
-      {/* Spacer so the CTA can scroll clear of the fixed bottom nav + FAB. */}
-      <div aria-hidden style={{ height: 96 }} />
 
       <BottomNav
         screen={screen}

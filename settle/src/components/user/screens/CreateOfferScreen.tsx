@@ -28,7 +28,7 @@ export const CreateOfferScreen = ({
           className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle">
           <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
-        <h1 className="flex-1 text-center pr-8 text-[17px] font-bold text-text-primary tracking-[-0.02em]">
+        <h1 className="flex-1 text-center pr-8 text-[17px] font-semibold text-text-primary">
           Create Offer
         </h1>
       </div>

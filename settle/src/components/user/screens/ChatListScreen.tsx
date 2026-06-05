@@ -145,7 +145,7 @@ export const ChatListScreen = ({
           className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
             activeTab === 'chats'
               ? 'bg-accent text-accent-text'
-              : 'bg-surface-hover text-text-tertiary'
+              : 'bg-surface-hover text-text-secondary-strong'
           }`}
         >
           <MessageCircle size={13} strokeWidth={2.2} />
@@ -163,7 +163,7 @@ export const ChatListScreen = ({
           className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
             activeTab === 'disputes'
               ? 'bg-accent text-accent-text'
-              : 'bg-surface-hover text-text-tertiary'
+              : 'bg-surface-hover text-text-secondary-strong'
           }`}
         >
           <Shield size={13} strokeWidth={2.2} />

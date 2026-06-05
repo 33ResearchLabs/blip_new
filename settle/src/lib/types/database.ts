@@ -70,6 +70,13 @@ export interface User {
   referral_code?: string | null;
   referred_by_user_id?: string | null;
   referred_by_merchant_id?: string | null;
+  // First-run onboarding completion (migration 151). NULL = not completed.
+  // Source of truth for the onboarding gate; localStorage is a client cache.
+  onboarding_completed_at?: Date | null;
+  // When the user first chose their username (migration 152). NULL = still the
+  // auto-assigned default (wallet `user_…` or Google email-derived), so the
+  // onboarding step may edit it; once set the handle is locked (set-once).
+  username_customized_at?: Date | null;
   created_at: Date;
   updated_at: Date;
 }

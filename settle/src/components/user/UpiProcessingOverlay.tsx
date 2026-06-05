@@ -54,7 +54,7 @@ export function UpiProcessingOverlay({ open, stage, title, subtitle, onDone }: P
           className="fixed inset-0 z-[125] flex flex-col items-center justify-center px-8 text-center"
           style={{
             background:
-              "radial-gradient(ellipse 80% 60% at 50% 30%, rgba(120,119,198,0.18), transparent 60%), #07090F",
+              "radial-gradient(ellipse 80% 60% at 50% 30%, rgba(120,119,198,0.18), transparent 60%), var(--color-surface-base)",
           }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -72,8 +72,7 @@ export function UpiProcessingOverlay({ open, stage, title, subtitle, onDone }: P
                 <div
                   className="w-16 h-16 rounded-full flex items-center justify-center mb-6"
                   style={{
-                    background:
-                      "linear-gradient(140deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02))",
+                    background: "var(--color-surface-card)",
                     boxShadow:
                       "inset 0 1px 0 rgba(255,255,255,0.16), 0 12px 36px -16px rgba(0,0,0,0.55)",
                   }}

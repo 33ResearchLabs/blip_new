@@ -409,18 +409,18 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, walletReady, w
   return (
     <div className="fixed inset-0 z-[100] bg-surface-base text-text-primary flex flex-col h-dvh">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <button
+      <div className="flex items-center gap-3 px-5 pt-4 pb-3 shrink-0">
+        <motion.button
+          whileTap={{ scale: 0.92 }}
           onClick={onClose}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold bg-surface-card hover:bg-surface-hover border border-border-medium transition-all"
+          aria-label="Back"
+          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle"
         >
-          <ChevronLeft className="w-3.5 h-3.5" />
-          Back
-        </button>
-        <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-text-tertiary">
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
+        </motion.button>
+        <h1 className="text-[17px] font-semibold text-text-primary">
           {stage === "scanning" ? "Scan to Pay" : "Pay via UPI"}
-        </p>
-        <div className="w-[64px]" />
+        </h1>
       </div>
 
       <AnimatePresence mode="wait">
