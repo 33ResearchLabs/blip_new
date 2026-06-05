@@ -184,6 +184,14 @@ export const HomeScreen = ({
   const homeRootRef = useRef<HTMLDivElement | null>(null);
   const txScrollRef = useRef<HTMLDivElement | null>(null);
   const PTR_THRESHOLD = 68;
+  // Time-based greeting — mirrors MobileHomeView (merchant side).
+  const greetingHour = new Date().getHours();
+  const greeting =
+    greetingHour < 12
+      ? "Good morning"
+      : greetingHour < 17
+        ? "Good afternoon"
+        : "Good evening";
   const {
     pull: ptrPull,
     status: ptrStatus,
@@ -359,7 +367,7 @@ export const HomeScreen = ({
                 <BlipMark />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.72 }}>Good morning</span>
+                <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.72 }}>{greeting}</span>
                 <span style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: '-0.01em' }}>
                   {(() => {
                     if (!userName) return userName;
