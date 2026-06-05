@@ -339,7 +339,7 @@ export const PaymentMethodSelector = ({
             <>
               <div
                 className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: `${TYPE_CONFIG[selected.type].color}30` }}
+                style={{ background: `color-mix(in srgb, ${TYPE_CONFIG[selected.type].color} 19%, transparent)` }}
               >
                 {(() => {
                   const Ic = TYPE_CONFIG[selected.type].Icon;
@@ -399,7 +399,7 @@ export const PaymentMethodSelector = ({
                     >
                       <div
                         className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                        style={{ background: `${cfg.color}30` }}
+                        style={{ background: `color-mix(in srgb, ${cfg.color} 19%, transparent)` }}
                       >
                         <Ic className="w-3.5 h-3.5" style={{ color: cfg.color }} />
                       </div>
@@ -559,7 +559,7 @@ export const PaymentMethodSelector = ({
                 onChange={(e) => setAddLabel(e.target.value)}
                 placeholder="Label (e.g. Emirates NBD - Salary)"
                 className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
               />
 
               {/* Bank fields */}
@@ -571,7 +571,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, bank_name: e.target.value })}
                     placeholder="Bank Name (e.g. Emirates NBD)"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -579,7 +579,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, account_name: e.target.value })}
                     placeholder="Account Holder Name"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -587,7 +587,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, account_number: e.target.value })}
                     placeholder="Account Number"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -595,7 +595,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, ifsc: e.target.value.toUpperCase() })}
                     placeholder="IFSC / SWIFT code — optional"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -603,7 +603,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, iban: e.target.value.toUpperCase() })}
                     placeholder="IBAN — optional (for international transfers)"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                 </>
               )}
@@ -617,7 +617,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, upi_id: e.target.value })}
                     placeholder="UPI ID (e.g. user@oksbi)"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -625,7 +625,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, provider: e.target.value })}
                     placeholder="Provider (e.g. Google Pay, PhonePe) — optional"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                 </>
               )}
@@ -639,7 +639,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, location_name: e.target.value })}
                     placeholder="Location Name"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -647,7 +647,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, location_address: e.target.value })}
                     placeholder="Address"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -655,7 +655,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, meeting_instructions: e.target.value })}
                     placeholder="Meeting instructions — optional"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                 </>
               )}
@@ -669,7 +669,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, method_name: e.target.value })}
                     placeholder="Method Name (e.g. Wise, PayPal)"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -677,7 +677,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, account_identifier: e.target.value })}
                     placeholder="Account ID / Email / Phone"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -685,7 +685,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, instructions: e.target.value })}
                     placeholder="Instructions — optional"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                 </>
               )}

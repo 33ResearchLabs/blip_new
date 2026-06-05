@@ -51,6 +51,10 @@ const INACTIVITY_LOCK_MS = 5 * 60 * 1000;
 interface AppLockContextValue {
   state: AppLockState;
   userId: string | null;
+  /** The logged-in actor's type, from the auth probe. Lets the overlay
+   *  scope each lock to its OWN app surface — user lock on /user, merchant
+   *  lock on /market — instead of painting over the public landing. */
+  actorType: 'user' | 'merchant' | 'compliance' | null;
   /** Whether the device shows the background-blur overlay (tab hidden). */
   isBackgrounded: boolean;
   /** Force a re-lock (e.g. from "Lock now" in settings). */
@@ -83,6 +87,7 @@ export function useIsAppLocked(): boolean {
 
 export function AppLockProvider({ children }: { children: ReactNode }) {
   const [userId, setUserIdState] = useState<string | null>(null);
+  const [actorType, setActorType] = useState<'user' | 'merchant' | 'compliance' | null>(null);
   const [state, setState] = useState<AppLockState>('initializing');
   const [isBackgrounded, setIsBackgrounded] = useState(false);
   // Initialized to 0; first activity event (or unlock) writes the
@@ -129,6 +134,7 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (!res.ok) {
           setUserIdState(null);
+          setActorType(null);
           setState('no-pin');
           return;
         }
@@ -136,15 +142,21 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
         // The actor id is at data.data.user.id / merchant.id / compliance.id
         // depending on actorType. We treat them uniformly here — the lock
         // is per-account regardless of role.
-        const actorType = data?.data?.actorType;
+        const probedActorType = data?.data?.actorType;
         const id =
-          actorType === 'user'       ? data?.data?.user?.id ?? null
-          : actorType === 'merchant' ? data?.data?.merchant?.id ?? null
-          : actorType === 'compliance' ? data?.data?.compliance?.id ?? null
+          probedActorType === 'user'       ? data?.data?.user?.id ?? null
+          : probedActorType === 'merchant' ? data?.data?.merchant?.id ?? null
+          : probedActorType === 'compliance' ? data?.data?.compliance?.id ?? null
           : null;
         setUserIdState(id);
+        // Only retain the actor type when we actually resolved an id, so the
+        // overlay's surface check can't match on a half-resolved probe.
+        setActorType(id ? probedActorType : null);
       } catch {
-        if (!cancelled) setUserIdState(null);
+        if (!cancelled) {
+          setUserIdState(null);
+          setActorType(null);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -244,6 +256,7 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
   const value: AppLockContextValue = {
     state,
     userId,
+    actorType,
     isBackgrounded,
     lock,
     markUnlocked,

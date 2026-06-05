@@ -45,7 +45,11 @@
   /* Text hierarchy — white opacities */
   --color-text-primary:    rgba(255, 255, 255, 0.92);
   --color-text-secondary:  rgba(255, 255, 255, 0.55);
+  /* Between secondary and primary — for labels that need extra weight. */
+  --color-text-secondary-strong: rgba(255, 255, 255, 0.75);
   --color-text-tertiary:   rgba(255, 255, 255, 0.30);
+  /* Slightly stronger tertiary — same as tertiary in dark, darker in light. */
+  --color-text-tertiary-strong: var(--color-text-tertiary);
   --color-text-quaternary: rgba(255, 255, 255, 0.15);
 
   /* Borders */
@@ -110,7 +114,11 @@
   /* Text hierarchy — dark on cream (HomeScreen #14151a / #80828c) */
   --color-text-primary:    #14151a;
   --color-text-secondary:  #80828c;
+  /* Between secondary and primary — for labels that need extra weight. */
+  --color-text-secondary-strong: rgba(20, 21, 26, 0.72);
   --color-text-tertiary:   rgba(20, 21, 26, 0.35);
+  /* Stronger than tertiary for faint labels that read too light on cream. */
+  --color-text-tertiary-strong: rgba(20, 21, 26, 0.60);
   --color-text-quaternary: rgba(20, 21, 26, 0.18);
 
   /* Borders */

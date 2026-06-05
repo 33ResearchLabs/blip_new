@@ -124,7 +124,7 @@ export const NotificationsScreen = ({
           className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
             activeTab === 'alerts'
               ? 'bg-accent text-accent-text'
-              : 'bg-surface-hover text-text-tertiary'
+              : 'bg-surface-hover text-text-secondary-strong'
           }`}
         >
           <Bell size={13} strokeWidth={2.2} />
@@ -137,7 +137,7 @@ export const NotificationsScreen = ({
         </button>
         <button
           onClick={() => { setActiveTab('activity'); setScreen('orders'); }}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all bg-surface-hover text-text-tertiary"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all bg-surface-hover text-text-secondary-strong"
         >
           <Activity size={13} strokeWidth={2.2} />
           <span className="text-[12px] font-bold">Orders</span>

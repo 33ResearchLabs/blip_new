@@ -411,13 +411,39 @@ export default function Home() {
   // reappears even if the user closes/refreshes mid-flow. Previously the gate
   // key was written solely in onComplete (the final "Start paying" tap), so any
   // incomplete run left the key unset and the flow popped up again every load.
+  //
+  // localStorage is a per-device fast-path cache; the DB
+  // (users.onboarding_completed_at, migration 151) is the source of truth. When
+  // the local key is missing we don't immediately show the flow — we first ask
+  // the server, so a user who already onboarded on another device / cleared
+  // their cache isn't shown it again. Only a genuinely-new user (no local key,
+  // server says not completed) sees it.
   useEffect(() => {
     if (!auth.userId) return;
     const key = `blip_onb_v1_${auth.userId}`;
-    if (!localStorage.getItem(key)) {
+    if (localStorage.getItem(key)) return; // fast path — already done on this device
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithAuth('/api/auth/user/onboarding');
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (res.ok && data?.data?.completed) {
+          // Completed elsewhere — cache locally and don't show.
+          try { localStorage.setItem(key, '1'); } catch { /* storage blocked */ }
+          return;
+        }
+      } catch {
+        // Network/server error — fall through and show onboarding (the old
+        // localStorage-only behavior), so we never hard-block a new user.
+      }
+      if (cancelled) return;
       setShowOnboarding(true);
       try { localStorage.setItem(key, '1'); } catch { /* storage blocked — falls back to per-session */ }
-    }
+    })();
+
+    return () => { cancelled = true; };
   }, [auth.userId]);
 
   // Refetch orders when returning to home screen so completed/cancelled orders update.
@@ -648,6 +674,11 @@ export default function Home() {
             try {
               localStorage.setItem(`blip_onb_v1_${auth.userId}`, '1');
             } catch { /* ignore */ }
+            // Persist to the DB (source of truth) so completion survives a
+            // device switch / cache clear. Fire-and-forget — the localStorage
+            // cache already prevents a re-show on this device if this fails.
+            fetchWithAuth('/api/auth/user/onboarding', { method: 'POST' })
+              .catch(() => { /* best-effort */ });
             setShowOnboarding(false);
           }}
         />
@@ -957,12 +988,13 @@ export default function Home() {
         {screen === "rewards" && (
           <Panel
             k="rewards"
-            anim={slide}
             style={theme === "light" ? lightPanelBg : darkBg}
           >
             <RewardsScreen
+              screen={screen}
               setScreen={setScreen}
-              previousScreen={previousScreen}
+              maxW={maxW}
+              notificationCount={notifications.filter((n) => !n.read).length}
               referralCode={referralInfo.code ?? "—"}
               friendsJoined={referralInfo.friends}
               blipEarned={referralInfo.blipFromReferrals}

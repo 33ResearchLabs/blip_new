@@ -35,7 +35,12 @@ export const BottomNav = ({
     background: "none",
     border: "none",
     cursor: "pointer",
-    color: screen === key ? "#14151a" : "rgba(20,21,26,0.35)",
+    // Values mirror the light-theme tokens (#14151a = text-primary,
+    // rgba(20,21,26,0.72) = text-secondary-strong). Kept as literals — not
+    // var(--color-…) — because this bar is intentionally always-light
+    // (hardcoded #f4f3f1 bg), so the theme-adapting var would flip to white
+    // in dark mode and vanish on the light bar.
+    color: screen === key ? "#14151a" : "rgba(20,21,26,0.72)",
     fontSize: 9.5,
     fontWeight: 700,
     padding: "4px 0",

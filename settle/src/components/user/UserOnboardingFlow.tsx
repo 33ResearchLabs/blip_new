@@ -6,11 +6,12 @@
  * White/light theme. After final step, onComplete() is called.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, Shield, Check } from "lucide-react";
+import { ChevronRight, Shield, Check, AtSign, X, Loader2 } from "lucide-react";
 import { AppPinPad } from "@/components/app-lock/AppPinPad";
 import { setAppPin, markSessionUnlocked, validateAppPinStrength, APP_PIN_LENGTH } from "@/lib/auth/appPin";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 
 /* ── Light theme tokens ───────────────────────────────────────────────── */
 const ACC     = "#ffb02e";
@@ -255,7 +256,7 @@ function ScreenFeature({ step, num, badge, title, ital, body, hero, last, onNext
         <button onClick={onBack} style={{ width: 40, height: 40, borderRadius: 999, border: `1px solid ${HAIR2}`, background: SURFACE, color: TEXT, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
         </button>
-        <Dots step={step - 1} total={4} />
+        <Dots step={step - 1} total={5} />
         <span style={{ width: 40 }} />
       </div>
 
@@ -392,6 +393,220 @@ function ScreenPin({ onNext, userId, onPasscodeSet }: {
   );
 }
 
+/* ── Username screen — claims the user's @handle (token-authed) ────────────
+ * Required step before the passcode. Persists via POST /api/auth/user/username
+ * (self-only, set-once). If the account already has a real (non-temporary)
+ * username, the step degrades to a one-tap confirmation instead of a dead-end,
+ * since the server blocks renames of an already-claimed handle. */
+function ScreenUsername({ onNext, onBack, userId }: {
+  onNext: () => void;
+  onBack: () => void;
+  userId: string | null;
+}) {
+  const [value, setValue] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [alreadySet, setAlreadySet] = useState(false);
+  const [currentUsername, setCurrentUsername] = useState("");
+
+  // Same 3-20 / [a-zA-Z0-9_] rule the server (validateUsername) enforces.
+  const formatValid = useMemo(
+    () => value.length >= 3 && value.length <= 20 && /^[a-zA-Z0-9_]+$/.test(value),
+    [value],
+  );
+  const formatError = useMemo(() => {
+    if (!value) return null;
+    if (value.length < 3 || value.length > 20) return "3–20 characters";
+    if (!/^[a-zA-Z0-9_]+$/.test(value)) return "Letters, numbers & _ only";
+    return null;
+  }, [value]);
+
+  // On mount: if a real username is already set, make this a confirmation.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithAuth("/api/auth/user/username");
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.success) {
+          const current: string = data.data?.username ?? "";
+          setCurrentUsername(current);
+          if (data.data?.isSet) {
+            // Already committed → confirmation only.
+            setAlreadySet(true);
+            setValue(current);
+          } else if (current && !current.startsWith("user_")) {
+            // Auto-assigned a real-looking handle (e.g. Google email-derived):
+            // prefill it so the user can keep or tweak it instead of a blank field.
+            setValue(current);
+          }
+        }
+      } catch {
+        /* fall back to the input form */
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Debounced live availability check.
+  const isOwnCurrent =
+    !!currentUsername && value.toLowerCase() === currentUsername.toLowerCase();
+
+  useEffect(() => {
+    if (alreadySet || !formatValid) { setAvailable(null); setChecking(false); return; }
+    // The user's own current handle is "available" to them — keeping it is
+    // allowed, so skip the server check that would report it taken by themselves.
+    if (isOwnCurrent) { setAvailable(true); setChecking(false); return; }
+    setChecking(true);
+    setAvailable(null);
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetchWithAuth(
+          `/api/auth/user/username-availability?username=${encodeURIComponent(value)}`,
+        );
+        const data = await res.json();
+        setAvailable(!!data?.data?.available);
+      } catch {
+        setAvailable(null);
+      } finally {
+        setChecking(false);
+      }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [value, formatValid, alreadySet, isOwnCurrent]);
+
+  const canContinue =
+    loaded && !busy && (alreadySet || (formatValid && available === true && !checking));
+
+  const handleContinue = useCallback(async () => {
+    if (!canContinue) return;
+    // Already-set (or, defensively, no userId) → nothing to persist, advance.
+    if (alreadySet || !userId) { onNext(); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetchWithAuth("/api/auth/user/username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: value }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        setError(data?.error ?? "Couldn't save username. Try again.");
+        setAvailable(false);
+        setBusy(false);
+        return;
+      }
+      onNext();
+    } catch {
+      setError("Couldn't save username. Try again.");
+      setBusy(false);
+    }
+  }, [canContinue, alreadySet, userId, value, onNext]);
+
+  const borderColor =
+    error || available === false ? "#dc2626"
+    : available === true || alreadySet ? "#10b981"
+    : HAIR2;
+  const statusText =
+    error ? error
+    : alreadySet ? `@${value} is yours`
+    : formatError ? formatError
+    : checking ? "Checking availability…"
+    : available === true ? (isOwnCurrent ? "Your current handle — tap Continue to keep it" : "Available")
+    : available === false ? "Already taken"
+    : "3–20 letters, numbers or _";
+  const statusColor =
+    error || available === false ? "#dc2626"
+    : available === true || alreadySet ? "#10b981"
+    : MUTED;
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 22px 0" }}>
+        <button onClick={onBack} style={{ width: 40, height: 40, borderRadius: 999, border: `1px solid ${HAIR2}`, background: SURFACE, color: TEXT, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <Dots step={3} total={5} />
+        <span style={{ width: 40 }} />
+      </div>
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "12px 22px 26px" }}>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ textAlign: "center" }}>
+          <div style={{ width: 56, height: 56, borderRadius: 18, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", background: SURFACE, border: `1px solid ${HAIR2}`, color: TEXT }}>
+            <AtSign size={26} strokeWidth={1.8} />
+          </div>
+          <div style={{ fontFamily: "'Georgia','Cambria',serif", fontSize: 32, lineHeight: 1.14, letterSpacing: "-0.01em", color: TEXT }}>
+            <span style={{ display: "block" }}>Pick your</span>
+            <span style={{ display: "block", fontStyle: "italic" }}>username.</span>
+          </div>
+          <div style={{ color: MUTED, fontSize: 14, fontWeight: 600, marginTop: 14, lineHeight: 1.5, maxWidth: 300, marginLeft: "auto", marginRight: "auto" }}>
+            {alreadySet
+              ? "This is your Blip handle — how others find and pay you."
+              : "This is how others find and pay you. Choose carefully — it can't be changed later."}
+          </div>
+        </motion.div>
+
+        <div style={{ marginTop: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "15px 16px", borderRadius: 16, border: `1.5px solid ${borderColor}`, background: SURFACE, transition: "border-color 0.2s ease" }}>
+            <span style={{ color: MUTED, fontSize: 18, fontWeight: 800, lineHeight: 1 }}>@</span>
+            <input
+              value={value}
+              onChange={(e) => { setValue(e.target.value.trim()); setError(""); }}
+              placeholder="yourname"
+              maxLength={20}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              disabled={alreadySet || busy || !loaded}
+              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 18, fontWeight: 700, color: TEXT, fontFamily: "inherit", letterSpacing: "-0.01em" }}
+            />
+            {!alreadySet && formatValid && (
+              checking
+                ? <Loader2 size={18} className="animate-spin" style={{ color: MUTED }} />
+                : available === true
+                  ? <Check size={18} strokeWidth={2.6} style={{ color: "#10b981" }} />
+                  : available === false
+                    ? <X size={18} strokeWidth={2.6} style={{ color: "#dc2626" }} />
+                    : null
+            )}
+            {alreadySet && <Check size={18} strokeWidth={2.6} style={{ color: "#10b981" }} />}
+          </div>
+          <div style={{ minHeight: 18, marginTop: 8, fontSize: 12.5, fontWeight: 600, color: statusColor }}>
+            {statusText}
+          </div>
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        <motion.button
+          whileTap={canContinue ? { scale: 0.97 } : undefined}
+          onClick={handleContinue}
+          disabled={!canContinue}
+          style={{
+            width: "100%", padding: "19px", borderRadius: 18, border: "none",
+            background: TEXT, color: "#fff",
+            fontFamily: "inherit", fontWeight: 800, fontSize: 16.5,
+            cursor: canContinue ? "pointer" : "not-allowed",
+            opacity: canContinue ? 1 : 0.4,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
+            boxShadow: canContinue ? "0 10px 28px rgba(20,21,26,0.18)" : "none",
+            letterSpacing: "-0.01em", transition: "opacity 0.2s ease",
+          }}
+        >
+          {busy ? <Loader2 size={18} className="animate-spin" /> : <>Continue<ChevronRight size={18} strokeWidth={2.5} /></>}
+        </motion.button>
+      </div>
+    </div>
+  );
+}
+
 /* ── All set screen ───────────────────────────────────────────────────── */
 function ScreenDone({ onNext }: { onNext: () => void }) {
   return (
@@ -440,7 +655,7 @@ export interface UserOnboardingFlowProps {
   onPasscodeSet?: () => void;
 }
 
-const SCREENS = ["welcome", "f1", "f2", "f3", "pin", "done"] as const;
+const SCREENS = ["welcome", "f1", "f2", "f3", "username", "pin", "done"] as const;
 type StepKey = typeof SCREENS[number];
 
 export function UserOnboardingFlow({ onComplete, userId, onPasscodeSet }: UserOnboardingFlowProps) {
@@ -472,7 +687,8 @@ export function UserOnboardingFlow({ onComplete, userId, onPasscodeSet }: UserOn
           {key === "welcome" && <ScreenWelcome onNext={next} />}
           {key === "f1" && <ScreenFeature step={1} num="1" badge="INSTANT" title="Send & get paid in" ital="seconds." body="Pay any contact, UPI ID or QR code. Money lands instantly — any day, any time." hero={<HeroInstant />} onNext={next} onBack={back} />}
           {key === "f2" && <ScreenFeature step={2} num="2" badge="BEST RATE" title="Always the" ital="best rate." body="Best rates — beat it and we match it. We compare every exchange in real time, automatically." hero={<HeroBestRate />} onNext={next} onBack={back} />}
-          {key === "f3" && <ScreenFeature step={3} num="3" badge="SECURE" title="Safe by" ital="design." body="Funds stay in escrow until settled. Two-factor and a passcode on every payment." hero={<HeroSecurity />} last onNext={next} onBack={back} />}
+          {key === "f3" && <ScreenFeature step={3} num="3" badge="SECURE" title="Safe by" ital="design." body="Funds stay in escrow until settled. Two-factor and a passcode on every payment." hero={<HeroSecurity />} onNext={next} onBack={back} />}
+          {key === "username" && <ScreenUsername onNext={next} onBack={back} userId={userId} />}
           {key === "pin"  && <ScreenPin onNext={next} userId={userId} onPasscodeSet={onPasscodeSet} />}
           {key === "done" && <ScreenDone onNext={onComplete} />}
         </motion.div>

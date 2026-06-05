@@ -3,11 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronLeft,
+  Bell,
   ChevronRight,
   Copy,
   Check,
-  ShieldCheck,
   BadgeCheck,
   Gift,
   Sparkles,
@@ -24,6 +23,7 @@ import {
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import type { Screen } from "./types";
+import { BottomNav } from "./BottomNav";
 
 // Established constants used across the user screens
 // (ProfileScreen.tsx, OrdersListScreen.tsx, OrderDetailScreen.tsx).
@@ -31,20 +31,14 @@ const CARD = "bg-surface-card border border-border-subtle";
 const SECTION_LABEL =
   "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
 
-// Only return to known-safe parents so a transient flow can't be re-entered
-// with stale state. Mirrors OrderDetailScreen.tsx.
-const SAFE_BACK_SCREENS = new Set<Screen>([
-  "home",
-  "orders",
-  "profile",
-  "chats",
-  "notifications",
-  "support",
-]);
-
 export interface RewardsScreenProps {
+  /** Current screen — passed through to the persistent BottomNav. */
+  screen: Screen;
   setScreen: (s: Screen) => void;
-  previousScreen?: Screen;
+  /** Width constraint shared with the BottomNav (e.g. "max-w-[440px] mx-auto"). */
+  maxW: string;
+  /** Unread notification count for the BottomNav inbox badge. */
+  notificationCount?: number;
   /** All values are API-driven — defaults shown for the empty/loading state. */
   referralCode?: string;
   /** Number of accounts this user has referred. */
@@ -230,8 +224,10 @@ const CoinsMotif = () => (
 // ─── Screen ──────────────────────────────────────────────────────────────
 
 export const RewardsScreen = ({
+  screen,
   setScreen,
-  previousScreen,
+  maxW,
+  notificationCount = 0,
   referralCode = "—",
   friendsJoined = 0,
   blipEarned = 0,
@@ -258,14 +254,6 @@ export const RewardsScreen = ({
   const aFriends = useAnimatedNumber(friendsJoined);
   const aBlipEarned = useAnimatedNumber(blipEarned);
   const aTotalBlip = useAnimatedNumber(totalBlip);
-
-  const handleBack = () => {
-    const target =
-      previousScreen && SAFE_BACK_SCREENS.has(previousScreen)
-        ? previousScreen
-        : "profile";
-    setScreen(target);
-  };
 
   // Toast helper — single-channel, replaces any active toast
   const showToast = (msg: string) => {
@@ -373,42 +361,44 @@ export const RewardsScreen = ({
 
   return (
     <div className="relative flex flex-col h-dvh overflow-hidden bg-surface-base">
-      {/* ── Header — small back chip on top, big hero title + subtitle below.
-              Matches the Support page "Need help?" pattern so both screens
-              read consistently. ── */}
-      <header className="px-5 pt-4 pb-3 shrink-0">
-        <div className="flex items-center gap-2">
+      {/* ── Header — big hero title + subtitle. No back chip: this is a
+              tab-style screen with the persistent BottomNav below, matching
+              the Notifications screen pattern. ── */}
+      <header className="px-5 pt-4 pb-4 shrink-0">
+        <div className="flex items-start justify-between gap-3">
+          <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="min-w-0"
+          >
+            <h2 className="text-[26px] font-extrabold tracking-[-0.03em] leading-none text-text-primary">
+              Refer &amp; Earn
+            </h2>
+            <p className="mt-2 text-[13px] font-medium text-text-secondary">
+              Earn more when your friends join and trade on blip.money
+            </p>
+          </motion.section>
           <motion.button
             whileTap={{ scale: 0.92 }}
-            onClick={handleBack}
-            aria-label="Back"
-            className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle"
+            onClick={() => setScreen("notifications")}
+            aria-label="Notifications"
+            className="relative shrink-0 w-9 h-9 rounded-xl flex items-center justify-center bg-surface-hover border border-border-subtle"
           >
-            <ChevronLeft className="w-5 h-5 text-text-secondary" />
+            <Bell className="w-[18px] h-[18px] text-text-secondary" strokeWidth={2} />
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-text-primary border-2 border-surface-base flex items-center justify-center">
+                <span className="text-[8px] font-extrabold leading-none text-surface-base">
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </span>
+              </span>
+            )}
           </motion.button>
-           <h1 className="text-[17px] font-semibold text-text-primary">Referral</h1>
         </div>
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="pt-4"
-        >
-          <h2 className="text-[26px] font-extrabold tracking-[-0.03em] leading-[1.02] text-text-primary">
-            Refer &amp; Earn
-          </h2>
-          <p className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-text-secondary">
-            <ShieldCheck
-              className="w-3.5 h-3.5 text-text-tertiary shrink-0"
-              strokeWidth={2.2}
-            />
-            Earn more when your friends join and trade on blip.money
-          </p>
-        </motion.section>
       </header>
 
       {/* ── Scrollable body ── */}
-      <div className="flex-1 px-5 pb-8 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pb-28 overflow-y-auto scrollbar-hide">
         <div className="mx-auto w-full max-w-[440px]">
           {/* ── 1. Main referral card ── */}
           <motion.section
@@ -709,6 +699,14 @@ export const RewardsScreen = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Persistent bottom navigation (tab-style screen, like Notifications) ── */}
+      <BottomNav
+        screen={screen}
+        setScreen={setScreen}
+        maxW={maxW}
+        notificationCount={notificationCount}
+      />
     </div>
   );
 };

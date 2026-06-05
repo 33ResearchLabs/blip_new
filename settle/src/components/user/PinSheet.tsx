@@ -238,7 +238,7 @@ export function PinSheet({ open, mode, title, subtitle, onClose, onSuccess }: Pr
                           : "transparent",
                         border: filled
                           ? "2px solid var(--accent, #a8f762)"
-                          : "2px solid rgba(255,255,255,0.18)",
+                          : "2px solid var(--color-border-strong)",
                       }}
                     />
                   );

@@ -598,8 +598,8 @@ export const HomeScreen = ({
               {/* Action chips — button grid first */}
               <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Request', fn: () => showComingSoon(), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V5m0 15-5-5m5 5 5-5M5 4h14"/></svg> },
                   { label: 'Deposit', fn: () => setShowDeposit(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0-4-4m4 4 4-4M5 20h14"/></svg> },
+                  { label: 'Swap', fn: () => showComingSoon(), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg> },
                   { label: 'Send', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
                   { label: 'Scan', fn: () => setShowUpiPay(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/></svg> },
                 ]).map(({ label, fn, icon }) => (
@@ -645,7 +645,7 @@ export const HomeScreen = ({
                     }}>
                       <Plus size={18} strokeWidth={1.8} style={{ color: 'rgba(20,21,26,0.3)' }} />
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#80828c' }}>New</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(20,21,26,0.72)' }}>New</span>
                   </div>
                   {recentContacts.map((order, i) => {
                     const initial = order.merchant.name?.charAt(0)?.toUpperCase() ?? '?';
@@ -691,7 +691,7 @@ export const HomeScreen = ({
                 ) : (
                   <div style={{ padding: '24px 0', textAlign: 'center' }}>
                     <p style={{ fontSize: 13, fontWeight: 600, color: '#80828c', marginBottom: 4 }}>No transactions yet</p>
-                    <p style={{ fontSize: 11, color: 'rgba(20,21,26,0.3)' }}>Your trades will appear here</p>
+                    <p style={{ fontSize: 11, color: 'rgba(20,21,26,0.45)' }}>Your trades will appear here</p>
                   </div>
                 )}
               </div>
@@ -717,7 +717,7 @@ export const HomeScreen = ({
                     </svg>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: '#f5f5f7', letterSpacing: '-0.01em' }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#14151a', letterSpacing: '-0.01em' }}>
                       Best rates — beat it &amp; we match it
                     </div>
                     <div style={{ fontSize: 11.5, fontWeight: 600, color: '#8a8a90', marginTop: 2 }}>
@@ -742,8 +742,8 @@ export const HomeScreen = ({
               {/* Action chips — exact from source PLAY_CHIPS */}
               <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Request', fn: () => showComingSoon(), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V5m0 15-5-5m5 5 5-5M5 4h14"/></svg> },
                   { label: 'Deposit', fn: () => setShowDeposit(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0-4-4m4 4 4-4M5 20h14"/></svg> },
+                  { label: 'Swap', fn: () => showComingSoon(), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg> },
                   { label: 'Send', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
                   { label: 'Scan', fn: () => setShowUpiPay(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/></svg> },
                 ]).map(({ label, fn, icon }) => (
@@ -905,13 +905,13 @@ export const HomeScreen = ({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                   <div>
                     <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--color-text-primary)' }}>Receive USDT</h2>
-                    <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-tertiary)', marginTop: 2 }}>Solana network · SPL token</p>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', marginTop: 2 }}>Solana network · SPL token</p>
                   </div>
                   <button onClick={() => setShowDeposit(false)} style={{
                     width: 30, height: 30, borderRadius: 999, border: 'none', cursor: 'pointer',
                     background: 'var(--color-surface-active)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <X size={14} strokeWidth={2.4} style={{ color: 'var(--color-text-tertiary)' }} />
+                    <X size={14} strokeWidth={2.4} style={{ color: 'var(--color-text-secondary)' }} />
                   </button>
                 </div>
                 <div style={{
@@ -956,12 +956,12 @@ export const HomeScreen = ({
                   >
                     {depositCopied
                       ? <Check size={16} strokeWidth={2.6} style={{ color: 'var(--color-success)' }} />
-                      : <Copy size={15} strokeWidth={2.4} style={{ color: 'var(--color-surface-card)' }} />}
+                      : <Copy size={15} strokeWidth={2.4} style={{ color: 'var(--color-surface-base)' }} />}
                   </button>
                 </div>
                 <p style={{
                   textAlign: 'center', fontSize: 10.5, fontWeight: 600,
-                  color: 'var(--color-text-tertiary)', marginTop: 14, lineHeight: 1.4,
+                  color: 'var(--color-text-secondary-strong)', marginTop: 14, lineHeight: 1.4,
                 }}>
                   Send only USDT (SPL) on Solana. Other tokens or networks will be lost.
                 </p>

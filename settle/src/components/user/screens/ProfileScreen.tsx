@@ -78,11 +78,11 @@ function AccountCard({
     <div className={`rounded-[20px] p-4 ${CARD}`}>
       {/* Membership badge + accent flourish */}
       <div className="flex items-start justify-between mb-4">
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-warning/10 border border-warning/20 text-warning text-[10px] font-bold tracking-[0.12em] uppercase">
-          <Star size={11} className="fill-warning text-warning" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-active border border-border-medium text-text-secondary-strong text-[10px] font-bold tracking-[0.12em] uppercase">
+          <Star size={11} className="fill-current" />
           Regular Member
         </span>
-        <Sparkles size={16} className="text-warning shrink-0" />
+        <Sparkles size={16} className="text-text-tertiary shrink-0" />
       </div>
 
       {/* Identity row */}
@@ -154,7 +154,7 @@ const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 // Class-string aliases — mirror the Card / SectionLabel / CardLabel components
 // for places where we compose with extra utility classes inline.
 const CARD = "bg-surface-card border border-border-subtle";
-const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
+const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-secondary-strong uppercase";
 // In-card labels (stat/balance labels, …) use a darker shade than section
 // headers so they stay legible on card backgrounds.
 const CARD_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-secondary uppercase";
@@ -294,7 +294,7 @@ export const ProfileScreen = ({
 
       {/* ── Header ── matches the Messages screen: big title + a rounded-square
           icon button. Static; the account card + the rest scroll underneath. */}
-      <header className="px-5 pt-4 pb-4 shrink-0">
+      <header className="px-5 pt-4 pb-2 shrink-0">
         <div className="flex items-center justify-between">
           <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
             Profile
@@ -314,7 +314,7 @@ export const ProfileScreen = ({
       </header>
 
       {/* ── Scrollable content ── */}
-      <div className="flex-1 px-5 pt-4 pb-28 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pt-0 pb-28 overflow-y-auto scrollbar-hide">
 
         {/* Account card — membership badge, avatar + online dot, name +
             (phone-verified) check, and Blip Points / Reputation tiles. */}

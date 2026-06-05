@@ -226,7 +226,10 @@ export async function updateUsername(
 
   try {
     const result = await queryOne<User>(
-      `UPDATE users SET username = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      // Setting a username through this path is always an explicit choice
+      // (wallet `set_username`, onboarding step), so stamp username_customized_at
+      // — that timestamp is the set-once / "did they pick it?" source of truth.
+      `UPDATE users SET username = $1, username_customized_at = NOW(), updated_at = NOW() WHERE id = $2 RETURNING *`,
       [newUsername, id]
     );
     return sanitizeUser(result);
@@ -237,6 +240,44 @@ export async function updateUsername(
     }
     throw err;
   }
+}
+
+/**
+ * Mark the user's current (auto-assigned) username as their deliberate choice
+ * WITHOUT changing it — used when a user keeps the handle they were given at
+ * signup (e.g. a Google email-derived name) during the onboarding step. Locks
+ * it set-once via username_customized_at, same as a fresh claim.
+ */
+export async function markUsernameCustomized(
+  id: string
+): Promise<Omit<User, 'password_hash'> | null> {
+  const result = await queryOne<User>(
+    `UPDATE users SET username_customized_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [id]
+  );
+  return sanitizeUser(result);
+}
+
+/**
+ * Marks the user's first-run onboarding as complete (migration 151).
+ *
+ * Set-once: COALESCE preserves the original completion timestamp if this is
+ * called again (e.g. the client retries, or onboarding is somehow re-shown),
+ * so we always keep the FIRST time they finished. Returns the stored
+ * timestamp so callers can echo it back to the client.
+ */
+export async function markOnboardingComplete(
+  id: string
+): Promise<Date | null> {
+  const row = await queryOne<{ onboarding_completed_at: Date | null }>(
+    `UPDATE users
+       SET onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()),
+           updated_at = NOW()
+     WHERE id = $1
+     RETURNING onboarding_completed_at`,
+    [id]
+  );
+  return row?.onboarding_completed_at ?? null;
 }
 
 export async function updatePassword(
