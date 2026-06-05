@@ -78,7 +78,7 @@ export function MarketingDownload() {
                 Install app
               </button>
             ) : (
-              <a href="/?welcome=skip&tab=signin" className="dl-btn dl-btn-outline">
+              <a href="/user/login" className="dl-btn dl-btn-outline">
                 Open in browser →
               </a>
             )}

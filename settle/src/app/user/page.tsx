@@ -1,8 +1,6 @@
 "use client";
 
 import "@/components/user/styles/user-theme.css";
-import { LandingPage } from "@/components/user/LandingPage";
-import { AppLaunchPage } from "@/components/AppLaunchPage";
 import { UserOnboardingFlow } from "@/components/user/UserOnboardingFlow";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 // TransactionProgress removed — simple loading on buttons instead
@@ -263,10 +261,7 @@ export default function Home() {
     };
   }, [rawToast, addNotification]);
 
-  // Onboarding flow — shown whenever a non-authenticated user lands on /
-  // without ?welcome=skip. localStorage gate removed so it shows on every
-  // fresh visit until the user signs in.
-  // Onboarding shown post-login for first-time users only.
+  // Onboarding flow — shown post-login for first-time users only.
   // Keyed per userId so each new account sees it once, returning users never do.
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -406,11 +401,12 @@ export default function Home() {
   });
   extensionRequestSetterRef.current = orderActions.setExtensionRequest;
 
-  // Show onboarding exactly once per user, keyed by userId. We mark it as shown
-  // the moment it's displayed — NOT only on full completion — so it never
-  // reappears even if the user closes/refreshes mid-flow. Previously the gate
-  // key was written solely in onComplete (the final "Start paying" tap), so any
-  // incomplete run left the key unset and the flow popped up again every load.
+  // Show onboarding to first-time users until they actually COMPLETE it. We do
+  // NOT mark it "shown" on display — otherwise a refresh mid-flow would treat
+  // the flow as finished and skip it. The localStorage key is written only on
+  // completion (in onComplete, and below when the server already reports done).
+  // Because completion is tracked server-side, showing-until-done can't loop
+  // forever: once onComplete fires the flag is set and it never reappears.
   //
   // localStorage is a per-device fast-path cache; the DB
   // (users.onboarding_completed_at, migration 151) is the source of truth. When
@@ -439,8 +435,11 @@ export default function Home() {
         // localStorage-only behavior), so we never hard-block a new user.
       }
       if (cancelled) return;
+      // Not completed → show it. No localStorage write here, so a refresh
+      // mid-flow re-shows onboarding until it's genuinely finished — the cache
+      // key is written only on completion (in onComplete, and above when the
+      // server already reports it done).
       setShowOnboarding(true);
-      try { localStorage.setItem(key, '1'); } catch { /* storage blocked — falls back to per-session */ }
     })();
 
     return () => { cancelled = true; };
@@ -459,14 +458,13 @@ export default function Home() {
     prevScreenRef.current = screen;
   }, [screen, auth.userId, fetchOrders]);
 
-  // Once the user is authenticated, strip login-flow query params (?welcome=skip,
-  // ?tab=signin, ?reason=…) from the URL. They're only meaningful on the landing
-  // screen — leaving them in place keeps the URL looking like "/?welcome=skip"
-  // for the entire session, which is confusing when sharing or bookmarking.
+  // Once the user is authenticated, strip any leftover login-flow query param
+  // (?reason=…) from the URL — it's only meaningful on the login screen, and
+  // leaving it in place is confusing when sharing or bookmarking.
   useEffect(() => {
     if (typeof window === "undefined" || !auth.userId) return;
     const url = new URL(window.location.href);
-    const junk = ["welcome", "tab", "reason"];
+    const junk = ["reason"];
     let mutated = false;
     for (const key of junk) {
       if (url.searchParams.has(key)) {
@@ -482,6 +480,16 @@ export default function Home() {
       window.history.replaceState(null, "", clean);
     }
   }, [auth.userId]);
+
+  // Logged-out visitors no longer see the sign-in form inline — the user
+  // app's login lives at its own route (/user/login). Once auth finishes
+  // initializing and we know they're not signed in, hand off to that route.
+  useEffect(() => {
+    if (auth.isInitializing) return;
+    if (screen === "welcome" && typeof window !== "undefined") {
+      window.location.replace("/user/login");
+    }
+  }, [auth.isInitializing, screen]);
 
   // Refer & Earn data — sourced from the same waitlist row as
   // /waitlist/dashboard so the code shown here is the user's *real*
@@ -691,52 +699,13 @@ export default function Home() {
           avoiding the parent-frame flash. */}
       <div className="relative flex-1 w-full flex flex-col">
       <AnimatePresence>
-        {screen === "welcome" &&
-          (() => {
-            // Parse query params for login route redirects. The
-            // session-expired banner is wired up by a one-shot mount
-            // effect above (it also strips ?reason so refresh is clean);
-            // here we only read ?welcome=skip to decide whether to skip
-            // the marketing splash and jump straight to the sign-in form.
-            const params =
-              typeof window !== "undefined"
-                ? new URLSearchParams(window.location.search)
-                : null;
-            const skipWelcome = params?.get("welcome") === "skip";
-            // Fresh visit (`/` with no skip flag) shows the marketing
-            // landing — the showcase index.html ported via iframe. Once
-            // the user clicks "Sign in" they end up at /login (the role
-            // chooser) which routes them back here with ?welcome=skip
-            // for the actual auth form.
-            if (!skipWelcome) {
-              return <AppLaunchPage />;
-            }
-            return (
-              <LandingPage
-                loginForm={auth.loginForm}
-                setLoginForm={auth.setLoginForm}
-                authMode={auth.authMode}
-                setAuthMode={auth.setAuthMode}
-                handleUserLogin={auth.handleUserLogin}
-                handleUserRegister={auth.handleUserRegister}
-                isLoggingIn={auth.isLoggingIn}
-                loginError={auth.loginError}
-                setLoginError={auth.setLoginError}
-                pendingVerificationEmail={auth.pendingVerificationEmail}
-                onClearPendingVerification={auth.clearPendingVerification}
-                onResendVerification={auth.handleResendVerification}
-                isResendingVerification={auth.isResendingVerification}
-                verificationCooldownSeconds={auth.verificationCooldownSeconds}
-                verificationSuccessNotice={auth.verificationSuccessNotice}
-                onDismissVerificationSuccess={auth.dismissVerificationSuccess}
-                pendingVerificationVerified={auth.pendingVerificationVerified}
-                registerEmail={auth.registerEmail}
-                setRegisterEmail={auth.setRegisterEmail}
-                skipWelcome={skipWelcome}
-                onGoogleSuccess={auth.handleGoogleSuccess}
-              />
-            );
-          })()}
+        {screen === "welcome" && (
+          // Logged out — the effect above redirects to /user/login. Show a
+          // brief spinner during the hand-off instead of the inline form.
+          <div className="flex-1 w-full flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-accent-text" />
+          </div>
+        )}
 
         {screen === "home" && (
           <Panel
