@@ -240,7 +240,7 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
 
       {/* ── Scrollable body ── */}
       <div className="flex-1 px-5 pb-8 overflow-y-auto scrollbar-hide">
-        <div className="mx-auto w-full max-w-[440px] md:max-w-[720px]">
+        <div className="mx-auto w-full max-w-[440px] md:max-w-[min(1100px,97vw)]">
 
           {/* ── 1. Hero ── */}
           <motion.section

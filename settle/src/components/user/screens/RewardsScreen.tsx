@@ -399,7 +399,7 @@ export const RewardsScreen = ({
 
       {/* ── Scrollable body ── */}
       <div className="flex-1 px-5 pb-28 overflow-y-auto scrollbar-hide">
-        <div className="mx-auto w-full max-w-[440px] md:max-w-[720px]">
+        <div className="mx-auto w-full max-w-[440px] md:max-w-[min(1100px,97vw)]">
           {/* ── 1. Main referral card ── */}
           <motion.section
             initial={{ opacity: 0, y: 8 }}

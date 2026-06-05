@@ -357,7 +357,7 @@ export const TradeCreationScreen = ({
       /> */}
 
       {/* ── Header ── */}
-      <header className="relative z-10 max-w-[440px] md:max-w-[720px] mx-auto w-full px-5 pt-5">
+      <header className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 pt-5">
         <div className="flex items-center justify-end">
           {/* <motion.button
             whileTap={{ scale: 0.92 }}
@@ -484,7 +484,7 @@ export const TradeCreationScreen = ({
       </header>
 
       {/* ── Hero amount stack ── */}
-      <div className="relative z-10 max-w-[440px] md:max-w-[720px] mx-auto w-full px-5 flex flex-col items-center justify-center flex-1 pt-2">
+      <div className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 flex flex-col items-center justify-center flex-1 pt-2">
         {/* Animated You Buy / You Sell label */}
         <AnimatePresence mode="wait">
           <motion.p
@@ -741,7 +741,7 @@ export const TradeCreationScreen = ({
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ ...SOFT_SPRING, delay: 0.1 }}
-        className="relative z-10 max-w-[440px] md:max-w-[720px] mx-auto w-full "
+        className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full "
         style={{
           marginTop: 24,
           padding: "18px 18px calc(env(safe-area-inset-bottom, 12px) + 90px)",
