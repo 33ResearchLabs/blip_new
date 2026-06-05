@@ -55,23 +55,27 @@ export const BottomNav = ({
 
   return (
     <div
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full max-w-110"
+      className="fixed left-1/2 -translate-x-1/2 z-50"
       style={{
+        // Floating dock: a compact, lightly-rounded bar that hovers above the
+        // bottom edge instead of a full-width bar glued to it. Centred + width-
+        // capped so it reads as an intentional dock at every width — including
+        // the wide tablet column, where a full bar looked sparse/mismatched.
+        width: "min(420px, calc(100% - 28px))",
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)",
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "space-between",
-        // 20px side padding gives the Home / You tabs breathing room from the
-        // screen edges (end-icon centres land ~42px in: 20 padding + 22 half-
-        // tab). Honour the home-indicator / gesture-bar inset on notched
-        // devices, but take the MAX of the inset and a base padding rather than
-        // summing them — summing left a tall empty band between the tabs and
-        // the phone's bottom nav on gesture-nav devices.
-        padding: "8px 20px",
-        paddingBottom: "max(env(safe-area-inset-bottom, 0px), 14px)",
-        borderTop: "1px solid rgba(20,21,26,0.07)",
+        // Side padding keeps the Home / You end-tabs off the dock edge; the
+        // FAB's -22 marginTop still lifts it above the dock's rounded top.
+        padding: "8px 18px 10px",
+        borderRadius: 20, // little-bit-rounded dock corners
+        border: "1px solid rgba(20,21,26,0.08)",
         background: "#f4f3f1",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
+        boxShadow:
+          "0 10px 30px -8px rgba(0,0,0,0.22), 0 2px 8px -2px rgba(0,0,0,0.12)",
       }}
     >
       {/* Home */}

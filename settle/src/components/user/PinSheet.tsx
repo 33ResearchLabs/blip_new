@@ -201,13 +201,18 @@ export function PinSheet({ open, mode, title, subtitle, onClose, onSuccess }: Pr
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-[131] bg-surface-base text-text-primary rounded-t-3xl border-t border-border-medium shadow-2xl"
+            // Full-width sheet surface on phone (unchanged). On tablet (md:) cap
+            // + centre it via auto-margins — left:0/right:0 + mx-auto centres a
+            // fixed element WITHOUT a transform, so it never fights framer's
+            // y-slide. Keeps every phone width byte-for-byte identical and stops
+            // the sheet stretching edge-to-edge across a wide screen.
+            className="fixed inset-x-0 bottom-0 z-[131] md:max-w-[680px] md:mx-auto bg-surface-base text-text-primary rounded-t-3xl border-t border-border-medium shadow-2xl"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
           >
-            <div className="mx-auto max-w-[420px] px-5 py-5 pb-[max(env(safe-area-inset-bottom,16px),16px)]">
+            <div className="mx-auto max-w-[420px] md:max-w-[640px] px-5 py-5 pb-[max(env(safe-area-inset-bottom,16px),16px)]">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-text-tertiary">
                   {mode === "verify" ? "PIN required" : "Set app PIN"}

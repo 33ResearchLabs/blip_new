@@ -280,7 +280,7 @@ export const WalletScreen = ({
             className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-end justify-center">
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="w-full max-w-sm rounded-t-3xl p-6 bg-surface-base border-t border-border-subtle">
+              className="w-full max-w-sm md:max-w-[680px] rounded-t-3xl p-6 bg-surface-base border-t border-border-subtle">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-black text-text-primary">Send</h3>
                 <button onClick={() => { setShowSend(false); setSendError(''); setSendSuccess(''); }}
@@ -341,7 +341,7 @@ export const WalletScreen = ({
             className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-end justify-center">
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="w-full max-w-sm rounded-t-3xl p-6 bg-surface-base border-t border-border-subtle">
+              className="w-full max-w-sm md:max-w-[680px] rounded-t-3xl p-6 bg-surface-base border-t border-border-subtle">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-black text-text-primary">Receive</h3>
                 <button onClick={() => setShowReceive(false)}

@@ -357,7 +357,7 @@ export const TradeCreationScreen = ({
       /> */}
 
       {/* ── Header ── */}
-      <header className="relative z-10 max-w-[440px] mx-auto w-full px-5 pt-5">
+      <header className="relative z-10 max-w-[440px] md:max-w-[720px] mx-auto w-full px-5 pt-5">
         <div className="flex items-center justify-end">
           {/* <motion.button
             whileTap={{ scale: 0.92 }}
@@ -484,7 +484,7 @@ export const TradeCreationScreen = ({
       </header>
 
       {/* ── Hero amount stack ── */}
-      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 flex flex-col items-center justify-center flex-1 pt-2">
+      <div className="relative z-10 max-w-[440px] md:max-w-[720px] mx-auto w-full px-5 flex flex-col items-center justify-center flex-1 pt-2">
         {/* Animated You Buy / You Sell label */}
         <AnimatePresence mode="wait">
           <motion.p
@@ -741,7 +741,7 @@ export const TradeCreationScreen = ({
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ ...SOFT_SPRING, delay: 0.1 }}
-        className="relative z-10 max-w-[440px] mx-auto w-full "
+        className="relative z-10 max-w-[440px] md:max-w-[720px] mx-auto w-full "
         style={{
           marginTop: 24,
           padding: "18px 18px calc(env(safe-area-inset-bottom, 12px) + 90px)",
@@ -785,9 +785,9 @@ export const TradeCreationScreen = ({
                     style={{ background: T.surface2, border: `1px solid ${T.border2}` }}
                   >
                     <div className="flex items-center justify-between px-3 py-2.5">
-                      <span style={{ fontSize: 12, fontWeight: 600, color: T.md }}>{amount} USDT</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.md }}>{formatAmountInput(amount)} USDT</span>
                       <span style={{ fontSize: 12, fontWeight: 700, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                        {rateSymbol}{rawFiatAmount.toFixed(2)}
+                        {rateSymbol}{formatCrypto(rawFiatAmount)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
@@ -801,12 +801,12 @@ export const TradeCreationScreen = ({
                     {promo.active && (
                       <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
                         <span style={{ fontSize: 11, color: "#4ade80" }}>🎁 $5 testing reward</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>-{rateSymbol}{promoDiscountInr.toFixed(2)}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>-{rateSymbol}{formatCrypto(promoDiscountInr)}</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between px-3 py-2.5" style={{ borderTop: `1px solid ${T.border2}`, background: isLight ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)" }}>
                       <span style={{ fontSize: 13, fontWeight: 800, color: T.hi }}>Total</span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}{discountedFiatAmount.toFixed(2)} {rateCurrency}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}{formatCrypto(discountedFiatAmount)} {rateCurrency}</span>
                     </div>
                   </div>
                 ) : null
@@ -1076,7 +1076,7 @@ export const TradeCreationScreen = ({
               ) : (
                 <ArrowUpRight size={16} strokeWidth={2.6} />
               )}
-              {isBuy ? "Buy" : "Sell"} {amount} USDT
+              {isBuy ? "Buy" : "Sell"} {formatAmountInput(amount)} USDT
             </>
           ) : (
             "Enter Amount"
@@ -1113,7 +1113,7 @@ export const TradeCreationScreen = ({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 36 }}
-              className="fixed bottom-0 left-1/2 -translate-x-1/2 z-[121] w-full max-w-[440px]"
+              className="fixed bottom-0 left-1/2 -translate-x-1/2 z-[121] w-full max-w-[440px] md:max-w-[720px]"
               style={{
                 background: T.bg,
                 borderRadius: "28px 28px 0 0",

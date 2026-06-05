@@ -646,7 +646,7 @@ export default function UserWalletPage() {
       className={`user-scope ${isUserLight ? "user-light" : ""} min-h-dvh flex flex-col items-center overflow-y-auto`}
       style={{ background: "var(--user-frame)" }}
     >
-      <div className="flex-1 w-full max-w-[440px] mx-auto flex flex-col bg-surface-base">
+      <div className="flex-1 w-full max-w-[440px] md:max-w-[720px] mx-auto flex flex-col bg-surface-base">
         {/* Header row — flush with the 440px column, matching ProfileScreen's
             `px-5` content gutter so the back-button / title line up with the
             cards below. */}

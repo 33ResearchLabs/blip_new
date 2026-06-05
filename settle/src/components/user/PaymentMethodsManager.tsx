@@ -415,7 +415,11 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/65 backdrop-blur-sm z-40"
+            // z-[55]: above the BottomNav (z-50) so the nav is dimmed behind
+            // the backdrop while this sheet is open (it shares the Profile
+            // Panel's stacking context, so an equal z-index let the nav paint
+            // over the sheet's save button).
+            className="fixed inset-0 bg-black/65 backdrop-blur-sm z-[55]"
             onClick={onClose}
           />
           <motion.div
@@ -424,10 +428,10 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 36, stiffness: 380 }}
-            className="fixed inset-x-0 bottom-0 z-50 flex justify-center pointer-events-none"
+            className="fixed inset-x-0 bottom-0 z-[60] flex justify-center pointer-events-none"
           >
             <div
-              className="pointer-events-auto w-full max-w-[440px] max-h-[92dvh] overflow-y-auto rounded-t-[24px] shadow-[0_-20px_60px_-12px_rgba(0,0,0,0.5)]"
+              className="pointer-events-auto w-full max-w-[440px] md:max-w-[720px] max-h-[92dvh] overflow-y-auto rounded-t-[24px] shadow-[0_-20px_60px_-12px_rgba(0,0,0,0.5)]"
               style={{
                 background: isLight
                   ? 'linear-gradient(180deg,#ffffff 0%,#f7f8fa 100%)'
