@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, Zap, Lock, DollarSign, AlertTriangle, CheckCircle2, MessageCircle, Shield, Activity } from "lucide-react";
+import { Bell, Zap, Lock, DollarSign, AlertTriangle, CheckCircle2, MessageCircle, Shield, Activity, TrendingDown } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
 import type { Screen } from "./types";
@@ -77,6 +77,8 @@ export interface NotificationsScreenProps {
   unreadCount: number;
   maxW: string;
   hideBottomNav?: boolean;
+  cancelledOrderCount?: number;
+  totalOrderCount?: number;
 }
 
 export const NotificationsScreen = ({
@@ -88,6 +90,8 @@ export const NotificationsScreen = ({
   unreadCount,
   maxW,
   hideBottomNav = false,
+  cancelledOrderCount = 0,
+  totalOrderCount = 0,
 }: NotificationsScreenProps) => {
   const [activeTab, setActiveTab] = useState<'alerts' | 'activity'>('alerts');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
@@ -98,6 +102,11 @@ export const NotificationsScreen = ({
     const cutoff = timeFilter === 'today' ? now - 86400000 : timeFilter === '7d' ? now - 7 * 86400000 : now - 30 * 86400000;
     return notifications.filter(n => n.timestamp >= cutoff);
   })();
+
+  // Show reputation warning when ≥2 cancellations AND cancel rate ≥20%
+  const cancelRate = totalOrderCount > 0 ? cancelledOrderCount / totalOrderCount : 0;
+  const showReputationBanner = cancelledOrderCount >= 2 && cancelRate >= 0.2;
+  const cancelPct = Math.round(cancelRate * 100);
 
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
@@ -118,6 +127,29 @@ export const NotificationsScreen = ({
           )}
         </div>
       </header>
+
+      {/* ── Reputation warning banner ── */}
+      {showReputationBanner && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-5 mb-3 shrink-0"
+        >
+          <div className="flex items-start gap-3 p-3.5 rounded-[16px] bg-error-dim border border-error/25">
+            <div className="w-8 h-8 rounded-[10px] bg-error/15 flex items-center justify-center shrink-0 mt-0.5">
+              <TrendingDown size={15} className="text-error" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold text-text-primary leading-snug">
+                Your trade reputation is low
+              </p>
+              <p className="text-[11.5px] font-medium text-text-secondary mt-0.5 leading-snug">
+                {cancelPct}% of your orders were cancelled ({cancelledOrderCount} of {totalOrderCount}). A high cancel rate limits your ability to start new trades. Complete your trades to restore full access.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* ── Tabs + Time Filter (single row) ── */}
       <div className="px-5 pb-2 flex items-center gap-2 shrink-0">

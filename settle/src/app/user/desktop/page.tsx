@@ -27,7 +27,6 @@ import { useUserTradeCreation } from "@/hooks/useUserTradeCreation";
 import { useUserOrderActions } from "@/hooks/useUserOrderActions";
 import { useUserEffects } from "@/hooks/useUserEffects";
 import { useSolanaWalletSafe } from "@/hooks/useSolanaWalletSafe";
-import { useAppLock } from "@/context/AppLockContext";
 import { useApp } from "@/context/AppContext";
 import { useOrphanedEscrowRecovery } from "@/hooks/useOrphanedEscrowRecovery";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
@@ -100,8 +99,6 @@ export default function UserDesktopPage() {
   const { playSound } = useSounds();
   const rawToast = useToast();
   const solanaWallet = useSolanaWalletSafe();
-  const { refreshPinStatus } = useAppLock();
-
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
     | {
         state: "none" | "locked" | "unlocked";
@@ -457,7 +454,7 @@ export default function UserDesktopPage() {
       {showOnboarding && !!auth.userId && (
         <UserOnboardingFlow
           userId={auth.userId}
-          onPasscodeSet={refreshPinStatus}
+          onPasscodeSet={() => {}}
           onComplete={() => {
             try { localStorage.setItem(`blip_onb_v1_${auth.userId}`, "1"); } catch { /* ignore */ }
             fetchWithAuth("/api/auth/user/onboarding", { method: "POST" }).catch(() => {});

@@ -196,7 +196,6 @@ function AccountCard({
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodsManager } from "../PaymentMethodsManager";
-import { AppLockSettingsCard } from "@/components/app-lock/AppLockSettingsCard";
 import { SettingsGroup } from "@/components/settings/SettingsGroup";
 import { SettingsRow } from "@/components/settings/SettingsRow";
 import { StatusPill } from "@/components/settings/StatusPill";
@@ -595,20 +594,6 @@ export const ProfileScreen = ({
 
         {/* ── 1. Payment Methods (own card, always-visible list) ── */}
         <PaymentMethodsManager userId={userId} />
-
-        {/* ── 2. Security & Privacy ── */}
-        <div className="flex items-center justify-between mb-2 px-1">
-          <div className="flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-white/40" />
-            <span className={SECTION_LABEL}>Security &amp; Privacy</span>
-          </div>
-          <span className="inline-flex items-center gap-1 text-[9.5px] font-bold tracking-[0.16em] uppercase text-text-tertiary">
-            Protected
-          </span>
-        </div>
-        <div className="mb-6">
-          <AppLockSettingsCard userId={userId} />
-        </div>
 
         {/* Resolved Disputes — rich list kept inline so each card retains
             its existing layout (orderNumber, won/lost/split badge, amount,

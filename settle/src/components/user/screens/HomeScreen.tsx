@@ -604,12 +604,12 @@ export const HomeScreen = ({
                 </div>
               </div>
 
-              {/* Action chips — button grid first */}
+              {/* Action chips — primary actions */}
               <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
                 {([
                   { label: 'Deposit', fn: () => setShowDeposit(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0-4-4m4 4 4-4M5 20h14"/></svg> },
                   { label: 'Swap', fn: () => showComingSoon(), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg> },
-                  { label: 'Send', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
+                  { label: 'Trade', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
                   { label: 'Scan', fn: () => setShowUpiPay(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/></svg> },
                 ]).map(({ label, fn, icon }) => (
                   <motion.button
@@ -633,6 +633,32 @@ export const HomeScreen = ({
                       {icon}
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Quick links — compact pill row */}
+              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {([
+                  { label: 'Help & Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
+                  { label: 'Raise a ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
+                  { label: 'Refer & Earn', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
+                ]).map(({ label, fn, icon }) => (
+                  <motion.button
+                    key={label}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={fn}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
+                      border: '1px solid rgba(20,21,26,0.10)',
+                      background: '#fff',
+                      boxShadow: '0 1px 3px rgba(20,21,26,0.05)',
+                    }}
+                  >
+                    <span style={{ color: '#565862' }}>{icon}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#3d3e45', whiteSpace: 'nowrap' }}>{label}</span>
                   </motion.button>
                 ))}
               </div>
@@ -748,12 +774,12 @@ export const HomeScreen = ({
                 </div>
               </div>
 
-              {/* Action chips — exact from source PLAY_CHIPS */}
+              {/* Action chips — primary actions */}
               <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
                 {([
                   { label: 'Deposit', fn: () => setShowDeposit(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0-4-4m4 4 4-4M5 20h14"/></svg> },
                   { label: 'Swap', fn: () => showComingSoon(), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg> },
-                  { label: 'Send', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
+                  { label: 'Trade', fn: () => setScreen('trade'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
                   { label: 'Scan', fn: () => setShowUpiPay(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/></svg> },
                 ]).map(({ label, fn, icon }) => (
                   <motion.button
@@ -777,6 +803,32 @@ export const HomeScreen = ({
                       {icon}
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Quick links */}
+              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {([
+                  { label: 'Help & Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
+                  { label: 'Raise a ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
+                  { label: 'Refer & Earn', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
+                ]).map(({ label, fn, icon }) => (
+                  <motion.button
+                    key={label}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={fn}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
+                      border: '1px solid rgba(20,21,26,0.10)',
+                      background: '#fff',
+                      boxShadow: '0 1px 3px rgba(20,21,26,0.05)',
+                    }}
+                  >
+                    <span style={{ color: '#565862' }}>{icon}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#3d3e45', whiteSpace: 'nowrap' }}>{label}</span>
                   </motion.button>
                 ))}
               </div>

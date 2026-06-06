@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
+import type React from "react";
 import { defaultAvatarUrl } from "@/lib/avatars";
 
 interface UserAvatarProps {
@@ -14,6 +15,8 @@ interface UserAvatarProps {
   className?: string;
   /** Title / aria label. */
   alt?: string;
+  /** Inline styles (e.g. custom borderRadius). */
+  style?: React.CSSProperties;
 }
 
 /**
@@ -27,6 +30,7 @@ export const UserAvatar = memo(function UserAvatar({
   size = 28,
   className = "",
   alt,
+  style,
 }: UserAvatarProps) {
   const [errored, setErrored] = useState(false);
   const fallback = defaultAvatarUrl(seed || "anonymous");
@@ -40,7 +44,7 @@ export const UserAvatar = memo(function UserAvatar({
       height={size}
       onError={() => setErrored(true)}
       className={`rounded-full bg-foreground/[0.04] object-cover shrink-0 ${className}`}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size, ...style }}
     />
   );
 });

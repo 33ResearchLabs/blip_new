@@ -333,7 +333,7 @@ export const TradeCreationScreen = ({
 
   return (
     <div
-      className="relative flex flex-col min-h-[100dvh] overflow-y-auto"
+      className="relative flex flex-col h-dvh overflow-hidden"
       style={{ background: T.bg }}
     >
       {/* ── Ambient color glow that follows Buy / Sell ── */}
@@ -357,6 +357,9 @@ export const TradeCreationScreen = ({
           backgroundSize: "26px 26px",
         }}
       /> */}
+
+      {/* ── Scrollable body (header + hero + sheet content) ── */}
+      <div className="flex-1 overflow-y-auto">
 
       {/* ── Header ── */}
       <header className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 pt-5">
@@ -746,7 +749,7 @@ export const TradeCreationScreen = ({
         className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full "
         style={{
           marginTop: 24,
-          padding: "18px 18px calc(env(safe-area-inset-bottom, 12px) + 90px)",
+          padding: "18px 18px 24px",
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
           background: T.sheetBg,
@@ -1042,7 +1045,19 @@ export const TradeCreationScreen = ({
         </LayoutGroup>
 
 
-        {/* CTA — Buy/Sell action, in flow after Priority */}
+      </motion.div>
+
+      </div>{/* end scrollable body */}
+
+      {/* ── Sticky footer: CTA + BottomNav ── */}
+      <div
+        className="relative z-20 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full shrink-0"
+        style={{
+          padding: "12px 18px 0",
+          background: T.bg,
+          borderTop: `1px solid ${T.sheetBorder}`,
+        }}
+      >
         <motion.button
           onClick={startTrade}
           disabled={!hasAmount || isLoading || !userId}
@@ -1084,7 +1099,7 @@ export const TradeCreationScreen = ({
             "Enter Amount"
           )}
         </motion.button>
-      </motion.div>
+      </div>
 
       {!hideBottomNav && (
         <BottomNav
