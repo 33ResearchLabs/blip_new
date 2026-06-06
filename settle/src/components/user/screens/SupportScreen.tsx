@@ -218,49 +218,39 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
 
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
-      {/* ── Header — back + title on the left, "My Tickets" pill on the right ── */}
-      <header className="px-5 pt-4 pb-3 shrink-0 flex items-center gap-3">
-        <motion.button
-          whileTap={{ scale: 0.92 }}
-          onClick={handleBack}
-          aria-label="Back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle"
-        >
-          <ChevronLeft className="w-5 h-5 text-text-secondary" />
-        </motion.button>
-        <h1 className="text-[17px] font-semibold text-text-primary">Support</h1>
-        <div className="flex-1" />
-        <motion.button
-          whileTap={{ scale: 0.95 }}
-          whileHover={{ y: -1 }}
-          onClick={handleMyTickets}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl ${CARD} hover:bg-surface-hover transition-colors`}
-        >
-          <Ticket className="w-[15px] h-[15px] text-text-secondary" strokeWidth={2} />
-          <span className="text-[12px] font-bold text-text-primary">My Tickets</span>
-        </motion.button>
+      {/* ── Header — matches Activity / Notifications / Messages / Profile tabs ── */}
+      <header className="px-5 pt-4 pb-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <motion.button
+              whileTap={{ scale: 0.92 }}
+              onClick={handleBack}
+              aria-label="Back"
+              className="w-9 h-9 rounded-[14px] flex items-center justify-center shrink-0 bg-surface-card border border-border-subtle"
+            >
+              <ChevronLeft className="w-5 h-5 text-text-secondary" />
+            </motion.button>
+            <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+              Support
+            </p>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            whileHover={{ y: -1 }}
+            onClick={handleMyTickets}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl ${CARD} hover:bg-surface-hover transition-colors`}
+          >
+            <Ticket className="w-[15px] h-[15px] text-text-secondary" strokeWidth={2} />
+            <span className="text-[12px] font-bold text-text-primary">My Tickets</span>
+          </motion.button>
+        </div>
       </header>
 
       {/* ── Scrollable body ── */}
-      <div className="flex-1 px-5 pb-8 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pb-28 overflow-y-auto scrollbar-hide">
         <div className="mx-auto w-full max-w-[440px] md:max-w-[min(1100px,97vw)]">
 
-          {/* ── 1. Hero ── */}
-          <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="pt-4 pb-6"
-          >
-            <h2 className="text-[40px] font-extrabold tracking-[-0.035em] leading-[1.02] text-text-primary">
-              Need help?
-            </h2>
-            <p className="mt-2 text-[14px] font-medium text-text-secondary">
-              You are in the right place.
-            </p>
-          </motion.section>
-
-          {/* ── 2. Quick actions — 3 tall cards ── */}
+          {/* ── 2. Quick actions — 2 tall cards ── */}
           <motion.section
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}

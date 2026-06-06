@@ -194,7 +194,6 @@ function AccountCard({
   );
 }
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
-import { PhoneVerificationSheet } from "@/components/user/PhoneVerificationSheet";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodsManager } from "../PaymentMethodsManager";
 import { AppLockSettingsCard } from "@/components/app-lock/AppLockSettingsCard";
@@ -315,11 +314,6 @@ export const ProfileScreen = ({
   const router = useRouter();
 
   const { user } = useUser();
-  const [phoneVerifiedLocal, setPhoneVerifiedLocal] = useState(
-    Boolean((user as any)?.phone_verified)
-  );
-  const phoneVerified = phoneVerifiedLocal || Boolean((user as any)?.phone_verified);
-  const [showPhoneSheet, setShowPhoneSheet] = useState(false);
 
   // Copy the connected Solana wallet address with a brief check-mark confirm.
   const [copiedAddr, setCopiedAddr] = useState(false);
@@ -372,7 +366,7 @@ export const ProfileScreen = ({
 
       {/* ── Header ── matches the Messages screen: big title + a rounded-square
           icon button. Static; the account card + the rest scroll underneath. */}
-      <header className="px-5 pt-4 pb-2 shrink-0">
+      <header className="px-5 pt-4 pb-4 shrink-0">
         <div className="flex items-center justify-between">
           <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
             Profile
@@ -612,29 +606,6 @@ export const ProfileScreen = ({
             Protected
           </span>
         </div>
-        <div className="mb-3">
-          <SettingsGroup label="" icon={undefined}>
-            <SettingsRow
-              icon={<Phone className="w-[15px] h-[15px]" />}
-              title="Phone Number"
-              subtitle={phoneVerified ? "Verified — required for buy orders" : "Not verified · Tap to verify"}
-              onClick={() => !phoneVerified && setShowPhoneSheet(true)}
-              hideChevron={phoneVerified}
-              trailing={
-                phoneVerified ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-bold tracking-[0.08em] uppercase">
-                    <BadgeCheck size={10} />
-                    Verified
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold tracking-[0.08em] uppercase">
-                    Verify
-                  </span>
-                )
-              }
-            />
-          </SettingsGroup>
-        </div>
         <div className="mb-6">
           <AppLockSettingsCard userId={userId} />
         </div>
@@ -774,24 +745,6 @@ export const ProfileScreen = ({
       </div>
 
       {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />}
-
-      <PhoneVerificationSheet
-        open={showPhoneSheet}
-        onClose={() => setShowPhoneSheet(false)}
-        onVerified={() => {
-          // Optimistically flip local state so the badge lights up immediately
-          // without waiting for a context refresh.
-          setPhoneVerifiedLocal(true);
-          try {
-            const raw = localStorage.getItem('blip_user');
-            if (raw) {
-              const cached = JSON.parse(raw);
-              cached.phone_verified = true;
-              localStorage.setItem('blip_user', JSON.stringify(cached));
-            }
-          } catch { /* localStorage unavailable */ }
-        }}
-      />
     </div>
   );
 };

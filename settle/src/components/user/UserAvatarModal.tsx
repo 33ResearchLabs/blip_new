@@ -61,7 +61,7 @@ export function UserAvatarModal({
       setTimeout(() => {
         onClose();
         setSuccess(false);
-      }, 1200);
+      }, 1800);
     } catch (err) {
       console.error("Avatar update error:", err);
       setError(err instanceof Error ? err.message : "Update failed");
@@ -123,6 +123,16 @@ export function UserAvatarModal({
               <X className="w-[18px] h-[18px] text-text-tertiary" />
             </button>
           </div>
+
+          {/* Success banner */}
+          {success && (
+            <div className="mx-5 mt-4">
+              <div className="flex items-center gap-2 p-3 rounded-[12px] bg-accent/15 border border-accent/30">
+                <Check className="w-4 h-4 text-accent shrink-0" />
+                <p className="text-[13px] font-semibold text-text-primary">Avatar updated!</p>
+              </div>
+            </div>
+          )}
 
           {/* Error row */}
           {error && (

@@ -97,8 +97,8 @@ export const OrdersListScreen = ({
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
       {/* ── Header ── */}
-      <header className="px-5 pt-4 pb-2 shrink-0">
-        <div className="flex items-center justify-between mb-4">
+      <header className="px-5 pt-4 pb-4 shrink-0">
+        <div className="flex items-center justify-between mb-3">
           <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Activity</p>
           <button
             onClick={() => setScreen("notifications")}
