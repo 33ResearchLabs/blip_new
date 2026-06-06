@@ -163,15 +163,15 @@ export const WalletScreen = ({
 
   return (
     <>
-      <div className="h-12" />
-
       {/* Header */}
-      <header className="px-5 pt-2 pb-4 flex items-center justify-between">
-        <h1 className="text-[20px] font-black tracking-tight text-text-primary">Wallet</h1>
-        <motion.button whileTap={{ scale: 0.9 }} onClick={handleRefresh}
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-surface-card border border-border-subtle">
-          <RefreshCw size={15} className={`${isRefreshing ? 'animate-spin' : ''} text-text-tertiary`} />
-        </motion.button>
+      <header className="px-5 pt-4 pb-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Wallet</p>
+          <motion.button whileTap={{ scale: 0.9 }} onClick={handleRefresh}
+            className="p-2.5 rounded-[14px] bg-surface-card border border-border-subtle">
+            <RefreshCw size={18} className={`${isRefreshing ? 'animate-spin' : ''} text-text-tertiary`} />
+          </motion.button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto pb-28 no-scrollbar px-5">
