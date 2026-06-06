@@ -24,6 +24,7 @@ import { useState as useStateHook, useEffect, useRef } from "react";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ArrowDown } from "lucide-react";
 import type { Screen, Order } from "./types";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 const IS_MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
@@ -87,13 +88,10 @@ function formatDate(d: Date) {
 }
 
 // ─── Single transaction row ────────────────────────────────────────────────
-function TxRow({ order, index, onPress }: { order: Order; index: number; onPress: () => void; avatarUrl?: string }) {
+function TxRow({ order, onPress }: { order: Order; index: number; onPress: () => void; avatarUrl?: string }) {
   const isBuy = order.type === 'buy';
   const amount = parseFloat(order.fiatAmount);
   const isActive = order.status !== 'complete';
-  const AVATAR_COLORS = ["#c2674e", "#2c2c32", "#6b7a66", "#46566e", "#b08968"];
-  const avatarBg = AVATAR_COLORS[index % AVATAR_COLORS.length];
-  const initial = order.merchant.name?.charAt(0)?.toUpperCase() ?? 'T';
 
   return (
     <motion.button
@@ -104,12 +102,13 @@ function TxRow({ order, index, onPress }: { order: Order; index: number; onPress
         textAlign: 'left', padding: '10px 0', background: 'none', border: 'none', cursor: 'pointer',
       }}
     >
-      <div style={{
-        position: 'relative', flexShrink: 0, width: 36, height: 36, borderRadius: 12,
-        overflow: 'hidden', background: avatarBg,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <span style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{initial}</span>
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        <UserAvatar
+          src={order.merchant.avatarUrl}
+          seed={order.merchant.name}
+          size={36}
+          style={{ borderRadius: 12 }}
+        />
         {isActive && (
           <motion.div
             animate={{ scale: [1, 1.3, 1], opacity: [1, 0.4, 1] }}

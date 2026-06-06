@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { MessageCircle, Shield, AlertTriangle, Bell } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { Screen, Order } from "./types";
 
 type TimeFilter = 'today' | '7d' | '30d' | 'all';
@@ -231,18 +232,18 @@ export const ChatListScreen = ({
                 >
                   {/* Avatar */}
                   <div className="relative shrink-0">
-                    <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${
-                      isDispute
-                        ? 'bg-surface-active border border-border-medium'
-                        : hasUnread
-                          ? 'bg-accent'
-                          : 'bg-surface-active'
-                    }`}>
-                      {isDispute
-                        ? <AlertTriangle size={18} className="text-text-secondary" />
-                        : <span className={`text-[17px] font-extrabold ${hasUnread ? 'text-accent-text' : 'text-text-tertiary'}`}>{initial}</span>
-                      }
-                    </div>
+                    {isDispute ? (
+                      <div className="w-11 h-11 rounded-[14px] flex items-center justify-center bg-surface-active border border-border-medium">
+                        <AlertTriangle size={18} className="text-text-secondary" />
+                      </div>
+                    ) : (
+                      <UserAvatar
+                        src={order.merchant?.avatarUrl}
+                        seed={order.merchant?.name}
+                        size={44}
+                        style={{ borderRadius: 14 }}
+                      />
+                    )}
                     {hasUnread && (
                       <div className={`absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center border-2 border-surface-base ${
                         isDispute ? 'bg-text-primary' : 'bg-accent'
