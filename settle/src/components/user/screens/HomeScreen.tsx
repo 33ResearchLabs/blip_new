@@ -626,7 +626,8 @@ export const HomeScreen = ({
               </div>
 
               {/* Quick links — same chip style as Deposit/Swap/Trade/Scan */}
-              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+              <div style={{ fontSize: 15.5, fontWeight: 800, color: '#14151a', marginTop: 24, marginBottom: 12 }}>Learn more</div>
+              <div style={{ display: 'flex', gap: 8 }}>
                 {([
                   { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
                   { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
@@ -653,7 +654,7 @@ export const HomeScreen = ({
                     }}>
                       {icon}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#3d3e45' }}>{label}</span>
                   </motion.button>
                 ))}
               </div>
@@ -788,7 +789,7 @@ export const HomeScreen = ({
                     }}>
                       {icon}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#3d3e45' }}>{label}</span>
                   </motion.button>
                 ))}
               </div>
