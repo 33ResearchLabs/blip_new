@@ -198,7 +198,7 @@ export function DesktopSidebar({
           color: "rgba(255,255,255,0.75)",
         }}
       >
-        <UserAvatar name={userName} avatarUrl={userAvatar} size={30} />
+        <UserAvatar src={userAvatar} seed={userName} size={30} />
         <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {userName || "You"}
