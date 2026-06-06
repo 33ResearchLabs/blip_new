@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['framer-motion', '@solana/web3.js', 'lucide-react'],
   },
+  outputFileTracingExcludes: {
+    '*': ['**/@swc/core*', '**/@esbuild/**', '**/node_modules/**/.bin/**', '**/*.map'],
+  },
   // Back-compat for the merchant route rename (/merchant → /market). Protects
   // existing bookmarks and already-installed merchant PWAs (old start_url was
   // /merchant/login). Query strings (?tab=, ?pwa=merchant, ?order=) are

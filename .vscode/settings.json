@@ -1,3 +1,58 @@
 {
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+
+    // ── File watcher: never watch generated/binary trees ──────────────────
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/**": true,
+        "**/.next/**": true,
+        "**/out/**": true,
+        "**/dist/**": true,
+        "**/build/**": true,
+        "**/.turbo/**": true,
+        "**/android/**": true,
+        "**/ios/**": true,
+        "**/resources/**": true,
+        "**/.gradle/**": true
+    },
+
+    // ── Explorer: hide noise ───────────────────────────────────────────────
+    "files.exclude": {
+        "**/.next": true,
+        "**/out": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/.turbo": true,
+        "**/android": true,
+        "**/ios": true
+    },
+
+    // ── Search: skip generated trees ──────────────────────────────────────
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/.next": true,
+        "**/out": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/.turbo": true,
+        "**/android": true,
+        "**/ios": true
+    },
+
+    // ── TypeScript: hard memory cap + targeted project roots ──────────────
+    "typescript.tsserver.maxTsServerMemory": 4096,
+    "typescript.disableAutomaticTypeAcquisition": true,
+    "typescript.tsserver.watchOptions": {
+        "watchDirectory": "useFsEventsOnParentDirectory",
+        "watchFile": "useFsEvents",
+        "fallbackPolling": "dynamicPriorityPolling"
+    },
+
+    // ── ESLint: only run in relevant sub-projects ─────────────────────────
+    "eslint.workingDirectories": [
+        { "directory": "settle", "changeProcessCWD": true },
+        { "directory": "blip-extension", "changeProcessCWD": true },
+        { "directory": "blip-mcp", "changeProcessCWD": true }
+    ]
 }

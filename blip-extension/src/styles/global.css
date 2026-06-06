@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  width: 400px;
+  height: 600px;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: #0B0F14;
+  color: rgba(255,255,255,0.92);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, textarea { font-family: inherit; }
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 4px; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+:root {
+  /* Dark theme — matches phone app */
+  --bg:              #0B0F14;
+  --bg-card:         #111827;
+  --bg-raised:       #1a2030;
+  --surface:         rgba(255,255,255,0.04);
+  --surface-hover:   rgba(255,255,255,0.07);
+  --border:          rgba(255,255,255,0.07);
+  --border-medium:   rgba(255,255,255,0.12);
+  --text-primary:    rgba(255,255,255,0.92);
+  --text-secondary:  rgba(255,255,255,0.55);
+  --text-tertiary:   rgba(255,255,255,0.32);
+  --accent:          #FFFFFF;
+  --accent-text:     #0B0F14;
+  --accent-dim:      rgba(255,255,255,0.06);
+  --accent-border:   rgba(255,255,255,0.14);
+  --amber:           #ffb02e;
+  --success:         #10b981;
+  --danger:          #ef4444;
+  --warning:         #f59e0b;
+}

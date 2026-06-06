@@ -17,6 +17,7 @@ const PusherClient = require('pusher-js');
 const fs = require('fs');
 const path = require('path');
 const solanaWallet = require('./solana-wallet');
+const { handleAiMessage, clearHistory } = require('./ai');
 
 // Initialize
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -61,7 +62,9 @@ function saveSessions() {
   try {
     const data = {};
     for (const [telegramId, session] of sessions) {
-      data[telegramId] = session;
+      // Never persist sensitive credentials to disk
+      const { apiKey: _k, password: _p, ...safe } = session;
+      data[telegramId] = safe;
     }
     fs.writeFileSync(SESSIONS_FILE, JSON.stringify(data, null, 2));
   } catch (e) {
@@ -127,6 +130,79 @@ async function validateSessions() {
 }
 
 // ============================================================================
+// HELPER: Auth Headers
+// ============================================================================
+
+/**
+ * Return the correct Authorization header for a merchant.
+ * Prefers sk_live_* API key (production-safe, no expiry).
+ * Falls back to x-actor-* dev headers only if no key stored yet.
+ */
+function getHeadersForMerchant(merchantId) {
+  for (const [, session] of sessions) {
+    if (session.merchantId === merchantId && session.apiKey) {
+      return { Authorization: `Bearer ${session.apiKey}` };
+    }
+  }
+  // Dev fallback — blocked in production
+  return { 'x-actor-type': 'merchant', 'x-actor-id': merchantId };
+}
+
+/**
+ * After login/register: use the short-lived access token to create a
+ * permanent API key for this bot session. Stored in session.apiKey.
+ */
+async function createApiKeyForBot(accessToken, merchantId) {
+  try {
+    const res = await axios.post(`${API_BASE}/auth/api-keys`, {
+      name: `Telegram Bot — ${merchantId.slice(0, 8)}`,
+      permissions: ['orders:read', 'orders:write', 'wallet:read', 'notifications'],
+    }, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    return res.data.data.key; // sk_live_*
+  } catch (err) {
+    console.error('[Auth] Failed to create API key:', err.response?.data?.error || err.message);
+    return null;
+  }
+}
+
+// ============================================================================
+// HELPER: Cloudinary Upload
+// ============================================================================
+
+async function uploadToCloudinary(buffer, filename) {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new Error('Cloudinary not configured — set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET');
+  }
+
+  const crypto = require('crypto');
+  const timestamp = Math.floor(Date.now() / 1000);
+  const folder = 'blip-payment-receipts';
+  const params = `folder=${folder}&timestamp=${timestamp}`;
+  const signature = crypto.createHash('sha1').update(params + apiSecret).digest('hex');
+
+  const FormData = require('form-data');
+  const form = new FormData();
+  form.append('file', buffer, { filename, contentType: 'image/jpeg' });
+  form.append('api_key', apiKey);
+  form.append('timestamp', timestamp);
+  form.append('folder', folder);
+  form.append('signature', signature);
+
+  const res = await axios.post(
+    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+    form,
+    { headers: form.getHeaders() },
+  );
+  return res.data.secure_url;
+}
+
+// ============================================================================
 // HELPER: API Calls
 // ============================================================================
 
@@ -137,7 +213,11 @@ async function registerMerchant(email, password, businessName) {
     password,
     business_name: businessName,
   });
-  return res.data.data.merchant;
+  // Return both merchant and accessToken so caller can create API key
+  return {
+    merchant: res.data.data.merchant,
+    accessToken: res.data.data.accessToken || null,
+  };
 }
 
 async function loginMerchant(email, password) {
@@ -146,7 +226,10 @@ async function loginMerchant(email, password) {
     email,
     password,
   });
-  return res.data.data.merchant;
+  return {
+    merchant: res.data.data.merchant,
+    accessToken: res.data.data.accessToken || null,
+  };
 }
 
 async function getMerchantBalance(merchantId) {
@@ -168,15 +251,17 @@ async function getMerchantBalance(merchantId) {
       }
     }
   }
-  // Fallback: API balance
+  const headers = getHeadersForMerchant(merchantId);
   try {
     const res = await axios.get(`${API_BASE}/merchant/transactions`, {
-      params: { merchant_id: merchantId, summary: true }
+      params: { merchant_id: merchantId, summary: true },
+      headers,
     });
     return res.data.data;
   } catch (err) {
     const res = await axios.get(`${API_BASE}/mock/balance`, {
-      params: { userId: merchantId, type: 'merchant' }
+      params: { userId: merchantId, type: 'merchant' },
+      headers,
     });
     return {
       current_balance: res.data.balance || 0,
@@ -195,7 +280,7 @@ async function createOrder(merchantId, type, amount, paymentMethod = 'bank', esc
     payment_method: paymentMethod,
     spread_preference: 'fastest',
     ...escrowFields,
-  });
+  }, { headers: getHeadersForMerchant(merchantId) });
 
   const order = res.data.data;
 
@@ -217,7 +302,8 @@ async function createOrder(merchantId, type, amount, paymentMethod = 'bank', esc
 async function getOrders(merchantId) {
   try {
     const res = await axios.get(`${API_BASE}/merchant/orders`, {
-      params: { merchant_id: merchantId }
+      params: { merchant_id: merchantId },
+      headers: getHeadersForMerchant(merchantId),
     });
     return res.data.data || [];
   } catch (err) {
@@ -231,7 +317,8 @@ async function getOrders(merchantId) {
 async function getAvailableOrders(merchantId) {
   try {
     const res = await axios.get(`${API_BASE}/merchant/orders`, {
-      params: { merchant_id: merchantId, include_all_pending: 'true' }
+      params: { merchant_id: merchantId, include_all_pending: 'true' },
+      headers: getHeadersForMerchant(merchantId),
     });
     return res.data.data || [];
   } catch (err) {
@@ -242,8 +329,9 @@ async function getAvailableOrders(merchantId) {
   }
 }
 
-async function getOrderDetails(orderId) {
-  const res = await axios.get(`${API_BASE}/orders/${orderId}`);
+async function getOrderDetails(orderId, merchantId) {
+  const headers = merchantId ? getHeadersForMerchant(merchantId) : {};
+  const res = await axios.get(`${API_BASE}/orders/${orderId}`, { headers });
   return res.data.data;
 }
 
@@ -251,7 +339,7 @@ async function acceptOrder(orderId, merchantId) {
   // If the order is already escrowed (pre-locked SELL), call acceptTrade on-chain first
   if (!MOCK_MODE && solanaWallet.getKeypair(merchantId)) {
     try {
-      const order = await getOrderDetails(orderId);
+      const order = await getOrderDetails(orderId, merchantId);
       if (order.escrow_tx_hash && order.escrow_creator_wallet && order.escrow_trade_id) {
         console.log(`[Accept] Order ${orderId} has escrow — calling acceptTrade on-chain`);
         const result = await solanaWallet.acceptTradeOnChain(
@@ -272,13 +360,12 @@ async function acceptOrder(orderId, merchantId) {
     actor_type: 'merchant',
     actor_id: merchantId,
     acceptor_wallet_address: solanaWallet.getPublicKey(merchantId) || undefined,
-  });
+  }, { headers: getHeadersForMerchant(merchantId) });
   return res.data.data;
 }
 
 async function lockEscrow(orderId, merchantId) {
-  // Get order details for amount
-  const order = await getOrderDetails(orderId);
+  const order = await getOrderDetails(orderId, merchantId);
   const amount = parseFloat(order.crypto_amount);
 
   // Non-mock: real on-chain escrow
@@ -293,24 +380,22 @@ async function lockEscrow(orderId, merchantId) {
       escrow_trade_pda: result.tradePda,
       escrow_pda: result.escrowPda,
       escrow_creator_wallet: result.creatorWallet,
-    });
+    }, { headers: getHeadersForMerchant(merchantId) });
     return res.data.data;
   }
 
-  // Mock mode fallback
   const txHash = `demo-tg-${Date.now()}`;
   const res = await axios.post(`${API_BASE}/orders/${orderId}/escrow`, {
     tx_hash: txHash,
     actor_type: 'merchant',
     actor_id: merchantId,
-  });
+  }, { headers: getHeadersForMerchant(merchantId) });
   return res.data.data;
 }
 
 async function releaseEscrow(orderId, merchantId) {
-  // Non-mock: real on-chain release
   if (!MOCK_MODE && solanaWallet.getKeypair(merchantId)) {
-    const order = await getOrderDetails(orderId);
+    const order = await getOrderDetails(orderId, merchantId);
     if (order.escrow_trade_id && order.escrow_creator_wallet) {
       // Determine counterparty wallet (buyer)
       const counterparty = order.buyer_wallet_address
@@ -332,18 +417,17 @@ async function releaseEscrow(orderId, merchantId) {
         tx_hash: result.txHash,
         actor_type: 'merchant',
         actor_id: merchantId,
-      });
+      }, { headers: getHeadersForMerchant(merchantId) });
       return res.data.data;
     }
   }
 
-  // Mock mode fallback
   const txHash = `demo-tg-release-${Date.now()}`;
   const res = await axios.patch(`${API_BASE}/orders/${orderId}/escrow`, {
     tx_hash: txHash,
     actor_type: 'merchant',
     actor_id: merchantId,
-  });
+  }, { headers: getHeadersForMerchant(merchantId) });
   return res.data.data;
 }
 
@@ -352,26 +436,30 @@ async function updateOrderStatus(orderId, status, merchantId) {
     status,
     actor_type: 'merchant',
     actor_id: merchantId,
-  });
+  }, { headers: getHeadersForMerchant(merchantId) });
   return res.data.data;
 }
 
 async function cancelOrder(orderId, merchantId) {
-  const res = await axios.delete(
-    `${API_BASE}/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled via Telegram`
-  );
+  const res = await axios.delete(`${API_BASE}/orders/${orderId}`, {
+    params: { actor_type: 'merchant', actor_id: merchantId, reason: 'Cancelled via Telegram' },
+    headers: getHeadersForMerchant(merchantId),
+  });
   return res.data;
 }
 
 async function getTransactionHistory(merchantId, limit = 10) {
+  const headers = getHeadersForMerchant(merchantId);
   try {
     const res = await axios.get(`${API_BASE}/merchant/transactions`, {
-      params: { merchant_id: merchantId, limit }
+      params: { merchant_id: merchantId, limit },
+      headers,
     });
     return res.data.data;
   } catch (err) {
     const res = await axios.get(`${API_BASE}/merchant/orders`, {
-      params: { merchant_id: merchantId }
+      params: { merchant_id: merchantId },
+      headers,
     });
     const orders = res.data.data || [];
     return orders.slice(0, limit).map(o => ({
@@ -384,18 +472,23 @@ async function getTransactionHistory(merchantId, limit = 10) {
   }
 }
 
-async function sendChatMessage(orderId, merchantId, content) {
-  const res = await axios.post(`${API_BASE}/orders/${orderId}/messages`, {
+async function sendChatMessage(orderId, merchantId, content, imageUrl = null) {
+  const body = {
     sender_type: 'merchant',
     sender_id: merchantId,
     content,
-    message_type: 'text',
+    message_type: imageUrl ? 'image' : 'text',
+  };
+  if (imageUrl) body.image_url = imageUrl;
+  const res = await axios.post(`${API_BASE}/orders/${orderId}/messages`, body, {
+    headers: getHeadersForMerchant(merchantId),
   });
   return res.data.data;
 }
 
-async function getChatMessages(orderId) {
-  const res = await axios.get(`${API_BASE}/orders/${orderId}/messages`);
+async function getChatMessages(orderId, merchantId) {
+  const headers = merchantId ? getHeadersForMerchant(merchantId) : {};
+  const res = await axios.get(`${API_BASE}/orders/${orderId}/messages`, { headers });
   return res.data.data || [];
 }
 
@@ -449,8 +542,7 @@ function subscribeToPusher(telegramId, merchantId) {
             const res = await axios.post(`${API_BASE}/pusher/auth`, formData.toString(), {
               headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'x-actor-type': 'merchant',
-                'x-actor-id': merchantId,
+                ...getHeadersForMerchant(merchantId),
               }
             });
             console.log(`[Pusher Auth] Auth success for ${channelName}`);
@@ -709,12 +801,43 @@ async function handleOrderStatusUpdate(telegramId, merchantId, data) {
       }
 
       case 'completed': {
-        msg = `*Trade Completed!*\n\n`;
+        const displayType = getDisplayType(order, merchantId);
+        const duration = order.accepted_at
+          ? Math.round((Date.now() - new Date(order.accepted_at).getTime()) / 60000)
+          : null;
+
+        msg = `✅ *Trade Complete!*\n\n`;
         msg += `Order: \`${order.order_number || orderId.slice(0, 8)}\`\n`;
-        msg += `${order.crypto_amount} USDC transferred.\n`;
-        msg += `${order.fiat_amount} AED exchanged.`;
-        buttons.push([Markup.button.callback('Check Balance', 'balance')]);
-        buttons.push([Markup.button.callback('Menu', 'main_menu')]);
+        msg += `Type: ${displayType.toUpperCase()}\n`;
+        msg += `Amount: *${order.crypto_amount} USDC*\n`;
+        msg += `Fiat: *${order.fiat_amount} AED*\n`;
+        msg += `Rate: ${order.rate} AED/USDC\n`;
+        if (duration) msg += `Duration: ${duration} min\n`;
+
+        if (isBuyer) {
+          msg += `\nUSDC has been released to your wallet.`;
+        } else {
+          msg += `\nFiat payment confirmed. Escrow released to buyer.`;
+        }
+
+        buttons.push([Markup.button.callback('Check Balance', 'balance'), Markup.button.callback('New Order', 'main_menu')]);
+
+        // Send completion summary as a styled message (separate from the notification)
+        const summaryMsg =
+          `━━━━━━━━━━━━━━━\n` +
+          `🏦 *Blip Trade Receipt*\n` +
+          `━━━━━━━━━━━━━━━\n` +
+          `Order  \`${order.order_number || orderId.slice(0, 8)}\`\n` +
+          `USDC   ${order.crypto_amount}\n` +
+          `AED    ${order.fiat_amount}\n` +
+          `Rate   ${order.rate}\n` +
+          `Status ✅ Complete\n` +
+          `━━━━━━━━━━━━━━━`;
+
+        setTimeout(() => {
+          bot.telegram.sendMessage(telegramId, summaryMsg, { parse_mode: 'Markdown' }).catch(() => {});
+        }, 1500);
+
         break;
       }
 
@@ -858,28 +981,37 @@ async function subscribeToActiveOrders(telegramId, merchantId) {
 
 // Handle incoming chat message from counterparty
 function handleIncomingChatMessage(telegramId, merchantId, orderId, data) {
-  const { senderId, senderType, content } = data;
+  const { senderId, senderType, content, messageType, imageUrl, senderName } = data;
 
-  // Skip own messages and system messages
   if (senderId === merchantId) return;
   if (senderType === 'system') return;
 
-  // Dedup chat notifications (reuse existing dedup with 'chat' pseudo-status)
-  if (isDuplicateNotification(telegramId, orderId, `chat:${data.messageId || content.slice(0, 20)}`)) return;
+  const dedupKey = `chat:${data.messageId || (content || '').slice(0, 20)}`;
+  if (isDuplicateNotification(telegramId, orderId, dedupKey)) return;
 
-  const senderLabel = senderType === 'merchant' ? 'Counterparty' : (senderType || 'User');
-  const preview = content.length > 120 ? content.slice(0, 120) + '...' : content;
+  const senderLabel = senderName || (senderType === 'merchant' ? 'Counterparty' : 'User');
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('Reply', `chat:${orderId}`)],
+    [Markup.button.callback('View Order', `order_actions:${orderId}`)],
+  ]);
 
+  // Image message — send as Telegram photo with caption
+  if ((messageType === 'image' || imageUrl) && imageUrl) {
+    const caption = `*${senderLabel}* — Order \`${orderId.slice(0, 8)}\`\n${content || 'Sent an image'}`;
+    bot.telegram.sendPhoto(telegramId, imageUrl, {
+      caption,
+      parse_mode: 'Markdown',
+      reply_markup: keyboard.reply_markup,
+    }).catch(err => console.error('[Chat] Failed to send photo notification:', err.message));
+    return;
+  }
+
+  const preview = (content || '').length > 120 ? content.slice(0, 120) + '…' : (content || '');
   const msg =
     `*New Message*\n\n` +
     `Order: \`${orderId.slice(0, 8)}\`\n` +
     `From: ${senderLabel}\n\n` +
     `${preview}`;
-
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('Reply', `chat:${orderId}`)],
-    [Markup.button.callback('View Order', `order_actions:${orderId}`)]
-  ]);
 
   sendTelegramNotification(telegramId, msg, keyboard);
 }
@@ -1718,34 +1850,70 @@ bot.action(/^lock_escrow:(.+)$/, async (ctx) => {
   }
 });
 
-// Mark Payment Sent
+// Mark Payment Sent — prompt for screenshot first
 bot.action(/^payment_sent:(.+)$/, async (ctx) => {
-  await ack(ctx, 'Marking payment sent...');
+  await ack(ctx);
   const orderId = ctx.match[1];
   const session = getSession(ctx.from.id);
   if (!session) return;
 
+  // Ask for payment screenshot before marking sent
+  pendingActions.set(ctx.from.id, { action: 'await_payment_screenshot', orderId });
+  await editOrReply(ctx,
+    `*Send Payment Screenshot*\n\nPlease send a photo of your payment confirmation.\n\n` +
+    `_(Bank transfer receipt, UPI screenshot, etc.)_`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Skip — No Screenshot', `payment_sent_confirm:${orderId}`)],
+        [Markup.button.callback('Cancel', `order_actions:${orderId}`)],
+      ]),
+    }
+  );
+});
+
+// Payment sent without screenshot (skip)
+bot.action(/^payment_sent_confirm:(.+)$/, async (ctx) => {
+  await ack(ctx, 'Marking payment sent...');
+  const orderId = ctx.match[1];
+  const session = getSession(ctx.from.id);
+  if (!session) return;
+  pendingActions.delete(ctx.from.id);
+  await doMarkPaymentSent(ctx, orderId, session, null);
+});
+
+async function doMarkPaymentSent(ctx, orderId, session, imageUrl) {
   try {
     await updateOrderStatus(orderId, 'payment_sent', session.merchantId);
   } catch (err) {
     const errMsg = err.response?.data?.error || err.message;
-    await editOrReply(ctx, `Failed to mark payment: ${errMsg}`, {
+    await ctx.reply(`Failed to mark payment: ${errMsg}`, {
       ...Markup.inlineKeyboard([[Markup.button.callback('Retry', `payment_sent:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]])
     });
     return;
   }
 
+  // Post screenshot to order chat if provided
+  if (imageUrl) {
+    try {
+      await sendChatMessage(orderId, session.merchantId, 'Payment screenshot', imageUrl);
+    } catch (e) {
+      console.error('[Screenshot] Failed to post to chat:', e.message);
+    }
+  }
+
   try {
-    const order = await getOrderDetails(orderId);
-    const text = `*Payment Marked as Sent!*\n\n${order.fiat_amount} AED marked as sent.\nWaiting for seller to confirm receipt.`;
-    await editOrReply(ctx, text, { parse_mode: 'Markdown', ...getActionButtons(order, session.merchantId) });
+    const order = await getOrderDetails(orderId, session.merchantId);
+    const screenshotNote = imageUrl ? '\nScreenshot sent to seller.' : '';
+    const text = `*Payment Marked as Sent!*\n\n${order.fiat_amount} AED marked as sent.${screenshotNote}\nWaiting for seller to confirm receipt.`;
+    await ctx.reply(text, { parse_mode: 'Markdown', ...getActionButtons(order, session.merchantId) });
   } catch (err) {
-    await editOrReply(ctx, `*Payment Marked as Sent!* ✓\n\nTap below to see order details.`, {
+    await ctx.reply(`*Payment Marked as Sent!* ✓\n\nWaiting for seller to confirm.`, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([[Markup.button.callback('View Order', `order_actions:${orderId}`), Markup.button.callback('Menu', 'main_menu')]])
     });
   }
-});
+}
 
 // Confirm Payment Received & Release Escrow (Atomic)
 bot.action(/^confirm_payment:(.+)$/, async (ctx) => {
@@ -1890,31 +2058,45 @@ bot.action(/^chat:(.+)$/, async (ctx) => {
   if (!session) return;
 
   try {
-    const messages = await getChatMessages(orderId);
-    const recent = messages.slice(-5);
+    const messages = await getChatMessages(orderId, session.merchantId);
+    const recent = messages.slice(-6);
 
-    let text = `*Chat* - Order \`${orderId.slice(0, 8)}\`\n\n`;
+    // Send any image messages as actual Telegram photos first
+    const imageMessages = recent.filter(m => m.message_type === 'image' && m.image_url);
+    for (const m of imageMessages) {
+      const isMe = m.sender_id === session.merchantId;
+      const sender = isMe ? 'You' : (m.sender_name || m.sender_type);
+      const caption = `${sender}: ${m.content || 'Image'}`;
+      try {
+        await ctx.replyWithPhoto(m.image_url, { caption });
+      } catch (e) {
+        console.error('[Chat] Failed to send image:', e.message);
+      }
+    }
 
-    if (recent.length === 0) {
+    let text = `*Chat* — Order \`${orderId.slice(0, 8)}\`\n\n`;
+
+    const textMessages = recent.filter(m => m.message_type !== 'image');
+    if (textMessages.length === 0 && imageMessages.length === 0) {
       text += `_No messages yet._\n\n`;
     } else {
-      recent.forEach(m => {
+      textMessages.forEach(m => {
         const isMe = m.sender_id === session.merchantId;
-        const sender = isMe ? 'You' : (m.sender_name || m.sender_type);
+        const sender = isMe ? 'You' : (m.sender_name || m.sender_type || 'Other');
         const time = m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-        text += `*${sender}* ${time}\n${m.content}\n\n`;
+        const icon = isMe ? '→' : '←';
+        text += `${icon} *${sender}* ${time}\n${m.content || ''}\n\n`;
       });
     }
 
-    text += `_Type your message below to send:_`;
+    text += `_Type a message or send a photo to reply._`;
 
-    // Set pending chat action
     pendingActions.set(ctx.from.id, { action: 'chat', orderId });
 
-    await editOrReply(ctx, text, {
+    await ctx.reply(text, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
-        [Markup.button.callback('Refresh Chat', `chat:${orderId}`)],
+        [Markup.button.callback('Refresh', `chat:${orderId}`)],
         [Markup.button.callback('Back to Order', `order_actions:${orderId}`), Markup.button.callback('Menu', 'main_menu')]
       ])
     });
@@ -2055,18 +2237,21 @@ async function handleSignupFlow(ctx) {
 
       // Create the account
       try {
-        const merchant = await registerMerchant(
+        const { merchant, accessToken } = await registerMerchant(
           signup.data.email,
           signup.data.password,
           signup.data.username
         );
 
-        // Save session
+        // Create a permanent API key using the short-lived access token
+        const apiKey = accessToken ? await createApiKeyForBot(accessToken, merchant.id) : null;
+
         setSession(telegramId, {
           merchantId: merchant.id,
           username: merchant.username || signup.data.username,
           email: signup.data.email,
           walletAddress: merchant.wallet_address,
+          apiKey,
         });
 
         pendingSignups.delete(telegramId);
@@ -2121,13 +2306,16 @@ async function handleSignupFlow(ctx) {
       try { await ctx.deleteMessage(); } catch (e) {}
 
       try {
-        const merchant = await loginMerchant(signup.data.email, signup.data.password);
+        const { merchant, accessToken } = await loginMerchant(signup.data.email, signup.data.password);
+
+        const apiKey = accessToken ? await createApiKeyForBot(accessToken, merchant.id) : null;
 
         setSession(telegramId, {
           merchantId: merchant.id,
           username: merchant.username,
           email: signup.data.email,
           walletAddress: merchant.wallet_address,
+          apiKey,
         });
 
         pendingSignups.delete(telegramId);
@@ -2254,6 +2442,7 @@ bot.command('logout', (ctx) => {
   if (session) merchantToTelegram.delete(session.merchantId);
   sessions.delete(telegramId);
   pendingActions.delete(telegramId);
+  clearHistory(telegramId);
   saveSessions();
   ctx.reply('Logged out. Real-time notifications stopped. Send /start to login again.');
 });
@@ -2261,6 +2450,71 @@ bot.command('logout', (ctx) => {
 // ============================================================================
 // BOT: Text Handler (Signup + Pending Actions)
 // ============================================================================
+
+// ============================================================================
+// BOT: Photo Handler (payment screenshots)
+// ============================================================================
+
+bot.on('photo', async (ctx) => {
+  const telegramId = ctx.from.id;
+  const session = getSession(telegramId);
+  if (!session) return ctx.reply('Please /start first.');
+
+  const pending = pendingActions.get(telegramId);
+
+  // Payment screenshot flow
+  if (pending?.action === 'await_payment_screenshot' && pending.orderId) {
+    pendingActions.delete(telegramId);
+    const orderId = pending.orderId;
+
+    await ctx.sendChatAction('upload_photo');
+
+    // Get the largest available photo size
+    const photos = ctx.message.photo;
+    const largest = photos[photos.length - 1];
+
+    let imageUrl = null;
+    try {
+      const fileLink = await ctx.telegram.getFileLink(largest.file_id);
+      const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
+      const buffer = Buffer.from(response.data);
+      imageUrl = await uploadToCloudinary(buffer, `payment-${orderId}-${Date.now()}.jpg`);
+      await ctx.reply('Screenshot uploaded.');
+    } catch (err) {
+      console.error('[Screenshot] Upload failed:', err.message);
+      await ctx.reply('Could not upload screenshot — marking payment sent without it.');
+    }
+
+    return doMarkPaymentSent(ctx, orderId, session, imageUrl);
+  }
+
+  // Chat image flow — forward photo to order chat
+  if (pending?.action === 'chat' && pending.orderId) {
+    pendingActions.delete(telegramId);
+    const orderId = pending.orderId;
+
+    await ctx.sendChatAction('upload_photo');
+    const photos = ctx.message.photo;
+    const largest = photos[photos.length - 1];
+
+    try {
+      const fileLink = await ctx.telegram.getFileLink(largest.file_id);
+      const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
+      const buffer = Buffer.from(response.data);
+      const imageUrl = await uploadToCloudinary(buffer, `chat-${orderId}-${Date.now()}.jpg`);
+      const caption = ctx.message.caption || '';
+      await sendChatMessage(orderId, session.merchantId, caption || 'Image', imageUrl);
+      return ctx.reply('Image sent.', Markup.inlineKeyboard([
+        [Markup.button.callback('View Chat', `chat:${orderId}`)],
+        [Markup.button.callback('Back to Order', `order_actions:${orderId}`)],
+      ]));
+    } catch (err) {
+      return ctx.reply(`Failed to send image: ${err.message}`);
+    }
+  }
+
+  ctx.reply('Send a photo while in the payment or chat flow.');
+});
 
 bot.on('text', async (ctx) => {
   if (ctx.message.text.startsWith('/')) return;
@@ -2311,11 +2565,62 @@ bot.on('text', async (ctx) => {
     return handlePendingAction(ctx, session, pending);
   }
 
-  // 5. No pending action - show menu hint
-  return ctx.reply(
-    'Tap a button or type /menu to open the main menu.',
-    Markup.inlineKeyboard([[Markup.button.callback('Menu', 'main_menu')]])
-  );
+  // 5. AI brain — natural language via Claude Haiku with function calling
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return ctx.reply(
+      'Tap a button or type /menu to open the main menu.',
+      Markup.inlineKeyboard([[Markup.button.callback('Menu', 'main_menu')]])
+    );
+  }
+
+  try {
+    await ctx.sendChatAction('typing');
+
+    // Bundle all API helpers so ai.js can call them without circular deps
+    const apiHelpers = {
+      getMerchantBalance,
+      createOrder,
+      getOrders,
+      getAvailableOrders,
+      getOrderDetails,
+      acceptOrder,
+      lockEscrow,
+      updateOrderStatus,
+      releaseEscrow,
+      cancelOrder,
+      getTransactionHistory,
+    };
+
+    const reply = await handleAiMessage(telegramId, session.merchantId, ctx.message.text, apiHelpers);
+
+    // After AI executes a state-changing tool, show contextual quick-action buttons
+    const activeOrders = await getOrders(session.merchantId).then(orders =>
+      orders.filter(o => !['completed', 'cancelled', 'expired'].includes(o.status))
+    ).catch(() => []);
+
+    if (activeOrders.length > 0) {
+      return ctx.reply(reply, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('My Orders', 'my_orders'), Markup.button.callback('Available', 'available_orders')],
+          [Markup.button.callback('Menu', 'main_menu')],
+        ]),
+      });
+    }
+
+    return ctx.reply(reply, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Menu', 'main_menu')],
+      ]),
+    });
+  } catch (err) {
+    console.error('[AI] Handler error:', err.message);
+    return ctx.reply(
+      'Something went wrong. Try /menu for manual controls.',
+      Markup.inlineKeyboard([[Markup.button.callback('Menu', 'main_menu')]])
+    );
+  }
 });
 
 // ============================================================================
@@ -2518,6 +2823,21 @@ async function handlePendingAction(ctx, session, pending) {
         ])
       );
     }
+  }
+
+  // Payment screenshot pending — user typed text instead of sending photo
+  if (pending.action === 'await_payment_screenshot' && pending.orderId) {
+    pendingActions.delete(telegramId);
+    return ctx.reply(
+      'Please send a *photo* as your payment screenshot, or tap Skip.',
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('Skip — No Screenshot', `payment_sent_confirm:${pending.orderId}`)],
+          [Markup.button.callback('Cancel', `order_actions:${pending.orderId}`)],
+        ]),
+      }
+    );
   }
 
   // Unknown pending action - clear and show menu
