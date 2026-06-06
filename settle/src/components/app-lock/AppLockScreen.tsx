@@ -65,6 +65,11 @@ export function AppLockScreen() {
     return () => clearInterval(id);
   }, [userId, errorTick]);
 
+  // Clear the "Try again in Xs" error message once the cooldown expires.
+  useEffect(() => {
+    if (cooldownLeft === 0) setError('');
+  }, [cooldownLeft]);
+
   const tryBiometric = async () => {
     if (!userId || biometricRunning || busy) return;
     setBiometricRunning(true);

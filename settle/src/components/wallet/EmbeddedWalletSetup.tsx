@@ -209,18 +209,18 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
             <summary className="px-3 py-2 text-[11px] font-mono cursor-pointer select-none" style={{ color: colors.text.tertiary }}>
               Also show base58 private key (advanced)
             </summary>
-            <div className="relative px-3 pb-3">
-              <div className="p-3 rounded-lg font-mono text-xs break-all select-all"
+            <div className="px-3 pb-3">
+              <div className="relative p-3 pr-10 rounded-lg font-mono text-xs break-all select-all"
                 style={{ background: colors.bg.primary, border: `1px solid ${colors.border.subtle}`, color: colors.text.secondary }}>
                 {backupKey}
+                <button
+                  onClick={handleCopyKey}
+                  className="absolute top-2 right-2 p-1.5 rounded-md transition-colors"
+                  style={{ background: colors.surface.active }}
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" style={{ color: colors.text.tertiary }} />}
+                </button>
               </div>
-              <button
-                onClick={handleCopyKey}
-                className="absolute top-5 right-5 p-1.5 rounded-md transition-colors"
-                style={{ background: colors.surface.active }}
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" style={{ color: colors.text.tertiary }} />}
-              </button>
             </div>
           </details>
 
