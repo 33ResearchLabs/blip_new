@@ -13,7 +13,6 @@ import {
   X,
   Loader2,
   Gift,
-  Plus,
   MoreHorizontal,
   Clock,
 } from "lucide-react";
@@ -263,17 +262,6 @@ export const HomeScreen = ({
       color: { dark: "#0B0F14", light: "#FFFFFF" },
     }).then(setQrDataUrl).catch(() => setQrDataUrl(null));
   }, [showDeposit, solanaWallet.walletAddress]);
-
-  // Recent contacts from completedOrders
-  const AVATAR_COLORS = ["#c2674e", "#2c2c32", "#6b7a66", "#46566e", "#b08968"];
-  const recentContacts = (() => {
-    const seen = new Set<string>();
-    return completedOrders.filter(o => {
-      if (seen.has(o.merchant.id)) return false;
-      seen.add(o.merchant.id);
-      return true;
-    }).slice(0, 5);
-  })();
 
   // Scan icon SVG
   const ScanIcon = ({ size = 17, color = "#0b0b0d" }: { size?: number; color?: string }) => (
@@ -637,72 +625,37 @@ export const HomeScreen = ({
                 ))}
               </div>
 
-              {/* Quick links — compact pill row */}
-              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {/* Quick links — same chip style as Deposit/Swap/Trade/Scan */}
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Help & Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
-                  { label: 'Raise a ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
-                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
-                  { label: 'Refer & Earn', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
+                  { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
+                  { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
+                  { label: 'Refer', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
                 ]).map(({ label, fn, icon }) => (
                   <motion.button
                     key={label}
-                    whileTap={{ scale: 0.96 }}
+                    whileTap={{ scale: 0.93 }}
                     onClick={fn}
                     style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
-                      border: '1px solid rgba(20,21,26,0.10)',
-                      background: '#fff',
-                      boxShadow: '0 1px 3px rgba(20,21,26,0.05)',
+                      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      padding: '14px 4px 11px', borderRadius: 16, cursor: 'pointer',
+                      border: '1px solid rgba(20,21,26,0.08)',
+                      background: '#fff', gap: 8,
+                      boxShadow: '0 1px 4px rgba(20,21,26,0.06)',
                     }}
                   >
-                    <span style={{ color: '#565862' }}>{icon}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#3d3e45', whiteSpace: 'nowrap' }}>{label}</span>
+                    <div style={{
+                      width: 38, height: 38, borderRadius: 12,
+                      background: 'rgba(20,21,26,0.05)', border: '1px solid rgba(20,21,26,0.07)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#14151a',
+                    }}>
+                      {icon}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
                   </motion.button>
                 ))}
-              </div>
-
-              {/* Send again — contacts row, below chips */}
-              <div style={{ marginTop: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <span style={{ fontSize: 15.5, fontWeight: 800, color: '#14151a' }}>Send again</span>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: '#80828c' }}>All</span>
-                </div>
-                <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 4 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}
-                    onClick={() => setScreen('trade')}
-                  >
-                    <div style={{
-                      width: 52, height: 52, borderRadius: 999,
-                      border: '1.5px dashed rgba(20,21,26,0.22)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                    }}>
-                      <Plus size={18} strokeWidth={1.8} style={{ color: 'rgba(20,21,26,0.3)' }} />
-                    </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(20,21,26,0.72)' }}>New</span>
-                  </div>
-                  {recentContacts.map((order, i) => {
-                    const initial = order.merchant.name?.charAt(0)?.toUpperCase() ?? '?';
-                    const bg = AVATAR_COLORS[i % AVATAR_COLORS.length];
-                    const firstName = order.merchant.name?.split(' ')?.[0] ?? 'Trader';
-                    return (
-                      <motion.div key={order.merchant.id} whileTap={{ scale: 0.93 }}
-                        onClick={() => setScreen('trade')}
-                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0, cursor: 'pointer' }}
-                      >
-                        <div style={{
-                          width: 52, height: 52, borderRadius: 999,
-                          background: `linear-gradient(150deg, ${bg}, ${bg}cc)`,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <span style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>{initial}</span>
-                        </div>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: '#80828c' }}>{firstName}</span>
-                      </motion.div>
-                    );
-                  })}
-                </div>
               </div>
 
               {/* Recent trades */}
@@ -807,28 +760,35 @@ export const HomeScreen = ({
                 ))}
               </div>
 
-              {/* Quick links */}
-              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {/* Quick links — same chip style */}
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Help & Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
-                  { label: 'Raise a ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
-                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
-                  { label: 'Refer & Earn', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
+                  { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
+                  { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
+                  { label: 'Refer', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
                 ]).map(({ label, fn, icon }) => (
                   <motion.button
                     key={label}
-                    whileTap={{ scale: 0.96 }}
+                    whileTap={{ scale: 0.93 }}
                     onClick={fn}
                     style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
-                      border: '1px solid rgba(20,21,26,0.10)',
-                      background: '#fff',
-                      boxShadow: '0 1px 3px rgba(20,21,26,0.05)',
+                      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      padding: '14px 4px 11px', borderRadius: 16, cursor: 'pointer',
+                      border: '1px solid rgba(20,21,26,0.08)',
+                      background: '#fff', gap: 8,
+                      boxShadow: '0 1px 4px rgba(20,21,26,0.06)',
                     }}
                   >
-                    <span style={{ color: '#565862' }}>{icon}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#3d3e45', whiteSpace: 'nowrap' }}>{label}</span>
+                    <div style={{
+                      width: 38, height: 38, borderRadius: 12,
+                      background: 'rgba(20,21,26,0.05)', border: '1px solid rgba(20,21,26,0.07)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#14151a',
+                    }}>
+                      {icon}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
                   </motion.button>
                 ))}
               </div>
