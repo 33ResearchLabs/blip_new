@@ -595,10 +595,14 @@ export const HomeScreen = ({
               {/* Action chips — primary actions */}
               <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Deposit', fn: () => setShowDeposit(true), bg: 'rgba(59,130,246,0.12)', color: '#2563eb', icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0-4-4m4 4 4-4M5 20h14"/></svg> },
-                  { label: 'Swap', fn: () => showComingSoon(), bg: 'rgba(139,92,246,0.12)', color: '#7c3aed', icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg> },
-                  { label: 'Trade', fn: () => setScreen('trade'), bg: 'rgba(255,176,46,0.15)', color: '#d97706', icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
-                  { label: 'Scan', fn: () => setShowUpiPay(true), bg: 'rgba(16,185,129,0.12)', color: '#059669', icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/></svg> },
+                  { label: 'Deposit', fn: () => setShowDeposit(true), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg> },
+                  { label: 'Swap', fn: () => showComingSoon(), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/></svg> },
+                  { label: 'Trade', fn: () => setScreen('trade'), bg: '#ffb02e', color: '#0b0b0d',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> },
+                  { label: 'Scan', fn: () => setShowUpiPay(true), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx="1"/><rect x="13" y="7" width="4" height="4" rx="1"/><rect x="7" y="13" width="4" height="4" rx="1"/><path d="M13 15h1v3h3v-3h-1M16 13h1"/></svg> },
                 ]).map(({ label, fn, icon, bg, color }) => (
                   <motion.button
                     key={label}
@@ -613,8 +617,8 @@ export const HomeScreen = ({
                     }}
                   >
                     <div style={{
-                      width: 38, height: 38, borderRadius: 12,
-                      background: bg, border: 'none',
+                      width: 40, height: 40, borderRadius: 13,
+                      background: bg,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color,
                     }}>
@@ -731,10 +735,14 @@ export const HomeScreen = ({
               {/* Action chips — primary actions */}
               <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Deposit', fn: () => setShowDeposit(true), bg: 'rgba(59,130,246,0.12)', color: '#2563eb', icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0-4-4m4 4 4-4M5 20h14"/></svg> },
-                  { label: 'Swap', fn: () => showComingSoon(), bg: 'rgba(139,92,246,0.12)', color: '#7c3aed', icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg> },
-                  { label: 'Trade', fn: () => setScreen('trade'), bg: 'rgba(255,176,46,0.15)', color: '#d97706', icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z"/></svg> },
-                  { label: 'Scan', fn: () => setShowUpiPay(true), bg: 'rgba(16,185,129,0.12)', color: '#059669', icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17"/></svg> },
+                  { label: 'Deposit', fn: () => setShowDeposit(true), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg> },
+                  { label: 'Swap', fn: () => showComingSoon(), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/></svg> },
+                  { label: 'Trade', fn: () => setScreen('trade'), bg: '#ffb02e', color: '#0b0b0d',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> },
+                  { label: 'Scan', fn: () => setShowUpiPay(true), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx="1"/><rect x="13" y="7" width="4" height="4" rx="1"/><rect x="7" y="13" width="4" height="4" rx="1"/><path d="M13 15h1v3h3v-3h-1M16 13h1"/></svg> },
                 ]).map(({ label, fn, icon, bg, color }) => (
                   <motion.button
                     key={label}
@@ -749,8 +757,8 @@ export const HomeScreen = ({
                     }}
                   >
                     <div style={{
-                      width: 38, height: 38, borderRadius: 12,
-                      background: bg, border: 'none',
+                      width: 40, height: 40, borderRadius: 13,
+                      background: bg,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color,
                     }}>
