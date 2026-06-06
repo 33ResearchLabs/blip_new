@@ -76,6 +76,7 @@ export interface NotificationsScreenProps {
   onMarkAllRead: () => void;
   unreadCount: number;
   maxW: string;
+  hideBottomNav?: boolean;
 }
 
 export const NotificationsScreen = ({
@@ -86,6 +87,7 @@ export const NotificationsScreen = ({
   onMarkAllRead,
   unreadCount,
   maxW,
+  hideBottomNav = false,
 }: NotificationsScreenProps) => {
   const [activeTab, setActiveTab] = useState<'alerts' | 'activity'>('alerts');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
@@ -210,7 +212,7 @@ export const NotificationsScreen = ({
         )}
       </div>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={unreadCount} />
+      {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={unreadCount} />}
     </div>
   );
 };

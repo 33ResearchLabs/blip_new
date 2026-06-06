@@ -39,6 +39,7 @@ export interface WalletScreenProps {
   setShowWalletSetup: (v: boolean) => void;
   setShowWalletUnlock: (v: boolean) => void;
   maxW: string;
+  hideBottomNav?: boolean;
 }
 
 export const WalletScreen = ({
@@ -50,6 +51,7 @@ export const WalletScreen = ({
   setShowWalletSetup,
   setShowWalletUnlock,
   maxW,
+  hideBottomNav = false,
 }: WalletScreenProps) => {
   const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
   const [copied, setCopied] = useState(false);
@@ -154,7 +156,7 @@ export const WalletScreen = ({
               : 'Connect Wallet'}
           </button>
         </div>
-        <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
+        {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />}
       </>
     );
   }
@@ -369,7 +371,7 @@ export const WalletScreen = ({
         )}
       </AnimatePresence>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
+      {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />}
     </>
   );
 };

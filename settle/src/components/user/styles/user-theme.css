@@ -93,6 +93,7 @@
   /* "Desk" frame around the phone column.
      Dark mode: white desk for contrast against the dark phone. */
   --user-frame: #ffffff;
+  --user-bg: #e8e8ec;
 }
 
 /* ----- Light-mode design tokens (scoped) ----- */
@@ -165,6 +166,11 @@
      used by home/orders/notifications Panels — keeping them equal prevents
      a visible color shift during tab cross-fades. */
   --user-frame: #080810;
+
+  /* Desktop background — shown on either side of the 440px phone column
+     when viewed on a wide screen. Slightly different from the frame colour
+     so the phone boundary is subtly visible without a hard border. */
+  --user-bg: #050508;
 }
 
 /* ----- Phantom-utility fix: text-secondary-strong / text-tertiary-strong -----

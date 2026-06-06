@@ -7,6 +7,7 @@ import { uuidSchema } from "@/lib/validation/schemas";
 import {
   requireAuth,
   requireTokenAuth,
+  requireApiKeyScope,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -91,6 +92,8 @@ export async function GET(
     // Require token auth for escrow operations (sensitive financial action)
     const auth = await requireTokenAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'wallet:read');
+    if (scopeErr) return scopeErr;
 
     // Fetch order
     const order = await getOrderWithRelations(id);
@@ -158,6 +161,8 @@ export async function POST(
     // Require token auth for escrow deposit (sensitive financial action)
     const auth = await requireTokenAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErrPost = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErrPost) return scopeErrPost;
 
     // Validate request body
     const parseResult = escrowDepositSchema.safeParse(body);
@@ -456,6 +461,8 @@ export async function PATCH(
     // Require token auth for escrow release (sensitive financial action)
     const auth = await requireTokenAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErrPatch = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErrPatch) return scopeErrPatch;
 
     // Validate request body
     const parseResult = escrowReleaseSchema.safeParse(body);

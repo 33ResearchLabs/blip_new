@@ -51,6 +51,7 @@ export interface EscrowLockScreenProps {
   setShowWalletModal: (v: boolean) => void;
   onConnectWallet?: () => void;
   fiatCurrency?: string;
+  hideBottomNav?: boolean;
   solanaWallet: {
     connected: boolean;
     walletAddress: string | null;
@@ -81,6 +82,7 @@ export const EscrowLockScreen = ({
   setShowWalletModal,
   onConnectWallet,
   fiatCurrency = 'AED',
+  hideBottomNav = false,
   solanaWallet,
 }: EscrowLockScreenProps) => {
   const fiatSymbol = fiatCurrency === 'INR' ? '₹' : fiatCurrency === 'USD' ? '$' : 'د.إ';
@@ -694,11 +696,13 @@ export const EscrowLockScreen = ({
         )}
       </div>
 
-      <BottomNav
-        screen={screen}
-        setScreen={setScreen}
-        maxW="max-w-[440px] mx-auto"
-      />
+      {!hideBottomNav && (
+        <BottomNav
+          screen={screen}
+          setScreen={setScreen}
+          maxW="max-w-[440px] mx-auto"
+        />
+      )}
     </div>
   );
 };

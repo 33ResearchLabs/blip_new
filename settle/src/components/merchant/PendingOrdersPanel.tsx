@@ -695,9 +695,26 @@ const OrderList = memo(function OrderList({
                       </div>
 
                       {/* ── Timer + rate footer ── */}
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center justify-between gap-2 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-white/15 font-mono tabular-nums">
+                            @ {order.rate.toFixed(2)}
+                          </span>
+                          {extraPct > 0 && (
+                            <span className="text-[10px] font-mono text-[#f5f5f7]/70">+{extraPct.toFixed(1)}%</span>
+                          )}
+                          {isMyOwnOrder && onCancelOrder && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
+                              className="text-[10px] text-red-400/50 hover:text-red-400 transition-colors font-mono"
+                            >
+                              cancel
+                            </button>
+                          )}
+                        </div>
                         {isActivelyPending ? (
-                          <div className={`flex items-center gap-1 text-[11px] font-mono tabular-nums ${order.expiresIn <= 120 ? "text-red-400" : "text-white/30"}`}>
+                          <div className="flex items-center gap-1 text-[11px] font-mono tabular-nums text-red-400">
                             <Clock className="w-3 h-3" />
                             {order.expiresIn >= 3600
                               ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
@@ -715,21 +732,6 @@ const OrderList = memo(function OrderList({
                               </span>
                             ) : null;
                           })()
-                        )}
-                        <span className="text-[10px] text-white/15 font-mono tabular-nums">
-                          @ {order.rate.toFixed(2)}
-                        </span>
-                        {extraPct > 0 && (
-                          <span className="text-[10px] font-mono text-[#f5f5f7]/70">+{extraPct.toFixed(1)}%</span>
-                        )}
-                        {isMyOwnOrder && onCancelOrder && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
-                            className="ml-auto text-[10px] text-red-400/50 hover:text-red-400 transition-colors font-mono"
-                          >
-                            cancel
-                          </button>
                         )}
                       </div>
                     </>

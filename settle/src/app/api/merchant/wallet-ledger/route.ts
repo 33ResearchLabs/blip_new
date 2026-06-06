@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import {
   requireAuth,
+  requireApiKeyScope,
   verifyMerchant,
   successResponse,
   errorResponse,
@@ -51,6 +52,8 @@ export async function GET(request: NextRequest) {
     // Auth check
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'wallet:read');
+    if (scopeErr) return scopeErr;
     const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden('GET /api/merchant/wallet-ledger', auth.actorId, 'Not merchant owner');

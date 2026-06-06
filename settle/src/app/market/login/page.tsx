@@ -79,6 +79,11 @@ export default function MerchantLoginPage() {
         window.history.replaceState(null, "", clean);
       }
     }
+    // Native app (Capacitor) Google Sign In redirect callback — session
+    // cookies are already set by the server; navigate into the app.
+    if (searchParams.get("google_ok") === "1") {
+      router.replace("/market");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

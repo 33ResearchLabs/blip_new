@@ -8,6 +8,7 @@ import {
 } from '@/lib/validation/schemas';
 import {
   requireAuth,
+  requireApiKeyScope,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -45,6 +46,8 @@ export async function GET(
     // Require authentication
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:read');
+    if (scopeErr) return scopeErr;
 
     // Check order exists
     const order = await getOrderById(id);
@@ -114,6 +117,8 @@ export async function POST(
     // Require authentication
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErrPost = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErrPost) return scopeErrPost;
 
     // Validate request body
     const parseResult = sendMessageSchema.safeParse(body);

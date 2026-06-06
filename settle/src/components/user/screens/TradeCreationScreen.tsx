@@ -65,6 +65,7 @@ export interface TradeCreationScreenProps {
   onPairChange?: (pair: "usdt_aed" | "usdt_inr") => void;
   setCurrentRate?: (rate: number) => void;
   theme?: "dark" | "light";
+  hideBottomNav?: boolean;
 }
 
 // iOS 26 spring physics — snappy
@@ -186,6 +187,7 @@ export const TradeCreationScreen = ({
   onPairChange,
   setCurrentRate,
   theme = "dark",
+  hideBottomNav = false,
 }: TradeCreationScreenProps) => {
   const isLight = theme === "light";
   const T = isLight ? TOKENS_LIGHT : TOKENS_DARK;
@@ -1084,11 +1086,13 @@ export const TradeCreationScreen = ({
         </motion.button>
       </motion.div>
 
-      <BottomNav
-        screen={screen}
-        setScreen={setScreen}
-        maxW="max-w-[440px] mx-auto"
-      />
+      {!hideBottomNav && (
+        <BottomNav
+          screen={screen}
+          setScreen={setScreen}
+          maxW="max-w-[440px] mx-auto"
+        />
+      )}
 
       {/* Payment methods — merchant-style mobile bottom sheet, opened in place
           from "Add payment method" (no Profile redirect). Hosts the full

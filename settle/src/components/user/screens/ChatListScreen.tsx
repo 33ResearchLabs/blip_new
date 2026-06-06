@@ -32,6 +32,7 @@ export interface ChatListScreenProps {
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   maxW: string;
   notificationCount?: number;
+  hideBottomNav?: boolean;
 }
 
 export const ChatListScreen = ({
@@ -42,6 +43,7 @@ export const ChatListScreen = ({
   setOrders,
   maxW,
   notificationCount = 0,
+  hideBottomNav = false,
 }: ChatListScreenProps) => {
   const [activeTab, setActiveTab] = useState<'chats' | 'disputes'>('chats');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
@@ -293,7 +295,7 @@ export const ChatListScreen = ({
         )}
       </div>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} />
+      {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} />}
     </div>
   );
 };

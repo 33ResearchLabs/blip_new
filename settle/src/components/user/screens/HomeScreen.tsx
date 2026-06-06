@@ -73,6 +73,7 @@ export interface HomeScreenProps {
   userBalance?: number;
   maxW: string;
   notificationCount?: number;
+  hideBottomNav?: boolean;
   /**
    * Pull-to-refresh handler. Wired to the transactions list scroll container.
    * Should refetch orders + balances. May return a promise — the spinner
@@ -178,6 +179,7 @@ export const HomeScreen = ({
   userBalance,
   maxW,
   notificationCount = 0,
+  hideBottomNav = false,
   onUpiPayConfirm,
   onRefresh,
 }: HomeScreenProps) => {
@@ -842,12 +844,14 @@ export const HomeScreen = ({
       {/* BOTTOM NAV — shared component so every user screen matches.
           Inbox carries the chat-unread badge; Rewards now lives in the
           top header above. */}
-      <BottomNav
-        screen={screen}
-        setScreen={setScreen}
-        maxW={maxW}
-        chatUnreadCount={unreadCount}
-      />
+      {!hideBottomNav && (
+        <BottomNav
+          screen={screen}
+          setScreen={setScreen}
+          maxW={maxW}
+          chatUnreadCount={unreadCount}
+        />
+      )}
 
       {/* ── UPI Pay (QR scan → amount → hand off to escrow flow) ── */}
       {showUpiPay && (
