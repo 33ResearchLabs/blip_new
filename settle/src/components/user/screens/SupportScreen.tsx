@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Screen } from "./types";
-import { openIssueReporter } from "@/plugins/issue-reporter";
 
 // Established constants used across the user screens.
 const CARD = "bg-surface-card border border-border-subtle";
@@ -201,11 +200,8 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
     router.push("/user/my-issues");
   };
 
-  // "Raise a ticket" reuses the existing IssueReporter modal — its submit
-  // hits POST /api/issues/create, which stamps the logged-in user as the
-  // owner, so the new ticket shows up under My Tickets immediately.
   const raiseTicket = () => {
-    void openIssueReporter();
+    setScreen("raise-ticket");
   };
 
   // Filter the issues grid by the search query so the empty state is real

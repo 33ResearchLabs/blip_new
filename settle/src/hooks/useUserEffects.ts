@@ -238,11 +238,36 @@ export function useUserEffects({
     };
 
     channel.bind(CHAT_EVENTS.MESSAGE_NEW, handler);
+
+    // Support ticket resolution / escalation notifications
+    const ticketNotificationHandler = (raw: unknown) => {
+      const data = raw as { type?: string; title?: string; message?: string; ticketId?: string };
+      if (data.type === 'ticket_resolved') {
+        playSound('notification');
+        toast.show({
+          type: 'complete',
+          title: data.title || 'Support Ticket Resolved',
+          message: data.message || 'Your support ticket has been resolved.',
+          duration: 8000,
+        });
+      } else if (data.type === 'ticket_escalated') {
+        playSound('notification');
+        toast.show({
+          type: 'system',
+          title: data.title || 'Ticket Escalated',
+          message: data.message || 'Your support ticket has been escalated for review.',
+          duration: 6000,
+        });
+      }
+    };
+    channel.bind('notification:new', ticketNotificationHandler);
+
     return () => {
       channel.unbind(CHAT_EVENTS.MESSAGE_NEW, handler);
+      channel.unbind('notification:new', ticketNotificationHandler);
       pusherCtx.unsubscribe(channelName);
     };
-  }, [userId, pusherCtx, setOrders]);
+  }, [userId, pusherCtx, setOrders, playSound, toast]);
 
   // Real-time order updates for active order
   const { order: realtimeOrder, refetch: refetchActiveOrder } = useRealtimeOrder(activeOrderId, {

@@ -7,12 +7,10 @@
  * Body for PATCH (all fields optional — send only what's changing):
  *   { status?: 'open' | 'in_progress' | 'resolved' | 'closed' | 'rejected',
  *     priority?: 'low' | 'medium' | 'high' | 'critical',
- *     note?: string,          // appended to admin_notes (internal-only)
- *     statusNote?: string,    // appended to status_history (user-visible).
- *                             //   With a status change → recorded alongside it.
- *                             //   Without a status change → posted as a staff
- *                             //   answer/reply at the ticket's current status.
- *     resolvedBy?: string }   // recorded when status → resolved/closed/rejected
+ *     note?: string,              // appended to admin_notes (internal-only)
+ *     statusNote?: string,        // appended to status_history (user-visible).
+ *     resolvedBy?: string,        // recorded when status → resolved/closed/rejected
+ *     escalatedDepartment?: string } // routes ticket to a dept (risk|finance|compliance|...)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -26,11 +24,14 @@ import {
   IssueStatus,
   updateIssue,
 } from '@/lib/issueReporter/repository';
+import { query } from '@/lib/db';
+import { triggerEvent } from '@/lib/pusher/server';
+import { getUserChannel } from '@/lib/pusher/channels';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// 'rejected' was added in migration 109. Matches the DB CHECK constraint.
 const VALID_STATUS: IssueStatus[] = ['open', 'in_progress', 'resolved', 'closed', 'rejected'];
 const VALID_PRIORITY: IssuePriority[] = ['low', 'medium', 'high', 'critical'];
+const VALID_DEPARTMENTS = ['risk', 'finance', 'compliance', 'engineering', 'legal', 'operations'];
 
 export async function GET(
   request: NextRequest,
@@ -74,6 +75,7 @@ export async function PATCH(
     note?: string;
     statusNote?: string;
     resolvedBy?: string;
+    escalatedDepartment?: string;
   };
   try {
     body = await request.json();
@@ -87,12 +89,11 @@ export async function PATCH(
   if (body.priority && !VALID_PRIORITY.includes(body.priority as IssuePriority)) {
     return NextResponse.json({ success: false, error: 'Invalid priority' }, { status: 400 });
   }
+  if (body.escalatedDepartment && !VALID_DEPARTMENTS.includes(body.escalatedDepartment)) {
+    return NextResponse.json({ success: false, error: 'Invalid department' }, { status: 400 });
+  }
 
   try {
-    // statusNote is the user-visible reason that shows up on the
-    // detail-page timeline. statusByType is hard-coded to 'admin' here
-    // because this is the admin route; statusById carries the admin
-    // username for audit attribution.
     const statusByType = body.status ? ('admin' as const) : undefined;
     const statusById = body.status ? body.resolvedBy ?? null : undefined;
     const trimmedStatusNote =
@@ -112,11 +113,41 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 
-    // Answer-only path: a user-visible note with no status change isn't
-    // recorded by updateIssue (it only appends to the timeline alongside a
-    // status transition). Post it as a staff reply at the current status so
-    // an admin can answer a ticket without forcing it into a new state.
-    if (!body.status && trimmedStatusNote) {
+    // Escalation: stamp department + escalated_at
+    if (body.escalatedDepartment) {
+      const updated = await query<{ id: string; created_by: string | null; actor_type: string | null }>(
+        `UPDATE issues SET escalated_department = $1, escalated_at = NOW(), status = 'escalated',
+         status_history = status_history || $2::jsonb, updated_at = NOW()
+         WHERE id = $3 RETURNING id, created_by, actor_type`,
+        [
+          body.escalatedDepartment,
+          JSON.stringify([{
+            status: 'escalated',
+            at: new Date().toISOString(),
+            by_type: 'admin',
+            by_id: body.resolvedBy ?? null,
+            note: `Escalated to ${body.escalatedDepartment}`,
+          }]),
+          id,
+        ],
+      );
+      // Refresh row after escalation update
+      const refreshed = await getIssueById(id);
+      if (refreshed) row = refreshed;
+      // Notify user via Pusher if we have their user id
+      const userId = updated[0]?.actor_type === 'user' ? updated[0]?.created_by : null;
+      if (userId) {
+        triggerEvent(getUserChannel(userId), 'notification:new', {
+          type: 'ticket_escalated',
+          ticketId: id,
+          title: 'Ticket Escalated',
+          message: `Your support ticket has been escalated to the ${body.escalatedDepartment} team for review.`,
+        }).catch(() => {});
+      }
+    }
+
+    // Answer-only path: a user-visible note with no status change
+    if (!body.status && !body.escalatedDepartment && trimmedStatusNote) {
       const replied = await appendIssueReply(id, {
         note: trimmedStatusNote,
         byType: 'admin',
@@ -131,6 +162,17 @@ export async function PATCH(
         author: body.resolvedBy || 'admin',
         at: new Date().toISOString(),
       });
+    }
+
+    // Send Pusher notification to user when ticket is resolved
+    if (body.status === 'resolved' && row && row.created_by && row.actor_type === 'user') {
+      triggerEvent(getUserChannel(row.created_by), 'notification:new', {
+        type: 'ticket_resolved',
+        ticketId: id,
+        title: 'Support Ticket Resolved',
+        message: trimmedStatusNote || 'Your support ticket has been resolved.',
+        ticketRef: id.slice(0, 8).toUpperCase(),
+      }).catch(() => {});
     }
 
     return NextResponse.json({ success: true, data: row });

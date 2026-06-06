@@ -556,6 +556,7 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
         priority?: IssuePriority;
         note?: string;
         statusNote?: string;
+        escalatedDepartment?: string;
       },
     ) => {
       setSavingAction(true);
@@ -1088,6 +1089,37 @@ function pageNumbers(current: number, total: number): (number | '…')[] {
 
 // ─── Detail panel ─────────────────────────────────────────────────────────
 
+const DEPARTMENTS = [
+  { value: 'risk', label: 'Risk & Fraud' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'engineering', label: 'Engineering' },
+  { value: 'legal', label: 'Legal' },
+  { value: 'operations', label: 'Operations' },
+];
+
+interface UserProfile {
+  id: string;
+  display_name: string;
+  email: string;
+  total_trades: number;
+  completed_trades: number;
+  disputed_trades: number;
+  cancelled_trades: number;
+  joined_at: string;
+  is_active: boolean;
+}
+
+interface RecentOrder {
+  id: string;
+  order_number: string;
+  type: 'buy' | 'sell';
+  status: string;
+  fiat_amount: number;
+  fiat_currency: string;
+  created_at: string;
+}
+
 interface DetailPanelProps {
   issue: IssueRow;
   pendingStatus: IssueStatus | '';
@@ -1105,6 +1137,7 @@ interface DetailPanelProps {
       priority?: IssuePriority;
       note?: string;
       statusNote?: string;
+      escalatedDepartment?: string;
     },
   ) => Promise<void>;
 }
@@ -1129,6 +1162,64 @@ function DetailPanel({
       : issue.screenshot_url
         ? [{ id: issue.id, url: issue.screenshot_url, type: 'screenshot' as const }]
         : [];
+
+  // User profile + recent orders (fetched when ticket has a linked user)
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [escalateDept, setEscalateDept] = useState('');
+  const [escalating, setEscalating] = useState(false);
+  const [resolutionMsg, setResolutionMsg] = useState('');
+
+  useEffect(() => {
+    setProfile(null);
+    setRecentOrders([]);
+    setEscalateDept('');
+    setResolutionMsg('');
+    if (!issue.created_by || issue.actor_type !== 'user') return;
+    const uid = issue.created_by;
+    // Fetch user profile
+    fetch(`/api/admin/users?search=${uid}&limit=1`)
+      .then((r) => r.json())
+      .then((d) => {
+        const u = d?.data?.users?.[0] ?? d?.data?.[0] ?? null;
+        if (u) setProfile(u as UserProfile);
+      })
+      .catch(() => {});
+    // Fetch recent orders
+    fetch(`/api/admin/orders?user_id=${uid}&limit=5`)
+      .then((r) => r.json())
+      .then((d) => {
+        const orders = d?.data?.orders ?? d?.data ?? [];
+        setRecentOrders(Array.isArray(orders) ? orders.slice(0, 5) : []);
+      })
+      .catch(() => {});
+  }, [issue.id, issue.created_by, issue.actor_type]);
+
+  const handleEscalate = async () => {
+    if (!escalateDept) return;
+    setEscalating(true);
+    await onPatch(issue.id, {
+      escalatedDepartment: escalateDept,
+      ...(statusNoteDraft.trim() ? { statusNote: statusNoteDraft.trim() } : {}),
+    });
+    setEscalating(false);
+    setEscalateDept('');
+    // Open the escalation view in a new tab (admin dashboard filtered to dept)
+    window.open(
+      `/admin/issues?department=${escalateDept}&ticket=${issue.id}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
+
+  const handleResolveWithMessage = async () => {
+    if (!resolutionMsg.trim()) return;
+    await onPatch(issue.id, {
+      status: 'resolved' as IssueStatus,
+      statusNote: resolutionMsg.trim(),
+    });
+    setResolutionMsg('');
+  };
 
   const applyPendingStatus = async () => {
     if (!pendingStatus || pendingStatus === issue.status) return;
@@ -1309,11 +1400,143 @@ function DetailPanel({
           </div>
         ) : null}
 
+        {/* ── User Profile ── */}
+        {profile && (
+          <div className="border-t border-border pt-4 space-y-2">
+            <div className="text-[11px] uppercase tracking-wider text-foreground/40">
+              User Profile
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-[11px]">
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2">
+                <div className="text-foreground/45 mb-0.5">Trades</div>
+                <div className="font-bold text-foreground/90">{profile.total_trades ?? 0}</div>
+              </div>
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2">
+                <div className="text-foreground/45 mb-0.5">Disputes</div>
+                <div className={`font-bold ${(profile.disputed_trades ?? 0) > 2 ? 'text-rose-400' : 'text-foreground/90'}`}>
+                  {profile.disputed_trades ?? 0}
+                </div>
+              </div>
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2">
+                <div className="text-foreground/45 mb-0.5">Cancelled</div>
+                <div className={`font-bold ${(profile.cancelled_trades ?? 0) > 5 ? 'text-amber-400' : 'text-foreground/90'}`}>
+                  {profile.cancelled_trades ?? 0}
+                </div>
+              </div>
+            </div>
+            {(profile.disputed_trades ?? 0) > 2 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-300">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400 shrink-0" />
+                High dispute rate — review history carefully
+              </div>
+            )}
+            <a
+              href={`/admin/users?search=${profile.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-foreground/50 hover:text-foreground/80 transition-colors"
+            >
+              <Plus size={11} /> View full profile
+            </a>
+          </div>
+        )}
+
+        {/* ── Recent Orders ── */}
+        {recentOrders.length > 0 && (
+          <div className="border-t border-border pt-4 space-y-2">
+            <div className="text-[11px] uppercase tracking-wider text-foreground/40">
+              Recent Orders
+            </div>
+            <ul className="space-y-1">
+              {recentOrders.map((o) => (
+                <li key={o.id} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-foreground/[0.03] border border-border text-[11px]">
+                  <span className="font-mono text-foreground/60">#{o.order_number}</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                    o.type === 'buy' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-blue-500/10 text-blue-300'
+                  }`}>
+                    {o.type.toUpperCase()}
+                  </span>
+                  <span className="text-foreground/80 tabular-nums">
+                    {o.fiat_currency} {Number(o.fiat_amount).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                    o.status === 'completed' ? 'text-emerald-300 border-emerald-500/20 bg-emerald-500/10' :
+                    o.status === 'disputed' ? 'text-rose-300 border-rose-500/20 bg-rose-500/10' :
+                    'text-foreground/50 border-border bg-foreground/[0.03]'
+                  }`}>
+                    {o.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Actions block */}
         <div className="border-t border-border pt-4 space-y-3">
           <div className="text-[11px] uppercase tracking-wider text-foreground/40">
             Actions
           </div>
+
+          {/* ── Resolve with message ── */}
+          {issue.status !== 'resolved' && issue.status !== 'closed' && (
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-3 space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-400/70 font-medium">
+                Resolve ticket
+              </div>
+              <textarea
+                value={resolutionMsg}
+                onChange={(e) => setResolutionMsg(e.target.value)}
+                maxLength={2000}
+                rows={3}
+                placeholder="Write a message to the user explaining the resolution…"
+                className="w-full px-2.5 py-1.5 rounded-md bg-background border border-border text-foreground/80 placeholder:text-foreground/30 focus:outline-none focus:border-emerald-500/40 resize-none text-[12px]"
+              />
+              <button
+                type="button"
+                disabled={saving || !resolutionMsg.trim()}
+                onClick={handleResolveWithMessage}
+                className="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Mark Resolved + Notify User
+              </button>
+            </div>
+          )}
+
+          {/* ── Escalate to department ── */}
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3 space-y-2">
+            <div className="text-[10px] uppercase tracking-wider text-amber-400/70 font-medium">
+              Escalate to department
+            </div>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <select
+                  value={escalateDept}
+                  onChange={(e) => setEscalateDept(e.target.value)}
+                  disabled={saving || escalating}
+                  className="w-full appearance-none bg-background border border-border rounded-lg px-2.5 py-2 pr-7 text-[12px] text-foreground/80 focus:outline-none focus:border-foreground/30 disabled:opacity-50"
+                >
+                  <option value="">Select department…</option>
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d.value} value={d.value}>{d.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground/40" />
+              </div>
+              <button
+                type="button"
+                disabled={saving || escalating || !escalateDept}
+                onClick={handleEscalate}
+                className="px-3 py-2 rounded-lg bg-amber-600 text-white text-[12px] font-medium hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                Escalate ↗
+              </button>
+            </div>
+            <p className="text-[10px] text-foreground/35">
+              Opens escalated view in a new tab for the assigned team.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <div className="relative">
               <select
@@ -1362,10 +1585,7 @@ function DetailPanel({
             </button>
           </div>
 
-          {/* Reply to reporter. Sending here posts to the reporter's
-              timeline WITHOUT changing status (answer-only path). When a
-              status change is applied, this same draft rides along as the
-              status note instead — see applyPendingStatus. */}
+          {/* Reply to reporter */}
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-foreground/40 mb-1">
               Reply (visible to reporter)

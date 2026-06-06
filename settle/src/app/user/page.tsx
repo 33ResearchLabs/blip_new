@@ -109,6 +109,7 @@ import {
   WalletScreen,
   NotificationsScreen,
   SupportScreen,
+  SupportTicketScreen,
   RewardsScreen,
 } from "@/components/user/screens";
 
@@ -989,6 +990,21 @@ export default function Home() {
             <SupportScreen
               setScreen={setScreen}
               previousScreen={previousScreen}
+            />
+          </Panel>
+        )}
+
+        {screen === "raise-ticket" && (
+          <Panel
+            k="raise-ticket"
+            anim={slide}
+            style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
+          >
+            <SupportTicketScreen
+              setScreen={setScreen}
+              previousScreen={previousScreen}
+              userId={auth.userId}
             />
           </Panel>
         )}
