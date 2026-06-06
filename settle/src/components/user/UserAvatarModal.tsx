@@ -76,7 +76,7 @@ export function UserAvatarModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -89,7 +89,7 @@ export function UserAvatarModal({
           initial={{ scale: 0.95, opacity: 0, y: 16 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 16 }}
-          className="relative w-full max-w-md rounded-[24px] bg-surface-card border border-border-subtle shadow-2xl max-h-[88vh] flex flex-col overflow-hidden"
+          className="relative w-full max-w-md rounded-t-[24px] sm:rounded-[24px] bg-surface-card border border-border-subtle shadow-2xl max-h-[90dvh] flex flex-col overflow-hidden"
         >
           {/* Header — live preview + title */}
           <div className="flex items-center gap-3 p-5 border-b border-border-subtle">
@@ -168,7 +168,7 @@ export function UserAvatarModal({
             </div>
           </div>
 
-          <div className="p-4 border-t border-border-subtle">
+          <div className="p-4 pb-[max(16px,env(safe-area-inset-bottom,16px))] border-t border-border-subtle">
             <button
               onClick={onClose}
               className="w-full h-11 rounded-[14px] bg-surface-active text-[13px] font-bold text-text-secondary tracking-[-0.01em] transition-colors hover:bg-surface-hover"

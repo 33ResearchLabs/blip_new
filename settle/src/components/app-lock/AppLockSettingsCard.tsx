@@ -696,11 +696,15 @@ function ChangePasswordSheet({
       return;
     }
     if (next.length < 8 || next.length > 24) {
-      setError('New password must be 8–24 characters.');
+      setError('New password must be 8-24 characters.');
+      return;
+    }
+    if (next === current) {
+      setError('New password must be different from your current password.');
       return;
     }
     if (next !== confirm) {
-      setError('Passwords don’t match.');
+      setError("Passwords don't match.");
       return;
     }
     setBusy(true);
@@ -756,7 +760,7 @@ function ChangePasswordSheet({
   return (
     <Sheet title="Change Password" onClose={onClose}>
       <p className="text-[12px] text-white/55 mb-3">
-        Enter your current password, then choose a new one (8–24 characters).
+        Enter your current password, then choose a new one (8-24 characters).
       </p>
 
       <PasswordInput

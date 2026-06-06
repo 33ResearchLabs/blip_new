@@ -196,7 +196,10 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
 
   // "My Tickets" opens the user's own ticket list (GET /api/issues,
   // user-scoped) where they can track status + read our replies.
-  const handleMyTickets = () => router.push("/user/my-issues");
+  const handleMyTickets = () => {
+    try { sessionStorage.setItem("blip_return_screen", "support"); } catch { /* ignore */ }
+    router.push("/user/my-issues");
+  };
 
   // "Raise a ticket" reuses the existing IssueReporter modal — its submit
   // hits POST /api/issues/create, which stamps the logged-in user as the

@@ -45,6 +45,7 @@ export interface OrdersListScreenProps {
   cancelledOrders: Order[];
   maxW: string;
   notificationCount?: number;
+  hideBottomNav?: boolean;
 }
 
 export const OrdersListScreen = ({
@@ -56,6 +57,7 @@ export const OrdersListScreen = ({
   cancelledOrders,
   maxW,
   notificationCount = 0,
+  hideBottomNav = false,
 }: OrdersListScreenProps) => {
   // ── Filters ──
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -212,7 +214,7 @@ export const OrdersListScreen = ({
                         {titleVerb} {parseFloat(order.cryptoAmount).toFixed(2)} USDT
                       </p>
                       <p className={`text-[14px] font-extrabold tracking-[-0.01em] ${amountColor}`}>
-                        {amountSign}{"\u062F.\u0625"}{parseFloat(order.fiatAmount).toLocaleString()}
+                        {amountSign}{order.fiatCode === "INR" ? "\u20B9" : order.fiatCode === "AED" ? "\u062F.\u0625" : order.fiatCode === "USD" ? "$" : order.fiatCode}{parseFloat(order.fiatAmount).toLocaleString("en-US")}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -242,7 +244,7 @@ export const OrdersListScreen = ({
         )}
       </div>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
+      {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />}
     </div>
   );
 };

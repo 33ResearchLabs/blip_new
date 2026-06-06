@@ -48,6 +48,7 @@ export interface RewardsScreenProps {
   /** Total BLIP point balance — referrals + register + tasks. */
   totalBlip?: number;
   isLoading?: boolean;
+  hideBottomNav?: boolean;
   /** Called when the user taps "Learn more" on the benefits card. */
   onLearnMore?: () => void;
   /** Base URL for the referral link (e.g. https://app.blip.money/waitlist?ref=).
@@ -233,6 +234,7 @@ export const RewardsScreen = ({
   blipEarned = 0,
   totalBlip = 0,
   isLoading = false,
+  hideBottomNav = false,
   onLearnMore,
   referralLinkBase = `${
     process.env.NEXT_PUBLIC_APP_URL || "https://app.blip.money"
@@ -327,17 +329,22 @@ export const RewardsScreen = ({
       Icon: MoreHorizontal,
       onAction: async (msg, url) => {
         const shareData = { title: "Join me on Blip", text: msg, url };
-        try {
-          if (
-            typeof navigator !== "undefined" &&
-            typeof (navigator as any).share === "function"
-          ) {
+        if (
+          typeof navigator !== "undefined" &&
+          typeof (navigator as any).share === "function"
+        ) {
+          try {
             await (navigator as any).share(shareData);
-            return;
+          } catch (err: any) {
+            // AbortError = user dismissed the share sheet — do nothing.
+            if (err?.name !== "AbortError") {
+              const ok = await copyToClipboard(url);
+              if (ok) showToast("Invite link copied");
+            }
           }
-        } catch {
-          // User cancelled — silent.
+          return;
         }
+        // Fallback for browsers without Web Share API
         const ok = await copyToClipboard(url);
         if (ok) showToast("Invite link copied");
       },
@@ -701,12 +708,14 @@ export const RewardsScreen = ({
       </AnimatePresence>
 
       {/* ── Persistent bottom navigation (tab-style screen, like Notifications) ── */}
-      <BottomNav
-        screen={screen}
-        setScreen={setScreen}
-        maxW={maxW}
-        notificationCount={notificationCount}
-      />
+      {!hideBottomNav && (
+        <BottomNav
+          screen={screen}
+          setScreen={setScreen}
+          maxW={maxW}
+          notificationCount={notificationCount}
+        />
+      )}
     </div>
   );
 };

@@ -25,10 +25,13 @@ import { useSolanaWalletSafe } from "@/hooks/useSolanaWalletSafe";
 import { useAppLock } from "@/context/AppLockContext";
 import { useApp } from "@/context/AppContext";
 import { useOrphanedEscrowRecovery } from "@/hooks/useOrphanedEscrowRecovery";
-import { IssueReporter } from "@/components/IssueReporter";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { DesktopSidebar } from "@/components/user/desktop/DesktopSidebar";
+import { DesktopRightPanel } from "@/components/user/desktop/DesktopRightPanel";
+import { IssueReporter } from "@/components/IssueReporter";
 
 import type { Screen } from "@/components/user/screens/types";
 import { FEE_CONFIG } from "@/components/user/screens/helpers";
@@ -66,35 +69,27 @@ function Panel({
   className = "",
   style,
   children,
+  desktop = false,
 }: {
   k: string;
   anim?: typeof fade | typeof slide;
   className?: string;
   style?: React.CSSProperties;
   children: React.ReactNode;
+  desktop?: boolean;
 }) {
   return (
     <motion.div
       key={k}
       {...anim}
-      // `transition` is spread in from `anim` (fade → duration 0, slide →
-      // 0.26s) — see the comments above the `fade`/`slide` constants for
-      // the rationale behind the per-anim transition timing.
-      //
-      // Absolute-positioned + horizontally centered so the entering and
-      // exiting screens overlap during the transition. Solid background
-      // (falls back to var(--user-frame) when no `style` is provided) makes
-      // sure nothing behind the panel ever shows through.
-      //
-      // Width: 440px phone column (<768px, unchanged). At ≥768px it fills the
-      // screen up to 1100px via min(1100px, 97vw) — ONE proportional cap instead
-      // of fixed breakpoint steps. Foldables (Samsung Fold unfolded) report a
-      // CSS width in the md range (not the 1075 device px), so an lg-gated
-      // (≥1024px) step never fired. 97vw leaves only a thin edge margin (~1.5%
-      // a side) and the 1100px cap is high enough that even a wide Fold isn't
-      // clipped. Form screens (Trade, Escrow) keep their own narrower cap.
-      className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] md:max-w-[min(1100px,97vw)] flex flex-col ${className}`}
-      style={{ background: 'var(--user-frame)', ...style }}
+      className={
+        desktop
+          // Desktop: fill the center column, no phone-width cap
+          ? `absolute inset-0 flex flex-col overflow-y-auto ${className}`
+          // Mobile: centered phone column
+          : `absolute inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] flex flex-col ${className}`
+      }
+      style={{ background: desktop ? "#080810" : "var(--user-frame)", ...style }}
     >
       {children}
     </motion.div>
@@ -119,6 +114,8 @@ import {
 } from "@/components/user/screens";
 
 export default function Home() {
+  const isDesktop = useIsDesktop();
+
   // User route uses its own dark/light state — independent of the merchant
   // ThemeContext (which has 7 themes). Stored under localStorage key
   // 'user_theme' so it never collides with the merchant 'theme' key.
@@ -453,6 +450,19 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [auth.userId]);
 
+  // Restore screen from sessionStorage (e.g. returning from My Tickets back to Support).
+  useEffect(() => {
+    if (!auth.userId) return;
+    try {
+      const returnScreen = sessionStorage.getItem("blip_return_screen") as Screen | null;
+      if (returnScreen) {
+        sessionStorage.removeItem("blip_return_screen");
+        setScreen(returnScreen);
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.userId]);
+
   // Refetch orders when returning to home screen so completed/cancelled orders update.
   // Also drop activeOrderId: otherwise a stale id from a prior order survives into
   // the next trade-creation flow and the order screen flashes the previous order's
@@ -647,7 +657,10 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const maxW = "max-w-[440px] mx-auto";
+  const maxW = isDesktop ? "max-w-3xl mx-auto w-full" : "max-w-[440px] mx-auto";
+
+  // Chat unread count for desktop sidebar badge
+  const chatUnreadCount = orders.reduce((sum, o) => sum + (o.unreadCount ?? 0), 0);
 
   // The user route only uses two themes: dark (default) and light.
   const isUserLight = theme === "light";
@@ -665,9 +678,26 @@ export default function Home() {
 
   return (
     <div
-      className={`user-scope ${isUserLight ? "user-light" : ""} min-h-dvh flex flex-col items-center overflow-y-auto relative`}
-      style={{ background: "var(--user-frame)" }}
+      className={`user-scope ${isUserLight ? "user-light" : ""}`}
+      style={
+        isDesktop
+          ? { display: "flex", minHeight: "100dvh", background: "#080810", fontFamily: "Manrope, sans-serif" }
+          : { minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", overflowY: "auto", position: "relative", background: "var(--user-bg, #0a0a0a)" }
+      }
     >
+      {isDesktop && (
+        <DesktopSidebar
+          screen={screen}
+          setScreen={setScreen}
+          userName={auth.userName}
+          userAvatar={auth.userAvatar ?? null}
+          userId={auth.userId}
+          userBalance={auth.userBalance}
+          notificationCount={notifications.filter((n) => !n.read).length}
+          chatUnreadCount={chatUnreadCount}
+        />
+      )}
+      <IssueReporter hideTrigger />
       <NotificationToastContainer position="top-right" />
       {/* Global chat-toast overlay — shows per-order popups for inbound
           merchant messages on any screen. Tap jumps into that order's
@@ -700,12 +730,11 @@ export default function Home() {
         />
       )}
 
-      {/* TransactionProgress removed — simple loading on buttons instead */}
-      {/* Crossfade host: relative + flex-1 so absolute-positioned <Panel>s
-          stack on top of each other during transitions. Dropping mode="wait"
-          lets the outgoing screen fade out while the incoming fades in,
-          avoiding the parent-frame flash. */}
-      <div className="relative flex-1 w-full flex flex-col">
+      {/* Center column — on desktop this is a flex:1 <main>, on mobile a full-width div */}
+      <div
+        className="relative flex-1 w-full flex flex-col"
+        style={isDesktop ? { minWidth: 0, overflowX: "hidden" } : undefined}
+      >
       <AnimatePresence>
         {screen === "welcome" && (
           // Logged out — the effect above redirects to /user/login. Show a
@@ -720,6 +749,7 @@ export default function Home() {
             k="home"
             className="relative"
             style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
           >
             <HomeScreen
               userName={auth.userName}
@@ -742,6 +772,7 @@ export default function Home() {
               userBalance={auth.userBalance}
               maxW={maxW}
               notificationCount={notifications.filter((n) => !n.read).length}
+              hideBottomNav={!!isDesktop}
               onRefresh={async () => {
                 if (!auth.userId) return;
                 // Refresh the surfaces visible on home: orders list + bank
@@ -784,7 +815,7 @@ export default function Home() {
         )}
 
         {screen === "trade" && (
-          <Panel k="trade">
+          <Panel k="trade" desktop={!!isDesktop}>
             <TradeCreationScreen
               screen={screen}
               setScreen={setScreen}
@@ -810,12 +841,13 @@ export default function Home() {
               onPairChange={tradeCreation.setSelectedPair}
               setCurrentRate={tradeCreation.setCurrentRate}
               theme={theme}
+              hideBottomNav={!!isDesktop}
             />
           </Panel>
         )}
 
         {screen === "escrow" && (
-          <Panel k="escrow" anim={slide}>
+          <Panel k="escrow" anim={slide} desktop={!!isDesktop}>
             <EscrowLockScreen
               screen={screen}
               setScreen={setScreen}
@@ -847,13 +879,14 @@ export default function Home() {
               fiatCurrency={
                 tradeCreation.selectedPair === "usdt_inr" ? "INR" : "AED"
               }
+              hideBottomNav={!!isDesktop}
               solanaWallet={solanaWallet}
             />
           </Panel>
         )}
 
         {screen === "order" && activeOrder && (
-          <Panel k="order" anim={slide}>
+          <Panel k="order" anim={slide} desktop={!!isDesktop}>
             <OrderDetailScreen
               setScreen={setScreen}
               previousScreen={previousScreen}
@@ -909,7 +942,7 @@ export default function Home() {
         )}
 
         {screen === "order" && !activeOrder && activeOrderId && (
-          <Panel k="order-loading" className="items-center justify-center">
+          <Panel k="order-loading" className="items-center justify-center" desktop={!!isDesktop}>
             <div className="h-12" />
             <div className="px-5 py-4 flex items-center w-full">
               <button onClick={() => setScreen("home")} className="p-2 -ml-2">
@@ -933,6 +966,7 @@ export default function Home() {
             k="orders"
             className="relative"
             style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
           >
             <OrdersListScreen
               screen={screen}
@@ -945,6 +979,7 @@ export default function Home() {
               cancelledOrders={cancelledOrders}
               maxW={maxW}
               notificationCount={notifications.filter((n) => !n.read).length}
+              hideBottomNav={!!isDesktop}
             />
           </Panel>
         )}
@@ -954,6 +989,7 @@ export default function Home() {
             k="support"
             anim={slide}
             style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
           >
             <SupportScreen
               setScreen={setScreen}
@@ -966,6 +1002,7 @@ export default function Home() {
           <Panel
             k="rewards"
             style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
           >
             <RewardsScreen
               screen={screen}
@@ -977,6 +1014,7 @@ export default function Home() {
               blipEarned={referralInfo.blipFromReferrals}
               totalBlip={referralInfo.totalBlip}
               isLoading={referralLoading}
+              hideBottomNav={!!isDesktop}
             />
           </Panel>
         )}
@@ -985,6 +1023,7 @@ export default function Home() {
           <Panel
             k="notifications"
             style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
           >
             <NotificationsScreen
               screen={screen}
@@ -1002,6 +1041,7 @@ export default function Home() {
               }
               unreadCount={notifications.filter((n) => !n.read).length}
               maxW={maxW}
+              hideBottomNav={!!isDesktop}
             />
           </Panel>
         )}
@@ -1011,6 +1051,7 @@ export default function Home() {
             k="profile"
             className="overflow-hidden relative"
             style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
           >
             <ProfileScreen
               screen={screen}
@@ -1042,12 +1083,13 @@ export default function Home() {
               setLoginError={auth.setLoginError}
               setLoginForm={auth.setLoginForm}
               maxW={maxW}
+              hideBottomNav={!!isDesktop}
             />
           </Panel>
         )}
 
         {screen === "chats" && (
-          <Panel k="chats">
+          <Panel k="chats" desktop={!!isDesktop}>
             <ChatListScreen
               screen={screen}
               setScreen={setScreen}
@@ -1056,12 +1098,13 @@ export default function Home() {
               setOrders={setOrders}
               maxW={maxW}
               notificationCount={notifications.filter((n) => !n.read).length}
+              hideBottomNav={!!isDesktop}
             />
           </Panel>
         )}
 
         {screen === "chat-view" && activeOrder && (
-          <Panel k="chat-view" anim={slide} className="h-dvh">
+          <Panel k="chat-view" anim={slide} className="h-dvh" desktop={!!isDesktop}>
             <ChatViewScreen
               setScreen={setScreen}
               activeOrder={activeOrder}
@@ -1092,7 +1135,7 @@ export default function Home() {
         )}
 
         {screen === "create-offer" && (
-          <Panel k="create-offer" anim={slide}>
+          <Panel k="create-offer" anim={slide} desktop={!!isDesktop}>
             <CreateOfferScreen
               setScreen={setScreen}
               tradeType={tradeCreation.tradeType}
@@ -1102,7 +1145,7 @@ export default function Home() {
         )}
 
         {screen === "cash-confirm" && tradeCreation.selectedOffer && (
-          <Panel k="cash-confirm" anim={slide}>
+          <Panel k="cash-confirm" anim={slide} desktop={!!isDesktop}>
             <CashConfirmScreen
               setScreen={setScreen}
               selectedOffer={tradeCreation.selectedOffer}
@@ -1117,7 +1160,7 @@ export default function Home() {
         )}
 
         {screen === "wallet" && (
-          <Panel k="wallet">
+          <Panel k="wallet" desktop={!!isDesktop}>
             <WalletScreen
               screen={screen}
               setScreen={setScreen}
@@ -1127,12 +1170,13 @@ export default function Home() {
               setShowWalletSetup={auth.setShowWalletSetup}
               setShowWalletUnlock={auth.setShowWalletUnlock}
               maxW={maxW}
+              hideBottomNav={!!isDesktop}
             />
           </Panel>
         )}
 
         {screen === "matching" && pendingTradeData && (
-          <Panel k="matching">
+          <Panel k="matching" desktop={!!isDesktop}>
             <MatchingScreen
               setScreen={setScreen}
               pendingTradeData={pendingTradeData}
@@ -1168,9 +1212,16 @@ export default function Home() {
         acceptedOrderInfo={userEffects.acceptedOrderInfo}
       />
 
-      {/* Issue reporter floating button removed per UX feedback — the
-          inline bug icon in the header still routes to the same reporter
-          via openIssueReporter() if needed. */}
+      {isDesktop && (
+        <DesktopRightPanel
+          screen={screen}
+          setScreen={setScreen}
+          activeOrder={activeOrder}
+          pendingOrders={pendingOrders}
+          setActiveOrderId={setActiveOrderId}
+          selectedPair={tradeCreation.selectedPair}
+        />
+      )}
 
       <PushPermissionPrompt authed={!!auth.userId} />
 
