@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, Check, AlertCircle, Shield } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { BlinkingAvatar } from '@/components/ui/BlinkingAvatar';
+
+const CLASSIC_SEEDS = [
+  'Felix', 'Aneka', 'Max', 'Luna',
+  'Charlie', 'Oliver', 'Milo', 'Sophie',
+];
 
 // 50 pre-made avatar options using DiceBear API and other sources
 const PRESET_AVATARS = [
@@ -271,6 +277,61 @@ export function MerchantProfileModal({
                 </div>
               </div>
             )}
+
+            {/* Classics — animated blinking avatars */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <label className="block text-xs text-white/40 font-mono uppercase tracking-wider">Classics</label>
+                <span style={{
+                  fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  padding: '2px 8px', borderRadius: 99,
+                  background: 'rgba(184,233,212,0.1)', border: '1px solid rgba(184,233,212,0.22)',
+                  color: '#b8e9d4',
+                }}>Animated</span>
+              </div>
+              <div className="grid grid-cols-8 gap-2">
+                {CLASSIC_SEEDS.map((seed) => {
+                  const val = `blip:classic:${seed}`;
+                  const active = selectedPreset === val;
+                  return (
+                    <motion.button
+                      key={seed}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.93 }}
+                      onClick={() => handlePresetSelect(val)}
+                      disabled={isUploading}
+                      title={seed}
+                      style={{
+                        position: 'relative',
+                        borderRadius: 999,
+                        overflow: 'hidden',
+                        aspectRatio: '1',
+                        border: active ? '2px solid rgba(184,233,212,0.6)' : '2px solid rgba(255,255,255,0.08)',
+                        boxShadow: active ? '0 0 0 2px rgba(184,233,212,0.18)' : 'none',
+                        background: 'none',
+                        cursor: isUploading ? 'not-allowed' : 'pointer',
+                        opacity: isUploading ? 0.5 : 1,
+                        padding: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'border-color 0.15s, box-shadow 0.15s',
+                      }}
+                    >
+                      <BlinkingAvatar seed={seed} size={52} />
+                      {active && !success && isUploading && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 999 }}>
+                          <Loader2 className="w-4 h-4 text-white animate-spin" />
+                        </div>
+                      )}
+                      {active && success && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(184,233,212,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 999 }}>
+                          <Check className="w-3.5 h-3.5 text-[#b8e9d4]" />
+                        </div>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Avatar Grid */}
             <label className="block text-xs text-white/40 font-mono uppercase tracking-wider mb-3">Choose Avatar</label>

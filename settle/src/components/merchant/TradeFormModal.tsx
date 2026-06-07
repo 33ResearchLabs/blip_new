@@ -2,16 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  X,
-  ArrowLeftRight,
-  AlertTriangle,
-  Loader2,
-  Zap,
-  ChevronDown,
-  Plus,
-} from "lucide-react";
-import type { Order } from "@/types/merchant";
+import { X, AlertTriangle, Loader2 } from "lucide-react";
+import { Plus, CaretDown, Lightning } from "@phosphor-icons/react";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
@@ -24,7 +16,6 @@ const CORRIDOR_OPTIONS = [
   { key: "USDT_INR", label: "🇮🇳 USDT / INR" },
 ] as const;
 
-// Map a corridor id to its fiat currency code for labels in the preview row.
 function corridorFiat(corridorId: string | undefined): "AED" | "INR" {
   return corridorId === "USDT_INR" ? "INR" : "AED";
 }
@@ -36,14 +27,9 @@ export interface OpenTradeFormState {
   paymentMethodId?: string;
   spreadPreference: "best" | "fastest" | "cheap";
   expiryMinutes: 15 | 90;
-  /** Optional Priority Boost (0–25 %). Drives faster matching. The
-   *  protocol splits the boost amount 70/30 (merchant/Blip) on the
-   *  backend; the UI just exposes the slider. Default 0 = no boost. */
   boostPct?: number;
 }
 
-/** Max boost the user can dial in. Backend protocol limit per the
- *  spec. Keep in sync with any matching changes in the order engine. */
 const BOOST_MAX_PCT = 25;
 
 export interface TradeFormModalProps {
@@ -57,15 +43,13 @@ export interface TradeFormModalProps {
   setCreateTradeError: (error: string | null) => void;
   onClose: () => void;
   onSubmit: () => void;
-  // Active corridor (e.g. "USDT_AED" / "USDT_INR"). When provided, the modal
-  // shows a Trading Pair selector at the top so the user can switch corridor
-  // right inside the trade-creation flow.
   activeCorridor?: string;
   onCorridorChange?: (corridorId: string) => void;
-  // Opens the merchant's Payment Methods management overlay so a new method
-  // can be added without leaving the trade-creation flow. When omitted, the
-  // "+ Add payment method" affordance is hidden.
   onAddPaymentMethod?: () => void;
+}
+
+function pmIcon(type: string) {
+  return type === "bank" ? "🏦" : type === "cash" ? "💵" : type === "card" ? "💳" : type === "mobile" || type === "upi" ? "📱" : "💰";
 }
 
 export function TradeFormModal({
@@ -83,57 +67,41 @@ export function TradeFormModal({
   onCorridorChange,
   onAddPaymentMethod,
 }: TradeFormModalProps) {
-  // Payment methods come from the merchant store, preloaded at dashboard load
-  // (market/page.tsx) so this modal opens already populated — no fetch-on-open
-  // flash. We still refresh in the background on open + dropdown reopen.
   const paymentMethods = useMerchantStore((s) => s.paymentMethods);
   const paymentMethodsLoaded = useMerchantStore((s) => s.paymentMethodsLoaded);
   const refreshPaymentMethods = useMerchantStore((s) => s.fetchPaymentMethods);
   const [showPmDropdown, setShowPmDropdown] = useState(false);
-  // Live ref price for the active corridor — drives the Trade Preview row
-  // so it always matches what the user picked at the top (USDT/AED vs USDT/INR).
+
   const corridorPrices = useCorridorPrices();
   const fiatCcy = corridorFiat(activeCorridor);
   const liveRate = resolveCorridorRef(corridorPrices, activeCorridor, fiatCcy);
 
-  // Centralised "why is the submit button disabled" reason. Mirrored by the
-  // disabled check on the button itself so the visual + accessibility state
-  // and the human-readable explanation can never disagree.
+  const isSell = openTradeForm.tradeType === "sell";
   const cryptoAmountNum = parseFloat(openTradeForm.cryptoAmount || "0");
+  const overBalance =
+    isSell && effectiveBalance !== null && cryptoAmountNum > effectiveBalance && cryptoAmountNum > 0;
+
   const disabledReason: string | null = (() => {
     if (isCreatingTrade) return null;
-    if (!openTradeForm.cryptoAmount || cryptoAmountNum <= 0) {
-      return "Enter a USDT amount to continue";
-    }
-    if (
-      openTradeForm.tradeType === "sell" &&
-      effectiveBalance !== null &&
-      cryptoAmountNum > effectiveBalance
-    ) {
-      return `Insufficient USDT — wallet has ${formatCrypto(effectiveBalance)} USDT`;
-    }
+    if (!openTradeForm.cryptoAmount || cryptoAmountNum <= 0) return "Enter a USDT amount to continue";
+    if (overBalance) return `Insufficient USDT — wallet has ${formatCrypto(effectiveBalance!)} USDT`;
     return null;
   })();
   const submitDisabled = isCreatingTrade || disabledReason !== null;
 
-  // Background refresh — pulls the latest into the store. Called on open and on
-  // dropdown reopen so a method just added via the management overlay shows up.
   const loadPaymentMethods = useCallback(() => {
     if (!merchantId) return;
     void refreshPaymentMethods(merchantId);
   }, [merchantId, refreshPaymentMethods]);
 
-  // Auto-select the merchant's default the instant methods are available
-  // (preloaded or refreshed) and nothing is chosen yet — so the row is correct
-  // immediately, without waiting on the background refresh.
   useEffect(() => {
     if (!isOpen || openTradeForm.paymentMethodId || paymentMethods.length === 0) return;
-    const defaultPm = paymentMethods.find((pm) => pm.is_default) || paymentMethods[0];
-    if (defaultPm) {
-      setOpenTradeForm((prev) => ({
-        ...prev,
-        paymentMethod: (defaultPm.type === 'cash' ? 'cash' : 'bank') as 'bank' | 'cash',
-        paymentMethodId: defaultPm.id,
+    const def = paymentMethods.find((pm) => pm.is_default) || paymentMethods[0];
+    if (def) {
+      setOpenTradeForm((p) => ({
+        ...p,
+        paymentMethod: (def.type === "cash" ? "cash" : "bank") as "bank" | "cash",
+        paymentMethodId: def.id,
       }));
     }
   }, [isOpen, paymentMethods, openTradeForm.paymentMethodId, setOpenTradeForm]);
@@ -143,8 +111,6 @@ export function TradeFormModal({
     loadPaymentMethods();
   }, [isOpen, merchantId, loadPaymentMethods]);
 
-  // Refetch on every dropdown open so new methods picked up after the
-  // management overlay closes don't require a modal remount.
   useEffect(() => {
     if (showPmDropdown) loadPaymentMethods();
   }, [showPmDropdown, loadPaymentMethods]);
@@ -155,11 +121,23 @@ export function TradeFormModal({
     setShowPmDropdown(false);
   };
 
-  const pmIcon = (type: string) =>
-    type === 'bank' ? '🏦' : type === 'cash' ? '💵' : type === 'card' ? '💳' : type === 'mobile' || type === 'upi' ? '📱' : '💰';
   const selectedPm =
     paymentMethods.find((pm) => pm.id === openTradeForm.paymentMethodId) ||
     paymentMethods.find((pm) => pm.type === openTradeForm.paymentMethod);
+
+  const usdtAmt = cryptoAmountNum;
+  const baseFiat = liveRate && usdtAmt > 0 ? usdtAmt * liveRate : null;
+  const boost = openTradeForm.boostPct ?? 0;
+  const boostFiat = baseFiat !== null ? baseFiat * (boost / 100) : null;
+  const finalFiat =
+    baseFiat !== null && boostFiat !== null
+      ? isSell ? baseFiat - boostFiat : baseFiat + boostFiat
+      : baseFiat;
+
+  // Accent by trade side
+  const sideColor = isSell ? "#b8e9d4" : "#7da0ff";
+  const sideDim   = isSell ? "rgba(184,233,212,0.12)" : "rgba(125,160,255,0.12)";
+  const sideBorder= isSell ? "rgba(184,233,212,0.25)" : "rgba(125,160,255,0.25)";
 
   return (
     <AnimatePresence>
@@ -169,430 +147,385 @@ export function TradeFormModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-50"
+            style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }}
             onClick={handleClose}
           />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed z-50 w-full max-w-md max-h-[90vh] overflow-y-auto inset-x-0 bottom-0 md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
-          >
-            <div className="bg-card-solid rounded-t-2xl md:rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden pb-safe md:pb-0">
-              {/* Header — slim, matches the compact pill aesthetic of the
-                  home card. No big icon block. */}
-              <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold">Open Trade</h2>
-                <button
-                  onClick={handleClose}
-                  className="p-1.5 hover:bg-card rounded-lg transition-colors"
-                  aria-label="Close"
-                >
-                  <X className="w-4 h-4 text-foreground/40" />
-                </button>
-              </div>
 
-              {/* Form */}
-              <div className="p-4 space-y-3">
-                {/* Trading Pair — inline pill on the right */}
-                {activeCorridor && onCorridorChange && (
-                  <div className="flex items-center justify-between gap-2">
-                    <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium">Pair</label>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 8 }}
+            transition={{ type: "spring", damping: 28, stiffness: 340, mass: 0.8 }}
+            className="fixed z-50 inset-x-4 bottom-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[400px]"
+            style={{ maxHeight: "90dvh", overflowY: "auto" }}
+          >
+            <div style={{
+              background: "#111113",
+              borderRadius: 20,
+              border: "1px solid rgba(255,255,255,0.09)",
+              boxShadow: "0 32px 80px rgba(0,0,0,0.7), 0 0 0 0.5px rgba(255,255,255,0.04) inset",
+              overflow: "hidden",
+            }}>
+
+              {/* ── Header ── */}
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 18px 14px",
+                borderBottom: "1px solid rgba(255,255,255,0.055)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  {/* Animated side indicator dot */}
+                  <motion.div
+                    key={openTradeForm.tradeType}
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    style={{ width: 8, height: 8, borderRadius: 99, background: sideColor, boxShadow: `0 0 8px ${sideColor}88` }}
+                  />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#f5f5f7", letterSpacing: "-0.01em" }}>
+                    Open Trade
+                  </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {/* Corridor pill */}
+                  {activeCorridor && onCorridorChange && (
                     <FilterDropdown<string>
                       value={activeCorridor}
                       onChange={onCorridorChange}
                       ariaLabel="Select trading pair"
                       align="right"
                       variant="square"
-                      options={CORRIDOR_OPTIONS.map((c) => ({
-                        key: c.key,
-                        label: c.label,
-                      }))}
+                      options={CORRIDOR_OPTIONS.map((c) => ({ key: c.key, label: c.label }))}
                     />
+                  )}
+                  <button
+                    onClick={handleClose}
+                    style={{
+                      width: 28, height: 28, borderRadius: 99,
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      cursor: "pointer", color: "rgba(255,255,255,0.4)",
+                    }}
+                  >
+                    <X style={{ width: 13, height: 13 }} />
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Body ── */}
+              <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+
+                {/* Buy / Sell toggle */}
+                <div style={{
+                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5,
+                  padding: 4,
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.05)",
+                  borderRadius: 14,
+                }}>
+                  {(["sell", "buy"] as const).map((side) => {
+                    const active = openTradeForm.tradeType === side;
+                    const color  = side === "sell" ? "#b8e9d4" : "#7da0ff";
+                    const bg     = side === "sell" ? "rgba(184,233,212,0.1)" : "rgba(125,160,255,0.1)";
+                    const border = side === "sell" ? "rgba(184,233,212,0.22)" : "rgba(125,160,255,0.22)";
+                    return (
+                      <motion.button
+                        key={side}
+                        onClick={() => setOpenTradeForm((p) => ({ ...p, tradeType: side }))}
+                        whileTap={{ scale: 0.97 }}
+                        style={{
+                          padding: "9px 0",
+                          borderRadius: 10,
+                          border: active ? `1px solid ${border}` : "1px solid transparent",
+                          background: active ? bg : "transparent",
+                          color: active ? color : "rgba(255,255,255,0.28)",
+                          fontSize: 12.5,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          transition: "all 0.16s",
+                          letterSpacing: "0.005em",
+                        }}
+                      >
+                        {side === "sell" ? "Sell USDT" : "Buy USDT"}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+
+                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontWeight: 500, textAlign: "center", margin: "-2px 0 2px", letterSpacing: "0.01em" }}>
+                  {isSell ? `You send USDT · receive ${fiatCcy}` : `You send ${fiatCcy} · receive USDT`}
+                </p>
+
+                {/* Amount input */}
+                <div style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: overBalance ? "1px solid rgba(255,90,90,0.4)" : "1px solid rgba(255,255,255,0.07)",
+                  borderRadius: 14,
+                  padding: "0 14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  transition: "border-color 0.2s",
+                }}>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    maxLength={14}
+                    placeholder="0.00"
+                    value={openTradeForm.cryptoAmount}
+                    onChange={(e) => {
+                      const v = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
+                      setOpenTradeForm((p) => ({ ...p, cryptoAmount: v }));
+                    }}
+                    style={{
+                      flex: 1,
+                      background: "none",
+                      border: "none",
+                      outline: "none",
+                      padding: "13px 0",
+                      fontSize: 22,
+                      fontWeight: 700,
+                      letterSpacing: "-0.02em",
+                      color: overBalance ? "#ff7a7e" : "#f5f5f7",
+                      caretColor: sideColor,
+                      minWidth: 0,
+                    }}
+                  />
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+                    {baseFiat !== null && (
+                      <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.3)", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        ≈ {formatCrypto(baseFiat)} {fiatCcy}
+                      </span>
+                    )}
+                    <span style={{
+                      fontSize: 11, fontWeight: 800, letterSpacing: "0.05em",
+                      color: "rgba(255,255,255,0.4)",
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 7, padding: "3px 7px",
+                    }}>
+                      USDT
+                    </span>
+                  </div>
+                </div>
+
+                {overBalance && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#ff7a7e", fontSize: 11.5, fontWeight: 600, margin: "-4px 0 0 2px" }}>
+                    <AlertTriangle style={{ width: 12, height: 12 }} />
+                    Wallet has {formatCrypto(effectiveBalance!)} USDT
                   </div>
                 )}
 
-                {/* Trade Type — segmented pill toggle. Buy = emerald,
-                    Sell = primary, semantic colours preserved. */}
-                <div>
-                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium mb-1.5 block">Trade Type</label>
-                  <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                    <button
-                      onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "sell" }))}
-                      className={`py-2 rounded-lg text-[12px] font-semibold transition-colors ${
-                        openTradeForm.tradeType === "sell"
-                          ? "bg-white/[0.08] text-[#f5f5f7]"
-                          : "text-foreground/40 hover:text-foreground/70"
-                      }`}
-                    >
-                      Sell USDT
-                    </button>
-                    <button
-                      onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "buy" }))}
-                      className={`py-2 rounded-lg text-[12px] font-semibold transition-colors ${
-                        openTradeForm.tradeType === "buy"
-                          ? "bg-white/[0.06] text-white/70"
-                          : "text-foreground/40 hover:text-foreground/70"
-                      }`}
-                    >
-                      Buy USDT
-                    </button>
-                  </div>
-                  <p className="mt-1 text-[10px] text-foreground/35 px-1">
-                    {openTradeForm.tradeType === "sell"
-                      ? `You send USDT, get ${fiatCcy}`
-                      : `You send ${fiatCcy}, get USDT`}
-                  </p>
-                </div>
-
-                {/* Amount */}
-                <div>
-                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium mb-1.5 block">Amount</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      maxLength={14}
-                      placeholder="0.00"
-                      value={openTradeForm.cryptoAmount}
-                      onChange={(e) => {
-                        const value = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
-                        setOpenTradeForm(prev => ({ ...prev, cryptoAmount: value }));
-                      }}
-                      className="w-full bg-white/[0.04] rounded-xl px-3 py-2.5 pr-14 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-foreground/35 font-medium">USDT</span>
-                  </div>
-                  {openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount || "0") > effectiveBalance && (
-                    <p className="text-[10px] text-red-400 mt-1 ml-1 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" />
-                      Exceeds your wallet balance ({effectiveBalance.toLocaleString()} USDT)
-                    </p>
-                  )}
-                </div>
-
                 {/* Payment Method */}
-                <div>
-                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium mb-1.5 block">Payment Method</label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // When there are no methods, the dropdown body itself
-                        // is empty — opening it is pointless. Jump straight to
-                        // the management overlay if the host wired one in.
-                        if (paymentMethods.length === 0 && onAddPaymentMethod) {
-                          onAddPaymentMethod();
-                          return;
-                        }
-                        setShowPmDropdown(!showPmDropdown);
-                      }}
-                      className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.15] transition-all"
-                    >
-                      {(!paymentMethodsLoaded && paymentMethods.length === 0) ? (
-                        // Slow-internet fallback: skeleton placeholder while the
-                        // first load is still in flight (preload normally beats
-                        // this, so it rarely shows). Keeps the row from flashing
-                        // "Add a payment method" before the real default lands.
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="w-4 h-4 rounded-md bg-white/[0.08] animate-pulse shrink-0" />
-                          <span className="h-3 w-28 rounded bg-white/[0.08] animate-pulse" />
-                        </div>
-                      ) : selectedPm ? (
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="text-[12px] shrink-0">{pmIcon(selectedPm.type)}</span>
-                          <div className="min-w-0 flex-1 text-left">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[12px] font-medium text-white/80 truncate">{selectedPm.name}</span>
-                              <span className="text-[9px] text-foreground/35 font-mono uppercase shrink-0">{selectedPm.type}</span>
-                            </div>
-                            {selectedPm.details && (
-                              <div className="text-[10px] text-foreground/40 font-mono truncate">
-                                {selectedPm.details}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : paymentMethods.length === 0 ? (
-                        <span className="text-[11px] text-foreground/40 flex items-center gap-1.5">
-                          {onAddPaymentMethod ? (
-                            <>
-                              <Plus className="w-3.5 h-3.5" /> Add a payment method
-                            </>
-                          ) : (
-                            <>No payment methods — add one in Settings → Payments</>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-foreground/40">Select payment method</span>
-                      )}
-                      <ChevronDown className={`w-3.5 h-3.5 text-foreground/30 transition-transform shrink-0 ${showPmDropdown ? 'rotate-180' : ''}`} />
-                    </button>
+                <div style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (paymentMethods.length === 0 && onAddPaymentMethod) { onAddPaymentMethod(); return; }
+                      setShowPmDropdown(!showPmDropdown);
+                    }}
+                    style={{
+                      width: "100%",
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                      padding: "11px 14px",
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.07)",
+                      cursor: "pointer", boxSizing: "border-box",
+                      transition: "border-color 0.15s",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.13)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)")}
+                  >
+                    <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", flexShrink: 0 }}>Payment</span>
 
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 7, justifyContent: "flex-end", minWidth: 0, overflow: "hidden" }}>
+                      {!paymentMethodsLoaded && paymentMethods.length === 0 ? (
+                        <span style={{ height: 10, width: 72, borderRadius: 5, background: "rgba(255,255,255,0.08)", display: "inline-block" }} />
+                      ) : selectedPm ? (
+                        <>
+                          <span style={{ fontSize: 13 }}>{pmIcon(selectedPm.type)}</span>
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {selectedPm.name}
+                          </span>
+                          {selectedPm.details && (
+                            <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.28)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 80 }}>
+                              {selectedPm.details}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.28)", display: "flex", alignItems: "center", gap: 4 }}>
+                          {onAddPaymentMethod ? <><Plus style={{ width: 12, height: 12 }} /> Add method</> : "No methods configured"}
+                        </span>
+                      )}
+                      <CaretDown style={{ width: 13, height: 13, color: "rgba(255,255,255,0.22)", flexShrink: 0, transform: showPmDropdown ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
                     {showPmDropdown && paymentMethods.length > 0 && (
-                      <div className="absolute z-30 top-full left-0 right-0 mt-1 rounded-xl border border-white/[0.08] bg-card-solid shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+                      <motion.div
+                        initial={{ opacity: 0, y: -4, scaleY: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scaleY: 1 }}
+                        exit={{ opacity: 0, y: -4, scaleY: 0.95 }}
+                        transition={{ duration: 0.14 }}
+                        style={{
+                          position: "absolute", zIndex: 30,
+                          top: "calc(100% + 5px)", left: 0, right: 0,
+                          borderRadius: 14,
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          background: "#18181b",
+                          boxShadow: "0 12px 40px rgba(0,0,0,0.55)",
+                          overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                          transformOrigin: "top",
+                        }}
+                      >
                         {paymentMethods.map((pm) => {
-                          const isSelected = openTradeForm.paymentMethodId === pm.id;
+                          const sel = openTradeForm.paymentMethodId === pm.id;
                           return (
                             <button
                               key={pm.id}
                               type="button"
                               onClick={() => {
-                                setOpenTradeForm(prev => ({
-                                  ...prev,
-                                  paymentMethod: (pm.type === 'cash' ? 'cash' : 'bank') as 'bank' | 'cash',
+                                setOpenTradeForm((p) => ({
+                                  ...p,
+                                  paymentMethod: (pm.type === "cash" ? "cash" : "bank") as "bank" | "cash",
                                   paymentMethodId: pm.id,
                                 }));
                                 setShowPmDropdown(false);
                               }}
-                              className={`w-full flex items-start gap-2 px-3 py-2 text-left transition-colors ${
-                                isSelected
-                                  ? "bg-white/[0.08] text-white"
-                                  : "hover:bg-white/[0.04] text-foreground/60"
-                              }`}
+                              style={{
+                                width: "100%", display: "flex", alignItems: "center", gap: 9,
+                                padding: "10px 14px",
+                                background: sel ? "rgba(255,255,255,0.06)" : "transparent",
+                                border: "none", cursor: "pointer", boxSizing: "border-box", textAlign: "left",
+                                transition: "background 0.1s",
+                              }}
+                              onMouseEnter={(e) => { if (!sel) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
+                              onMouseLeave={(e) => { if (!sel) e.currentTarget.style.background = "transparent"; }}
                             >
-                              <span className="text-[12px] mt-0.5 shrink-0">{pmIcon(pm.type)}</span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[12px] font-medium truncate">{pm.name}</span>
-                                  <span className="text-[9px] text-foreground/30 font-mono uppercase shrink-0 ml-auto">{pm.type}</span>
+                              <span style={{ fontSize: 14 }}>{pmIcon(pm.type)}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 600, color: sel ? "#f5f5f7" : "rgba(255,255,255,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {pm.name}
                                 </div>
                                 {pm.details && (
-                                  <div className="text-[10px] text-foreground/40 font-mono truncate mt-0.5">
+                                  <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.28)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                     {pm.details}
                                   </div>
                                 )}
                               </div>
+                              {sel && (
+                                <svg viewBox="0 0 14 14" width={12} height={12} fill="none" stroke={sideColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="m2.5 7 3 3 6-6"/>
+                                </svg>
+                              )}
                             </button>
                           );
                         })}
-                        {/* Add new — opens the merchant's payment-methods overlay
-                            without dismissing the trade modal. The dropdown will
-                            refetch on its next open so a freshly added method
-                            appears immediately. */}
                         {onAddPaymentMethod && (
                           <button
                             type="button"
-                            onClick={() => {
-                              onAddPaymentMethod();
-                              setShowPmDropdown(false);
+                            onClick={() => { onAddPaymentMethod(); setShowPmDropdown(false); }}
+                            style={{
+                              width: "100%", display: "flex", alignItems: "center", gap: 8,
+                              padding: "10px 14px",
+                              borderTop: "1px solid rgba(255,255,255,0.06)",
+                              background: "transparent", border: "none", borderTopWidth: 1, borderTopStyle: "solid", borderTopColor: "rgba(255,255,255,0.06)",
+                              cursor: "pointer", boxSizing: "border-box", color: "rgba(255,255,255,0.4)",
                             }}
-                            className="w-full flex items-center gap-2 px-3 py-2.5 text-left border-t border-white/[0.06] text-[#f5f5f7] hover:bg-white/[0.06] transition-colors"
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span className="text-[12px] font-semibold">
-                              Add payment method
-                            </span>
+                            <Plus style={{ width: 13, height: 13 }} />
+                            <span style={{ fontSize: 12, fontWeight: 600 }}>Add payment method</span>
                           </button>
                         )}
-                      </div>
+                      </motion.div>
                     )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Expiry */}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "10px 14px",
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.07)",
+                  borderRadius: 14,
+                }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)" }}>
+                    Expires
+                  </span>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {([15, 90] as const).map((mins) => {
+                      const active = openTradeForm.expiryMinutes === mins;
+                      return (
+                        <button
+                          key={mins}
+                          onClick={() => setOpenTradeForm((p) => ({ ...p, expiryMinutes: mins }))}
+                          style={{
+                            padding: "4px 11px", borderRadius: 99,
+                            fontSize: 11.5, fontWeight: 700,
+                            border: active ? "1px solid rgba(255,255,255,0.14)" : "1px solid transparent",
+                            background: active ? "rgba(255,255,255,0.09)" : "transparent",
+                            color: active ? "#f5f5f7" : "rgba(255,255,255,0.3)",
+                            cursor: "pointer", transition: "all 0.14s",
+                          }}
+                        >
+                          {mins} min
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Speed/spread row was here previously — three pills
-                    (Best / Fast / Cheap) doubling as fee-tier picker. The
-                    new fee model removes per-trade fee tiers: Open Trade
-                    is always the 0%-fee "normal" path. Speed/priority is
-                    expressed on the user side via the Boost slider, not
-                    by the merchant when opening a trade. So the row is
-                    deleted; spreadPreference still lives in the form
-                    state for backwards-compat with downstream consumers
-                    (defaults to 'best') until those are migrated. */}
-
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-[10px] text-foreground/40 uppercase tracking-wider font-medium">Expires in</label>
-                  <div className="grid grid-cols-2 gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.04]">
-                    {([15, 90] as const).map((mins) => (
-                      <button
-                        key={mins}
-                        onClick={() => setOpenTradeForm(prev => ({ ...prev, expiryMinutes: mins as 15 | 90 }))}
-                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                          openTradeForm.expiryMinutes === mins
-                            ? 'bg-white/[0.08] text-[#f5f5f7]'
-                            : 'text-foreground/40 hover:text-foreground/70'
-                        }`}
-                      >
-                        {mins} min
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Trade preview — new 3-component breakdown (Merchant
-                    rate · Blip service fee · Boost · Final). Legacy
-                    "Trade Preview" card preserved below the flag so we
-                    can flip back instantly if needed. */}
-                {/* Settlement breakdown — shows merchant rate, optional
-                    priority boost adjustment, then the final amount the
-                    merchant nets. Normal trades (boost = 0) reduce to
-                    a one-line "rate × amount = final" without noise,
-                    matching the no-breakdown-for-0%-fee spec; the boost
-                    rows only appear when the slider is non-zero. */}
-                {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (() => {
-                  const usdtAmount = parseFloat(openTradeForm.cryptoAmount);
-                  const baseFiat = liveRate ? usdtAmount * liveRate : null;
-                  const boost = openTradeForm.boostPct ?? 0;
-                  // Boost direction: a SELL-USDT order creator gives
-                  // up a slice of their fiat to attract a buyer faster
-                  // (received fiat goes DOWN); a BUY-USDT creator pays
-                  // a premium to attract a seller (paid fiat goes UP).
-                  // From the merchant's POV the "you receive" line
-                  // tracks fiat for sell and crypto for buy, so the
-                  // adjustment is always a deduction visually.
-                  const boostFiat = baseFiat !== null ? baseFiat * (boost / 100) : null;
-                  const finalFiat =
-                    baseFiat !== null && boostFiat !== null
-                      ? openTradeForm.tradeType === "sell"
-                        ? baseFiat - boostFiat
-                        : baseFiat + boostFiat
-                      : baseFiat;
-                  if (FEE_UI_V2) {
-                    return (
-                      <div className="rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                        {/* Header row — always shows */}
-                        <div className="px-4 py-3 flex items-center justify-between gap-2 border-b border-white/[0.04]">
-                          <span className="flex flex-col">
-                            <span className="text-[10px] font-medium uppercase tracking-wider text-foreground/40">
-                              {openTradeForm.tradeType === "sell" ? "You receive" : "You pay"}
-                            </span>
-                            {liveRate && (
-                              <span className="text-[10px] text-foreground/35 mt-0.5">
-                                @ {formatRate(liveRate)} {fiatCcy} / USDT
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-sm font-bold tabular-nums text-foreground">
-                            {finalFiat !== null
-                              ? `${formatCrypto(finalFiat)} ${fiatCcy}`
-                              : "—"}
-                          </span>
-                        </div>
-                        {/* Boost breakdown — only rendered when active */}
-                        {boost > 0 && (
-                          <div className="px-4 py-2.5 space-y-1.5 text-[11px]">
-                            <div className="flex items-center justify-between">
-                              <span className="text-foreground/55">Merchant rate</span>
-                              <span className="tabular-nums font-medium text-foreground/80">
-                                {baseFiat !== null ? `${formatCrypto(baseFiat)} ${fiatCcy}` : "—"}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-white/60">
-                                Priority Boost ({boost.toFixed(0)}%)
-                              </span>
-                              <span className="tabular-nums font-medium text-[#f5f5f7]">
-                                {boostFiat !== null
-                                  ? `${openTradeForm.tradeType === "sell" ? "−" : "+"}${formatCrypto(boostFiat)} ${fiatCcy}`
-                                  : "—"}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.04]">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Zap className="w-3.5 h-3.5 text-white" />
-                        <span className="text-[11px] font-medium text-white">Trade Preview</span>
-                      </div>
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-foreground/35">USDT Amount</span>
-                          <span className="text-white">{formatCrypto(usdtAmount)} USDT</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-foreground/35">Rate (est.)</span>
-                          <span className="text-white">
-                            {liveRate ? `${formatRate(liveRate)} ${fiatCcy}/USDT` : "—"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between pt-2 border-t border-white/[0.04]">
-                          <span className="text-foreground/40">{fiatCcy} Amount</span>
-                          <span className="text-white font-bold">
-                            {baseFiat !== null ? `${formatCrypto(baseFiat)} ${fiatCcy}` : "—"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Error Message */}
-                {/* Priority Boost — optional, collapsed by default so a
-                    normal trade stays a one-tap flow. Tap to reveal a
-                    slider that lets the merchant offer up to BOOST_MAX_PCT
-                    extra on top of the rate to attract faster matches.
-                    The 70/30 backend split is hidden — the user just
-                    sees the % they're offering and what it does for
-                    them ("faster matching"). */}
+                {/* Priority Boost */}
                 {FEE_UI_V2 && (() => {
-                  const boost = openTradeForm.boostPct ?? 0;
                   const boostOn = boost > 0;
                   return (
-                    <div
-                      className={`rounded-xl border ${
-                        boostOn
-                          ? "bg-white/[0.06] border-white/20"
-                          : "bg-white/[0.03] border-white/[0.06]"
-                      }`}
-                    >
+                    <div style={{
+                      borderRadius: 14, overflow: "hidden",
+                      background: boostOn ? "rgba(245,200,66,0.06)" : "rgba(255,255,255,0.04)",
+                      border: boostOn ? "1px solid rgba(245,200,66,0.22)" : "1px solid rgba(255,255,255,0.07)",
+                      transition: "all 0.2s",
+                    }}>
                       <button
                         type="button"
-                        onClick={() =>
-                          setOpenTradeForm((prev) => ({
-                            ...prev,
-                            boostPct: boostOn ? 0 : 5,
-                          }))
-                        }
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left"
+                        onClick={() => setOpenTradeForm((p) => ({ ...p, boostPct: boostOn ? 0 : 5 }))}
+                        style={{
+                          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                          padding: "10px 14px", background: "none", border: "none", cursor: "pointer", boxSizing: "border-box",
+                        }}
                       >
-                        <span className="flex items-center gap-2">
-                          <Zap
-                            className={`w-3.5 h-3.5 ${
-                              boostOn ? "text-[#f5f5f7]" : "text-foreground/40"
-                            }`}
-                          />
-                          <span
-                            className={`text-[11px] font-semibold uppercase tracking-wider ${
-                              boostOn ? "text-[#f5f5f7]" : "text-foreground/55"
-                            }`}
-                          >
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <Lightning style={{ width: 12, height: 12, color: boostOn ? "#f5c842" : "rgba(255,255,255,0.25)" }} />
+                          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: boostOn ? "#f5c842" : "rgba(255,255,255,0.28)" }}>
                             Priority Boost
                           </span>
                           {boostOn && (
-                            <span className="text-[11px] font-mono tabular-nums text-white/70">
-                              +{boost.toFixed(0)}%
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: "#f5c842", fontVariantNumeric: "tabular-nums" }}>
+                              +{boost}%
                             </span>
                           )}
                         </span>
-                        <span className="text-[10px] font-medium text-foreground/40">
+                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.28)", fontWeight: 600 }}>
                           {boostOn ? "Remove" : "Add"}
                         </span>
                       </button>
-
                       {boostOn && (
-                        <div className="px-3 pb-3 space-y-1.5">
+                        <div style={{ padding: "0 14px 12px" }}>
                           <input
-                            type="range"
-                            min={1}
-                            max={BOOST_MAX_PCT}
-                            step={1}
-                            value={boost}
-                            onChange={(e) =>
-                              setOpenTradeForm((prev) => ({
-                                ...prev,
-                                boostPct: parseInt(e.target.value, 10),
-                              }))
-                            }
+                            type="range" min={1} max={BOOST_MAX_PCT} step={1} value={boost}
+                            onChange={(e) => setOpenTradeForm((p) => ({ ...p, boostPct: parseInt(e.target.value, 10) }))}
                             aria-label="Priority Boost percentage"
-                            className="w-full accent-white"
+                            style={{ width: "100%", accentColor: "#f5c842" }}
                           />
-                          <p className="text-[10px] text-foreground/45">
-                            Higher boost = faster acceptance from any
-                            merchant. Capped at {BOOST_MAX_PCT}%.
+                          <p style={{ fontSize: 10.5, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>
+                            Higher boost = faster acceptance. Max {BOOST_MAX_PCT}%.
                           </p>
                         </div>
                       )}
@@ -600,45 +533,59 @@ export function TradeFormModal({
                   );
                 })()}
 
-                {/* Fees footnote — quiet disclosure so the merchant
-                    knows what's actually charged without a clinical
-                    breakdown above. Per the fee-UI spec fees are a
-                    "processing thing", not a screen element. */}
-                {FEE_UI_V2 && (
-                  <p className="text-[10px] text-foreground/40 leading-relaxed text-center px-2">
-                    No processing fee on regular trades. Priority Boost
-                    is an optional incentive to merchants for faster
-                    matching.
-                  </p>
+                {/* Preview — only when there's an amount */}
+                {finalFiat !== null && (
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "11px 14px",
+                    background: sideDim,
+                    border: `1px solid ${sideBorder}`,
+                    borderRadius: 14,
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: sideColor, opacity: 0.7 }}>
+                        {isSell ? "You receive" : "You pay"}
+                      </div>
+                      {liveRate && (
+                        <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.25)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+                          @ {formatRate(liveRate)} {fiatCcy}/USDT
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 16, fontWeight: 800, color: sideColor, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+                      {formatCrypto(finalFiat)} {fiatCcy}
+                    </span>
+                  </div>
                 )}
 
+                {/* Error */}
                 {createTradeError && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                    <p className="text-xs text-red-400 flex items-center gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      {createTradeError}
-                    </p>
+                  <div style={{
+                    padding: "10px 12px", borderRadius: 12,
+                    background: "rgba(255,80,80,0.08)", border: "1px solid rgba(255,80,80,0.2)",
+                    display: "flex", alignItems: "flex-start", gap: 7,
+                  }}>
+                    <AlertTriangle style={{ width: 13, height: 13, color: "#ff7a7e", flexShrink: 0, marginTop: 1 }} />
+                    <span style={{ fontSize: 12, color: "#ff7a7e", lineHeight: 1.5 }}>{createTradeError}</span>
                   </div>
                 )}
               </div>
 
-              {/* Footer */}
-              <div className="border-t border-white/[0.04]">
-                {/* Disabled reason — shown right above the action buttons so
-                    the user immediately sees WHY Open Trade is greyed out
-                    instead of guessing. */}
-                {disabledReason && (
-                  <div className="px-5 pt-3 -mb-1">
-                    <p className="text-[11px] text-amber-300 flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      <span>{disabledReason}</span>
-                    </p>
-                  </div>
+              {/* ── Footer ── */}
+              <div style={{ padding: "0 18px 20px", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+                {disabledReason && !overBalance && (
+                  <p style={{ fontSize: 11, color: "rgba(255,190,60,0.65)", textAlign: "center", marginBottom: 9, fontWeight: 500 }}>
+                    {disabledReason}
+                  </p>
                 )}
-                <div className="px-5 py-4 flex gap-3">
+                <div style={{ display: "flex", gap: 8 }}>
                   <button
                     onClick={handleClose}
-                    className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] text-foreground/40 hover:bg-card transition-colors"
+                    style={{
+                      flex: 1, padding: "13px 0", borderRadius: 13,
+                      background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)",
+                      color: "rgba(255,255,255,0.35)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    }}
                   >
                     Cancel
                   </button>
@@ -646,26 +593,28 @@ export function TradeFormModal({
                     whileTap={{ scale: 0.98 }}
                     disabled={submitDisabled}
                     onClick={onSubmit}
-                    className={`flex-[2] py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
-                      submitDisabled
-                        ? "bg-gray-600 text-foreground/40 cursor-not-allowed"
-                        : "bg-[#f5f5f7] text-[#0b0b0c] hover:bg-white"
-                    }`}
+                    style={{
+                      flex: 2, padding: "13px 0", borderRadius: 13,
+                      background: submitDisabled ? "rgba(255,255,255,0.04)" : sideDim,
+                      border: submitDisabled ? "1px solid rgba(255,255,255,0.06)" : `1px solid ${sideBorder}`,
+                      color: submitDisabled ? "rgba(255,255,255,0.2)" : sideColor,
+                      fontSize: 13.5, fontWeight: 800, cursor: submitDisabled ? "not-allowed" : "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                      letterSpacing: "-0.01em", transition: "all 0.15s",
+                    }}
                   >
                     {isCreatingTrade ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Creating...
+                        <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+                        Opening…
                       </>
                     ) : (
-                      <>
-                        <ArrowLeftRight className="w-3.5 h-3.5" />
-                        Open Trade
-                      </>
+                      `${isSell ? "Sell" : "Buy"} USDT`
                     )}
                   </motion.button>
                 </div>
               </div>
+
             </div>
           </motion.div>
         </>

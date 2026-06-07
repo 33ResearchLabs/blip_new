@@ -3,24 +3,23 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { X, Menu } from "lucide-react";
 import {
-  Zap,
+  Lightning,
   Wallet,
   Lock,
-  LogOut,
+  SignOut,
   User,
-  Settings,
-  ChevronDown,
-  ChevronLeft,
-  Activity,
-  Shield,
-  Menu,
-  X,
+  GearSix,
+  CaretDown,
+  CaretLeft,
+  Pulse,
+  ShieldCheck,
   Bell,
-  BarChart3,
+  ChartBar,
   Bug,
   Coins,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { openIssueReporter } from "@/plugins/issue-reporter/IssueReporter";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -162,7 +161,7 @@ export function MerchantNavbar({
               aria-label="Back to dashboard"
               className="lg:hidden -ml-1 p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors"
             >
-              <ChevronLeft className="w-5 h-5 text-foreground/70" />
+              <CaretLeft className="w-5 h-5 text-foreground/70" />
             </button>
           )}
 
@@ -267,7 +266,7 @@ export function MerchantNavbar({
                   aria-label="Ops"
                   title="Ops"
                 >
-                  <Activity className="w-3.5 h-3.5 text-[#f5f5f7] shrink-0" />
+                  <Pulse className="w-3.5 h-3.5 text-[#f5f5f7] shrink-0" />
                   <span className="hidden xl:inline">Ops</span>
                 </Link>
               )}
@@ -279,7 +278,7 @@ export function MerchantNavbar({
                   aria-label="Compliance"
                   title="Compliance"
                 >
-                  <Shield className="w-3.5 h-3.5 text-white/60 shrink-0" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-white/60 shrink-0" />
                   <span className="hidden xl:inline">Compliance</span>
                 </Link>
               )}
@@ -330,7 +329,7 @@ export function MerchantNavbar({
                       className="border border-foreground/10"
                     />
                   </span>
-                  <ChevronDown
+                  <CaretDown
                     className={`w-3 h-3 text-foreground/30 transition-transform ${menuOpen ? "rotate-180" : ""}`}
                   />
                 </button>
@@ -390,21 +389,21 @@ export function MerchantNavbar({
                           onClick={() => { setMenuOpen(false); onOpenSettings(); }}
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors"
                         >
-                          <Settings className="w-4 h-4" /> Settings
+                          <GearSix className="w-4 h-4" /> Settings
                         </button>
                       ) : (
                         <Link href="/market/settings" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
-                          <Settings className="w-4 h-4" /> Settings
+                          <GearSix className="w-4 h-4" /> Settings
                         </Link>
                       )}
                       {merchantInfo?.has_ops_access && (
                         <Link href="/ops" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-[#f5f5f7]/70 hover:text-white hover:bg-white/[0.06] transition-colors">
-                          <Activity className="w-4 h-4" /> Ops Panel
+                          <Pulse className="w-4 h-4" /> Ops Panel
                         </Link>
                       )}
                       {merchantInfo?.has_compliance_access && (
                         <Link href="/compliance" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors">
-                          <Shield className="w-4 h-4" /> Compliance
+                          <ShieldCheck className="w-4 h-4" /> Compliance
                         </Link>
                       )} */}
                     </div>
@@ -413,7 +412,7 @@ export function MerchantNavbar({
                         onClick={handleLogout}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-red-400/70 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/[0.06] transition-colors"
                       >
-                        <LogOut className="w-4 h-4" /> Logout
+                        <SignOut className="w-4 h-4" /> Logout
                       </button>
                     </div>
                   </div>
@@ -554,7 +553,7 @@ export function MerchantNavbar({
                   }}
                   className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
                 >
-                  <Zap className="w-5 h-5" /> Dashboard
+                  <Lightning className="w-5 h-5" /> Dashboard
                 </Link>
                 {onOpenWallet ? (
                   <button
@@ -583,7 +582,7 @@ export function MerchantNavbar({
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
                   >
-                    <Settings className="w-5 h-5" /> Settings
+                    <GearSix className="w-5 h-5" /> Settings
                   </button>
                 ) : (
                   <Link
@@ -591,7 +590,7 @@ export function MerchantNavbar({
                     onClick={() => setDrawerOpen(false)}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
                   >
-                    <Settings className="w-5 h-5" /> Settings
+                    <GearSix className="w-5 h-5" /> Settings
                   </Link>
                 )}
                 {merchantInfo?.has_ops_access && (
@@ -605,7 +604,7 @@ export function MerchantNavbar({
                       }}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-[#f5f5f7]/70 hover:text-white hover:bg-white/[0.06] transition-colors"
                     >
-                      <Activity className="w-5 h-5" /> Ops Panel
+                      <Pulse className="w-5 h-5" /> Ops Panel
                     </Link>
                   </>
                 )}
@@ -618,7 +617,7 @@ export function MerchantNavbar({
                     }}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
                   >
-                    <Shield className="w-5 h-5" /> Compliance
+                    <ShieldCheck className="w-5 h-5" /> Compliance
                   </Link>
                 )}
               </div>
@@ -629,7 +628,7 @@ export function MerchantNavbar({
                   onClick={handleLogout}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium hover:bg-[var(--color-error)]/20 transition-colors"
                 >
-                  <LogOut className="w-4 h-4" /> Logout
+                  <SignOut className="w-4 h-4" /> Logout
                 </button>
               </div>
             </motion.div>
@@ -684,7 +683,7 @@ function NavbarRepCoins({ compact = false }: { compact?: boolean }) {
         className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.07] text-[11px] font-mono font-semibold text-white/70 shrink-0 tabular-nums"
         title="Reputation score (300–900)"
       >
-        <Shield className="w-3 h-3 text-white/40 shrink-0" />
+        <ShieldCheck className="w-3 h-3 text-white/40 shrink-0" />
         <span>{score}</span>
         {!compact && (
           <span className="hidden xl:inline text-white/30 text-[10px] font-sans">

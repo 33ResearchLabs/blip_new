@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react";
 import type React from "react";
-import { defaultAvatarUrl } from "@/lib/avatars";
+import { BlinkingAvatar } from "@/components/ui/BlinkingAvatar";
 
 interface UserAvatarProps {
   /** Stored avatar URL if the backend already provided one. */
@@ -20,9 +20,9 @@ interface UserAvatarProps {
 }
 
 /**
- * Square avatar that prefers an explicit URL but always falls back to a
- * deterministic DiceBear avatar derived from `seed`. Renders nothing
- * placeholder-y — once the seed/src is known there is always an image.
+ * Avatar component. When a custom photo URL is provided it renders that;
+ * otherwise falls back to the BlinkingAvatar — a deterministic animated
+ * face that blinks every few seconds, unique per seed.
  */
 export const UserAvatar = memo(function UserAvatar({
   src,
@@ -33,18 +33,42 @@ export const UserAvatar = memo(function UserAvatar({
   style,
 }: UserAvatarProps) {
   const [errored, setErrored] = useState(false);
-  const fallback = defaultAvatarUrl(seed || "anonymous");
-  const url = !errored && src && src.trim() ? src : fallback;
+
+  // blip:classic:{seed} — stored when merchant picks a Classics avatar
+  if (src && src.startsWith("blip:classic:")) {
+    const classicSeed = src.slice("blip:classic:".length) || seed;
+    return (
+      <BlinkingAvatar
+        seed={classicSeed}
+        size={size}
+        className={className}
+        style={style}
+      />
+    );
+  }
+
+  const hasPhoto = !errored && src && src.trim();
+
+  if (hasPhoto) {
+    return (
+      <img
+        src={src!}
+        alt={alt || seed || "user"}
+        width={size}
+        height={size}
+        onError={() => setErrored(true)}
+        className={`rounded-full bg-foreground/[0.04] object-cover shrink-0 ${className}`}
+        style={{ width: size, height: size, ...style }}
+      />
+    );
+  }
 
   return (
-    <img
-      src={url}
-      alt={alt || seed || "user"}
-      width={size}
-      height={size}
-      onError={() => setErrored(true)}
-      className={`rounded-full bg-foreground/[0.04] object-cover shrink-0 ${className}`}
-      style={{ width: size, height: size, ...style }}
+    <BlinkingAvatar
+      seed={seed}
+      size={size}
+      className={className}
+      style={style}
     />
   );
 });

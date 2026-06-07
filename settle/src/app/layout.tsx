@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 // Wallet-adapter UI styles — imported EAGERLY at the root layout so they
@@ -29,6 +29,13 @@ const inter = Inter({
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
+});
+
+const playfairDisplay = Playfair_Display({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -168,7 +175,7 @@ export default async function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className={`${inter.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
+      <body className={`${inter.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} antialiased`} suppressHydrationWarning>
         <ErrorTrackingBoot />
         <ThemeProvider>
           <ClientWalletProvider>

@@ -52,6 +52,8 @@ import { useMerchantTour } from "@/hooks/useMerchantTour";
 import { MerchantMobileContent } from "@/components/merchant/MerchantMobileContent";
 import { MobileNotificationsView } from "@/components/merchant/MobileNotificationsView";
 import { MobilePriceTicker } from "@/components/merchant/MobilePriceTicker";
+import { MerchantWelcomeFlow } from "@/components/merchant/MerchantWelcomeFlow";
+import { useMerchantWelcome } from "@/hooks/useMerchantWelcome";
 import { OnboardingProvider } from "@/contexts/OnboardingContext";
 import { OnboardingTour } from "@/components/merchant/OnboardingTour";
 
@@ -294,6 +296,16 @@ export default function MerchantDashboard() {
     markAllNotificationsRead,
     dismissStickyForOrder,
   } = useNotifications(merchantId, isLoggedIn);
+
+  // Welcome flow — 3 slides for new merchants; existing merchants get a
+  // one-time notification that replays the slides on tap.
+  const { showWelcome, completeWelcome, openWelcomeFromNotif } =
+    useMerchantWelcome(
+      merchantId,
+      (merchantInfo as { tour_completed_at?: string | null } | null)
+        ?.tour_completed_at ?? null,
+      addNotification,
+    );
 
   // Hand the wallet context the current merchant id so its storage probe
   // targets the right per-merchant slot. Without this, a new merchant on a
@@ -1179,6 +1191,10 @@ export default function MerchantDashboard() {
                   setShowNotifications(false);
                 }}
                 onClose={() => setShowNotifications(false)}
+                onWelcomeTap={() => {
+                  setShowNotifications(false);
+                  openWelcomeFromNotif();
+                }}
               />
             </div>
           </div>
@@ -1316,6 +1332,11 @@ export default function MerchantDashboard() {
         />
 
         <PushPermissionPrompt authed={!!merchantId} />
+
+        {/* Blip Markets welcome flow — full-screen 3-slide intro */}
+        {showWelcome && (
+          <MerchantWelcomeFlow onComplete={completeWelcome} />
+        )}
       </div>
     </OnboardingProvider>
   );
