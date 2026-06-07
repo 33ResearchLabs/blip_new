@@ -113,6 +113,7 @@ import {
   RewardsScreen,
 } from "@/components/user/screens";
 import { SendScreen } from "@/components/user/screens/SendScreen";
+import { ReputationScreen } from "@/components/user/screens/ReputationScreen";
 
 export default function Home() {
   const isDesktop = useIsDesktop();
@@ -1016,6 +1017,21 @@ export default function Home() {
               setScreen={setScreen}
               previousScreen={previousScreen}
               userId={auth.userId ?? undefined}
+            />
+          </Panel>
+        )}
+
+        {screen === "reputation" && (
+          <Panel
+            k="reputation"
+            anim={slide}
+            style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
+          >
+            <ReputationScreen
+              setScreen={setScreen}
+              cancelledOrderCount={cancelledOrders.length}
+              totalOrderCount={orders.length}
             />
           </Panel>
         )}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, Zap, Lock, DollarSign, AlertTriangle, CheckCircle2, MessageCircle, Shield, Activity, TrendingDown } from "lucide-react";
+import { Bell, Zap, Lock, DollarSign, AlertTriangle, CheckCircle2, MessageCircle, Shield, Activity, TrendingDown, ChevronRight } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
 import type { Screen } from "./types";
@@ -128,26 +128,31 @@ export const NotificationsScreen = ({
         </div>
       </header>
 
-      {/* ── Reputation warning banner ── */}
+      {/* ── Reputation warning notification ── */}
       {showReputationBanner && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           className="mx-5 mb-3 shrink-0"
         >
-          <div className="flex items-start gap-3 p-3.5 rounded-[16px] bg-error-dim border border-error/25">
-            <div className="w-8 h-8 rounded-[10px] bg-error/15 flex items-center justify-center shrink-0 mt-0.5">
-              <TrendingDown size={15} className="text-error" />
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setScreen("reputation")}
+            className="w-full flex items-start gap-3 p-3.5 rounded-[18px] bg-error-dim border border-error/25 text-left"
+          >
+            <div className="w-9 h-9 rounded-[12px] bg-error/15 flex items-center justify-center shrink-0 mt-0.5">
+              <TrendingDown size={16} className="text-error" strokeWidth={2} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-bold text-text-primary leading-snug">
                 Your trade reputation is low
               </p>
               <p className="text-[11.5px] font-medium text-text-secondary mt-0.5 leading-snug">
-                {cancelPct}% of your orders were cancelled ({cancelledOrderCount} of {totalOrderCount}). A high cancel rate limits your ability to start new trades. Complete your trades to restore full access.
+                {cancelPct}% cancel rate · {cancelledOrderCount} of {totalOrderCount} orders cancelled. Tap to learn more.
               </p>
             </div>
-          </div>
+            <ChevronRight size={16} className="text-text-tertiary shrink-0 mt-1" strokeWidth={2} />
+          </motion.button>
         </motion.div>
       )}
 
