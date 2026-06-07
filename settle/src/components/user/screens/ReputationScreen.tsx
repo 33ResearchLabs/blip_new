@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ChevronLeft, TrendingDown, CheckCircle2, XCircle, Clock, ExternalLink } from "lucide-react";
+import { ChevronLeft, ArrowRight } from "lucide-react";
 import type { Screen } from "./types";
 
 const CARD = "bg-surface-card border border-border-subtle";
@@ -40,39 +40,49 @@ export function ReputationScreen({
 
       {/* Body */}
       <div className="flex-1 px-5 pb-10 overflow-y-auto scrollbar-hide">
-        <div className="mx-auto w-full max-w-[440px] space-y-4">
+        <div className="mx-auto w-full max-w-[440px] space-y-3">
 
-          {/* Status card */}
+          {/* Cancel rate — big number, no color drama */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className="rounded-[20px] p-5 bg-error-dim border border-error/25"
+            className={`rounded-[20px] p-5 ${CARD}`}
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-[14px] bg-error/15 flex items-center justify-center shrink-0">
-                <TrendingDown className="w-5 h-5 text-error" strokeWidth={2} />
-              </div>
-              <div>
-                <p className="text-[15px] font-extrabold text-text-primary tracking-[-0.02em]">
-                  Reputation is low
-                </p>
-                <p className="text-[12px] font-medium text-text-secondary mt-0.5">
-                  {cancelPct}% cancel rate · {cancelledOrderCount} of {totalOrderCount} orders cancelled
-                </p>
-              </div>
-            </div>
+            <p className="text-[11px] font-bold tracking-[0.12em] uppercase text-text-tertiary mb-4">
+              Cancel rate
+            </p>
+            <p className="text-[52px] font-extrabold tracking-[-0.04em] text-text-primary leading-none">
+              {cancelPct}<span className="text-[28px] text-text-secondary">%</span>
+            </p>
+            <p className="text-[13px] font-medium text-text-tertiary mt-2">
+              {cancelledOrderCount} of {totalOrderCount} orders cancelled
+            </p>
             {/* Progress bar */}
-            <div className="h-2 rounded-full bg-surface-active overflow-hidden">
+            <div className="mt-4 h-1.5 rounded-full bg-border-subtle overflow-hidden">
               <div
-                className="h-full rounded-full bg-error transition-all"
+                className="h-full rounded-full bg-text-primary transition-all"
                 style={{ width: `${Math.min(cancelPct, 100)}%` }}
               />
             </div>
-            <div className="flex justify-between mt-1.5">
-              <span className="text-[10px] font-bold text-text-tertiary">0%</span>
-              <span className="text-[10px] font-bold text-error">{cancelPct}% cancelled</span>
-              <span className="text-[10px] font-bold text-text-tertiary">100%</span>
+          </motion.div>
+
+          {/* Stats row */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
+            className={`rounded-[20px] overflow-hidden ${CARD}`}
+          >
+            <div className="flex divide-x divide-border-subtle">
+              <div className="flex-1 p-4">
+                <p className="text-[11px] font-bold tracking-[0.1em] uppercase text-text-tertiary mb-1">Completed</p>
+                <p className="text-[28px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">{completedCount}</p>
+              </div>
+              <div className="flex-1 p-4">
+                <p className="text-[11px] font-bold tracking-[0.1em] uppercase text-text-tertiary mb-1">Cancelled</p>
+                <p className="text-[28px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">{cancelledOrderCount}</p>
+              </div>
             </div>
           </motion.div>
 
@@ -80,51 +90,18 @@ export function ReputationScreen({
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
             className={`rounded-[20px] p-5 ${CARD}`}
           >
-            <p className="text-[12px] font-bold tracking-[0.1em] uppercase text-text-tertiary mb-3">
-              What this means
+            <p className="text-[11px] font-bold tracking-[0.12em] uppercase text-text-tertiary mb-3">
+              Why it matters
             </p>
             <p className="text-[14px] font-medium text-text-secondary leading-relaxed">
-              Your trade reputation is based on how many of your orders are completed versus cancelled. A high cancellation rate signals unreliable behaviour to merchants — which can limit the offers you see and slow down your ability to start new trades.
+              A high cancellation rate signals unreliable behaviour to merchants — it can limit the offers you see and slow down your ability to start new trades.
             </p>
-            <p className="text-[14px] font-medium text-text-secondary leading-relaxed mt-3">
-              Blip calculates this as your <span className="font-bold text-text-primary">cancellation rate</span> — the percentage of orders you accepted but did not complete. Only orders cancelled after acceptance count; expired orders where you never engaged do not.
+            <p className="text-[14px] font-medium text-text-secondary leading-relaxed mt-2.5">
+              Only orders cancelled <span className="font-bold text-text-primary">after acceptance</span> count toward this rate. Orders that expired before anyone engaged do not affect your score.
             </p>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
-            className={`rounded-[20px] overflow-hidden ${CARD}`}
-          >
-            <div className="flex items-center gap-3 p-4 border-b border-border-subtle">
-              <div className="w-9 h-9 rounded-[12px] bg-success/10 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="w-4 h-4 text-success" strokeWidth={2} />
-              </div>
-              <div className="flex-1">
-                <p className="text-[13px] font-bold text-text-primary">Completed trades</p>
-                <p className="text-[11.5px] font-medium text-text-tertiary mt-0.5">Orders you saw through to the end</p>
-              </div>
-              <span className="text-[18px] font-extrabold text-text-primary tracking-[-0.02em]">
-                {completedCount}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 p-4">
-              <div className="w-9 h-9 rounded-[12px] bg-error/10 flex items-center justify-center shrink-0">
-                <XCircle className="w-4 h-4 text-error" strokeWidth={2} />
-              </div>
-              <div className="flex-1">
-                <p className="text-[13px] font-bold text-text-primary">Cancelled trades</p>
-                <p className="text-[11.5px] font-medium text-text-tertiary mt-0.5">Orders accepted but not completed</p>
-              </div>
-              <span className="text-[18px] font-extrabold text-error tracking-[-0.02em]">
-                {cancelledOrderCount}
-              </span>
-            </div>
           </motion.div>
 
           {/* How to improve */}
@@ -134,25 +111,27 @@ export function ReputationScreen({
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
             className={`rounded-[20px] p-5 ${CARD}`}
           >
-            <p className="text-[12px] font-bold tracking-[0.1em] uppercase text-text-tertiary mb-3">
+            <p className="text-[11px] font-bold tracking-[0.12em] uppercase text-text-tertiary mb-3">
               How to improve
             </p>
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {[
-                { icon: CheckCircle2, text: "Only accept trades you intend to complete — don't accept and then cancel." },
-                { icon: Clock, text: "Stay active in the chat during an open order. Most disputes start from silence." },
-                { icon: TrendingDown, text: "Avoid starting trades when you don't have the funds or time to finish them." },
-                { icon: CheckCircle2, text: "Confirm fiat receipt or mark payment sent promptly — delays push orders toward auto-cancel." },
-              ].map(({ icon: Icon, text }, i) => (
+                "Only accept trades you intend to complete.",
+                "Stay active in the chat — most disputes start from silence.",
+                "Don't start a trade if you don't have the funds or time to finish.",
+                "Mark payment sent or confirm receipt promptly to avoid auto-cancellation.",
+              ].map((text, i) => (
                 <div key={i} className="flex items-start gap-3">
-                  <Icon className="w-4 h-4 text-text-tertiary mt-0.5 shrink-0" strokeWidth={2} />
+                  <span className="w-5 h-5 rounded-full bg-surface-active border border-border-subtle flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-[9px] font-extrabold text-text-tertiary">{i + 1}</span>
+                  </span>
                   <p className="text-[13.5px] font-medium text-text-secondary leading-snug">{text}</p>
                 </div>
               ))}
             </div>
           </motion.div>
 
-          {/* CTA */}
+          {/* CTAs */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -162,17 +141,18 @@ export function ReputationScreen({
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => setScreen("trade")}
-              className="w-full py-3.5 rounded-[16px] bg-accent text-white text-[14px] font-bold tracking-[-0.01em]"
+              className="w-full flex items-center justify-between px-5 py-4 rounded-[16px] bg-text-primary"
             >
-              Start a trade
+              <span className="text-[14px] font-bold text-surface-base">Start a trade</span>
+              <ArrowRight className="w-4 h-4 text-surface-base opacity-60" strokeWidth={2.2} />
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => setScreen("support")}
-              className={`w-full flex items-center justify-center gap-1.5 py-3.5 rounded-[16px] text-[14px] font-bold text-text-primary ${CARD}`}
+              className={`w-full flex items-center justify-between px-5 py-4 rounded-[16px] ${CARD}`}
             >
-              <ExternalLink className="w-4 h-4 text-text-tertiary" strokeWidth={2} />
-              Contact support
+              <span className="text-[14px] font-bold text-text-primary">Contact support</span>
+              <ArrowRight className="w-4 h-4 text-text-tertiary" strokeWidth={2.2} />
             </motion.button>
           </motion.div>
 
