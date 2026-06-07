@@ -34,7 +34,9 @@ import {
   BookOpen,
   AtSign,
   X,
+  HelpCircle,
 } from "lucide-react";
+import { MerchantSupportSheet } from "@/components/merchant/MerchantSupportSheet";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMerchantStore } from "@/stores/merchantStore";
@@ -202,6 +204,7 @@ export default function MerchantSettingsPage({
     Boolean((merchantInfo as any)?.phone_verified),
   );
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
+  const [showSupportSheet, setShowSupportSheet] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(
     (merchantInfo as any)?.avatar_url || null,
   );
@@ -902,6 +905,13 @@ export default function MerchantSettingsPage({
             })}
 
             <div className="mt-auto pt-6 space-y-3">
+              <button
+                onClick={() => setShowSupportSheet(true)}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium text-white/40 hover:text-foreground/60 hover:bg-card transition-all w-full"
+              >
+                <HelpCircle className="w-4 h-4" />
+                Support
+              </button>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium text-red-400/70 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/[0.06] transition-all w-full"
@@ -2114,6 +2124,12 @@ export default function MerchantSettingsPage({
             phone_verified: true,
           }));
         }}
+      />
+
+      <MerchantSupportSheet
+        open={showSupportSheet}
+        onClose={() => setShowSupportSheet(false)}
+        merchantId={merchantInfo?.id}
       />
     </div>
   );

@@ -212,7 +212,7 @@ export function OrderQuickView({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md bg-card-solid rounded-2xl shadow-2xl border border-foreground/[0.08] overflow-hidden"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md rounded-2xl shadow-2xl overflow-hidden" style={{ background: "#0e0e10", border: "1px solid rgba(255,255,255,0.08)" }}
           >
             {/* Header */}
             <div className="px-5 py-4 border-b border-foreground/[0.04] flex items-center justify-between">
@@ -773,8 +773,12 @@ export function OrderQuickView({
                       </div>
                     ) : null}
 
-                    {/* Secondary Action — from backend (CANCEL or DISPUTE) */}
-                    {secondary?.type && (
+                    {/* Secondary Action — hidden for accepted/escrowed (cancel not surfaced at this stage) */}
+                    {secondary?.type && (() => {
+                      const st = (selectedOrder.dbOrder as any)?.status || (selectedOrder.dbOrder as any)?.minimal_status;
+                      if (secondary.type === "CANCEL" && (st === "accepted" || st === "escrowed")) return null;
+                      return true;
+                    })() && (
                       <motion.button
                         whileTap={{ scale: 0.98 }}
                         disabled={isActionLoading(secondary.type)}

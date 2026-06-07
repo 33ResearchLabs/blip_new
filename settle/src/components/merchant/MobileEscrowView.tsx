@@ -288,8 +288,6 @@ const FILTERS: { key: EscrowStatusFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "accepted", label: "Accepted" },
   { key: "escrowed", label: "Escrowed" },
-  { key: "payment_sent", label: "Paid" },
-  { key: "cancelled", label: "Cancelled" },
   { key: "disputed", label: "Disputed" },
 ];
 

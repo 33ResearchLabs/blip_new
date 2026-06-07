@@ -3,35 +3,43 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import {
-  Wallet,
-  TrendingUp,
-  Clock,
-  Lock,
-  Unlock,
-  ArrowDownRight,
-  ArrowDownLeft,
-  ArrowUpRight,
-  ArrowLeftRight,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  QrCode,
-  Loader2 as Loader2Icon,
-  History,
-  Plus,
-  Minus,
-  ChevronDown,
-  Check,
   X,
-  Copy,
+  Check,
   Settings,
-  Key,
-  Download,
-  Trash2,
   Building2,
   DollarSign,
   CreditCard,
   Smartphone,
+  Loader2 as Loader2Icon,
 } from "lucide-react";
+import {
+  Wallet,
+  TrendUp,
+  Clock,
+  Lock,
+  LockOpen,
+  ArrowDownRight,
+  ArrowDownLeft,
+  ArrowUpRight,
+  ArrowsLeftRight,
+  ArrowLineDown,
+  ArrowLineUp,
+  ArrowCircleDown,
+  ArrowCircleUp,
+  QrCode,
+  ClockCounterClockwise,
+  Plus,
+  Minus,
+  CaretDown,
+  Copy,
+  Key,
+  DownloadSimple,
+  Trash,
+  GearSix,
+  Bell,
+  CreditCard as PhosphorCard,
+  DeviceMobile,
+} from "@phosphor-icons/react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { BalanceSparkline } from "./BalanceSparkline";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -54,6 +62,7 @@ import { SwapModal } from "@/components/merchant/SwapModal";
 import { DepositModal } from "@/components/merchant/DepositModal";
 import { SendModal } from "@/components/merchant/SendModal";
 import { WalletActionsMenu } from "@/components/merchant/WalletActionsMenu";
+import { BlinkingAvatar } from "@/components/ui/BlinkingAvatar";
 
 interface MobileHomeViewProps {
   effectiveBalance: number | null;
@@ -144,6 +153,18 @@ export function MobileHomeView({
   notificationCount = 0,
 }: MobileHomeViewProps) {
   const openWallet = onOpenWallet ?? onShowWalletModal;
+
+  // Design version toggle — v2 = Direction 2 "Blip" redesign
+  const [designV2, setDesignV2] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const v = localStorage.getItem("blip_ui_v2");
+    return v === null ? true : v === "1";
+  });
+  const toggleDesign = () => setDesignV2(v => {
+    const next = !v;
+    localStorage.setItem("blip_ui_v2", next ? "1" : "0");
+    return next;
+  });
 
   // Read SOL balance directly from the wallet context so we can render
   // it inline next to the USDT balance — saves a tile in the action
@@ -403,8 +424,8 @@ export function MobileHomeView({
   // ── Greeting ──────────────────────────────────────────────────────────
   const now = new Date();
   const hour = now.getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const dateLabel = now.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "short" });
+  const timeGreeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const firstName = (merchantInfo?.display_name || merchantInfo?.username || "").split(" ")[0] || merchantInfo?.username || "";
   const avatarLetter = (merchantInfo?.display_name || merchantInfo?.business_name || "M")[0].toUpperCase();
 
   // Recent activity — merge pending + ongoing + recent completed
@@ -482,10 +503,10 @@ export function MobileHomeView({
 
 
       {/* ── AMBIENT MESH ── */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "55%", pointerEvents: "none", zIndex: 0, overflow: "hidden", filter: "blur(46px)", opacity: 0.9 }}>
-        <div style={{ position: "absolute", width: 280, height: 280, left: "-6%", top: "-10%", borderRadius: "50%", background: "radial-gradient(circle, rgba(120,134,224,0.55), transparent 62%)", mixBlendMode: "screen", animation: "z2drift1 16s ease-in-out infinite" }} />
-        <div style={{ position: "absolute", width: 260, height: 260, right: "-10%", top: "0%", borderRadius: "50%", background: "radial-gradient(circle, rgba(196,138,224,0.42), transparent 62%)", mixBlendMode: "screen", animation: "z2drift2 19s ease-in-out infinite" }} />
-        <div style={{ position: "absolute", width: 240, height: 240, left: "30%", top: "14%", borderRadius: "50%", background: "radial-gradient(circle, rgba(224,176,128,0.30), transparent 64%)", mixBlendMode: "screen", animation: "z2drift1 22s ease-in-out infinite reverse" }} />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "55%", pointerEvents: "none", zIndex: 0, overflow: "hidden", filter: "blur(52px)", opacity: 0.7 }}>
+        <div style={{ position: "absolute", width: 320, height: 320, left: "-10%", top: "-15%", borderRadius: "50%", background: "radial-gradient(circle, rgba(180,180,190,0.18), transparent 65%)", mixBlendMode: "screen", animation: "z2drift1 18s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", width: 280, height: 280, right: "-8%", top: "-5%", borderRadius: "50%", background: "radial-gradient(circle, rgba(140,140,155,0.12), transparent 65%)", mixBlendMode: "screen", animation: "z2drift2 22s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", width: 260, height: 260, left: "25%", top: "10%", borderRadius: "50%", background: "radial-gradient(circle, rgba(200,200,210,0.08), transparent 68%)", mixBlendMode: "screen", animation: "z2drift1 26s ease-in-out infinite reverse" }} />
       </div>
       <style>{`
         @keyframes z2drift1{0%{transform:translate(0,0) scale(1)} 50%{transform:translate(12%,8%) scale(1.18)} 100%{transform:translate(0,0) scale(1)}}
@@ -498,37 +519,53 @@ export function MobileHomeView({
       `}</style>
 
       {/* ── HEADER ── */}
-      <div className="z2rise" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1, paddingBottom: 4, animationDelay: "40ms" }}>
-        {/* Left: profile avatar (top-left corner) + greeting */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+      <div className="z2rise" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1, paddingBottom: designV2 ? 2 : 4, animationDelay: "40ms" }}>
+        {/* Left: profile avatar + greeting */}
+        <div style={{ display: "flex", alignItems: "center", gap: designV2 ? 9 : 10, minWidth: 0 }}>
           <div
             onClick={() => onOpenProfile?.()}
-            style={{ width: 42, height: 42, borderRadius: 999, border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden", flexShrink: 0, background: merchantInfo?.avatar_url && /^https?:|^\//.test(merchantInfo.avatar_url) ? "transparent" : "linear-gradient(150deg,#ff8a3d,#ff5d73)" }}>
+            style={{ width: designV2 ? 34 : 42, height: designV2 ? 34 : 42, borderRadius: 999, border: designV2 ? "none" : "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden", flexShrink: 0 }}>
             {merchantInfo?.avatar_url && /^https?:|^\//.test(merchantInfo.avatar_url)
-              ? <img src={merchantInfo.avatar_url} style={{ width: 42, height: 42, objectFit: "cover" }} alt="" />
-              : <span style={{ fontWeight: 800, color: "#fff", fontSize: 17 }}>{avatarLetter}</span>}
+              ? <img src={merchantInfo.avatar_url} style={{ width: designV2 ? 34 : 42, height: designV2 ? 34 : 42, objectFit: "cover" }} alt="" />
+              : <BlinkingAvatar seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"} size={designV2 ? 34 : 42} />}
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ color: "#86868b", fontSize: 12.5, fontWeight: 600 }}>{dateLabel}</div>
-            <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 1, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{greeting}</div>
+            {designV2 ? (
+              <>
+                <div style={{ fontFamily: "var(--font-serif, Georgia, serif)", fontStyle: "italic", fontWeight: 400, fontSize: 16, lineHeight: 1.05, color: "#FBFBFA", whiteSpace: "nowrap", letterSpacing: 0 }}>
+                  {timeGreeting}{firstName ? `, ${firstName}` : ""}
+                </div>
+              </>
+            ) : (
+              <>
+                {firstName && (
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: "#86868b", letterSpacing: "0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    Hi {firstName},
+                  </div>
+                )}
+                <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.015em", color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {timeGreeting}
+                </div>
+              </>
+            )}
           </div>
         </div>
-        {/* Right: payment + notifications + settings (settings = top-right corner) */}
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        {/* Right: payment + notifications + settings */}
+        <div style={{ display: "flex", gap: designV2 ? 2 : 8, flexShrink: 0 }}>
           <button
             onClick={() => onOpenPaymentMethods?.()}
-            style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", position: "relative", cursor: "pointer" }}>
-            <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3.2"/><path d="M2.5 9.5h19"/></svg>
+            style={{ width: designV2 ? 32 : 42, height: designV2 ? 32 : 42, borderRadius: 999, background: designV2 ? "transparent" : "rgba(255,255,255,0.055)", border: designV2 ? "none" : "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", position: "relative", cursor: "pointer" }}>
+            <Wallet weight={designV2 ? "thin" : "regular"} style={{ width: designV2 ? 20 : 18, height: designV2 ? 20 : 18 }} />
             {defaultPaymentMethod && (
-              <span style={{ position: "absolute", top: 6, right: 6, width: 9, height: 9, borderRadius: 9, background: "#7b54e0", boxShadow: "0 0 0 2px #08080a" }} />
+              <span style={{ position: "absolute", top: designV2 ? 0 : 6, right: designV2 ? 0 : 6, width: designV2 ? 6 : 9, height: designV2 ? 6 : 9, borderRadius: 9, background: "#7b54e0", boxShadow: "0 0 0 2px #08080a" }} />
             )}
           </button>
           <button
             onClick={() => onOpenNotifications?.()}
-            style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer", position: "relative" }}>
-            <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            style={{ width: designV2 ? 32 : 42, height: designV2 ? 32 : 42, borderRadius: 999, background: designV2 ? "transparent" : "rgba(255,255,255,0.055)", border: designV2 ? "none" : "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer", position: "relative" }}>
+            <Bell weight={designV2 ? "thin" : "regular"} style={{ width: designV2 ? 20 : 18, height: designV2 ? 20 : 18 }} />
             {notificationCount > 0 && (
-              <span style={{ position: "absolute", top: 5, right: 5, minWidth: 18, height: 18, borderRadius: 99, background: "#b8e9d4", color: "#08221a", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxShadow: "0 0 0 2px #08080a" }}>
+              <span style={{ position: "absolute", top: designV2 ? 0 : 5, right: designV2 ? 0 : 5, minWidth: designV2 ? 14 : 18, height: designV2 ? 14 : 18, borderRadius: 99, background: "#b8e9d4", color: "#08221a", fontSize: designV2 ? 9 : 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxShadow: "0 0 0 2px #08080a" }}>
                 {notificationCount > 9 ? "9+" : notificationCount}
               </span>
             )}
@@ -537,18 +574,27 @@ export function MobileHomeView({
             <button
               onClick={() => onOpenSettings()}
               aria-label="Settings"
-              style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
-              <Settings style={{ width: 18, height: 18 }} />
+              style={{ width: designV2 ? 32 : 42, height: designV2 ? 32 : 42, borderRadius: 999, background: designV2 ? "transparent" : "rgba(255,255,255,0.055)", border: designV2 ? "none" : "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
+              <GearSix weight={designV2 ? "thin" : "regular"} style={{ width: designV2 ? 19 : 18, height: designV2 ? 19 : 18 }} />
             </button>
           )}
         </div>
       </div>
 
       {/* ── HERO BALANCE ── */}
-      <div className="z2rise" style={{ position: "relative", zIndex: 1, paddingTop: 18, animationDelay: "120ms" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <span className="z2tick" />
-          <span style={{ color: "#86868b", fontSize: 12, fontWeight: 700, letterSpacing: "0.16em" }}>LIVE BALANCE</span>
+      <div style={{ position:"relative", borderRadius:24, overflow:"hidden", padding:"20px 20px 22px", background:"#0b0b0d", boxShadow:"0 0 0 1px rgba(255,255,255,0.07) inset, 0 8px 32px rgba(0,0,0,0.5)" }}>
+      <div className="z2rise" style={{ position: "relative", zIndex: 1, paddingTop: 2, animationDelay: "120ms" }}>
+        {/* LIVE BALANCE label row */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="z2tick" />
+            <span style={{ color: "#86868b", fontSize: 12, fontWeight: 700, letterSpacing: "0.16em" }}>LIVE BALANCE</span>
+          </div>
+          {designV2 && displayBalance > 0 && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#3FE0A6", background: "rgba(63,224,166,0.13)", padding: "3px 9px", borderRadius: 20, letterSpacing: 0, whiteSpace: "nowrap" }}>
+              ▲ 0.4% today
+            </span>
+          )}
         </div>
         {embeddedWalletState === "locked" ? (
           <button onClick={openWallet} style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px", borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#aeaeb2", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
@@ -562,82 +608,153 @@ export function MobileHomeView({
           </button>
         ) : (
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <span style={{ fontSize: 64, lineHeight: 0.92, fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", color: "#f5f5f7" }}>
+            <span style={{ fontSize: designV2 ? 52 : 64, lineHeight: 0.92, fontWeight: designV2 ? 800 : 700, letterSpacing: "-0.025em", fontVariantNumeric: "tabular-nums", color: "#f5f5f7" }}>
               {displayBalance.toFixed(2)}
             </span>
             <span style={{ fontSize: 18, fontWeight: 700, color: "#86868b" }}>USDT</span>
           </div>
         )}
 
-        {/* Market + Set rate row — equal height with a small gap between them.
-            alignItems:stretch grows the shorter pill to match the taller one,
-            and gap replaces the old inline-whitespace that let them overlap. */}
-        <div style={{ marginTop: 14, display: "flex", alignItems: "stretch", gap: 8, flexWrap: "wrap" }}>
-        {/* Market switch pill */}
-        <button
-          onClick={() => setCorridorPickerOpen(true)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "8px 14px", borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", cursor: "pointer", backdropFilter: "blur(20px)" }}>
-          <span style={{ fontSize: 14 }}>{activeCorridorMeta.flag}</span>
-          <span style={{ fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}>USDT / {activeCorridorMeta.fiat}</span>
-          {liveRate && <>
-            <span style={{ width: 1, height: 13, background: "rgba(255,255,255,0.16)", flexShrink: 0 }} />
-            <span style={{ fontWeight: 800, fontSize: 13.5, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-              {formatFiat(liveRate, activeCorridorMeta.fiat).replace(/\.00$/, '')}
+        {/* D2: sparkline + mascot caption */}
+        {designV2 && embeddedWalletState === "unlocked" && (<>
+          <style>{`
+            @keyframes sparkDraw { to { stroke-dashoffset: 0; } }
+            @keyframes sparkPing { 0%,100%{transform:scale(1);opacity:.5} 80%{transform:scale(2.2);opacity:0} }
+          `}</style>
+          <div style={{ position: "relative", height: 40, marginTop: 12 }}>
+            <svg viewBox="0 0 300 40" preserveAspectRatio="none" style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}>
+              <defs>
+                <linearGradient id="spGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3FE0A6" stopOpacity="0.22"/>
+                  <stop offset="100%" stopColor="#3FE0A6" stopOpacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,32 L30,34 L60,26 L90,28 L120,20 L150,22 L180,14 L210,17 L240,10 L270,8 L300,6 L300,40 L0,40 Z" fill="url(#spGrad)" />
+              <path d="M0,32 L30,34 L60,26 L90,28 L120,20 L150,22 L180,14 L210,17 L240,10 L270,8 L300,6"
+                fill="none" stroke="#3FE0A6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+                style={{ strokeDasharray: 620, strokeDashoffset: 620, animation: "sparkDraw 1.6s 0.2s cubic-bezier(.4,0,.2,1) forwards" }} />
+            </svg>
+            {/* Pulsing live dot at tip */}
+            <span style={{ position: "absolute", right: 0, top: 3, width: 7, height: 7, borderRadius: "50%", background: "#3FE0A6", display: "block" }}>
+              <span style={{ position: "absolute", inset: -4, borderRadius: "50%", background: "#3FE0A6", opacity: 0.35, animation: "sparkPing 2.2s ease-out infinite", display: "block" }} />
             </span>
-          </>}
-          <span style={{ color: "#86868b", display: "flex" }}>
-            <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
-          </span>
-        </button>
+          </div>
+          {/* Mascot caption */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <svg width="20" height="20" viewBox="0 0 60 60" fill="none" stroke="#9b9ba1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <path d="M30 9V4" /><circle cx="30" cy="3" r="2" fill="#9b9ba1" stroke="none"/>
+              <rect x="13" y="11" width="34" height="34" rx="13" fill="#1a1a1c" stroke="#9b9ba1" strokeWidth="1.8"/>
+              <circle cx="24" cy="27" r="2.6" fill="#9b9ba1" stroke="none"/><circle cx="36" cy="27" r="2.6" fill="#9b9ba1" stroke="none"/>
+              <path d="M25 35c2 2.5 8 2.5 10 0"/>
+            </svg>
+            <span style={{ fontSize: 12, color: "#9b9ba1" }}>{displayBalance > 0 ? "looking healthy today" : "Ready to start trading"}</span>
+          </div>
+        </>)}
 
-        {/* Set rate button — plus sits inside a round circle badge after the label */}
-        <button
-          onClick={(e) => { e.stopPropagation(); setShowRatePanel(true); }}
-          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 5px 5px 13px", borderRadius: 999, background: savedRate ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", color: savedRate ? "#f5f5f7" : "#86868b", cursor: "pointer", backdropFilter: "blur(20px)", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
-          {savedRate ? `${activeCorridorMeta.fiat} ${savedRate.toFixed(2)}` : "Set rate"}
-          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: 999, background: "rgba(255,255,255,0.12)", color: "#f5f5f7", flexShrink: 0 }}>
-            <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-          </span>
-        </button>
+        {/* Market pill + Set rate — single compact row */}
+        <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
+          {/* Market switch pill */}
+          <button
+            onClick={() => setCorridorPickerOpen(true)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", cursor: "pointer", backdropFilter: "blur(20px)" }}>
+            <span style={{ fontSize: 12 }}>{activeCorridorMeta.flag}</span>
+            <span style={{ fontWeight: 700, fontSize: 11.5, whiteSpace: "nowrap", color: "#aeaeb2" }}>USDT/{activeCorridorMeta.fiat}</span>
+            {liveRate && <>
+              <span style={{ width: 1, height: 11, background: "rgba(255,255,255,0.16)", flexShrink: 0 }} />
+              <span style={{ fontWeight: 800, fontSize: 12, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", color: "#f5f5f7" }}>
+                {formatFiat(liveRate, activeCorridorMeta.fiat).replace(/\.00$/, '')}
+              </span>
+            </>}
+            <span style={{ color: "#86868b", display: "flex" }}>
+              <svg viewBox="0 0 24 24" width={11} height={11} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
+            </span>
+          </button>
+
+          {/* Divider dot */}
+          <span style={{ width: 3, height: 3, borderRadius: 999, background: "rgba(255,255,255,0.18)", flexShrink: 0 }} />
+
+          {/* Set rate button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowRatePanel(true); }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 8px 5px 10px", borderRadius: 999, background: savedRate ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", color: savedRate ? "#f5f5f7" : "#86868b", cursor: "pointer", backdropFilter: "blur(20px)", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+            {savedRate ? `${activeCorridorMeta.fiat} ${savedRate.toFixed(2)}` : "Set rate"}
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: 999, background: "rgba(255,255,255,0.12)", color: "#f5f5f7", flexShrink: 0 }}>
+              <svg viewBox="0 0 24 24" width={10} height={10} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </span>
+          </button>
         </div>
+      </div>
       </div>
 
       {/* ── BUY / SELL ── */}
       {embeddedWalletState !== "locked" && embeddedWalletState !== "none" && (
-        <div className="z2rise" style={{ display: "flex", gap: 12, position: "relative", zIndex: 1, animationDelay: "200ms" }}>
-          <button onClick={() => onStartTrade?.("buy")} style={{ flex: 1, padding: 16, borderRadius: 18, background: "#f5f5f7", color: "#0b0b0c", textAlign: "left", cursor: "pointer", border: "none" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M17 7 7 17"/></svg>
-              <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="m9 6 6 6-6 6"/></svg>
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 16 }}>Buy</div>
-            <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.55 }}>Acquire USDT</div>
-          </button>
-          <button onClick={() => onStartTrade?.("sell")} style={{ flex: 1, padding: 16, borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.16)", color: "#f5f5f7", textAlign: "left", backdropFilter: "blur(20px)", cursor: "pointer" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#aeaeb2" }}>
-              <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 17H7V7M7 17 17 7"/></svg>
-              <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="m9 6 6 6-6 6"/></svg>
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 16 }}>Sell</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#86868b" }}>Offload USDT</div>
-          </button>
-        </div>
+        designV2 ? (
+          /* Direction 2 — equal 3D cards */
+          <div className="z2rise" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, position: "relative", zIndex: 1, animationDelay: "200ms" }}>
+            <button onClick={() => onStartTrade?.("buy")}
+              style={{ height: 88, padding: "13px 15px", borderRadius: 22, background: "linear-gradient(158deg,#ffffff 0%,#ececea 100%)", color: "#0a0a0c", textAlign: "left", cursor: "pointer", border: "none", display: "flex", flexDirection: "column", justifyContent: "space-between", boxShadow: "0 12px 28px -14px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.9)", transition: "transform 0.12s, box-shadow 0.12s" }}
+              onPointerDown={e => { e.currentTarget.style.transform = "scale(0.97) translateY(1px)"; e.currentTarget.style.boxShadow = "0 4px 12px -6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.9)"; }}
+              onPointerUp={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 12px 28px -14px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.9)"; }}
+              onPointerLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 12px 28px -14px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.9)"; }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(0,0,0,0.055)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ArrowUpRight weight="regular" style={{ width: 16, height: 16, color: "#0a0a0c" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Buy</div>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: "#55555a", marginTop: 1 }}>Buy USDT</div>
+              </div>
+            </button>
+            <button onClick={() => onStartTrade?.("sell")}
+              style={{ height: 88, padding: "13px 15px", borderRadius: 22, background: "linear-gradient(158deg,#1b1c20 0%,#131417 100%)", color: "#f5f5f7", textAlign: "left", cursor: "pointer", border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", justifyContent: "space-between", boxShadow: "0 10px 24px -14px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)", transition: "transform 0.12s, box-shadow 0.12s" }}
+              onPointerDown={e => { e.currentTarget.style.transform = "scale(0.97) translateY(1px)"; e.currentTarget.style.boxShadow = "0 3px 10px -6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)"; }}
+              onPointerUp={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 10px 24px -14px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)"; }}
+              onPointerLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 10px 24px -14px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)"; }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ArrowDownLeft weight="regular" style={{ width: 16, height: 16, color: "#f5f5f7" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Sell</div>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: "#9b9ba1", marginTop: 1 }}>Sell USDT</div>
+              </div>
+            </button>
+          </div>
+        ) : (
+          /* Original design */
+          <div className="z2rise" style={{ display: "flex", gap: 12, position: "relative", zIndex: 1, animationDelay: "200ms" }}>
+            <button onClick={() => onStartTrade?.("buy")} style={{ flex: 1, padding: 16, borderRadius: 18, background: "#f5f5f7", color: "#0b0b0c", textAlign: "left", cursor: "pointer", border: "none" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10M17 7 7 17"/></svg>
+                <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="m9 6 6 6-6 6"/></svg>
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 800, marginTop: 16 }}>Buy</div>
+              <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.55 }}>Buy USDT</div>
+            </button>
+            <button onClick={() => onStartTrade?.("sell")} style={{ flex: 1, padding: 16, borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.16)", color: "#f5f5f7", textAlign: "left", backdropFilter: "blur(20px)", cursor: "pointer" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#aeaeb2" }}>
+                <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 17H7V7M7 17 17 7"/></svg>
+                <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="m9 6 6 6-6 6"/></svg>
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 800, marginTop: 16 }}>Sell</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#86868b" }}>Sell USDT</div>
+            </button>
+          </div>
+        )
       )}
 
       {/* ── QUICK ACTIONS ── */}
       {embeddedWalletState !== "locked" && embeddedWalletState !== "none" && (
         <div className="z2rise" style={{ display: "flex", gap: 10, position: "relative", zIndex: 1, animationDelay: "280ms" }}>
           {([
-            { label: "Deposit", action: () => setDepositOpen(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg> },
-            { label: "Swap", action: () => setSwapOpen(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg> },
-            { label: "Send", action: () => setSendOpen(true), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V8m0 0-4 4m4-4 4 4M5 4h14"/></svg> },
+            { label: "Deposit", action: () => setDepositOpen(true), icon: <ArrowLineDown weight={designV2 ? "thin" : "regular"} style={{ width: 20, height: 20 }} /> },
+            { label: "Swap", action: () => setSwapOpen(true), icon: <ArrowsLeftRight weight={designV2 ? "thin" : "regular"} style={{ width: 20, height: 20 }} /> },
+            { label: "Send", action: () => setSendOpen(true), icon: <ArrowLineUp weight={designV2 ? "thin" : "regular"} style={{ width: 20, height: 20 }} /> },
           ] as const).map(({ label, action, icon }) => (
             <button
               key={label} onClick={action}
-              style={{ flex: 1, padding: "14px 0", borderRadius: 18, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#aeaeb2", display: "flex", flexDirection: "column", alignItems: "center", gap: 7, cursor: "pointer", backdropFilter: "blur(20px)", transition: "transform 0.14s" }}
-              onPointerDown={(e) => (e.currentTarget.style.transform = "scale(0.96)")}
-              onPointerUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
-              onPointerLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+              style={{ flex: 1, height: 62, borderRadius: 20, background: "linear-gradient(180deg,rgba(255,255,255,0.045) 0%,rgba(255,255,255,0) 56%), #131418", border: "1px solid rgba(255,255,255,0.07)", color: "#94969C", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 7, cursor: "pointer", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 6px -3px rgba(0,0,0,0.55)", transition: "transform 0.12s" }}
+              onPointerDown={e => { e.currentTarget.style.transform = "scale(0.97) translateY(1px)"; }}
+              onPointerUp={e => { e.currentTarget.style.transform = ""; }}
+              onPointerLeave={e => { e.currentTarget.style.transform = ""; }}
             >
               {icon}
               <span style={{ fontSize: 11.5, fontWeight: 600, color: "#86868b" }}>{label}</span>
@@ -649,13 +766,27 @@ export function MobileHomeView({
       {/* ── RECENT ACTIVITY ── */}
       <div className="z2rise" style={{ position: "relative", zIndex: 1, animationDelay: "380ms" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
-          <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.01em", color: "#f5f5f7" }}>Recent activity</span>
-          <button
-            onClick={() => setMobileView("history")}
-            style={{ display: "flex", alignItems: "center", gap: 3, color: "#86868b", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", background: "none", border: "none", cursor: "pointer" }}>
-            See all
-            <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6"/></svg>
-          </button>
+          {designV2 ? (
+            <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.01em", color: "#f5f5f7" }}>Recent activity</span>
+          ) : (
+            <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.01em", color: "#f5f5f7" }}>Recent activity</span>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Design revert toggle */}
+            <button
+              onClick={toggleDesign}
+              title={designV2 ? "Revert to classic design" : "Switch to new design"}
+              style={{ display: "flex", alignItems: "center", gap: 4, color: "#5f5f66", fontSize: 11, fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: "2px 0", whiteSpace: "nowrap" }}>
+              <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              {designV2 ? "Classic" : "New UI"}
+            </button>
+            <button
+              onClick={() => setMobileView("history")}
+              style={{ display: "flex", alignItems: "center", gap: 3, color: "#86868b", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", background: "none", border: "none", cursor: "pointer" }}>
+              See all
+              <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            </button>
+          </div>
         </div>
 
         {/* New order highlight — shows first pending order */}

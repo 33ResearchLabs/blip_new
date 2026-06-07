@@ -187,8 +187,8 @@ function OrderCardTimer({
   }
 
   return (
-    <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 22, overflow: "hidden", backdropFilter: "blur(20px) saturate(150%)", marginBottom: 12, opacity: isExpired ? 0.62 : 1 }}>
-      <div style={{ padding: 13 }}>
+    <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, overflow: "hidden", backdropFilter: "blur(20px) saturate(150%)", marginBottom: 9, opacity: isExpired ? 0.62 : 1 }}>
+      <div style={{ padding: 11 }}>
 
         {/* ── EXPIRED HEADER ── */}
         {isExpired && (
@@ -209,7 +209,7 @@ function OrderCardTimer({
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Row 1: name + verified shield */}
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <b style={{ fontSize: 13.5, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</b>
+              <b style={{ fontSize: 12.5, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</b>
               {isVerified && (
                 <span style={{ color: "rgba(255,255,255,0.7)", display: "flex", flexShrink: 0 }}>
                   <Shield style={{ width: 11, height: 11 }} />
@@ -253,7 +253,7 @@ function OrderCardTimer({
         </div>
 
         {/* ── FULL-BLEED DIVIDER ── */}
-        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "11px -13px" }} />
+        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "9px -11px" }} />
 
         {/* ── PAYOUT HERO ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 11, marginBottom: 14 }}>
@@ -261,7 +261,7 @@ function OrderCardTimer({
           <div>
             <div style={{ color: "#86868b", fontWeight: 700, fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{fiatLabel}</div>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 7 }}>
-              <span style={{ fontSize: 25, fontWeight: 800, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", color: "#f5f5f7" }}>{heroFiat}</span>
+              <span style={{ fontSize: 22, fontWeight: 800, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", color: "#f5f5f7" }}>{heroFiat}</span>
               {!isMine && isActivelyPending && heroEarning && (
                 <span style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2, padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.7)", fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap" }}>
                   <svg viewBox="0 0 24 24" width={10} height={10} fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
@@ -327,7 +327,7 @@ function OrderCardTimer({
 
       {/* ── BOTTOM PROGRESS BAR — flush to card edge ── */}
       {isActivelyPending && !isExpired && (
-        <div style={{ height: 3, margin: "9px -13px -13px", background: "rgba(255,255,255,0.06)" }}>
+        <div style={{ height: 3, margin: "8px -11px -11px", background: "rgba(255,255,255,0.06)" }}>
           <div style={{ height: "100%", width: `${timeFrac * 100}%`, background: low || expiringSoon ? "#ff5a5f" : "#f5f5f7", boxShadow: low || expiringSoon ? "0 0 8px rgba(255,90,95,0.5)" : "0 0 8px rgba(255,255,255,0.45)", transition: "width 1s linear" }} />
         </div>
       )}
