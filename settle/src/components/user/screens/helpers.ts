@@ -73,6 +73,7 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     merchant: {
       id: merchant.id,
       name: merchant.display_name || merchant.business_name || 'Merchant',
+      username: merchant.username || undefined,
       rating: parseFloat(merchant.rating?.toString() || '5.0'),
       trades: merchant.total_trades || 0,
       rate: parseFloat((dbOrder.rate ?? 0).toString()),

@@ -76,7 +76,8 @@ export async function GET(request: NextRequest) {
           'id', u.id,
           'username', u.username,
           'rating', u.rating,
-          'total_trades', u.total_trades
+          'total_trades', u.total_trades,
+          'avatar_url', u.avatar_url
         ) as user,
         COALESCE(unread.cnt, 0) as message_count,
         COALESCE(unread.unread, 0) as unread_count,

@@ -50,12 +50,13 @@ import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayo
 import { MerchantTour } from "@/components/merchant/MerchantTour";
 import { useMerchantTour } from "@/hooks/useMerchantTour";
 import { MerchantMobileContent } from "@/components/merchant/MerchantMobileContent";
-import { MobileNotificationsView } from "@/components/merchant/MobileNotificationsView";
+import { NotificationsPanel } from "@/components/merchant/NotificationsPanel";
 import { MobilePriceTicker } from "@/components/merchant/MobilePriceTicker";
 import { MerchantWelcomeFlow } from "@/components/merchant/MerchantWelcomeFlow";
 import { useMerchantWelcome } from "@/hooks/useMerchantWelcome";
 import { OnboardingProvider } from "@/contexts/OnboardingContext";
 import { OnboardingTour } from "@/components/merchant/OnboardingTour";
+import { prefetchOrderMessages } from "@/hooks/useRealtimeChat";
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
@@ -410,12 +411,23 @@ export default function MerchantDashboard() {
     clearAllUnread,
   } = useMerchantConversations();
 
+  // Pre-warm message cache so chat opens instantly
+  const prefetchDoneRef = useRef(false);
+  useEffect(() => {
+    if (!merchantId || isLoadingConversations || orderConversations.length === 0) return;
+    if (prefetchDoneRef.current) return;
+    prefetchDoneRef.current = true;
+    const ids = orderConversations.slice(0, 10).map(c => c.order_id);
+    prefetchOrderMessages(ids, 'merchant', merchantId).catch(() => {});
+  }, [merchantId, isLoadingConversations, orderConversations]);
+
   // ── Order-based chat state ──────────────────────────────────────────
   const [activeOrderChat, setActiveOrderChat] = useState<{
     orderId: string;
     userName: string;
     orderNumber: string;
     orderType?: "buy" | "sell";
+    userAvatarUrl?: string | null;
   } | null>(null);
 
   const onOpenOrderChat = useCallback(
@@ -424,9 +436,10 @@ export default function MerchantDashboard() {
       userName: string,
       orderNumber: string,
       orderType?: "buy" | "sell",
+      userAvatarUrl?: string | null,
     ) => {
       clearUnreadForOrder(orderId);
-      setActiveOrderChat({ orderId, userName, orderNumber, orderType });
+      setActiveOrderChat({ orderId, userName, orderNumber, orderType, userAvatarUrl });
     },
     [clearUnreadForOrder],
   );
@@ -880,7 +893,7 @@ export default function MerchantDashboard() {
           mobileTitle={
             // When inside an active chat, show the counterparty's username
             mobileView === "chat" && activeOrderChat
-              ? activeOrderChat.userName
+              ? (activeOrderChat.userName || "Merchant")
               : (
                   {
                     home: "Home",
@@ -892,30 +905,10 @@ export default function MerchantDashboard() {
                   } as Record<typeof mobileView, string>
                 )[mobileView]
           }
-          mobileSubtitle={
-            mobileView === "chat" && activeOrderChat
-              ? `Order #${activeOrderChat.orderNumber}`
-              : (
-                  {
-                    home: "",
-                    orders:
-                      pendingOrders.length > 0
-                        ? `${formatCount(pendingOrders.length)} ${pendingOrders.length === 1 ? "order" : "orders"} waiting`
-                        : "No new orders",
-                    escrow:
-                      ongoingOrders.length > 0
-                        ? `${formatCount(ongoingOrders.length)} in progress`
-                        : "Nothing active",
-                    chat:
-                      totalUnread > 0
-                        ? `${formatCount(totalUnread)} unread`
-                        : "All caught up",
-                    history: "Completed & cancelled",
-                    marketplace: "Browse open offers",
-                  } as Record<typeof mobileView, string>
-                )[mobileView]
-          }
+          mobileSubtitle={undefined}
           onBack={mobileView === "chat" && activeOrderChat ? onCloseOrderChat : undefined}
+          mobileChatUser={mobileView === "chat" && activeOrderChat ? (activeOrderChat.userName || "Merchant") : undefined}
+          mobileChatAvatarUrl={mobileView === "chat" && activeOrderChat ? activeOrderChat.userAvatarUrl : undefined}
           merchantInfo={merchantInfo}
           embeddedWalletState={embeddedWallet?.state}
           onLogout={handleLogout}
@@ -1182,27 +1175,47 @@ export default function MerchantDashboard() {
 
         {/* Mobile Notifications Overlay */}
         {showNotifications && (
-          <div className="lg:hidden fixed inset-0 z-[55]">
+          <div className="lg:hidden fixed inset-0 z-[55] flex flex-col">
             <div
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setShowNotifications(false)}
             />
-            <div className="absolute inset-0 overflow-y-auto p-4" style={{ background: "#08080a" }}>
-              <MobileNotificationsView
-                notifications={notifications}
-                onMarkRead={markNotificationRead}
-                onMarkAllRead={markAllNotificationsRead}
-                onSelectOrder={(orderId) => {
-                  const target = orders.find((o) => o.id === orderId);
-                  if (target) setSelectedOrderPopup(target);
-                  setShowNotifications(false);
-                }}
-                onClose={() => setShowNotifications(false)}
-                onWelcomeTap={() => {
-                  setShowNotifications(false);
-                  openWelcomeFromNotif();
-                }}
-              />
+            <div className="absolute inset-0 flex flex-col overflow-hidden" style={{ background: "#08080a" }}>
+              <div className="border-b border-white/[0.06]" style={{ paddingTop: "2%" }}>
+                <div className="flex items-center justify-between pl-3 pr-[5%] h-[49px]">
+                  <span className="text-[21px] font-semibold text-white tracking-[-0.01em] ml-3">Notifications</span>
+                  <button
+                    onClick={() => setShowNotifications(false)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center mr-[4%]"
+                    style={{ color: "#aeaeb2", background: "transparent", border: "none", fontSize: 16 }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 flex flex-col">
+                <NotificationsPanel
+                  hideTabStrip
+                  notifications={notifications}
+                  onMarkRead={markNotificationRead}
+                  onSelectOrder={(orderId) => {
+                    const target = orders.find((o) => o.id === orderId);
+                    if (target) setSelectedOrderPopup(target);
+                    setShowNotifications(false);
+                  }}
+                  onOpenChat={(orderId) => {
+                    const order = orders.find((o) => o.id === orderId);
+                    if (order) {
+                      setShowNotifications(false);
+                    }
+                  }}
+                  onOpenPaymentMethods={() => setShowNotifications(false)}
+                  onOpenSettings={() => {
+                    setShowSettings(true);
+                    setShowNotifications(false);
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}

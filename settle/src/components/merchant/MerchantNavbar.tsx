@@ -66,11 +66,34 @@ interface MerchantNavbarProps {
   // "3 orders waiting"). Turns the header into a two-line large-title bar.
   // Only rendered alongside `mobileTitle`; ignored on desktop.
   mobileSubtitle?: string;
+  // When set together with onBack, renders a centered avatar+name header
+  // (chat-style) instead of a plain left-aligned title.
+  mobileChatUser?: string;
+  mobileChatAvatarUrl?: string | null;
   // Active corridor (e.g. "USDT_AED" / "USDT_INR"). When both are provided,
   // the mobile navbar exposes a dropdown so the user can switch trading pair
   // from any tab. On desktop the corridor lives in StatusCard.
   activeCorridor?: string;
   onCorridorChange?: (corridorId: string) => void;
+}
+
+function getInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+const AVATAR_GRADIENTS = [
+  "linear-gradient(150deg,#ff8a3d,#ff5d73)",
+  "linear-gradient(150deg,#6c63ff,#3b82f6)",
+  "linear-gradient(150deg,#f59e0b,#ef4444)",
+  "linear-gradient(150deg,#10b981,#3b82f6)",
+  "linear-gradient(150deg,#ec4899,#8b5cf6)",
+  "linear-gradient(150deg,#14b8a6,#6366f1)",
+];
+function avatarGradient(name: string): string {
+  const hash = name.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
+  return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
 }
 
 const pill = (active: boolean) =>
@@ -94,6 +117,8 @@ export function MerchantNavbar({
   onBack,
   mobileTitle,
   mobileSubtitle,
+  mobileChatUser,
+  mobileChatAvatarUrl,
   activeCorridor,
   onCorridorChange,
 }: MerchantNavbarProps) {
@@ -147,22 +172,48 @@ export function MerchantNavbar({
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-[#070710]/96 backdrop-blur-md border-b border-white/[0.06]">
+      <header className={`sticky top-0 z-50 bg-[#070710]/96 backdrop-blur-md border-b border-white/[0.06]${mobileTitle ? " pt-[2%]" : ""}`}>
         {/* Per-tab mobile screens (mobileTitle set) get a taller two-line
             large-title bar; desktop is fixed at 50px and overlay/home screens
             keep the compact 48px height. */}
         <div
-          className={`relative ${mobileTitle ? "h-[68px]" : "h-12"} lg:h-[50px] flex lg:grid lg:grid-cols-[1fr_auto_1fr] items-center px-3 lg:px-4 gap-3`}
+          className={`relative ${mobileChatUser ? "h-[56px]" : mobileTitle ? "h-[49px]" : "h-12"} lg:h-[50px] flex lg:grid lg:grid-cols-[1fr_auto_1fr] items-center ${mobileTitle ? "pl-3 pr-[5%]" : "px-3"} lg:px-4 gap-3`}
         >
           {/* Mobile back button — only on overlay screens that pass onBack */}
           {onBack && (
             <button
               onClick={onBack}
-              aria-label="Back to dashboard"
-              className="lg:hidden -ml-1 p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors"
+              aria-label="Back"
+              className="lg:hidden -ml-1 p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors shrink-0"
             >
               <CaretLeft className="w-5 h-5 text-foreground/70" />
             </button>
+          )}
+
+          {/* Chat header — avatar + username centred when in an active chat */}
+          {onBack && mobileChatUser && (
+            <div className="lg:hidden flex-1 flex items-center justify-center gap-2.5 min-w-0 pointer-events-none">
+              {/* Avatar: real photo if available, else gradient initials */}
+              {mobileChatAvatarUrl ? (
+                <img
+                  src={mobileChatAvatarUrl}
+                  alt={mobileChatUser}
+                  className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/[0.1]"
+                />
+              ) : (
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-[12px] select-none"
+                  style={{ background: avatarGradient(mobileChatUser) }}
+                >
+                  {getInitials(mobileChatUser)}
+                </div>
+              )}
+              <div className="flex flex-col min-w-0">
+                <span className="text-[15px] font-semibold text-foreground truncate leading-tight">
+                  {mobileChatUser}
+                </span>
+              </div>
+            </div>
           )}
 
           {/* Left: Logo on desktop / merchant identity on mobile */}
@@ -180,12 +231,12 @@ export function MerchantNavbar({
                   // padding (px-3 = 12px) already matches the content column
                   // below (<main> p-3 = 12px), so the title's left edge lines up
                   // with the tab strip / search field / order cards on every tab.
-                  <div className="flex flex-col justify-center min-w-0">
-                    <span className="text-[22px] font-bold text-white tracking-tight truncate leading-none">
+                  <div className="flex flex-col justify-center min-w-0 ml-3">
+                    <span className="text-[21px] font-semibold text-white tracking-[-0.01em] truncate leading-none">
                       {mobileTitle}
                     </span>
                     {mobileSubtitle && (
-                      <span className="mt-[5px] text-[12.5px] font-medium text-white/45 truncate leading-none">
+                      <span className="mt-[6px] text-[12px] font-medium text-white/40 truncate leading-none">
                         {mobileSubtitle}
                       </span>
                     )}
@@ -421,7 +472,7 @@ export function MerchantNavbar({
             </div>
 
             {/* Mobile: Corridor dropdown + Notification bell + Hamburger */}
-            <div className="flex lg:hidden items-center gap-1">
+            <div className="flex lg:hidden items-center gap-1 ml-auto mr-[4%]">
               {/* {activeCorridor && onCorridorChange && (
                 <FilterDropdown<string>
                   value={activeCorridor}
@@ -438,7 +489,7 @@ export function MerchantNavbar({
               {onOpenNotifications && (
                 <button
                   onClick={onOpenNotifications}
-                  className="relative w-10 h-10 flex items-center justify-center rounded-full bg-white/[0.055] border border-white/[0.09] hover:bg-white/[0.08] transition-colors"
+                  style={{ position: "relative", width: 32, height: 32, borderRadius: 999, background: "transparent", border: "none", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}
                   aria-label={
                     urgentNotificationCount > 0
                       ? `Notifications — ${urgentNotificationCount} require action`
@@ -446,21 +497,16 @@ export function MerchantNavbar({
                   }
                 >
                   <Bell
-                    className={`w-[18px] h-[18px] ${urgentNotificationCount > 0 ? "text-red-400" : "text-foreground/60"}`}
+                    weight="thin"
+                    style={{ width: 20, height: 20, color: urgentNotificationCount > 0 ? "#f87171" : "#aeaeb2" }}
                   />
                   {notificationCount > 0 && (
                     <>
-                      <span
-                        className={`absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ring-2 ring-[#070710] ${
-                          urgentNotificationCount > 0
-                            ? "bg-red-500 text-white"
-                            : "bg-[#f5f5f7] text-[#0b0b0c]"
-                        }`}
-                      >
+                      <span style={{ position: "absolute", top: 0, right: 0, minWidth: 14, height: 14, borderRadius: 99, background: urgentNotificationCount > 0 ? "#ef4444" : "#b8e9d4", color: urgentNotificationCount > 0 ? "#fff" : "#08221a", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxShadow: "0 0 0 2px #08080a" }}>
                         {notificationCount > 9 ? "9+" : notificationCount}
                       </span>
                       {urgentNotificationCount > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 w-[18px] h-[18px] rounded-full bg-red-500 animate-ping opacity-60 pointer-events-none" />
+                        <span className="absolute top-0 right-0 w-[14px] h-[14px] rounded-full bg-red-500 animate-ping opacity-60 pointer-events-none" />
                       )}
                     </>
                   )}

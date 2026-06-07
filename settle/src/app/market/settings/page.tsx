@@ -837,6 +837,7 @@ export default function MerchantSettingsPage({
         activePage="settings"
         merchantInfo={merchantInfo}
         onLogout={handleLogout}
+        mobileTitle="Settings"
         onOpenSettings={
           onClose
             ? () => {

@@ -325,7 +325,7 @@ export function MobileEscrowView({
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* Tab strip — same design as New Orders / Chat / History */}
-      <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, padding: 3, marginBottom: 12, overflowX: "auto", scrollbarWidth: "none" }}>
+      <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, marginBottom: 12, overflowX: "auto", scrollbarWidth: "none", width: "100%" }}>
         {/* sliding thumb */}
         <div style={{
           position: "absolute", top: 3, bottom: 3, borderRadius: 11,
@@ -343,7 +343,7 @@ export function MobileEscrowView({
               key={key}
               type="button"
               onClick={() => setFilter(key)}
-              style={{ flex: 1, minWidth: "max-content", position: "relative", zIndex: 1, padding: "9px 14px", fontSize: 13, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", whiteSpace: "nowrap" }}
+              style={{ flex: 1, minWidth: "max-content", position: "relative", zIndex: 1, padding: "7px 12px", fontSize: 13, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", whiteSpace: "nowrap" }}
             >
               {label}
             </button>

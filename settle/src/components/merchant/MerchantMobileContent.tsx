@@ -52,8 +52,8 @@ export interface MerchantMobileContentProps {
   orderConversations: OrderConversation[];
   chatTotalUnread: number;
   isLoadingConversations: boolean;
-  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell' } | null;
-  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
+  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell'; userAvatarUrl?: string | null } | null;
+  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell', userAvatarUrl?: string | null) => void;
   onCloseOrderChat: () => void;
   onClearUnread: (orderId: string) => void;
   onClearAllUnread?: () => void;
@@ -256,7 +256,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
 
         <main
           ref={scrollRef}
-          className={`flex-1 min-h-0 overflow-y-auto p-3 ${mobileView === "chat" && activeOrderChat ? "pb-0" : "pb-24"}`}
+          className={`flex-1 min-h-0 ${mobileView === "chat" ? "overflow-hidden" : (mobileView === "orders" || mobileView === "escrow" || mobileView === "history") ? "overflow-y-auto pt-1 px-3 pb-24" : "overflow-y-auto p-3 pb-24"}`}
           style={{
             overscrollBehaviorY: "contain",
             WebkitOverflowScrolling: "touch",

@@ -528,7 +528,9 @@ export const ChatViewScreen = ({
             )}
           </div>
           <div className="flex-1">
-            <p className="text-[15px] font-semibold text-text-primary">{activeOrder.merchant.name}</p>
+            <p className="text-[15px] font-semibold text-text-primary">
+              {activeOrder.merchant.username ? `@${activeOrder.merchant.username}` : activeOrder.merchant.name}
+            </p>
             <div className="flex items-center gap-1.5">
               {isCounterpartyTyping && chatEnabled ? (
                 // Typing replaces online/lastSeen — exactly like WhatsApp

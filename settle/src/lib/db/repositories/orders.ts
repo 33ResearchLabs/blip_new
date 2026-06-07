@@ -143,6 +143,7 @@ export async function getUserOrders(
              'id', m.id,
              'display_name', m.display_name,
              'business_name', m.business_name,
+             'username', m.username,
              'rating', m.rating,
              'total_trades', m.total_trades,
              'wallet_address', m.wallet_address,

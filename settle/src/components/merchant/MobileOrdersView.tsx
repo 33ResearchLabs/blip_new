@@ -514,7 +514,7 @@ export function MobileOrdersView({
       {/* ── TOP ROW: tabs + icons all in one line ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: searchOpen ? 8 : 14 }}>
         {/* Sliding tab strip — shrinks to make room for icons */}
-        <div style={{ position: "relative", display: "flex", flex: 1, minWidth: 0, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, height: 38 }}>
+        <div style={{ position: "relative", display: "flex", flex: 1, minWidth: 0, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, height: 34 }}>
           <div style={{
             position: "absolute", top: 3, bottom: 3, borderRadius: 9,
             background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
@@ -530,7 +530,7 @@ export function MobileOrdersView({
                 key={tab.id}
                 type="button"
                 onClick={() => setView(tab.id)}
-                style={{ flex: 1, position: "relative", zIndex: 1, padding: "0 4px", fontSize: 12, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 9, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, whiteSpace: "nowrap" }}
+                style={{ flex: 1, position: "relative", zIndex: 1, padding: "0 4px", fontSize: 13, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 9, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, whiteSpace: "nowrap" }}
               >
                 {tab.label}
                 {tab.count > 0 && (
@@ -548,7 +548,7 @@ export function MobileOrdersView({
           <button
             onClick={() => { setSearchOpen(s => !s); if (searchOpen) handleSearchClose(); }}
             aria-label="Search orders"
-            style={{ width: 38, height: 38, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: searchOpen || searchQuery ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.055)", border: `1px solid ${searchOpen || searchQuery ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.09)"}`, color: searchOpen || searchQuery ? "#f5f5f7" : "#5a5a60", cursor: "pointer", flexShrink: 0 }}
+            style={{ width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: searchOpen || searchQuery ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.055)", border: `1px solid ${searchOpen || searchQuery ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.09)"}`, color: searchOpen || searchQuery ? "#f5f5f7" : "#5a5a60", cursor: "pointer", flexShrink: 0 }}
           >
             <Search style={{ width: 15, height: 15 }} />
           </button>
@@ -566,7 +566,7 @@ export function MobileOrdersView({
             onClick={() => { const next = !soundEnabled; setSoundEnabled(next); if (next) playSound("notification"); }}
             aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
             aria-pressed={soundEnabled}
-            style={{ width: 38, height: 38, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: soundEnabled ? "rgba(255,255,255,0.7)" : "#5a5a60", cursor: "pointer" }}
+            style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: soundEnabled ? "rgba(255,255,255,0.7)" : "#5a5a60", cursor: "pointer" }}
           >
             {soundEnabled ? <Volume2 style={{ width: 15, height: 15 }} /> : <VolumeX style={{ width: 15, height: 15 }} />}
           </button>
@@ -584,7 +584,7 @@ export function MobileOrdersView({
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by user, amount, currency…"
             maxLength={100}
-            style={{ width: "100%", height: 38, paddingLeft: 32, paddingRight: searchQuery ? 30 : 12, borderRadius: 12, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+            style={{ width: "100%", height: 34, paddingLeft: 32, paddingRight: searchQuery ? 30 : 12, borderRadius: 12, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", fontSize: 13, outline: "none", boxSizing: "border-box" }}
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", padding: 4, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#5a5a60" }}>

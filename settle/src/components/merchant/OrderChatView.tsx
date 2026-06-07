@@ -12,6 +12,7 @@ interface OrderChatViewProps {
   userName: string;
   orderNumber: string;
   orderType?: 'buy' | 'sell';
+  userAvatarUrl?: string | null;
   onBack: () => void;
   onSendSound?: () => void;
 }
@@ -22,7 +23,7 @@ function getUserEmoji(username: string): string {
   return emojis[hash % emojis.length];
 }
 
-export function OrderChatView({ orderId, merchantId, userName, orderNumber, orderType, onBack, onSendSound }: OrderChatViewProps) {
+export function OrderChatView({ orderId, merchantId, userName, orderNumber, orderType, userAvatarUrl, onBack, onSendSound }: OrderChatViewProps) {
   const { chatWindows, openChat, sendMessage, markAsRead, sendTypingIndicator, loadOlderMessages, hasOlderMessages, isLoadingOlderMessages } = useRealtimeChat({
     maxWindows: 1,
     actorType: 'merchant',
@@ -83,6 +84,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
 
   // Track order status to gate chat input on terminal statuses
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
+  const [orderLabel, setOrderLabel] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -90,13 +92,22 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
         const res = await fetchWithAuth(`/api/orders/${orderId}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled) setOrderStatus(data?.data?.status || data?.status || null);
+        const order = data?.data || data;
+        if (!cancelled) {
+          setOrderStatus(order?.status || null);
+          if (order?.fiat_amount && order?.fiat_currency) {
+            const symbol = order.fiat_currency === 'INR' ? '₹' : order.fiat_currency === 'AED' ? 'د.إ' : order.fiat_currency;
+            const amount = Number(order.fiat_amount).toLocaleString('en-US', { maximumFractionDigits: 0 });
+            const side = orderType === 'buy' ? 'Buy' : 'Sell';
+            setOrderLabel(`@${userName} · ${side} ${symbol}${amount}`);
+          }
+        }
       } catch { /* best-effort */ }
     };
     load();
     const interval = setInterval(load, 15000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [orderId]);
+  }, [orderId, userName, orderType]);
 
   const isChatClosed = ['completed', 'cancelled', 'expired'].includes(orderStatus || '');
   const closedReason: string | null = isChatClosed
@@ -123,6 +134,9 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
             messages={chatWindow.messages}
             currentUserType="merchant"
             currentUserId={merchantId}
+            userName={userName}
+            userAvatarUrl={userAvatarUrl}
+            orderLabel={orderLabel ?? undefined}
             onSendMessage={(text, imageUrl, fileData) => {
               sendMessage(chatWindow.id, text, imageUrl, fileData);
               onSendSound?.();

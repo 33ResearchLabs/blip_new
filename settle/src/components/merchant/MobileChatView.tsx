@@ -10,8 +10,8 @@ export interface MobileChatViewProps {
   orderConversations: OrderConversation[];
   totalUnread: number;
   isLoadingConversations: boolean;
-  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell' } | null;
-  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
+  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell'; userAvatarUrl?: string | null } | null;
+  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell', userAvatarUrl?: string | null) => void;
   onCloseOrderChat: () => void;
   onClearUnread: (orderId: string) => void;
   onClearAllUnread?: () => void;
@@ -34,7 +34,7 @@ export function MobileChatView({
     // The parent <main> in MerchantMobileContent already has `pb-20` to
     // clear the fixed bottom nav. Adding a second bottom padding here
     // would stack 64+80=144px of empty space below the chat composer.
-    <div className="h-full flex flex-col">
+    <div className={`h-full flex flex-col ${!activeOrderChat ? "pb-24" : ""}`}>
       {activeOrderChat && merchantId ? (
         <OrderChatView
           orderId={activeOrderChat.orderId}
@@ -42,6 +42,7 @@ export function MobileChatView({
           userName={activeOrderChat.userName}
           orderNumber={activeOrderChat.orderNumber}
           orderType={activeOrderChat.orderType}
+          userAvatarUrl={activeOrderChat.userAvatarUrl}
           onBack={onCloseOrderChat}
           onSendSound={() => playSound('send')}
         />

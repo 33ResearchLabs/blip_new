@@ -11,6 +11,7 @@ export interface Merchant {
   id: string;
   display_name: string;
   business_name: string;
+  username?: string;
   rating: number;
   total_trades: number;
   is_online: boolean;
@@ -112,6 +113,7 @@ export interface Order {
   merchant: {
     id: string;
     name: string;
+    username?: string;
     rating: number;
     trades: number;
     rate: number;
