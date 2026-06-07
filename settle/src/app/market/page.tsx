@@ -878,41 +878,44 @@ export default function MerchantDashboard() {
         <MerchantNavbar
           activePage="dashboard"
           mobileTitle={
-            (
-              {
-                home: "Home",
-                orders: "New Order",
-                escrow: "Active Order",
-                chat: "Chat",
-                history: "History",
-                marketplace: "Marketplace",
-              } as Record<typeof mobileView, string>
-            )[mobileView]
+            // When inside an active chat, show the counterparty's username
+            mobileView === "chat" && activeOrderChat
+              ? activeOrderChat.userName
+              : (
+                  {
+                    home: "Home",
+                    orders: "New Order",
+                    escrow: "Active Order",
+                    chat: "Chat",
+                    history: "History",
+                    marketplace: "Marketplace",
+                  } as Record<typeof mobileView, string>
+                )[mobileView]
           }
-          // Live context line under the large title. Counts route through
-          // formatCount per the formatting rules; falls back to a calm
-          // "all clear" phrase when the relevant count is zero.
           mobileSubtitle={
-            (
-              {
-                home: "",
-                orders:
-                  pendingOrders.length > 0
-                    ? `${formatCount(pendingOrders.length)} ${pendingOrders.length === 1 ? "order" : "orders"} waiting`
-                    : "No new orders",
-                escrow:
-                  ongoingOrders.length > 0
-                    ? `${formatCount(ongoingOrders.length)} in progress`
-                    : "Nothing active",
-                chat:
-                  totalUnread > 0
-                    ? `${formatCount(totalUnread)} unread`
-                    : "All caught up",
-                history: "Completed & cancelled",
-                marketplace: "Browse open offers",
-              } as Record<typeof mobileView, string>
-            )[mobileView]
+            mobileView === "chat" && activeOrderChat
+              ? `Order #${activeOrderChat.orderNumber}`
+              : (
+                  {
+                    home: "",
+                    orders:
+                      pendingOrders.length > 0
+                        ? `${formatCount(pendingOrders.length)} ${pendingOrders.length === 1 ? "order" : "orders"} waiting`
+                        : "No new orders",
+                    escrow:
+                      ongoingOrders.length > 0
+                        ? `${formatCount(ongoingOrders.length)} in progress`
+                        : "Nothing active",
+                    chat:
+                      totalUnread > 0
+                        ? `${formatCount(totalUnread)} unread`
+                        : "All caught up",
+                    history: "Completed & cancelled",
+                    marketplace: "Browse open offers",
+                  } as Record<typeof mobileView, string>
+                )[mobileView]
           }
+          onBack={mobileView === "chat" && activeOrderChat ? onCloseOrderChat : undefined}
           merchantInfo={merchantInfo}
           embeddedWalletState={embeddedWallet?.state}
           onLogout={handleLogout}
@@ -926,7 +929,11 @@ export default function MerchantDashboard() {
                 !n.read && n.message.includes("act now to avoid auto-cancel"),
             ).length
           }
-          onOpenNotifications={() => setShowNotifications(!showNotifications)}
+          onOpenNotifications={
+            mobileView === "chat" && activeOrderChat
+              ? undefined
+              : () => setShowNotifications(!showNotifications)
+          }
           activeCorridor={activeCorridor}
           onCorridorChange={setActiveCorridor}
           rightActions={
