@@ -504,92 +504,95 @@ export function MobileOrdersView({
     { id: "mine" as ViewTab, label: "My Orders", count: myCount },
   ];
 
-  return (
-    <div>
-      {/* ── TAB STRIP ── */}
-      <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, padding: 3, marginBottom: 12 }}>
-        {/* sliding thumb */}
-        <div style={{
-          position: "absolute", top: 3, bottom: 3, borderRadius: 11,
-          background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
-          transition: "left 0.22s cubic-bezier(0.22,1,0.36,1), width 0.22s",
-          left: `calc(${tabIndex} * (100% - 6px) / 3 + 3px)`,
-          width: "calc((100% - 6px) / 3)",
-          pointerEvents: "none",
-        }} />
-        {tabs.map((tab) => {
-          const isActive = view === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setView(tab.id)}
-              style={{ flex: 1, position: "relative", zIndex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? "rgba(245,245,247,0.55)" : "rgba(134,134,139,0.7)" }}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+  const [searchOpen, setSearchOpen] = useState(false);
 
-      {/* ── SEARCH + FILTER ROW ── */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-        {/* Search input */}
-        <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
-          <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "#5a5a60", pointerEvents: "none" }} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search orders…"
-            maxLength={100}
-            style={{ width: "100%", height: 42, paddingLeft: 34, paddingRight: searchQuery ? 32 : 14, borderRadius: 14, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              aria-label="Clear search"
-              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", padding: 4, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#5a5a60" }}
-            >
-              <X style={{ width: 12, height: 12 }} />
-            </button>
-          )}
+  // Close search bar when query is cleared
+  const handleSearchClose = () => { setSearchQuery(""); setSearchOpen(false); };
+
+  return (
+    <div style={{ maxWidth: 480, margin: "0 auto" }}>
+      {/* ── TOP ROW: tabs + icons all in one line ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: searchOpen ? 8 : 14 }}>
+        {/* Sliding tab strip — shrinks to make room for icons */}
+        <div style={{ position: "relative", display: "flex", flex: 1, minWidth: 0, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, height: 38 }}>
+          <div style={{
+            position: "absolute", top: 3, bottom: 3, borderRadius: 9,
+            background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
+            transition: "left 0.22s cubic-bezier(0.22,1,0.36,1), width 0.22s",
+            left: `calc(${tabIndex} * (100% - 6px) / 3 + 3px)`,
+            width: "calc((100% - 6px) / 3)",
+            pointerEvents: "none",
+          }} />
+          {tabs.map((tab) => {
+            const isActive = view === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setView(tab.id)}
+                style={{ flex: 1, position: "relative", zIndex: 1, padding: "0 4px", fontSize: 12, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 9, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, whiteSpace: "nowrap" }}
+              >
+                {tab.label}
+                {tab.count > 0 && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? "rgba(245,245,247,0.55)" : "rgba(134,134,139,0.7)" }}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Filter dropdown */}
-        <div style={{ height: 42, display: "flex", alignItems: "center" }}>
+        {/* Icon buttons: search · filter · sound */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          <button
+            onClick={() => { setSearchOpen(s => !s); if (searchOpen) handleSearchClose(); }}
+            aria-label="Search orders"
+            style={{ width: 38, height: 38, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: searchOpen || searchQuery ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.055)", border: `1px solid ${searchOpen || searchQuery ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.09)"}`, color: searchOpen || searchQuery ? "#f5f5f7" : "#5a5a60", cursor: "pointer", flexShrink: 0 }}
+          >
+            <Search style={{ width: 15, height: 15 }} />
+          </button>
+
           <FilterDropdown<PendingFilter>
             value={pendingFilter}
             onChange={setPendingFilter}
             ariaLabel="Filter pending orders"
             align="right"
             options={PENDING_FILTER_OPTIONS}
-            triggerClassName="!rounded-[14px] !h-[42px] !py-0 !text-[12px]"
+            triggerClassName="!rounded-[12px] !h-[38px] !w-[38px] !p-0 !text-[12px]"
           />
-        </div>
 
-        {/* Sound toggle */}
-        <button
-          onClick={() => {
-            const next = !soundEnabled;
-            setSoundEnabled(next);
-            // setSoundEnabled writes the Zustand store synchronously, so the
-            // store's soundEnabled gate already reads `true` here — play the
-            // chime inside the gesture to also unlock mobile audio.
-            if (next) playSound("notification");
-          }}
-          aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
-          aria-pressed={soundEnabled}
-          style={{ width: 42, height: 42, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: soundEnabled ? "rgba(255,255,255,0.7)" : "#5a5a60", cursor: "pointer" }}
-        >
-          {soundEnabled ? <Volume2 style={{ width: 16, height: 16 }} /> : <VolumeX style={{ width: 16, height: 16 }} />}
-        </button>
+          <button
+            onClick={() => { const next = !soundEnabled; setSoundEnabled(next); if (next) playSound("notification"); }}
+            aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
+            aria-pressed={soundEnabled}
+            style={{ width: 38, height: 38, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: soundEnabled ? "rgba(255,255,255,0.7)" : "#5a5a60", cursor: "pointer" }}
+          >
+            {soundEnabled ? <Volume2 style={{ width: 15, height: 15 }} /> : <VolumeX style={{ width: 15, height: 15 }} />}
+          </button>
+        </div>
       </div>
+
+      {/* ── SEARCH INPUT — expands below when open ── */}
+      {searchOpen && (
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <Search style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "#5a5a60", pointerEvents: "none" }} />
+          <input
+            type="text"
+            autoFocus
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by user, amount, currency…"
+            maxLength={100}
+            style={{ width: "100%", height: 38, paddingLeft: 32, paddingRight: searchQuery ? 30 : 12, borderRadius: 12, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", padding: 4, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#5a5a60" }}>
+              <X style={{ width: 12, height: 12 }} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── ORDER LIST or EMPTY STATE ── */}
       {filteredPendingOrders.length > 0 ? (
