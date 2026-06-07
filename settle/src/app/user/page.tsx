@@ -1015,7 +1015,7 @@ export default function Home() {
             <SupportTicketScreen
               setScreen={setScreen}
               previousScreen={previousScreen}
-              userId={auth.userId}
+              userId={auth.userId ?? undefined}
             />
           </Panel>
         )}
