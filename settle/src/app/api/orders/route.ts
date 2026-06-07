@@ -194,16 +194,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ── BUY order guards ─────────────────────────────────────────────────
-    // 1. Phone verification: buyer must have a verified phone number.
-    //    One real phone = one real person; cheapest identity signal.
-    // 2. Active buy cap: max 2 concurrent unfulfilled buy orders per user.
-    //    Once at cap, the user must complete or cancel existing orders first.
+    // Phone verification gate is temporarily disabled while the SMS/OTP
+    // flow is being fixed. Re-enable by restoring the phone_verified check.
+    // Active buy cap: max 2 concurrent unfulfilled buy orders per user.
     if (type === 'buy') {
-      const [userRow, activeBuyRow] = await Promise.all([
-        dbQuery<{ phone_verified: boolean }>(
-          'SELECT phone_verified FROM users WHERE id = $1',
-          [user_id]
-        ),
+      const [activeBuyRow] = await Promise.all([
         dbQuery<{ count: string }>(
           `SELECT COUNT(*) AS count FROM orders
            WHERE user_id = $1
@@ -212,17 +207,6 @@ export async function POST(request: NextRequest) {
           [user_id]
         ),
       ]);
-
-      if (!userRow[0]?.phone_verified) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'PHONE_VERIFICATION_REQUIRED',
-            message: 'Please verify your phone number before placing a buy order.',
-          },
-          { status: 403 }
-        );
-      }
 
       const activeBuyCount = parseInt(activeBuyRow[0]?.count ?? '0', 10);
       if (activeBuyCount >= 2) {
