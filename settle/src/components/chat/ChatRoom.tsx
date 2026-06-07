@@ -912,7 +912,8 @@ export function ChatRoom({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
+        className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
+        style={{ background: "rgba(8,9,10,0.7)" }}
       >
         {/* Older-messages loading spinner — shown at the TOP while fetching history */}
         {isLoadingOlder && (
@@ -1044,13 +1045,25 @@ export function ChatRoom({
                   )}
 
                   <div
-                    className={`rounded-2xl px-3 py-2 ${
+                    className={`px-3 py-2 ${
                       isMe
-                        ? "bg-primary/20 border border-primary/10"
+                        ? "rounded-2xl rounded-br-sm"
                         : msg.from === "compliance"
-                          ? "bg-red-500/10 border border-red-500/10"
-                          : "bg-white/[0.05] border border-white/[0.04]"
+                          ? "rounded-2xl rounded-bl-sm"
+                          : "rounded-2xl rounded-bl-sm"
                     }`}
+                    style={{
+                      background: isMe
+                        ? "linear-gradient(135deg,#2f6ae0 0%,#1a56c4 100%)"
+                        : msg.from === "compliance"
+                          ? "rgba(239,68,68,0.12)"
+                          : "rgba(255,255,255,0.08)",
+                      border: isMe
+                        ? "1px solid rgba(100,150,255,0.2)"
+                        : msg.from === "compliance"
+                          ? "1px solid rgba(239,68,68,0.15)"
+                          : "1px solid rgba(255,255,255,0.07)",
+                    }}
                   >
                     {/* Image content */}
                     {msg.messageType === "image" && msg.imageUrl && (
@@ -1074,7 +1087,7 @@ export function ChatRoom({
                     {msg.messageType !== "image" &&
                       msg.messageType !== "file" &&
                       msg.text && (
-                        <p className="text-sm text-white/90 whitespace-pre-wrap break-words">
+                        <p className={`text-sm whitespace-pre-wrap break-words ${isMe ? "text-white" : "text-white/85"}`}>
                           {msg.text}
                         </p>
                       )}
@@ -1225,8 +1238,8 @@ export function ChatRoom({
         </div>
       )}
 
-      {/* Input area */}
-      <div className="px-3 py-2 border-t border-foreground/[0.04] bg-foreground/[0.02]">
+      {/* Input area — WhatsApp-style toolbar */}
+      <div className="px-3 py-2 border-t border-white/[0.05]" style={{ background: "rgba(14,14,16,0.98)" }}>
         {/* Chat-closed banner — replaces the input row entirely when the
             backend (or the order's terminal status) has disabled chat.
             Compliance reviewers can still see the input via the freeze
@@ -1283,7 +1296,7 @@ export function ChatRoom({
               so the Send button can never be pushed off-screen by long text.
               min-w-0 on the flex parent is the critical bit — without it the
               <input> can overflow its flex cell on narrow screens. */}
-          <div className="flex-1 min-w-0 flex items-center gap-1 bg-foreground/[0.04] border border-foreground/[0.06] rounded-full pl-4 pr-1.5 focus-within:border-primary/30 transition-colors">
+          <div className="flex-1 min-w-0 flex items-center gap-1 rounded-full pl-4 pr-1.5 transition-colors" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.09)" }}>
             {/* Text input — disabled when chat is closed/frozen/waiting */}
             <input
               ref={inputRef}
@@ -1335,7 +1348,8 @@ export function ChatRoom({
               (isFrozen && currentUserType !== "compliance") ||
               (!messageText.trim() && !pendingFile)
             }
-            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-primary hover:bg-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ background: "linear-gradient(135deg,#2f6ae0,#1a56c4)" }}
           >
             {isUploading ? (
               <Loader2 className="w-4 h-4 text-background animate-spin" />

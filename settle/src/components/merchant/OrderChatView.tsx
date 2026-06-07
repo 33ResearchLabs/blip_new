@@ -113,48 +113,59 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
   const typeLabel = orderType === 'buy' ? 'BUY' : 'SELL';
   const typeColor = orderType === 'buy' ? 'text-[#f5f5f7] bg-white/[0.06] border-white/[0.09]' : 'text-orange-400 bg-orange-500/15 border-orange-500/20';
 
+  const isOnline = chatWindow?.presence?.some(p => p.actorType === 'user' && p.isOnline) ?? false;
+  const isTypingNow = chatWindow?.isTyping ?? false;
+
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
-      {/* Header */}
-      <div className="px-3 py-2 border-b border-foreground/[0.04] flex items-center gap-2">
+      {/* WhatsApp-style header */}
+      <div
+        className="flex items-center gap-3 px-2 py-2 border-b border-white/[0.06]"
+        style={{ background: "rgba(14,14,16,0.98)", backdropFilter: "blur(12px)" }}
+      >
+        {/* Back button — prominent, full hit area */}
         <button
           onClick={onBack}
-          className="p-1 rounded hover:bg-foreground/[0.06] transition-colors text-foreground/40 hover:text-foreground/70"
+          className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-white/[0.07] active:bg-white/[0.12] transition-colors shrink-0 -ml-1"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-6 h-6 text-white/70" />
         </button>
-        <div className="w-7 h-7 rounded-lg bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center text-sm">
+
+        {/* Avatar circle */}
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400/80 to-pink-500/80 flex items-center justify-center text-xl shrink-0 relative">
           {getUserEmoji(userName)}
+          {/* Online dot */}
+          {isOnline && (
+            <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#0e0e10]" />
+          )}
         </div>
+
+        {/* Name + status */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p className="text-xs font-medium text-foreground/80 truncate">
+          <div className="flex items-center gap-2">
+            <p className="text-[15px] font-semibold text-white leading-tight truncate">
               {userName}
             </p>
             {orderType && (
-              <span className={`text-[12px] px-1 py-0.5 rounded font-mono border ${typeColor}`}>
+              <span className={`text-[11px] px-1.5 py-0.5 rounded-md font-bold border shrink-0 ${typeColor}`}>
                 {typeLabel}
               </span>
             )}
           </div>
-          {/* Online / Typing status */}
-          <div className="flex items-center gap-1">
-            {chatWindow?.isTyping ? (
-              <p className="text-[12px] text-[#f5f5f7] font-medium">typing...</p>
+          <p className="text-[12px] leading-tight mt-0.5 truncate">
+            {isTypingNow ? (
+              <span className="text-emerald-400">typing…</span>
+            ) : isOnline ? (
+              <span className="text-emerald-400">Online</span>
             ) : (
-              <>
-                <ConnectionIndicator isConnected={chatWindow?.presence?.some(p => p.actorType === 'user' && p.isOnline) ?? false} />
-                <p className="text-[12px] text-foreground/30 font-mono truncate">
-                  {chatWindow?.presence?.some(p => p.actorType === 'user' && p.isOnline)
-                    ? 'Online'
-                    : `Order #${orderNumber}`}
-                </p>
-              </>
+              <span className="text-white/30">Order #{orderNumber}</span>
             )}
-          </div>
+          </p>
         </div>
+
+        {/* Status badge */}
         {orderStatus && (
-          <span className="text-[12px] px-1.5 py-0.5 bg-foreground/[0.04] text-foreground/40 rounded font-mono uppercase">
+          <span className="text-[11px] px-2 py-1 bg-white/[0.06] text-white/40 rounded-lg font-mono uppercase shrink-0">
             {orderStatus}
           </span>
         )}

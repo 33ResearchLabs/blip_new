@@ -256,7 +256,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
 
         <main
           ref={scrollRef}
-          className="flex-1 min-h-0 overflow-y-auto p-3 pb-24"
+          className={`flex-1 min-h-0 overflow-y-auto p-3 ${mobileView === "chat" && activeOrderChat ? "pb-0" : "pb-24"}`}
           style={{
             overscrollBehaviorY: "contain",
             WebkitOverflowScrolling: "touch",
@@ -380,13 +380,16 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
         </motion.button>
       )}
 
-      <MobileBottomNav
-        mobileView={mobileView}
-        setMobileView={setMobileView}
-        pendingCount={pendingOrders.length}
-        ongoingCount={ongoingOrders.length}
-        totalUnread={totalUnread}
-      />
+      {/* Hide bottom nav when inside an active chat — like WhatsApp */}
+      {!(mobileView === "chat" && activeOrderChat) && (
+        <MobileBottomNav
+          mobileView={mobileView}
+          setMobileView={setMobileView}
+          pendingCount={pendingOrders.length}
+          ongoingCount={ongoingOrders.length}
+          totalUnread={totalUnread}
+        />
+      )}
     </>
   );
 });
