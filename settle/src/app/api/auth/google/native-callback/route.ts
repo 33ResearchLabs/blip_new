@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const actorType = role === 'user' ? 'user' : 'merchant';
+    const actorType = (role === 'user' ? 'user' : 'merchant') as 'user' | 'merchant';
     let actorId: string;
     let isNew = false;
 
