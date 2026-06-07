@@ -336,15 +336,23 @@ export default function MerchantSettingsPage({
         );
         return;
       }
-      // Update both the local row state and the in-memory store so the
-      // dashboard reflects the new username without a refresh.
-      setMerchant((prev: any) => (prev ? { ...prev, username: trimmed } : prev));
+      // Sync display_name + business_name to the new username so both
+      // fields always show the same value — one name, no divergence.
+      const id = merchantId || merchant?.id;
+      if (id) {
+        await fetchWithAuth(`/api/merchant/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ display_name: trimmed, business_name: trimmed }),
+        }).catch(() => null);
+      }
+      setMerchant((prev: any) => (prev ? { ...prev, username: trimmed, display_name: trimmed } : prev));
       setMerchantInfo((prev: any) =>
-        prev ? { ...prev, username: trimmed } : prev,
+        prev ? { ...prev, username: trimmed, display_name: trimmed } : prev,
       );
+      setDisplayName(trimmed);
       setUsernameInput("");
       setUsernameAvailability({ kind: "idle" });
-      // Drop back to the read-only display once the new value is committed.
       setIsEditingUsername(false);
       void refreshOnboarding();
     } catch {
@@ -500,10 +508,6 @@ export default function MerchantSettingsPage({
       const updates: any = {};
       if (displayName !== (merchant?.display_name || "")) {
         updates.display_name = displayName;
-        // Keep business_name in lockstep with display_name. The settings UI
-        // no longer exposes a separate Business Name input — both columns
-        // represent "the merchant's name" and drift between them was the
-        // root cause of confusing UIs ("why are these two the same?").
         updates.business_name = displayName;
       }
       if (bio !== (merchant?.bio || "")) updates.bio = bio;
@@ -1028,27 +1032,21 @@ export default function MerchantSettingsPage({
                 </div>
               </div>
 
-              {/* Display Name + Bio.
-                  Business Name field was removed because at register
-                  business_name and display_name are populated with the same
-                  Full Name input, and the merchant edits "their name" once —
-                  showing two inputs for the same concept was confusing.
-                  business_name is kept in sync server-side on save (see
-                  handleSaveProfile) so any downstream queries that read
-                  business_name stay current. */}
               <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-4">
                 <div>
                   <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-2 block">
-                    Username
+                    Name
                   </label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Your username"
-                    maxLength={50}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/30 transition-colors"
-                  />
+                  <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3">
+                    <span className="text-sm text-white flex-1">{merchant?.username || displayName || "—"}</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("account")}
+                      className="text-[11px] text-white/30 hover:text-white/60 transition-colors"
+                    >
+                      Change in Account
+                    </button>
+                  </div>
                 </div>
 
                 <div>
