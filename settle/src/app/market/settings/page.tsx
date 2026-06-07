@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import {
@@ -183,6 +183,7 @@ export default function MerchantSettingsPage({
   const [activeTab, setActiveTab] = useState<SettingsTab>(
     (searchParams.get("tab") as SettingsTab) || "profile"
   );
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(!merchantInfo);
   const [merchant, setMerchant] = useState<any>(merchantInfo ?? null);
 
@@ -859,26 +860,89 @@ export default function MerchantSettingsPage({
             MerchantNavbar) and capped at the viewport so very long sidebars
             scroll internally instead of pushing the page taller. */}
         <nav className="lg:w-60 lg:border-r border-white/[0.05] lg:py-6 lg:px-3 shrink-0 flex flex-col lg:sticky lg:top-[50px] lg:self-start lg:h-[calc(100vh-50px)] lg:overflow-y-auto">
-          {/* Mobile: horizontal scroll tabs (single flat list, no section
-              headers — they only make sense in the vertical desktop layout). */}
-          <div className="flex lg:hidden gap-1 overflow-x-auto px-3 py-2 scrollbar-hide">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? "bg-white/[0.08] text-white"
-                      : "text-white/40 hover:text-foreground/60 hover:bg-card"
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  {tab.label}
-                </button>
-              );
-            })}
+          {/* Mobile: iOS-style grouped list — each row opens a bottom-sheet */}
+          <div className="flex lg:hidden flex-col gap-6 px-4 py-4 pb-28">
+            {/* Profile header card */}
+            <button
+              onClick={() => { setActiveTab("profile"); setMobileSheetOpen(true); }}
+              className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] active:bg-white/[0.06] transition-colors text-left w-full"
+            >
+              <div className="w-12 h-12 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 overflow-hidden">
+                {merchant?.avatar_url ? (
+                  <img src={merchant.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-lg font-bold text-white/60">
+                    {(merchant?.username || merchant?.display_name || "?").charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-semibold text-white truncate">
+                  {merchant?.username || merchant?.display_name || "Set up profile"}
+                </p>
+                <p className="text-[12px] text-white/40 truncate">{merchant?.email || ""}</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-white/20 shrink-0" />
+            </button>
+
+            {/* Account section */}
+            <div>
+              <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest px-1 mb-2">Account</p>
+              <div className="rounded-2xl border border-white/[0.06] overflow-hidden divide-y divide-white/[0.04]">
+                {accountTabs.filter(t => t.id !== "profile").map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => { setActiveTab(tab.id); setMobileSheetOpen(true); }}
+                      className="flex items-center gap-3.5 w-full px-4 py-3.5 bg-white/[0.02] active:bg-white/[0.06] transition-colors text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-white/60" />
+                      </div>
+                      <span className="flex-1 text-[14px] text-white/80">{tab.label}</span>
+                      <ChevronRight className="w-4 h-4 text-white/20" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Preferences section */}
+            <div>
+              <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest px-1 mb-2">Preferences</p>
+              <div className="rounded-2xl border border-white/[0.06] overflow-hidden divide-y divide-white/[0.04]">
+                {preferenceTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => { setActiveTab(tab.id); setMobileSheetOpen(true); }}
+                      className="flex items-center gap-3.5 w-full px-4 py-3.5 bg-white/[0.02] active:bg-white/[0.06] transition-colors text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-white/60" />
+                      </div>
+                      <span className="flex-1 text-[14px] text-white/80">{tab.label}</span>
+                      <ChevronRight className="w-4 h-4 text-white/20" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Logout */}
+            <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-3.5 w-full px-4 py-3.5 bg-white/[0.02] active:bg-white/[0.06] transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                  <LogOut className="w-4 h-4 text-red-400" />
+                </div>
+                <span className="flex-1 text-[14px] text-red-400">Log Out</span>
+              </button>
+            </div>
           </div>
 
           {/* Desktop: grouped sidebar — ACCOUNT then PREFERENCES, with the
@@ -945,9 +1009,41 @@ export default function MerchantSettingsPage({
           </div>
         </nav>
 
-        {/* Content — full remaining width with a comfortable max so very
-            wide monitors don't stretch the form fields edge-to-edge. */}
-        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 max-w-[1100px] w-full">
+        {/* Mobile: scrim behind the sheet */}
+        <AnimatePresence>
+          {mobileSheetOpen && (
+            <motion.div
+              className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileSheetOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Content — desktop: inline flex column. Mobile: slides up as a bottom-sheet. */}
+        <motion.main
+          className={`flex-1 max-w-[1100px] w-full overflow-y-auto
+            lg:p-8 lg:pb-8 lg:static lg:z-auto lg:bg-transparent lg:rounded-none lg:border-none lg:max-h-none lg:translate-y-0 lg:block
+            fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-[#0e0e10] border-t border-white/[0.08]
+            ${mobileSheetOpen ? 'flex flex-col' : 'hidden lg:flex'}`}
+          style={{ maxHeight: mobileSheetOpen ? "92vh" : undefined }}
+          initial={false}
+          animate={mobileSheetOpen ? { y: 0 } : { y: "100%" }}
+          transition={{ type: "spring", stiffness: 360, damping: 36 }}
+        >
+          {/* Mobile sheet header — hidden on desktop */}
+          <div className="lg:hidden flex items-center px-5 pt-5 pb-3 border-b border-white/[0.05] shrink-0 relative">
+            <div className="absolute left-1/2 -translate-x-1/2 top-2 w-8 h-1 rounded-full bg-white/20" />
+            <p className="text-[15px] font-semibold text-white flex-1 text-center">
+              {tabs.find(t => t.id === activeTab)?.label}
+            </p>
+            <button onClick={() => setMobileSheetOpen(false)} className="p-1.5 rounded-lg text-white/40 hover:text-white/70">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto lg:overflow-visible p-5 lg:p-8 pb-10 lg:pb-16">
           {/* Success/Error banners */}
           {saveSuccess && (
             <motion.div
@@ -1999,8 +2095,8 @@ export default function MerchantSettingsPage({
             <ReputationTab merchantId={merchantId} />
           )}
 
-
-        </main>
+          </div>
+        </motion.main>
       </div>
 
       <PaymentMethodModal
