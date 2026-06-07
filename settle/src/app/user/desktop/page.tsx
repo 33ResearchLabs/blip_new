@@ -776,6 +776,7 @@ export default function UserDesktopPage() {
                 isLoadingOlder={activeOrder ? userEffects.isLoadingOlderMessages(activeOrder.id) : false}
                 onTyping={userEffects.sendTypingIndicator}
                 isCounterpartyTyping={!!(userEffects.activeChat as any)?.isTyping}
+                userId={auth.userId ?? undefined}
               />
             </CenterPanel>
           )}

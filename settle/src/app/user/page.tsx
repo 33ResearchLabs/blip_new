@@ -1170,6 +1170,7 @@ export default function Home() {
               }
               onTyping={userEffects.sendTypingIndicator}
               isCounterpartyTyping={!!(userEffects.activeChat as any)?.isTyping}
+              userId={auth.userId ?? undefined}
             />
           </Panel>
         )}

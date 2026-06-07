@@ -5,6 +5,7 @@ import { ChevronLeft, Shield } from 'lucide-react';
 import { ChatRoom } from '@/components/chat/ChatRoom';
 import { useRealtimeChat } from '@/hooks/useRealtimeChat';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { AlertTriangle } from 'lucide-react';
 
 interface DisputeChatViewProps {
   orderId: string;
@@ -20,6 +21,47 @@ export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendS
     actorType: 'merchant',
     actorId: merchantId,
   });
+
+  // Mutual cancel state
+  const [myMutualCancel, setMyMutualCancel] = useState(false);
+  const [counterpartyMutualCancel, setCounterpartyMutualCancel] = useState(false);
+  const [mutualCancelLoading, setMutualCancelLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetchWithAuth(`/api/orders/${orderId}/dispute/mutual-cancel`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data?.data) {
+          setMyMutualCancel(!!data.data.mutual_cancel_requested_by_merchant);
+          setCounterpartyMutualCancel(!!data.data.mutual_cancel_requested_by_user);
+        }
+      } catch { /* best-effort */ }
+    };
+    load();
+    const interval = setInterval(load, 10000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [orderId]);
+
+  const handleMutualCancel = async (action: 'request' | 'withdraw') => {
+    setMutualCancelLoading(true);
+    try {
+      const res = await fetchWithAuth(`/api/orders/${orderId}/dispute/mutual-cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, actor_type: 'merchant', actor_id: merchantId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMyMutualCancel(action === 'request');
+        if (data.mutualCancelComplete) onBack();
+      }
+    } catch { /* best-effort */ } finally {
+      setMutualCancelLoading(false);
+    }
+  };
 
   // Open the dispute chat on mount
   useEffect(() => {
@@ -82,6 +124,45 @@ export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendS
           DISPUTE
         </span>
       </div>
+
+      {/* Mutual cancel bar */}
+      {!isChatClosed && (
+        <div className="px-3 py-2 bg-red-500/5 border-b border-red-500/10">
+          {counterpartyMutualCancel && !myMutualCancel && (
+            <p className="text-[11px] text-yellow-400 mb-1.5">Buyer has requested to cancel — agree below to refund funds.</p>
+          )}
+          {myMutualCancel && !counterpartyMutualCancel && (
+            <p className="text-[11px] text-foreground/40 mb-1.5">Waiting for buyer to agree…</p>
+          )}
+          <div className="flex gap-2">
+            {myMutualCancel ? (
+              <button
+                onClick={() => handleMutualCancel('withdraw')}
+                disabled={mutualCancelLoading}
+                className="flex-1 py-1.5 rounded-lg text-[12px] font-medium bg-foreground/[0.06] text-foreground/50 border border-foreground/[0.08] disabled:opacity-50"
+              >
+                {mutualCancelLoading ? 'Processing…' : 'Continue Dispute'}
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleMutualCancel('request')}
+                  disabled={mutualCancelLoading}
+                  className="flex-1 py-1.5 rounded-lg text-[12px] font-medium bg-red-500/80 text-white disabled:opacity-50"
+                >
+                  {mutualCancelLoading ? 'Processing…' : 'Cancel Dispute'}
+                </button>
+                <button
+                  disabled
+                  className="flex-1 py-1.5 rounded-lg text-[12px] font-medium bg-foreground/[0.06] text-foreground/40 border border-foreground/[0.06] opacity-50"
+                >
+                  Continue Dispute
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Chat Room */}
       <div className="flex-1 min-h-0">
