@@ -183,7 +183,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
   return (
     <>
       {/* Mobile View Content */}
-      <div className="lg:hidden flex-1 min-h-0 flex flex-col overflow-hidden relative">
+      <div className="lg:hidden flex-1 min-h-0 flex flex-col overflow-hidden relative" style={{ fontSize: '90%' }}>
         {/* ── Pull-to-refresh indicator ─────────────────────────────────────
             Pill is parked above the viewport and slides down with the pull
             so a hint of motion is visible from the first pixel. */}

@@ -177,7 +177,7 @@ export function MerchantNavbar({
             large-title bar; desktop is fixed at 50px and overlay/home screens
             keep the compact 48px height. */}
         <div
-          className={`relative ${mobileChatUser ? "h-[56px]" : mobileTitle ? "h-[49px]" : "h-12"} lg:h-[50px] flex lg:grid lg:grid-cols-[1fr_auto_1fr] items-center ${mobileTitle ? "pl-3 pr-[5%]" : "px-3"} lg:px-4 gap-3`}
+          className={`relative ${mobileChatUser ? "h-[56px]" : mobileTitle ? "h-[44px]" : "h-12"} lg:h-[50px] flex lg:grid lg:grid-cols-[1fr_auto_1fr] items-center ${mobileTitle ? "pl-3 pr-[5%]" : "px-3"} lg:px-4 gap-3`}
         >
           {/* Mobile back button — only on overlay screens that pass onBack */}
           {onBack && (
@@ -232,7 +232,7 @@ export function MerchantNavbar({
                   // below (<main> p-3 = 12px), so the title's left edge lines up
                   // with the tab strip / search field / order cards on every tab.
                   <div className="flex flex-col justify-center min-w-0 ml-3">
-                    <span className="text-[21px] font-semibold text-white tracking-[-0.01em] truncate leading-none">
+                    <span className="text-[19px] font-semibold text-white tracking-[-0.01em] truncate leading-none">
                       {mobileTitle}
                     </span>
                     {mobileSubtitle && (

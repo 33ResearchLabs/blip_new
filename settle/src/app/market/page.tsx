@@ -1183,7 +1183,7 @@ export default function MerchantDashboard() {
             <div className="absolute inset-0 flex flex-col overflow-hidden" style={{ background: "#08080a" }}>
               <div className="border-b border-white/[0.06]" style={{ paddingTop: "2%" }}>
                 <div className="flex items-center justify-between pl-3 pr-[5%] h-[49px]">
-                  <span className="text-[21px] font-semibold text-white tracking-[-0.01em] ml-3">Notifications</span>
+                  <span className="text-[19px] font-semibold text-white tracking-[-0.01em] ml-3">Notifications</span>
                   <button
                     onClick={() => setShowNotifications(false)}
                     className="w-8 h-8 rounded-full flex items-center justify-center mr-[4%]"
