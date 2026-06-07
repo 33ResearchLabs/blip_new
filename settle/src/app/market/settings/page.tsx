@@ -818,13 +818,11 @@ export default function MerchantSettingsPage({
     { id: "security", label: "Security", icon: Lock },
     { id: "theme", label: "Theme", icon: Palette },
     { id: "payments", label: "Payments", icon: CreditCard },
-    { id: "rates", label: "INR Rates", icon: TrendingUp },
   ];
   const preferenceTabs: { id: SettingsTab; label: string; icon: any }[] = [
     { id: "notifications", label: "Alerts", icon: Bell },
     { id: "liquidity", label: "Liquidity", icon: Droplets },
     { id: "reputation", label: "Reputation", icon: Trophy },
-    { id: "ledger", label: "Wallet Ledger", icon: BookOpen },
   ];
   const tabs = [...accountTabs, ...preferenceTabs];
 
@@ -1838,102 +1836,6 @@ export default function MerchantSettingsPage({
             </div>
           )}
 
-          {/* INR Rates Tab */}
-          {activeTab === "rates" && (
-            <div className="space-y-6" data-tour="inr-rates">
-              <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <h2 className="text-2xl font-bold">INR Rates</h2>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-white/10 bg-white/[0.05] text-[11px] font-semibold text-white/50">
-                    0% Blip fees
-                  </span>
-                </div>
-                <p className="text-sm text-white/40">
-                  Set the rates you offer for buying and selling USDT in the India corridor.
-                </p>
-              </div>
-
-
-              {/* Buy Rate */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-white/70">
-                  Buy Rate — you buy USDT from users at this price (₹/USDT)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">₹</span>
-                  <input
-                    type="number"
-                    value={buyRate}
-                    onChange={(e) => setBuyRate(e.target.value)}
-                    placeholder="Enter buy rate"
-                    min={50}
-                    max={200}
-                    step={0.01}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-7 pr-4 py-3 text-white text-sm focus:outline-none focus:border-white/30 focus:bg-white/8"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-white/30">Blip Rate:</span>
-                  <button
-                    onClick={() => setBuyRate('101.5')}
-                    className="text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1 rounded-lg transition-colors"
-                  >
-                    ₹101.5
-                  </button>
-                </div>
-              </div>
-
-              {/* Sell Rate */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-white/70">
-                  Sell Rate — you sell USDT to users at this price (₹/USDT)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">₹</span>
-                  <input
-                    type="number"
-                    value={sellRate}
-                    onChange={(e) => setSellRate(e.target.value)}
-                    placeholder="Enter sell rate"
-                    min={50}
-                    max={200}
-                    step={0.01}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-7 pr-4 py-3 text-white text-sm focus:outline-none focus:border-white/30 focus:bg-white/8"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-white/30">Blip Rate:</span>
-                  <button
-                    onClick={() => setSellRate('103.4')}
-                    className="text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1 rounded-lg transition-colors"
-                  >
-                    ₹103.4
-                  </button>
-                </div>
-              </div>
-
-              {rateError && (
-                <p className="text-red-400 text-sm flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" /> {rateError}
-                </p>
-              )}
-
-              <button
-                onClick={handleSaveRates}
-                disabled={rateSaving}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-black font-semibold text-sm transition-colors"
-              >
-                {rateSaving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : rateSaved ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                {rateSaved ? "Saved!" : rateSaving ? "Saving…" : "Save Rates"}
-              </button>
-            </div>
-          )}
 
           {/* Notifications Tab */}
           {activeTab === "notifications" && (
@@ -2099,16 +2001,6 @@ export default function MerchantSettingsPage({
             <ReputationTab merchantId={merchantId} />
           )}
 
-          {activeTab === "ledger" && (merchantId || merchant?.id) && (
-            <div>
-              <h2 className="text-lg font-bold mb-1">Wallet Ledger</h2>
-              <p className="text-sm text-white/40 mb-6">
-                View your complete USDT transaction history with running
-                balances.
-              </p>
-              <WalletLedger merchantId={merchantId || merchant?.id} />
-            </div>
-          )}
 
         </main>
       </div>

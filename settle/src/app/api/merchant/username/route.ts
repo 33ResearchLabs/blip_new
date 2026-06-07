@@ -110,20 +110,14 @@ export async function PATCH(request: NextRequest) {
     // Changing it requires a wallet-bound support flow (legacy
     // `update_username` action on /api/auth/merchant, which verifies a
     // wallet signature).
-    const lockCheck = await query<{ username_customized_at: string | null; username: string | null }>(
-      `SELECT username_customized_at, username FROM merchants WHERE id = $1`,
+    // Fetch current username to allow same-name no-op short-circuit.
+    const lockCheck = await query<{ username: string | null }>(
+      `SELECT username FROM merchants WHERE id = $1`,
       [auth.actorId]
     );
     const existing = lockCheck[0];
-    if (existing?.username_customized_at) {
-      // Resubmitting the same name is a no-op (handles UI replay).
-      if (existing.username && existing.username.toLowerCase() === username.toLowerCase()) {
-        return successResponse({ username: existing.username });
-      }
-      return errorResponse(
-        'Username is locked after first set. Contact support to change it.',
-        409,
-      );
+    if (existing?.username && existing.username.toLowerCase() === username.toLowerCase()) {
+      return successResponse({ username: existing.username });
     }
 
     // Uniqueness check across both tables. Case-insensitive match — we
