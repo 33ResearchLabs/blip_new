@@ -249,10 +249,30 @@ export default function MerchantSettingsPage({
   // as a quiet read-only row by default — matching the Display Name pattern.
   const [isEditingUsername, setIsEditingUsername] = useState(false);
 
+  const RESERVED_USERNAMES = [
+    'blip', 'blipmoney', 'blipapp', 'blip_money', 'blip_app',
+    'blipsupport', 'blipceo', 'blipteam', 'blipofficial', 'bliphelp',
+    'blip_support', 'blip_ceo', 'blip_team', 'blip_official', 'blip_help',
+    'support', 'admin', 'help', 'official', 'team', 'staff', 'mod',
+    'moderator', 'customercare', 'customer_care',
+  ];
+
   useEffect(() => {
     const trimmed = usernameInput.trim();
     if (trimmed.length === 0) {
       setUsernameAvailability({ kind: "idle" });
+      return;
+    }
+    if (trimmed.length < 4) {
+      setUsernameAvailability({ kind: "unavailable", reason: "At least 4 characters required" });
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+      setUsernameAvailability({ kind: "unavailable", reason: "Letters, numbers and underscores only" });
+      return;
+    }
+    if (RESERVED_USERNAMES.includes(trimmed.toLowerCase())) {
+      setUsernameAvailability({ kind: "unavailable", reason: "This username is reserved" });
       return;
     }
     setUsernameAvailability({ kind: "checking" });
@@ -1267,7 +1287,7 @@ export default function MerchantSettingsPage({
                             {usernameAvailability.kind === "unavailable" &&
                               usernameAvailability.reason}
                             {usernameAvailability.kind === "idle" &&
-                              "Letters, numbers and underscores. 3–20 chars."}
+                              "Letters, numbers and underscores. 4–20 chars."}
                             {usernameAvailability.kind === "checking" &&
                               "Checking…"}
                           </p>
