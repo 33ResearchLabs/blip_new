@@ -105,7 +105,7 @@ export const NotificationsScreen = ({
 
   // Show reputation warning when ≥2 cancellations AND cancel rate ≥20%
   const cancelRate = totalOrderCount > 0 ? cancelledOrderCount / totalOrderCount : 0;
-  const showReputationBanner = cancelledOrderCount >= 2 && cancelRate >= 0.2;
+  const showReputationBanner = cancelledOrderCount >= 1 && cancelRate >= 0.1;
   const cancelPct = Math.round(cancelRate * 100);
 
   return (
@@ -167,18 +167,9 @@ export const NotificationsScreen = ({
 
       {/* ── Notification List ── */}
       <div className="flex-1 px-5 pt-2 pb-28 overflow-y-auto scrollbar-hide">
-        {filteredNotifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 bg-surface-card border border-border-subtle">
-              <Bell size={22} className="text-text-quaternary" />
-            </div>
-            <p className="text-[18px] font-extrabold tracking-[-0.02em] text-text-primary mb-1.5">No notifications</p>
-            <p className="text-[13px] font-medium text-text-tertiary">You&apos;re all caught up</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {/* Reputation alert — pinned first when threshold is met */}
-            {showReputationBanner && activeTab === 'alerts' && (
+        <div className="flex flex-col gap-2">
+          {/* Reputation alert — always pinned first on alerts tab when threshold is met */}
+          {showReputationBanner && activeTab === 'alerts' && (
               <motion.button
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -243,8 +234,16 @@ export const NotificationsScreen = ({
                 </div>
               </motion.button>
             ))}
-          </div>
-        )}
+          {filteredNotifications.length === 0 && !showReputationBanner && (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 bg-surface-card border border-border-subtle">
+                <Bell size={22} className="text-text-quaternary" />
+              </div>
+              <p className="text-[18px] font-extrabold tracking-[-0.02em] text-text-primary mb-1.5">No notifications</p>
+              <p className="text-[13px] font-medium text-text-tertiary">You&apos;re all caught up</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={unreadCount} />}
