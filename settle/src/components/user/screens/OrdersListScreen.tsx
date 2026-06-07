@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Clock, Check, TrendingUp, TrendingDown, X, Bell } from "lucide-react";
+import { Clock, Check, ArrowDownLeft, ArrowUpRight, X, Bell } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
 import type { Screen, Order } from "./types";
@@ -158,19 +158,14 @@ export const OrdersListScreen = ({
                 ? `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, "0")}`
                 : null;
 
-              const iconWrap =
-                isCompleted ? "bg-surface-active border border-border-subtle" :
-                isCancelled || isDisputed ? "bg-surface-card border border-border-subtle" :
-                "bg-surface-active border border-border-medium";
-
-              const Icon =
-                isCompleted ? Check :
-                isCancelled || isDisputed ? X :
-                isBuy ? TrendingUp : TrendingDown;
-              const iconColor =
-                isCompleted ? "text-text-tertiary" :
-                isCancelled || isDisputed ? "text-text-quaternary" :
-                "text-text-primary";
+              const avatarUrl = order.merchant?.avatarUrl;
+              const merchantInitial = (order.merchant?.name || "?")[0].toUpperCase();
+              // Directional badge shown over avatar
+              const BadgeIcon = isCompleted ? Check : isCancelled || isDisputed ? X : isBuy ? ArrowDownLeft : ArrowUpRight;
+              const badgeBg =
+                isCompleted ? "rgba(100,116,139,0.85)" :
+                isCancelled || isDisputed ? "rgba(100,116,139,0.6)" :
+                isBuy ? "rgba(16,185,129,0.85)" : "rgba(99,102,241,0.85)";
 
               const titleVerb =
                 isCompleted ? (isBuy ? "Received" : "Sent") :
@@ -205,8 +200,22 @@ export const OrdersListScreen = ({
                   whileTap={{ scale: 0.98 }}
                   onClick={() => { setActiveOrderId(order.id); setScreen("order"); }}
                   className={`w-full flex items-center gap-3 rounded-[18px] p-3.5 text-left ${CARD}`}>
-                  <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${iconWrap}`}>
-                    <Icon size={17} className={iconColor} />
+                  {/* Avatar with directional badge */}
+                  <div className="relative shrink-0 w-11 h-11">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={merchantInitial} className="w-11 h-11 rounded-[14px] object-cover" />
+                    ) : (
+                      <div className="w-11 h-11 rounded-[14px] bg-surface-active border border-border-subtle flex items-center justify-center">
+                        <span style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text-secondary)", fontFamily: "Manrope, sans-serif" }}>
+                          {merchantInitial}
+                        </span>
+                      </div>
+                    )}
+                    {/* Directional badge — bottom-right corner */}
+                    <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
+                      style={{ background: badgeBg, backdropFilter: "blur(4px)" }}>
+                      <BadgeIcon size={10} strokeWidth={2.8} color="#fff" />
+                    </span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1.5">

@@ -83,12 +83,12 @@ function Panel({
       {...anim}
       className={
         desktop
-          // Desktop: fill the center column, no phone-width cap
-          ? `absolute inset-0 flex flex-col overflow-y-auto ${className}`
+          // Desktop: centered column, 30% wider than mobile (440 × 1.3 ≈ 572px)
+          ? `absolute inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-[572px] flex flex-col ${className}`
           // Mobile: centered phone column
           : `absolute inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] flex flex-col ${className}`
       }
-      style={{ background: desktop ? "#080810" : "var(--user-frame)", ...style }}
+      style={{ background: "var(--user-frame)", ...style }}
     >
       {children}
     </motion.div>
@@ -112,6 +112,7 @@ import {
   SupportTicketScreen,
   RewardsScreen,
 } from "@/components/user/screens";
+import { SendScreen } from "@/components/user/screens/SendScreen";
 
 export default function Home() {
   const isDesktop = useIsDesktop();
@@ -653,7 +654,7 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const maxW = isDesktop ? "max-w-3xl mx-auto w-full" : "max-w-[440px] mx-auto";
+  const maxW = isDesktop ? "max-w-[572px] mx-auto w-full" : "max-w-[440px] mx-auto";
 
   // Chat unread count for desktop sidebar badge
   const chatUnreadCount = orders.reduce((sum, o) => sum + (o.unreadCount ?? 0), 0);
@@ -728,7 +729,7 @@ export default function Home() {
 
       {/* Center column — on desktop this is a flex:1 <main>, on mobile a full-width div */}
       <div
-        className="relative flex-1 w-full flex flex-col"
+        className="relative flex-1 w-full flex flex-col h-dvh"
         style={isDesktop ? { minWidth: 0, overflowX: "hidden" } : undefined}
       >
       <AnimatePresence>
@@ -806,6 +807,16 @@ export default function Home() {
                 } catch { /* sessionStorage may be blocked — non-fatal */ }
                 setScreen('escrow');
               }}
+            />
+          </Panel>
+        )}
+
+        {screen === "send" && (
+          <Panel k="send" desktop={!!isDesktop}>
+            <SendScreen
+              orders={orders}
+              setScreen={setScreen}
+              solanaWallet={solanaWallet}
             />
           </Panel>
         )}

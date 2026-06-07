@@ -150,33 +150,19 @@ export function SupportTicketScreen({
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
       {/* Header */}
       <header className="px-5 pt-4 pb-4 shrink-0">
-        <div className="flex items-center gap-3">
-          {step !== "success" && (
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              onClick={handleBack}
-              aria-label="Back"
-              className="w-9 h-9 rounded-[14px] flex items-center justify-center shrink-0 bg-surface-card border border-border-subtle"
-            >
-              <ChevronLeft className="w-5 h-5 text-text-secondary" />
-            </motion.button>
-          )}
-          <div>
-            <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
-              {step === "success" ? "Ticket Submitted" : "Raise a Ticket"}
-            </p>
-            {step === "category" && (
-              <p className="text-[12px] text-text-tertiary mt-0.5">
-                What&apos;s the issue?
-              </p>
-            )}
-            {step === "form" && (
-              <p className="text-[12px] text-text-tertiary mt-0.5 truncate max-w-[220px]">
-                {form.categoryLabel}
-              </p>
-            )}
-          </div>
-        </div>
+        {step !== "success" && (
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={handleBack}
+            aria-label="Back"
+            className="w-9 h-9 rounded-[14px] flex items-center justify-center bg-surface-card border border-border-subtle mb-3"
+          >
+            <ChevronLeft className="w-5 h-5 text-text-secondary" />
+          </motion.button>
+        )}
+        <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+          {step === "success" ? "Ticket Submitted" : "Raise a Ticket"}
+        </p>
       </header>
 
       <div className="flex-1 px-5 pb-10 overflow-y-auto scrollbar-hide">

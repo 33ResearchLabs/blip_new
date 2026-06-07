@@ -275,7 +275,7 @@ export const HomeScreen = ({
     <div
       ref={homeRootRef}
       style={{
-        position: 'relative', height: '100dvh', background: '#161619',
+        position: 'relative', height: '100dvh', background: '#0f0f12',
         display: 'flex', flexDirection: 'column', fontFamily: 'Manrope, sans-serif', overflow: 'hidden',
       }}
     >
@@ -340,9 +340,11 @@ export const HomeScreen = ({
       {/* INK HEADER — fixed, does not scroll */}
       <div style={{
         flexShrink: 0,
-        background: '#161619', color: '#fff',
+        background: 'linear-gradient(160deg, #1e1e24 0%, #0f0f12 55%, #161619 100%)',
+        color: '#fff',
         padding: '16px 22px 44px',
         borderBottomLeftRadius: 36, borderBottomRightRadius: 36,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
       }}>
           {/* Top row */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -500,14 +502,14 @@ export const HomeScreen = ({
               must not be nested (the QR tap used to bubble to the search button
               and just navigate to Trade instead of scanning). */}
           <div style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-            padding: '16px 18px', borderRadius: 22,
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '11px 14px', borderRadius: 18,
             background: '#fff', border: '1px solid rgba(20,21,26,0.08)',
             boxSizing: 'border-box',
             boxShadow: '0 2px 8px rgba(20,21,26,0.06)',
           }}>
             <button
-              onClick={() => setShowUpiPay(true)}
+              onClick={() => setScreen('send')}
               style={{
                 flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12,
                 background: 'none', border: 'none', padding: 0, cursor: 'pointer',
@@ -517,7 +519,7 @@ export const HomeScreen = ({
                 stroke="rgba(20,21,26,0.35)" strokeWidth="1.9" strokeLinecap="round">
                 <circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" />
               </svg>
-              <span style={{ flex: 1, color: 'rgba(20,21,26,0.35)', fontWeight: 700, fontSize: 14.5, textAlign: 'left' }}>
+              <span style={{ flex: 1, color: 'rgba(20,21,26,0.35)', fontWeight: 700, fontSize: 13, textAlign: 'left' }}>
                 Name, phone or UPI ID
               </span>
             </button>
@@ -525,7 +527,7 @@ export const HomeScreen = ({
               onClick={() => setShowUpiPay(true)}
               aria-label="Scan QR to pay"
               style={{
-                width: 32, height: 32, borderRadius: 999, border: 'none', cursor: 'pointer',
+                width: 28, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer',
                 background: '#ffb02e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}
             >
@@ -630,13 +632,13 @@ export const HomeScreen = ({
               </div>
 
               {/* Quick links — same chip style as Deposit/Swap/Trade/Scan */}
-              <div style={{ fontSize: 15.5, fontWeight: 800, color: '#14151a', marginTop: 24, marginBottom: 12 }}>Learn more</div>
+              <div style={{ fontSize: 15.5, fontWeight: 800, color: '#14151a', marginTop: 16, marginBottom: 8 }}>Learn more</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
-                  { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
-                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
-                  { label: 'Refer', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
+                  { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
+                  { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
+                  { label: 'Refer', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
                 ]).map(({ label, fn, icon }) => (
                   <motion.button
                     key={label}
@@ -644,21 +646,21 @@ export const HomeScreen = ({
                     onClick={fn}
                     style={{
                       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      padding: '14px 4px 11px', borderRadius: 16, cursor: 'pointer',
+                      padding: '10px 4px 8px', borderRadius: 14, cursor: 'pointer',
                       border: '1px solid rgba(20,21,26,0.08)',
-                      background: '#fff', gap: 8,
+                      background: '#fff', gap: 6,
                       boxShadow: '0 1px 4px rgba(20,21,26,0.06)',
                     }}
                   >
                     <div style={{
-                      width: 38, height: 38, borderRadius: 12,
+                      width: 32, height: 32, borderRadius: 10,
                       background: 'rgba(20,21,26,0.05)', border: '1px solid rgba(20,21,26,0.07)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: '#14151a',
                     }}>
                       {icon}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#3d3e45' }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
                   </motion.button>
                 ))}
               </div>
@@ -772,10 +774,10 @@ export const HomeScreen = ({
               {/* Quick links — same chip style */}
               <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                 {([
-                  { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
-                  { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
-                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
-                  { label: 'Refer', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
+                  { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
+                  { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
+                  { label: 'Refer', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
                 ]).map(({ label, fn, icon }) => (
                   <motion.button
                     key={label}
@@ -783,21 +785,21 @@ export const HomeScreen = ({
                     onClick={fn}
                     style={{
                       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      padding: '14px 4px 11px', borderRadius: 16, cursor: 'pointer',
+                      padding: '10px 4px 8px', borderRadius: 14, cursor: 'pointer',
                       border: '1px solid rgba(20,21,26,0.08)',
-                      background: '#fff', gap: 8,
+                      background: '#fff', gap: 6,
                       boxShadow: '0 1px 4px rgba(20,21,26,0.06)',
                     }}
                   >
                     <div style={{
-                      width: 38, height: 38, borderRadius: 12,
+                      width: 32, height: 32, borderRadius: 10,
                       background: 'rgba(20,21,26,0.05)', border: '1px solid rgba(20,21,26,0.07)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: '#14151a',
                     }}>
                       {icon}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#3d3e45' }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
                   </motion.button>
                 ))}
               </div>

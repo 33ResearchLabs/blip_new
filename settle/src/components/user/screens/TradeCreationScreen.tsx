@@ -6,14 +6,11 @@ import {
   ChevronLeft,
   ArrowUpRight,
   ArrowDownLeft,
-  Building2,
   Banknote,
   Loader2,
   ChevronDown,
-  Check,
   X,
   CreditCard,
-  Plus,
 } from "lucide-react";
 import type {
   Screen,
@@ -309,6 +306,8 @@ export const TradeCreationScreen = ({
   const effectiveRateLoading = ratePair === "usdt_inr" ? false : rateLoading;
 
   // Promo: first 10 orders get $5 off — default optimistically active, API updates remaining count
+  const [showReceipt, setShowReceipt] = useState(false);
+
   const [promo, setPromo] = useState<{ active: boolean; remaining: number; discount_usdt: number }>({
     active: true, remaining: 10, discount_usdt: 5,
   });
@@ -358,13 +357,10 @@ export const TradeCreationScreen = ({
         }}
       /> */}
 
-      {/* ── Scrollable body (header + hero + sheet content) ── */}
-      <div className="flex-1 overflow-y-auto">
-
-      {/* ── Header ── */}
+      {/* ── Header — always pinned at top ── */}
       <header className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 pt-5">
-        <div className="flex items-center justify-end">
-          {/* <motion.button
+        <div className="flex items-center justify-between">
+          <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={() => setScreen("home")}
             className="flex items-center justify-center"
@@ -372,8 +368,8 @@ export const TradeCreationScreen = ({
               width: 38,
               height: 38,
               borderRadius: 13,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: T.surface1,
+              border: `1px solid ${T.border1}`,
               backdropFilter: "blur(12px)",
               WebkitBackdropFilter: "blur(12px)",
             }}
@@ -383,7 +379,7 @@ export const TradeCreationScreen = ({
               strokeWidth={2.2}
               style={{ color: T.hi }}
             />
-          </motion.button> */}
+          </motion.button>
 
           {/* Corridor selector — animated dropdown */}
           <div className="relative">
@@ -488,8 +484,11 @@ export const TradeCreationScreen = ({
         </div>
       </header>
 
+      {/* ── Central section ── */}
+      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
+
       {/* ── Hero amount stack ── */}
-      <div className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 flex flex-col items-center justify-center flex-1 pt-2">
+      <div className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 flex flex-col items-center pt-2">
         {/* Animated You Buy / You Sell label */}
         <AnimatePresence mode="wait">
           <motion.p
@@ -740,15 +739,20 @@ export const TradeCreationScreen = ({
           })}
         </div>
       </div>
+      </div>{/* end central */}
 
-      {/* ── Bottom liquid-glass sheet ── */}
+      {/* ── Bottom drawer — slides up when amount entered ── */}
+      <AnimatePresence>
+      {hasAmount && (
       <motion.div
-        initial={{ y: 30, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ ...SOFT_SPRING, delay: 0.1 }}
-        className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full "
+        key="trade-drawer"
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", stiffness: 380, damping: 36 }}
+        className="absolute bottom-0 inset-x-0 z-20 max-w-[440px] md:max-w-[572px] mx-auto overflow-y-auto"
         style={{
-          marginTop: 24,
+          maxHeight: "60dvh",
           padding: "18px 18px 24px",
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
@@ -759,219 +763,112 @@ export const TradeCreationScreen = ({
           boxShadow: T.sheetShadow,
         }}
       >
-        {/* Pulled-handle pip */}
-        <div className="flex justify-center mb-3 ">
-          <span
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 999,
-              background: T.handle,
-            }}
-          />
-        </div>
-
-        {/* Fee row — only when amount entered */}
-        <AnimatePresence>
-          {hasAmount && (
-            <motion.div
-              key="fees"
-              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-              animate={{ opacity: 1, height: "auto", marginBottom: 14 }}
-              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-              transition={SPRING}
-              style={{ overflow: "hidden" }}
-            >
-              {FEE_UI_V2 ? (
-                /* Receipt breakdown */
-                hasAmount && displayRate !== null ? (
-                  <div
-                    className="rounded-2xl overflow-hidden"
-                    style={{ background: T.surface2, border: `1px solid ${T.border2}` }}
-                  >
-                    <div className="flex items-center justify-between px-3 py-2.5">
-                      <span style={{ fontSize: 12, fontWeight: 600, color: T.md }}>{formatAmountInput(amount)} USDT</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                        {rateSymbol}{formatCrypto(rawFiatAmount)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
-                      <div className="flex items-center gap-1.5">
-                        <span style={{ fontSize: 11, color: T.lo }}>Fees</span>
-                        <span style={{ fontSize: 11, color: T.lo, textDecoration: "line-through" }}>{(currentFees.totalFee * 100).toFixed(0)}%</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80" }}>0%</span>
-                      </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}0.00</span>
-                    </div>
-                    {promo.active && (
-                      <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
-                        <span style={{ fontSize: 11, color: "#4ade80" }}>🎁 $5 testing reward</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>-{rateSymbol}{formatCrypto(promoDiscountInr)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between px-3 py-2.5" style={{ borderTop: `1px solid ${T.border2}`, background: isLight ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)" }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: T.hi }}>Total</span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}{formatCrypto(discountedFiatAmount)} {rateCurrency}</span>
-                    </div>
-                  </div>
-                ) : null
-              ) : (
-                <div
-                  className="flex items-center"
-                  style={{
-                    padding: "11px 14px",
-                    borderRadius: 14,
-                    background: T.surface2,
-                    border: `1px solid ${T.border2}`,
-                    gap: 12,
-                  }}
-                >
-                  {[
-                    {
-                      label: "Fee",
-                      value: formatPercentage(currentFees.totalFee * 100),
-                    },
-                    {
-                      label: "Earns",
-                      value: formatPercentage(currentFees.traderCut * 100),
-                    },
-                    {
-                      label: "You Get",
-                      value: isBuy
-                        ? `${formatCrypto(parseFloat(amount || "0"))} USDT`
-                        : formatFiat(
-                            parseFloat(fiatAmount || "0"),
-                            rateCurrency,
-                          ),
-                    },
-                  ].map((row, i, arr) => (
-                    <div key={row.label} className="flex-1 text-center flex items-center" style={{ gap: 12 }}>
-                      <div className="flex-1 text-center">
-                        <p
-                          style={{
-                            fontSize: 8.5,
-                            fontWeight: 800,
-                            letterSpacing: "0.18em",
-                            color: T.lo,
-                            textTransform: "uppercase",
-                            marginBottom: 3,
-                          }}
-                        >
-                          {row.label}
-                        </p>
-                        <p
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 800,
-                            color: i === arr.length - 1 ? T.hi : T.md,
-                            fontFamily:
-                              "ui-monospace, SFMono-Regular, Menlo, monospace",
-                          }}
-                        >
-                          {row.value}
-                        </p>
-                      </div>
-                      {i < arr.length - 1 && (
-                        <span
-                          style={{
-                            width: 1,
-                            height: 26,
-                            background: T.divider,
-                          }}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Payment method header — label only. The buy flow's "Add payment
-            method" affordance lives in the card row below; sell uses the
-            selector's own add. */}
-        <div className="mb-1">
-          <p
-            style={{
-              fontSize: 9,
-              fontWeight: 800,
-              letterSpacing: "0.22em",
-              color: T.lo,
-              textTransform: "uppercase",
-            }}
+        {/* Handle + close */}
+        <div className="flex items-center justify-between mb-3">
+          <div style={{ width: 32 }} />
+          <span style={{ width: 36, height: 4, borderRadius: 999, background: T.handle, display: "block" }} />
+          <button
+            onClick={() => setAmount("")}
+            style={{ width: 32, height: 32, borderRadius: 999, background: T.surface3, border: `1px solid ${T.border1}`, display: "flex", alignItems: "center", justifyContent: "center" }}
           >
-            {isBuy ? "Pay With" : "Receive To"}
-          </p>
+            <X size={15} strokeWidth={2.4} style={{ color: T.md }} />
+          </button>
         </div>
 
-        {/* Chosen payment method shows as a card left of the "Add" button —
-            same UI for Buy and Sell. Selecting / adding happens in the sheet. */}
-        <div className="flex items-center gap-2 mb-3">
-              {chosenMethod ? (
-                <button
-                  onClick={() => setShowAddMethods(true)}
-                  className="flex-1 min-w-0 flex items-center text-left"
-                  style={{ gap: 11, padding: "11px 12px", borderRadius: 14, background: T.surface1, border: `1px solid ${T.border1}` }}
-                >
-                  <div className="flex items-center justify-center shrink-0" style={{ width: 34, height: 34, borderRadius: 10, background: T.activeTileBg }}>
-                    {chosenMethod.type === "cash" ? (
-                      <Banknote size={16} strokeWidth={2.2} style={{ color: T.activeTileText }} />
-                    ) : chosenMethod.type === "bank" ? (
-                      <Building2 size={16} strokeWidth={2.2} style={{ color: T.activeTileText }} />
-                    ) : (
-                      <CreditCard size={16} strokeWidth={2.2} style={{ color: T.activeTileText }} />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="truncate block" style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: "-0.01em", color: T.hi }}>{chosenMethod.label}</span>
-                    <span className="truncate block" style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: T.lo, marginTop: 1 }}>{PM_TYPE_LABEL[chosenMethod.type]}</span>
-                  </div>
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowAddMethods(true)}
-                  className="flex-1 min-w-0 flex items-center text-left"
-                  style={{ gap: 10, padding: "11px 12px", borderRadius: 14, background: T.surface4, border: `1px dashed ${T.border2}` }}
-                >
-                  <CreditCard size={16} strokeWidth={2} style={{ color: T.lo }} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: T.lo }}>No payment method selected</span>
-                </button>
-              )}
-              <motion.button
-                whileTap={{ scale: 0.96 }}
-                onClick={() => setShowAddMethods(true)}
-                className="flex items-center justify-center shrink-0"
-                style={{ gap: 6, padding: "0 14px", height: 48, borderRadius: 14, border: `1px solid ${T.border1}`, background: T.surface1, color: T.hi, fontSize: 12, fontWeight: 800, cursor: "pointer" }}
+        {/* Receipt */}
+        {displayRate !== null && (
+            <div style={{ marginBottom: 14 }}>
+              <div
+                className="rounded-2xl overflow-hidden"
+                style={{ background: T.surface2, border: `1px solid ${T.border2}` }}
               >
-                <Plus size={15} strokeWidth={2.6} />
-                Add
-              </motion.button>
-        </div>
+                {/* Summary row — always visible, tap to expand */}
+                <button
+                  onClick={() => setShowReceipt((v) => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2.5"
+                >
+                  <span style={{ fontSize: 14, fontWeight: 700, color: T.hi }}>
+                    {formatAmountInput(amount)} USDT → {rateSymbol}{formatCrypto(discountedFiatAmount)} {rateCurrency}
+                  </span>
+                  <motion.span
+                    animate={{ rotate: showReceipt ? 180 : 0 }}
+                    transition={SPRING}
+                    style={{ display: "inline-flex" }}
+                  >
+                    <ChevronDown size={14} strokeWidth={2.2} style={{ color: T.lo }} />
+                  </motion.span>
+                </button>
+
+                {/* Expanded receipt */}
+                <AnimatePresence>
+                  {showReceipt && (
+                    <motion.div
+                      key="receipt-detail"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={SPRING}
+                      style={{ overflow: "hidden" }}
+                    >
+                      <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: T.md }}>{formatAmountInput(amount)} USDT</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                          {rateSymbol}{formatCrypto(rawFiatAmount)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
+                        <div className="flex items-center gap-1.5">
+                          <span style={{ fontSize: 11, color: T.lo }}>Fees</span>
+                          <span style={{ fontSize: 11, color: T.lo, textDecoration: "line-through" }}>{(currentFees.totalFee * 100).toFixed(0)}%</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80" }}>0%</span>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}0.00</span>
+                      </div>
+                      {promo.active && (
+                        <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
+                          <span style={{ fontSize: 11, color: "#4ade80" }}>🎁 $5 testing reward</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>-{rateSymbol}{formatCrypto(promoDiscountInr)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between px-3 py-2.5" style={{ borderTop: `1px solid ${T.border2}`, background: isLight ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)" }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: T.hi }}>Total</span>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}{formatCrypto(discountedFiatAmount)} {rateCurrency}</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+        )}
+
+
+        {/* Payment method — minimal single-line row */}
+        <button
+          onClick={() => setShowAddMethods(true)}
+          className="w-full flex items-center justify-between mb-4"
+          style={{ padding: "13px 16px", borderRadius: 14, background: T.surface1, border: `1px solid ${T.border1}` }}
+        >
+          <div className="flex items-center" style={{ gap: 10 }}>
+            {chosenMethod?.type === "cash" ? (
+              <Banknote size={16} strokeWidth={2} style={{ color: T.md }} />
+            ) : (
+              <CreditCard size={16} strokeWidth={2} style={{ color: T.md }} />
+            )}
+            <span style={{ fontSize: 14, fontWeight: 700, color: chosenMethod ? T.hi : T.md }}>
+              {chosenMethod ? chosenMethod.label : (isBuy ? "Select pay method" : "Select receive method")}
+            </span>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: T.lo }}>Change</span>
+        </button>
 
         {/* Priority — sliding segmented */}
-        <p
-          style={{
-            fontSize: 9,
-            fontWeight: 800,
-            letterSpacing: "0.22em",
-            color: T.lo,
-            textTransform: "uppercase",
-            marginBottom: 2,
-          }}
-        >
+        <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", color: T.lo, textTransform: "uppercase", marginBottom: 6 }}>
           Priority
         </p>
         <LayoutGroup>
           <div
-            className="relative grid grid-cols-3 mb-3"
-            style={{
-              gap: 4,
-              padding: 4,
-              borderRadius: 16,
-              background: T.surface2,
-              border: `1px solid ${T.border2}`,
-            }}
+            className="relative grid grid-cols-3 mb-4"
+            style={{ gap: 6, padding: 6, borderRadius: 18, background: T.surface2, border: `1px solid ${T.border2}` }}
           >
             {(
               [
@@ -987,14 +884,14 @@ export const TradeCreationScreen = ({
                   onClick={() => setTradePreference(key)}
                   whileTap={{ scale: 0.97 }}
                   className="relative flex flex-col items-center justify-center"
-                  style={{ padding: "9px 4px", borderRadius: 12 }}
+                  style={{ padding: "14px 4px", borderRadius: 13 }}
                 >
                   {on && (
                     <motion.span
                       layoutId="prio-pill"
                       className="absolute inset-0"
                       style={{
-                        borderRadius: 12,
+                        borderRadius: 13,
                         background: T.activeTileBg,
                         border: `1px solid ${T.activeTileBorder}`,
                         boxShadow: isLight
@@ -1006,21 +903,16 @@ export const TradeCreationScreen = ({
                   )}
                   <span
                     className="relative"
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 800,
-                      letterSpacing: "-0.005em",
-                      color: on ? T.activeTileText : T.md,
-                    }}
+                    style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.01em", color: on ? T.activeTileText : T.hi }}
                   >
                     {label}
                   </span>
-                  <span className="relative flex items-center gap-1" style={{ marginTop: 2 }}>
+                  <span className="relative flex items-center gap-1" style={{ marginTop: 3 }}>
                     {oldFee && (
                       <span style={{
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: 700,
-                        color: T.lo,
+                        color: on ? T.activeTileSubText : T.lo,
                         textDecoration: "line-through",
                         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                       }}>
@@ -1029,9 +921,9 @@ export const TradeCreationScreen = ({
                     )}
                     <span
                       style={{
-                        fontSize: 11,
+                        fontSize: 13,
                         fontWeight: 800,
-                        color: fee === "0%" ? (on ? "#15803d" : "#22c55e") : (on ? T.activeTileSubText : T.lo),
+                        color: fee === "0%" ? (on ? "#15803d" : "#22c55e") : (on ? T.activeTileSubText : T.md),
                         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                       }}
                     >
@@ -1044,35 +936,19 @@ export const TradeCreationScreen = ({
           </div>
         </LayoutGroup>
 
-
-      </motion.div>
-
-      </div>{/* end scrollable body */}
-
-      {/* ── Sticky footer: CTA + BottomNav ── */}
-      <div
-        className="relative z-20 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full shrink-0"
-        style={{
-          padding: "12px 18px 0",
-          background: T.bg,
-          borderTop: `1px solid ${T.sheetBorder}`,
-        }}
-      >
+        {/* CTA — lives inside the sheet so it scrolls with content */}
         <motion.button
           onClick={startTrade}
           disabled={!hasAmount || isLoading || !userId}
           whileTap={hasAmount ? { scale: 0.985 } : undefined}
           animate={{
-            background:
-              hasAmount && !isLoading ? T.ctaActiveBg : T.ctaInactiveBg,
+            background: hasAmount && !isLoading ? T.ctaActiveBg : T.ctaInactiveBg,
             color: hasAmount && !isLoading ? T.ctaActiveText : T.md,
-            borderColor:
-              hasAmount && !isLoading ? T.ctaActiveBorder : T.ctaInactiveBorder,
-            boxShadow:
-              hasAmount && !isLoading ? T.ctaActiveShadow : "none",
+            borderColor: hasAmount && !isLoading ? T.ctaActiveBorder : T.ctaInactiveBorder,
+            boxShadow: hasAmount && !isLoading ? T.ctaActiveShadow : "none",
           }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full flex items-center justify-center"
+          className="w-full flex items-center justify-center mt-3"
           style={{
             gap: 4,
             minHeight: 56,
@@ -1088,20 +964,18 @@ export const TradeCreationScreen = ({
             <Loader2 size={18} className="animate-spin" />
           ) : hasAmount ? (
             <>
-              {isBuy ? (
-                <ArrowDownLeft size={16} strokeWidth={2.6} />
-              ) : (
-                <ArrowUpRight size={16} strokeWidth={2.6} />
-              )}
+              {isBuy ? <ArrowDownLeft size={16} strokeWidth={2.6} /> : <ArrowUpRight size={16} strokeWidth={2.6} />}
               {isBuy ? "Buy" : "Sell"} {formatAmountInput(amount)} USDT
             </>
           ) : (
             "Enter Amount"
           )}
         </motion.button>
-      </div>
+      </motion.div>
+      )}
+      </AnimatePresence>
 
-      {!hideBottomNav && (
+      {!hideBottomNav && !hasAmount && (
         <BottomNav
           screen={screen}
           setScreen={setScreen}

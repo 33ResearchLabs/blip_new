@@ -72,7 +72,7 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     fiatCode: dbOrder.fiat_currency || 'AED',
     merchant: {
       id: merchant.id,
-      name: merchant.display_name,
+      name: merchant.display_name || merchant.business_name || 'Merchant',
       rating: parseFloat(merchant.rating?.toString() || '5.0'),
       trades: merchant.total_trades || 0,
       rate: parseFloat((dbOrder.rate ?? 0).toString()),

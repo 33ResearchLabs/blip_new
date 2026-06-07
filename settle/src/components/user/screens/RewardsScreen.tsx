@@ -372,27 +372,17 @@ export const RewardsScreen = ({
               tab-style screen with the persistent BottomNav below, matching
               the Notifications screen pattern. ── */}
       <header className="px-5 pt-4 pb-4 shrink-0">
-        <div className="flex items-start justify-between gap-3">
-          <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="min-w-0"
-          >
-            <h2 className="text-[26px] font-extrabold tracking-[-0.03em] leading-none text-text-primary">
-              Refer &amp; Earn
-            </h2>
-            <p className="mt-2 text-[13px] font-medium text-text-secondary">
-              Earn more when your friends join and trade on blip.money
-            </p>
-          </motion.section>
+        <div className="flex items-center justify-between">
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+            Refer &amp; Earn
+          </p>
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={() => setScreen("notifications")}
             aria-label="Notifications"
-            className="relative shrink-0 w-9 h-9 rounded-xl flex items-center justify-center bg-surface-hover border border-border-subtle"
+            className="relative shrink-0 w-9 h-9 rounded-[14px] flex items-center justify-center bg-surface-card border border-border-subtle"
           >
-            <Bell className="w-[18px] h-[18px] text-text-secondary" strokeWidth={2} />
+            <Bell className="w-[18px] h-[18px] text-text-tertiary" strokeWidth={2} />
             {notificationCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-text-primary border-2 border-surface-base flex items-center justify-center">
                 <span className="text-[8px] font-extrabold leading-none text-surface-base">

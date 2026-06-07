@@ -216,25 +216,20 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
       {/* ── Header — matches Activity / Notifications / Messages / Profile tabs ── */}
       <header className="px-5 pt-4 pb-4 shrink-0">
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={handleBack}
+          aria-label="Back"
+          className="w-9 h-9 rounded-[14px] flex items-center justify-center bg-surface-card border border-border-subtle mb-3"
+        >
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
+        </motion.button>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              onClick={handleBack}
-              aria-label="Back"
-              className="w-9 h-9 rounded-[14px] flex items-center justify-center shrink-0 bg-surface-card border border-border-subtle"
-            >
-              <ChevronLeft className="w-5 h-5 text-text-secondary" />
-            </motion.button>
-            <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
-              Support
-            </p>
-          </div>
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Support</p>
           <motion.button
             whileTap={{ scale: 0.95 }}
-            whileHover={{ y: -1 }}
             onClick={handleMyTickets}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl ${CARD} hover:bg-surface-hover transition-colors`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-[14px] ${CARD}`}
           >
             <Ticket className="w-[15px] h-[15px] text-text-secondary" strokeWidth={2} />
             <span className="text-[12px] font-bold text-text-primary">My Tickets</span>

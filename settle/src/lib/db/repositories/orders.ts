@@ -142,11 +142,13 @@ export async function getUserOrders(
            json_build_object(
              'id', m.id,
              'display_name', m.display_name,
+             'business_name', m.business_name,
              'rating', m.rating,
              'total_trades', m.total_trades,
              'wallet_address', m.wallet_address,
              'is_online', m.is_online,
-             'last_seen_at', m.last_seen_at
+             'last_seen_at', m.last_seen_at,
+             'avatar_url', m.avatar_url
            ) as merchant,
            json_build_object(
              'payment_method', mo.payment_method,

@@ -1,10 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ArrowLeft,
+  ChevronLeft,
   ChevronDown,
   Search,
   Wallet,
@@ -13,71 +13,12 @@ import {
   ShieldCheck,
   Scale,
   Coins,
-  LifeBuoy,
+  HelpCircle,
 } from 'lucide-react';
 import { useUserTheme } from '@/hooks/useUserTheme';
 
-// Theme tokens — `T` switches between dark/light below. All colors on this
-// page route through this map so the page flips with the user's theme
-// (Profile → Preferences → Appearance) instead of staying dark forever.
-const TOKENS_DARK = {
-  pageBg: '#000000',
-  text: 'rgba(255,255,255,0.95)',
-  textMd: 'rgba(255,255,255,0.65)',
-  textLo: 'rgba(255,255,255,0.45)',
-  textXl: 'rgba(255,255,255,0.30)',
-  iconLo: 'rgba(255,255,255,0.40)',
-  iconHi: 'rgba(255,255,255,0.75)',
-  headerBg: 'rgba(0,0,0,0.95)',
-  border: 'rgba(255,255,255,0.06)',
-  borderStrong: 'rgba(255,255,255,0.07)',
-  borderFocus: 'rgba(255,255,255,0.18)',
-  divider: 'rgba(255,255,255,0.05)',
-  inputBg: 'rgba(255,255,255,0.04)',
-  surface: 'rgba(255,255,255,0.02)',
-  hoverBg: 'rgba(255,255,255,0.025)',
-  activeBg: 'rgba(255,255,255,0.04)',
-  ambient1: 'rgba(255,255,255,0.03)',
-  ambient2: 'rgba(255,255,255,0.02)',
-  cardGradient:
-    'linear-gradient(180deg,rgba(255,255,255,0.025) 0%,rgba(255,255,255,0.015) 100%)',
-  cardShadow:
-    '0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px -12px rgba(0,0,0,0.6)',
-} as const;
-
-const TOKENS_LIGHT = {
-  pageBg: '#ffffff',
-  text: 'rgba(15,23,42,0.95)',
-  textMd: 'rgba(15,23,42,0.65)',
-  textLo: 'rgba(15,23,42,0.50)',
-  textXl: 'rgba(15,23,42,0.32)',
-  iconLo: 'rgba(15,23,42,0.45)',
-  iconHi: 'rgba(15,23,42,0.75)',
-  headerBg: 'rgba(255,255,255,0.95)',
-  border: 'rgba(15,23,42,0.08)',
-  borderStrong: 'rgba(15,23,42,0.10)',
-  borderFocus: 'rgba(15,23,42,0.25)',
-  divider: 'rgba(15,23,42,0.06)',
-  inputBg: 'rgba(15,23,42,0.04)',
-  surface: 'rgba(15,23,42,0.025)',
-  hoverBg: 'rgba(15,23,42,0.04)',
-  activeBg: 'rgba(15,23,42,0.06)',
-  ambient1: 'rgba(15,23,42,0.04)',
-  ambient2: 'rgba(15,23,42,0.03)',
-  cardGradient:
-    'linear-gradient(180deg,rgba(15,23,42,0.03) 0%,rgba(15,23,42,0.015) 100%)',
-  cardShadow:
-    '0 1px 0 rgba(255,255,255,0.6) inset, 0 8px 24px -14px rgba(15,23,42,0.18)',
-} as const;
-
-/**
- * FAQ
- * ───
- * Self-contained help page. Static content — no API calls — so the page
- * renders instantly and works offline. Q&A grouped by category; one item
- * open at a time within a category to keep the page compact on mobile.
- * Lightweight client-side filter narrows down by keyword.
- */
+const CARD = 'bg-surface-card border border-border-subtle';
+const SECTION_LABEL = 'text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase';
 
 interface QA {
   q: string;
@@ -98,20 +39,20 @@ const CATEGORIES: Category[] = [
     Icon: Wallet,
     items: [
       {
-        q: 'What is Blip Market?',
-        a: 'Blip Market is a peer-to-peer (P2P) marketplace where you can buy and sell USDT (Tether) for fiat currency. Orders are matched between users and merchants, and crypto is held in an on-chain escrow until the fiat payment is confirmed.',
+        q: 'What is Blip?',
+        a: 'Blip is a peer-to-peer (P2P) marketplace where you can buy and sell USDT for local currency. You trade directly with verified merchants — Blip holds the crypto in an on-chain escrow until your payment is confirmed, so neither side can walk away mid-trade.',
       },
       {
         q: 'How do I create an account?',
-        a: 'Open the app and choose a username on the home screen. You can sign in with a connected Solana wallet or use the embedded wallet flow on your device. No KYC is required to start browsing, but verified merchants may have higher limits.',
+        a: 'Download the app, pick a username, and you\'re in. A wallet is created for you automatically — no separate setup required. You can always link an external Solana wallet later from Profile → Wallet.',
       },
       {
         q: 'Do I need a Solana wallet?',
-        a: 'Yes — every Blip Market account is tied to a Solana wallet so escrow can lock and release USDT on-chain. You can either connect an external wallet (Phantom, Backpack, Solflare) or create an embedded wallet inside the app.',
+        a: 'Every Blip account has a built-in Solana wallet — you don\'t need to bring your own. If you prefer to use Phantom, Backpack, or another Solana wallet, you can connect it from Profile → Wallet at any time.',
       },
       {
         q: 'How do I switch between dark and light mode?',
-        a: 'Open the Profile tab (You), scroll to Preferences, and tap the Appearance toggle. Your choice is remembered on this device.',
+        a: 'Open the Profile tab, scroll down to Preferences, and tap Appearance. Your choice is saved on this device.',
       },
     ],
   },
@@ -122,19 +63,19 @@ const CATEGORIES: Category[] = [
     items: [
       {
         q: 'How do I buy USDT?',
-        a: "Tap the Trade tab, pick Buy, enter the fiat amount, then select a merchant offer. After accepting, the merchant locks USDT in escrow and you send the fiat through your chosen payment method. Once the merchant confirms receipt, the USDT releases to your wallet.",
+        a: 'Tap Trade, select Buy, and enter the amount you want to spend. Choose a merchant offer that suits your preferred payment method and rate. Once you accept, the merchant locks USDT in escrow — send the fiat payment and mark it sent in the app. After the merchant confirms receipt, the USDT lands in your wallet.',
       },
       {
         q: 'How do I sell USDT?',
-        a: "From the Trade tab, pick Sell, enter the amount, choose a payment method to receive fiat, and accept a buyer's offer. You then lock USDT in escrow. After the buyer sends fiat and you confirm receipt, the USDT releases to them.",
+        a: 'Tap Trade, select Sell, and enter the USDT amount. Pick a buyer offer, then lock your USDT into escrow. The buyer sends you fiat — once you receive it and confirm in the app, the escrow releases automatically.',
       },
       {
         q: 'How long does a trade take?',
-        a: 'Most trades complete in 5–15 minutes. After accepting an offer you have 120 minutes for the escrow lock and payment cycle before the order auto-cancels or moves to dispute. If you stay in the chat, both sides usually finish much faster.',
+        a: 'Most trades complete in 5–15 minutes. The order window is 120 minutes from acceptance — if both sides stay active in the chat it usually wraps up much faster.',
       },
       {
-        q: "What happens if I don't pay in time?",
-        a: 'If the buyer does not mark payment sent within the trade window, the order is cancelled. If escrow was already locked, the crypto is automatically refunded to the seller. Repeated no-shows can affect your trader reputation.',
+        q: "What happens if the buyer doesn't pay in time?",
+        a: 'If payment is not marked sent within the trade window, the order is cancelled. If escrow was already locked, the USDT is automatically refunded to the seller on-chain. Repeated no-shows can lower your trader reputation.',
       },
     ],
   },
@@ -145,19 +86,19 @@ const CATEGORIES: Category[] = [
     items: [
       {
         q: 'How do I add a payment method?',
-        a: 'Open Profile (You), find the Payment Methods card, and tap Add. Choose the type (Bank, UPI, Cash, Other), enter the details, and save. You can add as many methods as you like.',
+        a: 'Go to Profile → Payment Methods and tap Add. Choose the type — Bank Transfer, UPI, Cash, or Other — fill in the details, and save. You can add as many as you like.',
       },
       {
-        q: 'What is the "Default" payment method?',
-        a: 'The default is the method shown first in pickers and pre-selected when you start a new sell order. Tap the ⭐ star next to any method to make it the new default. Only one method can be default at a time.',
+        q: 'What is the default payment method?',
+        a: 'Your default method is pre-selected whenever you start a sell order. Tap the star icon next to any method to make it the new default. Only one method can be default at a time.',
       },
       {
-        q: 'Can I edit or remove a payment method later?',
-        a: 'Yes — tap the pencil icon to edit, or the trash icon to delete. Deletion uses a two-tap "confirm" pattern to prevent accidental removal. Removing the default does not auto-promote another method; you choose the new default yourself.',
+        q: 'Can I edit or delete a payment method?',
+        a: 'Yes — tap the edit icon to update details, or the delete icon to remove it. Deleting requires a second confirmation tap to prevent accidents. If you remove your default, you\'ll need to pick a new one before your next trade.',
       },
       {
         q: 'Which payment method should I use?',
-        a: 'Pick whichever your trading partner supports. UPI is fastest in India; bank transfers work everywhere but settle slower; cash and other methods (Wise, PayPal, etc.) depend on local merchant availability. Always confirm in chat before sending.',
+        a: 'UPI is fastest for Indian traders. Bank transfers work everywhere but settle slower. Always check what the merchant supports before accepting an offer — the trade chat is the right place to confirm before sending money.',
       },
     ],
   },
@@ -167,20 +108,20 @@ const CATEGORIES: Category[] = [
     Icon: ShieldCheck,
     items: [
       {
-        q: 'How does App Lock PIN work?',
-        a: 'When enabled, the app prompts for your 4-digit PIN every time you reopen it after switching away. Five wrong attempts in 15 minutes will temporarily lock the PIN. Set or change it in Profile → Security & Privacy → App Lock PIN.',
+        q: 'How does App Lock work?',
+        a: 'When App Lock is on, you\'ll be asked for your PIN every time you reopen Blip after switching away. Five wrong attempts in 15 minutes will temporarily lock the PIN entry. Set or change it under Profile → Security.',
       },
       {
-        q: 'Should I turn on Biometric Unlock?',
-        a: "Yes if your device supports Face ID, Touch ID, or Windows Hello — it's faster and just as safe as typing the PIN. You still need a PIN as the fallback. Enable it in Profile → Security & Privacy → Biometric Unlock.",
+        q: 'Should I enable Biometric Unlock?',
+        a: 'Yes — Face ID or fingerprint is faster than typing your PIN and equally secure. Your PIN remains the fallback if biometrics aren\'t available. Enable it under Profile → Security → Biometric Unlock.',
       },
       {
         q: 'What are Trusted Devices?',
-        a: 'Every device you sign in on is listed in Profile → Security & Privacy → Trusted Devices. Review this list periodically; if you see a device you don\'t recognise, remove it immediately and change your password.',
+        a: 'Every device you sign in on appears in Profile → Security → Trusted Devices. Review this list periodically. If you spot a device you don\'t recognise, remove it immediately — this revokes its session.',
       },
       {
-        q: 'I forgot my PIN — what now?',
-        a: 'You can sign out from any other device where you are still logged in, then sign back in on this device to reset the PIN. If you have no other device, contact support — recovery requires identity verification.',
+        q: 'I forgot my PIN — what do I do?',
+        a: 'Sign out from another device where you\'re still logged in, then sign back in on this device to reset the PIN. If you have no other active session, contact support — account recovery requires identity verification.',
       },
     ],
   },
@@ -191,19 +132,19 @@ const CATEGORIES: Category[] = [
     items: [
       {
         q: 'What is escrow?',
-        a: 'Escrow is an on-chain smart contract that holds the seller\'s USDT until the buyer\'s fiat payment is confirmed. The seller cannot reclaim the crypto without the buyer\'s confirmation (or a compliance ruling), and the buyer cannot get the crypto without paying first.',
+        a: 'Escrow is a smart contract on Solana that holds the seller\'s USDT during the trade. The crypto cannot be moved until the buyer\'s fiat payment is confirmed — or until a compliance reviewer decides the outcome of a dispute. It protects both sides.',
       },
       {
         q: 'When can I open a dispute?',
-        a: 'You can dispute any order that has been escrowed or has the "payment sent" status. Open the chat for that order and tap Dispute. A compliance reviewer will look at the chat history, payment proof, and account history.',
+        a: 'You can raise a dispute on any order that has USDT locked in escrow or where payment has been marked sent. Open the order, tap Dispute, and describe the issue. Our team will review the chat history and any payment proof you share.',
       },
       {
-        q: 'What happens after I open a dispute?',
-        a: 'Both parties are notified. You have 24 hours to share evidence (receipts, screenshots) before automatic resolution. A compliance reviewer will decide; the escrowed crypto is then released to the rightful party.',
+        q: 'What happens after I raise a dispute?',
+        a: 'Both parties are notified and have 24 hours to submit evidence — receipts, screenshots, bank statements. A compliance reviewer will examine everything and release the escrowed USDT to the rightful party.',
       },
       {
-        q: 'How are auto-cancelled orders handled?',
-        a: 'If escrow was never locked, the order simply expires with no asset movement. If escrow was locked but the trade timed out, the USDT is automatically refunded to the seller via an atomic on-chain refund.',
+        q: 'What happens to an order that times out?',
+        a: 'If escrow was never locked, the order expires with no asset movement. If USDT was already in escrow, the order moves to dispute and our team handles the resolution. You\'ll always be notified before anything is finalised.',
       },
     ],
   },
@@ -213,39 +154,31 @@ const CATEGORIES: Category[] = [
     Icon: Coins,
     items: [
       {
-        q: 'What fees do I pay?',
-        a: 'Blip charges a small platform fee per completed trade, shown transparently before you confirm. Merchants may also include a spread in their quoted rate — always check the "You receive" / "You pay" panel before accepting.',
+        q: 'What fees does Blip charge?',
+        a: 'Blip charges a small platform fee on each completed trade, displayed clearly before you confirm. Merchants set their own rate — the difference between the market price and the merchant\'s quoted rate goes to them. You always see the exact amount you\'ll receive before accepting.',
       },
       {
         q: 'Are there trading limits?',
-        a: 'New accounts start with conservative per-trade and daily limits to reduce fraud risk. Limits increase automatically as you build a successful trading history. Verified merchants have higher limits from day one.',
+        a: 'Yes — new accounts start with conservative per-trade and daily limits to reduce fraud risk. Limits increase automatically as your trading history grows. If you need a higher limit sooner, contact support.',
       },
       {
-        q: 'Are there network fees for the wallet?',
-        a: 'Yes — Solana transactions cost a tiny amount of SOL (typically a fraction of a cent). Keep a small SOL balance for escrow operations. The app warns you before any transaction that would fail due to insufficient SOL.',
+        q: 'Are there Solana network fees?',
+        a: 'Solana transactions cost a tiny fraction of a cent in SOL. Keep a small SOL balance in your wallet for escrow operations. Blip will warn you before any transaction that would fail due to insufficient SOL.',
       },
       {
-        q: 'Why was my rate slightly different at execution?',
-        a: 'Quoted rates are valid for a short window. If the corridor price moves before you accept, the order uses the live rate at acceptance. Large moves will require you to re-confirm.',
+        q: 'Why was the rate slightly different from what I saw?',
+        a: 'Merchant rates are live — if the corridor price moves between when you viewed an offer and when you accepted it, the final rate reflects the live price at acceptance. Any significant move will prompt you to re-confirm before the order is placed.',
       },
     ],
   },
 ];
 
 export default function FaqPage() {
+  const router = useRouter();
   const { theme } = useUserTheme();
   const isLight = theme === 'light';
-  const T = isLight ? TOKENS_LIGHT : TOKENS_DARK;
-
-  // Auth gate lives in faq/layout.tsx — server-side cookie + HMAC check
-  // runs before this component mounts, so a logged-out visitor never
-  // reaches here. Kept the page itself simple to avoid the client-side
-  // race that surfaced when the probe and the existing user-app
-  // providers tried to redirect simultaneously.
 
   const [query, setQuery] = useState('');
-  // Per-category open index — only one item open per category to keep the
-  // page short on mobile. Map keys are category ids.
   const [openByCat, setOpenByCat] = useState<Record<string, number | null>>({});
 
   const filtered = useMemo(() => {
@@ -268,163 +201,117 @@ export default function FaqPage() {
     }));
 
   return (
-    <div className="min-h-screen" style={{ background: T.pageBg, color: T.text }}>
-      {/* Ambient background — tint follows the theme */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div
-          className="absolute top-0 right-1/3 w-[600px] h-[400px] rounded-full blur-[150px]"
-          style={{ background: T.ambient1 }}
-        />
-        <div
-          className="absolute bottom-0 left-1/4 w-[500px] h-[300px] rounded-full blur-[150px]"
-          style={{ background: T.ambient2 }}
-        />
-      </div>
-
-      <header
-        className="sticky top-0 z-50 backdrop-blur-sm"
-        style={{ background: T.headerBg, borderBottom: `1px solid ${T.border}` }}
-      >
-        <div className="px-4 h-14 flex items-center gap-3 max-w-[480px] mx-auto">
-          <Link
-            href="/user"
-            className="p-2 -ml-2 rounded-lg transition-colors"
-            style={{ color: T.iconHi }}
+    <div
+      className={`user-scope ${isLight ? 'user-light' : ''} min-h-dvh`}
+      style={{ background: 'var(--color-surface-base)' }}
+    >
+      <div className="mx-auto w-full max-w-[560px]">
+        {/* Header — back-navigable pattern matching SupportTicketScreen */}
+        <header className="px-5 pt-4 pb-4 shrink-0">
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={() => router.back()}
             aria-label="Back"
+            className={`w-9 h-9 rounded-[14px] flex items-center justify-center mb-3 ${CARD}`}
           >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-base font-semibold" style={{ color: T.text }}>FAQs</h1>
-            <p className="text-[12px]" style={{ color: T.textLo }}>Frequently asked questions</p>
+            <ChevronLeft className="w-5 h-5 text-text-secondary" />
+          </motion.button>
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+            FAQs
+          </p>
+        </header>
+
+        <div className="px-5 pb-28">
+          {/* Search */}
+          <div className={`flex items-center gap-3 px-4 py-3.5 rounded-[16px] mb-6 ${CARD}`}>
+            <Search className="w-[18px] h-[18px] text-text-tertiary shrink-0" strokeWidth={2} />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search questions..."
+              maxLength={100}
+              className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13.5px] font-medium text-text-primary placeholder:text-text-tertiary"
+            />
           </div>
-          <LifeBuoy className="w-4 h-4" style={{ color: T.textXl }} />
-        </div>
-      </header>
 
-      <main className="relative z-10 px-4 py-5 pb-24 max-w-[480px] mx-auto">
-        {/* Search */}
-        <div className="relative mb-5">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-            style={{ color: T.textXl }}
-          />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search questions"
-            maxLength={100}
-            className="w-full h-12 pl-9 pr-3 rounded-[12px] text-[15px] outline-none transition"
-            style={{
-              background: T.inputBg,
-              border: `1px solid ${T.border}`,
-              color: T.text,
-            }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = T.borderFocus; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }}
-          />
-        </div>
+          {/* Empty state */}
+          {filtered.length === 0 && (
+            <div className={`rounded-[18px] py-10 px-5 flex flex-col items-center justify-center text-center ${CARD}`}>
+              <span className="w-12 h-12 rounded-full bg-surface-active border border-border-subtle flex items-center justify-center mb-3">
+                <HelpCircle className="w-[18px] h-[18px] text-text-tertiary" strokeWidth={2} />
+              </span>
+              <p className="text-[13.5px] font-bold text-text-primary mb-1">
+                No results for &ldquo;{query}&rdquo;
+              </p>
+              <p className="text-[11.5px] font-medium text-text-tertiary">
+                Try a different keyword or raise a support ticket.
+              </p>
+            </div>
+          )}
 
-        {filtered.length === 0 && (
-          <div
-            className="rounded-[16px] p-6 text-center"
-            style={{ background: T.surface, border: `1px solid ${T.border}` }}
-          >
-            <p className="text-[15px]" style={{ color: T.textMd }}>
-              No results for &ldquo;{query}&rdquo;.
-            </p>
-            <p className="mt-1 text-[13px]" style={{ color: T.textXl }}>
-              Try a different keyword or contact support.
-            </p>
-          </div>
-        )}
+          {/* Categories */}
+          {filtered.map((cat) => {
+            const Icon = cat.Icon;
+            const open = openByCat[cat.id] ?? null;
+            return (
+              <section key={cat.id} className="mb-6">
+                <div className="flex items-center gap-1.5 mb-2.5 px-1">
+                  <Icon className="w-3.5 h-3.5 text-text-quaternary" strokeWidth={2} />
+                  <span className={SECTION_LABEL}>{cat.label}</span>
+                </div>
 
-        {filtered.map((cat) => {
-          const Icon = cat.Icon;
-          const open = openByCat[cat.id] ?? null;
-          return (
-            <section key={cat.id} className="mb-6">
-              <div className="flex items-center gap-1.5 mb-2 px-1">
-                <Icon className="w-3.5 h-3.5" style={{ color: T.iconLo }} />
-                <span
-                  className="text-[10px] font-bold tracking-[0.22em] uppercase"
-                  style={{ color: T.textLo }}
-                >
-                  {cat.label}
-                </span>
-              </div>
-
-              <div
-                className="rounded-[20px] overflow-hidden"
-                style={{
-                  background: T.cardGradient,
-                  border: `1px solid ${T.borderStrong}`,
-                  boxShadow: T.cardShadow,
-                }}
-              >
-                {cat.items.map((item, idx, arr) => {
-                  const isOpen = open === idx;
-                  return (
-                    <div
-                      key={item.q}
-                      style={{
-                        borderBottom:
-                          idx < arr.length - 1 ? `1px solid ${T.divider}` : undefined,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggle(cat.id, idx)}
-                        aria-expanded={isOpen}
-                        className="w-full px-4 py-3.5 flex items-start gap-3 text-left transition"
-                        onMouseEnter={(e) => { e.currentTarget.style.background = T.hoverBg; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                <div className={`rounded-[20px] overflow-hidden ${CARD}`}>
+                  {cat.items.map((item, idx, arr) => {
+                    const isOpen = open === idx;
+                    return (
+                      <div
+                        key={item.q}
+                        className={idx < arr.length - 1 ? 'border-b border-border-subtle' : ''}
                       >
-                        <span
-                          className="flex-1 min-w-0 text-[15.5px] font-semibold tracking-[-0.01em] leading-snug"
-                          style={{ color: T.text }}
+                        <button
+                          type="button"
+                          onClick={() => toggle(cat.id, idx)}
+                          aria-expanded={isOpen}
+                          className="w-full px-4 py-4 flex items-start gap-3 text-left"
                         >
-                          {item.q}
-                        </span>
-                        <ChevronDown
-                          className={`w-4 h-4 mt-0.5 shrink-0 transition-transform duration-200 ${
-                            isOpen ? 'rotate-180' : ''
-                          }`}
-                          style={{ color: isOpen ? T.iconHi : T.textXl }}
-                        />
-                      </button>
-                      <AnimatePresence initial={false}>
-                        {isOpen && (
-                          <motion.div
-                            key="answer"
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                            className="overflow-hidden"
-                          >
-                            <p
-                              className="px-4 pb-4 -mt-1 text-[14.5px] leading-relaxed"
-                              style={{ color: T.textMd }}
+                          <span className="flex-1 min-w-0 text-[14px] font-bold tracking-[-0.01em] leading-snug text-text-primary">
+                            {item.q}
+                          </span>
+                          <ChevronDown
+                            className={`w-4 h-4 mt-0.5 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} text-text-tertiary`}
+                            strokeWidth={2.2}
+                          />
+                        </button>
+                        <AnimatePresence initial={false}>
+                          {isOpen && (
+                            <motion.div
+                              key="answer"
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                              className="overflow-hidden"
                             >
-                              {item.a}
-                            </p>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
+                              <p className="px-4 pb-4 -mt-1 text-[13.5px] leading-relaxed text-text-secondary">
+                                {item.a}
+                              </p>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
 
-        <p className="mt-6 text-center text-[13px]" style={{ color: T.textXl }}>
-          Can&apos;t find what you need? Tap Contact Support from your profile.
-        </p>
-      </main>
+          <p className="mt-2 text-center text-[12px] font-medium text-text-tertiary">
+            Still stuck? Go to Profile → Support to raise a ticket.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
