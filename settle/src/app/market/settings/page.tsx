@@ -846,7 +846,7 @@ export default function MerchantSettingsPage({
   const tabs = [...accountTabs, ...preferenceTabs];
 
   return (
-    <div className="min-h-screen bg-background text-white">
+    <div className="h-screen bg-background text-white flex flex-col overflow-hidden">
       <MerchantNavbar
         activePage="settings"
         merchantInfo={merchantInfo}
@@ -864,17 +864,12 @@ export default function MerchantSettingsPage({
         onBack={onClose ?? (() => router.push("/market"))}
       />
 
-      {/* Constrained layout — capped at 1080px and centered to match the
-          wallet "main" view's max-w-[1080px]. Prior version was full-bleed
-          which felt sparse next to the wallet page sitting at a tighter
-          width. Sidebar still gets its fixed 240px column; the rest goes
-          to content. */}
-      <div className="w-full max-w-[1080px] mx-auto flex flex-col lg:flex-row min-h-[calc(100vh-50px)]">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
         {/* Sidebar Tabs — sticky on desktop so it stays visible while the
             content area scrolls. Anchored at top-[50px] (the height of the
             MerchantNavbar) and capped at the viewport so very long sidebars
             scroll internally instead of pushing the page taller. */}
-        <nav className="lg:w-60 lg:border-r border-white/[0.05] lg:py-6 lg:px-3 shrink-0 flex flex-col lg:sticky lg:top-[50px] lg:self-start lg:h-[calc(100vh-50px)] lg:overflow-y-auto">
+        <nav className="lg:w-60 lg:border-r border-white/[0.05] lg:py-6 lg:px-3 shrink-0 flex flex-col lg:h-full lg:overflow-y-auto">
           {/* Mobile: iOS-style grouped list — each row opens a bottom-sheet */}
           <div className="flex lg:hidden flex-col gap-6 px-4 py-4 pb-28">
             {/* Profile header card */}
@@ -1076,7 +1071,16 @@ export default function MerchantSettingsPage({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto lg:overflow-visible p-5 lg:p-8 pb-10 lg:pb-16">
+          {/* Desktop panel header — hidden on mobile */}
+          <div className="hidden lg:flex items-center gap-3 px-6 py-4 border-b border-white/[0.05] shrink-0">
+            <span className="text-[11px] font-semibold tracking-[0.15em] uppercase text-white/30">Settings</span>
+            <span className="text-white/20 text-xs">›</span>
+            <span className="text-[13px] font-semibold text-white/80">
+              {tabs.find(t => t.id === activeTab)?.label}
+            </span>
+          </div>
+          {/* Content scroll area */}
+          <div className="flex-1 overflow-y-auto p-5 lg:p-6 pb-10 lg:pb-8">
           {/* Success/Error banners */}
           {saveSuccess && (
             <motion.div
@@ -2133,7 +2137,7 @@ export default function MerchantSettingsPage({
           )}
 
           </div>
-        </motion.main>
+        </div>
       </div>
 
       <PaymentMethodModal
