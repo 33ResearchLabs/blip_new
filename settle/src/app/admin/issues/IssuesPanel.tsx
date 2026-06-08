@@ -1098,26 +1098,54 @@ const DEPARTMENTS = [
   { value: 'operations', label: 'Operations' },
 ];
 
-interface UserProfile {
+// Account summary for whoever filed the ticket — normalised from the admin
+// users/merchants list endpoints (both return camelCase). Fields are optional
+// since users and merchants expose slightly different stats.
+interface ReporterAccount {
+  kind: 'user' | 'merchant';
   id: string;
-  display_name: string;
+  name: string;
   email: string;
-  total_trades: number;
-  completed_trades: number;
-  disputed_trades: number;
-  cancelled_trades: number;
-  joined_at: string;
-  is_active: boolean;
+  status?: string | null;       // merchant status
+  kycStatus?: string | null;    // user KYC
+  isOnline?: boolean;
+  rating?: number;
+  balance?: number;
+  totalTrades?: number;
+  completedCount?: number;
+  cancelledCount?: number;
+  disputesTotal?: number;
+  reputationScore?: number;
+  verificationLevel?: number;   // merchant
+  riskScore?: number | null;
+  riskLevel?: string | null;
 }
 
-interface RecentOrder {
+// The order attached to the ticket (metadata.linked_order_id), as returned by
+// GET /api/admin/orders?order_id= (serialized, camelCase + minimal_status).
+interface LinkedOrder {
   id: string;
-  order_number: string;
-  type: 'buy' | 'sell';
+  orderNumber: string;
+  user: string;
+  merchant: string;
+  buyerMerchant: string | null;
+  amount: number;
+  fiatAmount: number;
+  fiatCurrency: string | null;
   status: string;
-  fiat_amount: number;
-  fiat_currency: string;
-  created_at: string;
+  minimal_status?: string;
+  type: string;
+  feePercentage: number | null;
+  feeAmount: number | null;
+  createdAt: string;
+  expiresAt: string | null;
+  completedAt: string | null;
+  acceptedAt: string | null;
+  escrowedAt: string | null;
+  paymentSentAt: string | null;
+  paymentConfirmedAt: string | null;
+  cancelledAt: string | null;
+  disputedAt: string | null;
 }
 
 interface DetailPanelProps {
@@ -1163,37 +1191,117 @@ function DetailPanel({
         ? [{ id: issue.id, url: issue.screenshot_url, type: 'screenshot' as const }]
         : [];
 
-  // User profile + recent orders (fetched when ticket has a linked user)
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  // Reporter account summary (user or merchant) + the order linked to the
+  // ticket — fetched whenever the selected ticket changes.
+  const [account, setAccount] = useState<ReporterAccount | null>(null);
+  const [linkedOrder, setLinkedOrder] = useState<LinkedOrder | null>(null);
+  const [linkedOrderLoading, setLinkedOrderLoading] = useState(false);
   const [escalateDept, setEscalateDept] = useState('');
   const [escalating, setEscalating] = useState(false);
   const [resolutionMsg, setResolutionMsg] = useState('');
 
+  // The order the reporter attached at submit time (if any).
+  const linkedOrderId =
+    typeof issue.metadata?.linked_order_id === 'string'
+      ? issue.metadata.linked_order_id
+      : null;
+
+  // Chronological lifecycle of the linked order — one entry per action that
+  // actually happened, ordered by time, derived from the order's per-action
+  // timestamp columns.
+  const orderLifecycle = linkedOrder
+    ? (
+        [
+          ['Created', linkedOrder.createdAt, 'neutral'],
+          ['Accepted', linkedOrder.acceptedAt, 'neutral'],
+          ['Escrow locked', linkedOrder.escrowedAt, 'neutral'],
+          ['Payment sent', linkedOrder.paymentSentAt, 'neutral'],
+          ['Payment confirmed', linkedOrder.paymentConfirmedAt, 'good'],
+          ['Completed', linkedOrder.completedAt, 'good'],
+          ['Disputed', linkedOrder.disputedAt, 'bad'],
+          ['Cancelled', linkedOrder.cancelledAt, 'warn'],
+        ] as const
+      )
+        .filter((e) => !!e[1])
+        .map((e) => ({ label: e[0], at: e[1] as string, tone: e[2] as string }))
+        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+    : [];
+
   useEffect(() => {
-    setProfile(null);
-    setRecentOrders([]);
+    setAccount(null);
+    setLinkedOrder(null);
+    setLinkedOrderLoading(false);
     setEscalateDept('');
     setResolutionMsg('');
-    if (!issue.created_by || issue.actor_type !== 'user') return;
-    const uid = issue.created_by;
-    // Fetch user profile
-    fetch(`/api/admin/users?search=${uid}&limit=1`)
-      .then((r) => r.json())
-      .then((d) => {
-        const u = d?.data?.users?.[0] ?? d?.data?.[0] ?? null;
-        if (u) setProfile(u as UserProfile);
-      })
-      .catch(() => {});
-    // Fetch recent orders
-    fetch(`/api/admin/orders?user_id=${uid}&limit=5`)
-      .then((r) => r.json())
-      .then((d) => {
-        const orders = d?.data?.orders ?? d?.data ?? [];
-        setRecentOrders(Array.isArray(orders) ? orders.slice(0, 5) : []);
-      })
-      .catch(() => {});
-  }, [issue.id, issue.created_by, issue.actor_type]);
+
+    const reporterId = issue.created_by;
+
+    // ── Reporter account summary (user OR merchant) ──
+    if (reporterId && issue.actor_type === 'user') {
+      fetch(`/api/admin/users?search=${reporterId}&limit=1`)
+        .then((r) => r.json())
+        .then((d) => {
+          const u = d?.data?.users?.[0] ?? d?.data?.[0];
+          if (!u) return;
+          setAccount({
+            kind: 'user',
+            id: u.id,
+            name: u.username || u.name || '—',
+            email: u.email || '—',
+            kycStatus: u.kycStatus ?? null,
+            rating: u.rating,
+            balance: u.balance,
+            totalTrades: u.totalTrades,
+            completedCount: u.completedCount,
+            cancelledCount: u.cancelledCount,
+            disputesTotal: u.disputesTotal,
+            reputationScore: u.reputationScore,
+            riskScore: u.riskScore ?? null,
+            riskLevel: u.riskLevel ?? null,
+          });
+        })
+        .catch(() => {});
+    } else if (reporterId && issue.actor_type === 'merchant') {
+      fetch(`/api/admin/merchants?search=${reporterId}&limit=1`)
+        .then((r) => r.json())
+        .then((d) => {
+          const m = d?.data?.merchants?.[0] ?? d?.data?.[0];
+          if (!m) return;
+          setAccount({
+            kind: 'merchant',
+            id: m.id,
+            name: m.displayName || m.name || '—',
+            email: m.email || '—',
+            status: m.status ?? null,
+            isOnline: m.isOnline,
+            rating: m.rating,
+            balance: m.balance,
+            totalTrades: m.trades,
+            completedCount: m.completedCount,
+            cancelledCount: m.cancelledCount,
+            disputesTotal: m.disputesTotal ?? m.disputedCount,
+            reputationScore: m.reputationScore,
+            verificationLevel: m.verificationLevel,
+            riskScore: m.riskScore ?? null,
+            riskLevel: m.riskLevel ?? null,
+          });
+        })
+        .catch(() => {});
+    }
+
+    // ── Linked order — complete summary ──
+    if (linkedOrderId) {
+      setLinkedOrderLoading(true);
+      fetch(`/api/admin/orders?order_id=${linkedOrderId}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const rows = Array.isArray(d?.data) ? d.data : (d?.data?.orders ?? []);
+          if (rows[0]) setLinkedOrder(rows[0] as LinkedOrder);
+        })
+        .catch(() => {})
+        .finally(() => setLinkedOrderLoading(false));
+    }
+  }, [issue.id, issue.created_by, issue.actor_type, linkedOrderId]);
 
   const handleEscalate = async () => {
     if (!escalateDept) return;
@@ -1400,38 +1508,76 @@ function DetailPanel({
           </div>
         ) : null}
 
-        {/* ── User Profile ── */}
-        {profile && (
+        {/* ── Reporter account summary (user or merchant) ── */}
+        {account && (
           <div className="border-t border-border pt-4 space-y-2">
             <div className="text-[11px] uppercase tracking-wider text-foreground/40">
-              User Profile
+              {account.kind === 'merchant' ? 'Merchant account' : 'User account'}
+            </div>
+            <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-foreground/90 truncate">{account.name}</span>
+                {account.riskLevel && (
+                  <span
+                    className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] border ${
+                      account.riskLevel === 'high' || account.riskLevel === 'critical'
+                        ? 'text-rose-300 border-rose-500/25 bg-rose-500/10'
+                        : account.riskLevel === 'medium'
+                          ? 'text-amber-300 border-amber-500/25 bg-amber-500/10'
+                          : 'text-foreground/50 border-border bg-foreground/[0.03]'
+                    }`}
+                  >
+                    risk: {account.riskLevel}
+                  </span>
+                )}
+              </div>
+              <div className="text-foreground/50 truncate">{account.email}</div>
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {account.kind === 'merchant' && account.status && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70">{account.status}</span>
+                )}
+                {account.kind === 'user' && account.kycStatus && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70">KYC: {account.kycStatus}</span>
+                )}
+                {typeof account.rating === 'number' && account.rating > 0 && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70">★ {account.rating.toFixed(1)}</span>
+                )}
+                {typeof account.reputationScore === 'number' && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70">Rep: {account.reputationScore}</span>
+                )}
+                {typeof account.balance === 'number' && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70 tabular-nums">
+                    {account.balance.toLocaleString('en-US', { maximumFractionDigits: 2 })} USDT
+                  </span>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2 text-[11px]">
               <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2">
                 <div className="text-foreground/45 mb-0.5">Trades</div>
-                <div className="font-bold text-foreground/90">{profile.total_trades ?? 0}</div>
+                <div className="font-bold text-foreground/90">{account.totalTrades ?? 0}</div>
               </div>
               <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2">
                 <div className="text-foreground/45 mb-0.5">Disputes</div>
-                <div className={`font-bold ${(profile.disputed_trades ?? 0) > 2 ? 'text-rose-400' : 'text-foreground/90'}`}>
-                  {profile.disputed_trades ?? 0}
+                <div className={`font-bold ${(account.disputesTotal ?? 0) > 2 ? 'text-rose-400' : 'text-foreground/90'}`}>
+                  {account.disputesTotal ?? 0}
                 </div>
               </div>
               <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2">
                 <div className="text-foreground/45 mb-0.5">Cancelled</div>
-                <div className={`font-bold ${(profile.cancelled_trades ?? 0) > 5 ? 'text-amber-400' : 'text-foreground/90'}`}>
-                  {profile.cancelled_trades ?? 0}
+                <div className={`font-bold ${(account.cancelledCount ?? 0) > 5 ? 'text-amber-400' : 'text-foreground/90'}`}>
+                  {account.cancelledCount ?? 0}
                 </div>
               </div>
             </div>
-            {(profile.disputed_trades ?? 0) > 2 && (
+            {(account.disputesTotal ?? 0) > 2 && (
               <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-300">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400 shrink-0" />
                 High dispute rate — review history carefully
               </div>
             )}
             <a
-              href={`/admin/users?search=${profile.id}`}
+              href={`/admin/${account.kind === 'merchant' ? 'merchants' : 'users'}?search=${account.id}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-[11px] text-foreground/50 hover:text-foreground/80 transition-colors"
@@ -1441,34 +1587,107 @@ function DetailPanel({
           </div>
         )}
 
-        {/* ── Recent Orders ── */}
-        {recentOrders.length > 0 && (
+        {/* ── Linked order — complete summary ── */}
+        {linkedOrderId && (
           <div className="border-t border-border pt-4 space-y-2">
             <div className="text-[11px] uppercase tracking-wider text-foreground/40">
-              Recent Orders
+              Linked order
             </div>
-            <ul className="space-y-1">
-              {recentOrders.map((o) => (
-                <li key={o.id} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-foreground/[0.03] border border-border text-[11px]">
-                  <span className="font-mono text-foreground/60">#{o.order_number}</span>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                    o.type === 'buy' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-blue-500/10 text-blue-300'
-                  }`}>
-                    {o.type.toUpperCase()}
-                  </span>
-                  <span className="text-foreground/80 tabular-nums">
-                    {o.fiat_currency} {Number(o.fiat_amount).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                  </span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                    o.status === 'completed' ? 'text-emerald-300 border-emerald-500/20 bg-emerald-500/10' :
-                    o.status === 'disputed' ? 'text-rose-300 border-rose-500/20 bg-rose-500/10' :
-                    'text-foreground/50 border-border bg-foreground/[0.03]'
-                  }`}>
-                    {o.status}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {linkedOrder ? (
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2 space-y-2 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-foreground/70">#{linkedOrder.orderNumber}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      linkedOrder.type === 'buy' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-blue-500/10 text-blue-300'
+                    }`}>
+                      {String(linkedOrder.type).toUpperCase()}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                      linkedOrder.status === 'completed' ? 'text-emerald-300 border-emerald-500/20 bg-emerald-500/10' :
+                      linkedOrder.status === 'disputed' ? 'text-rose-300 border-rose-500/20 bg-rose-500/10' :
+                      'text-foreground/50 border-border bg-foreground/[0.03]'
+                    }`}>
+                      {linkedOrder.status}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                  <div>
+                    <div className="text-foreground/45">Fiat</div>
+                    <div className="text-foreground/85 tabular-nums">
+                      {linkedOrder.fiatCurrency ? `${linkedOrder.fiatCurrency} ` : ''}
+                      {Number(linkedOrder.fiatAmount).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-foreground/45">Crypto</div>
+                    <div className="text-foreground/85 tabular-nums">
+                      {Number(linkedOrder.amount).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDT
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-foreground/45">User</div>
+                    <div className="text-foreground/85 truncate">{linkedOrder.user || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-foreground/45">Merchant</div>
+                    <div className="text-foreground/85 truncate">{linkedOrder.merchant || '—'}</div>
+                  </div>
+                  {linkedOrder.buyerMerchant && (
+                    <div>
+                      <div className="text-foreground/45">Buyer merchant</div>
+                      <div className="text-foreground/85 truncate">{linkedOrder.buyerMerchant}</div>
+                    </div>
+                  )}
+                  {typeof linkedOrder.feeAmount === 'number' && (
+                    <div>
+                      <div className="text-foreground/45">Fee</div>
+                      <div className="text-foreground/85 tabular-nums">
+                        {linkedOrder.feeAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                        {typeof linkedOrder.feePercentage === 'number' ? ` (${linkedOrder.feePercentage}%)` : ''}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {orderLifecycle.length > 0 && (
+                  <div className="pt-1.5 border-t border-border space-y-1.5">
+                    <div className="text-foreground/45 text-[10px] uppercase tracking-wider">
+                      Lifecycle
+                    </div>
+                    <ol className="relative border-l border-border pl-3 space-y-2">
+                      {orderLifecycle.map((s) => (
+                        <li key={s.label} className="relative">
+                          <span
+                            className={`absolute -left-[15px] top-1 w-1.5 h-1.5 rounded-full border ${
+                              s.tone === 'good'
+                                ? 'bg-emerald-400 border-emerald-400'
+                                : s.tone === 'bad'
+                                  ? 'bg-rose-400 border-rose-400'
+                                  : s.tone === 'warn'
+                                    ? 'bg-amber-400 border-amber-400'
+                                    : 'bg-foreground/40 border-foreground/40'
+                            }`}
+                          />
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-foreground/80">{s.label}</span>
+                            <span className="text-foreground/45 tabular-nums">
+                              {new Date(s.at).toLocaleString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2 text-[11px] text-foreground/45">
+                {linkedOrderLoading
+                  ? `Loading order ${linkedOrderId.slice(0, 8)}…`
+                  : `Order ${linkedOrderId.slice(0, 8)}… — details unavailable`}
+              </div>
+            )}
           </div>
         )}
 

@@ -235,11 +235,14 @@ export function MerchantSupportPanel({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [copiedDetail, setCopiedDetail] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   // Load recent merchant orders for the optional "link order" dropdown.
   useEffect(() => {
     if (!merchantId) return;
-    fetchWithAuth(`/api/orders?merchant_id=${merchantId}&limit=10`)
+    fetchWithAuth(`/api/merchant/orders?merchant_id=${merchantId}&limit=10`)
       .then((r) => r.json())
       .then((d) => {
         const rows = d?.data?.orders ?? d?.data ?? [];
@@ -320,7 +323,33 @@ export function MerchantSupportPanel({
     setDetail(null);
     setDetailError(null);
     setLightboxIdx(null);
+    setReplyText("");
+    setReplyError(null);
     setView("detail");
+  };
+
+  const handleSendReply = async () => {
+    const msg = replyText.trim();
+    if (!msg || !detail || replySending) return;
+    setReplySending(true);
+    setReplyError(null);
+    try {
+      const res = await fetchWithAuth(`/api/issues/${detail.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      setReplyText("");
+      await loadDetail(detail.id); // refresh the timeline (polling/refresh)
+    } catch (e) {
+      setReplyError((e as Error).message || "Failed to send reply");
+    } finally {
+      setReplySending(false);
+    }
   };
 
   const startCreate = () => {
@@ -862,6 +891,51 @@ export function MerchantSupportPanel({
                     </li>
                   ))}
                 </ol>
+              </section>
+            )}
+
+            {/* Reply composer — turns the support timeline into a two-way thread */}
+            {detail.status === "closed" ? (
+              <p className="text-[12px] text-white/40 text-center pt-1">
+                This ticket is closed. Raise a new ticket if you still need help.
+              </p>
+            ) : (
+              <section className="space-y-2">
+                <h3 className="text-[12px] font-medium text-white/60 uppercase tracking-wide">
+                  Reply
+                </h3>
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  maxLength={1000}
+                  rows={3}
+                  placeholder="Write a reply to support…"
+                  className={`${INPUT} resize-none`}
+                />
+                {replyError && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    <span className="text-[12px] text-red-300">{replyError}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] text-white/30">
+                    {replyText.length}/1000
+                  </span>
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleSendReply}
+                    disabled={!replyText.trim() || replySending}
+                    className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#f5f5f7] text-[#0b0b0c] font-bold text-[13px] hover:bg-white transition-colors disabled:opacity-50"
+                  >
+                    {replySending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    {replySending ? "Sending…" : "Send"}
+                  </motion.button>
+                </div>
               </section>
             )}
           </>
