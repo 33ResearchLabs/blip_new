@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 import { formatFiat } from "@/lib/format";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { Order } from "@/types/merchant";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
@@ -80,9 +81,12 @@ export function EscrowLockModal({
                 {/* Order Info */}
                 <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.04]">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl">
-                      {escrowOrder.emoji}
-                    </div>
+                    <UserAvatar
+                      src={escrowOrder.user_avatar}
+                      seed={escrowOrder.user}
+                      size={48}
+                      className="rounded-xl"
+                    />
                     <div>
                       <p className="text-sm font-medium">{escrowOrder.user}</p>
                       <p className="text-xs text-foreground/35">
