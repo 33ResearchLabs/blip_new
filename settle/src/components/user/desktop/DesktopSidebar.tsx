@@ -77,18 +77,22 @@ export function DesktopSidebar({
         overflowY: "auto",
       }}
     >
-      {/* Logo / wordmark */}
+      {/* Logo / wordmark — full "Blip money" lockup, matches the rest of the app */}
       <div style={{ padding: "0 20px 28px" }}>
         <span
           style={{
+            display: "inline-block",
             fontSize: 20,
             fontWeight: 800,
+            lineHeight: 1.3,
             letterSpacing: "-0.5px",
-            color: "#ffb02e",
             fontFamily: "Manrope, sans-serif",
           }}
         >
-          blip
+          <span style={{ color: "#ffb02e" }}>Blip</span>{" "}
+          <span style={{ fontStyle: "italic", fontWeight: 600, color: "rgba(255,255,255,0.55)" }}>
+            money
+          </span>
         </span>
       </div>
 

@@ -1201,7 +1201,7 @@ export default function Home() {
         )}
 
         {screen === "wallet" && (
-          <Panel k="wallet" desktop={!!isDesktop}>
+          <Panel k="wallet" style={theme === "light" ? lightPanelBg : darkBg} desktop={!!isDesktop}>
             <WalletScreen
               screen={screen}
               setScreen={setScreen}
