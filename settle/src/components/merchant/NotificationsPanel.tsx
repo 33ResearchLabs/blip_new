@@ -181,7 +181,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
   }, [onboardingLoading, onboardingStatus, onboardingNeedsAttention, didInitialFocus]);
 
   return (
-    <div style={{ height: hideTabStrip ? '100%' : '50%' }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
+    <div style={{ height: '100%' }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
       <div className="flex flex-col h-full min-h-0">
         {/* ── Tab Strip ──────────────────────────────────── */}
         <div className={`flex items-center justify-between border-b border-section-divider px-1${hideTabStrip ? " hidden" : ""}`}>
