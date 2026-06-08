@@ -925,17 +925,23 @@ function MerchantDashboardV2({
                             const Widget = WIDGET_REGISTRY[wid];
                             return (
                               <div key={wid} className="min-h-0 rounded-xl overflow-hidden flex flex-col border border-white/[0.08] bg-white/[0.02] shadow-[0_2px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]" style={{ flex: wid === "dashboardWidgets" ? 2 : 3 }}>
-                                <CardLabel label={wid === "dashboardWidgets" ? "Balance" : "Trade"} live={wid === "dashboardWidgets"} />
-                                <div className="flex-1 min-h-0 overflow-hidden">
-                                  <WidgetShell
-                                    id={wid}
-                                    isEditing={isEditing}
-                                    onHide={onHide}
-                                    fillHeight={true}
-                                  >
-                                    <Widget ctx={ctx} />
-                                  </WidgetShell>
-                                </div>
+                                {/* WidgetShell wraps the WHOLE card (CardLabel header
+                                    included) so its drag/hide handle lands in the
+                                    "Trade"/"Balance" header bar — consistent with every
+                                    other panel — instead of floating over the form body. */}
+                                <WidgetShell
+                                  id={wid}
+                                  isEditing={isEditing}
+                                  onHide={onHide}
+                                  fillHeight={true}
+                                >
+                                  <div className="h-full flex flex-col">
+                                    <CardLabel label={wid === "dashboardWidgets" ? "Balance" : "Trade"} live={wid === "dashboardWidgets"} />
+                                    <div className="flex-1 min-h-0 overflow-hidden">
+                                      <Widget ctx={ctx} />
+                                    </div>
+                                  </div>
+                                </WidgetShell>
                               </div>
                             );
                           })}
