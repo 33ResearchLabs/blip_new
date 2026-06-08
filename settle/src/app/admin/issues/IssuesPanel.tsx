@@ -252,6 +252,18 @@ function downloadCsv(filename: string, rows: IssueRow[]) {
   URL.revokeObjectURL(url);
 }
 
+// ─── SLA: resolution target ──────────────────────────────────────────────
+// Tickets are meant to be resolved within this window. A ticket is "overdue"
+// once it's older than this and still actionable (open / in_progress).
+const SLA_HOURS = 24;
+
+function isOverdue(r: { status: IssueStatus; created_at: string }): boolean {
+  if (r.status !== 'open' && r.status !== 'in_progress') return false;
+  const created = new Date(r.created_at).getTime();
+  if (!Number.isFinite(created)) return false;
+  return Date.now() - created >= SLA_HOURS * 60 * 60 * 1000;
+}
+
 // ─── Stat card ─────────────────────────────────────────────────────────────
 
 interface StatCardProps {
@@ -375,6 +387,8 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
   const [statusFilter, setStatusFilter] = useState<IssueStatus | ''>('');
   const [categoryFilter, setCategoryFilter] = useState<IssueCategory | ''>('');
   const [priorityFilter, setPriorityFilter] = useState<IssuePriority | ''>('');
+  // Client-side "overdue" view — tickets past the 24h SLA, still actionable.
+  const [overdueOnly, setOverdueOnly] = useState(false);
 
   // Client-side filters
   const [search, setSearch] = useState('');
@@ -489,13 +503,18 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
       closed: 0,
       rejected: 0,
     };
-    for (const r of rows) c[r.status] = (c[r.status] || 0) + 1;
+    let overdue = 0;
+    for (const r of rows) {
+      c[r.status] = (c[r.status] || 0) + 1;
+      if (isOverdue(r)) overdue += 1;
+    }
     return {
       total,
       open: c.open,
       inProgress: c.in_progress,
       resolved: c.resolved,
       closed: c.closed + c.rejected,
+      overdue,
     };
   }, [rows]);
 
@@ -523,13 +542,16 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
         r = r.filter((x) => new Date(x.created_at).getTime() <= t);
       }
     }
+    if (overdueOnly) {
+      r = r.filter(isOverdue);
+    }
     const sorted = [...r].sort((a, b) => {
       const ta = new Date(a.created_at).getTime();
       const tb = new Date(b.created_at).getTime();
       return sortDir === 'desc' ? tb - ta : ta - tb;
     });
     return sorted;
-  }, [rows, search, startDate, endDate, sortDir]);
+  }, [rows, search, startDate, endDate, sortDir, overdueOnly]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = useMemo(() => {
@@ -545,7 +567,8 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
     !!priorityFilter ||
     !!search ||
     !!startDate ||
-    !!endDate;
+    !!endDate ||
+    overdueOnly;
 
   // ─── Mutations ─────────────────────────────────────────────────────────
   const patchIssue = useCallback(
@@ -590,6 +613,7 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
     setSearch('');
     setStartDate('');
     setEndDate('');
+    setOverdueOnly(false);
   };
 
   const toggleRowSelect = (id: string) => {
@@ -615,10 +639,10 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold leading-tight text-foreground/90">
-            Issues
+            Support Tickets
           </h1>
           <p className="text-[12px] text-foreground/45 mt-0.5">
-            Manage and resolve user issues and support tickets
+            Manage and resolve user &amp; merchant support tickets
           </p>
         </div>
         <button
@@ -637,14 +661,17 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
         <StatCard
           label="All Issues"
           value={stats.total}
           total={stats.total}
           totalLabel="Total"
-          active={!statusFilter}
-          onClick={() => setStatusFilter('')}
+          active={!statusFilter && !overdueOnly}
+          onClick={() => {
+            setStatusFilter('');
+            setOverdueOnly(false);
+          }}
         />
         <StatCard
           label="Open"
@@ -681,6 +708,17 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
           dotColor="bg-foreground/40"
           active={statusFilter === 'closed'}
           onClick={() => setStatusFilter(statusFilter === 'closed' ? '' : 'closed')}
+        />
+        <StatCard
+          label="Overdue >24h"
+          value={stats.overdue}
+          total={stats.total}
+          dotColor="bg-rose-400"
+          active={overdueOnly}
+          onClick={() => {
+            setOverdueOnly((v) => !v);
+            setStatusFilter('');
+          }}
         />
       </div>
 
@@ -956,14 +994,24 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
                           </span>
                         </td>
                         <td className="px-2 py-2.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium ${STATUS_PILL[r.status]}`}
-                          >
+                          <div className="flex items-center gap-1.5">
                             <span
-                              className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[r.status]}`}
-                            />
-                            {STATUS_LABEL[r.status]}
-                          </span>
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium ${STATUS_PILL[r.status]}`}
+                            >
+                              <span
+                                className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[r.status]}`}
+                              />
+                              {STATUS_LABEL[r.status]}
+                            </span>
+                            {isOverdue(r) ? (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-300 text-[10px] font-semibold whitespace-nowrap"
+                                title={`Overdue — open longer than ${SLA_HOURS}h without resolution`}
+                              >
+                                {SLA_HOURS}h+
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-2 py-2.5 whitespace-pre text-foreground/55 leading-tight tabular-nums">
                           {fmtDateTime(r.created_at)}
@@ -1200,6 +1248,19 @@ function DetailPanel({
   const [escalating, setEscalating] = useState(false);
   const [resolutionMsg, setResolutionMsg] = useState('');
 
+  // Which collapsible sections are expanded. Key context + actions open by
+  // default; activity and media collapse to keep the panel scannable.
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(['description', 'account', 'order', 'actions']),
+  );
+  const toggleSection = (key: string) =>
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   // The order the reporter attached at submit time (if any).
   const linkedOrderId =
     typeof issue.metadata?.linked_order_id === 'string'
@@ -1433,21 +1494,24 @@ function DetailPanel({
         </div>
 
         {/* Description */}
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-foreground/40 mb-1">
-            Description
-          </div>
-          <p className="text-foreground/80 whitespace-pre-wrap leading-relaxed">
+        <Section
+          title="Description"
+          open={openSections.has('description')}
+          onToggle={() => toggleSection('description')}
+        >
+          <p className="text-foreground/80 whitespace-pre-wrap leading-relaxed text-[12px]">
             {issue.description}
           </p>
-        </div>
+        </Section>
 
         {/* Screenshots */}
         {shots.length > 0 ? (
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-foreground/40 mb-2">
-              Screenshots ({shots.length})
-            </div>
+          <Section
+            title="Screenshots"
+            count={shots.length}
+            open={openSections.has('screenshots')}
+            onToggle={() => toggleSection('screenshots')}
+          >
             <div className="grid grid-cols-3 gap-2">
               {shots.map((shot, i) => (
                 <a
@@ -1466,15 +1530,17 @@ function DetailPanel({
                 </a>
               ))}
             </div>
-          </div>
+          </Section>
         ) : null}
 
         {/* Attachments */}
         {issue.attachments?.length > 0 ? (
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-foreground/40 mb-2">
-              Attachments
-            </div>
+          <Section
+            title="Attachments"
+            count={issue.attachments.length}
+            open={openSections.has('attachments')}
+            onToggle={() => toggleSection('attachments')}
+          >
             <ul className="space-y-1.5">
               {issue.attachments.map((a, i) => (
                 <li
@@ -1505,15 +1571,16 @@ function DetailPanel({
                 </li>
               ))}
             </ul>
-          </div>
+          </Section>
         ) : null}
 
         {/* ── Reporter account summary (user or merchant) ── */}
         {account && (
-          <div className="border-t border-border pt-4 space-y-2">
-            <div className="text-[11px] uppercase tracking-wider text-foreground/40">
-              {account.kind === 'merchant' ? 'Merchant account' : 'User account'}
-            </div>
+          <Section
+            title={account.kind === 'merchant' ? 'Merchant account' : 'User account'}
+            open={openSections.has('account')}
+            onToggle={() => toggleSection('account')}
+          >
             <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2 space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold text-foreground/90 truncate">{account.name}</span>
@@ -1584,15 +1651,16 @@ function DetailPanel({
             >
               <Plus size={11} /> View full profile
             </a>
-          </div>
+          </Section>
         )}
 
         {/* ── Linked order — complete summary ── */}
         {linkedOrderId && (
-          <div className="border-t border-border pt-4 space-y-2">
-            <div className="text-[11px] uppercase tracking-wider text-foreground/40">
-              Linked order
-            </div>
+          <Section
+            title="Linked order"
+            open={openSections.has('order')}
+            onToggle={() => toggleSection('order')}
+          >
             {linkedOrder ? (
               <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2 space-y-2 text-[11px]">
                 <div className="flex items-center justify-between gap-2">
@@ -1688,14 +1756,16 @@ function DetailPanel({
                   : `Order ${linkedOrderId.slice(0, 8)}… — details unavailable`}
               </div>
             )}
-          </div>
+          </Section>
         )}
 
         {/* Actions block */}
-        <div className="border-t border-border pt-4 space-y-3">
-          <div className="text-[11px] uppercase tracking-wider text-foreground/40">
-            Actions
-          </div>
+        <Section
+          title="Actions"
+          accent="action"
+          open={openSections.has('actions')}
+          onToggle={() => toggleSection('actions')}
+        >
 
           {/* ── Resolve with message ── */}
           {issue.status !== 'resolved' && issue.status !== 'closed' && (
@@ -1915,14 +1985,15 @@ function DetailPanel({
               </ul>
             </div>
           ) : null}
-        </div>
+        </Section>
 
         {/* Activity timeline */}
         {issue.status_history && issue.status_history.length > 0 ? (
-          <div className="border-t border-border pt-4">
-            <div className="text-[11px] uppercase tracking-wider text-foreground/40 mb-2">
-              Activity Timeline
-            </div>
+          <Section
+            title="Activity Timeline"
+            open={openSections.has('activity')}
+            onToggle={() => toggleSection('activity')}
+          >
             <ol className="relative border-l border-border pl-4 space-y-3">
               {issue.status_history.map((entry, i) => (
                 <li key={i} className="relative">
@@ -1953,7 +2024,7 @@ function DetailPanel({
                 </li>
               ))}
             </ol>
-          </div>
+          </Section>
         ) : null}
       </div>
     </aside>
@@ -1973,6 +2044,58 @@ function FieldBlock({
         {label}
       </div>
       <div className="text-[12px]">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Collapsible card section for the issue detail panel. Header shows the title
+ * (+ optional count) and a chevron that rotates when open; body reveals on
+ * expand. Gives every section a consistent, polished surface.
+ */
+function Section({
+  title,
+  open,
+  onToggle,
+  count,
+  accent,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  count?: number | null;
+  accent?: 'default' | 'action';
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-xl border overflow-hidden transition-colors ${
+        accent === 'action'
+          ? 'border-orange-500/20 bg-orange-500/[0.03]'
+          : 'border-border bg-foreground/[0.02]'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-foreground/[0.03] transition-colors"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold text-foreground/55">
+          {title}
+          {count != null && (
+            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-foreground/[0.08] text-foreground/60 text-[9px] font-bold tabular-nums">
+              {count}
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          size={14}
+          className={`text-foreground/40 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open ? <div className="px-3 pb-3 pt-0.5 space-y-2.5">{children}</div> : null}
     </div>
   );
 }
