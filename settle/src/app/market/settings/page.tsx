@@ -946,6 +946,20 @@ export default function MerchantSettingsPage({
               </div>
             </div>
 
+            {/* Support — opens the support/ticketing panel in the bottom-sheet */}
+            <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
+              <button
+                onClick={() => { setActiveTab("support"); setMobileSheetOpen(true); }}
+                className="flex items-center gap-3.5 w-full px-4 py-3.5 bg-white/[0.02] active:bg-white/[0.06] transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
+                  <HelpCircle className="w-4 h-4 text-white/60" />
+                </div>
+                <span className="flex-1 text-[14px] text-white/80">Support</span>
+                <ChevronRight className="w-4 h-4 text-white/20" />
+              </button>
+            </div>
+
             {/* Logout */}
             <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
               <button
@@ -2115,7 +2129,7 @@ export default function MerchantSettingsPage({
           )}
 
           {activeTab === "support" && (
-            <MerchantSupportPanel merchantId={merchantInfo?.id} />
+            <MerchantSupportPanel merchantId={merchantId ?? merchantInfo?.id} />
           )}
 
           </div>

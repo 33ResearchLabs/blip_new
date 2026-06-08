@@ -21,7 +21,9 @@ import {
   Copy,
   Download,
   LifeBuoy,
+  Loader2,
   Paperclip,
+  Send,
   ShieldCheck,
   X as XIcon,
 } from "lucide-react";
@@ -85,6 +87,9 @@ export default function UserMyIssueDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,6 +124,30 @@ export default function UserMyIssueDetailPage({
       window.setTimeout(() => setCopied(false), 1200);
     }
   }, [issue]);
+
+  const handleSendReply = async () => {
+    const msg = replyText.trim();
+    if (!msg || !issue || replySending) return;
+    setReplySending(true);
+    setReplyError(null);
+    try {
+      const res = await fetchWithAuth(`/api/issues/${id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      setReplyText("");
+      await load(); // refresh the timeline (polling/refresh)
+    } catch (e) {
+      setReplyError((e as Error).message || "Failed to send reply");
+    } finally {
+      setReplySending(false);
+    }
+  };
 
   // v1 fallback: pre-Phase-1 tickets only have screenshot_url and no
   // screenshots[] array.
@@ -331,6 +360,51 @@ export default function UserMyIssueDetailPage({
                 </ol>
               )}
             </section>
+
+            {/* Reply composer — two-way thread with support */}
+            {issue.status === "closed" ? (
+              <p className="mt-5 text-[12px] text-text-tertiary text-center">
+                This ticket is closed. Raise a new ticket if you still need help.
+              </p>
+            ) : (
+              <section className="mt-5">
+                <h2 className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wide mb-2">
+                  Reply
+                </h2>
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  maxLength={1000}
+                  rows={3}
+                  placeholder="Write a reply to support…"
+                  className="w-full px-4 py-3 rounded-2xl bg-surface-card border border-border-subtle text-[13.5px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-medium transition-colors resize-none"
+                />
+                {replyError && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/25">
+                    <AlertCircle size={14} className="text-rose-600 shrink-0" />
+                    <span className="text-[12px] text-rose-600">{replyError}</span>
+                  </div>
+                )}
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-[10px] text-text-tertiary">
+                    {replyText.length}/1000
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSendReply}
+                    disabled={!replyText.trim() || replySending}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-accent text-white font-bold text-[13px] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    {replySending ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Send size={15} />
+                    )}
+                    {replySending ? "Sending…" : "Send"}
+                  </button>
+                </div>
+              </section>
+            )}
           </>
         )}
       </div>
