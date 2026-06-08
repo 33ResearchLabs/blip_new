@@ -56,12 +56,13 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 
-// Phase 1 (migration 146): when this flag is on, the wide-screen render
-// path is data-driven from the merchant's saved dashboard_layout (falls
-// back to DEFAULT_LAYOUT_WIDE when null). Narrow viewports and the
-// flag-off case go through the legacy hardcoded JSX below, untouched.
-const MERCHANT_LAYOUT_V2 =
-  process.env.NEXT_PUBLIC_MERCHANT_LAYOUT_V2 === "true";
+// Phase 1 (migration 146): the wide-screen render path is data-driven
+// from the merchant's saved dashboard_layout (falls back to
+// DEFAULT_LAYOUT_WIDE when null). This is now the only desktop path — the
+// former NEXT_PUBLIC_MERCHANT_LAYOUT_V2 build-time flag was removed so the
+// behaviour no longer depends on an env var that wasn't wired into the
+// production build. The legacy hardcoded JSX below is kept as an
+// unreachable reference fallback.
 
 export interface MerchantDesktopLayoutProps {
   isWideScreen: boolean;
@@ -202,12 +203,18 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     }, 0);
   }, [ongoingOrders, merchantId]);
 
-  // ── Phase 1 v2 path ─────────────────────────────────────────────────
+  // ── Phase 1 v2 path (now the only desktop path) ─────────────────────
   // V2 renders at all desktop widths (the wrapper's `hidden lg:flex`
   // handles the mobile cutoff). Edit-layout mode only works against V2,
-  // so gating V2 to 2xl+ left the Edit button non-functional between
-  // lg and 2xl — now V2 takes over from lg upward whenever the flag is on.
-  if (MERCHANT_LAYOUT_V2) {
+  // so this also makes the always-visible "Edit Layout" button functional
+  // everywhere instead of only when the old build-time flag was set.
+  //
+  // The legacy hardcoded layout below is retained as a reference fallback
+  // only and is intentionally never rendered. `RENDER_LEGACY_LAYOUT` is
+  // typed `boolean` (not the literal `false`) so the type checker keeps the
+  // legacy branch statically reachable — no unreachable-code lint/TS noise.
+  const RENDER_LEGACY_LAYOUT: boolean = false;
+  if (!RENDER_LEGACY_LAYOUT) {
     return (
       <MerchantDashboardV2
         props={props}
