@@ -31,10 +31,20 @@ export function MobileChatView({
   playSound,
 }: MobileChatViewProps) {
   return (
-    // The parent <main> in MerchantMobileContent already has `pb-20` to
-    // clear the fixed bottom nav. Adding a second bottom padding here
-    // would stack 64+80=144px of empty space below the chat composer.
-    <div className={`h-full flex flex-col ${!activeOrderChat ? "pb-24" : ""}`}>
+    // In chat mode the parent <main> uses overflow-hidden with NO bottom
+    // padding, so this div is the sole clearance for the fixed bottom nav
+    // (~58px tall). Use a safe-area-aware value instead of a flat pb-24:
+    // 4rem (64px) on non-notched devices → small gap above the nav, plus
+    // the home-indicator inset on notched devices → same gap everywhere.
+    // Skipped inside an active order chat — the bottom nav is hidden there.
+    <div
+      className="h-full flex flex-col"
+      style={
+        !activeOrderChat
+          ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4rem)" }
+          : undefined
+      }
+    >
       {activeOrderChat && merchantId ? (
         <OrderChatView
           orderId={activeOrderChat.orderId}

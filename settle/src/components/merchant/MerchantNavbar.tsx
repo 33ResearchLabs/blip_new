@@ -172,7 +172,7 @@ export function MerchantNavbar({
 
   return (
     <>
-      <header className={`sticky top-0 z-50 bg-[#070710]/96 backdrop-blur-md border-b border-white/[0.06]${mobileTitle ? " pt-[2%]" : ""}`}>
+      <header className={`sticky top-0 z-50 bg-[#070710]/96 backdrop-blur-md border-b border-white/[0.06]${mobileTitle ? " pt-[2%] lg:pt-0" : ""}`}>
         {/* Per-tab mobile screens (mobileTitle set) get a taller two-line
             large-title bar; desktop is fixed at 50px and overlay/home screens
             keep the compact 48px height. */}

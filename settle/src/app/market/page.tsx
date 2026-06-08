@@ -1182,14 +1182,14 @@ export default function MerchantDashboard() {
             />
             <div className="absolute inset-0 flex flex-col overflow-hidden" style={{ background: "#08080a" }}>
               <div className="border-b border-white/[0.06]" style={{ paddingTop: "2%" }}>
-                <div className="flex items-center justify-between pl-3 pr-[5%] h-[49px]">
-                  <span className="text-[19px] font-semibold text-white tracking-[-0.01em] ml-3">Notifications</span>
+                <div className="flex items-center justify-between px-4 h-[49px]">
+                  <span className="text-[19px] font-semibold text-white tracking-[-0.01em]">Notifications</span>
                   <button
                     onClick={() => setShowNotifications(false)}
-                    className="w-8 h-8 rounded-full flex items-center justify-center mr-[4%]"
-                    style={{ color: "#aeaeb2", background: "transparent", border: "none", fontSize: 16 }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center"
+                    style={{ color: "#aeaeb2", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)" }}
                   >
-                    ✕
+                    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
                   </button>
                 </div>
               </div>
