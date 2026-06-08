@@ -75,7 +75,7 @@ function HistTabs({ tab, setTab }: { tab: number; setTab: (t: number) => void })
     { icon: HI.x(14), label: "Cancelled" },
   ];
   return (
-    <div style={{ position: "relative", display: "flex", background: T.glass, border: `1px solid ${T.hair}`, borderRadius: 12, padding: 3, maxWidth: 260, width: "100%" }}>
+    <div style={{ position: "relative", display: "flex", background: T.glass, border: `1px solid ${T.hair}`, borderRadius: 12, padding: 3, width: "100%" }}>
       <div style={{
         position: "absolute", top: 3, bottom: 3,
         borderRadius: 11,

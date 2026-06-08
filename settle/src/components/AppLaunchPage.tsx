@@ -37,9 +37,26 @@ const T = {
   mono: "'SF Mono', Monaco, 'Courier New', monospace",
 };
 
+type HelpKind = "ios" | "android" | "desktop";
+
+// Best-effort platform sniff — used only to pick which Add-to-Home-Screen
+// instructions to show when no native install prompt is available.
+function detectPlatform(): HelpKind {
+  if (typeof navigator === "undefined") return "desktop";
+  const ua = navigator.userAgent || "";
+  // iPadOS 13+ masquerades as "Macintosh" but is touch-capable.
+  const isIOS =
+    /iphone|ipad|ipod/i.test(ua) ||
+    (/Macintosh/.test(ua) && typeof document !== "undefined" && "ontouchend" in document);
+  if (isIOS) return "ios";
+  if (/android/i.test(ua)) return "android";
+  return "desktop";
+}
+
 export function AppLaunchPage() {
   const [state, setState] = useState<InstallState>("unavailable");
   const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [help, setHelp] = useState<HelpKind | null>(null);
 
   useEffect(() => {
     if (window.matchMedia("(display-mode: standalone)").matches) { setState("installed"); return; }
@@ -49,39 +66,37 @@ export function AppLaunchPage() {
     return () => window.removeEventListener("beforeinstallprompt", h);
   }, []);
 
-  async function install() {
+  // Install the USER app. On Android / desktop Chrome the captured
+  // `beforeinstallprompt` shows the native install dialog. When no native
+  // prompt is available (iOS Safari, in-app webviews, or before the event has
+  // fired) we show platform-specific Add-to-Home-Screen steps — instead of
+  // silently dropping the user onto the login page in the browser.
+  async function installUserApp() {
+    if (state === "installed") return;
     if (prompt) {
       setState("installing");
-      await prompt.prompt();
-      const { outcome } = await prompt.userChoice;
-      setState(outcome === "accepted" ? "installed" : "ready");
+      try {
+        await prompt.prompt();
+        const { outcome } = await prompt.userChoice;
+        setState(outcome === "accepted" ? "installed" : "ready");
+      } catch {
+        setState("ready");
+      }
       setPrompt(null);
-    } else {
-      // No native prompt yet — open the app; browser install button appears in address bar
-      window.location.href = "/user/login";
+      return;
     }
-  }
-
-  async function installMerchant() {
-    if (prompt) {
-      setState("installing");
-      await prompt.prompt();
-      const { outcome } = await prompt.userChoice;
-      setState(outcome === "accepted" ? "installed" : "ready");
-      setPrompt(null);
-    } else {
-      window.location.href = "/market/login";
-    }
+    setHelp(detectPlatform());
   }
 
   const openUserApp = () => { window.location.href = "/user/login"; };
-  const downloadUserApp = install;
+  const downloadUserApp = installUserApp;
   // Open the merchant web app — direct navigation, matching the user card.
-  // (Previously aliased to installMerchant, which fired the PWA install
-  // prompt instead of navigating whenever beforeinstallprompt had fired.)
   const openMerchantApp = () => { window.location.href = "/market/login"; };
-  // Download/install the merchant PWA — used by the Mobile/Desktop buttons.
-  const downloadMerchantApp = installMerchant;
+  // The merchant PWA has its own manifest + scope (/market). The landing-page
+  // install prompt targets the USER app, so it can't install the merchant app.
+  // Send the merchant to /market/login, where the merchant manifest is active
+  // and Chrome offers install directly (and iOS can Add-to-Home-Screen there).
+  const downloadMerchantApp = () => { window.location.href = "/market/login"; };
 
   return (
     <>
@@ -293,6 +308,7 @@ export function AppLaunchPage() {
           }
         `}</style>
       </div>
+      {help && <InstallHelp kind={help} onClose={() => setHelp(null)} />}
     </>
   );
 }
@@ -326,6 +342,99 @@ function PlatBtn({ icon, label, onClick }: { icon: "ios"|"android"|"mac"; label:
       )}
       {label}
     </button>
+  );
+}
+
+/* ── Install instructions overlay (shown when no native prompt is available) ── */
+function InstallHelp({ kind, onClose }: { kind: HelpKind; onClose: () => void }) {
+  const steps =
+    kind === "ios"
+      ? [
+          { title: "Tap the Share button", body: "In Safari, tap the Share icon (a square with an upward arrow) in the bottom toolbar." },
+          { title: "Add to Home Screen", body: "Scroll down the share sheet and tap “Add to Home Screen”." },
+          { title: "Tap Add", body: "Confirm with “Add”. Blip appears on your home screen and opens fullscreen." },
+        ]
+      : kind === "android"
+      ? [
+          { title: "Open the Chrome menu", body: "Tap the ⋮ menu in the top-right of Chrome." },
+          { title: "Install app", body: "Tap “Install app” (or “Add to Home screen”)." },
+          { title: "Confirm", body: "Tap “Install”. Blip installs like a normal app and opens fullscreen." },
+        ]
+      : [
+          { title: "Use the address bar", body: "Click the install icon (a monitor with a down arrow) at the right of the address bar." },
+          { title: "Or the browser menu", body: "Otherwise open the ⋮ menu and choose “Install Blip Money”." },
+          { title: "Confirm", body: "Click “Install”. Blip opens in its own window." },
+        ];
+
+  const heading = kind === "ios" ? "Add Blip to your Home Screen" : "Install Blip";
+  const note =
+    kind === "android"
+      ? "Not seeing “Install app”? You may be in an in-app browser (Instagram, Facebook, Telegram). Tap ⋮ → “Open in Chrome”, then try again."
+      : kind === "ios"
+      ? "iPhone & iPad install Blip through Safari’s Share menu — there’s no one-tap button."
+      : null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(13,12,10,.55)",
+        backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
+        fontFamily: T.font,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 460, background: T.bg,
+          borderRadius: "24px 24px 0 0", padding: "22px 22px 28px",
+          boxShadow: "0 -20px 60px -20px rgba(16,14,12,.5)",
+          maxHeight: "85vh", overflowY: "auto",
+        }}
+      >
+        <div style={{ width: 40, height: 4, borderRadius: 999, background: T.line2, margin: "0 auto 18px" }} />
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+          <span style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, display: "grid", placeItems: "center", background: T.black }}>
+            <svg viewBox="0 0 70 60" width={24} height={20} fill="none">
+              <path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#fff" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-0.02em", color: T.ink }}>{heading}</div>
+        </div>
+
+        <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+          {steps.map((s, i) => (
+            <li key={i} style={{ display: "flex", gap: 12 }}>
+              <span style={{ width: 24, height: 24, borderRadius: 999, flexShrink: 0, display: "grid", placeItems: "center", background: T.coral, color: "#fff", fontWeight: 700, fontSize: 13, fontFamily: T.mono }}>{i + 1}</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14.5, color: T.inkSoft }}>{s.title}</div>
+                <div style={{ fontSize: 13.5, color: T.muted, marginTop: 2, lineHeight: 1.45 }}>{s.body}</div>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        {note && (
+          <div style={{ marginTop: 18, padding: "11px 13px", borderRadius: 12, background: T.coralWash, border: `1px solid ${T.coralSoft}`, fontSize: 12.5, color: T.coralDeep, lineHeight: 1.45 }}>
+            {note}
+          </div>
+        )}
+
+        <button
+          onClick={onClose}
+          style={{
+            width: "100%", marginTop: 20, padding: "14px 18px", borderRadius: 14,
+            border: `1px solid ${T.line2}`, background: T.bgWarm, color: T.inkSoft,
+            fontFamily: T.font, fontWeight: 700, fontSize: 15, cursor: "pointer",
+          }}
+        >
+          Got it
+        </button>
+      </div>
+    </div>
   );
 }
 

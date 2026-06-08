@@ -184,6 +184,20 @@ export default function MerchantSettingsPage({
     (searchParams.get("tab") as SettingsTab) || "profile"
   );
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  // The content panel renders inline on desktop (lg ≥ 1024px) but slides up as a
+  // bottom-sheet on mobile. Framer Motion writes that slide as an inline transform that
+  // overrides Tailwind's lg:translate-y-0, so the panel must only be pushed off-screen
+  // (y:100%) when it's a *closed mobile sheet*. Default to desktop so SSR/first paint
+  // agree (no hydration mismatch); the effect corrects it on mobile after mount, where
+  // the closed sheet is display:hidden anyway so the correction is invisible.
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
   const [isLoading, setIsLoading] = useState(!merchantInfo);
   const [merchant, setMerchant] = useState<any>(merchantInfo ?? null);
 
@@ -1031,7 +1045,7 @@ export default function MerchantSettingsPage({
             ${mobileSheetOpen ? 'flex flex-col' : 'hidden lg:flex'}`}
           style={{ maxHeight: mobileSheetOpen ? "92vh" : undefined }}
           initial={false}
-          animate={mobileSheetOpen ? { y: 0 } : { y: "100%" }}
+          animate={!isDesktop && !mobileSheetOpen ? { y: "100%" } : { y: 0 }}
           transition={{ type: "spring", stiffness: 360, damping: 36 }}
         >
           {/* Mobile sheet header — hidden on desktop */}

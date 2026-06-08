@@ -197,7 +197,7 @@ export function MerchantChatTabs({
 
       {/* Tab strip */}
       <div style={{ padding: hideHeading ? "2px 16px 8px" : "0 0 8px" }}>
-        <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, maxWidth: 260, width: "100%" }}>
+        <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, width: "100%" }}>
           {/* sliding thumb */}
           <div style={{
             position: "absolute", top: 3, bottom: 3, borderRadius: 11,
