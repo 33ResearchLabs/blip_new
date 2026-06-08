@@ -36,7 +36,7 @@ import {
   X,
   HelpCircle,
 } from "lucide-react";
-import { MerchantSupportSheet } from "@/components/merchant/MerchantSupportSheet";
+import { MerchantSupportPanel } from "@/components/merchant/MerchantSupportPanel";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMerchantStore } from "@/stores/merchantStore";
@@ -167,7 +167,8 @@ type SettingsTab =
   | "notifications"
   | "liquidity"
   | "reputation"
-  | "ledger";
+  | "ledger"
+  | "support";
 
 export default function MerchantSettingsPage({
   onClose,
@@ -219,7 +220,6 @@ export default function MerchantSettingsPage({
     Boolean((merchantInfo as any)?.phone_verified),
   );
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
-  const [showSupportSheet, setShowSupportSheet] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(
     (merchantInfo as any)?.avatar_url || null,
   );
@@ -1007,8 +1007,12 @@ export default function MerchantSettingsPage({
 
             <div className="mt-auto pt-6 space-y-3">
               <button
-                onClick={() => setShowSupportSheet(true)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium text-white/40 hover:text-foreground/60 hover:bg-card transition-all w-full"
+                onClick={() => { setActiveTab("support"); setMobileSheetOpen(true); }}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all w-full ${
+                  activeTab === "support"
+                    ? "bg-white/[0.08] text-white"
+                    : "text-white/40 hover:text-foreground/60 hover:bg-card"
+                }`}
               >
                 <HelpCircle className="w-4 h-4" />
                 Support
@@ -1052,7 +1056,7 @@ export default function MerchantSettingsPage({
           <div className="lg:hidden flex items-center px-5 pt-5 pb-3 border-b border-white/[0.05] shrink-0 relative">
             <div className="absolute left-1/2 -translate-x-1/2 top-2 w-8 h-1 rounded-full bg-white/20" />
             <p className="text-[15px] font-semibold text-white flex-1 text-center">
-              {tabs.find(t => t.id === activeTab)?.label}
+              {tabs.find(t => t.id === activeTab)?.label ?? (activeTab === "support" ? "Support" : "")}
             </p>
             <button onClick={() => setMobileSheetOpen(false)} className="p-1.5 rounded-lg text-white/40 hover:text-white/70">
               <X className="w-4 h-4" />
@@ -2110,6 +2114,10 @@ export default function MerchantSettingsPage({
             <ReputationTab merchantId={merchantId} />
           )}
 
+          {activeTab === "support" && (
+            <MerchantSupportPanel merchantId={merchantInfo?.id} />
+          )}
+
           </div>
         </motion.main>
       </div>
@@ -2147,11 +2155,6 @@ export default function MerchantSettingsPage({
         }}
       />
 
-      <MerchantSupportSheet
-        open={showSupportSheet}
-        onClose={() => setShowSupportSheet(false)}
-        merchantId={merchantInfo?.id}
-      />
     </div>
   );
 }
