@@ -59,7 +59,7 @@ function AdminObservabilityInner() {
             active={activeTab === 'issues'}
             onClick={() => switchTab('issues')}
             icon={<Bug size={13} />}
-            label="Issues"
+            label="Support Tickets"
             subtitle="User-reported"
           />
           <TabButton
