@@ -396,14 +396,14 @@ function ScreenUsername({ onNext, onBack, userId }: {
   const [alreadySet, setAlreadySet] = useState(false);
   const [currentUsername, setCurrentUsername] = useState("");
 
-  // Same 3-20 / [a-zA-Z0-9_] rule the server (validateUsername) enforces.
+  // Same 4-20 / [a-zA-Z0-9_] rule the server (validateUsername) enforces.
   const formatValid = useMemo(
-    () => value.length >= 3 && value.length <= 20 && /^[a-zA-Z0-9_]+$/.test(value),
+    () => value.length >= 4 && value.length <= 20 && /^[a-zA-Z0-9_]+$/.test(value),
     [value],
   );
   const formatError = useMemo(() => {
     if (!value) return null;
-    if (value.length < 3 || value.length > 20) return "3–20 characters";
+    if (value.length < 4 || value.length > 20) return "4–20 characters";
     if (!/^[a-zA-Z0-9_]+$/.test(value)) return "Letters, numbers & _ only";
     return null;
   }, [value]);
@@ -505,7 +505,7 @@ function ScreenUsername({ onNext, onBack, userId }: {
     : checking ? "Checking availability…"
     : available === true ? (isOwnCurrent ? "Your current handle — tap Continue to keep it" : "Available")
     : available === false ? "Already taken"
-    : "3–20 letters, numbers or _";
+    : "4–20 letters, numbers or _";
   const statusColor =
     error || available === false ? "#dc2626"
     : available === true || alreadySet ? "#10b981"

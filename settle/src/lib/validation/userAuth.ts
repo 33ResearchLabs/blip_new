@@ -18,7 +18,7 @@ const PASSWORD_HAS_SPACE = /\s/;
 
 export const USER_PASSWORD_MIN_LEN = 6;
 export const USER_PASSWORD_MAX_LEN = 24;
-export const USER_USERNAME_MIN_LEN = 3;
+export const USER_USERNAME_MIN_LEN = 4;
 export const USER_USERNAME_MAX_LEN = 20;
 
 export function validateUserUsername(raw: string): string | null {

@@ -32,7 +32,7 @@ import { checkRateLimit, SEARCH_LIMIT } from '@/lib/middleware/rateLimit';
 // duplicated here (not imported) to avoid pulling client validation
 // into a server-only path. Keep them in sync.
 const USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
-const USERNAME_MIN = 3;
+const USERNAME_MIN = 4;
 const USERNAME_MAX = 20;
 
 export async function GET(request: NextRequest) {
