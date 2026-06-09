@@ -11,7 +11,7 @@
  *
  * Output must satisfy validateUserUsername in
  * settle/src/lib/validation/userAuth.ts:
- *   - 3-20 characters
+ *   - 4-20 characters
  *   - [a-zA-Z0-9_] (we emit lowercase + digits + underscore)
  *
  * Local parts are NOT unique across domains (foo@a.com and foo@b.com both

@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import jsQR from "jsqr";
-import { ChevronLeft, Loader2, Check, AlertCircle, ImagePlus } from "lucide-react";
+import { ChevronLeft, Loader2, Check, AlertCircle, ImagePlus, Wallet } from "lucide-react";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 import { UpiProcessingOverlay } from "@/components/user/UpiProcessingOverlay";
 import { FEE_UI_V2 } from "@/lib/featureFlags";
@@ -38,6 +38,36 @@ function parseUpiUrl(raw: string): ParsedUpi | null {
   } catch {
     return null;
   }
+}
+
+// Server schema (schemas.ts `upi_vpa`) only accepts this VPA shape. Match it
+// exactly so anything we hand off downstream also passes server validation.
+const VPA_RE = /^[\w.\-]{2,256}@[\w.\-]{2,64}$/;
+
+// Interpret manually-typed input as a payee — so a UPI ID or phone "behaves
+// like a QR". Accepts:
+//   • a full upi:// URL          → parsed normally
+//   • a bare UPI ID (name@bank)  → used directly as the payee VPA
+//   • an Indian mobile number    → passed through as the NPCI handle
+//                                  `<phone>@upi` (a valid VPA the fulfilling
+//                                  merchant's UPI app resolves on payout)
+// The phone path is best-effort pass-through: we can't verify the number here,
+// so an unregistered one only fails when the merchant tries to pay it.
+// Returns null when the text is none of the above.
+function parsePayeeInput(raw: string): ParsedUpi | null {
+  const s = raw.trim();
+  if (!s) return null;
+  if (s.toLowerCase().startsWith("upi://")) return parseUpiUrl(s);
+  if (VPA_RE.test(s)) return { pa: s, pn: "", am: "", tn: "" };
+  // Indian mobile: 10 digits starting 6-9. Strip a country/trunk prefix only
+  // when the length implies one — so a real 10-digit number that happens to
+  // begin "91" (e.g. 9123456789) isn't corrupted by an over-eager strip.
+  let d = s.replace(/[\s\-()]/g, "");
+  if (d.startsWith("+91")) d = d.slice(3);
+  else if (d.startsWith("91") && d.length === 12) d = d.slice(2);
+  else if (d.startsWith("0") && d.length === 11) d = d.slice(1);
+  if (/^[6-9]\d{9}$/.test(d)) return { pa: `${d}@upi`, pn: "", am: "", tn: "" };
+  return null;
 }
 
 // ── QR decoder: native BarcodeDetector → jsQR fallback with size tiering ──
@@ -100,16 +130,30 @@ interface Props {
   currentRate: number | null;
   /** User's spendable USDT balance. `null` = still loading. */
   usdtBalance: number | null;
+  /** Whether the wallet is connected/unlocked. When false the screen shows a
+   *  "wallet not connected" gate instead of the camera or the balance spinner.
+   *  Without this, a locked/absent embedded wallet reports `usdtBalance = null`
+   *  forever, leaving the user stuck on "Checking your balance…". */
+  walletReady: boolean;
+  /** Label + handler for the connect CTA shown when `walletReady` is false.
+   *  The label differs by mode — "Unlock wallet" (locked), "Set up wallet"
+   *  (none), "Connect wallet" (external). The handler should open the matching
+   *  modal (and typically close this screen first). */
+  walletCta: { label: string; onClick: () => void };
   onConfirm: (data: UpiPayConfirm) => void;
 }
 
 const UPI_BASE = process.env.NEXT_PUBLIC_UPI_PAY_BASE_URL || "";
 
-export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: Props) {
+export function UpiPayScreen({ onClose, currentRate, usdtBalance, walletReady, walletCta, onConfirm }: Props) {
   // Hard gate: no balance → can't pay. Block before camera even opens so
   // we never produce an on-chain order the escrow flow would reject anyway.
   const balanceReady = usdtBalance !== null;
   const hasBalance = balanceReady && usdtBalance > 0;
+  // A locked / absent embedded wallet never reports a balance, so the
+  // balance spinner alone would hang forever. Gate the whole scan flow on
+  // the wallet being connected first, then on having spendable USDT.
+  const canScan = walletReady && hasBalance;
 
   // PIN gating removed (wallet-password = 6-digit PIN unification): the
   // wallet-unlock prompt downstream (during escrow lock) is the single
@@ -130,6 +174,22 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   const rafRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Manual entry (typed UPI ID / phone / pasted upi:// link). Lenient parser —
+  // unlike the camera path it accepts a bare VPA or a phone number too. Changing
+  // stage to "entering" tears down the camera via the lifecycle effect below.
+  const acceptManual = useCallback((raw: string) => {
+    const p = parsePayeeInput(raw);
+    if (!p) {
+      setErrorMsg("Enter a UPI ID (name@bank) or a 10-digit phone number.");
+      return;
+    }
+    setErrorMsg("");
+    setParsed(p);
+    setAmount(p.am || "");
+    setNote(p.tn || "");
+    setStage("entering");
+  }, []);
+
   const acceptRaw = useCallback((raw: string): boolean => {
     const p = parseUpiUrl(raw);
     if (!p) {
@@ -147,9 +207,9 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   // ── Camera lifecycle ──────────────────────────────────────────────────
   useEffect(() => {
     if (stage !== "scanning") return;
-    // No balance → don't even start the camera. The UI below shows the
-    // "fund your wallet" state in this case.
-    if (!hasBalance) return;
+    // Wallet not connected or no balance → don't even start the camera. The
+    // UI below shows the "connect wallet" / "fund your wallet" state instead.
+    if (!canScan) return;
     let cancelled = false;
 
     const stop = () => {
@@ -228,7 +288,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
       cancelled = true;
       stop();
     };
-  }, [stage, acceptRaw, hasBalance]);
+  }, [stage, acceptRaw, canScan]);
 
   // ── Image upload fallback ────────────────────────────────────────────
   // Hardening guards on the upload path (audit F-7). The decode pipeline
@@ -349,31 +409,50 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
   return (
     <div className="fixed inset-0 z-[100] bg-surface-base text-text-primary flex flex-col h-dvh">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <button
+      <div className="flex items-center gap-3 px-5 pt-4 pb-3 shrink-0">
+        <motion.button
+          whileTap={{ scale: 0.92 }}
           onClick={onClose}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold bg-surface-card hover:bg-surface-hover border border-border-medium transition-all"
+          aria-label="Back"
+          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle"
         >
-          <ChevronLeft className="w-3.5 h-3.5" />
-          Back
-        </button>
-        <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-text-tertiary">
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
+        </motion.button>
+        <h1 className="text-[17px] font-semibold text-text-primary">
           {stage === "scanning" ? "Scan to Pay" : "Pay via UPI"}
-        </p>
-        <div className="w-[64px]" />
+        </h1>
       </div>
 
       <AnimatePresence mode="wait">
-        {/* ── BALANCE GATE ─────────────────────────────────────────── */}
-        {stage === "scanning" && !hasBalance && (
+        {/* ── WALLET / BALANCE GATE ────────────────────────────────── */}
+        {stage === "scanning" && !canScan && (
           <motion.div
-            key="no-balance"
+            key="gate"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="flex-1 flex flex-col items-center justify-center px-6 gap-4 text-center"
           >
-            {!balanceReady ? (
+            {!walletReady ? (
+              /* Wallet locked / not set up / not connected. Without this the
+                 screen hung on the balance spinner forever, because a locked
+                 embedded wallet never reports a balance. */
+              <>
+                <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+                  <Wallet className="w-7 h-7 text-white" />
+                </div>
+                <p className="text-[22px] font-bold tracking-[-0.02em]">Wallet not connected</p>
+                <p className="text-[12px] text-text-tertiary max-w-[280px]">
+                  Connect your wallet to scan &amp; pay. You&apos;ll also need USDT in it to cover the payment.
+                </p>
+                <button
+                  onClick={walletCta.onClick}
+                  className="mt-2 px-5 py-2.5 rounded-xl bg-accent text-accent-text text-sm font-bold"
+                >
+                  {walletCta.label}
+                </button>
+              </>
+            ) : !balanceReady ? (
               <>
                 <Loader2 className="w-7 h-7 animate-spin text-text-tertiary" />
                 <p className="text-[12px] tracking-[0.2em] uppercase text-text-tertiary">
@@ -387,7 +466,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
                 </div>
                 <p className="text-[22px] font-bold tracking-[-0.02em]">No USDT to pay with</p>
                 <p className="text-[12px] text-text-tertiary max-w-[280px]">
-                  Your wallet has 0 USDT. Top up first, then come back here to scan & pay.
+                  Your wallet has 0 USDT. Top up first, then come back here to scan &amp; pay.
                 </p>
                 <button
                   onClick={onClose}
@@ -401,7 +480,7 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
         )}
 
         {/* ── SCANNING ──────────────────────────────────────────────── */}
-        {stage === "scanning" && hasBalance && (
+        {stage === "scanning" && canScan && (
           <motion.div
             key="scan"
             initial={{ opacity: 0 }}
@@ -465,21 +544,29 @@ export function UpiPayScreen({ onClose, currentRate, usdtBalance, onConfirm }: P
               </button>
             </div>
 
-            {/* Manual paste fallback */}
-            <div className="mt-3 w-full max-w-[360px] flex gap-2">
-              <input
-                type="text"
-                value={manualUrl}
-                onChange={(e) => setManualUrl(e.target.value)}
-                placeholder="paste upi://pay?pa=...&am=..."
-                className="flex-1 rounded-xl px-3 py-2 text-[12px] outline-none bg-surface-hover border border-border-subtle text-text-primary placeholder:text-text-tertiary font-mono"
-              />
-              <button
-                onClick={() => manualUrl && acceptRaw(manualUrl.trim())}
-                className="px-3 py-2 rounded-xl text-[12px] font-bold bg-surface-card hover:bg-surface-hover border border-border-medium text-text-primary"
-              >
-                Use
-              </button>
+            {/* Pay by UPI ID or phone — no QR needed. Also accepts a pasted
+                upi:// link. Phone numbers are sent as <phone>@upi. */}
+            <div className="mt-4 w-full max-w-[360px]">
+              <p className="mb-2 text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary text-center">
+                or pay by UPI ID / phone
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={manualUrl}
+                  maxLength={256}
+                  onChange={(e) => setManualUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && manualUrl.trim()) acceptManual(manualUrl.trim()); }}
+                  placeholder="name@bank or 9876543210"
+                  className="flex-1 rounded-xl px-3 py-2 text-[12px] outline-none bg-surface-hover border border-border-subtle text-text-primary placeholder:text-text-tertiary"
+                />
+                <button
+                  onClick={() => manualUrl.trim() && acceptManual(manualUrl.trim())}
+                  className="px-4 py-2 rounded-xl text-[12px] font-bold bg-accent text-accent-text"
+                >
+                  Pay
+                </button>
+              </div>
             </div>
           </motion.div>
         )}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, Zap, Lock, DollarSign, AlertTriangle, CheckCircle2, MessageCircle, Shield, Activity } from "lucide-react";
+import { Bell, Zap, Lock, DollarSign, AlertTriangle, CheckCircle2, MessageCircle, Shield, Activity, TrendingDown } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
 import type { Screen } from "./types";
@@ -76,6 +76,9 @@ export interface NotificationsScreenProps {
   onMarkAllRead: () => void;
   unreadCount: number;
   maxW: string;
+  hideBottomNav?: boolean;
+  cancelledOrderCount?: number;
+  totalOrderCount?: number;
 }
 
 export const NotificationsScreen = ({
@@ -86,6 +89,9 @@ export const NotificationsScreen = ({
   onMarkAllRead,
   unreadCount,
   maxW,
+  hideBottomNav = false,
+  cancelledOrderCount = 0,
+  totalOrderCount = 0,
 }: NotificationsScreenProps) => {
   const [activeTab, setActiveTab] = useState<'alerts' | 'activity'>('alerts');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
@@ -97,14 +103,18 @@ export const NotificationsScreen = ({
     return notifications.filter(n => n.timestamp >= cutoff);
   })();
 
+  // Show reputation warning when ≥2 cancellations AND cancel rate ≥20%
+  const cancelRate = totalOrderCount > 0 ? cancelledOrderCount / totalOrderCount : 0;
+  const showReputationBanner = cancelledOrderCount >= 1 && cancelRate >= 0.1;
+  const cancelPct = Math.round(cancelRate * 100);
+
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
       {/* ── Header ── */}
-      <header className="px-5 pt-10 pb-3 shrink-0">
+      <header className="px-5 pt-4 pb-4 shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase mb-1">Updates</p>
             <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Notifications</p>
           </div>
           {unreadCount > 0 && (
@@ -118,6 +128,7 @@ export const NotificationsScreen = ({
         </div>
       </header>
 
+
       {/* ── Tabs + Time Filter (single row) ── */}
       <div className="px-5 pb-2 flex items-center gap-2 shrink-0">
         <button
@@ -125,7 +136,7 @@ export const NotificationsScreen = ({
           className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
             activeTab === 'alerts'
               ? 'bg-accent text-accent-text'
-              : 'bg-surface-hover text-text-tertiary'
+              : 'bg-surface-hover text-text-secondary-strong'
           }`}
         >
           <Bell size={13} strokeWidth={2.2} />
@@ -138,7 +149,7 @@ export const NotificationsScreen = ({
         </button>
         <button
           onClick={() => { setActiveTab('activity'); setScreen('orders'); }}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all bg-surface-hover text-text-tertiary"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all bg-surface-hover text-text-secondary-strong"
         >
           <Activity size={13} strokeWidth={2.2} />
           <span className="text-[12px] font-bold">Orders</span>
@@ -155,17 +166,33 @@ export const NotificationsScreen = ({
       </div>
 
       {/* ── Notification List ── */}
-      <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto scrollbar-hide">
-        {filteredNotifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 bg-surface-card border border-border-subtle">
-              <Bell size={22} className="text-text-quaternary" />
-            </div>
-            <p className="text-[18px] font-extrabold tracking-[-0.02em] text-text-primary mb-1.5">No notifications</p>
-            <p className="text-[13px] font-medium text-text-tertiary">You&apos;re all caught up</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
+      <div className="flex-1 px-5 pt-2 pb-28 overflow-y-auto scrollbar-hide">
+        <div className="flex flex-col gap-2">
+          {/* Reputation alert — always pinned first on alerts tab when threshold is met */}
+          {showReputationBanner && activeTab === 'alerts' && (
+              <motion.button
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setScreen("reputation")}
+                className="w-full rounded-[18px] p-3.5 flex items-start gap-3 text-left bg-surface-card border border-border-medium"
+              >
+                <div className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 bg-surface-hover">
+                  <TrendingDown size={16} className="text-text-secondary" strokeWidth={2} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <p className="text-[14px] font-bold tracking-[-0.01em] text-text-primary">Trade reputation</p>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      <div className="w-2 h-2 rounded-full bg-info" />
+                    </div>
+                  </div>
+                  <p className="text-[13px] font-normal text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
+                    {cancelPct}% cancel rate — tap to see how to improve
+                  </p>
+                </div>
+              </motion.button>
+            )}
             {filteredNotifications.map((notif, i) => (
               <motion.button
                 key={notif.id}
@@ -207,11 +234,19 @@ export const NotificationsScreen = ({
                 </div>
               </motion.button>
             ))}
-          </div>
-        )}
+          {filteredNotifications.length === 0 && !showReputationBanner && (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 bg-surface-card border border-border-subtle">
+                <Bell size={22} className="text-text-quaternary" />
+              </div>
+              <p className="text-[18px] font-extrabold tracking-[-0.02em] text-text-primary mb-1.5">No notifications</p>
+              <p className="text-[13px] font-medium text-text-tertiary">You&apos;re all caught up</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={unreadCount} />
+      {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={unreadCount} />}
     </div>
   );
 };

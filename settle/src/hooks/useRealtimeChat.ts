@@ -173,6 +173,59 @@ interface UseRealtimeChatOptions {
  * Determine 'from' field based on sender type/id and current actor type/id.
  * For M2M trades both parties are 'merchant' — we must compare IDs too.
  */
+// ─── Module-level message cache ──────────────────────────────────────────────
+// Persists across component mounts so OrderChatView gets instant messages on open.
+// Key: orderId  Value: { messages, actorId (owner), ts }
+interface CacheEntry { messages: ChatMessage[]; actorId: string; ts: number; }
+const _msgCache = new Map<string, CacheEntry>();
+const CACHE_TTL = 5 * 60_000; // 5 min
+
+function _mapDbMsg(dbMsg: DbMessage, actorType: string, actorId: string): ChatMessage {
+  const from = determineSender(dbMsg.sender_type, dbMsg.message_type, actorType, dbMsg.sender_id, actorId);
+  return {
+    id: dbMsg.id, from,
+    text: dbMsg.content,
+    timestamp: new Date(dbMsg.created_at),
+    messageType: dbMsg.message_type,
+    receiptData: dbMsg.receipt_data ?? null,
+    imageUrl: dbMsg.image_url, fileUrl: dbMsg.file_url,
+    fileName: dbMsg.file_name, fileSize: dbMsg.file_size, mimeType: dbMsg.mime_type,
+    senderType: dbMsg.sender_type, senderName: dbMsg.sender_name,
+    isRead: dbMsg.is_read, isHighlighted: dbMsg.is_highlighted,
+    status: from === "me"
+      ? (dbMsg.is_read || dbMsg.status === "seen" ? "read" : dbMsg.status === "delivered" ? "delivered" : "sent")
+      : undefined,
+    clientId: dbMsg.client_id ?? undefined, seq: dbMsg.seq ?? undefined,
+  };
+}
+
+/** Call this once after conversations load to pre-warm the cache. */
+export async function prefetchOrderMessages(
+  orderIds: string[],
+  actorType: string,
+  actorId: string,
+): Promise<void> {
+  const now = Date.now();
+  const toFetch = orderIds.slice(0, 10).filter(id => {
+    const e = _msgCache.get(id);
+    return !e || e.actorId !== actorId || (now - e.ts) > CACHE_TTL;
+  });
+  await Promise.allSettled(toFetch.map(async orderId => {
+    try {
+      const res = await fetchWithAuth(`/api/orders/${orderId}/messages?user_id=${actorId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        _msgCache.set(orderId, {
+          messages: data.data.map((m: DbMessage) => _mapDbMsg(m, actorType, actorId)),
+          actorId,
+          ts: Date.now(),
+        });
+      }
+    } catch { /* best-effort */ }
+  }));
+}
+
 function determineSender(
   senderType: string,
   messageType: string,
@@ -385,6 +438,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
             const current = lastSeqRef.current.get(orderId) || 0;
             if (maxSeq > current) lastSeqRef.current.set(orderId, maxSeq);
           }
+
+          // Update cache with fresh messages
+          if (actorId) _msgCache.set(orderId, { messages, actorId, ts: Date.now() });
 
           setChatWindows((prev) =>
             prev.map((w) => {
@@ -837,14 +893,16 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           );
         }
 
-        // Create new window
+        // Create new window — seed from cache for instant display
         const chatId = `chat_${Date.now()}`;
+        const cachedEntry = orderId ? _msgCache.get(orderId) : undefined;
+        const seedMessages = (cachedEntry && actorId && cachedEntry.actorId === actorId) ? cachedEntry.messages : [];
         const newWindow: ChatWindow = {
           id: chatId,
           user,
           emoji,
           orderId,
-          messages: [],
+          messages: seedMessages,
           minimized: false,
           unread: 0,
           isTyping: false,

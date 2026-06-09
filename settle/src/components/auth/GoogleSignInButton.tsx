@@ -57,6 +57,10 @@ interface RenderButtonOptions {
 
 const GIS_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 
+function isCapacitor(): boolean {
+  return typeof window !== "undefined" && !!(window as any).Capacitor;
+}
+
 let scriptPromise: Promise<void> | null = null;
 
 function loadGisScript(): Promise<void> {
@@ -148,13 +152,19 @@ export default function GoogleSignInButton({
     loadGisScript()
       .then(() => {
         if (cancelled || !window.google?.accounts?.id || !containerRef.current) return;
+        const inCapacitor = isCapacitor();
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.blip.money";
+        const state = encodeURIComponent(JSON.stringify({ role, redirect: role === "merchant" ? "/market" : "/" }));
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (resp) => {
             const cred = resp?.credential;
             if (typeof cred === "string") exchangeCredential(cred);
           },
-          ux_mode: "popup",
+          ux_mode: inCapacitor ? "redirect" : "popup",
+          ...(inCapacitor && {
+            login_uri: `${appUrl}/api/auth/google/native-callback?state=${state}`,
+          }),
           auto_select: false,
           itp_support: true,
         });

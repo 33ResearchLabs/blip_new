@@ -3,37 +3,30 @@
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bell,
-  Bug,
   ArrowUpRight,
   ArrowDownLeft,
-  Zap,
   QrCode,
   Download,
-  Activity,
   ChevronRight,
   Copy,
   Check,
-  ShieldCheck,
-  ExternalLink,
   X,
   Loader2,
+  Gift,
+  MoreHorizontal,
+  Clock,
 } from "lucide-react";
 import * as QRCode from "qrcode";
 import { UpiPayScreen } from "@/components/user/UpiPayScreen";
-import { openIssueReporter } from "@/components/IssueReporter";
-import { useState as useStateHook, useEffect, useRef } from "react";
-import { ConnectionIndicator } from "@/components/NotificationToast";
-import { showAlert } from "@/context/ModalContext";
 import { BottomNav } from "./BottomNav";
+import { useState as useStateHook, useEffect, useRef } from "react";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ArrowDown } from "lucide-react";
 import type { Screen, Order } from "./types";
-import { ReputationCoinBadge } from "@/components/shared/ReputationCoinBadge";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 const IS_MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
-
-const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
 
 export interface HomeScreenProps {
   userName: string;
@@ -80,6 +73,7 @@ export interface HomeScreenProps {
   userBalance?: number;
   maxW: string;
   notificationCount?: number;
+  hideBottomNav?: boolean;
   /**
    * Pull-to-refresh handler. Wired to the transactions list scroll container.
    * Should refetch orders + balances. May return a promise — the spinner
@@ -93,7 +87,7 @@ function formatDate(d: Date) {
 }
 
 // ─── Single transaction row ────────────────────────────────────────────────
-function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: number; onPress: () => void; avatarUrl?: string }) {
+function TxRow({ order, onPress }: { order: Order; index: number; onPress: () => void; avatarUrl?: string }) {
   const isBuy = order.type === 'buy';
   const amount = parseFloat(order.fiatAmount);
   const isActive = order.status !== 'complete';
@@ -102,48 +96,48 @@ function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: numb
     <motion.button
       whileTap={{ scale: 0.985 }}
       onClick={onPress}
-      className="w-full flex items-center gap-3 text-left py-[10px]"
+      style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+        textAlign: 'left', padding: '10px 0', background: 'none', border: 'none', cursor: 'pointer',
+      }}
     >
-      {/* Avatar — compact */}
-      <div className="relative shrink-0 w-9 h-9 rounded-[12px] overflow-hidden bg-surface-raised border border-border-subtle">
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt={order.merchant.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-[14px] font-bold text-text-primary">
-              {order.merchant.name?.charAt(0)?.toUpperCase() ?? 'T'}
-            </span>
-          </div>
-        )}
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        <UserAvatar
+          src={order.merchant.avatarUrl}
+          seed={order.merchant.name}
+          size={36}
+          style={{ borderRadius: 12 }}
+        />
         {isActive && (
           <motion.div
             animate={{ scale: [1, 1.3, 1], opacity: [1, 0.4, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
-            className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-success border-2 border-surface-base"
+            style={{
+              position: 'absolute', bottom: -2, right: -2,
+              width: 8, height: 8, borderRadius: 999,
+              background: '#10b981', border: '2px solid #f4f3f1',
+            }}
           />
         )}
       </div>
 
-      {/* Name + date — compact */}
-      <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-semibold text-text-primary tracking-[-0.005em] mb-[1px]">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#14151a', letterSpacing: '-0.005em', marginBottom: 1 }}>
           {isBuy ? 'Buy USDT' : 'Sell USDT'}
         </p>
-        <p className="text-[10px] font-medium text-text-tertiary">
+        <p style={{ fontSize: 10, fontWeight: 500, color: '#80828c' }}>
           {order.merchant.name} · {formatDate(order.createdAt)}
         </p>
       </div>
 
-      {/* Amount — compact, color-coded (Apple Stocks: green/red signed) */}
-      <div className="text-right shrink-0">
-        <p
-          className="text-[13px] font-semibold tracking-[-0.01em] font-mono"
-          style={{ color: isBuy ? '#DC2626' : '#059669' }}
-        >
-          {isBuy ? '-' : '+'}{order.fiatCode === 'INR' ? '₹' : order.fiatCode === 'USD' ? '$' : 'د.إ'}{amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <p style={{
+          fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em', fontFamily: 'ui-monospace, monospace',
+          color: isBuy ? '#DC2626' : '#059669',
+        }}>
+          {isBuy ? '-' : '+'}{order.fiatCode === 'INR' ? '₹' : order.fiatCode === 'USD' ? '$' : 'د.إ'}{amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}
         </p>
-        <p className="text-[10px] font-medium text-text-tertiary mt-0.5 font-mono">
+        <p style={{ fontSize: 10, fontWeight: 500, color: '#80828c', marginTop: 2, fontFamily: 'ui-monospace, monospace' }}>
           {parseFloat(order.cryptoAmount).toFixed(2)} USDT
         </p>
       </div>
@@ -151,395 +145,13 @@ function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: numb
   );
 }
 
-// ─── Wallet balance + chart + actions ───────────────────────────────────
-function WalletBalanceSection({
-  displayBalance, isWalletReady,
-  solanaWallet, embeddedWallet, completedOrders, currentRate, selectedPair,
-  setShowWalletModal, setShowWalletSetup, setShowWalletUnlock,
-  setTradeType, setScreen, onDeposit, onPay,
-}: {
-  displayBalance: number | null;
-  isWalletReady: boolean;
-  solanaWallet: { connected: boolean; walletAddress: string | null; usdtBalance: number | null; solBalance?: number | null; usdcBalance?: number | null };
-  embeddedWallet?: { state: 'none' | 'locked' | 'unlocked' };
-  completedOrders: Order[];
-  currentRate: number;
-  selectedPair?: 'usdt_aed' | 'usdt_inr';
-  setShowWalletModal: (v: boolean) => void;
-  setShowWalletSetup: (v: boolean) => void;
-  setShowWalletUnlock: (v: boolean) => void;
-  setTradeType: (t: 'buy' | 'sell') => void;
-  setScreen: (s: Screen) => void;
-  onDeposit: () => void;
-  onPay: () => void;
-}) {
-  // Currency label tracks the active corridor (defaults to INR — see useUserTradeCreation).
-  const fiatLabel = selectedPair === 'usdt_aed' ? 'AED' : 'INR';
-
-  // TODO(balance-history): build /api/users/[id]/balance-history that reads
-  // from ledger_entries grouped by day for the last 7 days, then render a
-  // real sparkline here with real daily P&L. Removed the static placeholders
-  // (hardcoded +$557 / +3.6% / fake ascending chart) because showing fake
-  // financial data to real users is misleading and not acceptable for a
-  // fintech product.
-
-  // Hard-coded white text for the dark hero — these must NOT be flipped by
-  // .user-light overrides since the hero stays dark regardless of theme.
-  const heroText = {
-    hi: 'rgba(255,255,255,0.96)',
-    md: 'rgba(255,255,255,0.55)',
-    lo: 'rgba(255,255,255,0.32)',
-  };
-
-  // ── Token deck — main USDT balance is index 0, swipe-equivalent via page dots
-  const tokens = [
-    { symbol: 'USDT', name: 'Tether',   amount: displayBalance,                 dp: 2, color: 'rgba(255,255,255,0.92)', hasRate: true  },
-    { symbol: 'SOL',  name: 'Solana',   amount: solanaWallet.solBalance ?? null, dp: 4, color: 'rgba(255,255,255,0.92)', hasRate: false },
-    { symbol: 'USDC', name: 'USD Coin', amount: solanaWallet.usdcBalance ?? null, dp: 2, color: 'rgba(255,255,255,0.92)', hasRate: true  },
-  ] as const;
-  const [tokenIdx, setTokenIdx] = useStateHook(0);
-  const t = tokens[tokenIdx];
-  const tBal = t.amount ?? 0;
-  const tWhole = Math.floor(tBal).toLocaleString('en-US');
-  const tDec = (tBal % 1).toFixed(t.dp).slice(1) || `.${'0'.repeat(t.dp)}`;
-  const tFiat = t.hasRate
-    ? (tBal * currentRate).toLocaleString('en-US', { maximumFractionDigits: 2 })
-    : null;
-
+// ─── BlipMark SVG ─────────────────────────────────────────────────────────
+function BlipMark() {
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      {/* Reputation + coin pill — small, sits at the top of the hero. Same
-          widget as the merchant + waitlist surfaces. */}
-      {/* <div className="shrink-0 flex items-center justify-center mt-1 mb-2">
-        <ReputationCoinBadge variant="pill" hideRep="true" />
-      </div> */}
-
-      {/* ── Top group: balance, vertically centered in remaining hero height
-              so the empty/ready states feel anchored rather than floating
-              with dead space below. ── */}
-      <div className="flex-1 flex flex-col justify-center min-h-0">
-
-      {/* ── Big centered balance + Apple-style page-dot token switcher ── */}
-      {isWalletReady ? (
-        <div   style={{ marginTop: 12, marginBottom: 8, textAlign: 'center' }}>
-          <motion.div
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.18}
-            dragMomentum={false}
-            onDragEnd={(_, info) => {
-              const OFFSET = 50;
-              const VELOCITY = 350;
-              const swipedLeft = info.offset.x < -OFFSET || info.velocity.x < -VELOCITY;
-              const swipedRight = info.offset.x > OFFSET || info.velocity.x > VELOCITY;
-              if (swipedLeft) setTokenIdx((i) => Math.min(i + 1, tokens.length - 1));
-              else if (swipedRight) setTokenIdx((i) => Math.max(i - 1, 0));
-            }}
-            style={{ touchAction: 'pan-y', cursor: 'grab' }}
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={t.symbol}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <div className="flex items-baseline justify-center" style={{ gap: 2 }}>
-                  <span style={{
-                    fontSize: window.innerWidth <= 768 ? 50 : 60, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1,
-                    color: heroText.hi,
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  }}>
-                    {tWhole}
-                  </span>
-                  <span style={{
-                    fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1,
-                    color: heroText.lo,
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  }}>
-                    {tDec}
-                  </span>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
-                    color: heroText.lo, marginLeft: 8,
-                  }}>
-                    {t.symbol}
-                  </span>
-                </div>
-                <p style={{
-                  fontSize: 12, fontWeight: 600,
-                  color: heroText.md,
-                  marginTop: 2, letterSpacing: '-0.005em',
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                }}>
-                  {tFiat ? `≈ ${tFiat} ${fiatLabel}` : t.name}
-                </p>
-              </motion.div>
-            </AnimatePresence>
-          </motion.div>
-
-          {/* ── Page-dot indicator (iOS-style) ── */}
-          <div className="flex items-center justify-center mt-1" style={{ gap: 6,  }}>
-            {tokens.map((tk, i) => {
-              const active = i === tokenIdx;
-              return (
-                <button
-                  key={tk.symbol}
-                  type="button"
-                  onClick={() => setTokenIdx(i)}
-                  aria-label={`Show ${tk.name} balance`}
-                  style={{
-                    height: 6,
-                    width: active ? 18 : 6,
-                    borderRadius: 999,
-                    background: active ? tk.color : 'rgba(255,255,255,0.22)',
-                    boxShadow: active ? '0 0 8px rgba(255,255,255,0.35)' : undefined,
-                    transition: 'width 280ms cubic-bezier(0.22,1,0.36,1), background 280ms ease',
-                    border: 0,
-                    padding: 0,
-                  }}
-                />
-              );
-            })}
-          </div>
-
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-2" style={{ textAlign: 'center' }}>
-          {/* Compact dash placeholder — kept small (font-size 32, not 60)
-              so the stack stays short enough to fit inside the flex-1
-              centered area on mobile viewports without overflowing into
-              the action-tile row below. */}
-          <span className="" style={{
-            fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1,
-            color: 'rgba(255,255,255,0.22)',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          }}>
-            ---
-          </span>
-          <p style={{ fontSize: 13, color: heroText.md, lineHeight: 1, maxWidth: 240 }}>
-            {IS_EMBEDDED_WALLET
-              ? embeddedWallet?.state === 'locked' ? 'Unlock your wallet to view balance' : 'Set up a wallet to start trading'
-              : 'Connect your Solana wallet to trade'}
-          </p>
-          <motion.button whileTap={{ scale: 0.96 }}
-            onClick={() => {
-              if (IS_EMBEDDED_WALLET) {
-                if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
-                else setShowWalletSetup(true);
-              } else { setShowWalletModal(true); }
-            }}
-            style={{
-              padding: '11px 26px', borderRadius: 14,
-              background: '#ffffff', color: '#0B0F14',
-              fontSize: 14, fontWeight: 800, letterSpacing: '-0.005em',
-            }}>
-            {IS_EMBEDDED_WALLET
-              ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Create Wallet'
-              : 'Connect Wallet'}
-          </motion.button>
-        </div>
-      )}
-
-      </div>
-
-      {/* ── Bottom group: action tiles + Beat-any-rate. Pinned to the bottom
-              of the hero card so the dark surface terminates with the CTA
-              row sitting just above the curved bottom edge. `pt-5` enforces
-              a minimum 20px gap from whatever sits in the centered group
-              above (especially the Create Wallet CTA in the not-ready state,
-              which would otherwise collide with the action tiles when the
-              viewport leaves little flex slack to distribute). ── */}
-      <div className="shrink-0 pt-5">
-      {/* ── Action buttons — bigger Phantom-style square tiles ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
-        className="grid grid-cols-4 gap-2.5"
-        style={{ marginTop: 0 }}
-      >
-        {([
-          { label: 'Pay',      Icon: QrCode,        primary: false, comingSoon: false, fn: onPay },
-          { label: 'Buy',      Icon: ArrowDownLeft, primary: true,  comingSoon: false, fn: () => { setTradeType('buy');  setScreen('trade'); } },
-          { label: 'Sell',     Icon: ArrowUpRight,  primary: true,  comingSoon: false, fn: () => { setTradeType('sell'); setScreen('trade'); } },
-          { label: 'Deposit',  Icon: Download,      primary: false, comingSoon: false, fn: onDeposit },
-        ] as const).map(({ label, Icon, primary, comingSoon, fn }) => (
-          <motion.button key={label} whileTap={{ scale: 0.93 }} onClick={fn}
-            className="relative flex flex-col items-center justify-center gap-1 cursor-pointer min-w-0"
-            style={{
-              // Padding scales with viewport so 4 tiles + 3 gaps always fit
-              // a small phone (~320px) without overflow, and grow up on
-              // wider devices.
-              padding: 'clamp(10px, 3.2vw, 14px) clamp(4px, 1.5vw, 8px)',
-              borderRadius: 18,
-              background: primary
-                ? 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(235,235,240,0.92))'
-                : 'rgba(255,255,255,0.05)',
-              border: primary
-                ? '1px solid rgba(255,255,255,0.55)'
-                : '1px solid rgba(255,255,255,0.08)',
-              boxShadow: primary
-                ? '0 8px 22px -10px rgba(255,255,255,0.30), inset 0 1px 0 rgba(255,255,255,0.85)'
-                : 'inset 0 1px 0 rgba(255,255,255,0.04)',
-              opacity: comingSoon ? 0.55 : 1,
-            }}
-          >
-            <Icon size={20} strokeWidth={2.2}
-              style={{ color: primary ? '#0B0F14' : 'rgba(255,255,255,0.92)' }} />
-            <span
-              className="truncate max-w-full"
-              style={{
-                fontSize: 'clamp(10px, 2.8vw, 12px)',
-                fontWeight: 700, letterSpacing: '-0.005em',
-                color: primary ? '#0B0F14' : 'rgba(255,255,255,0.78)',
-              }}
-            >
-              {label}
-            </span>
-            {comingSoon && (
-              <span style={{
-                position: 'absolute', top: 6, right: 6,
-                padding: '1px 5px', borderRadius: 999,
-                background: 'rgba(255,255,255,0.12)',
-                border: '1px solid rgba(255,255,255,0.16)',
-                fontSize: 7, fontWeight: 800, letterSpacing: '0.06em',
-                color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase',
-              }}>Soon</span>
-            )}
-          </motion.button>
-        ))}
-      </motion.div>
-
-      {/* ── Beat Any Rate — full-width Apple Card titanium row ── */}
-      <motion.a
-        href="https://blip.money/rates"
-        target="_blank"
-        rel="noopener noreferrer"
-        whileTap={{ scale: 0.985 }}
-        className="relative flex items-center w-full overflow-hidden"
-        style={{
-          marginTop: 18,
-          gap: 12,
-          padding: '13px 16px 13px 14px',
-          borderRadius: 20,
-          // Brushed-titanium: layered radial sheens over a silver-gray gradient
-          background: [
-            'radial-gradient(at 12% 0%, rgba(255, 230, 240, 0.55) 0%, transparent 45%)',
-            'radial-gradient(at 90% 100%, rgba(180, 220, 255, 0.55) 0%, transparent 50%)',
-            'linear-gradient(135deg, #E5E7EB 0%, #C7CBD2 35%, #E8EAEE 60%, #B7BBC2 100%)',
-          ].join(', '),
-          border: '1px solid rgba(255,255,255,0.55)',
-          boxShadow: [
-            '0 18px 34px -14px rgba(15,23,42,0.55)',
-            '0 6px 12px -6px rgba(15,23,42,0.30)',
-            'inset 0 1px 0 rgba(255,255,255,0.85)',
-            'inset 0 -1px 0 rgba(15,23,42,0.10)',
-          ].join(', '),
-          textDecoration: 'none',
-        }}
-      >
-        {/* Brushed-metal vertical grain */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            borderRadius: 'inherit',
-            opacity: 0.35,
-            mixBlendMode: 'soft-light',
-            background:
-              'repeating-linear-gradient(90deg, rgba(255,255,255,0.20) 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, rgba(15,23,42,0.05) 0 1px, transparent 1px 4px)',
-          }}
-        />
-        {/* Specular top sheen */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            borderRadius: 'inherit',
-            background:
-              'linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.10) 38%, transparent 60%)',
-          }}
-        />
-        {/* Embossed shield medallion */}
-        <div
-          className="relative flex items-center justify-center shrink-0"
-          style={{
-            width: 32, height: 32, borderRadius: 10,
-            background: 'linear-gradient(135deg, #1A1F2C 0%, #0B0F17 100%)',
-            border: '1px solid rgba(255,255,255,0.55)',
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.22), 0 2px 4px rgba(0,0,0,0.22)',
-          }}
-        >
-          <ShieldCheck size={15} strokeWidth={2.6} style={{ color: '#E8B66A' }} />
-        </div>
-
-        {/* Title + subtitle */}
-        <div className="relative flex-1 min-w-0 flex flex-col" style={{ lineHeight: 1.15 }}>
-          <div className="flex items-center gap-2">
-            <span style={{
-              fontSize: 14,
-              fontWeight: 800,
-              letterSpacing: '-0.01em',
-              color: '#0B0F14',
-            }}>
-              Beat any rate
-            </span>
-            {/* Live tag — adds color hint without being loud */}
-            <span
-              className="flex items-center gap-1"
-              style={{
-                padding: '2px 6px',
-                borderRadius: 999,
-                background: 'rgba(5,150,105,0.14)',
-                border: '1px solid rgba(5,150,105,0.32)',
-              }}
-            >
-              <motion.span
-                animate={{ opacity: [1, 0.3, 1] }}
-                transition={{ duration: 1.8, repeat: Infinity }}
-                style={{
-                  width: 4, height: 4, borderRadius: 999,
-                  background: '#059669',
-                  boxShadow: '0 0 4px rgba(5,150,105,0.65)',
-                }}
-              />
-              <span style={{
-                fontSize: 8.5,
-                fontWeight: 800,
-                letterSpacing: '0.10em',
-                textTransform: 'uppercase',
-                color: '#04785A',
-              }}>
-                Live
-              </span>
-            </span>
-          </div>
-          <span style={{
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: '-0.005em',
-            color: 'rgba(15,23,42,0.62)',
-            marginTop: 2,
-          }}>
-            Compared across exchanges &middot; we&rsquo;ll match it
-          </span>
-        </div>
-
-        {/* Trailing external-link arrow */}
-        <div
-          className="relative flex items-center justify-center shrink-0"
-          style={{
-            width: 26, height: 26, borderRadius: 999,
-            background: 'rgba(15,23,42,0.06)',
-            border: '1px solid rgba(15,23,42,0.10)',
-          }}
-        >
-          <ExternalLink size={12} strokeWidth={2.6} style={{ color: 'rgba(15,23,42,0.75)' }} />
-        </div>
-      </motion.a>
-      </div>
-    </div>
+    <svg viewBox="0 0 30 24" width={22} height={Math.round(22 * 24 / 30)} fill="none"
+      stroke="#ffb02e" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 13h4.5l3-8.5 4.5 17 3-10 2.2 4.5H28" />
+    </svg>
   );
 }
 
@@ -565,28 +177,28 @@ export const HomeScreen = ({
   userBalance,
   maxW,
   notificationCount = 0,
+  hideBottomNav = false,
   onUpiPayConfirm,
   onRefresh,
 }: HomeScreenProps) => {
-  // ── Pull-to-refresh wiring ───────────────────────────────────────────────
-  // Listener attaches to the whole home screen (`homeRootRef`) so the gesture
-  // works from the dark hero as well as the white transactions list. The
-  // "at top" gate reads the inner transactions list's scrollTop — when that
-  // list is scrolled mid-way down, pulling-down scrolls the list instead of
-  // triggering a refresh. When it's at top (or the user touches above the
-  // list, where there's nothing to scroll), the pull triggers refresh.
   const homeRootRef = useRef<HTMLDivElement | null>(null);
   const txScrollRef = useRef<HTMLDivElement | null>(null);
   const PTR_THRESHOLD = 68;
+  // Time-based greeting — mirrors MobileHomeView (merchant side).
+  const greetingHour = new Date().getHours();
+  const greeting =
+    greetingHour < 12
+      ? "Good morning"
+      : greetingHour < 17
+        ? "Good afternoon"
+        : "Good evening";
   const {
     pull: ptrPull,
     status: ptrStatus,
     progress: ptrProgress,
     isRefreshing: ptrRefreshing,
   } = usePullToRefresh({
-    onRefresh: async () => {
-      if (onRefresh) await onRefresh();
-    },
+    onRefresh: async () => { if (onRefresh) await onRefresh(); },
     threshold: PTR_THRESHOLD,
     enabled: !!onRefresh,
     targetRef: homeRootRef,
@@ -595,38 +207,52 @@ export const HomeScreen = ({
   });
   const ptrActive = ptrPull > 0 || ptrRefreshing;
   const ptrIsDragging = ptrStatus === "pulling" || ptrStatus === "ready";
-  // Spring-back on release / refresh-complete; no transition during the drag
-  // itself so the finger tracks the pill 1:1.
   const ptrTransition = ptrIsDragging
     ? "none"
     : "transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 360ms cubic-bezier(0.34, 1.56, 0.64, 1), top 360ms cubic-bezier(0.34, 1.56, 0.64, 1)";
   const ptrIndicatorScale = 0.55 + Math.min(ptrProgress, 1) * 0.55;
   const ptrIndicatorRotation = ptrRefreshing ? 0 : ptrProgress * 220;
-  const ptrLabel =
-    ptrStatus === "refreshing"
-      ? "Refreshing…"
-      : ptrStatus === "ready"
-        ? "Release to refresh"
-        : "Pull to refresh";
+  const ptrLabel = ptrStatus === "refreshing" ? "Refreshing…" : ptrStatus === "ready" ? "Release to refresh" : "Pull to refresh";
+  const PTR_PILL_REST = 50;
+  const ptrPillTranslate = (ptrRefreshing ? PTR_THRESHOLD : ptrPull) - PTR_PILL_REST;
+  const ptrLabelTop = Math.max((ptrRefreshing ? PTR_THRESHOLD : ptrPull) - 6, -16);
 
   const displayBalance = IS_MOCK_MODE ? (userBalance ?? 0) : solanaWallet.usdtBalance;
   const isWalletReady = IS_MOCK_MODE ? (userBalance !== undefined && userBalance !== null) : solanaWallet.connected;
+  // A wallet can EXIST but be locked (needs PIN) — e.g. after logout or
+  // re-opening the browser once the decrypted session is cleared. That is
+  // NOT the same as having no wallet, so we prompt to Unlock instead of
+  // showing the "Set up wallet" new-user state. Embedded-mode only; mock /
+  // external-wallet modes never report a 'locked' state so this stays false.
+  const isWalletLocked = IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked';
+  const fiatLabel = selectedPair === 'usdt_aed' ? 'AED' : 'INR';
+  const fiatSymbol = selectedPair === 'usdt_aed' ? 'د.إ' : '₹';
 
-  // Only count unread on non-terminal orders. Terminal orders (completed /
-  // cancelled / expired) can retain is_read=false rows if the user never
-  // reopened the chat, which would otherwise inflate the nav badge forever.
+  const balanceNum = displayBalance ?? 0;
+  const balWhole = Math.floor(balanceNum).toLocaleString('en-US');
+  const balDec = (balanceNum % 1).toFixed(2).slice(1);
+  const balFiat = (balanceNum * currentRate).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
   const TERMINAL_STATUSES = ['completed', 'cancelled', 'expired'];
   const unreadCount = orders.reduce(
     (s, o) => s + (TERMINAL_STATUSES.includes(String(o.dbStatus)) ? 0 : (o.unreadCount || 0)),
     0,
   );
-  const [navCopied, setNavCopied] = useStateHook(false);
-  const [cardH, setCardH] = useStateHook<number | null>(null);
-  // ── Deposit / Receive modal ──
+
   const [showDeposit, setShowDeposit] = useStateHook(false);
   const [showUpiPay, setShowUpiPay] = useStateHook(false);
   const [qrDataUrl, setQrDataUrl] = useStateHook<string | null>(null);
   const [depositCopied, setDepositCopied] = useStateHook(false);
+  // "Coming soon" toast for not-yet-shipped actions (e.g. Request). The toast
+  // auto-dismisses via the effect below, so the click handler stays ref-free.
+  const [comingSoon, setComingSoon] = useStateHook(false);
+  const showComingSoon = () => setComingSoon(true);
+  useEffect(() => {
+    if (!comingSoon) return;
+    const t = setTimeout(() => setComingSoon(false), 1900);
+    return () => clearTimeout(t);
+  }, [comingSoon]);
+
   useEffect(() => {
     if (!showDeposit || !solanaWallet.walletAddress) return;
     QRCode.toDataURL(solanaWallet.walletAddress, {
@@ -634,127 +260,76 @@ export const HomeScreen = ({
       margin: 1,
       width: 320,
       color: { dark: "#0B0F14", light: "#FFFFFF" },
-    })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null));
+    }).then(setQrDataUrl).catch(() => setQrDataUrl(null));
   }, [showDeposit, solanaWallet.walletAddress]);
-  useEffect(() => {
-    setCardH(Math.round(window.innerHeight * 0.5));
-  }, []);
-  function copyNavWallet() {
-    const addr = solanaWallet.walletAddress;
-    if (!addr) return;
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(addr).then(() => {
-          setNavCopied(true);
-          setTimeout(() => setNavCopied(false), 2000);
-        }).catch(() => fallbackCopy(addr));
-      } else {
-        fallbackCopy(addr);
-      }
-    } catch { fallbackCopy(addr); }
-  }
-  function fallbackCopy(text: string) {
-    const el = document.createElement('textarea');
-    el.value = text;
-    el.style.position = 'fixed';
-    el.style.opacity = '0';
-    document.body.appendChild(el);
-    el.focus(); el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    setNavCopied(true);
-    setTimeout(() => setNavCopied(false), 2000);
-  }
 
-  // ── Pull-to-refresh visual positions ──────────────────────────────────
-  // iOS-style: the spinner pill is parked just above the viewport top and
-  // slides DOWN with the pull (translateY = ptr - 50). The label slides in
-  // below it. This avoids being clipped by the home root's `overflow-hidden`
-  // and keeps a visible hint from the very first pixel of pull.
-  const PTR_PILL_REST = 50; // pill starts 50px above the top, slides down
-  const ptrPillTranslate = (ptrRefreshing ? PTR_THRESHOLD : ptrPull) - PTR_PILL_REST;
-  const ptrLabelTop = Math.max((ptrRefreshing ? PTR_THRESHOLD : ptrPull) - 6, -16);
+  // Scan icon SVG
+  const ScanIcon = ({ size = 17, color = "#0b0b0d" }: { size?: number; color?: string }) => (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color}
+      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3.5 12h17" />
+    </svg>
+  );
 
   return (
     <div
       ref={homeRootRef}
-      className="relative flex flex-col h-[100dvh] overflow-hidden  "
-      // White parent so the hero's rounded bottom corners reveal white
-      // behind them — otherwise the curves disappear against a dark parent.
-      // No `touch-action` override — the hook's preventDefault on touchmove
-      // does all the gating; setting `pan-y` here would let the browser's
-      // compositor claim the gesture before JS can cancel it.
-      style={{ background: '#fff' }}
+      style={{
+        position: 'relative', height: '100dvh', background: '#0f0f12',
+        display: 'flex', flexDirection: 'column', fontFamily: 'Manrope, sans-serif', overflow: 'hidden',
+      }}
     >
-      {/* ══════════════════════════════════════════════════════════════════
-          PULL-TO-REFRESH INDICATOR — pill is positioned absolutely at the
-          top of the home root and translates DOWN with the pull (iOS-style),
-          so it works regardless of where the user starts the pull (dark
-          hero or white transactions list) and is never clipped by the
-          parent's `overflow-hidden`.
-         ══════════════════════════════════════════════════════════════════ */}
+      {/* PTR indicator */}
       {onRefresh && (
         <>
-          {/* Soft halo glow — sits behind the pill, fades in with progress */}
           <div
             aria-hidden
-            className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-full blur-2xl z-[59]"
             style={{
-              top: ptrPillTranslate - 60,
-              width: 220,
-              height: 220,
-              background:
-                'radial-gradient(circle, rgba(255,255,255,0.60) 0%, rgba(167,180,255,0.30) 38%, rgba(167,180,255,0) 72%)',
+              pointerEvents: 'none', position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+              borderRadius: 999, filter: 'blur(32px)', zIndex: 59,
+              top: ptrPillTranslate - 60, width: 220, height: 220,
+              background: 'radial-gradient(circle, rgba(255,255,255,0.60) 0%, rgba(167,180,255,0.30) 38%, rgba(167,180,255,0) 72%)',
               opacity: Math.min(ptrProgress, 1) * 0.95,
-              transform: `translate3d(0,0,0) scale(${0.55 + Math.min(ptrProgress, 1) * 0.7})`,
               transition: ptrTransition,
-              willChange: 'transform, opacity, top',
             }}
           />
-
-          {/* Spinner pill — bg white so it reads on the dark hero */}
           <div
             aria-hidden={!ptrActive}
-            className="pointer-events-none absolute left-1/2 z-[60] flex h-11 w-11 items-center justify-center rounded-full bg-white"
             style={{
-              top: 0,
+              pointerEvents: 'none', position: 'absolute', left: '50%', zIndex: 60,
+              display: 'flex', width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
+              borderRadius: 999, background: 'white', top: 0,
               transform: `translate3d(-50%, ${ptrPillTranslate}px, 0) scale(${ptrIndicatorScale}) rotate(${ptrIndicatorRotation}deg)`,
               opacity: Math.min(0.25 + ptrProgress * 0.9, 1),
               transition: ptrTransition,
-              boxShadow: `0 8px 24px -6px rgba(0,0,0,0.45), 0 0 ${28 * Math.min(ptrProgress, 1)}px rgba(167,180,255,${0.45 * Math.min(ptrProgress, 1)})`,
+              boxShadow: `0 8px 24px -6px rgba(0,0,0,0.45)`,
               border: '1px solid rgba(255,255,255,0.85)',
-              willChange: 'transform, opacity',
             }}
           >
             {ptrRefreshing ? (
-              <Loader2 className="h-[18px] w-[18px] animate-spin text-zinc-800" />
+              <Loader2 style={{ width: 18, height: 18, color: '#27272a', animation: 'spin 1s linear infinite' }} />
             ) : (
               <ArrowDown
-                className="h-[18px] w-[18px] text-zinc-800"
                 style={{
+                  width: 18, height: 18, color: '#27272a',
                   transform: `rotate(${ptrStatus === 'ready' ? 180 : 0}deg)`,
-                  transition: 'transform 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition: 'transform 220ms',
                 }}
               />
             )}
           </div>
-
-          {/* Floating status label — slides in beneath the pill */}
           {ptrActive && (
             <div
-              className="pointer-events-none absolute left-0 right-0 z-[60] flex justify-center"
               style={{
-                top: ptrLabelTop,
-                opacity: Math.min(ptrProgress * 1.4, 1),
-                transition: ptrTransition,
+                pointerEvents: 'none', position: 'absolute', left: 0, right: 0, zIndex: 60,
+                display: 'flex', justifyContent: 'center',
+                top: ptrLabelTop, opacity: Math.min(ptrProgress * 1.4, 1), transition: ptrTransition,
               }}
             >
-              <span
-                className="rounded-full px-3 py-[3px] text-[10.5px] font-semibold tracking-wide text-white shadow-sm backdrop-blur-md"
-                style={{ background: 'rgba(15,23,42,0.78)' }}
-              >
+              <span style={{
+                borderRadius: 999, padding: '3px 12px', fontSize: 10.5, fontWeight: 600,
+                color: '#fff', background: 'rgba(15,23,42,0.78)', backdropFilter: 'blur(8px)',
+              }}>
                 {ptrLabel}
               </span>
             </div>
@@ -762,373 +337,543 @@ export const HomeScreen = ({
         </>
       )}
 
-
-      {/* ══════════════════════════════════════════════
-          HERO CARD — premium dark "card" surface,
-          stays dark in BOTH themes, curved bottom rests on white body.
-          Always 60dvh tall — body below gets the remaining 40dvh, so the
-          two sections together fill the viewport without overflow.
-          Inner content uses flex-column so the balance area centers in
-          remaining space and the CTA row pins to the bottom edge.
-         ══════════════════════════════════════════════ */}
-      <div
-        className="relative shrink-0 h-[60dvh] flex flex-col"
-        style={{
-          background: 'linear-gradient(180deg, #161B26 0%, #0B0F17 55%, #07090F 100%)',
-          borderBottomLeftRadius: 44,
-          borderBottomRightRadius: 44,
-        }}
-      >
-
-        {/* ── Ambient decorations ── */}
-        <div
-          className="absolute inset-0 pointer-events-none overflow-hidden"
-          style={{ borderBottomLeftRadius: 44, borderBottomRightRadius: 44 }}
-        >
-          {/* Soft top-edge highlight (Apple-style edge) */}
-          <div
-            className="absolute top-0 left-0 right-0"
-            style={{
-              height: 1,
-              background:
-                'linear-gradient(90deg, transparent, rgba(255,255,255,0.18) 25%, rgba(255,255,255,0.18) 75%, transparent)',
-            }}
-          />
-
-          {/* Accent glow top-left */}
-          <div
-            className="absolute -top-[20%] -left-[15%] w-[65%] h-[65%] blur-[60px]"
-            style={{ background: 'radial-gradient(ellipse, rgba(255,255,255,0.10) 0%, transparent 65%)' }}
-          />
-
-          {/* Subtle emerald glow lower-right (mirrors live-rate dot) */}
-          <div
-            className="absolute -bottom-[10%] -right-[12%] w-[55%] h-[55%] blur-[55px]"
-            style={{ background: 'radial-gradient(ellipse, rgba(16,185,129,0.08) 0%, transparent 65%)' }}
-          />
-
-          {/* Dot grid */}
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px)',
-              backgroundSize: '26px 26px',
-            }}
-          />
-        </div>
-
-        {/* ── Header + balance + CTA (flex column fills the hero height) ── */}
-        <div className={`${maxW} w-full mx-auto relative z-10 px-6 pt-4 pb-5 flex flex-col flex-1 min-h-0`}>
-          <div className="flex items-center justify-between mb-2 shrink-0">
-
-            {/* Avatar + name + wallet — white text locked in for dark hero */}
-            <div className="flex items-center gap-3">
-              <motion.button whileTap={{ scale: 0.92 }} onClick={() => setScreen('profile')}>
-                <div
-                  className="relative w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ background: '#ffffff' }}
-                >
-                  <span style={{ fontSize: 15, fontWeight: 800, color: '#0B0F14' }}>
-                    {(userName || 'U').charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              </motion.button>
-              <div className="flex flex-col gap-0.5">
-                <span style={{
-                  fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em',
-                  color: 'rgba(255,255,255,0.96)',
-                }}>
-                  {userName}
+      {/* INK HEADER — fixed, does not scroll */}
+      <div style={{
+        flexShrink: 0,
+        background: 'linear-gradient(160deg, #1e1e24 0%, #0f0f12 55%, #161619 100%)',
+        color: '#fff',
+        padding: '16px 22px 44px',
+        borderBottomLeftRadius: 36, borderBottomRightRadius: 36,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
+      }}>
+          {/* Top row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Left: BlipMark + greeting */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 12,
+                background: 'rgba(255,255,255,0.14)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                <BlipMark />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.72 }}>{greeting}</span>
+                <span style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: '-0.01em' }}>
+                  {(() => {
+                    if (!userName) return userName;
+                    // Google login stores email as username with @ and . replaced by _
+                    // e.g. zoopweb333@gmail.com → zoopweb333_gmail_com
+                    // Strip common email domain suffixes
+                    let n = userName;
+                    if (n.includes('@')) n = n.split('@')[0];
+                    // strip _gmail_com, _yahoo_com, _hotmail_com etc.
+                    n = n.replace(/_gmail_com$/, '').replace(/_yahoo_com$/, '').replace(/_hotmail_com$/, '').replace(/_outlook_com$/, '');
+                    return n;
+                  })()}
                 </span>
-                {solanaWallet.walletAddress && (
-                  <div className="flex items-center gap-1.5">
-                    <span style={{
-                      fontSize: 10, letterSpacing: '0.04em',
-                      color: 'rgba(255,255,255,0.42)',
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                    }}>
-                      {solanaWallet.walletAddress.slice(0, 6)}…{solanaWallet.walletAddress.slice(-6)}
-                    </span>
-                    <motion.button whileTap={{ scale: 0.88 }} onClick={copyNavWallet}
-                      className="flex items-center justify-center"
-                      style={{
-                        width: 18, height: 18, borderRadius: 5,
-                        background: navCopied ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)',
-                        border: navCopied ? '1px solid rgba(255,255,255,0.30)' : '1px solid rgba(255,255,255,0.10)',
-                      }}>
-                      {navCopied
-                        ? <Check size={9} style={{ color: 'rgba(255,255,255,0.95)' }} />
-                        : <Copy size={9} style={{ color: 'rgba(255,255,255,0.55)' }} />}
-                    </motion.button>
-                  </div>
-                )}
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <ReputationCoinBadge variant="pill" hideRep />
-              {/* Bug / Report Issue button — hidden
-              <motion.button
-                whileTap={{ scale: 0.88 }}
-                onClick={() => void openIssueReporter()}
-                aria-label="Report Issue"
-                title="Report Issue"
-                className="flex items-center justify-center"
+            {/* Right: rewards + bell (scan moved into the search bar) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={() => setScreen('rewards')}
+                aria-label="Rewards"
                 style={{
-                  width: 38, height: 38, borderRadius: 13,
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.10)',
+                  width: 38, height: 38, borderRadius: 999, border: 'none', cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.12)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <Bug size={17} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.65)' }} />
-              </motion.button>
-              */}
-
-              <motion.button whileTap={{ scale: 0.88 }} onClick={() => setScreen('notifications')}
-                className="relative flex items-center justify-center"
+                <Gift size={17} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.85)' }} />
+              </button>
+              <button
+                onClick={() => setScreen('notifications')}
                 style={{
-                  width: 28, height: 28, borderRadius: 13,
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.10)',
-                }}>
-                <Bell size={15} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.65)' }} />
+                  position: 'relative', width: 38, height: 38, borderRadius: 999, border: 'none', cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.12)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Bell size={17} strokeWidth={1.8} style={{ color: 'rgba(255,255,255,0.85)' }} />
                 {notificationCount > 0 && (
-                  <div
-                    className="absolute -top-[3px] -right-[3px] flex items-center justify-center"
-                    style={{
-                      minWidth: 15, height: 15, padding: '0 4px', borderRadius: 999,
-                      background: '#ffffff', border: '2px solid #0B0F17',
-                    }}
-                  >
-                    <span style={{ fontSize: 7, fontWeight: 800, color: '#0B0F14' }}>
-                      {notificationCount}
-                    </span>
+                  <div style={{
+                    position: 'absolute', top: -2, right: -2,
+                    minWidth: 15, height: 15, borderRadius: 999,
+                    background: '#fff', border: '2px solid #161619',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px',
+                  }}>
+                    <span style={{ fontSize: 7, fontWeight: 800, color: '#0b0b0d' }}>{notificationCount}</span>
                   </div>
                 )}
-              </motion.button>
+              </button>
             </div>
           </div>
 
-          {/* ── Balance section (fills remaining hero space) ── */}
-          <WalletBalanceSection
-            displayBalance={displayBalance}
-            isWalletReady={isWalletReady}
-            solanaWallet={solanaWallet}
-            embeddedWallet={embeddedWallet}
-            completedOrders={completedOrders}
-            currentRate={currentRate}
-            selectedPair={selectedPair}
-            setShowWalletModal={setShowWalletModal}
-            setShowWalletSetup={setShowWalletSetup}
-            setShowWalletUnlock={setShowWalletUnlock}
-            setTradeType={setTradeType}
-            setScreen={setScreen}
-            onDeposit={() => setShowDeposit(true)}
-            onPay={() => setShowUpiPay(true)}
-          />
-
-          {/* ── Circle (trading partners) — temporarily hidden ── */}
-          {/*
-          <div className="mt-4">
-            <div className="flex justify-between items-center mb-2">
-              <span style={{
-                fontSize: 10, fontWeight: 800, letterSpacing: '0.22em',
-                color: 'rgba(255,255,255,0.32)', textTransform: 'uppercase',
-              }}>
-                Circle
-              </span>
+          {/* Balance section */}
+          {isWalletReady ? (
+            <div style={{ marginTop: 26 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.7, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Balance
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                  <span style={{ fontSize: 26, fontWeight: 700, color: '#fff' }}>{fiatSymbol}</span>
+                  <span style={{ fontSize: 50, fontWeight: 800, lineHeight: 0.86, color: '#fff', letterSpacing: '-0.03em', fontFamily: 'ui-monospace, monospace' }}>
+                    {balWhole}
+                  </span>
+                  <span style={{ fontSize: 26, fontWeight: 700, color: 'rgba(255,255,255,0.5)', fontFamily: 'ui-monospace, monospace' }}>
+                    {balDec}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowDeposit(true)}
+                  style={{
+                    background: '#fff', color: '#161619', border: 'none', cursor: 'pointer',
+                    padding: '6px 16px', borderRadius: 999,
+                    fontSize: 13, fontWeight: 800, letterSpacing: '-0.01em',
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, opacity: 0.7, marginTop: 6 }}>
+                {displayBalance?.toFixed(2)} USDT · ≈ {fiatLabel} {balFiat}
+              </div>
             </div>
-            {orders.length === 0 ? (
-              <p style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.32)' }}>
-                No trading partners yet
-              </p>
-            ) : (
-              <div className="flex gap-3 overflow-x-auto no-scrollbar -ml-1 px-1">
-                {(() => {
-                  const seen = new Set<string>();
-                  return orders.filter(o => { if (seen.has(o.merchant.id)) return false; seen.add(o.merchant.id); return true; }).slice(0, 6);
-                })().map((order, i) => {
-                  const isActive = order.status !== 'complete' && order.status !== 'cancelled' && order.status !== 'expired';
-                  const initial = order.merchant.name?.charAt(0)?.toUpperCase() ?? '?';
-                  return (
-                    <motion.div key={order.merchant.id}
-                      initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.18 + i * 0.06 }}
-                      whileTap={{ scale: 0.93 }} className="flex flex-col items-center gap-1.5 shrink-0">
-                      <div className="relative">
-                        <div
-                          style={{
-                            padding: 2, borderRadius: 22,
-                            border: '1.5px solid rgba(255,255,255,0.12)',
-                          }}
-                        >
-                          <div
-                            className="flex items-center justify-center"
-                            style={{
-                              width: 48, height: 48, borderRadius: 17,
-                              background: 'rgba(255,255,255,0.06)',
-                              border: '1px solid rgba(255,255,255,0.08)',
-                            }}
-                          >
-                            <span style={{ fontSize: 18, fontWeight: 800, color: 'rgba(255,255,255,0.92)' }}>
-                              {initial}
-                            </span>
-                          </div>
-                        </div>
-                        {isActive && (
-                          <motion.div animate={{ scale: [1, 1.35, 1] }} transition={{ duration: 2, repeat: Infinity }}
-                            className="absolute -bottom-[3px] -right-[3px] flex items-center justify-center"
-                            style={{
-                              width: 14, height: 14, borderRadius: 999,
-                              background: '#10b981', border: '2px solid #0B0F17',
-                            }}>
-                            <Zap size={6} className="fill-current" style={{ color: '#ffffff' }} />
-                          </motion.div>
+          ) : isWalletLocked ? (
+            <div style={{ marginTop: 26 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                {"Welcome back 👋"}
+              </div>
+              <div style={{
+                fontSize: 13, fontWeight: 600, opacity: 0.8, marginTop: 7,
+                lineHeight: 1.5, maxWidth: 280,
+              }}>
+                Your wallet is locked. Enter your PIN to see your balance and pay.
+              </div>
+              <button
+                onClick={() => setShowWalletUnlock(true)}
+                style={{
+                  marginTop: 16, background: '#fff', color: '#161619', border: 'none', cursor: 'pointer',
+                  padding: '13px 28px', borderRadius: 14, fontSize: 15, fontWeight: 800,
+                }}
+              >
+                Unlock wallet
+              </button>
+            </div>
+          ) : (
+            <div style={{ marginTop: 26 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                {"Let's set you up 👋"}
+              </div>
+              <div style={{
+                fontSize: 13, fontWeight: 600, opacity: 0.8, marginTop: 7,
+                lineHeight: 1.5, maxWidth: 280,
+              }}>
+                Add money once, then send to friends, pay bills and scan any QR.
+              </div>
+              <button
+                onClick={() => IS_EMBEDDED_WALLET ? setShowWalletSetup(true) : setShowWalletModal(true)}
+                style={{
+                  marginTop: 16, background: '#fff', color: '#161619', border: 'none', cursor: 'pointer',
+                  padding: '13px 28px', borderRadius: 14, fontSize: 15, fontWeight: 800,
+                }}
+              >
+                Set up wallet
+              </button>
+            </div>
+          )}
+      </div>
+
+      {/* Scrollable body — white card pulled up over dark header */}
+      <div ref={txScrollRef} style={{
+        flex: 1, overflow: 'auto',
+        background: '#f4f3f1',
+        borderTopLeftRadius: 44, borderTopRightRadius: 44,
+        marginTop: -24,
+        boxShadow: '0 -4px 24px rgba(0,0,0,0.18)',
+      }}>
+        <div style={{ padding: '20px 22px 100px', minHeight: 380 }}>
+
+          {/* SEARCH BAR — the text area opens the send/search (trade) flow; the
+              QR pill is a SEPARATE sibling button that opens the scanner. They
+              must not be nested (the QR tap used to bubble to the search button
+              and just navigate to Trade instead of scanning). */}
+          <div style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '11px 14px', borderRadius: 18,
+            background: '#fff', border: '1px solid rgba(20,21,26,0.08)',
+            boxSizing: 'border-box',
+            boxShadow: '0 2px 8px rgba(20,21,26,0.06)',
+          }}>
+            <button
+              onClick={() => setScreen('send')}
+              style={{
+                flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12,
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              }}
+            >
+              <svg viewBox="0 0 24 24" width={20} height={20} fill="none"
+                stroke="rgba(20,21,26,0.35)" strokeWidth="1.9" strokeLinecap="round">
+                <circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" />
+              </svg>
+              <span style={{ flex: 1, color: 'rgba(20,21,26,0.35)', fontWeight: 700, fontSize: 13, textAlign: 'left' }}>
+                Name, phone or UPI ID
+              </span>
+            </button>
+            <button
+              onClick={() => setShowUpiPay(true)}
+              aria-label="Scan QR to pay"
+              style={{
+                width: 28, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer',
+                background: '#ffb02e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+            >
+              <ScanIcon size={17} color="#0b0b0d" />
+            </button>
+          </div>
+
+          {/* FUNDED / RETURNING STATE — show if wallet is connected (even 0 balance).
+              Only show new-user onboarding if wallet has never been set up. */}
+          {isWalletReady ? (
+            <>
+              {/* StreakCoins card — exact from source */}
+              <div style={{
+                marginTop: 12, background: '#fff',
+                border: '1px solid rgba(20,21,26,0.07)', borderRadius: 22, padding: 15,
+                boxShadow: '0 2px 8px rgba(20,21,26,0.05)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                      background: 'rgba(255,176,46,0.16)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {/* PIcon.coin from source */}
+                      <svg viewBox="0 0 24 24" width={21} height={21} fill="none"
+                        stroke="#ffb02e" strokeWidth="1.8" strokeLinecap="round">
+                        <circle cx="12" cy="12" r="8.5"/>
+                        <path d="M12 7.5v9M9.3 10h3.4a1.8 1.8 0 0 1 0 3.6H9.5"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: '#14151a', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em' }}>
+                          Best rates
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, fontWeight: 600, color: '#8a8a90', marginTop: 1 }}>
+                        beat it &amp; we match it · {fiatSymbol}{currentRate.toFixed(2)} LIVE
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setTradeType('buy'); setScreen('trade'); }}
+                    style={{
+                      background: '#ffb02e', color: '#0b0b0d', border: 'none', cursor: 'pointer',
+                      padding: '9px 15px', borderRadius: 11, fontSize: 12.5, fontWeight: 800,
+                    }}
+                  >
+                    Trade
+                  </button>
+                </div>
+                {/* Streak dots row — from source */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 13 }}>
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    {[1,1,1,1,1,0,0].map((on, i) => (
+                      <span key={i} style={{
+                        width: 8, height: 8, borderRadius: 999,
+                        background: on ? '#ffb02e' : 'rgba(20,21,26,0.12)',
+                      }} />
+                    ))}
+                  </div>
+                  <span style={{ color: '#8a8a90', fontSize: 11, fontWeight: 700 }}>2 days to a bonus 🔥</span>
+                </div>
+              </div>
+
+              {/* Action chips — primary actions */}
+              <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+                {([
+                  { label: 'Deposit', fn: () => setShowDeposit(true), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg> },
+                  { label: 'Swap', fn: () => showComingSoon(), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/></svg> },
+                  { label: 'Trade', fn: () => setScreen('trade'), bg: '#ffb02e', color: '#0b0b0d',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> },
+                  { label: 'Scan', fn: () => setShowUpiPay(true), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx="1"/><rect x="13" y="7" width="4" height="4" rx="1"/><rect x="7" y="13" width="4" height="4" rx="1"/><path d="M13 15h1v3h3v-3h-1M16 13h1"/></svg> },
+                ]).map(({ label, fn, icon, bg, color }) => (
+                  <motion.button
+                    key={label}
+                    whileTap={{ scale: 0.93 }}
+                    onClick={fn}
+                    style={{
+                      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      padding: '14px 4px 11px', borderRadius: 16, cursor: 'pointer',
+                      border: '1px solid rgba(20,21,26,0.08)',
+                      background: '#fff', gap: 8,
+                      boxShadow: '0 1px 4px rgba(20,21,26,0.06)',
+                    }}
+                  >
+                    <div style={{
+                      width: 40, height: 40, borderRadius: 13,
+                      background: bg,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color,
+                    }}>
+                      {icon}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Quick links — same chip style as Deposit/Swap/Trade/Scan */}
+              <div style={{ fontSize: 15.5, fontWeight: 800, color: '#14151a', marginTop: 16, marginBottom: 8 }}>Learn more</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {([
+                  { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
+                  { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
+                  { label: 'Refer', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
+                ]).map(({ label, fn, icon }) => (
+                  <motion.button
+                    key={label}
+                    whileTap={{ scale: 0.93 }}
+                    onClick={fn}
+                    style={{
+                      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      padding: '10px 4px 8px', borderRadius: 14, cursor: 'pointer',
+                      border: '1px solid rgba(20,21,26,0.08)',
+                      background: '#fff', gap: 6,
+                      boxShadow: '0 1px 4px rgba(20,21,26,0.06)',
+                    }}
+                  >
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 10,
+                      background: 'rgba(20,21,26,0.05)', border: '1px solid rgba(20,21,26,0.07)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#14151a',
+                    }}>
+                      {icon}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Recent trades */}
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontSize: 15.5, fontWeight: 800, color: '#14151a', marginBottom: 4 }}>Recent</div>
+                {orders.length > 0 ? (
+                  <>
+                    {orders.slice(0, 5).map((order, i, arr) => (
+                      <div key={order.id}>
+                        <TxRow
+                          order={order}
+                          index={i}
+                          onPress={() => { setActiveOrderId(order.id); setScreen('order'); }}
+                        />
+                        {i < arr.length - 1 && (
+                          <div style={{ height: 1, background: 'rgba(20,21,26,0.07)', marginLeft: 48 }} />
                         )}
                       </div>
-                      <span style={{
-                        fontSize: 10, fontWeight: 600,
-                        color: 'rgba(255,255,255,0.42)',
-                      }}>
-                        {order.merchant.name?.split(' ')?.[0] ?? 'Trader'}
-                      </span>
-                    </motion.div>
-                  );
-                })}
+                    ))}
+                  </>
+                ) : (
+                  <div style={{ padding: '24px 0', textAlign: 'center' }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: '#80828c', marginBottom: 4 }}>No transactions yet</p>
+                    <p style={{ fontSize: 11, color: 'rgba(20,21,26,0.45)' }}>Your trades will appear here</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          */}
+            </>
+          ) : isWalletLocked ? null : (
+            /* NEW USER STATE */
+            <>
+              {/* Welcome bonus card */}
+              <div style={{
+                marginTop: 12, background: '#fff',
+                border: '1px solid rgba(20,21,26,0.07)', borderRadius: 22, padding: 15,
+                boxShadow: '0 2px 8px rgba(20,21,26,0.05)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                    background: 'rgba(255,176,46,0.16)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg viewBox="0 0 24 24" width={22} height={22} fill="none"
+                      stroke="#ffb02e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="8" r="6" /><path d="M8 14v7l4-2 4 2v-7" />
+                    </svg>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#14151a', letterSpacing: '-0.01em' }}>
+                      Best rates — beat it &amp; we match it
+                    </div>
+                    <div style={{ fontSize: 11.5, fontWeight: 600, color: '#8a8a90', marginTop: 2 }}>
+                      Unlocks on first payment
+                    </div>
+                  </div>
+                  <span style={{
+                    fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
+                    padding: '3px 8px', borderRadius: 999,
+                    background: 'rgba(255,176,46,0.20)', color: '#ffb02e',
+                  }}>NEW</span>
+                </div>
+                {/* Progress bar */}
+                <div style={{
+                  marginTop: 12, height: 4, borderRadius: 999,
+                  background: 'rgba(20,21,26,0.08)', overflow: 'hidden',
+                }}>
+                  <div style={{ width: '10%', height: '100%', background: '#ffb02e', borderRadius: 999 }} />
+                </div>
+              </div>
+
+              {/* Action chips — primary actions */}
+              <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
+                {([
+                  { label: 'Deposit', fn: () => setShowDeposit(true), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg> },
+                  { label: 'Swap', fn: () => showComingSoon(), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/></svg> },
+                  { label: 'Trade', fn: () => setScreen('trade'), bg: '#ffb02e', color: '#0b0b0d',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> },
+                  { label: 'Scan', fn: () => setShowUpiPay(true), bg: '#1c1c24', color: 'rgba(255,255,255,0.88)',
+                    icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx="1"/><rect x="13" y="7" width="4" height="4" rx="1"/><rect x="7" y="13" width="4" height="4" rx="1"/><path d="M13 15h1v3h3v-3h-1M16 13h1"/></svg> },
+                ]).map(({ label, fn, icon, bg, color }) => (
+                  <motion.button
+                    key={label}
+                    whileTap={{ scale: 0.93 }}
+                    onClick={fn}
+                    style={{
+                      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      padding: '14px 4px 11px', borderRadius: 16, cursor: 'pointer',
+                      border: '1px solid rgba(20,21,26,0.08)',
+                      background: '#fff', gap: 8,
+                      boxShadow: '0 1px 4px rgba(20,21,26,0.06)',
+                    }}
+                  >
+                    <div style={{
+                      width: 40, height: 40, borderRadius: 13,
+                      background: bg,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color,
+                    }}>
+                      {icon}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Quick links — same chip style */}
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                {([
+                  { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
+                  { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                  { label: 'Rewards', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
+                  { label: 'Refer', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
+                ]).map(({ label, fn, icon }) => (
+                  <motion.button
+                    key={label}
+                    whileTap={{ scale: 0.93 }}
+                    onClick={fn}
+                    style={{
+                      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      padding: '10px 4px 8px', borderRadius: 14, cursor: 'pointer',
+                      border: '1px solid rgba(20,21,26,0.08)',
+                      background: '#fff', gap: 6,
+                      boxShadow: '0 1px 4px rgba(20,21,26,0.06)',
+                    }}
+                  >
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 10,
+                      background: 'rgba(20,21,26,0.05)', border: '1px solid rgba(20,21,26,0.07)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#14151a',
+                    }}>
+                      {icon}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a8a90' }}>{label}</span>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Get started list */}
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontSize: 15.5, fontWeight: 800, color: '#14151a', marginBottom: 12 }}>Get started</div>
+                <div style={{ borderRadius: 22, overflow: 'hidden', border: '1px solid rgba(20,21,26,0.08)', background: '#fff', boxShadow: '0 2px 8px rgba(20,21,26,0.05)' }}>
+                  {[
+                    {
+                      icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>,
+                      label: 'Add money',
+                      sub: 'Top up via UPI or bank transfer',
+                      onClick: () => IS_EMBEDDED_WALLET ? setShowWalletSetup(true) : setShowWalletModal(true),
+                    },
+                    {
+                      icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 4 11 14M21 4l-6.5 17-3.5-7-7-3.5L21 4Z" /></svg>,
+                      label: 'Buy USDT',
+                      sub: 'Best rate, instantly settled',
+                      onClick: () => { setTradeType('buy'); setScreen('trade'); },
+                    },
+                    {
+                      icon: <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 11h16v9H4zM2.5 7.5h19V11h-19zM12 7.5V20" /></svg>,
+                      label: 'Invite & earn',
+                      sub: 'Refer a friend and get rewarded',
+                      onClick: () => setScreen('profile'),
+                    },
+                  ].map((item, i) => (
+                    <motion.button
+                      key={item.label}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={item.onClick}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '14px 16px',
+                        background: 'transparent',
+                        borderTop: i > 0 ? '1px solid rgba(20,21,26,0.07)' : 'none',
+                        border: 'none', cursor: 'pointer', textAlign: 'left',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <div style={{
+                        width: 38, height: 38, borderRadius: 12, flexShrink: 0,
+                        background: 'rgba(20,21,26,0.05)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#565862',
+                      }}>
+                        {item.icon}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: 13.5, color: '#14151a' }}>{item.label}</div>
+                        <div style={{ color: '#8a8a90', fontSize: 11.5, fontWeight: 600, marginTop: 1 }}>{item.sub}</div>
+                      </div>
+                      <ChevronRight size={14} strokeWidth={2} style={{ color: 'rgba(20,21,26,0.25)', flexShrink: 0 }} />
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-
-      {/* ══════════════════════════════════════════════
-          TRANSACTIONS SECTION — always white, regardless
-          of the user's dark/light theme. Locks light-mode
-          token values via CSS variables so existing
-          `text-text-primary` / `bg-surface-*` / `border-border-*`
-          utilities inside resolve to dark-on-white tokens.
-         ══════════════════════════════════════════════ */}
-      <motion.div
-        ref={txScrollRef}
-        initial={{ y: 30, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 pb-24 overflow-y-auto no-scrollbar"
-        style={{
-          height: '40dvh',
-          background: '#ffffff',
-          overscrollBehaviorY: 'contain',
-          WebkitOverflowScrolling: 'touch',
-          // ── Force light tokens locally — overrides .user-scope (dark) tokens
-          ['--color-surface-base' as any]: '#ffffff',
-          ['--color-surface-raised' as any]: '#f7f8fa',
-          ['--color-surface-overlay' as any]: '#eef0f3',
-          ['--color-surface-card' as any]: 'rgba(15,23,42,0.035)',
-          ['--color-surface-hover' as any]: 'rgba(15,23,42,0.055)',
-          ['--color-surface-active' as any]: 'rgba(15,23,42,0.075)',
-          ['--color-text-primary' as any]: 'rgba(15,23,42,0.95)',
-          ['--color-text-secondary' as any]: 'rgba(15,23,42,0.60)',
-          ['--color-text-tertiary' as any]: 'rgba(15,23,42,0.42)',
-          ['--color-text-quaternary' as any]: 'rgba(15,23,42,0.20)',
-          ['--color-border-subtle' as any]: 'rgba(15,23,42,0.06)',
-          ['--color-border-medium' as any]: 'rgba(15,23,42,0.10)',
-          ['--color-border-strong' as any]: 'rgba(15,23,42,0.16)',
-          ['--color-success' as any]: '#059669',
-          ['--color-success-dim' as any]: 'rgba(5,150,105,0.10)',
-          ['--color-success-border' as any]: 'rgba(5,150,105,0.28)',
-          ['--accent' as any]: '#0f172a',
-          ['--accent-text' as any]: '#ffffff',
-        }}
-      >
-        <div className={`${maxW} mx-auto px-5 pt-2`}>
-
-          {/* Section title — sticky so it stays visible while rows scroll under it */}
-          <div
-            className="sticky top-0 z-10 flex items-center justify-between py-2 -mx-5 px-5"
-            style={{ background: '#ffffff' }}
-          >
-            <h2 className="text-[13px] font-bold text-text-secondary tracking-[-0.01em]">
-              Transactions
-            </h2>
-            {orders.length > 0 && (
-              <motion.button whileTap={{ scale: 0.94 }} onClick={() => setScreen('orders')}
-                className="flex items-center gap-0.5 text-[11px] font-semibold text-text-tertiary">
-                See all <ChevronRight size={12} strokeWidth={2} className="mt-px" />
-              </motion.button>
-            )}
-          </div>
-
-          {/* Pending order alert */}
-          {pendingOrders.length > 0 && (
-            <motion.button
-              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                const o = pendingOrders[0];
-                setActiveOrderId(o.id);
-                if (o.status === 'pending') {
-                  setPendingTradeData({ amount: o.cryptoAmount, fiatAmount: o.fiatAmount, type: o.type, paymentMethod: o.merchant.paymentMethod });
-                  setScreen('matching');
-                } else { setScreen('order'); }
-              }}
-              className="w-full flex items-center gap-3 text-left rounded-[18px] mt-3 mb-1 py-[13px] px-[15px] bg-surface-hover border border-border-strong"
-            >
-              <motion.div animate={{ opacity: [1, 0.25, 1] }} transition={{ duration: 1.4, repeat: Infinity }}
-                className="w-[7px] h-[7px] rounded-full bg-accent shrink-0" />
-              <div className="flex-1">
-                <p className="text-[14px] font-bold text-text-primary mb-0.5 tracking-[-0.01em]">
-                  {pendingOrders[0].type === 'buy' ? 'Buying' : 'Selling'} {parseFloat(pendingOrders[0].cryptoAmount).toFixed(2)} USDT
-                </p>
-                <p className="text-[11px] text-text-tertiary font-medium">
-                  {pendingOrders[0].status === 'pending' ? 'Finding merchant...' : `Step ${pendingOrders[0].step} of 4 · Tap to continue`}
-                </p>
-              </div>
-              <ChevronRight size={17} strokeWidth={2} className="text-text-tertiary shrink-0" />
-            </motion.button>
-          )}
-
-          {/* Transaction rows — real orders only */}
-          {orders.length > 0 ? (
-            <div className="mt-2">
-              {orders.slice(0, 8).map((order, i, arr) => (
-                <motion.div
-                  key={order.id}
-                  initial={{ opacity: 0, y: 18 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: false, amount: 0.35, margin: '0px 0px -40px 0px' }}
-                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <TxRow
-                    order={order}
-                    index={i}
-                    onPress={() => {
-                      setActiveOrderId(order.id);
-                      setScreen('order');
-                    }}
-                  />
-                  {i < arr.length - 1 && (
-                    <div className="h-px bg-border-subtle ml-12" />
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="mt-4 py-8 flex flex-col items-center justify-center text-center"
-            >
-              <p className="text-[13px] font-semibold text-text-secondary mb-1">No transactions yet</p>
-              <p className="text-[11px] text-text-tertiary">Your trades will appear here</p>
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* ── Bottom nav ── */}
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} chatUnreadCount={unreadCount} />
+      {/* BOTTOM NAV — shared component so every user screen matches.
+          Inbox carries the chat-unread badge; Rewards now lives in the
+          top header above. */}
+      {!hideBottomNav && (
+        <BottomNav
+          screen={screen}
+          setScreen={setScreen}
+          maxW={maxW}
+          chatUnreadCount={unreadCount}
+        />
+      )}
 
       {/* ── UPI Pay (QR scan → amount → hand off to escrow flow) ── */}
       {showUpiPay && (
@@ -1136,6 +881,21 @@ export const HomeScreen = ({
           onClose={() => setShowUpiPay(false)}
           currentRate={currentRate}
           usdtBalance={IS_MOCK_MODE ? (userBalance ?? null) : solanaWallet.usdtBalance}
+          walletReady={isWalletReady}
+          walletCta={(() => {
+            // Close the scanner first so the wallet modal (rendered at the
+            // page level, below this z-[100] overlay) is visible, then open
+            // the right flow for the wallet's current state. Mirrors the
+            // EscrowLockScreen onConnectWallet handler in page.tsx.
+            const close = () => setShowUpiPay(false);
+            if (IS_EMBEDDED_WALLET && embeddedWallet) {
+              if (embeddedWallet.state === 'none')
+                return { label: 'Set up wallet', onClick: () => { close(); setShowWalletSetup(true); } };
+              if (embeddedWallet.state === 'locked')
+                return { label: 'Unlock wallet', onClick: () => { close(); setShowWalletUnlock(true); } };
+            }
+            return { label: 'Connect wallet', onClick: () => { close(); setShowWalletModal(true); } };
+          })()}
           onConfirm={(data) => {
             setShowUpiPay(false);
             onUpiPayConfirm?.(data);
@@ -1143,117 +903,83 @@ export const HomeScreen = ({
         />
       )}
 
-      {/* ── Deposit / Receive — Apple-style bottom sheet with QR ── */}
+      {/* ── Deposit / Receive — bottom sheet ── */}
       <AnimatePresence>
         {showDeposit && (
           <>
             <motion.div
               key="deposit-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
               onClick={() => setShowDeposit(false)}
-              className="fixed inset-0 z-50"
               style={{
-                background: 'rgba(0,0,0,0.55)',
-                backdropFilter: 'blur(6px)',
-                WebkitBackdropFilter: 'blur(6px)',
+                // zIndex 55: above the BottomNav (z-50) so the nav is dimmed
+                // behind the backdrop while the deposit sheet is open.
+                position: 'fixed', inset: 0, zIndex: 55,
+                background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)',
               }}
             />
             <motion.div
               key="deposit-sheet"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 380, damping: 36 }}
-              className="fixed left-0 right-0 bottom-0 z-50 px-3"
-              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 12px) + 16px)' }}
+              style={{
+                // zIndex 60: above the BottomNav (z-50) so the sheet (and its
+                // copy button) sit on top of the nav instead of behind it.
+                position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60,
+                padding: '0 12px', paddingBottom: 'calc(env(safe-area-inset-bottom, 12px) + 16px)',
+              }}
             >
               <div
-                className="max-w-[440px] mx-auto"
+                // Tablet: widen the deposit sheet to match the 720px column
+                // (md:) instead of a 440px card stranded in the middle. mx-auto
+                // keeps it centred; phone stays 440 via the base cap.
+                className="w-full max-w-[440px] md:max-w-[720px] mx-auto"
                 style={{
-                  padding: '18px 20px 22px',
-                  borderRadius: 28,
-                  background: 'rgba(20,24,32,0.92)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  backdropFilter: 'blur(28px) saturate(1.4)',
-                  WebkitBackdropFilter: 'blur(28px) saturate(1.4)',
-                  boxShadow: '0 -20px 50px -10px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
-                }}
-              >
-                {/* Drag pip */}
-                <div className="flex justify-center mb-3">
-                  <span style={{ width: 36, height: 4, borderRadius: 999, background: 'rgba(255,255,255,0.18)' }} />
+                padding: '18px 20px 22px',
+                borderRadius: 28, background: 'var(--color-surface-card)',
+                border: '1px solid var(--color-border-subtle)',
+                backdropFilter: 'blur(28px)',
+                boxShadow: '0 -20px 50px -10px rgba(0,0,0,0.35)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                  <span style={{ width: 36, height: 4, borderRadius: 999, background: 'var(--color-border-medium)', display: 'block' }} />
                 </div>
-
-                {/* Header */}
-                <div className="flex items-center justify-between mb-4">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                   <div>
-                    <h2 style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.01em', color: 'rgba(255,255,255,0.96)' }}>
-                      Receive USDT
-                    </h2>
-                    <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
-                      Solana network · SPL token
-                    </p>
+                    <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--color-text-primary)' }}>Receive USDT</h2>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', marginTop: 2 }}>Solana network · SPL token</p>
                   </div>
-                  <button
-                    onClick={() => setShowDeposit(false)}
-                    className="flex items-center justify-center"
-                    style={{
-                      width: 30, height: 30, borderRadius: 999,
-                      background: 'rgba(255,255,255,0.06)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                    }}
-                  >
-                    <X size={14} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.55)' }} />
+                  <button onClick={() => setShowDeposit(false)} style={{
+                    width: 30, height: 30, borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: 'var(--color-surface-active)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <X size={14} strokeWidth={2.4} style={{ color: 'var(--color-text-secondary)' }} />
                   </button>
                 </div>
-
-                {/* QR card */}
-                <div
-                  className="flex items-center justify-center mx-auto"
-                  style={{
-                    width: 232, height: 232,
-                    padding: 14,
-                    borderRadius: 24,
-                    background: '#FFFFFF',
-                    boxShadow: '0 16px 36px -12px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.85)',
-                  }}
-                >
+                <div style={{
+                  width: 232, height: 232, padding: 14, borderRadius: 24, background: '#fff',
+                  margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 16px 36px -12px rgba(0,0,0,0.25)',
+                  border: '1px solid var(--color-border-subtle)',
+                }}>
                   {qrDataUrl ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={qrDataUrl} alt="Wallet QR" style={{ width: '100%', height: '100%' }} />
                   ) : (
-                    <div className="flex items-center justify-center w-full h-full">
-                      <Loader2 size={20} className="animate-spin" style={{ color: 'rgba(15,23,42,0.45)' }} />
-                    </div>
+                    <Loader2 size={20} style={{ color: 'rgba(15,23,42,0.45)', animation: 'spin 1s linear infinite' }} />
                   )}
                 </div>
-
-                {/* Address pill + copy */}
-                <div className="flex items-center mt-5" style={{ gap: 8 }}>
-                  <div
-                    className="flex-1 flex items-center"
-                    style={{
-                      padding: '11px 14px',
-                      borderRadius: 14,
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      gap: 10,
-                      minWidth: 0,
-                    }}
-                  >
-                    <span
-                      className="truncate"
-                      style={{
-                        flex: 1,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: 'rgba(255,255,255,0.78)',
-                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                      }}
-                    >
+                <div style={{ display: 'flex', alignItems: 'center', marginTop: 20, gap: 8 }}>
+                  <div style={{
+                    flex: 1, padding: '11px 14px', borderRadius: 14, minWidth: 0,
+                    background: 'var(--color-surface-base)', border: '1px solid var(--color-border-subtle)',
+                  }}>
+                    <span style={{
+                      display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)',
+                      fontFamily: 'ui-monospace, monospace',
+                    }}>
                       {solanaWallet.walletAddress || '—'}
                     </span>
                   </div>
@@ -1261,43 +987,61 @@ export const HomeScreen = ({
                     onClick={() => {
                       const addr = solanaWallet.walletAddress;
                       if (!addr) return;
-                      try {
-                        navigator.clipboard?.writeText(addr);
-                      } catch {}
+                      try { navigator.clipboard?.writeText(addr); } catch {}
                       setDepositCopied(true);
                       setTimeout(() => setDepositCopied(false), 1800);
                     }}
-                    className="flex items-center justify-center"
                     style={{
-                      width: 44, height: 44, borderRadius: 14,
-                      background: depositCopied ? 'rgba(16,185,129,0.18)' : '#FFFFFF',
-                      border: depositCopied ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(255,255,255,0.6)',
-                      boxShadow: depositCopied ? 'none' : '0 6px 14px -6px rgba(255,255,255,0.30), inset 0 1px 0 rgba(255,255,255,0.85)',
-                      transition: 'background 200ms ease, border-color 200ms ease',
+                      width: 44, height: 44, borderRadius: 14, border: 'none', cursor: 'pointer', flexShrink: 0,
+                      background: depositCopied ? 'rgba(16,185,129,0.18)' : 'var(--color-text-primary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
                   >
                     {depositCopied
-                      ? <Check size={16} strokeWidth={2.6} style={{ color: '#10B981' }} />
-                      : <Copy size={15} strokeWidth={2.4} style={{ color: '#0B0F14' }} />}
+                      ? <Check size={16} strokeWidth={2.6} style={{ color: 'var(--color-success)' }} />
+                      : <Copy size={15} strokeWidth={2.4} style={{ color: 'var(--color-surface-base)' }} />}
                   </button>
                 </div>
-
-                {/* Warning */}
-                <p
-                  className="text-center"
-                  style={{
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    color: 'rgba(255,255,255,0.42)',
-                    marginTop: 14,
-                    lineHeight: 1.4,
-                  }}
-                >
+                <p style={{
+                  textAlign: 'center', fontSize: 10.5, fontWeight: 600,
+                  color: 'var(--color-text-secondary-strong)', marginTop: 14, lineHeight: 1.4,
+                }}>
                   Send only USDT (SPL) on Solana. Other tokens or networks will be lost.
                 </p>
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* ── "Coming soon" toast ── shown when a not-yet-shipped action
+          (e.g. Request) is tapped. Auto-dismisses. */}
+      <AnimatePresence>
+        {comingSoon && (
+          <motion.div
+            key="coming-soon-toast"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            style={{
+              position: 'fixed', left: 0, right: 0, zIndex: 200,
+              bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
+              display: 'flex', justifyContent: 'center', padding: '0 24px',
+              pointerEvents: 'none',
+            }}
+          >
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '11px 18px', borderRadius: 999,
+              background: 'rgba(20,21,26,0.92)', backdropFilter: 'blur(10px)',
+              color: '#fff', fontSize: 13, fontWeight: 700,
+              boxShadow: '0 10px 30px -8px rgba(0,0,0,0.5)',
+            }}>
+              <Clock size={15} strokeWidth={2.2} />
+              Request is coming soon
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

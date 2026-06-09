@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual, randomBytes } from 'crypto';
+import { createHmac, timingSafeEqual, randomBytes, createHash } from 'crypto';
 import { getOrderById } from '../db/repositories/orders';
 import { getUserById } from '../db/repositories/users';
 import { getMerchantByIdInternal } from '../db/repositories/merchants';
@@ -13,6 +13,55 @@ import { verifySessionToken } from '../auth/sessionToken';
 import { checkBlacklist } from './blacklist';
 import { hasNoActiveSessions, isSessionValid } from '../auth/sessions';
 import { isAdminJtiRevoked } from '@/lib/auth/adminRevocation';
+import { queryOne } from '@/lib/db';
+
+// ── API Key auth ──────────────────────────────────────────────────────
+// Keys have format: sk_live_<64 hex chars> or sk_test_<64 hex chars>
+// Only the SHA-256 hash is stored; the full key is never persisted.
+
+const API_KEY_PREFIX_RE = /^sk_(live|test)_[0-9a-f]{64}$/;
+
+interface ApiKeyRow {
+  id: string;
+  merchant_id: string;
+  permissions: string[];
+  revoked_at: string | null;
+}
+
+async function resolveApiKey(rawKey: string): Promise<AuthContext | null> {
+  if (!API_KEY_PREFIX_RE.test(rawKey)) return null;
+
+  const hash = createHash('sha256').update(rawKey).digest('hex');
+
+  let row: ApiKeyRow | null = null;
+  try {
+    row = await queryOne<ApiKeyRow>(
+      `SELECT id, merchant_id, permissions, revoked_at
+       FROM api_keys
+       WHERE key_hash = $1`,
+      [hash],
+    );
+  } catch {
+    return null;
+  }
+
+  if (!row || row.revoked_at) return null;
+
+  // Non-blocking: bump last_used_at
+  void queryOne(
+    `UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`,
+    [row.id],
+  ).catch(() => {});
+
+  return {
+    actorType: 'merchant',
+    actorId: row.merchant_id,
+    merchantId: row.merchant_id,
+    // Expose permissions so downstream guards can enforce scope if needed
+    apiKeyId: row.id,
+    apiKeyPermissions: row.permissions,
+  } as AuthContext;
+}
 
 // Admin auth secret - MUST be configured via environment variable.
 // Resolved LAZILY (not captured at module load) so:
@@ -281,7 +330,9 @@ export interface AuthContext {
   complianceId?: string;
   actorType: 'user' | 'merchant' | 'system' | 'compliance';
   actorId: string;
-  sessionId?: string; // Present when token contains session_id (v2 tokens)
+  sessionId?: string;       // Present when token contains session_id (v2 tokens)
+  apiKeyId?: string;        // Present when authenticated via API key
+  apiKeyPermissions?: string[]; // Scopes granted to this API key
 }
 
 // Production mode: token is the ONLY trusted identity source
@@ -301,6 +352,12 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
  *   - Fallback usage is logged as a warning
  */
 export function getAuthContext(request: NextRequest): AuthContext | null {
+  // ── API key auth (sk_live_ / sk_test_ bearer tokens) ──────────────
+  // Checked before session tokens so agent callers get a fast path.
+  // resolveApiKey() is async — callers that need API key support must
+  // use getVerifiedAuthContext() (which awaits it) rather than this sync fn.
+  // We surface the raw key here so getVerifiedAuthContext can await it.
+
   // ── Token-based auth (trusted, cryptographically verified) ──
   //
   // Two equally-trusted sources for the access token, in priority order:
@@ -484,10 +541,25 @@ async function actorExistsInDb(auth: AuthContext): Promise<boolean> {
 /**
  * Like getAuthContext() but also confirms the actor exists in the DB.
  * Returns null if extraction fails OR the actor doesn't exist.
+ *
+ * API key path: Bearer sk_live_* / sk_test_* tokens bypass session lookup
+ * entirely — the key_hash DB lookup IS the auth check.
  */
 export async function getVerifiedAuthContext(
   request: NextRequest,
 ): Promise<AuthContext | null> {
+  // ── API key fast-path ─────────────────────────────────────────────
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer sk_')) {
+    const rawKey = authHeader.slice(7);
+    const apiKeyAuth = await resolveApiKey(rawKey);
+    if (!apiKeyAuth) return null;
+    // Still verify the merchant exists and is active
+    const exists = await verifyMerchant(apiKeyAuth.merchantId!);
+    if (!exists) return null;
+    return apiKeyAuth;
+  }
+
   const auth = getAuthContext(request);
   if (!auth) return null;
 
@@ -959,6 +1031,44 @@ export function forbiddenResponse(
   return NextResponse.json(
     { success: false, error: message, code },
     { status: 403 }
+  );
+}
+
+// ── API Key scope enforcement ──────────────────────────────────────────
+//
+// Valid permission scopes (must match 153_api_keys.sql default):
+//   orders:read    – GET orders, messages, events
+//   orders:write   – POST/PATCH/DELETE orders, action, escrow, dispute
+//   wallet:read    – GET wallet-ledger, sync-balance
+//   notifications  – Pusher channel auth, presence, typing
+//
+// Session tokens (no apiKeyId) bypass scope checks entirely — they carry
+// full merchant identity and are already gated by session validation.
+
+export type ApiKeyScope = 'orders:read' | 'orders:write' | 'wallet:read' | 'notifications';
+
+/**
+ * Enforce an API key scope on a route.
+ * Returns a 403 NextResponse if the key lacks the required scope.
+ * Returns null if the request is authenticated via a session token (no-op).
+ *
+ * Usage:
+ *   const scopeErr = requireApiKeyScope(auth, 'orders:write');
+ *   if (scopeErr) return scopeErr;
+ */
+export function requireApiKeyScope(
+  auth: AuthContext,
+  scope: ApiKeyScope,
+): NextResponse | null {
+  if (!auth.apiKeyId) return null; // session token — no scope restriction
+  if (auth.apiKeyPermissions?.includes(scope)) return null; // scope granted
+  return NextResponse.json(
+    {
+      success: false,
+      error: `API key does not have the '${scope}' scope required for this action`,
+      code: 'INSUFFICIENT_SCOPE',
+    },
+    { status: 403 },
   );
 }
 

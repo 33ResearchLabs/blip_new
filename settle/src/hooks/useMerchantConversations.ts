@@ -22,6 +22,7 @@ export interface OrderConversation {
     username: string;
     rating: number;
     total_trades: number;
+    avatar_url?: string | null;
   };
   message_count: number;
   unread_count: number;

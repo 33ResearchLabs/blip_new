@@ -6,11 +6,11 @@ import {
   ChevronLeft,
   ArrowUpRight,
   ArrowDownLeft,
-  Building2,
   Banknote,
   Loader2,
   ChevronDown,
-  Check,
+  X,
+  CreditCard,
 } from "lucide-react";
 import type {
   Screen,
@@ -23,6 +23,7 @@ import {
   type PaymentMethodItem,
 } from "../PaymentMethodSelector";
 import { BottomNav } from "./BottomNav";
+import { useUserPaymentMethods } from "@/context/AppContext";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 import { formatCrypto, formatFiat, formatPercentage } from "@/lib/format";
@@ -61,6 +62,7 @@ export interface TradeCreationScreenProps {
   onPairChange?: (pair: "usdt_aed" | "usdt_inr") => void;
   setCurrentRate?: (rate: number) => void;
   theme?: "dark" | "light";
+  hideBottomNav?: boolean;
 }
 
 // iOS 26 spring physics — snappy
@@ -75,6 +77,14 @@ function formatAmountInput(value: string): string {
 }
 
 const QUICK_AMOUNTS = ["100", "500", "1000", "5000"];
+
+// Human label for a PaymentMethodItem.type, shown under the chosen-method card.
+const PM_TYPE_LABEL: Record<string, string> = {
+  bank: "Bank account",
+  upi: "UPI",
+  cash: "Cash",
+  other: "Other",
+};
 
 const TOKENS_DARK = {
   hi: "rgba(255,255,255,0.96)",
@@ -112,40 +122,43 @@ const TOKENS_DARK = {
     "0 -16px 36px -16px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
 };
 
+// Light theme recoloured to HomeScreen's cream look — this is the user app's
+// default, so the Trade screen matches the rest: cream bg, white cards,
+// #14151a / #80828c text, golden CTA.
 const TOKENS_LIGHT = {
-  hi: "rgba(15,23,42,0.95)",
-  md: "rgba(15,23,42,0.60)",
-  lo: "rgba(15,23,42,0.42)",
-  xl: "rgba(15,23,42,0.18)",
-  bg: "#ffffff",
-  surface1: "rgba(15,23,42,0.05)",
-  surface2: "rgba(15,23,42,0.04)",
-  surface3: "rgba(15,23,42,0.07)",
-  surface4: "rgba(15,23,42,0.03)",
-  border1: "rgba(15,23,42,0.10)",
-  border2: "rgba(15,23,42,0.08)",
-  border3: "rgba(15,23,42,0.12)",
-  borderStrong: "rgba(15,23,42,0.28)",
-  borderStrongAlt: "rgba(15,23,42,0.24)",
-  divider: "rgba(15,23,42,0.10)",
-  handle: "rgba(15,23,42,0.18)",
-  dropdownBg: "rgba(255,255,255,0.98)",
-  dropdownBorder: "rgba(15,23,42,0.10)",
-  activeTileBg: "#0f172a",
-  activeTileText: "#FFFFFF",
-  activeTileSubText: "rgba(255,255,255,0.70)",
-  activeTileBorder: "rgba(15,23,42,0.85)",
-  ctaInactiveBg: "rgba(15,23,42,0.05)",
-  ctaInactiveBorder: "rgba(15,23,42,0.10)",
-  ctaActiveBg: "#0f172a",
-  ctaActiveText: "#FFFFFF",
-  ctaActiveBorder: "rgba(15,23,42,0.30)",
+  hi: "rgba(20,21,26,0.96)",
+  md: "#80828c",
+  lo: "rgba(20,21,26,0.38)",
+  xl: "rgba(20,21,26,0.16)",
+  bg: "#f4f3f1",
+  surface1: "#ffffff",
+  surface2: "#ffffff",
+  surface3: "rgba(20,21,26,0.05)",
+  surface4: "#ffffff",
+  border1: "rgba(20,21,26,0.08)",
+  border2: "rgba(20,21,26,0.06)",
+  border3: "rgba(20,21,26,0.12)",
+  borderStrong: "rgba(20,21,26,0.28)",
+  borderStrongAlt: "rgba(20,21,26,0.24)",
+  divider: "rgba(20,21,26,0.10)",
+  handle: "rgba(20,21,26,0.18)",
+  dropdownBg: "#ffffff",
+  dropdownBorder: "rgba(20,21,26,0.10)",
+  activeTileBg: "#ffb02e",
+  activeTileText: "#0b0b0d",
+  activeTileSubText: "rgba(11,11,13,0.65)",
+  activeTileBorder: "rgba(255,176,46,0.85)",
+  ctaInactiveBg: "rgba(20,21,26,0.05)",
+  ctaInactiveBorder: "rgba(20,21,26,0.08)",
+  ctaActiveBg: "#ffb02e",
+  ctaActiveText: "#0b0b0d",
+  ctaActiveBorder: "rgba(255,176,46,0.40)",
   ctaActiveShadow:
-    "0 16px 36px -14px rgba(15,23,42,0.20), inset 0 1px 0 rgba(255,255,255,0.10)",
-  sheetBg: "rgba(15,23,42,0.025)",
-  sheetBorder: "rgba(15,23,42,0.06)",
+    "0 16px 36px -14px rgba(255,176,46,0.40), inset 0 1px 0 rgba(255,255,255,0.55)",
+  sheetBg: "#ffffff",
+  sheetBorder: "rgba(20,21,26,0.06)",
   sheetShadow:
-    "0 -16px 36px -16px rgba(15,23,42,0.10), inset 0 1px 0 rgba(15,23,42,0.04)",
+    "0 -16px 36px -16px rgba(20,21,26,0.12), inset 0 1px 0 rgba(20,21,26,0.04)",
 };
 
 export const TradeCreationScreen = ({
@@ -171,6 +184,7 @@ export const TradeCreationScreen = ({
   onPairChange,
   setCurrentRate,
   theme = "dark",
+  hideBottomNav = false,
 }: TradeCreationScreenProps) => {
   const isLight = theme === "light";
   const T = isLight ? TOKENS_LIGHT : TOKENS_DARK;
@@ -204,6 +218,35 @@ export const TradeCreationScreen = ({
   };
   const [savedBanks, setSavedBanks] = useState<SavedBank[]>([]);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
+  // "Payment methods" bottom sheet — opened from the buy flow's "Add payment
+  // method" link. Hosts the full multi-type PaymentMethodSelector (the same
+  // component Profile / the sell flow use) so users get the complete add form
+  // (bank / UPI / cash / …), not a bank-only one. No navigation to Profile.
+  const [showAddMethods, setShowAddMethods] = useState(false);
+  // The method picked in the sheet — rendered as a card left of the "Add"
+  // button (merchant trade-form pattern). Local so the buy flow reflects the
+  // pick immediately; the order itself carries it via onSelectPaymentMethod.
+  const [chosenMethod, setChosenMethod] = useState<PaymentMethodItem | null>(null);
+
+  // Pre-select the default payment method from the login-time cache so the
+  // "Pay With" / "Receive To" row shows it immediately — without the user
+  // having to open the sheet first. Works for both Buy and Sell.
+  const { paymentMethods: cachedPaymentMethods } = useUserPaymentMethods();
+  useEffect(() => {
+    if (chosenMethod || !cachedPaymentMethods.length) return;
+    const pick =
+      (selectedPaymentMethodId
+        ? cachedPaymentMethods.find((m) => m.id === selectedPaymentMethodId)
+        : null) ??
+      cachedPaymentMethods.find((m) => m.is_default) ??
+      cachedPaymentMethods[0];
+    if (!pick) return;
+    setChosenMethod(pick);
+    if (!selectedPaymentMethodId) onSelectPaymentMethod(pick);
+    setPaymentMethod(pick.type === "cash" ? "cash" : "bank");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cachedPaymentMethods, chosenMethod, selectedPaymentMethodId]);
+
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
@@ -225,7 +268,6 @@ export const TradeCreationScreen = ({
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
-
 
   useEffect(() => {
     let cancelled = false;
@@ -264,6 +306,8 @@ export const TradeCreationScreen = ({
   const effectiveRateLoading = ratePair === "usdt_inr" ? false : rateLoading;
 
   // Promo: first 10 orders get $5 off — default optimistically active, API updates remaining count
+  const [showReceipt, setShowReceipt] = useState(false);
+
   const [promo, setPromo] = useState<{ active: boolean; remaining: number; discount_usdt: number }>({
     active: true, remaining: 10, discount_usdt: 5,
   });
@@ -288,7 +332,7 @@ export const TradeCreationScreen = ({
 
   return (
     <div
-      className="relative flex flex-col min-h-[100dvh] overflow-y-auto"
+      className="relative flex flex-col h-dvh overflow-hidden"
       style={{ background: T.bg }}
     >
       {/* ── Ambient color glow that follows Buy / Sell ── */}
@@ -313,10 +357,10 @@ export const TradeCreationScreen = ({
         }}
       /> */}
 
-      {/* ── Header ── */}
-      <header className="relative z-10 max-w-[440px] mx-auto w-full px-5 pt-5">
-        <div className="flex items-center justify-end">
-          {/* <motion.button
+      {/* ── Header — always pinned at top ── */}
+      <header className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 pt-5">
+        <div className="flex items-center justify-between">
+          <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={() => setScreen("home")}
             className="flex items-center justify-center"
@@ -324,8 +368,8 @@ export const TradeCreationScreen = ({
               width: 38,
               height: 38,
               borderRadius: 13,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: T.surface1,
+              border: `1px solid ${T.border1}`,
               backdropFilter: "blur(12px)",
               WebkitBackdropFilter: "blur(12px)",
             }}
@@ -335,7 +379,7 @@ export const TradeCreationScreen = ({
               strokeWidth={2.2}
               style={{ color: T.hi }}
             />
-          </motion.button> */}
+          </motion.button>
 
           {/* Corridor selector — animated dropdown */}
           <div className="relative">
@@ -440,8 +484,11 @@ export const TradeCreationScreen = ({
         </div>
       </header>
 
+      {/* ── Central section ── */}
+      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
+
       {/* ── Hero amount stack ── */}
-      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 flex flex-col items-center justify-start pt-2">
+      <div className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 flex flex-col items-center pt-2">
         {/* Animated You Buy / You Sell label */}
         <AnimatePresence mode="wait">
           <motion.p
@@ -692,16 +739,21 @@ export const TradeCreationScreen = ({
           })}
         </div>
       </div>
+      </div>{/* end central */}
 
-      {/* ── Bottom liquid-glass sheet ── */}
+      {/* ── Bottom drawer — slides up when amount entered ── */}
+      <AnimatePresence>
+      {hasAmount && (
       <motion.div
-        initial={{ y: 30, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ ...SOFT_SPRING, delay: 0.1 }}
-        className="relative z-10 max-w-[440px] mx-auto w-full "
+        key="trade-drawer"
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", stiffness: 380, damping: 36 }}
+        className="absolute bottom-0 inset-x-0 z-20 max-w-[440px] md:max-w-[572px] mx-auto overflow-y-auto"
         style={{
-          marginTop: 24,
-          padding: "18px 18px calc(env(safe-area-inset-bottom, 12px) + 90px)",
+          maxHeight: "60dvh",
+          padding: "18px 18px 24px",
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
           background: T.sheetBg,
@@ -711,407 +763,112 @@ export const TradeCreationScreen = ({
           boxShadow: T.sheetShadow,
         }}
       >
-        {/* Pulled-handle pip */}
-        <div className="flex justify-center mb-3 ">
-          <span
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 999,
-              background: T.handle,
-            }}
-          />
+        {/* Handle + close */}
+        <div className="flex items-center justify-between mb-3">
+          <div style={{ width: 32 }} />
+          <span style={{ width: 36, height: 4, borderRadius: 999, background: T.handle, display: "block" }} />
+          <button
+            onClick={() => setAmount("")}
+            style={{ width: 32, height: 32, borderRadius: 999, background: T.surface3, border: `1px solid ${T.border1}`, display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <X size={15} strokeWidth={2.4} style={{ color: T.md }} />
+          </button>
         </div>
 
-        {/* Fee row — only when amount entered */}
-        <AnimatePresence>
-          {hasAmount && (
-            <motion.div
-              key="fees"
-              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-              animate={{ opacity: 1, height: "auto", marginBottom: 14 }}
-              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-              transition={SPRING}
-              style={{ overflow: "hidden" }}
-            >
-              {FEE_UI_V2 ? (
-                /* Receipt breakdown */
-                hasAmount && displayRate !== null ? (
-                  <div
-                    className="rounded-2xl overflow-hidden"
-                    style={{ background: T.surface2, border: `1px solid ${T.border2}` }}
-                  >
-                    <div className="flex items-center justify-between px-3 py-2.5">
-                      <span style={{ fontSize: 12, fontWeight: 600, color: T.md }}>{amount} USDT</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                        {rateSymbol}{rawFiatAmount.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
-                      <div className="flex items-center gap-1.5">
-                        <span style={{ fontSize: 11, color: T.lo }}>Fees</span>
-                        <span style={{ fontSize: 11, color: T.lo, textDecoration: "line-through" }}>{(currentFees.totalFee * 100).toFixed(0)}%</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80" }}>0%</span>
-                      </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}0.00</span>
-                    </div>
-                    {promo.active && (
-                      <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
-                        <span style={{ fontSize: 11, color: "#4ade80" }}>🎁 $5 testing reward</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>-{rateSymbol}{promoDiscountInr.toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between px-3 py-2.5" style={{ borderTop: `1px solid ${T.border2}`, background: isLight ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)" }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: T.hi }}>Total</span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}{discountedFiatAmount.toFixed(2)} {rateCurrency}</span>
-                    </div>
-                  </div>
-                ) : null
-              ) : (
-                <div
-                  className="flex items-center"
-                  style={{
-                    padding: "11px 14px",
-                    borderRadius: 14,
-                    background: T.surface2,
-                    border: `1px solid ${T.border2}`,
-                    gap: 12,
-                  }}
+        {/* Receipt */}
+        {displayRate !== null && (
+            <div style={{ marginBottom: 14 }}>
+              <div
+                className="rounded-2xl overflow-hidden"
+                style={{ background: T.surface2, border: `1px solid ${T.border2}` }}
+              >
+                {/* Summary row — always visible, tap to expand */}
+                <button
+                  onClick={() => setShowReceipt((v) => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2.5"
                 >
-                  {[
-                    {
-                      label: "Fee",
-                      value: formatPercentage(currentFees.totalFee * 100),
-                    },
-                    {
-                      label: "Earns",
-                      value: formatPercentage(currentFees.traderCut * 100),
-                    },
-                    {
-                      label: "You Get",
-                      value: isBuy
-                        ? `${formatCrypto(parseFloat(amount || "0"))} USDT`
-                        : formatFiat(
-                            parseFloat(fiatAmount || "0"),
-                            rateCurrency,
-                          ),
-                    },
-                  ].map((row, i, arr) => (
-                    <div key={row.label} className="flex-1 text-center flex items-center" style={{ gap: 12 }}>
-                      <div className="flex-1 text-center">
-                        <p
-                          style={{
-                            fontSize: 8.5,
-                            fontWeight: 800,
-                            letterSpacing: "0.18em",
-                            color: T.lo,
-                            textTransform: "uppercase",
-                            marginBottom: 3,
-                          }}
-                        >
-                          {row.label}
-                        </p>
-                        <p
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 800,
-                            color: i === arr.length - 1 ? T.hi : T.md,
-                            fontFamily:
-                              "ui-monospace, SFMono-Regular, Menlo, monospace",
-                          }}
-                        >
-                          {row.value}
-                        </p>
-                      </div>
-                      {i < arr.length - 1 && (
-                        <span
-                          style={{
-                            width: 1,
-                            height: 26,
-                            background: T.divider,
-                          }}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Payment method header — label + inline "Add payment method" link */}
-        <div className="flex items-center justify-between mb-1">
-          <p
-            style={{
-              fontSize: 9,
-              fontWeight: 800,
-              letterSpacing: "0.22em",
-              color: T.lo,
-              textTransform: "uppercase",
-            }}
-          >
-            {isBuy ? "Pay With" : "Receive To"}
-          </p>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={() => setScreen("profile")}
-            className="flex items-center"
-            style={{ gap: 4 }}
-          >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "-0.005em",
-                color: T.md,
-              }}
-            >
-              Add payment method
-            </span>
-            <ArrowUpRight size={11} strokeWidth={2.4} style={{ color: T.lo }} />
-          </motion.button>
-        </div>
-
-        {isBuy ? (
-          <>
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              {(
-                [
-                  {
-                    method: "bank" as const,
-                    label: "Bank Transfer",
-                    sub: "Wire / IBAN",
-                    Icon: Building2,
-                  },
-                  {
-                    method: "cash" as const,
-                    label: "Cash",
-                    sub: "In-person",
-                    Icon: Banknote,
-                  },
-                ] as const
-              ).map(({ method, label, sub, Icon }) => {
-                const on = paymentMethod === method;
-                return (
-                  <motion.button
-                    key={method}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setPaymentMethod(method)}
-                    animate={{
-                      background: on ? T.activeTileBg : T.surface4,
-                      borderColor: on ? T.activeTileBorder : T.border2,
-                      boxShadow: on
-                        ? isLight
-                          ? "0 6px 14px -8px rgba(15,23,42,0.25)"
-                          : "0 6px 14px -8px rgba(255,255,255,0.35)"
-                        : "none",
-                    }}
-                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                    className="flex items-center"
-                    style={{
-                      padding: "11px 12px",
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderStyle: "solid",
-                      gap: 10,
-                    }}
+                  <span style={{ fontSize: 14, fontWeight: 700, color: T.hi }}>
+                    {formatAmountInput(amount)} USDT → {rateSymbol}{formatCrypto(discountedFiatAmount)} {rateCurrency}
+                  </span>
+                  <motion.span
+                    animate={{ rotate: showReceipt ? 180 : 0 }}
+                    transition={SPRING}
+                    style={{ display: "inline-flex" }}
                   >
-                    <div
-                      className="flex items-center justify-center shrink-0"
-                      style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: 9,
-                        // When the tile is active (white), use a subtle dark
-                        // tint for the icon container so it remains visible on
-                        // the white surface; otherwise keep the original
-                        // raised-surface look.
-                        background: on
-                          ? "rgba(11,15,20,0.08)"
-                          : T.surface3,
-                      }}
+                    <ChevronDown size={14} strokeWidth={2.2} style={{ color: T.lo }} />
+                  </motion.span>
+                </button>
+
+                {/* Expanded receipt */}
+                <AnimatePresence>
+                  {showReceipt && (
+                    <motion.div
+                      key="receipt-detail"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={SPRING}
+                      style={{ overflow: "hidden" }}
                     >
-                      <Icon
-                        size={14}
-                        strokeWidth={2.4}
-                        style={{ color: on ? T.activeTileText : T.md }}
-                      />
-                    </div>
-                    <div className="flex flex-col text-left min-w-0">
-                      <span
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 800,
-                          letterSpacing: "-0.005em",
-                          color: on ? T.activeTileText : T.hi,
-                        }}
-                      >
-                        {label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 9.5,
-                          fontWeight: 600,
-                          color: on ? T.activeTileSubText : T.lo,
-                          marginTop: 1,
-                        }}
-                      >
-                        {sub}
-                      </span>
-                    </div>
-                  </motion.button>
-                );
-              })}
+                      <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: T.md }}>{formatAmountInput(amount)} USDT</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                          {rateSymbol}{formatCrypto(rawFiatAmount)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
+                        <div className="flex items-center gap-1.5">
+                          <span style={{ fontSize: 11, color: T.lo }}>Fees</span>
+                          <span style={{ fontSize: 11, color: T.lo, textDecoration: "line-through" }}>{(currentFees.totalFee * 100).toFixed(0)}%</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80" }}>0%</span>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}0.00</span>
+                      </div>
+                      {promo.active && (
+                        <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: `1px solid ${T.border2}` }}>
+                          <span style={{ fontSize: 11, color: "#4ade80" }}>🎁 $5 testing reward</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>-{rateSymbol}{formatCrypto(promoDiscountInr)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between px-3 py-2.5" style={{ borderTop: `1px solid ${T.border2}`, background: isLight ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)" }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: T.hi }}>Total</span>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: T.hi, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{rateSymbol}{formatCrypto(discountedFiatAmount)} {rateCurrency}</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
-
-            {/* Saved bank accounts — only when Bank Transfer is the active method */}
-            <AnimatePresence initial={false}>
-              {paymentMethod === "bank" && savedBanks.length > 0 && (
-                <motion.div
-                  key="saved-banks"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  style={{ overflow: "hidden", marginBottom: 16 }}
-                >
-                  <div className="flex flex-col" style={{ gap: 6, paddingTop: 4 }}>
-                    {savedBanks.map((b) => {
-                      const on = selectedBankId === b.id;
-                      const bankName = b.bank_name || b.bank || "Bank";
-                      const acctName = b.account_name || b.name || "";
-                      const last4 = (b.iban || "").slice(-4);
-                      const initial = bankName.charAt(0).toUpperCase();
-                      return (
-                        <motion.button
-                          key={b.id}
-                          whileTap={{ scale: 0.985 }}
-                          onClick={() => setSelectedBankId(b.id)}
-                          className="flex items-center"
-                          style={{
-                            gap: 12,
-                            padding: "10px 12px",
-                            borderRadius: 14,
-                            background: on ? T.surface3 : T.surface4,
-                            border: on
-                              ? `1px solid ${T.borderStrongAlt}`
-                              : `1px solid ${T.border2}`,
-                          }}
-                        >
-                          <div
-                            className="flex items-center justify-center shrink-0"
-                            style={{
-                              width: 30,
-                              height: 30,
-                              borderRadius: 10,
-                              background: T.surface3,
-                              border: `1px solid ${T.border1}`,
-                            }}
-                          >
-                            <span style={{ fontSize: 12, fontWeight: 800, color: T.hi }}>
-                              {initial}
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0 text-left">
-                            <div className="flex items-center" style={{ gap: 6 }}>
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: 800,
-                                  letterSpacing: "-0.005em",
-                                  color: T.hi,
-                                }}
-                              >
-                                {bankName}
-                              </span>
-                              {(b.is_default || b.isDefault) && (
-                                <span
-                                  style={{
-                                    fontSize: 8,
-                                    fontWeight: 800,
-                                    letterSpacing: "0.10em",
-                                    textTransform: "uppercase",
-                                    color: T.lo,
-                                    padding: "1px 5px",
-                                    borderRadius: 999,
-                                    background: T.surface3,
-                                    border: `1px solid ${T.border1}`,
-                                  }}
-                                >
-                                  Default
-                                </span>
-                              )}
-                            </div>
-                            <span
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: T.lo,
-                                fontFamily:
-                                  "ui-monospace, SFMono-Regular, Menlo, monospace",
-                                marginTop: 1,
-                                display: "block",
-                              }}
-                            >
-                              {acctName}
-                              {last4 ? ` · •••${last4}` : ""}
-                            </span>
-                          </div>
-                          {on && (
-                            <div
-                              className="flex items-center justify-center shrink-0"
-                              style={{
-                                width: 20,
-                                height: 20,
-                                borderRadius: 999,
-                                background: T.activeTileBg,
-                              }}
-                            >
-                              <Check size={12} strokeWidth={2.8} style={{ color: T.activeTileText }} />
-                            </div>
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </>
-        ) : (
-          <div className="mb-4">
-            <PaymentMethodSelector
-              userId={userId}
-              selectedId={selectedPaymentMethodId}
-              onSelect={onSelectPaymentMethod}
-            />
-          </div>
         )}
 
-        {/* Priority — sliding segmented */}
-        <p
-          style={{
-            fontSize: 9,
-            fontWeight: 800,
-            letterSpacing: "0.22em",
-            color: T.lo,
-            textTransform: "uppercase",
-            marginBottom: 2,
-          }}
+
+        {/* Payment method — minimal single-line row */}
+        <button
+          onClick={() => setShowAddMethods(true)}
+          className="w-full flex items-center justify-between mb-4"
+          style={{ padding: "13px 16px", borderRadius: 14, background: T.surface1, border: `1px solid ${T.border1}` }}
         >
+          <div className="flex items-center" style={{ gap: 10 }}>
+            {chosenMethod?.type === "cash" ? (
+              <Banknote size={16} strokeWidth={2} style={{ color: T.md }} />
+            ) : (
+              <CreditCard size={16} strokeWidth={2} style={{ color: T.md }} />
+            )}
+            <span style={{ fontSize: 14, fontWeight: 700, color: chosenMethod ? T.hi : T.md }}>
+              {chosenMethod ? chosenMethod.label : (isBuy ? "Select pay method" : "Select receive method")}
+            </span>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: T.lo }}>Change</span>
+        </button>
+
+        {/* Priority — sliding segmented */}
+        <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", color: T.lo, textTransform: "uppercase", marginBottom: 6 }}>
           Priority
         </p>
         <LayoutGroup>
           <div
-            className="relative grid grid-cols-3 mb-3"
-            style={{
-              gap: 4,
-              padding: 4,
-              borderRadius: 16,
-              background: T.surface2,
-              border: `1px solid ${T.border2}`,
-            }}
+            className="relative grid grid-cols-3 mb-4"
+            style={{ gap: 6, padding: 6, borderRadius: 18, background: T.surface2, border: `1px solid ${T.border2}` }}
           >
             {(
               [
@@ -1127,14 +884,14 @@ export const TradeCreationScreen = ({
                   onClick={() => setTradePreference(key)}
                   whileTap={{ scale: 0.97 }}
                   className="relative flex flex-col items-center justify-center"
-                  style={{ padding: "9px 4px", borderRadius: 12 }}
+                  style={{ padding: "14px 4px", borderRadius: 13 }}
                 >
                   {on && (
                     <motion.span
                       layoutId="prio-pill"
                       className="absolute inset-0"
                       style={{
-                        borderRadius: 12,
+                        borderRadius: 13,
                         background: T.activeTileBg,
                         border: `1px solid ${T.activeTileBorder}`,
                         boxShadow: isLight
@@ -1146,21 +903,16 @@ export const TradeCreationScreen = ({
                   )}
                   <span
                     className="relative"
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 800,
-                      letterSpacing: "-0.005em",
-                      color: on ? T.activeTileText : T.md,
-                    }}
+                    style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.01em", color: on ? T.activeTileText : T.hi }}
                   >
                     {label}
                   </span>
-                  <span className="relative flex items-center gap-1" style={{ marginTop: 2 }}>
+                  <span className="relative flex items-center gap-1" style={{ marginTop: 3 }}>
                     {oldFee && (
                       <span style={{
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: 700,
-                        color: T.lo,
+                        color: on ? T.activeTileSubText : T.lo,
                         textDecoration: "line-through",
                         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                       }}>
@@ -1169,9 +921,9 @@ export const TradeCreationScreen = ({
                     )}
                     <span
                       style={{
-                        fontSize: 11,
+                        fontSize: 13,
                         fontWeight: 800,
-                        color: fee === "0%" ? (on ? "#4ade80" : "#22c55e") : (on ? T.activeTileSubText : T.lo),
+                        color: fee === "0%" ? (on ? "#15803d" : "#22c55e") : (on ? T.activeTileSubText : T.md),
                         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                       }}
                     >
@@ -1184,23 +936,19 @@ export const TradeCreationScreen = ({
           </div>
         </LayoutGroup>
 
-
-        {/* CTA — Buy/Sell action, in flow after Priority */}
+        {/* CTA — lives inside the sheet so it scrolls with content */}
         <motion.button
           onClick={startTrade}
           disabled={!hasAmount || isLoading || !userId}
           whileTap={hasAmount ? { scale: 0.985 } : undefined}
           animate={{
-            background:
-              hasAmount && !isLoading ? T.ctaActiveBg : T.ctaInactiveBg,
+            background: hasAmount && !isLoading ? T.ctaActiveBg : T.ctaInactiveBg,
             color: hasAmount && !isLoading ? T.ctaActiveText : T.md,
-            borderColor:
-              hasAmount && !isLoading ? T.ctaActiveBorder : T.ctaInactiveBorder,
-            boxShadow:
-              hasAmount && !isLoading ? T.ctaActiveShadow : "none",
+            borderColor: hasAmount && !isLoading ? T.ctaActiveBorder : T.ctaInactiveBorder,
+            boxShadow: hasAmount && !isLoading ? T.ctaActiveShadow : "none",
           }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full flex items-center justify-center"
+          className="w-full flex items-center justify-center mt-3"
           style={{
             gap: 4,
             minHeight: 56,
@@ -1216,24 +964,96 @@ export const TradeCreationScreen = ({
             <Loader2 size={18} className="animate-spin" />
           ) : hasAmount ? (
             <>
-              {isBuy ? (
-                <ArrowDownLeft size={16} strokeWidth={2.6} />
-              ) : (
-                <ArrowUpRight size={16} strokeWidth={2.6} />
-              )}
-              {isBuy ? "Buy" : "Sell"} {amount} USDT
+              {isBuy ? <ArrowDownLeft size={16} strokeWidth={2.6} /> : <ArrowUpRight size={16} strokeWidth={2.6} />}
+              {isBuy ? "Buy" : "Sell"} {formatAmountInput(amount)} USDT
             </>
           ) : (
             "Enter Amount"
           )}
         </motion.button>
       </motion.div>
+      )}
+      </AnimatePresence>
 
-      <BottomNav
-        screen={screen}
-        setScreen={setScreen}
-        maxW="max-w-[440px] mx-auto"
-      />
+      {!hideBottomNav && !hasAmount && (
+        <BottomNav
+          screen={screen}
+          setScreen={setScreen}
+          maxW="max-w-[440px] mx-auto"
+        />
+      )}
+
+      {/* Payment methods — merchant-style mobile bottom sheet, opened in place
+          from "Add payment method" (no Profile redirect). Hosts the full
+          multi-type PaymentMethodSelector (cards + complete add form for bank /
+          UPI / cash / …) so it matches the Profile experience. Sized to the
+          phone column (max-w-440, centered). */}
+      <AnimatePresence>
+        {showAddMethods && (
+          <>
+            <motion.div
+              key="pm-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAddMethods(false)}
+              className="fixed inset-0 z-[120]"
+              style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}
+            />
+            <motion.div
+              key="pm-sheet"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 380, damping: 36 }}
+              className="fixed bottom-0 left-1/2 -translate-x-1/2 z-[121] w-full max-w-[440px] md:max-w-[720px]"
+              style={{
+                background: T.bg,
+                borderRadius: "28px 28px 0 0",
+                maxHeight: "92dvh",
+                overflowY: "auto",
+                boxShadow: "0 -16px 44px -14px rgba(20,21,26,0.28)",
+                paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 4 }}>
+                <div style={{ width: 38, height: 4, borderRadius: 99, background: T.handle }} />
+              </div>
+
+              <div className="flex items-center justify-between" style={{ padding: "6px 20px 8px" }}>
+                <div className="flex items-center" style={{ gap: 10 }}>
+                  <div className="flex items-center justify-center" style={{ width: 34, height: 34, borderRadius: 11, background: T.activeTileBg }}>
+                    <CreditCard size={16} strokeWidth={2.4} style={{ color: T.activeTileText }} />
+                  </div>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em", color: T.hi }}>Payment methods</h3>
+                </div>
+                <button onClick={() => setShowAddMethods(false)} aria-label="Close" style={{ padding: 6, borderRadius: 10 }}>
+                  <X size={18} strokeWidth={2.2} style={{ color: T.md }} />
+                </button>
+              </div>
+
+              <div style={{ padding: "4px 20px 0" }}>
+                <PaymentMethodSelector
+                  userId={userId}
+                  selectedId={selectedPaymentMethodId}
+                  onSelect={(m) => {
+                    onSelectPaymentMethod(m);
+                    setChosenMethod(m);
+                    if (m) {
+                      // Keep the order's coarse payment_method in sync (bank vs
+                      // cash); the exact method also rides along as its id.
+                      setPaymentMethod(m.type === "cash" ? "cash" : "bank");
+                      setShowAddMethods(false);
+                    }
+                  }}
+                  hideHeader
+                  alwaysExpanded
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

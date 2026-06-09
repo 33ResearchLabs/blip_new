@@ -314,7 +314,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Package className="w-5 h-5 text-primary" />
+          <Package className="w-5 h-5 text-[#f5f5f7]" />
           <h2 className="text-sm font-semibold">My Offers</h2>
           <span className="text-xs text-foreground/35">
             ({activeOffers.length} active, {pausedOffers.length} paused)
@@ -330,7 +330,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary text-background rounded-lg text-xs font-medium transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-[#f5f5f7] hover:bg-white text-[#0b0b0c] rounded-lg text-xs font-medium transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Offer</span>
@@ -339,8 +339,8 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
       </div>
 
       {/* Info Notice */}
-      <div className="flex items-start gap-2 px-3 py-2 bg-blue-500/5 rounded-xl border border-blue-500/10">
-        <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+      <div className="flex items-start gap-2 px-3 py-2 bg-white/[0.06] rounded-xl border border-white/[0.12]">
+        <Info className="w-4 h-4 text-white/60 flex-shrink-0 mt-0.5" />
         <p className="text-[11px] text-foreground/40">
           Editing an offer only affects <span className="text-white">future orders</span>.
           Existing orders keep their locked rate and terms.
@@ -350,7 +350,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
       {/* Loading State */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
+          <Loader2 className="w-8 h-8 text-[#f5f5f7] animate-spin mb-3" />
           <p className="text-sm text-foreground/35">Loading your offers...</p>
         </div>
       )}
@@ -362,7 +362,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
           <p className="text-sm text-red-400 mb-3">{error}</p>
           <button
             onClick={fetchOffers}
-            className="px-4 py-2 bg-white/[0.04] hover:bg-accent-subtle rounded-lg text-xs transition-colors"
+            className="px-4 py-2 bg-white/[0.04] hover:bg-white/[0.08] rounded-lg text-xs transition-colors"
           >
             Try Again
           </button>
@@ -379,7 +379,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
           </p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary text-background rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#f5f5f7] hover:bg-white text-[#0b0b0c] rounded-lg text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Create Offer</span>
@@ -467,7 +467,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                 {/* Modal Body */}
                 <div className="p-5 space-y-4">
                   {/* Warning */}
-                  <div className="flex items-start gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/6">
+                  <div className="flex items-start gap-2 px-3 py-2 bg-white/[0.055] rounded-xl border border-white/[0.12]">
                     <AlertTriangle className="w-4 h-4 text-white/70 flex-shrink-0 mt-0.5" />
                     <p className="text-[11px] text-white/50">
                       Edits affect new orders only. Active orders remain unchanged.
@@ -490,7 +490,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                           rate: clampDecimal(e.target.value, DECIMAL_PRESETS.rate),
                         }))
                       }
-                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
+                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-white/30 transition-colors"
                       placeholder="3.67"
                     />
                   </div>
@@ -512,7 +512,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                             min_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount),
                           }))
                         }
-                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
+                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-white/30 transition-colors"
                         placeholder="50"
                       />
                     </div>
@@ -531,7 +531,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                             max_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount),
                           }))
                         }
-                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
+                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-white/30 transition-colors"
                         placeholder="10000"
                       />
                     </div>
@@ -553,7 +553,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                           available_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount),
                         }))
                       }
-                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
+                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-white/30 transition-colors"
                       placeholder="5000"
                     />
                   </div>
@@ -571,7 +571,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                         setEditForm((prev) => ({ ...prev, is_active: !prev.is_active }))
                       }
                       className={`w-12 h-6 rounded-full relative transition-colors ${
-                        editForm.is_active ? "bg-emerald-500" : "bg-gray-600"
+                        editForm.is_active ? "bg-white/[0.06] ring-1 ring-white/20" : "bg-white/[0.04]"
                       }`}
                     >
                       <div
@@ -595,14 +595,14 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                 <div className="px-5 py-4 border-t border-white/[0.04] flex items-center justify-end gap-3">
                   <button
                     onClick={closeEditModal}
-                    className="px-4 py-2 text-foreground/40 hover:text-foreground text-sm transition-colors"
+                    className="px-4 py-2 text-foreground/40 hover:text-white text-sm transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleUpdate}
                     disabled={isUpdating}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary disabled:opacity-50 text-background rounded-lg text-sm font-medium transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-[#f5f5f7] hover:bg-white disabled:opacity-50 text-[#0b0b0c] rounded-lg text-sm font-medium transition-colors"
                   >
                     {isUpdating ? (
                       <>
@@ -644,8 +644,8 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Plus className="w-5 h-5 text-primary" />
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center">
+                      <Plus className="w-5 h-5 text-[#f5f5f7]" />
                     </div>
                     <div>
                       <h2 className="text-sm font-semibold">Create New Offer</h2>
@@ -674,13 +674,13 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => setCreateForm(f => ({ ...f, type: 'buy' }))}
-                        className={`py-2.5 rounded-xl text-xs font-medium transition-colors ${createForm.type === 'buy' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/[0.04] text-foreground/40 border border-white/[0.04]'}`}
+                        className={`py-2.5 rounded-xl text-xs font-medium transition-colors ${createForm.type === 'buy' ? 'bg-white/[0.06] text-white/70 border border-white/[0.09]' : 'bg-white/[0.04] text-foreground/40 border border-white/[0.04]'}`}
                       >
                         BUY (I buy from users)
                       </button>
                       <button
                         onClick={() => setCreateForm(f => ({ ...f, type: 'sell' }))}
-                        className={`py-2.5 rounded-xl text-xs font-medium transition-colors ${createForm.type === 'sell' ? 'bg-primary/20 text-primary border border-primary/30' : 'bg-white/[0.04] text-foreground/40 border border-white/[0.04]'}`}
+                        className={`py-2.5 rounded-xl text-xs font-medium transition-colors ${createForm.type === 'sell' ? 'bg-white/[0.055] text-[#f5f5f7] border border-white/[0.12]' : 'bg-white/[0.04] text-foreground/40 border border-white/[0.04]'}`}
                       >
                         SELL (I sell to users)
                       </button>
@@ -693,13 +693,13 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => setCreateForm(f => ({ ...f, payment_method: 'bank' }))}
-                        className={`py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${createForm.payment_method === 'bank' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-foreground/40 border border-white/[0.04]'}`}
+                        className={`py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${createForm.payment_method === 'bank' ? 'bg-white/[0.06] text-white/60 border border-white/[0.09]' : 'bg-white/[0.04] text-foreground/40 border border-white/[0.04]'}`}
                       >
                         <Building2 className="w-3.5 h-3.5" /> Bank Transfer
                       </button>
                       <button
                         onClick={() => setCreateForm(f => ({ ...f, payment_method: 'cash' }))}
-                        className={`py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${createForm.payment_method === 'cash' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-foreground/40 border border-white/[0.04]'}`}
+                        className={`py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${createForm.payment_method === 'cash' ? 'bg-white/[0.06] text-white/60 border border-white/[0.09]' : 'bg-white/[0.04] text-foreground/40 border border-white/[0.04]'}`}
                       >
                         <MapPin className="w-3.5 h-3.5" /> Cash
                       </button>
@@ -715,7 +715,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                       maxLength={12}
                       value={createForm.rate}
                       onChange={(e) => setCreateForm(f => ({ ...f, rate: clampDecimal(e.target.value, DECIMAL_PRESETS.rate) }))}
-                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
+                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-white/30 transition-colors"
                       placeholder="3.67"
                     />
                   </div>
@@ -730,7 +730,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                         maxLength={14}
                         value={createForm.min_amount}
                         onChange={(e) => setCreateForm(f => ({ ...f, min_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount) }))}
-                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
+                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-white/30 transition-colors"
                       />
                     </div>
                     <div>
@@ -741,7 +741,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                         maxLength={14}
                         value={createForm.max_amount}
                         onChange={(e) => setCreateForm(f => ({ ...f, max_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount) }))}
-                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
+                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-white/30 transition-colors"
                       />
                     </div>
                   </div>
@@ -755,7 +755,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                       maxLength={14}
                       value={createForm.available_amount}
                       onChange={(e) => setCreateForm(f => ({ ...f, available_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount) }))}
-                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
+                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-white/30 transition-colors"
                     />
                   </div>
                 </div>
@@ -764,14 +764,14 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                 <div className="px-5 py-4 border-t border-white/[0.04] flex items-center gap-3">
                   <button
                     onClick={() => setShowCreateModal(false)}
-                    className="flex-1 py-2.5 bg-white/[0.04] hover:bg-accent-subtle rounded-xl text-xs font-medium transition-colors"
+                    className="flex-1 py-2.5 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl text-xs font-medium transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleCreateOffer}
                     disabled={isCreating || !createForm.rate}
-                    className="flex-1 py-2.5 bg-primary hover:bg-primary disabled:opacity-50 text-background rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 py-2.5 bg-[#f5f5f7] hover:bg-white disabled:opacity-50 text-[#0b0b0c] rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2"
                   >
                     {isCreating ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -812,19 +812,13 @@ function OfferCard({
       animate={{ opacity: 1, y: 0 }}
       className={`p-4 bg-card-solid rounded-xl border transition-all ${
         isPaused
-          ? "border-gray-700/50 opacity-60"
+          ? "border-white/[0.06] opacity-60"
           : "border-white/[0.04] hover:border-border"
       }`}
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span
-            className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-              offer.type === "buy"
-                ? "bg-white/5 text-white"
-                : "bg-white/5 text-white"
-            }`}
-          >
+          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/[0.06] text-white/70 border border-white/[0.09]">
             {offer.type.toUpperCase()}
           </span>
           <span className="px-2 py-0.5 bg-white/[0.04] rounded text-[10px] text-foreground/40">
@@ -841,7 +835,7 @@ function OfferCard({
             )}
           </span>
           {isPaused && (
-            <span className="px-2 py-0.5 bg-white/5 text-white/70 rounded text-[10px]">
+            <span className="px-2 py-0.5 bg-white/[0.06] text-white/70 border border-white/[0.09] rounded text-[10px]">
               Paused
             </span>
           )}
@@ -850,7 +844,7 @@ function OfferCard({
         <div className="flex items-center gap-1">
           <button
             onClick={onEdit}
-            className="p-2 hover:bg-accent-subtle rounded-lg transition-colors"
+            className="p-2 hover:bg-white/[0.08] rounded-lg transition-colors"
             title="Edit offer"
           >
             <Edit3 className="w-4 h-4 text-foreground/40" />
@@ -858,7 +852,7 @@ function OfferCard({
           <button
             onClick={onToggle}
             disabled={isToggling}
-            className="p-2 hover:bg-accent-subtle rounded-lg transition-colors"
+            className="p-2 hover:bg-white/[0.08] rounded-lg transition-colors"
             title={isPaused ? "Resume offer" : "Pause offer"}
           >
             {isToggling ? (

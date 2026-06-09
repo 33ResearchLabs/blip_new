@@ -1,3 +1,8 @@
+/* Manrope — HomeScreen declares this font but it was never loaded, so every
+   screen (Home included) silently fell back to system sans. Load it here, the
+   one stylesheet the whole user route imports. */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
 /* ==========================================================================
    USER MODULE — scoped theme tokens (dark + light)
    --------------------------------------------------------------------------
@@ -22,6 +27,9 @@
    isn't needed — same specificity (one class) wins because .user-scope is a
    nearer ancestor of the user-screen elements. */
 .user-scope {
+  /* Typography — Manrope on every user screen, matching HomeScreen. */
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+
   /* Backgrounds */
   --background:           #0B0F14;
   --foreground:           #ffffff;
@@ -37,7 +45,11 @@
   /* Text hierarchy — white opacities */
   --color-text-primary:    rgba(255, 255, 255, 0.92);
   --color-text-secondary:  rgba(255, 255, 255, 0.55);
+  /* Between secondary and primary — for labels that need extra weight. */
+  --color-text-secondary-strong: rgba(255, 255, 255, 0.75);
   --color-text-tertiary:   rgba(255, 255, 255, 0.30);
+  /* Slightly stronger tertiary — same as tertiary in dark, darker in light. */
+  --color-text-tertiary-strong: var(--color-text-tertiary);
   --color-text-quaternary: rgba(255, 255, 255, 0.15);
 
   /* Borders */
@@ -81,54 +93,62 @@
   /* "Desk" frame around the phone column.
      Dark mode: white desk for contrast against the dark phone. */
   --user-frame: #ffffff;
+  --user-bg: #e8e8ec;
 }
 
 /* ----- Light-mode design tokens (scoped) ----- */
 .user-scope.user-light {
-  --background: #ffffff;
-  --foreground: #0f172a;
+  /* Cream look matching HomeScreen — this is the user app's default theme. */
+  --background: #f4f3f1;
+  --foreground: #14151a;
 
   /* Background hierarchy */
-  --color-bg-primary:   #ffffff;
-  --color-bg-secondary: #f7f8fa;
+  --color-bg-primary:   #f4f3f1;
+  --color-bg-secondary: #ffffff;
   --color-bg-tertiary:  #eef0f3;
 
   /* Surface hierarchy (used by bg-surface-base / -raised / -overlay) */
-  --color-surface-base:    #ffffff;
-  --color-surface-raised:  #f7f8fa;
-  --color-surface-overlay: #eef0f3;
+  --color-surface-base:    #f4f3f1;
+  --color-surface-raised:  #ffffff;
+  --color-surface-overlay: #ffffff;
 
-  /* Text hierarchy — dark on white */
-  --color-text-primary:    rgba(15, 23, 42, 0.95);
-  --color-text-secondary:  rgba(15, 23, 42, 0.60);
-  --color-text-tertiary:   rgba(15, 23, 42, 0.38);
-  --color-text-quaternary: rgba(15, 23, 42, 0.18);
+  /* Text hierarchy — dark on cream. Secondary intentionally darkened from
+     #80828c → #5e606a so section labels (SECTION_LABEL → text-secondary) and
+     all secondary text read with stronger contrast on the light background. */
+  --color-text-primary:    #14151a;
+  --color-text-secondary:  #5e606a;
+  /* Between secondary and primary — for labels that need extra weight. */
+  --color-text-secondary-strong: rgba(20, 21, 26, 0.72);
+  --color-text-tertiary:   rgba(20, 21, 26, 0.50); /* darkened from 0.35 — faint labels (RECOVERY PHRASE, PUBLIC ADDRESS, word numbers, etc.) read too light on cream */
+  /* Stronger than tertiary for faint labels that read too light on cream. */
+  --color-text-tertiary-strong: rgba(20, 21, 26, 0.60);
+  --color-text-quaternary: rgba(20, 21, 26, 0.18);
 
   /* Borders */
-  --border:                  rgba(15, 23, 42, 0.08);
-  --color-border-subtle:     rgba(15, 23, 42, 0.06);
-  --color-border-medium:     rgba(15, 23, 42, 0.10);
-  --color-border-strong:     rgba(15, 23, 42, 0.16);
+  --border:                  rgba(20, 21, 26, 0.07);
+  --color-border-subtle:     rgba(20, 21, 26, 0.07);
+  --color-border-medium:     rgba(20, 21, 26, 0.10);
+  --color-border-strong:     rgba(20, 21, 26, 0.16);
 
-  /* Glass surfaces */
-  --color-surface-card:   rgba(15, 23, 42, 0.035);
-  --color-surface-hover:  rgba(15, 23, 42, 0.055);
-  --color-surface-active: rgba(15, 23, 42, 0.075);
+  /* Surfaces — solid white cards like HomeScreen */
+  --color-surface-card:   #ffffff;
+  --color-surface-hover:  rgba(20, 21, 26, 0.04);
+  --color-surface-active: rgba(20, 21, 26, 0.06);
 
-  --card: rgba(15, 23, 42, 0.035);
+  --card: #ffffff;
   --card-solid: #ffffff;
 
-  --muted: #64748b;
-  --muted-bg: #f1f5f9;
+  --muted: #80828c;
+  --muted-bg: #f4f3f1;
 
-  /* Accent CTA flips to dark on white */
-  --accent: #0f172a;
-  --accent-bright: #1e293b;
-  --accent-dark: #020617;
-  --accent-dim: rgba(15, 23, 42, 0.70);
-  --accent-subtle: rgba(15, 23, 42, 0.06);
-  --accent-glow: rgba(15, 23, 42, 0.08);
-  --accent-text: #ffffff;
+  /* Accent CTA — HomeScreen golden pill, dark text */
+  --accent: #ffb02e;
+  --accent-bright: #ffbf4d;
+  --accent-dark: #e89a1c;
+  --accent-dim: rgba(255, 176, 46, 0.70);
+  --accent-subtle: rgba(255, 176, 46, 0.12);
+  --accent-glow: rgba(255, 176, 46, 0.18);
+  --accent-text: #0b0b0d;
 
   /* Semantic — slightly deeper for AA contrast on white */
   --color-success: #059669;
@@ -146,7 +166,23 @@
      used by home/orders/notifications Panels — keeping them equal prevents
      a visible color shift during tab cross-fades. */
   --user-frame: #080810;
+
+  /* Desktop background — shown on either side of the 440px phone column
+     when viewed on a wide screen. Slightly different from the frame colour
+     so the phone boundary is subtly visible without a hard border. */
+  --user-bg: #050508;
 }
+
+/* ----- Phantom-utility fix: text-secondary-strong / text-tertiary-strong -----
+   These two classes are used by SECTION_LABEL / SettingsGroup / CardLabel, but
+   Tailwind never generates them: their tokens (--color-text-secondary-strong /
+   --color-text-tertiary-strong) have no base value in globals.css @theme, so the
+   utility is never emitted and the label falls back to an inherited colour
+   (white-ish → invisible on the light cream background). Define them explicitly
+   here, scoped to .user-scope, mapped to the working secondary / tertiary vars
+   (which ARE theme-aware, so they read correctly in both dark and light). */
+.user-scope .text-text-secondary-strong { color: var(--color-text-secondary); }
+.user-scope .text-text-tertiary-strong  { color: var(--color-text-tertiary); }
 
 /* ----- Raw class overrides for any remaining hardcoded dark-mode markup ----- */
 .user-scope.user-light .bg-neutral-950 { background-color: #f8fafc !important; }

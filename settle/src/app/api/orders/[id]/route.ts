@@ -5,6 +5,7 @@ import { updateOrderStatusSchema, uuidSchema } from "@/lib/validation/schemas";
 import {
   requireAuth,
   requireTokenAuth,
+  requireApiKeyScope,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -70,6 +71,8 @@ export async function GET(
     // Require authenticated user
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:read');
+    if (scopeErr) return scopeErr;
 
     // NOTE: GET always uses local query (read-only) because core-api
     // doesn't return joined merchant/user/offer objects needed by the UI.
@@ -186,6 +189,8 @@ export async function PATCH(
       ? await requireTokenAuth(request)
       : await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErrPatch = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErrPatch) return scopeErrPatch;
     __mark('auth');
 
     // Security: enforce actor matches authenticated identity.
@@ -519,6 +524,8 @@ export async function DELETE(
     // Require authentication
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErrDel = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErrDel) return scopeErrDel;
 
     // Get params from query string
     const searchParams = request.nextUrl.searchParams;

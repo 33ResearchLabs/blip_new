@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
-import { requireAuth, canAccessOrder, forbiddenResponse } from '@/lib/middleware/auth';
+import { requireAuth, requireApiKeyScope, canAccessOrder, forbiddenResponse } from '@/lib/middleware/auth';
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 import { validateFields } from '@/lib/middleware/validation';
 import { getOrderWithRelations } from '@/lib/db/repositories/orders';
@@ -26,6 +26,8 @@ export async function POST(
     // Require authentication
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErr) return scopeErr;
 
     // Idempotency-Key is REQUIRED for opening a dispute (state-changing
     // financial workflow — opens disputes locks escrow timers, notifies
@@ -155,6 +157,8 @@ export async function GET(
   try {
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:read');
+    if (scopeErr) return scopeErr;
 
     const { id: orderId } = await params;
 

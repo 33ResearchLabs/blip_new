@@ -33,6 +33,7 @@ import type { RefObject } from "react";
 export interface ChatViewScreenProps {
   setScreen: (s: Screen) => void;
   activeOrder: Order;
+  userId?: string;
   activeChat: {
     id: string;
     orderId?: string;
@@ -75,8 +76,56 @@ export const ChatViewScreen = ({
   isLoadingOlder = false,
   onTyping,
   isCounterpartyTyping = false,
+  userId,
 }: ChatViewScreenProps) => {
   const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
+
+  // Mutual cancel state (only relevant when order is disputed)
+  const [myMutualCancel, setMyMutualCancel] = useState(false);
+  const [counterpartyMutualCancel, setCounterpartyMutualCancel] = useState(false);
+  const [mutualCancelLoading, setMutualCancelLoading] = useState(false);
+
+  // Poll mutual cancel state when order is disputed
+  useEffect(() => {
+    if (activeOrder.status !== 'disputed') return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/dispute/mutual-cancel`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data?.data) {
+          setMyMutualCancel(!!data.data.mutual_cancel_requested_by_user);
+          setCounterpartyMutualCancel(!!data.data.mutual_cancel_requested_by_merchant);
+        }
+      } catch { /* best-effort */ }
+    };
+    load();
+    const interval = setInterval(load, 10000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [activeOrder.id, activeOrder.status]);
+
+  const handleMutualCancel = async (action: 'request' | 'withdraw') => {
+    if (!userId) return;
+    setMutualCancelLoading(true);
+    try {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/dispute/mutual-cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, actor_type: 'user', actor_id: userId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMyMutualCancel(action === 'request');
+        if (data.mutualCancelComplete) {
+          // Order is now cancelled — navigate back
+          setScreen('orders');
+        }
+      }
+    } catch { /* best-effort */ } finally {
+      setMutualCancelLoading(false);
+    }
+  };
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadOlderTriggeredRef = useRef(false);
@@ -528,7 +577,9 @@ export const ChatViewScreen = ({
             )}
           </div>
           <div className="flex-1">
-            <p className="text-[15px] font-semibold text-text-primary">{activeOrder.merchant.name}</p>
+            <p className="text-[15px] font-semibold text-text-primary">
+              {activeOrder.merchant.username ? `@${activeOrder.merchant.username}` : activeOrder.merchant.name}
+            </p>
             <div className="flex items-center gap-1.5">
               {isCounterpartyTyping && chatEnabled ? (
                 // Typing replaces online/lastSeen — exactly like WhatsApp
@@ -752,6 +803,48 @@ export const ChatViewScreen = ({
           onClose={clearPendingImage}
           isSending={isUploading}
         />
+      )}
+
+      {/* Mutual cancel banner — shown when order is disputed */}
+      {activeOrder.status === 'disputed' && (
+        <div className="shrink-0 px-4 pt-3 pb-2 bg-surface-raised border-t border-error-border">
+          <div className="rounded-xl bg-error-dim border border-error-border p-3 space-y-2">
+            <p className="text-[12px] font-semibold text-error">Dispute in progress</p>
+            {counterpartyMutualCancel && !myMutualCancel && (
+              <p className="text-[11px] text-warning">Merchant has requested to cancel — accept below to refund.</p>
+            )}
+            {myMutualCancel && !counterpartyMutualCancel && (
+              <p className="text-[11px] text-text-tertiary">Waiting for merchant to agree to cancel…</p>
+            )}
+            <div className="flex gap-2">
+              {myMutualCancel ? (
+                <button
+                  onClick={() => handleMutualCancel('withdraw')}
+                  disabled={mutualCancelLoading}
+                  className="flex-1 py-2 rounded-lg text-[13px] font-medium bg-surface-card text-text-secondary border border-border-subtle disabled:opacity-50"
+                >
+                  {mutualCancelLoading ? 'Processing…' : 'Continue Dispute'}
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleMutualCancel('request')}
+                    disabled={mutualCancelLoading}
+                    className="flex-1 py-2 rounded-lg text-[13px] font-medium bg-error text-white disabled:opacity-50"
+                  >
+                    {mutualCancelLoading ? 'Processing…' : 'Cancel Dispute'}
+                  </button>
+                  <button
+                    disabled
+                    className="flex-1 py-2 rounded-lg text-[13px] font-medium bg-surface-card text-text-tertiary border border-border-subtle opacity-50"
+                  >
+                    Continue Dispute
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Message Input / Chat Status Banner — pinned to bottom */}

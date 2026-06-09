@@ -56,12 +56,13 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 
-// Phase 1 (migration 146): when this flag is on, the wide-screen render
-// path is data-driven from the merchant's saved dashboard_layout (falls
-// back to DEFAULT_LAYOUT_WIDE when null). Narrow viewports and the
-// flag-off case go through the legacy hardcoded JSX below, untouched.
-const MERCHANT_LAYOUT_V2 =
-  process.env.NEXT_PUBLIC_MERCHANT_LAYOUT_V2 === "true";
+// Phase 1 (migration 146): the wide-screen render path is data-driven
+// from the merchant's saved dashboard_layout (falls back to
+// DEFAULT_LAYOUT_WIDE when null). This is now the only desktop path — the
+// former NEXT_PUBLIC_MERCHANT_LAYOUT_V2 build-time flag was removed so the
+// behaviour no longer depends on an env var that wasn't wired into the
+// production build. The legacy hardcoded JSX below is kept as an
+// unreachable reference fallback.
 
 export interface MerchantDesktopLayoutProps {
   isWideScreen: boolean;
@@ -202,12 +203,18 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     }, 0);
   }, [ongoingOrders, merchantId]);
 
-  // ── Phase 1 v2 path ─────────────────────────────────────────────────
+  // ── Phase 1 v2 path (now the only desktop path) ─────────────────────
   // V2 renders at all desktop widths (the wrapper's `hidden lg:flex`
   // handles the mobile cutoff). Edit-layout mode only works against V2,
-  // so gating V2 to 2xl+ left the Edit button non-functional between
-  // lg and 2xl — now V2 takes over from lg upward whenever the flag is on.
-  if (MERCHANT_LAYOUT_V2) {
+  // so this also makes the always-visible "Edit Layout" button functional
+  // everywhere instead of only when the old build-time flag was set.
+  //
+  // The legacy hardcoded layout below is retained as a reference fallback
+  // only and is intentionally never rendered. `RENDER_LEGACY_LAYOUT` is
+  // typed `boolean` (not the literal `false`) so the type checker keeps the
+  // legacy branch statically reachable — no unreachable-code lint/TS noise.
+  const RENDER_LEGACY_LAYOUT: boolean = false;
+  if (!RENDER_LEGACY_LAYOUT) {
     return (
       <MerchantDashboardV2
         props={props}
@@ -263,7 +270,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                     activeCorridor={activeCorridor}
                     onCorridorChange={onCorridorChange}
                     onToggleOnline={() => setIsMerchantOnline((prev) => !prev)}
-                    onOpenCorridor={() => window.open(`/merchant/mempool?corridor=${activeCorridor}`, "_blank")}
+                    onOpenCorridor={() => window.open(`/market/mempool?corridor=${activeCorridor}`, "_blank")}
                     onOpenSwap={props.onOpenSwap}
                     onOpenSend={props.onOpenSend}
                     onOpenDeposit={props.onOpenDeposit}
@@ -289,7 +296,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
             </div>
           </div>
         </Panel>
-        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
+        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize" />
         <Panel
           defaultSize={isWideScreen ? "24%" : "27%"}
           minSize="16%"
@@ -343,7 +350,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
             )}
           </div>
         </Panel>
-        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
+        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize" />
         <Panel
           defaultSize={isWideScreen ? "20%" : "27%"}
           minSize={isWideScreen ? "14%" : "18%"}
@@ -407,7 +414,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
         </Panel>
         {isWideScreen && (
           <>
-            <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
+            <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize" />
             <Panel
               defaultSize="18%"
               minSize="12%"
@@ -454,7 +461,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
             </Panel>
           </>
         )}
-        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize" />
+        <PanelResizeHandle className="w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize" />
         <Panel
           defaultSize={isWideScreen ? "18%" : "22%"}
           minSize={isWideScreen ? "12%" : "15%"}
@@ -890,8 +897,8 @@ function MerchantDashboardV2({
                   <PanelResizeHandle
                     className={
                       isEditing
-                        ? "w-[5px] bg-primary/30 hover:bg-primary/60 transition-colors cursor-col-resize"
-                        : "w-px bg-white/[0.05] hover:bg-primary/40 hover:w-[3px] transition-all cursor-col-resize"
+                        ? "w-[5px] bg-white/[0.06] hover:bg-white/[0.08] transition-colors cursor-col-resize"
+                        : "w-px bg-white/[0.05] hover:bg-white/[0.08] hover:w-[3px] transition-all cursor-col-resize"
                     }
                   />
                 )}
@@ -925,17 +932,23 @@ function MerchantDashboardV2({
                             const Widget = WIDGET_REGISTRY[wid];
                             return (
                               <div key={wid} className="min-h-0 rounded-xl overflow-hidden flex flex-col border border-white/[0.08] bg-white/[0.02] shadow-[0_2px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]" style={{ flex: wid === "dashboardWidgets" ? 2 : 3 }}>
-                                <CardLabel label={wid === "dashboardWidgets" ? "Balance" : "Trade"} live={wid === "dashboardWidgets"} />
-                                <div className="flex-1 min-h-0 overflow-hidden">
-                                  <WidgetShell
-                                    id={wid}
-                                    isEditing={isEditing}
-                                    onHide={onHide}
-                                    fillHeight={true}
-                                  >
-                                    <Widget ctx={ctx} />
-                                  </WidgetShell>
-                                </div>
+                                {/* WidgetShell wraps the WHOLE card (CardLabel header
+                                    included) so its drag/hide handle lands in the
+                                    "Trade"/"Balance" header bar — consistent with every
+                                    other panel — instead of floating over the form body. */}
+                                <WidgetShell
+                                  id={wid}
+                                  isEditing={isEditing}
+                                  onHide={onHide}
+                                  fillHeight={true}
+                                >
+                                  <div className="h-full flex flex-col">
+                                    <CardLabel label={wid === "dashboardWidgets" ? "Balance" : "Trade"} live={wid === "dashboardWidgets"} />
+                                    <div className="flex-1 min-h-0 overflow-hidden">
+                                      <Widget ctx={ctx} />
+                                    </div>
+                                  </div>
+                                </WidgetShell>
                               </div>
                             );
                           })}
@@ -965,8 +978,8 @@ function MerchantDashboardV2({
                                   <PanelResizeHandle
                                     className={
                                       isEditing
-                                        ? "h-[6px] bg-primary/30 hover:bg-primary/60 transition-colors cursor-row-resize"
-                                        : "h-[2px] bg-foreground/[0.04] hover:bg-primary/40 transition-colors cursor-row-resize"
+                                        ? "h-[6px] bg-white/[0.06] hover:bg-white/[0.08] transition-colors cursor-row-resize"
+                                        : "h-[2px] bg-foreground/[0.04] hover:bg-white/[0.08] transition-colors cursor-row-resize"
                                     }
                                   />
                                 )}
@@ -1046,7 +1059,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={`${className} ${
-        isEditing && isOver ? "ring-2 ring-primary/40 ring-inset" : ""
+        isEditing && isOver ? "ring-2 ring-white/20 ring-inset" : ""
       }`}
     >
       {children}

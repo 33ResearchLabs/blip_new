@@ -490,7 +490,7 @@ export function WalletActionsMenu({
             </>
           ) : initFeesState.stage === "done" ? (
             <>
-              <Check className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" />
+              <Check className="w-4 h-4 mt-0.5 shrink-0 text-[#f5f5f7]" />
               <div className="text-[12px] min-w-0">
                 <p className="font-bold">Fee accounts initialized</p>
                 <p className="opacity-70 text-[10px] truncate">

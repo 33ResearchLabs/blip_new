@@ -5,6 +5,7 @@ import { Loader2, Lock, Key, AlertTriangle, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { colors } from "@/lib/design/theme";
 import { AppPinPad } from '@/components/app-lock/AppPinPad';
+import { useUserTheme } from '@/hooks/useUserTheme';
 
 const PIN_LENGTH = 6;
 
@@ -38,6 +39,11 @@ export function UnlockWalletPrompt({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [errorTick, setErrorTick] = useState(0);
+  // The lock card themes itself via CSS vars (light/dark), but AppPinPad takes
+  // a JS `theme` prop. Keep them in sync — it was hardcoded "light" (near-black
+  // keys), which rendered invisible on the dark card in dark mode.
+  const { theme } = useUserTheme();
+  const padTheme: 'light' | 'dark' = theme === 'light' ? 'light' : 'dark';
 
   const resetError = () => { setError(''); };
 
@@ -144,8 +150,8 @@ export function UnlockWalletPrompt({
         }}
       >
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: colors.surface.active }}>
-            <Lock className="w-4 h-4" style={{ color: '#fff' }} />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: colors.accent.subtle }}>
+            <Lock className="w-4 h-4" style={{ color: colors.accent.primary }} />
           </div>
           <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>
             {mode === 'setPinEnter' || mode === 'setPinConfirm' ? 'Set your PIN' : 'Unlock Wallet'}
@@ -187,6 +193,7 @@ export function UnlockWalletPrompt({
                     length={PIN_LENGTH}
                     errorTick={errorTick}
                     disabled={busy}
+                    theme={padTheme}
                   />
                 </motion.div>
               )}
@@ -231,6 +238,7 @@ export function UnlockWalletPrompt({
                     onComplete={() => setMode('setPinConfirm')}
                     length={PIN_LENGTH}
                     disabled={busy}
+                    theme={padTheme}
                   />
                 </motion.div>
               )}
@@ -244,6 +252,7 @@ export function UnlockWalletPrompt({
                     length={PIN_LENGTH}
                     errorTick={errorTick}
                     disabled={busy}
+                    theme={padTheme}
                   />
                 </motion.div>
               )}

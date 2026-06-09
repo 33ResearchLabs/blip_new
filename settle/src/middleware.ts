@@ -219,6 +219,9 @@ function csrfCheck(request: NextRequest): NextResponse | null {
 
   if (!host) return null; // Can't verify without host
 
+  // Allow Chrome/Brave extension origins
+  if (origin && origin.startsWith('chrome-extension://')) return null;
+
   // At least one of origin/referer must be present and match
   if (origin) {
     try {
@@ -309,17 +312,17 @@ export function buildCsp(nonce: string): string {
   // Scoped to accounts.google.com — does NOT broaden to *.google.com.
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/client`,
+    `script-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/client https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://apis.google.com`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
-    "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com",
+    "img-src 'self' data: blob: https://res.cloudinary.com https://api.dicebear.com https://lh3.googleusercontent.com https://*.googleusercontent.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     // LI.FI cross-chain quotes (li.quest) — needed by the cross-chain
     // deposit flow. Without it the browser blocks every quote request
     // and the modal sits on "Couldn't get a quote right now".
-    `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag https://li.quest https://accounts.google.com`,
+    `connect-src 'self' ${wsScheme} https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com https://*.jup.ag https://li.quest https://accounts.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com/recaptcha/`,
     // 'self' kept for any same-origin frames we may need; Google entry
     // stays scoped to accounts.google.com for the GIS auth popup.
-    "frame-src 'self' https://accounts.google.com",
+    "frame-src 'self' https://accounts.google.com https://blipmoney-1508d.firebaseapp.com https://www.google.com/recaptcha/",
     "frame-ancestors 'none'",
     'report-uri /api/csp-report',
     'report-to csp-endpoint',
@@ -412,9 +415,9 @@ export function middleware(request: NextRequest) {
       pathname === '/user/verify-email' ||
       pathname === '/user/forgot-password' ||
       pathname === '/user/reset-password' ||
-      pathname === '/merchant/verify-email' ||
-      pathname === '/merchant/forgot-password' ||
-      pathname === '/merchant/reset-password';
+      pathname === '/market/verify-email' ||
+      pathname === '/market/forgot-password' ||
+      pathname === '/market/reset-password';
 
     if (!isDevExempt) {
       const devCookie = request.cookies.get('dev_access_granted');

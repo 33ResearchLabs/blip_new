@@ -61,11 +61,11 @@ interface MarketplaceProps {
 // Badge component for BlipScore tier
 const ScoreBadge = ({ tier, score }: { tier: string; score: number }) => {
   const tierStyles = {
-    diamond: "bg-white/10 text-white border-white/6",
-    gold: "bg-white/10 text-white border-white/6",
-    silver: "bg-gray-400/20 text-foreground/60 border-gray-400/30",
-    bronze: "bg-white/10 text-white/70 border-white/6",
-    unranked: "bg-gray-600/20 text-foreground/35 border-gray-600/30",
+    diamond: "bg-white/10 text-white border-white/[0.09]",
+    gold: "bg-white/10 text-white border-white/[0.09]",
+    silver: "bg-white/[0.06] text-white/70 border-white/[0.09]",
+    bronze: "bg-white/10 text-white/70 border-white/[0.09]",
+    unranked: "bg-white/[0.04] text-white/40 border-white/[0.09]",
   };
 
   const tierIcons = {
@@ -192,16 +192,16 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Globe className="w-5 h-5 text-primary" />
+          <Globe className="w-5 h-5 text-[#f5f5f7]" />
           <h2 className="text-sm font-semibold">Marketplace</h2>
           <span className="text-xs text-foreground/35">({offers.length} offers)</span>
           {refPrice && (
             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
               refPrice.confidence === "high"
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                ? "bg-white/[0.06] text-[#f5f5f7] border-white/[0.09]"
                 : refPrice.confidence === "medium"
-                ? "bg-primary/10 text-primary border-primary/20"
-                : "bg-gray-500/10 text-foreground/40 border-gray-500/20"
+                ? "bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]"
+                : "bg-white/[0.04] text-foreground/40 border-white/[0.09]"
             }`}>
               Ref: {refPrice.price.toFixed(4)} AED
             </span>
@@ -224,7 +224,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
             onClick={() => setShowSortDropdown(!showSortDropdown)}
             className="flex items-center gap-2 px-3 py-2 bg-card-solid rounded-xl border border-white/[0.04] text-xs hover:border-border transition-colors"
           >
-            <TrendingUp className="w-3.5 h-3.5 text-primary" />
+            <TrendingUp className="w-3.5 h-3.5 text-[#f5f5f7]" />
             <span>{sortOption?.label || "Best Overall"}</span>
             <ChevronDown className="w-3.5 h-3.5 text-foreground/35" />
           </button>
@@ -252,7 +252,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                         }}
                         className={`w-full flex flex-col items-start px-3 py-2 rounded-lg text-left transition-colors ${
                           sortBy === option.value
-                            ? "bg-primary/10 text-primary"
+                            ? "bg-white/[0.06] text-[#f5f5f7]"
                             : "hover:bg-card text-white"
                         }`}
                       >
@@ -303,17 +303,17 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
       </div>
 
       {/* Ranking Notice */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 rounded-xl border border-primary/10">
-        <TrendingUp className="w-4 h-4 text-primary" />
+      <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.06] rounded-xl border border-white/[0.12]">
+        <TrendingUp className="w-4 h-4 text-[#f5f5f7]" />
         <span className="text-[11px] text-foreground/40">
-          Offers ranked by <span className="text-primary font-medium">BlipScore</span> — a composite of price, reliability, and speed
+          Offers ranked by <span className="text-[#f5f5f7] font-medium">BlipScore</span> — a composite of price, reliability, and speed
         </span>
       </div>
 
       {/* Loading State */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
+          <Loader2 className="w-8 h-8 text-[#f5f5f7] animate-spin mb-3" />
           <p className="text-sm text-foreground/35">Loading marketplace...</p>
         </div>
       )}
@@ -366,7 +366,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                 {/* Offer Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <a href={`/merchant/profile/${offer.merchant.id}`} className="text-sm font-medium text-white truncate hover:opacity-80 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                    <a href={`/market/profile/${offer.merchant.id}`} className="text-sm font-medium text-white truncate hover:opacity-80 transition-opacity" onClick={(e) => e.stopPropagation()}>
                       {offer.merchant.display_name}
                     </a>
                     {offer.blipScore && (
@@ -392,8 +392,8 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
                       offer.type === "buy"
-                        ? "bg-green-500/10 text-green-400"
-                        : "bg-primary/10 text-primary"
+                        ? "bg-white/[0.06] text-[#f5f5f7]"
+                        : "bg-white/[0.06] text-[#f5f5f7]"
                     }`}>
                       {offer.type === "buy" ? "BUYING USDT" : "SELLING USDT"}
                     </span>
@@ -415,7 +415,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                     {refPrice && (() => {
                       const dev = Math.abs(offer.rate - refPrice.price) / refPrice.price;
                       const devPct = (dev * 100).toFixed(1);
-                      const color = dev < 0.02 ? "text-emerald-400" : dev < 0.05 ? "text-primary" : "text-red-400";
+                      const color = dev < 0.02 ? "text-[#f5f5f7]" : dev < 0.05 ? "text-[#f5f5f7]" : "text-red-400";
                       const sign = offer.rate >= refPrice.price ? "+" : "-";
                       return <span className={`ml-1 ${color}`}>({sign}{devPct}%)</span>;
                     })()}
@@ -433,7 +433,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                 </div>
                 <button
                   onClick={() => onTakeOffer(offer)}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary text-background rounded-lg text-xs font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-[#f5f5f7] hover:bg-white text-[#0b0b0c] rounded-lg text-xs font-medium transition-colors"
                 >
                   <span>Take Offer</span>
                   <ArrowRight className="w-3.5 h-3.5" />

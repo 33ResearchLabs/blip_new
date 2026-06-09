@@ -1,5 +1,18 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+
+// ─── Payment method ─────────────────────────────────────────────────
+// Shape mirrors what /api/merchant/[id]/payment-methods returns and what
+// TradeFormModal renders. Held in the store so it can be preloaded once at
+// dashboard load and reused by the trade modal (no fetch-on-open flash).
+export interface MerchantPaymentMethod {
+  id: string;
+  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile' | 'upi';
+  name: string;
+  details?: string;
+  is_default?: boolean;
+}
 
 // ─── Filter/sort types ──────────────────────────────────────────────
 export type PendingFilter = 'all' | 'mineable' | 'premium' | 'large' | 'expiring';
@@ -19,6 +32,13 @@ export interface MerchantStoreState {
   merchantInfo: any | null;
   isLoggedIn: boolean;
   isLoading: boolean;
+
+  // ─── Payment methods (preloaded at dashboard load) ───
+  // Single source of truth so the trade modal opens already populated
+  // instead of fetching on open. `paymentMethodsLoaded` lets consumers tell
+  // "empty because not fetched yet" apart from "genuinely no methods".
+  paymentMethods: MerchantPaymentMethod[];
+  paymentMethodsLoaded: boolean;
 
   // ─── Access token (in-memory ONLY) ───────────────────
   // Held purely in the Zustand store so other hooks (useOrderFetching,
@@ -56,6 +76,13 @@ export interface MerchantStoreState {
   setIsLoggedIn: (v: boolean) => void;
   setIsLoading: (v: boolean) => void;
 
+  // ─── Payment method actions ────────────────────────
+  setPaymentMethods: (m: MerchantPaymentMethod[]) => void;
+  /** Fetch + cache the merchant's payment methods. Safe to call repeatedly
+   *  (preload on dashboard load, background refresh on modal/dropdown open).
+   *  Never throws — failures leave the existing cache untouched. */
+  fetchPaymentMethods: (merchantId: string | null) => Promise<void>;
+
   // ─── Filter/sort setters ───────────────────────────
   setSearchQuery: (q: string) => void;
   setOrderViewFilter: (f: OrderViewFilter) => void;
@@ -76,6 +103,8 @@ export const useMerchantStore = create<MerchantStoreState>()(
     isLoggedIn: false,
     isLoading: true,
     sessionToken: null,
+    paymentMethods: [],
+    paymentMethodsLoaded: false,
 
     // ─── Filter/sort initial state ─────────────────────
     searchQuery: '',
@@ -136,6 +165,39 @@ export const useMerchantStore = create<MerchantStoreState>()(
     },
     setIsLoggedIn: (v) => set({ isLoggedIn: v }),
     setIsLoading: (v) => set({ isLoading: v }),
+
+    // ─── Payment method actions ────────────────────────
+    setPaymentMethods: (m) => set({ paymentMethods: m, paymentMethodsLoaded: true }),
+    fetchPaymentMethods: async (merchantId) => {
+      if (!merchantId) return;
+      try {
+        const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json?.success && Array.isArray(json.data)) {
+          const rows = json.data as Array<{
+            id: string | number;
+            type: MerchantPaymentMethod['type'];
+            name?: string | null;
+            details?: string | null;
+            is_default?: boolean;
+          }>;
+          set({
+            paymentMethods: rows.map((m) => ({
+              id: String(m.id),
+              type: m.type,
+              name: String(m.name ?? ''),
+              details: m.details != null ? String(m.details) : undefined,
+              is_default: !!m.is_default,
+            })),
+            paymentMethodsLoaded: true,
+          });
+        }
+      } catch {
+        // Swallow — keep whatever is already cached; consumers fall back to
+        // their own fetch / empty state. Never breaks the dashboard.
+      }
+    },
 
     // ─── Filter/sort setters ───────────────────────────
     setSearchQuery: (q) => set({ searchQuery: q }),

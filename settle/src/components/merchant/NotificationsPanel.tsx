@@ -27,6 +27,8 @@ interface NotificationsPanelProps {
   /** Handlers passed straight to the onboarding setup card. */
   onOpenPaymentMethods?: () => void;
   onOpenSettings?: () => void;
+  /** Hide the internal tab strip (use when the parent provides its own header). */
+  hideTabStrip?: boolean;
 }
 
 interface GroupedNotification {
@@ -39,10 +41,10 @@ interface GroupedNotification {
 // Type → icon color. The circular badge background was dropped so the
 // icon stands on its own — pure color carries the meaning.
 const TYPE_STYLES: Record<string, { icon: string }> = {
-  escrow:   { icon: 'text-primary' },
-  payment:  { icon: 'text-blue-400' },
-  complete: { icon: 'text-emerald-400' },
-  message:  { icon: 'text-purple-400' },
+  escrow:   { icon: 'text-[#f5f5f7]' },
+  payment:  { icon: 'text-white/60' },
+  complete: { icon: 'text-[#f5f5f7]' },
+  message:  { icon: 'text-white/60' },
   dispute:  { icon: 'text-red-400' },
   order:    { icon: 'text-foreground/70' },
   system:   { icon: 'text-foreground/55' },
@@ -67,6 +69,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
   onOpenChat,
   onOpenPaymentMethods,
   onOpenSettings,
+  hideTabStrip = false,
 }: NotificationsPanelProps) {
   const groupedNotifications = useMemo(() => {
     const groups: GroupedNotification[] = [];
@@ -119,6 +122,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
   // attention — so new merchants still land where they need to, but
   // completed/skipped merchants never see the flash.
   const [activeTab, setActiveTab] = useState<PanelTab>("notifications");
+  const [visibleCount, setVisibleCount] = useState(20);
   // One-shot guard so the snap-forward fires only on the first
   // authoritative status, not every subsequent re-render.
   const [didInitialFocus, setDidInitialFocus] = useState(false);
@@ -177,10 +181,10 @@ export const NotificationsPanel = memo(function NotificationsPanel({
   }, [onboardingLoading, onboardingStatus, onboardingNeedsAttention, didInitialFocus]);
 
   return (
-    <div style={{ height: '50%' }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
+    <div style={{ height: '100%' }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
       <div className="flex flex-col h-full min-h-0">
         {/* ── Tab Strip ──────────────────────────────────── */}
-        <div className="flex items-center justify-between border-b border-section-divider px-1">
+        <div className={`flex items-center justify-between border-b border-section-divider px-1${hideTabStrip ? " hidden" : ""}`}>
           <div className="flex">
             {/* Notifications tab is always visible — new merchants used to
                 only see Getting Started, which hid the panel entirely if
@@ -199,7 +203,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
               <Bell className="w-3.5 h-3.5" />
               Notifications
               {unreadCount > 0 && (
-                <span className="text-[9px] bg-primary text-background font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center shadow-sm shadow-primary/20">
+                <span className="text-[9px] bg-[#f5f5f7] text-[#0b0b0c] font-bold px-1.5 py-0.5 rounded-full font-mono tabular-nums min-w-[18px] text-center">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
@@ -247,7 +251,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
               <div className="group relative flex items-center">
                 <button
                   onClick={markAllRead}
-                  className="flex items-center gap-1 px-1.5 py-1 rounded text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors"
+                  className="flex items-center gap-1 px-1.5 py-1 rounded text-[#f5f5f7]/70 hover:text-white hover:bg-white/[0.08] transition-colors"
                   title="Mark all notifications as read"
                   aria-label="Mark all notifications as read"
                 >
@@ -294,7 +298,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
 
         {/* ── Notifications Tab ───────────────────────────── */}
         {activeTab === "notifications" && (
-        <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1.5">
+        <div className="flex-1 min-h-0 overflow-y-auto py-3 px-4 space-y-3">
           {notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-foreground/15">
               <div className="w-12 h-12 rounded-full bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center mb-3">
@@ -304,7 +308,8 @@ export const NotificationsPanel = memo(function NotificationsPanel({
               <p className="text-[10px] text-foreground/25 mt-0.5">New events will appear here</p>
             </div>
           ) : (
-            groupedNotifications.map((group) => {
+            <>
+            {groupedNotifications.slice(0, visibleCount).map((group) => {
               const notif = group.latest;
               const hasUnread = group.ids.some((id) => notifications.find((n) => n.id === id && !n.read));
               const style = getStyle(notif.type);
@@ -336,13 +341,13 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                   }}
                   className={`group relative w-full text-left p-2.5 rounded-xl border overflow-hidden transition-all ${
                     hasUnread
-                      ? 'bg-gradient-to-br from-primary/[0.04] to-transparent border-primary/15 hover:border-primary/35 hover:shadow-md hover:shadow-primary/[0.06]'
+                      ? 'bg-white/[0.055] border-white/[0.12] hover:border-white/20'
                       : 'bg-foreground/[0.015] border-foreground/[0.05] hover:border-foreground/[0.10] opacity-70 hover:opacity-100'
                   }`}
                 >
                   {/* Unread accent stripe */}
                   {hasUnread && (
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-primary/80 to-primary/30 rounded-r" />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-white/30 rounded-r" />
                   )}
 
                   <div className="flex items-start gap-3">
@@ -371,13 +376,13 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                     {/* Content column */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                        <p className={`text-[11.5px] leading-snug line-clamp-2 ${
+                        <p className={`text-[13px] leading-snug line-clamp-2 ${
                           hasUnread ? 'text-foreground font-semibold' : 'text-foreground/55 font-normal'
                         }`}>
                           {notif.message}
                         </p>
-                        <span className={`text-[9px] font-mono tabular-nums shrink-0 ${
-                          hasUnread ? 'text-primary/70' : 'text-foreground/25'
+                        <span className={`text-[10px] font-mono tabular-nums shrink-0 ${
+                          hasUnread ? 'text-white/60' : 'text-foreground/25'
                         }`}>
                           {relativeTime(notif.timestamp)}
                         </span>
@@ -386,12 +391,21 @@ export const NotificationsPanel = memo(function NotificationsPanel({
 
                     {/* Unread dot */}
                     {hasUnread && (
-                      <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_6px_rgba(255,138,76,0.6)] shrink-0 mt-1.5" />
+                      <div className="w-2 h-2 rounded-full bg-[#f5f5f7] shrink-0 mt-1.5" />
                     )}
                   </div>
                 </button>
               );
-            })
+            })}
+            {groupedNotifications.length > visibleCount && (
+              <button
+                onClick={() => setVisibleCount((v) => v + 20)}
+                className="w-full py-3 text-[12px] font-medium text-foreground/40 hover:text-foreground/70 transition-colors"
+              >
+                Load more ({groupedNotifications.length - visibleCount} remaining)
+              </button>
+            )}
+            </>
           )}
         </div>
         )}

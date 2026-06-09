@@ -77,8 +77,8 @@ export function MarketingLanding() {
           </h1>
           <p className="lead">Send across borders in <b style={{ color: "var(--ink)" }}>under 60 seconds</b>. Real merchants compete on rate. Escrow on-chain. No FX hidden in the spread.</p>
           <div className="hero-cta">
-            <Link href="/?welcome=skip&tab=signin" className="btn btn-ink">Send money →</Link>
-            <a href="/merchant/login" target="_top" className="btn btn-outline">Run a desk · Blip Market</a>
+            <Link href="/user/login" className="btn btn-ink">Send money →</Link>
+            <a href="/market/login" target="_top" className="btn btn-outline">Run a desk · Blip Market</a>
           </div>
           
           <div className="channels" aria-label="Coming soon channels">
@@ -473,7 +473,7 @@ export function MarketingLanding() {
               <div className="kr"><span>Boost <span className="it" style={{ color: "var(--ink-3)" }}>(optional)</span></span><span className="v">—</span></div>
               <div className="kr total"><span>You pay</span><span className="v">₹2,406.00</span></div>
             </div>
-            <Link href="/?welcome=skip&tab=signin" className="btn btn-ink" style={{ alignSelf: "flex-start" }}>Open the app →</Link>
+            <Link href="/user/login" className="btn btn-ink" style={{ alignSelf: "flex-start" }}>Open the app →</Link>
           </div>
       
           <div className="panel dark">
@@ -486,7 +486,7 @@ export function MarketingLanding() {
               <div className="kr"><span>Founding fee</span><span className="v green">0.00%</span></div>
               <div className="kr total"><span>KYB</span><span className="v">24–48h</span></div>
             </div>
-            <a href="/merchant/login" target="_top" className="btn btn-accent" style={{ alignSelf: "flex-start" }}>Apply to run a desk →</a>
+            <a href="/market/login" target="_top" className="btn btn-accent" style={{ alignSelf: "flex-start" }}>Apply to run a desk →</a>
           </div>
         </div>
       </section>
@@ -497,8 +497,8 @@ export function MarketingLanding() {
           <h2>Money,<br/>at the <span className="it">speed</span><br/>of <span className="it">trust.</span></h2>
           <p>122 users and 38 desks already on the network. Open the app or apply to run a desk — both take less than a minute.</p>
           <div className="cta-row">
-            <Link href="/?welcome=skip&tab=signin" className="btn btn-ink">Send money →</Link>
-            <a href="/merchant/login" target="_top" className="btn btn-accent">Apply to run a desk</a>
+            <Link href="/user/login" className="btn btn-ink">Send money →</Link>
+            <a href="/market/login" target="_top" className="btn btn-accent">Apply to run a desk</a>
           </div>
         </div>
       </section>

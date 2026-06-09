@@ -2,8 +2,9 @@
 # ===========================================
 #  Blip Money - Start All Services
 # ===========================================
-# Starts: Core API, Workers, Settle (Next.js), BlipScan, Telegram Bot
-# Usage:  ./start-all.sh [--skip-bot] [--skip-install]
+# Starts: Core API, Workers, Settle (Next.js), BlipScan
+# Usage:  ./start-all.sh [--skip-install]
+# NOTE:   Telegram bot is excluded from all environments (security review 2026-06-05)
 
 set -e
 
@@ -19,12 +20,10 @@ export OUTBOX_POLL_MS=${OUTBOX_POLL_MS:-5000}
 export EXPIRY_BATCH_SIZE=${EXPIRY_BATCH_SIZE:-20}
 export EXPIRY_POLL_MS=${EXPIRY_POLL_MS:-10000}
 
-SKIP_BOT=false
 SKIP_INSTALL=false
 
 for arg in "$@"; do
   case $arg in
-    --skip-bot) SKIP_BOT=true ;;
     --skip-install) SKIP_INSTALL=true ;;
   esac
 done
@@ -35,7 +34,6 @@ WORKER_PID=""
 SETTLE_PID=""
 BLIPSCAN_WEB_PID=""
 BLIPSCAN_INDEXER_PID=""
-BOT_PID=""
 
 # --------------- Cleanup ---------------
 CLEANED=0
@@ -45,13 +43,13 @@ cleanup() {
   echo ""
   echo "Shutting down all services..."
 
-  for pid in $SETTLE_PID $WORKER_PID $CORE_API_PID $BLIPSCAN_WEB_PID $BLIPSCAN_INDEXER_PID $BOT_PID; do
+  for pid in $SETTLE_PID $WORKER_PID $CORE_API_PID $BLIPSCAN_WEB_PID $BLIPSCAN_INDEXER_PID; do
     [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null || true
   done
 
   sleep 1
 
-  for pid in $SETTLE_PID $WORKER_PID $CORE_API_PID $BLIPSCAN_WEB_PID $BLIPSCAN_INDEXER_PID $BOT_PID; do
+  for pid in $SETTLE_PID $WORKER_PID $CORE_API_PID $BLIPSCAN_WEB_PID $BLIPSCAN_INDEXER_PID; do
     [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
   done
 
@@ -141,14 +139,6 @@ npx ts-node src/index.ts > /tmp/bm-blipscan-indexer.log 2>&1 &
 BLIPSCAN_INDEXER_PID=$!
 cd "$ROOT_DIR"
 
-# 6. Telegram Bot (optional)
-if [ "$SKIP_BOT" = false ] && [ -f "$ROOT_DIR/telegram-bot/bot.js" ]; then
-  echo "Starting Telegram Bot..."
-  cd "$ROOT_DIR/telegram-bot"
-  node bot.js > /tmp/bm-telegram-bot.log 2>&1 &
-  BOT_PID=$!
-fi
-
 # --------------- Health Checks ---------------
 echo ""
 echo "Waiting for services to be ready..."
@@ -163,7 +153,8 @@ echo "==========================================="
 echo ""
 echo "  URLs:"
 echo "    App:          http://localhost:$SETTLE_PORT"
-echo "    Merchant:     http://localhost:$SETTLE_PORT/merchant"
+echo "    User:         http://localhost:$SETTLE_PORT/user"
+echo "    Merchant:     http://localhost:$SETTLE_PORT/market"
 echo "    Compliance:   http://localhost:$SETTLE_PORT/compliance"
 echo "    Core API:     http://localhost:$CORE_API_PORT"
 echo "    WebSocket:    ws://localhost:$CORE_API_PORT/ws/orders"
@@ -175,7 +166,6 @@ echo "    Workers:      $WORKER_PID"
 echo "    Settle:       $SETTLE_PID"
 echo "    BlipScan Web: $BLIPSCAN_WEB_PID"
 echo "    BlipScan Idx: $BLIPSCAN_INDEXER_PID"
-[ -n "$BOT_PID" ] && echo "    Telegram Bot: $BOT_PID"
 echo ""
 echo "  Logs:"
 echo "    tail -f /tmp/bm-core-api.log"
@@ -183,7 +173,6 @@ echo "    tail -f /tmp/bm-workers.log"
 echo "    tail -f /tmp/bm-settle.log"
 echo "    tail -f /tmp/bm-blipscan-web.log"
 echo "    tail -f /tmp/bm-blipscan-indexer.log"
-[ -n "$BOT_PID" ] && echo "    tail -f /tmp/bm-telegram-bot.log"
 echo ""
 echo "  Debug:"
 echo "    curl http://localhost:$CORE_API_PORT/debug/ws"

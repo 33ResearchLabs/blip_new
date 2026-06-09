@@ -171,7 +171,7 @@ export function DepositModal({
                 </p>
               </div>
               {copied ? (
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <Check className="w-4 h-4 text-[#f5f5f7] shrink-0" />
               ) : (
                 <Copy className="w-4 h-4 text-foreground/40 shrink-0" />
               )}

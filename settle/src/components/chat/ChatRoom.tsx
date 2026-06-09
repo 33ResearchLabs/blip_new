@@ -93,6 +93,10 @@ interface ChatRoomProps {
   // is replaced with a status banner showing chatReason.
   chatEnabled?: boolean;
   chatReason?: string | null;
+  // Replaces "Order #xxxxxxxx" in the conversation separator
+  orderLabel?: string;
+  // Real avatar URL for the counterparty (user/buyer)
+  userAvatarUrl?: string | null;
 }
 
 // ============================================
@@ -172,36 +176,65 @@ function getRoleName(senderType?: string): string {
 // Sub-components
 // ============================================
 
+function getInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+// Deterministic gradient from username — same palette as the inbox list
+const AVATAR_GRADIENTS = [
+  "linear-gradient(150deg,#ff8a3d,#ff5d73)",
+  "linear-gradient(150deg,#6c63ff,#3b82f6)",
+  "linear-gradient(150deg,#f59e0b,#ef4444)",
+  "linear-gradient(150deg,#10b981,#3b82f6)",
+  "linear-gradient(150deg,#ec4899,#8b5cf6)",
+  "linear-gradient(150deg,#14b8a6,#6366f1)",
+];
+function avatarGradient(name: string): string {
+  const hash = name.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
+  return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
+}
+
 function SenderAvatar({
   senderType,
   senderName,
+  avatarUrl,
 }: {
   senderType?: string;
   senderName?: string;
+  avatarUrl?: string | null;
 }) {
+  const name = senderName || "User";
   switch (senderType) {
-    case "merchant":
-      return (
-        <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-          <Store className="w-3.5 h-3.5 text-primary" />
-        </div>
-      );
     case "compliance":
       return (
-        <div className="w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+        <div className="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
           <Shield className="w-3.5 h-3.5 text-red-400" />
         </div>
       );
     case "system":
       return (
-        <div className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+        <div className="w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
           <Bot className="w-3.5 h-3.5 text-amber-400" />
         </div>
       );
     default:
+      if (avatarUrl) {
+        return (
+          <img
+            src={avatarUrl}
+            alt={name}
+            className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/[0.08]"
+          />
+        );
+      }
       return (
-        <div className="w-7 h-7 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-          <span className="text-xs">{getUserEmoji(senderName || "User")}</span>
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-[12px] select-none"
+          style={{ background: avatarGradient(name) }}
+        >
+          {getInitials(name)}
         </div>
       );
   }
@@ -216,7 +249,7 @@ function MessageStatusIcon({ status }: { status?: string }) {
     case "delivered":
       return <CheckCheck className="w-3 h-3 text-gray-500" />;
     case "read":
-      return <CheckCheck className="w-3 h-3 text-blue-400" />;
+      return <CheckCheck className="w-3 h-3 text-emerald-400" />;
     default:
       return null;
   }
@@ -400,6 +433,8 @@ export function ChatRoom({
   isLoadingOlder = false,
   chatEnabled = true,
   chatReason = null,
+  orderLabel,
+  userAvatarUrl,
 }: ChatRoomProps) {
   const [messageText, setMessageText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -912,7 +947,8 @@ export function ChatRoom({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
+        className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
+        style={{ background: "rgba(8,9,10,0.7)" }}
       >
         {/* Older-messages loading spinner — shown at the TOP while fetching history */}
         {isLoadingOlder && (
@@ -1002,7 +1038,7 @@ export function ChatRoom({
                         : "bg-white/[0.03] border-white/[0.06] text-gray-500"
                     }`}
                   >
-                    Order #{(msg.orderId || "").slice(0, 8)}
+                    {orderLabel || `Order #${(msg.orderId || "").slice(0, 8)}`}
                   </span>
                   <div className="flex-1 h-px bg-white/[0.06]" />
                 </div>
@@ -1015,6 +1051,7 @@ export function ChatRoom({
                   <SenderAvatar
                     senderType={msg.senderType}
                     senderName={displayName}
+                    avatarUrl={msg.senderType === "user" ? userAvatarUrl : undefined}
                   />
                 )}
 
@@ -1044,13 +1081,26 @@ export function ChatRoom({
                   )}
 
                   <div
-                    className={`rounded-2xl px-3 py-2 ${
+                    className={`px-3 py-2 ${
                       isMe
-                        ? "bg-primary/20 border border-primary/10"
+                        ? "rounded-2xl rounded-br-sm"
                         : msg.from === "compliance"
-                          ? "bg-red-500/10 border border-red-500/10"
-                          : "bg-white/[0.05] border border-white/[0.04]"
+                          ? "rounded-2xl rounded-bl-sm"
+                          : "rounded-2xl rounded-bl-sm"
                     }`}
+                    style={{
+                      background: isMe
+                        ? "var(--chat-own-bg)"
+                        : msg.from === "compliance"
+                          ? "rgba(239,68,68,0.12)"
+                          : "var(--chat-them-bg)",
+                      border: isMe
+                        ? "1px solid var(--chat-own-border)"
+                        : msg.from === "compliance"
+                          ? "1px solid rgba(239,68,68,0.15)"
+                          : "1px solid var(--chat-them-border)",
+                      color: isMe ? "var(--chat-own-text)" : "var(--chat-them-text)",
+                    }}
                   >
                     {/* Image content */}
                     {msg.messageType === "image" && msg.imageUrl && (
@@ -1074,7 +1124,7 @@ export function ChatRoom({
                     {msg.messageType !== "image" &&
                       msg.messageType !== "file" &&
                       msg.text && (
-                        <p className="text-sm text-white/90 whitespace-pre-wrap break-words">
+                        <p className="text-sm whitespace-pre-wrap break-words" style={{ color: "inherit" }}>
                           {msg.text}
                         </p>
                       )}
@@ -1090,7 +1140,7 @@ export function ChatRoom({
                     <div
                       className={`flex items-center gap-1 mt-1 ${isMe ? "justify-end" : "justify-start"}`}
                     >
-                      <span className="text-[10px] text-gray-600">
+                      <span className="text-[10px]" style={{ opacity: 0.45, color: "inherit" }}>
                         {formatTime(msg.timestamp)}
                       </span>
                       {isMe && <MessageStatusIcon status={msg.status} />}
@@ -1130,7 +1180,7 @@ export function ChatRoom({
         {/* Typing indicator */}
         {isTyping && (
           <div className="flex items-center gap-2 px-2">
-            <SenderAvatar senderType={typingActorType} />
+            <SenderAvatar senderType={typingActorType} senderName={typingActorType === "user" ? (userName || "User") : (merchantName || "Seller")} />
             <div className="px-3 py-2 bg-white/[0.03] rounded-2xl border border-white/[0.04]">
               <div className="flex items-center gap-1">
                 <span className="text-[11px] text-gray-500">
@@ -1225,8 +1275,8 @@ export function ChatRoom({
         </div>
       )}
 
-      {/* Input area */}
-      <div className="px-3 py-2 border-t border-foreground/[0.04] bg-foreground/[0.02]">
+      {/* Input area — WhatsApp-style toolbar */}
+      <div className="px-3 py-2 border-t border-white/[0.05]" style={{ background: "rgba(14,14,16,0.98)" }}>
         {/* Chat-closed banner — replaces the input row entirely when the
             backend (or the order's terminal status) has disabled chat.
             Compliance reviewers can still see the input via the freeze
@@ -1283,7 +1333,7 @@ export function ChatRoom({
               so the Send button can never be pushed off-screen by long text.
               min-w-0 on the flex parent is the critical bit — without it the
               <input> can overflow its flex cell on narrow screens. */}
-          <div className="flex-1 min-w-0 flex items-center gap-1 bg-foreground/[0.04] border border-foreground/[0.06] rounded-full pl-4 pr-1.5 focus-within:border-primary/30 transition-colors">
+          <div className="flex-1 min-w-0 flex items-center gap-1 rounded-full pl-4 pr-1.5 transition-colors" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.09)" }}>
             {/* Text input — disabled when chat is closed/frozen/waiting */}
             <input
               ref={inputRef}
@@ -1335,7 +1385,8 @@ export function ChatRoom({
               (isFrozen && currentUserType !== "compliance") ||
               (!messageText.trim() && !pendingFile)
             }
-            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-primary hover:bg-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ background: "linear-gradient(135deg,#2f6ae0,#1a56c4)" }}
           >
             {isUploading ? (
               <Loader2 className="w-4 h-4 text-background animate-spin" />

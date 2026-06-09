@@ -3,33 +3,34 @@
   "name": "Blip Money",
   "short_name": "Blip",
   "description": "P2P settlement. Send crypto to anyone.",
-  "start_url": "/?pwa=user",
+  "start_url": "/user?pwa=user",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
   "orientation": "portrait",
-  "categories": ["finance", "business"],
+  "categories": [
+    "finance",
+    "business"
+  ],
   "icons": [
     {
-      "src": "/icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshots/home.png",
-      "sizes": "1080x1920",
+      "src": "/icons/icon-512.png",
       "type": "image/png",
-      "form_factor": "narrow"
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -37,7 +38,7 @@
       "name": "Trade",
       "short_name": "Trade",
       "description": "Start a new trade",
-      "url": "/?action=trade"
+      "url": "/user?action=trade"
     }
   ]
 }

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 // Wallet-adapter UI styles — imported EAGERLY at the root layout so they
@@ -18,10 +18,8 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { PusherProvider } from "@/context/PusherContext";
 import { WebSocketChatProvider } from "@/context/WebSocketChatContext";
 import { ModalProvider } from "@/context/ModalContext";
-import { AppLockProvider } from "@/context/AppLockContext";
 import ClientWalletProvider from "@/components/ClientWalletProvider";
 import ErrorTrackingBoot from "@/components/ErrorTrackingBoot";
-import { AppLockOverlay } from "@/components/app-lock/AppLockOverlay";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -31,6 +29,13 @@ const inter = Inter({
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
+});
+
+const playfairDisplay = Playfair_Display({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -99,8 +104,13 @@ const fastRefreshSilencer = `
   })();
 `;
 
-// Service worker cleanup — unregister any stale workers EXCEPT the
-// install-only worker used to make the app PWA-installable.
+// Service worker setup — unregister any stale workers EXCEPT the
+// install-only worker, then ensure that install-only worker IS registered
+// app-wide so the PWA is installable on every page (Android Chrome only
+// fires `beforeinstallprompt` once a service worker is active). sw-install.js
+// has an empty `fetch` handler, so it adds NO caching/offline behavior —
+// requests pass straight through to the network. It only enables PWA
+// install + Web Push.
 const swScript = `
   (async function() {
     try {
@@ -116,6 +126,9 @@ const swScript = `
       if ('caches' in window) {
         var keys = await caches.keys();
         for (var j = 0; j < keys.length; j++) { await caches.delete(keys[j]); }
+      }
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw-install.js', { scope: '/' }).catch(function(){});
       }
     } catch(e) {}
   })();
@@ -166,11 +179,13 @@ export default async function RootLayout({
             instead of a placeholder. */}
         <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
         <link rel="shortcut icon" type="image/svg+xml" href="/icons/icon.svg" />
-        <link rel="apple-touch-icon" href="/icons/icon.svg" />
+        {/* iOS does NOT support SVG for apple-touch-icon — must be PNG, or
+            the Add-to-Home-Screen icon renders blank. */}
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className={`${inter.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
+      <body className={`${inter.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} antialiased`} suppressHydrationWarning>
         <ErrorTrackingBoot />
         <ThemeProvider>
           <ClientWalletProvider>
@@ -178,15 +193,7 @@ export default async function RootLayout({
               <WebSocketChatProvider>
                 <ModalProvider>
                   <AppProvider>
-                    {/* AppLockProvider sits innermost so it can read auth
-                        state and render its lock overlay on top of the
-                        app content via AppLockOverlay. The overlay is a
-                        sibling of {children} so route changes never
-                        unmount it. */}
-                    <AppLockProvider>
-                      {children}
-                      <AppLockOverlay />
-                    </AppLockProvider>
+                    {children}
                   </AppProvider>
                 </ModalProvider>
               </WebSocketChatProvider>

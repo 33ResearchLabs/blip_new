@@ -11,6 +11,7 @@ interface OrderRow {
   buyer_merchant_id: string | null;
   crypto_amount: string;
   fiat_amount: string;
+  fiat_currency: string | null;
   status: string;
   type: string;
   spread_preference: string | null;
@@ -19,6 +20,12 @@ interface OrderRow {
   created_at: string;
   expires_at: string;
   completed_at: string | null;
+  accepted_at: string | null;
+  escrowed_at: string | null;
+  payment_sent_at: string | null;
+  payment_confirmed_at: string | null;
+  cancelled_at: string | null;
+  disputed_at: string | null;
   user_name: string | null;
   merchant_name: string | null;
   buyer_merchant_name: string | null;
@@ -32,6 +39,9 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status'); // Optional: filter by status
+    // Optional single-order lookup (e.g. the order linked to a support ticket).
+    // When present, returns just that order with its full enriched detail.
+    const orderId = searchParams.get('order_id');
     const limit = parseInt(searchParams.get('limit') || '50');
     const minAmount = searchParams.get('min_amount'); // For big transactions
     // Optional timeframe — must match the values the admin dashboard uses
@@ -86,6 +96,18 @@ export async function GET(request: NextRequest) {
       whereClause += `${connector} o.escrow_tx_hash IS ${hasEscrow ? 'NOT NULL' : 'NULL'}`;
     }
 
+    if (orderId) {
+      // Reject malformed ids up front so a bad value can't 22P02 the query.
+      const UUID_RE =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!UUID_RE.test(orderId)) {
+        return NextResponse.json({ success: true, data: [] });
+      }
+      const connector = whereClause ? ' AND' : 'WHERE';
+      whereClause += `${connector} o.id = $${paramIndex++}`;
+      params.push(orderId);
+    }
+
     params.push(limit);
 
     const orders = await query<OrderRow>(`
@@ -97,6 +119,7 @@ export async function GET(request: NextRequest) {
         o.buyer_merchant_id,
         o.crypto_amount::text,
         o.fiat_amount::text,
+        o.fiat_currency,
         o.status,
         o.type,
         o.spread_preference,
@@ -105,6 +128,12 @@ export async function GET(request: NextRequest) {
         o.created_at::text,
         o.expires_at::text,
         o.completed_at::text,
+        o.accepted_at::text,
+        o.escrowed_at::text,
+        o.payment_sent_at::text,
+        o.payment_confirmed_at::text,
+        o.cancelled_at::text,
+        o.disputed_at::text,
         CASE
           WHEN u.username LIKE 'open_order_%' THEN 'Open Order'
           WHEN u.username LIKE 'm2m_%' THEN 'M2M Buyer'
@@ -140,6 +169,7 @@ export async function GET(request: NextRequest) {
         buyerMerchant: order.buyer_merchant_name ?? null,
         amount: parseFloat(order.crypto_amount),
         fiatAmount: parseFloat(order.fiat_amount || '0'),
+        fiatCurrency: order.fiat_currency ?? null,
         status: order.status,
         type: order.type,
         spreadPreference: order.spread_preference,
@@ -148,6 +178,12 @@ export async function GET(request: NextRequest) {
         createdAt: order.created_at,
         expiresAt: order.expires_at,
         completedAt: order.completed_at,
+        acceptedAt: order.accepted_at,
+        escrowedAt: order.escrowed_at,
+        paymentSentAt: order.payment_sent_at,
+        paymentConfirmedAt: order.payment_confirmed_at,
+        cancelledAt: order.cancelled_at,
+        disputedAt: order.disputed_at,
       }))
     );
 

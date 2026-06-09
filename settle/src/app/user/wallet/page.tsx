@@ -54,6 +54,7 @@ import {
 } from "@/lib/wallet/embeddedWallet";
 import { Keypair } from "@solana/web3.js";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
+import { useUserTheme } from "@/hooks/useUserTheme";
 import { showAlert } from "@/context/ModalContext";
 import { WalletPinKeypad } from "@/components/wallet/WalletPinKeypad";
 import {
@@ -85,6 +86,11 @@ type WalletView = "loading" | "setup" | "unlock" | "main";
 export default function UserWalletPage() {
   const router = useRouter();
   const solanaWallet = useSolanaWallet();
+  // Follow the same theme the rest of the user app uses (cream light by
+  // default). Without `user-light` on the scope wrapper the design tokens
+  // fall back to their dark defaults, which is why this page rendered black.
+  const { theme: userTheme } = useUserTheme();
+  const isUserLight = userTheme === "light";
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
     | {
         state: "initializing" | "none" | "locked" | "unlocked";
@@ -155,7 +161,7 @@ export default function UserWalletPage() {
         });
         if (!res.ok) {
           setIsLoading(false);
-          router.push("/");
+          router.push("/user");
           return;
         }
         const data = await res.json();
@@ -170,10 +176,10 @@ export default function UserWalletPage() {
           return;
         }
         setIsLoading(false);
-        router.push("/");
+        router.push("/user");
       } catch {
         setIsLoading(false);
-        router.push("/");
+        router.push("/user");
       }
     };
     restoreSession();
@@ -622,8 +628,8 @@ export default function UserWalletPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className={`user-scope ${isUserLight ? "user-light" : ""} min-h-screen flex items-center justify-center`} style={{ background: "var(--color-surface-base)" }}>
+        <Loader2 className="w-8 h-8 text-accent animate-spin" />
       </div>
     );
   }
@@ -637,16 +643,16 @@ export default function UserWalletPage() {
     // flat-black slab instead of the framed phone column the rest of the app
     // uses, which is what the user flagged.
     <div
-      className="user-scope min-h-dvh flex flex-col items-center overflow-y-auto"
+      className={`user-scope ${isUserLight ? "user-light" : ""} min-h-dvh flex flex-col items-center overflow-y-auto`}
       style={{ background: "var(--user-frame)" }}
     >
-      <div className="flex-1 w-full max-w-[440px] mx-auto flex flex-col bg-surface-base">
+      <div className="flex-1 w-full max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto flex flex-col bg-surface-base">
         {/* Header row — flush with the 440px column, matching ProfileScreen's
             `px-5` content gutter so the back-button / title line up with the
             cards below. */}
-        <div className="px-5 pt-10 pb-4 shrink-0 flex items-center justify-between">
+        <div className="px-5 pt-4 pb-4 shrink-0 flex items-center justify-between">
           <button
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/user")}
             className="flex items-center gap-1.5 text-[13px] font-semibold text-text-tertiary hover:text-text-primary transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -664,8 +670,8 @@ export default function UserWalletPage() {
           {/* ========== LOADING VIEW ========== */}
           {view === "loading" && (
             <div className="flex flex-col items-center justify-center pt-24 space-y-4">
-              <Loader2 className="w-8 h-8 text-primary animate-spin" />
-              <p className="text-sm text-white/40 font-mono">
+              <Loader2 className="w-8 h-8 text-accent animate-spin" />
+              <p className="text-sm text-text-tertiary font-mono">
                 Loading wallet...
               </p>
             </div>
@@ -675,19 +681,19 @@ export default function UserWalletPage() {
           {view === "setup" && !pendingKeypair && (
             <div className="space-y-6">
               <div className="text-center pt-4">
-                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center mb-4">
-                  <Wallet className="w-10 h-10 text-primary" />
+                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/30 flex items-center justify-center mb-4">
+                  <Wallet className="w-10 h-10 text-accent" />
                 </div>
-                <h1 className="text-2xl font-bold text-white font-mono">
+                <h1 className="text-2xl font-bold text-text-primary font-mono">
                   Create Your Wallet
                 </h1>
-                <p className="text-sm text-white/40 font-mono mt-2">
+                <p className="text-sm text-text-tertiary font-mono mt-2">
                   Non-custodial Solana wallet. Your keys, your crypto.
                 </p>
               </div>
 
-              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5 space-y-4">
-                <div className="flex bg-white/[0.03] rounded-lg p-[3px]">
+              <div className="bg-surface-card border border-border-subtle rounded-2xl p-5 space-y-4">
+                <div className="flex bg-surface-card rounded-lg p-[3px]">
                   <button
                     onClick={() => {
                       setSetupTab("create");
@@ -695,8 +701,8 @@ export default function UserWalletPage() {
                     }}
                     className={`flex-1 py-2.5 rounded-md text-xs font-mono font-medium transition-colors ${
                       setupTab === "create"
-                        ? "bg-white/[0.08] text-white"
-                        : "text-white/40 hover:text-foreground/60"
+                        ? "bg-surface-active text-text-primary"
+                        : "text-text-tertiary hover:text-foreground/60"
                     }`}
                   >
                     Create New
@@ -708,8 +714,8 @@ export default function UserWalletPage() {
                     }}
                     className={`flex-1 py-2.5 rounded-md text-xs font-mono font-medium transition-colors ${
                       setupTab === "import"
-                        ? "bg-white/[0.08] text-white"
-                        : "text-white/40 hover:text-foreground/60"
+                        ? "bg-surface-active text-text-primary"
+                        : "text-text-tertiary hover:text-foreground/60"
                     }`}
                   >
                     Import Key
@@ -717,7 +723,7 @@ export default function UserWalletPage() {
                 </div>
 
                 {setupError && (
-                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 font-mono">
+                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-500 font-mono">
                     {setupError}
                   </div>
                 )}
@@ -762,8 +768,8 @@ export default function UserWalletPage() {
                     <button
                       type="submit"
                       disabled={setupLoading}
-                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
-                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full py-3.5 rounded-xl bg-accent text-accent-text font-bold font-mono text-sm
+                                 hover:bg-accent-bright transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {setupLoading ? (
                         <>
@@ -795,7 +801,7 @@ export default function UserWalletPage() {
                       className="absolute opacity-0 pointer-events-none h-0 w-0"
                     />
                     <div>
-                      <label htmlFor="wallet-import-key" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                      <label htmlFor="wallet-import-key" className="text-[10px] text-text-tertiary font-mono uppercase mb-1.5 block">
                         Recovery Phrase or Private Key
                       </label>
                       <textarea
@@ -810,9 +816,9 @@ export default function UserWalletPage() {
                         onChange={(e) => setPrivateKeyInput(e.target.value)}
                         placeholder="Paste your 12-word recovery phrase OR base58 private key..."
                         rows={3}
-                        className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                   text-sm text-white font-mono placeholder:text-white/20 resize-none
-                                   focus:outline-none focus:border-primary/50 transition-colors"
+                        className="w-full px-3 py-3 bg-surface-card border border-border-subtle rounded-xl
+                                   text-sm text-text-primary font-mono placeholder:text-text-quaternary resize-none
+                                   focus:outline-none focus:border-accent/50 transition-colors"
                       />
                     </div>
                     {/* User-side wallet password is a 6-digit PIN (see
@@ -841,8 +847,8 @@ export default function UserWalletPage() {
                     <button
                       type="submit"
                       disabled={setupLoading}
-                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
-                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full py-3.5 rounded-xl bg-accent text-accent-text font-bold font-mono text-sm
+                                 hover:bg-accent-bright transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {setupLoading ? (
                         <>
@@ -859,8 +865,8 @@ export default function UserWalletPage() {
               </div>
 
               <div className="flex items-start gap-2.5 px-1">
-                <Shield className="w-4 h-4 text-white/20 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-white/25 font-mono leading-relaxed">
+                <Shield className="w-4 h-4 text-text-quaternary shrink-0 mt-0.5" />
+                <p className="text-[10px] text-text-quaternary font-mono leading-relaxed">
                   Your private key is encrypted with AES-256-GCM and stored only
                   in your browser. We never see or store your keys.
                 </p>
@@ -872,24 +878,24 @@ export default function UserWalletPage() {
           {view === "setup" && pendingKeypair && (
             <div className="space-y-6">
               <div className="text-center pt-4">
-                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center mb-4">
-                  <Shield className="w-10 h-10 text-primary" />
+                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/30 flex items-center justify-center mb-4">
+                  <Shield className="w-10 h-10 text-accent" />
                 </div>
-                <h1 className="text-2xl font-bold text-white font-mono">
+                <h1 className="text-2xl font-bold text-text-primary font-mono">
                   Backup Your Wallet
                 </h1>
-                <p className="text-sm text-white/40 font-mono mt-2">
+                <p className="text-sm text-text-tertiary font-mono mt-2">
                   Download your recovery file. Without it, a forgotten password
                   means lost funds.
                 </p>
               </div>
 
-              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5 space-y-4">
-                <div className="p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl">
-                  <div className="text-[10px] text-white/30 font-mono uppercase mb-1">
+              <div className="bg-surface-card border border-border-subtle rounded-2xl p-5 space-y-4">
+                <div className="p-3 bg-surface-card border border-border-subtle rounded-xl">
+                  <div className="text-[10px] text-text-tertiary font-mono uppercase mb-1">
                     Your Public Address
                   </div>
-                  <div className="text-sm text-white/80 font-mono break-all">
+                  <div className="text-sm text-text-primary font-mono break-all">
                     {pendingKeypair.publicKey.toBase58()}
                   </div>
                 </div>
@@ -899,23 +905,23 @@ export default function UserWalletPage() {
                     no mnemonic and skip this block entirely. */}
                 {pendingMnemonic && (
                   <div className="p-3 bg-yellow-500/[0.04] border border-yellow-500/[0.15] rounded-xl">
-                    <div className="text-[10px] text-yellow-400/70 font-mono uppercase mb-2 flex items-center gap-1.5">
+                    <div className="text-[10px] text-yellow-600/70 font-mono uppercase mb-2 flex items-center gap-1.5">
                       <Key className="w-3 h-3" /> Recovery Phrase (write down)
                     </div>
                     <div className="grid grid-cols-3 gap-1.5">
                       {pendingMnemonic.split(/\s+/).map((word, i) => (
                         <div
                           key={i}
-                          className="px-2 py-1.5 bg-black/30 border border-white/[0.06] rounded text-[11px] font-mono text-white/80 flex items-center gap-1.5"
+                          className="px-2 py-1.5 bg-surface-active border border-border-subtle rounded text-[11px] font-mono text-text-primary flex items-center gap-1.5"
                         >
-                          <span className="text-white/30 text-[9px] w-3 text-right">
+                          <span className="text-text-tertiary text-[9px] w-3 text-right">
                             {i + 1}
                           </span>
                           <span>{word}</span>
                         </div>
                       ))}
                     </div>
-                    <p className="text-[9px] text-yellow-400/50 font-mono mt-2 leading-relaxed">
+                    <p className="text-[9px] text-yellow-600/50 font-mono mt-2 leading-relaxed">
                       These 12 words recover your wallet in any Solana wallet
                       (Phantom, Solflare, etc.). Write them down OFFLINE.
                       Anyone with this phrase controls your funds.
@@ -927,8 +933,8 @@ export default function UserWalletPage() {
                   onClick={handleDownloadBackup}
                   className={`w-full py-3.5 rounded-xl font-bold font-mono text-sm flex items-center justify-center gap-2 transition-colors ${
                     backupDownloaded
-                      ? "bg-green-500/20 border border-green-500/30 text-green-400"
-                      : "bg-primary text-background hover:bg-primary/90"
+                      ? "bg-green-500/20 border border-green-500/30 text-green-500"
+                      : "bg-accent text-accent-text hover:bg-accent-bright"
                   }`}
                 >
                   {backupDownloaded ? (
@@ -945,7 +951,7 @@ export default function UserWalletPage() {
                 <button
                   onClick={handleFinishSetup}
                   disabled={!backupDownloaded}
-                  className="w-full py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white font-bold font-mono text-sm
+                  className="w-full py-3.5 rounded-xl bg-surface-active border border-border-subtle text-text-primary font-bold font-mono text-sm
                              hover:bg-accent-subtle transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                 >
                   Continue to Wallet
@@ -953,8 +959,8 @@ export default function UserWalletPage() {
               </div>
 
               <div className="flex items-start gap-2.5 px-1">
-                <Shield className="w-4 h-4 text-red-400/50 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-red-400/50 font-mono leading-relaxed">
+                <Shield className="w-4 h-4 text-red-500/50 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-red-500/50 font-mono leading-relaxed">
                   The backup file contains your private key. Never share it.
                   Store it offline.
                 </p>
@@ -966,20 +972,20 @@ export default function UserWalletPage() {
           {view === "unlock" && (
             <div className="space-y-6">
               <div className="text-center pt-4">
-                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-white/10 to-white/[0.02] border border-white/10 flex items-center justify-center mb-4">
-                  <Lock className="w-10 h-10 text-white" />
+                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/30 flex items-center justify-center mb-4">
+                  <Lock className="w-10 h-10 text-accent" />
                 </div>
-                <h1 className="text-2xl font-bold text-white font-mono">
+                <h1 className="text-2xl font-bold text-text-primary font-mono">
                   Unlock Wallet
                 </h1>
-                <p className="text-sm text-white/40 font-mono mt-2">
+                <p className="text-sm text-text-tertiary font-mono mt-2">
                   Enter your password to access your wallet
                 </p>
               </div>
 
-              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5 space-y-4">
+              <div className="bg-surface-card border border-border-subtle rounded-2xl p-5 space-y-4">
                 {unlockError && (
-                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 font-mono">
+                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-500 font-mono">
                     {unlockError}
                   </div>
                 )}
@@ -1008,8 +1014,8 @@ export default function UserWalletPage() {
                     <button
                       type="submit"
                       disabled={unlockLoading || unlockPassword.length !== 6}
-                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
-                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full py-3.5 rounded-xl bg-accent text-accent-text font-bold font-mono text-sm
+                                 hover:bg-accent-bright transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {unlockLoading ? (
                         <>
@@ -1039,7 +1045,7 @@ export default function UserWalletPage() {
                       className="absolute opacity-0 pointer-events-none h-0 w-0"
                     />
                     <div>
-                      <label htmlFor="wallet-unlock-password" className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                      <label htmlFor="wallet-unlock-password" className="text-[10px] text-text-tertiary font-mono uppercase mb-1.5 block">
                         Password
                       </label>
                       <input
@@ -1052,17 +1058,17 @@ export default function UserWalletPage() {
                         onChange={(e) => setUnlockPassword(e.target.value)}
                         placeholder="Enter your wallet password"
                         autoFocus
-                        className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                                   text-sm text-white font-mono placeholder:text-white/20
-                                   focus:outline-none focus:border-white/20 transition-colors"
+                        className="w-full px-3 py-3 bg-surface-card border border-border-subtle rounded-xl
+                                   text-sm text-text-primary font-mono placeholder:text-text-quaternary
+                                   focus:outline-none focus:border-border-medium transition-colors"
                       />
                     </div>
 
                     <button
                       type="submit"
                       disabled={unlockLoading || !unlockPassword}
-                      className="w-full py-3.5 rounded-xl bg-primary text-background font-bold font-mono text-sm
-                                 hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full py-3.5 rounded-xl bg-accent text-accent-text font-bold font-mono text-sm
+                                 hover:bg-accent-bright transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {unlockLoading ? (
                         <>
@@ -1091,7 +1097,7 @@ export default function UserWalletPage() {
                       clearWalletFormat(userId);
                       setSetupTab("import");
                     }}
-                    className="text-[10px] text-white/40 hover:text-foreground/70 font-mono transition-colors flex items-center gap-1"
+                    className="text-[10px] text-text-tertiary hover:text-foreground/70 font-mono transition-colors flex items-center gap-1"
                   >
                     <Key className="w-3 h-3" />
                     {getWalletFormat(userId) === "pin"
@@ -1104,7 +1110,7 @@ export default function UserWalletPage() {
                       clearWalletFormat(userId);
                       setSetupTab("create");
                     }}
-                    className="text-[10px] text-white/30 hover:text-foreground/50 font-mono transition-colors flex items-center gap-1"
+                    className="text-[10px] text-text-tertiary hover:text-foreground/50 font-mono transition-colors flex items-center gap-1"
                   >
                     <Wallet className="w-3 h-3" />
                     Create new wallet
@@ -1117,7 +1123,7 @@ export default function UserWalletPage() {
           {/* ========== MAIN WALLET VIEW ========== */}
           {view === "main" && (
             <div className="space-y-4">
-              <div className="bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/[0.06] rounded-2xl p-6 text-center">
+              <div className="bg-surface-card border border-border-subtle rounded-2xl p-6 text-center">
                 {(() => {
                   // Show the *real* wallet state instead of a hardcoded
                   // green dot. Distinguishes: keypair-loaded vs locked vs
@@ -1126,10 +1132,10 @@ export default function UserWalletPage() {
                   const balancesReady =
                     solanaWallet.usdtBalance !== null || solanaWallet.solBalance !== null;
                   const status = !hasAddress
-                    ? { dot: 'bg-amber-500', text: 'text-amber-400', label: 'Locked' }
+                    ? { dot: 'bg-amber-500', text: 'text-amber-500', label: 'Locked' }
                     : balancesReady
-                      ? { dot: 'bg-green-500', text: 'text-green-400', label: 'Connected' }
-                      : { dot: 'bg-yellow-500', text: 'text-yellow-400', label: 'Connected · balances loading' };
+                      ? { dot: 'bg-green-500', text: 'text-green-500', label: 'Connected' }
+                      : { dot: 'bg-yellow-500', text: 'text-yellow-600', label: 'Connected · balances loading' };
                   return (
                     <div className="flex items-center justify-center gap-1.5 mb-4">
                       <div className={`w-2 h-2 ${status.dot} rounded-full`} />
@@ -1140,10 +1146,10 @@ export default function UserWalletPage() {
                   );
                 })()}
 
-                <div className="text-[10px] text-white/30 font-mono uppercase tracking-wider mb-1">
+                <div className="text-[10px] text-text-tertiary font-mono uppercase tracking-wider mb-1">
                   USDT Balance
                 </div>
-                <div className="text-4xl font-bold text-white font-mono tabular-nums mb-1">
+                <div className="text-4xl font-bold text-text-primary font-mono tabular-nums mb-1">
                   {solanaWallet.usdtBalance !== null
                     ? solanaWallet.usdtBalance.toLocaleString(undefined, {
                         minimumFractionDigits: 2,
@@ -1151,27 +1157,27 @@ export default function UserWalletPage() {
                       })
                     : "—"}
                 </div>
-                <div className="text-xs text-white/30 font-mono">
+                <div className="text-xs text-text-tertiary font-mono">
                   {MOCK_MODE ? "Mock USDT" : usdtLabel()}
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-white/[0.04] flex items-center justify-center gap-4">
+                <div className="mt-4 pt-3 border-t border-border-subtle flex items-center justify-center gap-4">
                   <div className="text-center">
-                    <div className="text-[9px] text-white/30 font-mono uppercase">
+                    <div className="text-[9px] text-text-tertiary font-mono uppercase">
                       SOL
                     </div>
-                    <div className="text-sm font-bold text-white/70 font-mono tabular-nums">
+                    <div className="text-sm font-bold text-text-secondary font-mono tabular-nums">
                       {solanaWallet.solBalance !== null
                         ? solanaWallet.solBalance.toFixed(4)
                         : "—"}
                     </div>
                   </div>
-                  <div className="w-px h-6 bg-white/[0.06]" />
+                  <div className="w-px h-6 bg-surface-active" />
                   <div className="text-center">
-                    <div className="text-[9px] text-white/30 font-mono uppercase">
+                    <div className="text-[9px] text-text-tertiary font-mono uppercase">
                       Network
                     </div>
-                    <div className={`text-sm font-medium font-mono ${isMainnet() ? 'text-emerald-400' : 'text-primary'}`}>
+                    <div className={`text-sm font-medium font-mono ${isMainnet() ? 'text-emerald-500' : 'text-accent'}`}>
                       {isMainnet() ? 'Mainnet' : 'Devnet'}
                     </div>
                   </div>
@@ -1181,13 +1187,13 @@ export default function UserWalletPage() {
               {/* Address card */}
               <div
                 onClick={handleCopyAddress}
-                className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between cursor-pointer hover:border-border-strong transition-colors group"
+                className="bg-surface-card border border-border-subtle rounded-xl p-4 flex items-center justify-between cursor-pointer hover:border-border-strong transition-colors group"
               >
                 <div>
-                  <div className="text-[9px] text-white/30 font-mono uppercase mb-0.5">
+                  <div className="text-[9px] text-text-tertiary font-mono uppercase mb-0.5">
                     Wallet Address
                   </div>
-                  <div className="text-sm text-white/80 font-mono group-hover:text-foreground transition-colors">
+                  <div className="text-sm text-text-primary font-mono group-hover:text-foreground transition-colors">
                     {truncated}
                   </div>
                 </div>
@@ -1200,13 +1206,13 @@ export default function UserWalletPage() {
                       onClick={(e) => e.stopPropagation()}
                       className="p-1.5 rounded-lg hover:bg-card transition-colors"
                     >
-                      <ExternalLink className="w-3.5 h-3.5 text-white/20 hover:text-foreground/40" />
+                      <ExternalLink className="w-3.5 h-3.5 text-text-quaternary hover:text-foreground/40" />
                     </a>
                   )}
                   {copied ? (
-                    <Check className="w-4 h-4 text-green-400" />
+                    <Check className="w-4 h-4 text-green-500" />
                   ) : (
-                    <Copy className="w-4 h-4 text-white/30" />
+                    <Copy className="w-4 h-4 text-text-tertiary" />
                   )}
                 </div>
               </div>
@@ -1221,35 +1227,35 @@ export default function UserWalletPage() {
                     setSendSuccess("");
                     setShowSendModal(true);
                   }}
-                  className="py-3 rounded-xl bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-colors
+                  className="py-3 rounded-xl bg-accent-subtle border border-accent/30 hover:bg-accent-subtle transition-colors
                              flex flex-col items-center gap-1.5"
                 >
-                  <Send className="w-5 h-5 text-primary" />
-                  <span className="text-[10px] text-primary/80 font-mono font-medium">
+                  <Send className="w-5 h-5 text-accent" />
+                  <span className="text-[10px] text-accent/80 font-mono font-medium">
                     Send
                   </span>
                 </button>
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-card transition-colors
+                  className="py-3 rounded-xl bg-surface-card border border-border-subtle hover:bg-card transition-colors
                              flex flex-col items-center gap-1.5 disabled:opacity-50"
                 >
                   <RefreshCw
-                    className={`w-5 h-5 text-primary ${isRefreshing ? "animate-spin" : ""}`}
+                    className={`w-5 h-5 text-accent ${isRefreshing ? "animate-spin" : ""}`}
                   />
-                  <span className="text-[10px] text-white/50 font-mono">
+                  <span className="text-[10px] text-text-secondary font-mono">
                     Refresh
                   </span>
                 </button>
                 {!MOCK_MODE && (
                   <button
                     onClick={handleExportKey}
-                    className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-card transition-colors
+                    className="py-3 rounded-xl bg-surface-card border border-border-subtle hover:bg-card transition-colors
                                flex flex-col items-center gap-1.5"
                   >
-                    <Download className="w-5 h-5 text-primary" />
-                    <span className="text-[10px] text-white/50 font-mono">
+                    <Download className="w-5 h-5 text-accent" />
+                    <span className="text-[10px] text-text-secondary font-mono">
                       Export Key
                     </span>
                   </button>
@@ -1257,25 +1263,25 @@ export default function UserWalletPage() {
               </div>
 
               {/* Token list */}
-              <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-white/[0.04]">
-                  <span className="text-[10px] font-bold text-white/40 font-mono uppercase tracking-wider">
+              <div className="bg-surface-card border border-border-subtle rounded-xl overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-border-subtle">
+                  <span className="text-[10px] font-bold text-text-tertiary font-mono uppercase tracking-wider">
                     Tokens
                   </span>
                 </div>
 
-                <div className="px-4 py-3 flex items-center justify-between border-b border-white/[0.03]">
+                <div className="px-4 py-3 flex items-center justify-between border-b border-border-subtle">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/30 flex items-center justify-center border border-purple-500/20">
-                      <span className="text-xs font-bold text-purple-300">S</span>
+                      <span className="text-xs font-bold text-purple-600">S</span>
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-white font-mono">SOL</div>
-                      <div className="text-[10px] text-white/30 font-mono">Solana</div>
+                      <div className="text-sm font-medium text-text-primary font-mono">SOL</div>
+                      <div className="text-[10px] text-text-tertiary font-mono">Solana</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-bold text-white font-mono tabular-nums">
+                    <div className="text-sm font-bold text-text-primary font-mono tabular-nums">
                       {solanaWallet.solBalance !== null
                         ? solanaWallet.solBalance.toFixed(4)
                         : "0.0000"}
@@ -1286,15 +1292,15 @@ export default function UserWalletPage() {
                 <div className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500/30 to-emerald-500/30 flex items-center justify-center border border-green-500/20">
-                      <span className="text-xs font-bold text-green-300">$</span>
+                      <span className="text-xs font-bold text-green-600">$</span>
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-white font-mono">USDT</div>
-                      <div className="text-[10px] text-white/30 font-mono">{usdtLabel()}</div>
+                      <div className="text-sm font-medium text-text-primary font-mono">USDT</div>
+                      <div className="text-[10px] text-text-tertiary font-mono">{usdtLabel()}</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-bold text-primary font-mono tabular-nums">
+                    <div className="text-sm font-bold text-accent font-mono tabular-nums">
                       {solanaWallet.usdtBalance !== null
                         ? solanaWallet.usdtBalance.toFixed(2)
                         : "0.00"}
@@ -1305,35 +1311,35 @@ export default function UserWalletPage() {
 
               {/* Security section — only for embedded wallet mode */}
               {!MOCK_MODE && (
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-white/[0.04]">
-                    <span className="text-[10px] font-bold text-white/40 font-mono uppercase tracking-wider">
+                <div className="bg-surface-card border border-border-subtle rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-border-subtle">
+                    <span className="text-[10px] font-bold text-text-tertiary font-mono uppercase tracking-wider">
                       Security
                     </span>
                   </div>
 
                   <button
                     onClick={() => embeddedWallet?.lockWallet()}
-                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-card transition-colors border-b border-white/[0.03]"
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-card transition-colors border-b border-border-subtle"
                   >
-                    <Lock className="w-4 h-4 text-white/30" />
-                    <span className="text-sm text-white/60 font-mono">Lock Wallet</span>
+                    <Lock className="w-4 h-4 text-text-tertiary" />
+                    <span className="text-sm text-text-secondary font-mono">Lock Wallet</span>
                   </button>
 
                   <button
                     onClick={handleExportKey}
-                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-card transition-colors border-b border-white/[0.03]"
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-card transition-colors border-b border-border-subtle"
                   >
-                    <Download className="w-4 h-4 text-white/30" />
-                    <span className="text-sm text-white/60 font-mono">Download Backup</span>
+                    <Download className="w-4 h-4 text-text-tertiary" />
+                    <span className="text-sm text-text-secondary font-mono">Download Backup</span>
                   </button>
 
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
                     className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[var(--color-error)]/5 transition-colors"
                   >
-                    <Trash2 className="w-4 h-4 text-red-400/50" />
-                    <span className="text-sm text-red-400/60 font-mono">Delete Wallet</span>
+                    <Trash2 className="w-4 h-4 text-red-500/50" />
+                    <span className="text-sm text-red-500/60 font-mono">Delete Wallet</span>
                   </button>
                 </div>
               )}
@@ -1350,34 +1356,34 @@ export default function UserWalletPage() {
           onClick={() => !isSending && setShowSendModal(false)}
         >
           <div
-            className="bg-[#0d0d0d] rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-4"
+            className="bg-surface-card rounded-2xl w-full max-w-sm border border-border-subtle shadow-2xl p-5 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2">
-              <Send className="w-5 h-5 text-primary" />
-              <h3 className="text-base font-bold text-white font-mono">Send</h3>
+              <Send className="w-5 h-5 text-accent" />
+              <h3 className="text-base font-bold text-text-primary font-mono">Send</h3>
             </div>
 
             {sendError && (
-              <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 font-mono">
+              <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-500 font-mono">
                 {sendError}
               </div>
             )}
             {sendSuccess && (
-              <div className="p-2.5 bg-green-500/10 border border-green-500/20 rounded-lg text-xs text-green-400 font-mono">
+              <div className="p-2.5 bg-green-500/10 border border-green-500/20 rounded-lg text-xs text-green-500 font-mono">
                 {sendSuccess}
               </div>
             )}
 
             {!sendSuccess && (
               <>
-                <div className="flex bg-white/[0.03] rounded-lg p-[3px]">
+                <div className="flex bg-surface-card rounded-lg p-[3px]">
                   <button
                     onClick={() => setSendToken("USDT")}
                     className={`flex-1 py-2 rounded-md text-xs font-mono font-medium transition-colors ${
                       sendToken === "USDT"
-                        ? "bg-white/[0.08] text-white"
-                        : "text-white/40"
+                        ? "bg-surface-active text-text-primary"
+                        : "text-text-tertiary"
                     }`}
                   >
                     USDT
@@ -1386,8 +1392,8 @@ export default function UserWalletPage() {
                     onClick={() => setSendToken("SOL")}
                     className={`flex-1 py-2 rounded-md text-xs font-mono font-medium transition-colors ${
                       sendToken === "SOL"
-                        ? "bg-white/[0.08] text-white"
-                        : "text-white/40"
+                        ? "bg-surface-active text-text-primary"
+                        : "text-text-tertiary"
                     }`}
                   >
                     SOL
@@ -1395,7 +1401,7 @@ export default function UserWalletPage() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">
+                  <label className="text-[10px] text-text-tertiary font-mono uppercase mb-1.5 block">
                     Recipient Address
                   </label>
                   <input
@@ -1404,15 +1410,15 @@ export default function UserWalletPage() {
                     onChange={(e) => setSendTo(e.target.value)}
                     placeholder="Solana address..."
                     maxLength={44}
-                    className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                               text-sm text-white font-mono placeholder:text-white/20
-                               focus:outline-none focus:border-primary/50 transition-colors"
+                    className="w-full px-3 py-2.5 bg-surface-card border border-border-subtle rounded-xl
+                               text-sm text-text-primary font-mono placeholder:text-text-quaternary
+                               focus:outline-none focus:border-accent/50 transition-colors"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[10px] text-white/40 font-mono uppercase">
+                    <label className="text-[10px] text-text-tertiary font-mono uppercase">
                       Amount
                     </label>
                     <button
@@ -1423,7 +1429,7 @@ export default function UserWalletPage() {
                             : solanaWallet.usdtBalance || 0;
                         setSendAmount(bal.toString());
                       }}
-                      className="text-[10px] text-primary/70 font-mono hover:text-primary"
+                      className="text-[10px] text-accent/70 font-mono hover:text-accent"
                     >
                       MAX
                     </button>
@@ -1435,11 +1441,11 @@ export default function UserWalletPage() {
                     placeholder="0.00"
                     step="any"
                     maxLength={14}
-                    className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-xl
-                               text-sm text-white font-mono placeholder:text-white/20
-                               focus:outline-none focus:border-primary/50 transition-colors"
+                    className="w-full px-3 py-2.5 bg-surface-card border border-border-subtle rounded-xl
+                               text-sm text-text-primary font-mono placeholder:text-text-quaternary
+                               focus:outline-none focus:border-accent/50 transition-colors"
                   />
-                  <div className="text-[10px] text-white/30 font-mono mt-1">
+                  <div className="text-[10px] text-text-tertiary font-mono mt-1">
                     Available:{" "}
                     {sendToken === "SOL"
                       ? `${solanaWallet.solBalance?.toFixed(4) || "0"} SOL`
@@ -1450,8 +1456,8 @@ export default function UserWalletPage() {
                 <button
                   onClick={handleSend}
                   disabled={isSending}
-                  className="w-full py-3 rounded-xl bg-primary text-background font-bold font-mono text-sm
-                             hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-accent text-accent-text font-bold font-mono text-sm
+                             hover:bg-accent-bright transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isSending ? (
                     <>
@@ -1472,7 +1478,7 @@ export default function UserWalletPage() {
                   setShowSendModal(false);
                   setSendSuccess("");
                 }}
-                className="w-full py-3 rounded-xl bg-white/[0.06] text-white/60 font-mono text-sm hover:bg-accent-subtle transition-colors"
+                className="w-full py-3 rounded-xl bg-surface-active text-text-secondary font-mono text-sm hover:bg-accent-subtle transition-colors"
               >
                 Done
               </button>
@@ -1488,7 +1494,7 @@ export default function UserWalletPage() {
           onClick={() => setShowDeleteConfirm(false)}
         >
           <div
-            className="bg-card-solid rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-4"
+            className="bg-card-solid rounded-2xl w-full max-w-sm border border-border-subtle shadow-2xl p-5 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-bold text-[var(--color-error)] font-mono">

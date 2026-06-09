@@ -39,6 +39,7 @@ export interface WalletScreenProps {
   setShowWalletSetup: (v: boolean) => void;
   setShowWalletUnlock: (v: boolean) => void;
   maxW: string;
+  hideBottomNav?: boolean;
 }
 
 export const WalletScreen = ({
@@ -50,6 +51,7 @@ export const WalletScreen = ({
   setShowWalletSetup,
   setShowWalletUnlock,
   maxW,
+  hideBottomNav = false,
 }: WalletScreenProps) => {
   const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
   const [copied, setCopied] = useState(false);
@@ -154,22 +156,22 @@ export const WalletScreen = ({
               : 'Connect Wallet'}
           </button>
         </div>
-        <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
+        {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />}
       </>
     );
   }
 
   return (
     <>
-      <div className="h-12" />
-
       {/* Header */}
-      <header className="px-5 pt-2 pb-4 flex items-center justify-between">
-        <h1 className="text-[20px] font-black tracking-tight text-text-primary">Wallet</h1>
-        <motion.button whileTap={{ scale: 0.9 }} onClick={handleRefresh}
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-surface-card border border-border-subtle">
-          <RefreshCw size={15} className={`${isRefreshing ? 'animate-spin' : ''} text-text-tertiary`} />
-        </motion.button>
+      <header className="px-5 pt-4 pb-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Wallet</p>
+          <motion.button whileTap={{ scale: 0.9 }} onClick={handleRefresh}
+            className="p-2.5 rounded-[14px] bg-surface-card border border-border-subtle">
+            <RefreshCw size={18} className={`${isRefreshing ? 'animate-spin' : ''} text-text-tertiary`} />
+          </motion.button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto pb-28 no-scrollbar px-5">
@@ -182,7 +184,7 @@ export const WalletScreen = ({
           />
           <div
             className="absolute bottom-0 right-0 w-40 h-40 translate-x-[38%] translate-y-[38%]"
-            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)' }}
+            style={{ background: 'radial-gradient(circle, var(--accent-glow) 0%, transparent 70%)' }}
           />
 
           <div className="relative z-10 p-6">
@@ -280,7 +282,7 @@ export const WalletScreen = ({
             className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-end justify-center">
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="w-full max-w-sm rounded-t-3xl p-6 bg-surface-base border-t border-border-subtle">
+              className="w-full max-w-sm md:max-w-[680px] rounded-t-3xl p-6 bg-surface-base border-t border-border-subtle">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-black text-text-primary">Send</h3>
                 <button onClick={() => { setShowSend(false); setSendError(''); setSendSuccess(''); }}
@@ -341,7 +343,7 @@ export const WalletScreen = ({
             className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-end justify-center">
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="w-full max-w-sm rounded-t-3xl p-6 bg-surface-base border-t border-border-subtle">
+              className="w-full max-w-sm md:max-w-[680px] rounded-t-3xl p-6 bg-surface-base border-t border-border-subtle">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-black text-text-primary">Receive</h3>
                 <button onClick={() => setShowReceive(false)}
@@ -369,7 +371,7 @@ export const WalletScreen = ({
         )}
       </AnimatePresence>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
+      {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />}
     </>
   );
 };

@@ -52,8 +52,8 @@ export interface MerchantMobileContentProps {
   orderConversations: OrderConversation[];
   chatTotalUnread: number;
   isLoadingConversations: boolean;
-  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell' } | null;
-  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
+  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell'; userAvatarUrl?: string | null } | null;
+  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell', userAvatarUrl?: string | null) => void;
   onCloseOrderChat: () => void;
   onClearUnread: (orderId: string) => void;
   onClearAllUnread?: () => void;
@@ -100,6 +100,9 @@ export interface MerchantMobileContentProps {
   onOpenPaymentMethods?: () => void;
   onOpenNotifications?: () => void;
   onOpenProfile?: () => void;
+  // Opens the merchant settings overlay — surfaced as a gear in the mobile
+  // home header (top-right).
+  onOpenSettings?: () => void;
   notificationCount?: number;
 
   /**
@@ -135,6 +138,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     onOpenPaymentMethods,
     onOpenNotifications,
     onOpenProfile,
+    onOpenSettings,
     notificationCount,
     onRefresh,
   } = props;
@@ -179,7 +183,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
   return (
     <>
       {/* Mobile View Content */}
-      <div className="lg:hidden flex-1 min-h-0 flex flex-col overflow-hidden relative">
+      <div className="lg:hidden flex-1 min-h-0 flex flex-col overflow-hidden relative" style={{ fontSize: '90%' }}>
         {/* ── Pull-to-refresh indicator ─────────────────────────────────────
             Pill is parked above the viewport and slides down with the pull
             so a hint of motion is visible from the first pixel. */}
@@ -252,7 +256,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
 
         <main
           ref={scrollRef}
-          className="flex-1 min-h-0 overflow-y-auto p-3 pb-24"
+          className={`flex-1 min-h-0 ${mobileView === "chat" ? "overflow-hidden" : (mobileView === "orders" || mobileView === "escrow" || mobileView === "history") ? "overflow-y-auto pt-1 px-3 pb-24" : "overflow-y-auto p-3 pb-24"}`}
           style={{
             overscrollBehaviorY: "contain",
             WebkitOverflowScrolling: "touch",
@@ -277,9 +281,10 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               onOpenPaymentMethods={onOpenPaymentMethods}
               onOpenNotifications={onOpenNotifications}
               onOpenProfile={onOpenProfile}
+              onOpenSettings={onOpenSettings}
               notificationCount={notificationCount}
-              onStartTrade={(side) => {
-                setOpenTradeForm({ ...openTradeForm, tradeType: side });
+              onStartTrade={(side, amount, expiryMinutes) => {
+                setOpenTradeForm({ ...openTradeForm, tradeType: side, cryptoAmount: amount ?? "", expiryMinutes: expiryMinutes ?? 15 });
                 setShowOpenTradeModal(true);
               }}
               openSheetSide={fabSheetSide}
@@ -369,19 +374,22 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setFabSheetSide("buy")}
-          className="lg:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-primary shadow-lg shadow-primary/25 flex items-center justify-center"
+          className="lg:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-[#f5f5f7] shadow-lg shadow-black/20 flex items-center justify-center"
         >
           <Plus className="w-6 h-6 text-background" />
         </motion.button>
       )}
 
-      <MobileBottomNav
-        mobileView={mobileView}
-        setMobileView={setMobileView}
-        pendingCount={pendingOrders.length}
-        ongoingCount={ongoingOrders.length}
-        totalUnread={totalUnread}
-      />
+      {/* Hide bottom nav when inside an active chat — like WhatsApp */}
+      {!(mobileView === "chat" && activeOrderChat) && (
+        <MobileBottomNav
+          mobileView={mobileView}
+          setMobileView={setMobileView}
+          pendingCount={pendingOrders.length}
+          ongoingCount={ongoingOrders.length}
+          totalUnread={totalUnread}
+        />
+      )}
     </>
   );
 });

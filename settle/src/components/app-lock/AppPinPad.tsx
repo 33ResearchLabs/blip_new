@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Delete, Fingerprint } from 'lucide-react';
 
@@ -37,9 +37,11 @@ function vibrate(ms: number) {
 }
 
 /** 4-digit secure PIN entry. Renders a row of dots over a custom 3x4
- *  numeric keypad with haptic feedback and shake-on-error. The OS
- *  keyboard never opens — every digit comes from on-screen taps, so
- *  password-manager autofill and screen-recording don't leak the PIN. */
+ *  numeric keypad with haptic feedback and shake-on-error. The OS soft
+ *  keyboard never opens (there's no focused input), so password-manager
+ *  autofill and screen-recording don't leak the PIN — but physical /
+ *  hardware-keyboard digits (desktop, attached keyboards) are accepted
+ *  and drive the same dots as on-screen taps. */
 export function AppPinPad({
   value,
   onChange,
@@ -65,21 +67,38 @@ export function AppPinPad({
     if (errorTick > 0) vibrate(40);
   }, [errorTick]);
 
-  const press = (digit: string) => {
+  const press = useCallback((digit: string) => {
     if (disabled) return;
     if (value.length >= length) return;
     vibrate(HAPTIC_MS);
     const next = value + digit;
     onChange(next);
     if (next.length === length) onComplete?.(next);
-  };
+  }, [disabled, value, length, onChange, onComplete]);
 
-  const backspace = () => {
+  const backspace = useCallback(() => {
     if (disabled) return;
     if (!value.length) return;
     vibrate(HAPTIC_MS);
     onChange(value.slice(0, -1));
-  };
+  }, [disabled, value, onChange]);
+
+  // Accept physical/hardware-keyboard input too (desktop, attached
+  // keyboards). Reuses the same press/backspace handlers as on-screen
+  // taps; the listener re-binds when they change so it always appends to
+  // the current PIN. We bail when a real text field is focused so we
+  // never steal keystrokes from the legacy-password input or a mnemonic
+  // textarea rendered alongside the keypad.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (/^[0-9]$/.test(e.key)) { e.preventDefault(); press(e.key); }
+      else if (e.key === 'Backspace') { e.preventDefault(); backspace(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [press, backspace]);
 
   return (
     <div className="select-none">

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { colors } from "@/lib/design/theme";
+import { useUserPaymentMethods } from "@/context/AppContext";
 
 export interface PaymentMethodItem {
   id: string;
@@ -43,6 +44,11 @@ interface PaymentMethodSelectorProps {
    *  container" matching the AppLockSettingsCard pattern on the profile
    *  screen. Trade / Escrow screens keep their default loose-cards look. */
   groupContainer?: boolean;
+  /** Render the method list open and skip the collapsed dropdown trigger, so
+   *  the in-list "Add New Payment Method" button is always visible. Used when
+   *  the selector lives in a dedicated sheet/modal (e.g. the Trade screen's
+   *  Payment methods bottom sheet) where there's nothing to collapse into. */
+  alwaysExpanded?: boolean;
 }
 
 // Each method type maps to a semantic token via its CSS variable.
@@ -62,10 +68,15 @@ export const PaymentMethodSelector = ({
   onSelect,
   hideHeader = false,
   groupContainer = false,
+  alwaysExpanded = false,
 }: PaymentMethodSelectorProps) => {
-  const [methods, setMethods] = useState<PaymentMethodItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  // Seed from the context preload (fetched at login) so the list shows
+  // instantly — no skeleton flash. The on-mount fetch below still runs as a
+  // background refresh + fallback if the preload hasn't landed.
+  const { paymentMethods: preloaded, paymentMethodsLoaded, fetchPaymentMethods: syncPreloaded } = useUserPaymentMethods();
+  const [methods, setMethods] = useState<PaymentMethodItem[]>(preloaded);
+  const [loading, setLoading] = useState(!paymentMethodsLoaded);
+  const [expanded, setExpanded] = useState(alwaysExpanded);
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
   // Two-tap delete: first tap arms `confirmDeleteId`, second tap within
@@ -92,10 +103,12 @@ export const PaymentMethodSelector = ({
     ? [selected, ...methods.filter((m) => m.id !== selected.id)]
     : methods;
 
-  // Fetch payment methods
+  // Fetch payment methods — background refresh + fallback. Only blanks to the
+  // skeleton when the context preload hasn't completed, so a seeded list never
+  // flickers on open.
   useEffect(() => {
     if (!userId) return;
-    setLoading(true);
+    if (!paymentMethodsLoaded) setLoading(true);
     fetchWithAuth(`/api/users/${userId}/payment-methods`)
       .then((res) => res.json())
       .then((data) => {
@@ -153,6 +166,8 @@ export const PaymentMethodSelector = ({
         // If the deleted one was selected, clear the selection so callers
         // don't render a stale chip.
         if (selectedId === methodId) onSelect(null);
+        // Keep the login-time cache fresh so the next open is instant + correct.
+        void syncPreloaded(userId ?? undefined);
       }
     } catch {
       // Best-effort — leave the row in place if the API call failed.
@@ -219,6 +234,8 @@ export const PaymentMethodSelector = ({
         resetForm();
         setShowAddForm(false);
         setExpanded(false);
+        // Keep the login-time cache fresh so the next open is instant + correct.
+        void syncPreloaded(userId ?? undefined);
       } else {
         // Map machine codes / HTTP status to friendly messages
         if (res.status === 401 || data.code === 'SESSION_EXPIRED') {
@@ -253,11 +270,41 @@ export const PaymentMethodSelector = ({
   };
 
   if (loading) {
+    // Skeleton card rows (not a collapse-to-spinner) so the bottom sheet keeps
+    // a stable height and content fades in smoothly — matches the merchant
+    // mobile modal feel instead of a "stuck" loading flash on every open.
+    const skeletonRows = alwaysExpanded ? 2 : 1;
     return (
-      <div className="w-full rounded-2xl p-4 flex items-center justify-center gap-2"
-        style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
-        <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
-        <span className="text-[13px] text-text-tertiary">Loading payment methods...</span>
+      <div
+        className={
+          groupContainer
+            ? "w-full rounded-xl bg-white/[0.02] border border-white/[0.06] p-3"
+            : "w-full"
+        }
+      >
+        {!hideHeader && (
+          <div className="flex items-center gap-2 mb-2">
+            <CreditCard className="w-4 h-4 text-text-tertiary" />
+            <span className="text-[12px] text-text-tertiary uppercase tracking-wide font-semibold">
+              Your Payment Method
+            </span>
+          </div>
+        )}
+        <div className="space-y-1">
+          {Array.from({ length: skeletonRows }).map((_, i) => (
+            <div
+              key={i}
+              className="w-full rounded-2xl px-4 py-3 flex items-center gap-3"
+              style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
+            >
+              <div className="w-9 h-9 rounded-xl shrink-0 bg-surface-hover animate-pulse" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="h-3 w-1/2 rounded bg-surface-hover animate-pulse" />
+                <div className="h-2.5 w-1/3 rounded bg-surface-hover animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -283,7 +330,7 @@ export const PaymentMethodSelector = ({
           match the legacy Bank Accounts card row (ProfileScreen) so both
           render as visually identical sibling cards in the unified
           Payment Methods group container. */}
-      {methods.length > 0 && !showAddForm && (
+      {methods.length > 0 && !showAddForm && !alwaysExpanded && (
         <button
           onClick={() => setExpanded(!expanded)}
           className="w-full rounded-2xl px-4 py-3 flex items-start gap-3 text-left bg-surface-card border border-border-subtle"
@@ -292,7 +339,7 @@ export const PaymentMethodSelector = ({
             <>
               <div
                 className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: `${TYPE_CONFIG[selected.type].color}30` }}
+                style={{ background: `color-mix(in srgb, ${TYPE_CONFIG[selected.type].color} 19%, transparent)` }}
               >
                 {(() => {
                   const Ic = TYPE_CONFIG[selected.type].Icon;
@@ -320,7 +367,7 @@ export const PaymentMethodSelector = ({
 
       {/* Dropdown list */}
       <AnimatePresence>
-        {expanded && !showAddForm && (
+        {(expanded || alwaysExpanded) && !showAddForm && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -352,7 +399,7 @@ export const PaymentMethodSelector = ({
                     >
                       <div
                         className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                        style={{ background: `${cfg.color}30` }}
+                        style={{ background: `color-mix(in srgb, ${cfg.color} 19%, transparent)` }}
                       >
                         <Ic className="w-3.5 h-3.5" style={{ color: cfg.color }} />
                       </div>
@@ -412,19 +459,25 @@ export const PaymentMethodSelector = ({
                 );
               })}
 
-              {/* Add new button */}
-              <button
-                onClick={() => { resetForm(); setShowAddForm(true); }}
-                className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors"
-                style={groupContainer ? {} : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
-              >
-                <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center shrink-0">
-                  <Plus className="w-3.5 h-3.5 text-text-tertiary" />
-                </div>
-                <span className="text-[13px] text-text-secondary font-medium">
-                  Add New Payment Method
-                </span>
-              </button>
+              {/* Add-new button — only once the user already has a method.
+                  With zero methods this would duplicate the descriptive
+                  empty-state card below ("Add Payment Method / Required to
+                  receive fiat payments"), which is the sole CTA in that case
+                  (the bug seen in the alwaysExpanded bottom sheet). */}
+              {methods.length > 0 && (
+                <button
+                  onClick={() => { resetForm(); setShowAddForm(true); }}
+                  className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors"
+                  style={groupContainer ? {} : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center shrink-0">
+                    <Plus className="w-3.5 h-3.5 text-text-tertiary" />
+                  </div>
+                  <span className="text-[13px] text-text-secondary font-medium">
+                    Add New Payment Method
+                  </span>
+                </button>
+              )}
             </div>
           </motion.div>
         )}
@@ -512,7 +565,7 @@ export const PaymentMethodSelector = ({
                 onChange={(e) => setAddLabel(e.target.value)}
                 placeholder="Label (e.g. Emirates NBD - Salary)"
                 className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
               />
 
               {/* Bank fields */}
@@ -524,7 +577,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, bank_name: e.target.value })}
                     placeholder="Bank Name (e.g. Emirates NBD)"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -532,7 +585,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, account_name: e.target.value })}
                     placeholder="Account Holder Name"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -540,7 +593,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, account_number: e.target.value })}
                     placeholder="Account Number"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -548,7 +601,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, ifsc: e.target.value.toUpperCase() })}
                     placeholder="IFSC / SWIFT code — optional"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -556,7 +609,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, iban: e.target.value.toUpperCase() })}
                     placeholder="IBAN — optional (for international transfers)"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                 </>
               )}
@@ -570,7 +623,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, upi_id: e.target.value })}
                     placeholder="UPI ID (e.g. user@oksbi)"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -578,7 +631,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, provider: e.target.value })}
                     placeholder="Provider (e.g. Google Pay, PhonePe) — optional"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                 </>
               )}
@@ -592,7 +645,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, location_name: e.target.value })}
                     placeholder="Location Name"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -600,7 +653,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, location_address: e.target.value })}
                     placeholder="Address"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -608,7 +661,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, meeting_instructions: e.target.value })}
                     placeholder="Meeting instructions — optional"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                 </>
               )}
@@ -622,7 +675,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, method_name: e.target.value })}
                     placeholder="Method Name (e.g. Wise, PayPal)"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -630,7 +683,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, account_identifier: e.target.value })}
                     placeholder="Account ID / Email / Phone"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                   <input
                     type="text"
@@ -638,7 +691,7 @@ export const PaymentMethodSelector = ({
                     onChange={(e) => setAddDetails({ ...addDetails, instructions: e.target.value })}
                     placeholder="Instructions — optional"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-primary/25 outline-none focus:ring-1 focus:ring-border-strong"
-                    style={{ background: colors.surface.card }}
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.medium}` }}
                   />
                 </>
               )}

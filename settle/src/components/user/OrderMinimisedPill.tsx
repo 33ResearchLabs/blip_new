@@ -35,11 +35,11 @@ export function OrderMinimisedPill({ status, onExpand }: Props) {
   const { text, tone } = labelForStatus(status);
   const dotColor =
     tone === "done"
-      ? "bg-green-400"
+      ? "bg-success"
       : tone === "fail"
-        ? "bg-red-400"
+        ? "bg-error"
         : tone === "warn"
-          ? "bg-yellow-400"
+          ? "bg-warning"
           : "bg-accent";
 
   return (

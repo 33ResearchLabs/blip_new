@@ -4,6 +4,7 @@ import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
 import { query, queryOne } from '@/lib/db';
 import {
   requireAuth,
+  requireApiKeyScope,
   successResponse,
   errorResponse,
   forbiddenResponse,
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'wallet:read');
+    if (scopeErr) return scopeErr;
 
     const body = await request.json().catch(() => ({}));
     const { merchant_id } = body as { merchant_id?: string };

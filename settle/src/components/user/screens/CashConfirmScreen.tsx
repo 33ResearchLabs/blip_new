@@ -40,8 +40,8 @@ export const CashConfirmScreen = ({
       <div className="h-12" />
 
       <div className="px-5 py-4 flex items-center">
-        <button onClick={() => { setScreen("home"); setSelectedOffer(null); }} className="p-2 -ml-2">
-          <ChevronLeft className="w-6 h-6 text-text-primary" />
+        <button onClick={() => { setScreen("home"); setSelectedOffer(null); }} className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle">
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
         <h1 className="flex-1 text-center text-[17px] font-semibold pr-8 text-text-primary">Confirm Meeting</h1>
       </div>

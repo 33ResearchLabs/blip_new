@@ -199,7 +199,7 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
       <div className="flex-1 overflow-y-auto">
         {isLoading && entries.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-4 h-4 text-primary/40 animate-spin" />
+            <Loader2 className="w-4 h-4 text-[#f5f5f7]/40 animate-spin" />
           </div>
         ) : visibleEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -326,7 +326,7 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                                 // outer row's order-detail click doesn't
                                 // also fire.
                                 <a
-                                  href={`/merchant/profile/${entry.counterparty_id}`}
+                                  href={`/market/profile/${entry.counterparty_id}`}
                                   onClick={(e) => e.stopPropagation()}
                                   className="text-foreground/55 truncate hover:text-foreground hover:underline transition-colors"
                                 >

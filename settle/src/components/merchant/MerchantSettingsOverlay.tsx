@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import MerchantSettingsPage from '@/app/merchant/settings/page';
+import MerchantSettingsPage from '@/app/market/settings/page';
 
 interface MerchantSettingsOverlayProps {
   open: boolean;

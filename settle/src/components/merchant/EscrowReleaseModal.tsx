@@ -146,7 +146,7 @@ export function EscrowReleaseModal({
                           href={getBlipscanTradeUrl(releaseOrder.escrowPda)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-xs text-primary hover:text-primary/80 transition-colors"
+                          className="flex items-center gap-2 text-xs text-[#f5f5f7] hover:text-white/80 transition-colors"
                         >
                           <ExternalLink className="w-3 h-3" />
                           BlipScan
@@ -235,7 +235,7 @@ export function EscrowReleaseModal({
                       className={`flex-[2] py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
                         isReleasingEscrow || !releaseOrder.escrowTradeId || !releaseOrder.escrowCreatorWallet || !releaseOrder.userWallet
                           ? 'bg-gray-600 text-foreground/40 cursor-not-allowed'
-                          : 'bg-primary hover:bg-primary text-background'
+                          : 'bg-[#f5f5f7] hover:bg-white/[0.08] text-background'
                       }`}
                     >
                       {isReleasingEscrow ? (

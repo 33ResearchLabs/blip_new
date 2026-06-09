@@ -11,6 +11,7 @@ import {
 import {
   requireAuth,
   requireTokenAuth,
+  requireApiKeyScope,
   verifyUser,
   forbiddenResponse,
   validationErrorResponse,
@@ -58,6 +59,8 @@ export async function GET(request: NextRequest) {
     // Authorization: require authenticated user
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:read');
+    if (scopeErr) return scopeErr;
     const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden('GET /api/orders', auth.actorId, 'Not order owner');
@@ -129,6 +132,8 @@ export async function POST(request: NextRequest) {
     // so we can see the migration curve.
     const auth = await requireTokenAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErr) return scopeErr;
     const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden('POST /api/orders', auth.actorId, 'Creating order for different user');
@@ -186,6 +191,34 @@ export async function POST(request: NextRequest) {
 
     if (!userExists) {
       return validationErrorResponse(['User not found']);
+    }
+
+    // ── BUY order guards ─────────────────────────────────────────────────
+    // Phone verification gate is temporarily disabled while the SMS/OTP
+    // flow is being fixed. Re-enable by restoring the phone_verified check.
+    // Active buy cap: max 2 concurrent unfulfilled buy orders per user.
+    if (type === 'buy') {
+      const [activeBuyRow] = await Promise.all([
+        dbQuery<{ count: string }>(
+          `SELECT COUNT(*) AS count FROM orders
+           WHERE user_id = $1
+             AND type = 'buy'
+             AND status IN ('pending', 'accepted', 'escrowed', 'payment_sent')`,
+          [user_id]
+        ),
+      ]);
+
+      const activeBuyCount = parseInt(activeBuyRow[0]?.count ?? '0', 10);
+      if (activeBuyCount >= 2) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'ACTIVE_BUY_LIMIT',
+            message: 'You have 2 active buy orders. Complete or cancel them before placing a new one.',
+          },
+          { status: 429 }
+        );
+      }
     }
 
     let verifiedPaymentMethodId: string | undefined;
@@ -264,7 +297,10 @@ export async function POST(request: NextRequest) {
       const limitCheck = await checkTradeAgainstLimits({
         actorId: user_id,
         actorType: 'user',
-        fiatAmountUsd: fiatAmount,
+        // Limits are USD-denominated. The crypto is a USD stablecoin
+        // (USDT ≈ $1), so crypto_amount IS the USD notional. fiatAmount
+        // is in local fiat (INR/AED) and must NOT be used here.
+        fiatAmountUsd: crypto_amount,
       });
       if (!limitCheck.allowed) {
         return NextResponse.json(
@@ -372,7 +408,8 @@ export async function POST(request: NextRequest) {
     const limitCheckBuy = await checkTradeAgainstLimitsBuy({
       actorId: user_id,
       actorType: 'user',
-      fiatAmountUsd: fiatAmount,
+      // USD notional = crypto_amount (USDT ≈ $1), not local-fiat fiatAmount.
+      fiatAmountUsd: crypto_amount,
     });
     if (!limitCheckBuy.allowed) {
       return NextResponse.json(

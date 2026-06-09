@@ -2,13 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Clock, Check, TrendingUp, TrendingDown, X } from "lucide-react";
+import { Clock, Check, ArrowDownLeft, ArrowUpRight, X, Bell } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
 import type { Screen, Order } from "./types";
 
 const CARD = "bg-surface-card border border-border-subtle";
-const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
 
 // Status filter — matches OrderStatus union from types.ts plus "all" / "active".
 // "active" = anything not in a terminal state (pending/payment/waiting).
@@ -45,6 +44,8 @@ export interface OrdersListScreenProps {
   completedOrders: Order[];
   cancelledOrders: Order[];
   maxW: string;
+  notificationCount?: number;
+  hideBottomNav?: boolean;
 }
 
 export const OrdersListScreen = ({
@@ -55,6 +56,8 @@ export const OrdersListScreen = ({
   completedOrders,
   cancelledOrders,
   maxW,
+  notificationCount = 0,
+  hideBottomNav = false,
 }: OrdersListScreenProps) => {
   // ── Filters ──
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -94,9 +97,21 @@ export const OrdersListScreen = ({
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
       {/* ── Header ── */}
-      <header className="px-5 pt-10 pb-4 shrink-0">
-        <p className={`${SECTION_LABEL} mb-1`}>Overview</p>
-        <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none mb-4">Activity</p>
+      <header className="px-5 pt-4 pb-4 shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Activity</p>
+          <button
+            onClick={() => setScreen("notifications")}
+            className="relative p-2.5 rounded-[14px] bg-surface-card border border-border-subtle"
+          >
+            <Bell size={18} className="text-text-tertiary" />
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 rounded-full flex items-center justify-center bg-text-primary text-surface-base text-[9px] font-extrabold px-1">
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </span>
+            )}
+          </button>
+        </div>
 
         {/* Status + Time filter dropdowns */}
         <div className="flex items-center gap-2">
@@ -118,11 +133,11 @@ export const OrdersListScreen = ({
       </header>
 
       {/* ── Unified List ── */}
-      <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pt-2 pb-28 overflow-y-auto scrollbar-hide">
         {filteredOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className={`w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 ${CARD}`}>
-              <Clock size={22} className="text-text-tertiary" />
+              <Clock size={22} className="text-text-quaternary" />
             </div>
             <p className="text-[18px] font-extrabold tracking-[-0.02em] text-text-primary mb-1.5">No orders found</p>
             <p className="text-[13px] font-medium text-text-tertiary">Try a different filter or time range</p>
@@ -143,19 +158,14 @@ export const OrdersListScreen = ({
                 ? `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, "0")}`
                 : null;
 
-              const iconWrap =
-                isCompleted ? "bg-surface-active border border-border-subtle" :
-                isCancelled || isDisputed ? "bg-surface-card border border-border-subtle" :
-                "bg-surface-active border border-border-medium";
-
-              const Icon =
-                isCompleted ? Check :
-                isCancelled || isDisputed ? X :
-                isBuy ? TrendingUp : TrendingDown;
-              const iconColor =
-                isCompleted ? "text-text-tertiary" :
-                isCancelled || isDisputed ? "text-text-quaternary" :
-                "text-text-primary";
+              const avatarUrl = order.merchant?.avatarUrl;
+              const merchantInitial = (order.merchant?.name || "?")[0].toUpperCase();
+              // Directional badge shown over avatar
+              const BadgeIcon = isCompleted ? Check : isCancelled || isDisputed ? X : isBuy ? ArrowDownLeft : ArrowUpRight;
+              const badgeBg =
+                isCompleted ? "rgba(100,116,139,0.85)" :
+                isCancelled || isDisputed ? "rgba(100,116,139,0.6)" :
+                isBuy ? "rgba(16,185,129,0.85)" : "rgba(99,102,241,0.85)";
 
               const titleVerb =
                 isCompleted ? (isBuy ? "Received" : "Sent") :
@@ -190,8 +200,22 @@ export const OrdersListScreen = ({
                   whileTap={{ scale: 0.98 }}
                   onClick={() => { setActiveOrderId(order.id); setScreen("order"); }}
                   className={`w-full flex items-center gap-3 rounded-[18px] p-3.5 text-left ${CARD}`}>
-                  <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${iconWrap}`}>
-                    <Icon size={17} className={iconColor} />
+                  {/* Avatar with directional badge */}
+                  <div className="relative shrink-0 w-11 h-11">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={merchantInitial} className="w-11 h-11 rounded-[14px] object-cover" />
+                    ) : (
+                      <div className="w-11 h-11 rounded-[14px] bg-surface-active border border-border-subtle flex items-center justify-center">
+                        <span style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text-secondary)", fontFamily: "Manrope, sans-serif" }}>
+                          {merchantInitial}
+                        </span>
+                      </div>
+                    )}
+                    {/* Directional badge — bottom-right corner */}
+                    <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
+                      style={{ background: badgeBg, backdropFilter: "blur(4px)" }}>
+                      <BadgeIcon size={10} strokeWidth={2.8} color="#fff" />
+                    </span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1.5">
@@ -199,7 +223,7 @@ export const OrdersListScreen = ({
                         {titleVerb} {parseFloat(order.cryptoAmount).toFixed(2)} USDT
                       </p>
                       <p className={`text-[14px] font-extrabold tracking-[-0.01em] ${amountColor}`}>
-                        {amountSign}{"\u062F.\u0625"}{parseFloat(order.fiatAmount).toLocaleString()}
+                        {amountSign}{order.fiatCode === "INR" ? "\u20B9" : order.fiatCode === "AED" ? "\u062F.\u0625" : order.fiatCode === "USD" ? "$" : order.fiatCode}{parseFloat(order.fiatAmount).toLocaleString("en-US")}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -229,7 +253,7 @@ export const OrdersListScreen = ({
         )}
       </div>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
+      {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />}
     </div>
   );
 };

@@ -75,7 +75,7 @@ function HistTabs({ tab, setTab }: { tab: number; setTab: (t: number) => void })
     { icon: HI.x(14), label: "Cancelled" },
   ];
   return (
-    <div style={{ position: "relative", display: "flex", background: T.glass, border: `1px solid ${T.hair}`, borderRadius: 14, padding: 3 }}>
+    <div style={{ position: "relative", display: "flex", background: T.glass, border: `1px solid ${T.hair}`, borderRadius: 12, padding: 3, width: "100%" }}>
       <div style={{
         position: "absolute", top: 3, bottom: 3,
         borderRadius: 11,
@@ -92,7 +92,7 @@ function HistTabs({ tab, setTab }: { tab: number; setTab: (t: number) => void })
           onClick={() => setTab(i)}
           style={{
             flex: 1, position: "relative", zIndex: 1,
-            padding: "9px 0", fontSize: 13, fontWeight: 700,
+            padding: "7px 0", fontSize: 13, fontWeight: 700,
             color: tab === i ? T.text : T.muted,
             background: "none", border: "none", cursor: "pointer",
             borderRadius: 11, transition: "color 0.2s",
@@ -355,7 +355,7 @@ function StatTab({ completedOrders, totalTradedVolume, todayEarnings, pendingEar
 
           {/* Settings link */}
           <Link
-            href="/merchant/settings"
+            href="/market/settings"
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", textDecoration: "none", borderBottom: `1px solid ${T.hair}` }}
           >
             <span style={{ fontWeight: 600, fontSize: 14, color: T.muted2 }}>Settings & Profile</span>
@@ -365,7 +365,7 @@ function StatTab({ completedOrders, totalTradedVolume, todayEarnings, pendingEar
           {/* Public profile */}
           {merchantId && (
             <Link
-              href={`/merchant/profile/${merchantId}`}
+              href={`/market/profile/${merchantId}`}
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", textDecoration: "none", borderBottom: `1px solid ${T.hair}` }}
             >
               <span style={{ fontWeight: 600, fontSize: 14, color: T.muted2 }}>View Public Profile</span>

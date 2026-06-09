@@ -198,7 +198,7 @@ export function TransactionHistoryModal({
 
   const getTypeColor = (type: string) => {
     if (type.includes('release') || type.includes('completed') || type.includes('refund')) {
-      return 'text-green-400';
+      return 'text-[#f5f5f7]';
     }
     if (type.includes('lock') || type.includes('cancelled')) {
       return 'text-red-400';
@@ -270,14 +270,14 @@ export function TransactionHistoryModal({
           {/* Summary Cards */}
           {summary && (
             <div className="grid grid-cols-3 gap-2 p-4 border-b border-white/[0.06]">
-              <div className="bg-gradient-to-br from-green-500/10 to-green-600/5 rounded-xl p-3 border border-green-500/20">
+              <div className="bg-gradient-to-br from-green-500/10 to-green-600/5 rounded-xl p-3 border border-white/[0.09]">
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-6 h-6 rounded-md bg-green-500/10 flex items-center justify-center">
-                    <TrendingUp className="w-3 h-3 text-green-400" />
+                  <div className="w-6 h-6 rounded-md bg-white/[0.06] flex items-center justify-center">
+                    <TrendingUp className="w-3 h-3 text-[#f5f5f7]" />
                   </div>
-                  <p className="text-[10px] text-green-400/80 font-medium">Total In</p>
+                  <p className="text-[10px] text-[#f5f5f7]/80 font-medium">Total In</p>
                 </div>
-                <p className="text-sm font-bold text-green-400">
+                <p className="text-sm font-bold text-[#f5f5f7]">
                   +{formatNumber(summary.total_credits)}
                 </p>
                 <p className="text-[10px] text-foreground/35 mt-0.5">USDT</p>
@@ -315,7 +315,7 @@ export function TransactionHistoryModal({
           <div className="flex-1 overflow-y-auto p-4">
             {isLoading && transactions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
+                <Loader2 className="w-8 h-8 text-[#f5f5f7] animate-spin mb-3" />
                 <p className="text-xs text-foreground/40">Loading transactions...</p>
               </div>
             ) : error && transactions.length === 0 ? (
@@ -353,12 +353,12 @@ export function TransactionHistoryModal({
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                         tx.amount > 0
-                          ? 'bg-green-500/10 group-hover:bg-[var(--color-success)]/20'
+                          ? 'bg-white/[0.06] group-hover:bg-[var(--color-success)]/20'
                           : 'bg-red-500/10 group-hover:bg-[var(--color-error)]/20'
                       } transition-colors`}
                     >
                       {tx.amount > 0 ? (
-                        <ArrowDownRight className="w-4 h-4 text-green-400" />
+                        <ArrowDownRight className="w-4 h-4 text-[#f5f5f7]" />
                       ) : (
                         <ArrowUpRight className="w-4 h-4 text-red-400" />
                       )}
@@ -376,7 +376,7 @@ export function TransactionHistoryModal({
                         <div className="text-right shrink-0">
                           <p
                             className={`text-sm font-bold ${
-                              tx.amount > 0 ? 'text-green-400' : 'text-red-400'
+                              tx.amount > 0 ? 'text-[#f5f5f7]' : 'text-red-400'
                             }`}
                           >
                             {tx.amount > 0 ? '+' : ''}

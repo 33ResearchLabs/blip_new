@@ -6,7 +6,7 @@ import { X, Smartphone, Check, Loader2, AlertCircle } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 
 const inputClass =
-  "w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all";
+  "w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/[0.12] focus:ring-1 focus:ring-white/20 transition-all";
 
 const RESEND_COOLDOWN_SEC = 60;
 
@@ -131,14 +131,14 @@ export function PhoneVerificationModal({
           className="relative w-full max-w-md bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden"
         >
           {/* Ambient glow */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[120px] bg-primary/[0.04] rounded-full blur-[80px] pointer-events-none" />
+          
 
           {/* Header */}
           <div className="relative px-6 pt-6 pb-4 border-b border-white/[0.06]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center">
-                  <Smartphone className="w-5 h-5 text-primary" />
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/70 to-white/60 border border-white/[0.12] flex items-center justify-center">
+                  <Smartphone className="w-5 h-5 text-[#f5f5f7]" />
                 </div>
                 <div>
                   <h2 className="text-[15px] font-bold text-white">
@@ -205,7 +205,7 @@ export function PhoneVerificationModal({
                   <button
                     onClick={sendCode}
                     disabled={isBusy}
-                    className="w-full py-3 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-[#f5f5f7] text-background font-bold text-sm hover:bg-white/[0.08] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isBusy && <Loader2 className="w-4 h-4 animate-spin" />}
                     Send code
@@ -254,7 +254,7 @@ export function PhoneVerificationModal({
                   <button
                     onClick={verifyCode}
                     disabled={isBusy}
-                    className="w-full py-3 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-[#f5f5f7] text-background font-bold text-sm hover:bg-white/[0.08] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isBusy && <Loader2 className="w-4 h-4 animate-spin" />}
                     Verify
@@ -273,7 +273,7 @@ export function PhoneVerificationModal({
                     <button
                       onClick={sendCode}
                       disabled={isBusy || cooldown > 0}
-                      className="text-primary hover:opacity-80 transition-opacity disabled:text-white/25 disabled:cursor-not-allowed"
+                      className="text-[#f5f5f7] hover:opacity-80 transition-opacity disabled:text-white/25 disabled:cursor-not-allowed"
                     >
                       {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
                     </button>
@@ -289,8 +289,8 @@ export function PhoneVerificationModal({
                   exit={{ opacity: 0 }}
                   className="flex flex-col items-center text-center py-6"
                 >
-                  <div className="w-14 h-14 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mb-3">
-                    <Check className="w-7 h-7 text-emerald-400" />
+                  <div className="w-14 h-14 rounded-full bg-white/[0.06] border border-white/[0.09] flex items-center justify-center mb-3">
+                    <Check className="w-7 h-7 text-[#f5f5f7]" />
                   </div>
                   <p className="text-sm font-bold text-white">Phone verified</p>
                   <p className="text-[12px] text-white/40 mt-1">

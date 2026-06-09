@@ -252,6 +252,18 @@ function downloadCsv(filename: string, rows: IssueRow[]) {
   URL.revokeObjectURL(url);
 }
 
+// ─── SLA: resolution target ──────────────────────────────────────────────
+// Tickets are meant to be resolved within this window. A ticket is "overdue"
+// once it's older than this and still actionable (open / in_progress).
+const SLA_HOURS = 24;
+
+function isOverdue(r: { status: IssueStatus; created_at: string }): boolean {
+  if (r.status !== 'open' && r.status !== 'in_progress') return false;
+  const created = new Date(r.created_at).getTime();
+  if (!Number.isFinite(created)) return false;
+  return Date.now() - created >= SLA_HOURS * 60 * 60 * 1000;
+}
+
 // ─── Stat card ─────────────────────────────────────────────────────────────
 
 interface StatCardProps {
@@ -375,6 +387,8 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
   const [statusFilter, setStatusFilter] = useState<IssueStatus | ''>('');
   const [categoryFilter, setCategoryFilter] = useState<IssueCategory | ''>('');
   const [priorityFilter, setPriorityFilter] = useState<IssuePriority | ''>('');
+  // Client-side "overdue" view — tickets past the 24h SLA, still actionable.
+  const [overdueOnly, setOverdueOnly] = useState(false);
 
   // Client-side filters
   const [search, setSearch] = useState('');
@@ -489,13 +503,18 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
       closed: 0,
       rejected: 0,
     };
-    for (const r of rows) c[r.status] = (c[r.status] || 0) + 1;
+    let overdue = 0;
+    for (const r of rows) {
+      c[r.status] = (c[r.status] || 0) + 1;
+      if (isOverdue(r)) overdue += 1;
+    }
     return {
       total,
       open: c.open,
       inProgress: c.in_progress,
       resolved: c.resolved,
       closed: c.closed + c.rejected,
+      overdue,
     };
   }, [rows]);
 
@@ -523,13 +542,16 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
         r = r.filter((x) => new Date(x.created_at).getTime() <= t);
       }
     }
+    if (overdueOnly) {
+      r = r.filter(isOverdue);
+    }
     const sorted = [...r].sort((a, b) => {
       const ta = new Date(a.created_at).getTime();
       const tb = new Date(b.created_at).getTime();
       return sortDir === 'desc' ? tb - ta : ta - tb;
     });
     return sorted;
-  }, [rows, search, startDate, endDate, sortDir]);
+  }, [rows, search, startDate, endDate, sortDir, overdueOnly]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = useMemo(() => {
@@ -545,7 +567,8 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
     !!priorityFilter ||
     !!search ||
     !!startDate ||
-    !!endDate;
+    !!endDate ||
+    overdueOnly;
 
   // ─── Mutations ─────────────────────────────────────────────────────────
   const patchIssue = useCallback(
@@ -556,6 +579,7 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
         priority?: IssuePriority;
         note?: string;
         statusNote?: string;
+        escalatedDepartment?: string;
       },
     ) => {
       setSavingAction(true);
@@ -589,6 +613,7 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
     setSearch('');
     setStartDate('');
     setEndDate('');
+    setOverdueOnly(false);
   };
 
   const toggleRowSelect = (id: string) => {
@@ -614,10 +639,10 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold leading-tight text-foreground/90">
-            Issues
+            Support Tickets
           </h1>
           <p className="text-[12px] text-foreground/45 mt-0.5">
-            Manage and resolve user issues and support tickets
+            Manage and resolve user &amp; merchant support tickets
           </p>
         </div>
         <button
@@ -636,14 +661,17 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
         <StatCard
           label="All Issues"
           value={stats.total}
           total={stats.total}
           totalLabel="Total"
-          active={!statusFilter}
-          onClick={() => setStatusFilter('')}
+          active={!statusFilter && !overdueOnly}
+          onClick={() => {
+            setStatusFilter('');
+            setOverdueOnly(false);
+          }}
         />
         <StatCard
           label="Open"
@@ -680,6 +708,17 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
           dotColor="bg-foreground/40"
           active={statusFilter === 'closed'}
           onClick={() => setStatusFilter(statusFilter === 'closed' ? '' : 'closed')}
+        />
+        <StatCard
+          label="Overdue >24h"
+          value={stats.overdue}
+          total={stats.total}
+          dotColor="bg-rose-400"
+          active={overdueOnly}
+          onClick={() => {
+            setOverdueOnly((v) => !v);
+            setStatusFilter('');
+          }}
         />
       </div>
 
@@ -955,14 +994,24 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
                           </span>
                         </td>
                         <td className="px-2 py-2.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium ${STATUS_PILL[r.status]}`}
-                          >
+                          <div className="flex items-center gap-1.5">
                             <span
-                              className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[r.status]}`}
-                            />
-                            {STATUS_LABEL[r.status]}
-                          </span>
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium ${STATUS_PILL[r.status]}`}
+                            >
+                              <span
+                                className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[r.status]}`}
+                              />
+                              {STATUS_LABEL[r.status]}
+                            </span>
+                            {isOverdue(r) ? (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-300 text-[10px] font-semibold whitespace-nowrap"
+                                title={`Overdue — open longer than ${SLA_HOURS}h without resolution`}
+                              >
+                                {SLA_HOURS}h+
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-2 py-2.5 whitespace-pre text-foreground/55 leading-tight tabular-nums">
                           {fmtDateTime(r.created_at)}
@@ -1088,6 +1137,65 @@ function pageNumbers(current: number, total: number): (number | '…')[] {
 
 // ─── Detail panel ─────────────────────────────────────────────────────────
 
+const DEPARTMENTS = [
+  { value: 'risk', label: 'Risk & Fraud' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'engineering', label: 'Engineering' },
+  { value: 'legal', label: 'Legal' },
+  { value: 'operations', label: 'Operations' },
+];
+
+// Account summary for whoever filed the ticket — normalised from the admin
+// users/merchants list endpoints (both return camelCase). Fields are optional
+// since users and merchants expose slightly different stats.
+interface ReporterAccount {
+  kind: 'user' | 'merchant';
+  id: string;
+  name: string;
+  email: string;
+  status?: string | null;       // merchant status
+  kycStatus?: string | null;    // user KYC
+  isOnline?: boolean;
+  rating?: number;
+  balance?: number;
+  totalTrades?: number;
+  completedCount?: number;
+  cancelledCount?: number;
+  disputesTotal?: number;
+  reputationScore?: number;
+  verificationLevel?: number;   // merchant
+  riskScore?: number | null;
+  riskLevel?: string | null;
+}
+
+// The order attached to the ticket (metadata.linked_order_id), as returned by
+// GET /api/admin/orders?order_id= (serialized, camelCase + minimal_status).
+interface LinkedOrder {
+  id: string;
+  orderNumber: string;
+  user: string;
+  merchant: string;
+  buyerMerchant: string | null;
+  amount: number;
+  fiatAmount: number;
+  fiatCurrency: string | null;
+  status: string;
+  minimal_status?: string;
+  type: string;
+  feePercentage: number | null;
+  feeAmount: number | null;
+  createdAt: string;
+  expiresAt: string | null;
+  completedAt: string | null;
+  acceptedAt: string | null;
+  escrowedAt: string | null;
+  paymentSentAt: string | null;
+  paymentConfirmedAt: string | null;
+  cancelledAt: string | null;
+  disputedAt: string | null;
+}
+
 interface DetailPanelProps {
   issue: IssueRow;
   pendingStatus: IssueStatus | '';
@@ -1105,6 +1213,7 @@ interface DetailPanelProps {
       priority?: IssuePriority;
       note?: string;
       statusNote?: string;
+      escalatedDepartment?: string;
     },
   ) => Promise<void>;
 }
@@ -1129,6 +1238,157 @@ function DetailPanel({
       : issue.screenshot_url
         ? [{ id: issue.id, url: issue.screenshot_url, type: 'screenshot' as const }]
         : [];
+
+  // Reporter account summary (user or merchant) + the order linked to the
+  // ticket — fetched whenever the selected ticket changes.
+  const [account, setAccount] = useState<ReporterAccount | null>(null);
+  const [linkedOrder, setLinkedOrder] = useState<LinkedOrder | null>(null);
+  const [linkedOrderLoading, setLinkedOrderLoading] = useState(false);
+  const [escalateDept, setEscalateDept] = useState('');
+  const [escalating, setEscalating] = useState(false);
+  const [resolutionMsg, setResolutionMsg] = useState('');
+
+  // Which collapsible sections are expanded. Key context + actions open by
+  // default; activity and media collapse to keep the panel scannable.
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(['description', 'account', 'order', 'actions']),
+  );
+  const toggleSection = (key: string) =>
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  // The order the reporter attached at submit time (if any).
+  const linkedOrderId =
+    typeof issue.metadata?.linked_order_id === 'string'
+      ? issue.metadata.linked_order_id
+      : null;
+
+  // Chronological lifecycle of the linked order — one entry per action that
+  // actually happened, ordered by time, derived from the order's per-action
+  // timestamp columns.
+  const orderLifecycle = linkedOrder
+    ? (
+        [
+          ['Created', linkedOrder.createdAt, 'neutral'],
+          ['Accepted', linkedOrder.acceptedAt, 'neutral'],
+          ['Escrow locked', linkedOrder.escrowedAt, 'neutral'],
+          ['Payment sent', linkedOrder.paymentSentAt, 'neutral'],
+          ['Payment confirmed', linkedOrder.paymentConfirmedAt, 'good'],
+          ['Completed', linkedOrder.completedAt, 'good'],
+          ['Disputed', linkedOrder.disputedAt, 'bad'],
+          ['Cancelled', linkedOrder.cancelledAt, 'warn'],
+        ] as const
+      )
+        .filter((e) => !!e[1])
+        .map((e) => ({ label: e[0], at: e[1] as string, tone: e[2] as string }))
+        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+    : [];
+
+  useEffect(() => {
+    setAccount(null);
+    setLinkedOrder(null);
+    setLinkedOrderLoading(false);
+    setEscalateDept('');
+    setResolutionMsg('');
+
+    const reporterId = issue.created_by;
+
+    // ── Reporter account summary (user OR merchant) ──
+    if (reporterId && issue.actor_type === 'user') {
+      fetch(`/api/admin/users?search=${reporterId}&limit=1`)
+        .then((r) => r.json())
+        .then((d) => {
+          const u = d?.data?.users?.[0] ?? d?.data?.[0];
+          if (!u) return;
+          setAccount({
+            kind: 'user',
+            id: u.id,
+            name: u.username || u.name || '—',
+            email: u.email || '—',
+            kycStatus: u.kycStatus ?? null,
+            rating: u.rating,
+            balance: u.balance,
+            totalTrades: u.totalTrades,
+            completedCount: u.completedCount,
+            cancelledCount: u.cancelledCount,
+            disputesTotal: u.disputesTotal,
+            reputationScore: u.reputationScore,
+            riskScore: u.riskScore ?? null,
+            riskLevel: u.riskLevel ?? null,
+          });
+        })
+        .catch(() => {});
+    } else if (reporterId && issue.actor_type === 'merchant') {
+      fetch(`/api/admin/merchants?search=${reporterId}&limit=1`)
+        .then((r) => r.json())
+        .then((d) => {
+          const m = d?.data?.merchants?.[0] ?? d?.data?.[0];
+          if (!m) return;
+          setAccount({
+            kind: 'merchant',
+            id: m.id,
+            name: m.displayName || m.name || '—',
+            email: m.email || '—',
+            status: m.status ?? null,
+            isOnline: m.isOnline,
+            rating: m.rating,
+            balance: m.balance,
+            totalTrades: m.trades,
+            completedCount: m.completedCount,
+            cancelledCount: m.cancelledCount,
+            disputesTotal: m.disputesTotal ?? m.disputedCount,
+            reputationScore: m.reputationScore,
+            verificationLevel: m.verificationLevel,
+            riskScore: m.riskScore ?? null,
+            riskLevel: m.riskLevel ?? null,
+          });
+        })
+        .catch(() => {});
+    }
+
+    // ── Linked order — complete summary ──
+    if (linkedOrderId) {
+      setLinkedOrderLoading(true);
+      fetch(`/api/admin/orders?order_id=${linkedOrderId}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const rows = Array.isArray(d?.data) ? d.data : (d?.data?.orders ?? []);
+          if (rows[0]) setLinkedOrder(rows[0] as LinkedOrder);
+        })
+        .catch(() => {})
+        .finally(() => setLinkedOrderLoading(false));
+    }
+  }, [issue.id, issue.created_by, issue.actor_type, linkedOrderId]);
+
+  const handleEscalate = async () => {
+    if (!escalateDept) return;
+    setEscalating(true);
+    await onPatch(issue.id, {
+      escalatedDepartment: escalateDept,
+      ...(statusNoteDraft.trim() ? { statusNote: statusNoteDraft.trim() } : {}),
+    });
+    setEscalating(false);
+    setEscalateDept('');
+    // Open the escalation view in a new tab (admin dashboard filtered to dept)
+    window.open(
+      `/admin/issues?department=${escalateDept}&ticket=${issue.id}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
+
+  const handleResolveWithMessage = async () => {
+    if (!resolutionMsg.trim()) return;
+    await onPatch(issue.id, {
+      status: 'resolved' as IssueStatus,
+      statusNote: resolutionMsg.trim(),
+    });
+    setResolutionMsg('');
+  };
 
   const applyPendingStatus = async () => {
     if (!pendingStatus || pendingStatus === issue.status) return;
@@ -1222,9 +1482,6 @@ function DetailPanel({
               </div>
             </div>
           </FieldBlock>
-          <FieldBlock label="Version">
-            <span className="text-foreground/80">{device.version || '—'}</span>
-          </FieldBlock>
           <FieldBlock label="Platform">
             <span className="text-foreground/80">{device.platform || '—'}</span>
           </FieldBlock>
@@ -1234,21 +1491,24 @@ function DetailPanel({
         </div>
 
         {/* Description */}
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-foreground/40 mb-1">
-            Description
-          </div>
-          <p className="text-foreground/80 whitespace-pre-wrap leading-relaxed">
+        <Section
+          title="Description"
+          open={openSections.has('description')}
+          onToggle={() => toggleSection('description')}
+        >
+          <p className="text-foreground/80 whitespace-pre-wrap leading-relaxed text-[12px]">
             {issue.description}
           </p>
-        </div>
+        </Section>
 
         {/* Screenshots */}
         {shots.length > 0 ? (
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-foreground/40 mb-2">
-              Screenshots ({shots.length})
-            </div>
+          <Section
+            title="Screenshots"
+            count={shots.length}
+            open={openSections.has('screenshots')}
+            onToggle={() => toggleSection('screenshots')}
+          >
             <div className="grid grid-cols-3 gap-2">
               {shots.map((shot, i) => (
                 <a
@@ -1267,15 +1527,17 @@ function DetailPanel({
                 </a>
               ))}
             </div>
-          </div>
+          </Section>
         ) : null}
 
         {/* Attachments */}
         {issue.attachments?.length > 0 ? (
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-foreground/40 mb-2">
-              Attachments
-            </div>
+          <Section
+            title="Attachments"
+            count={issue.attachments.length}
+            open={openSections.has('attachments')}
+            onToggle={() => toggleSection('attachments')}
+          >
             <ul className="space-y-1.5">
               {issue.attachments.map((a, i) => (
                 <li
@@ -1306,14 +1568,261 @@ function DetailPanel({
                 </li>
               ))}
             </ul>
-          </div>
+          </Section>
         ) : null}
 
+        {/* ── Reporter account summary (user or merchant) ── */}
+        {account && (
+          <Section
+            title={account.kind === 'merchant' ? 'Merchant account' : 'User account'}
+            open={openSections.has('account')}
+            onToggle={() => toggleSection('account')}
+          >
+            <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-foreground/90 truncate">{account.name}</span>
+                {account.riskLevel && (
+                  <span
+                    className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] border ${
+                      account.riskLevel === 'high' || account.riskLevel === 'critical'
+                        ? 'text-rose-300 border-rose-500/25 bg-rose-500/10'
+                        : account.riskLevel === 'medium'
+                          ? 'text-amber-300 border-amber-500/25 bg-amber-500/10'
+                          : 'text-foreground/50 border-border bg-foreground/[0.03]'
+                    }`}
+                  >
+                    risk: {account.riskLevel}
+                  </span>
+                )}
+              </div>
+              <div className="text-foreground/50 truncate">{account.email}</div>
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {account.kind === 'merchant' && account.status && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70">{account.status}</span>
+                )}
+                {account.kind === 'user' && account.kycStatus && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70">KYC: {account.kycStatus}</span>
+                )}
+                {typeof account.rating === 'number' && account.rating > 0 && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70">★ {account.rating.toFixed(1)}</span>
+                )}
+                {typeof account.reputationScore === 'number' && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70">Rep: {account.reputationScore}</span>
+                )}
+                {typeof account.balance === 'number' && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] border border-border bg-foreground/[0.03] text-foreground/70 tabular-nums">
+                    {account.balance.toLocaleString('en-US', { maximumFractionDigits: 2 })} USDT
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-[11px]">
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2">
+                <div className="text-foreground/45 mb-0.5">Trades</div>
+                <div className="font-bold text-foreground/90">{account.totalTrades ?? 0}</div>
+              </div>
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2">
+                <div className="text-foreground/45 mb-0.5">Disputes</div>
+                <div className={`font-bold ${(account.disputesTotal ?? 0) > 2 ? 'text-rose-400' : 'text-foreground/90'}`}>
+                  {account.disputesTotal ?? 0}
+                </div>
+              </div>
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2">
+                <div className="text-foreground/45 mb-0.5">Cancelled</div>
+                <div className={`font-bold ${(account.cancelledCount ?? 0) > 5 ? 'text-amber-400' : 'text-foreground/90'}`}>
+                  {account.cancelledCount ?? 0}
+                </div>
+              </div>
+            </div>
+            {(account.disputesTotal ?? 0) > 2 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-300">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400 shrink-0" />
+                High dispute rate — review history carefully
+              </div>
+            )}
+            <a
+              href={`/admin/${account.kind === 'merchant' ? 'merchants' : 'users'}?search=${account.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-foreground/50 hover:text-foreground/80 transition-colors"
+            >
+              <Plus size={11} /> View full profile
+            </a>
+          </Section>
+        )}
+
+        {/* ── Linked order — complete summary ── */}
+        {linkedOrderId && (
+          <Section
+            title="Linked order"
+            open={openSections.has('order')}
+            onToggle={() => toggleSection('order')}
+          >
+            {linkedOrder ? (
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2 space-y-2 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-foreground/70">#{linkedOrder.orderNumber}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      linkedOrder.type === 'buy' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-blue-500/10 text-blue-300'
+                    }`}>
+                      {String(linkedOrder.type).toUpperCase()}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                      linkedOrder.status === 'completed' ? 'text-emerald-300 border-emerald-500/20 bg-emerald-500/10' :
+                      linkedOrder.status === 'disputed' ? 'text-rose-300 border-rose-500/20 bg-rose-500/10' :
+                      'text-foreground/50 border-border bg-foreground/[0.03]'
+                    }`}>
+                      {linkedOrder.status}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                  <div>
+                    <div className="text-foreground/45">Fiat</div>
+                    <div className="text-foreground/85 tabular-nums">
+                      {linkedOrder.fiatCurrency ? `${linkedOrder.fiatCurrency} ` : ''}
+                      {Number(linkedOrder.fiatAmount).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-foreground/45">Crypto</div>
+                    <div className="text-foreground/85 tabular-nums">
+                      {Number(linkedOrder.amount).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDT
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-foreground/45">User</div>
+                    <div className="text-foreground/85 truncate">{linkedOrder.user || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-foreground/45">Merchant</div>
+                    <div className="text-foreground/85 truncate">{linkedOrder.merchant || '—'}</div>
+                  </div>
+                  {linkedOrder.buyerMerchant && (
+                    <div>
+                      <div className="text-foreground/45">Buyer merchant</div>
+                      <div className="text-foreground/85 truncate">{linkedOrder.buyerMerchant}</div>
+                    </div>
+                  )}
+                  {typeof linkedOrder.feeAmount === 'number' && (
+                    <div>
+                      <div className="text-foreground/45">Fee</div>
+                      <div className="text-foreground/85 tabular-nums">
+                        {linkedOrder.feeAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                        {typeof linkedOrder.feePercentage === 'number' ? ` (${linkedOrder.feePercentage}%)` : ''}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {orderLifecycle.length > 0 && (
+                  <div className="pt-1.5 border-t border-border space-y-1.5">
+                    <div className="text-foreground/45 text-[10px] uppercase tracking-wider">
+                      Lifecycle
+                    </div>
+                    <ol className="relative border-l border-border pl-3 space-y-2">
+                      {orderLifecycle.map((s) => (
+                        <li key={s.label} className="relative">
+                          <span
+                            className={`absolute -left-[15px] top-1 w-1.5 h-1.5 rounded-full border ${
+                              s.tone === 'good'
+                                ? 'bg-emerald-400 border-emerald-400'
+                                : s.tone === 'bad'
+                                  ? 'bg-rose-400 border-rose-400'
+                                  : s.tone === 'warn'
+                                    ? 'bg-amber-400 border-amber-400'
+                                    : 'bg-foreground/40 border-foreground/40'
+                            }`}
+                          />
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-foreground/80">{s.label}</span>
+                            <span className="text-foreground/45 tabular-nums">
+                              {new Date(s.at).toLocaleString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-foreground/[0.03] border border-border px-2.5 py-2 text-[11px] text-foreground/45">
+                {linkedOrderLoading
+                  ? `Loading order ${linkedOrderId.slice(0, 8)}…`
+                  : `Order ${linkedOrderId.slice(0, 8)}… — details unavailable`}
+              </div>
+            )}
+          </Section>
+        )}
+
         {/* Actions block */}
-        <div className="border-t border-border pt-4 space-y-3">
-          <div className="text-[11px] uppercase tracking-wider text-foreground/40">
-            Actions
+        <Section
+          title="Actions"
+          accent="action"
+          open={openSections.has('actions')}
+          onToggle={() => toggleSection('actions')}
+        >
+
+          {/* ── Resolve with message ── */}
+          {issue.status !== 'resolved' && issue.status !== 'closed' && (
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-3 space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-400/70 font-medium">
+                Resolve ticket
+              </div>
+              <textarea
+                value={resolutionMsg}
+                onChange={(e) => setResolutionMsg(e.target.value)}
+                maxLength={2000}
+                rows={3}
+                placeholder="Write a message to the user explaining the resolution…"
+                className="w-full px-2.5 py-1.5 rounded-md bg-background border border-border text-foreground/80 placeholder:text-foreground/30 focus:outline-none focus:border-emerald-500/40 resize-none text-[12px]"
+              />
+              <button
+                type="button"
+                disabled={saving || !resolutionMsg.trim()}
+                onClick={handleResolveWithMessage}
+                className="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Mark Resolved + Notify User
+              </button>
+            </div>
+          )}
+
+          {/* ── Escalate to department ── */}
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3 space-y-2">
+            <div className="text-[10px] uppercase tracking-wider text-amber-400/70 font-medium">
+              Escalate to department
+            </div>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <select
+                  value={escalateDept}
+                  onChange={(e) => setEscalateDept(e.target.value)}
+                  disabled={saving || escalating}
+                  className="w-full appearance-none bg-background border border-border rounded-lg px-2.5 py-2 pr-7 text-[12px] text-foreground/80 focus:outline-none focus:border-foreground/30 disabled:opacity-50"
+                >
+                  <option value="">Select department…</option>
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d.value} value={d.value}>{d.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground/40" />
+              </div>
+              <button
+                type="button"
+                disabled={saving || escalating || !escalateDept}
+                onClick={handleEscalate}
+                className="px-3 py-2 rounded-lg bg-amber-600 text-white text-[12px] font-medium hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                Escalate ↗
+              </button>
+            </div>
+            <p className="text-[10px] text-foreground/35">
+              Opens escalated view in a new tab for the assigned team.
+            </p>
           </div>
+
           <div className="grid grid-cols-2 gap-2">
             <div className="relative">
               <select
@@ -1362,7 +1871,7 @@ function DetailPanel({
             </button>
           </div>
 
-          {/* Optional reply note */}
+          {/* Reply to reporter */}
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-foreground/40 mb-1">
               Reply (visible to reporter)
@@ -1375,6 +1884,24 @@ function DetailPanel({
               placeholder="Add an optional reply that will appear in the reporter's timeline…"
               className="w-full px-2.5 py-1.5 rounded-md bg-background border border-border text-foreground/80 placeholder:text-foreground/30 focus:outline-none focus:border-foreground/30"
             />
+            <div className="flex items-center justify-between gap-2 mt-1.5">
+              <span className="text-[10px] text-foreground/35">
+                Posts to the reporter&apos;s timeline — no status change.
+              </span>
+              <button
+                type="button"
+                disabled={saving || !statusNoteDraft.trim()}
+                onClick={async () => {
+                  const note = statusNoteDraft.trim();
+                  if (!note) return;
+                  await onPatch(issue.id, { statusNote: note });
+                  setStatusNoteDraft('');
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border bg-foreground/[0.04] hover:bg-foreground/[0.08] text-foreground/80 text-[11px] font-medium disabled:opacity-50"
+              >
+                <MessageSquarePlus size={11} /> Send reply
+              </button>
+            </div>
           </div>
 
           {/* Priority quick-set */}
@@ -1455,14 +1982,15 @@ function DetailPanel({
               </ul>
             </div>
           ) : null}
-        </div>
+        </Section>
 
         {/* Activity timeline */}
         {issue.status_history && issue.status_history.length > 0 ? (
-          <div className="border-t border-border pt-4">
-            <div className="text-[11px] uppercase tracking-wider text-foreground/40 mb-2">
-              Activity Timeline
-            </div>
+          <Section
+            title="Activity Timeline"
+            open={openSections.has('activity')}
+            onToggle={() => toggleSection('activity')}
+          >
             <ol className="relative border-l border-border pl-4 space-y-3">
               {issue.status_history.map((entry, i) => (
                 <li key={i} className="relative">
@@ -1493,7 +2021,7 @@ function DetailPanel({
                 </li>
               ))}
             </ol>
-          </div>
+          </Section>
         ) : null}
       </div>
     </aside>
@@ -1513,6 +2041,58 @@ function FieldBlock({
         {label}
       </div>
       <div className="text-[12px]">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Collapsible card section for the issue detail panel. Header shows the title
+ * (+ optional count) and a chevron that rotates when open; body reveals on
+ * expand. Gives every section a consistent, polished surface.
+ */
+function Section({
+  title,
+  open,
+  onToggle,
+  count,
+  accent,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  count?: number | null;
+  accent?: 'default' | 'action';
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-xl border overflow-hidden transition-colors ${
+        accent === 'action'
+          ? 'border-orange-500/20 bg-orange-500/[0.03]'
+          : 'border-border bg-foreground/[0.02]'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-foreground/[0.03] transition-colors"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold text-foreground/55">
+          {title}
+          {count != null && (
+            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-foreground/[0.08] text-foreground/60 text-[9px] font-bold tabular-nums">
+              {count}
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          size={14}
+          className={`text-foreground/40 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open ? <div className="px-3 pb-3 pt-0.5 space-y-2.5">{children}</div> : null}
     </div>
   );
 }

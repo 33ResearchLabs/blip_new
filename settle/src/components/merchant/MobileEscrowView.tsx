@@ -288,8 +288,6 @@ const FILTERS: { key: EscrowStatusFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "accepted", label: "Accepted" },
   { key: "escrowed", label: "Escrowed" },
-  { key: "payment_sent", label: "Paid" },
-  { key: "cancelled", label: "Cancelled" },
   { key: "disputed", label: "Disputed" },
 ];
 
@@ -324,30 +322,31 @@ export function MobileEscrowView({
 
   return (
     <div>
-      <style>{`
-        @keyframes z2ep-pulse { 0%{box-shadow:0 0 0 0 rgba(184,233,212,.5)} 70%{box-shadow:0 0 0 6px rgba(184,233,212,0)} 100%{box-shadow:0 0 0 0 rgba(184,233,212,0)} }
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-      {/* Section header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, position: "relative", zIndex: 1 }}>
-        <span style={{ width: 6, height: 6, borderRadius: 999, background: T.mint, animation: "z2ep-pulse 2.6s infinite", display: "inline-block" }} />
-        <span style={{ fontWeight: 800, fontSize: 16, color: T.text, whiteSpace: "nowrap" }}>In Progress</span>
-        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ color: T.faint }}><path d="M12 3 5 6v5.5c0 4.3 3 7.3 7 8.5 4-1.2 7-4.2 7-8.5V6l-7-3Z"/></svg>
-      </div>
-
-      {/* Filter chips */}
-      <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 12, position: "relative", zIndex: 1, scrollbarWidth: "none" }}>
+      {/* Tab strip — same design as New Orders / Chat / History */}
+      <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, marginBottom: 12, overflowX: "auto", scrollbarWidth: "none", width: "100%" }}>
+        {/* sliding thumb */}
+        <div style={{
+          position: "absolute", top: 3, bottom: 3, borderRadius: 11,
+          background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
+          transition: "left 0.22s cubic-bezier(0.22,1,0.36,1), width 0.22s",
+          left: `calc(${FILTERS.findIndex(f => f.key === filter)} * (100% - 6px) / ${FILTERS.length} + 3px)`,
+          width: `calc((100% - 6px) / ${FILTERS.length})`,
+          pointerEvents: "none",
+          flexShrink: 0,
+        }} />
         {FILTERS.map(({ key, label }) => {
-          const active = filter === key;
+          const isActive = filter === key;
           return (
-            <button key={key} onClick={() => setFilter(key)} style={{
-              flexShrink: 0, padding: "7px 15px", borderRadius: 999,
-              border: active ? "none" : `1px solid ${T.hair}`,
-              background: active ? "#f5f5f7" : "rgba(255,255,255,0.03)",
-              color: active ? "#0b0b0c" : T.muted2,
-              fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap",
-            }}>{label}</button>
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              style={{ flex: 1, minWidth: "max-content", position: "relative", zIndex: 1, padding: "7px 12px", fontSize: 13, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", whiteSpace: "nowrap" }}
+            >
+              {label}
+            </button>
           );
         })}
       </div>

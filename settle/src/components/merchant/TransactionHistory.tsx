@@ -119,9 +119,9 @@ export function TransactionHistory({ merchantId }: TransactionHistoryProps) {
                 >
                   {/* Icon */}
                   <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${
-                    isCredit ? 'bg-green-500/10' : 'bg-red-500/10'
+                    isCredit ? 'bg-white/[0.06]' : 'bg-red-500/10'
                   }`}>
-                    <Icon className={`w-3 h-3 ${isCredit ? 'text-green-500' : 'text-red-400'}`} />
+                    <Icon className={`w-3 h-3 ${isCredit ? 'text-[#f5f5f7]' : 'text-red-400'}`} />
                   </div>
 
                   {/* Label + Description */}
@@ -132,7 +132,7 @@ export function TransactionHistory({ merchantId }: TransactionHistoryProps) {
 
                   {/* Amount + Time */}
                   <div className="text-right shrink-0">
-                    <div className={`text-[11px] font-mono font-bold ${isCredit ? 'text-green-500' : 'text-red-400'}`}>
+                    <div className={`text-[11px] font-mono font-bold ${isCredit ? 'text-[#f5f5f7]' : 'text-red-400'}`}>
                       {isCredit ? '+' : ''}{Number(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </div>
                     <div className="text-[9px] text-white/20 font-mono">{timeAgo(tx.created_at)}</div>

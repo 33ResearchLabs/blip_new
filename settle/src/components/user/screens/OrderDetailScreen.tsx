@@ -22,6 +22,7 @@ import {
   Shield,
   Wallet,
   Paperclip,
+  Receipt,
 } from "lucide-react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
@@ -39,7 +40,7 @@ import {
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/context/ModalContext";
-import { formatCrypto, formatFiat } from "@/lib/format";
+import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
 import { useGlobalNow } from "@/hooks/useGlobalNow";
 import { OrderProgressStepper } from "@/components/user/OrderProgressStepper";
 import { OrderMinimisedPill } from "@/components/user/OrderMinimisedPill";
@@ -69,6 +70,19 @@ function ChatBadge({ count }: { count?: number }) {
     <span className="ml-1 text-[11px] font-semibold leading-none tabular-nums">
       {count > 99 ? "99+" : count}
     </span>
+  );
+}
+
+/** One label/value line in the order receipt sheet. Value is right-aligned and
+ *  may be an interactive node (copy button / explorer link). */
+function ReceiptRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <span className="text-[13px] text-text-tertiary shrink-0">{label}</span>
+      <span className="text-[13px] font-medium text-text-primary text-right">
+        {children}
+      </span>
+    </div>
   );
 }
 
@@ -303,6 +317,20 @@ export const OrderDetailScreen = ({
   const [isUploading, setIsUploading] = useLocalState(false);
   const [copiedField, setCopiedField] = useLocalState<string | null>(null);
   const [reviewText, setReviewText] = useLocalState("");
+  // Order receipt sheet — opened by tapping the summary card.
+  const [showReceipt, setShowReceipt] = useLocalState(false);
+
+  // Receipt timestamps. Dates only — locale fixed to en-US for consistency
+  // with the @/lib/format number rules.
+  const fmtDateTime = (d?: Date | null) =>
+    d
+      ? new Date(d).toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "—";
 
   // ── Consumer UX additions (Swiggy-style tracking) ─────────────────────
   // - `minimised` collapses the entire order body into a top pill
@@ -674,9 +702,8 @@ export const OrderDetailScreen = ({
 
   return (
     <div className="min-h-[100dvh] bg-surface-base">
-      <div className="h-12" />
-
-      <div className="px-5 py-4 flex items-center">
+      {/* Header — matches SupportScreen: back + title left-aligned, action pinned right */}
+      <div className="px-5 pt-4 pb-3 flex items-center gap-3">
         <button
           onClick={() => {
             // Only go back to screens that are safe to return to.
@@ -690,10 +717,11 @@ export const OrderDetailScreen = ({
         >
           <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold text-text-primary">
+        <h1 className="text-[17px] font-semibold text-text-primary">
           Order Details
         </h1>
-        {isSellQR ? (
+        <div className="flex-1" />
+        {isSellQR && (
           <button
             onClick={() => setMinimised(true)}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-raised border border-border-subtle text-text-secondary hover:text-text-primary"
@@ -701,8 +729,6 @@ export const OrderDetailScreen = ({
           >
             Hide details
           </button>
-        ) : (
-          <div className="w-[88px]" />
         )}
       </div>
 
@@ -727,8 +753,13 @@ export const OrderDetailScreen = ({
           </div>
         )}
 
-        {/* Order Summary */}
-        <div className={`rounded-2xl p-4 mb-4 ${CARD}`}>
+        {/* Order Summary — tap to open the full receipt sheet */}
+        <button
+          type="button"
+          onClick={() => setShowReceipt(true)}
+          aria-label="View order receipt"
+          className={`block w-full text-left rounded-2xl p-4 mb-4 ${CARD} hover:bg-surface-hover transition-colors`}
+        >
           <div className="flex items-center gap-3 mb-4">
             <div
               className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -743,7 +774,7 @@ export const OrderDetailScreen = ({
                 <ArrowUpRight className="w-5 h-5 text-error" />
               )}
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-[17px] font-semibold text-text-primary">
                 {activeOrder.type === "buy" ? "Buying" : "Selling"}{" "}
                 {formatCrypto(parseFloat(activeOrder.cryptoAmount))} USDT
@@ -753,6 +784,9 @@ export const OrderDetailScreen = ({
                 {formatCrypto(parseFloat(activeOrder.fiatAmount))}
               </p>
             </div>
+            <span className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-active shrink-0">
+              <Receipt className="w-4 h-4 text-text-secondary" />
+            </span>
           </div>
 
           {/* Progress */}
@@ -803,7 +837,7 @@ export const OrderDetailScreen = ({
               createdAt={activeOrder.createdAt}
             />
           )}
-        </div>
+        </button>
 
         {/* "Payment secured" card — consumer-friendly version of the old
             Escrow Locked panel. Trade ID and on-chain tx are tucked behind
@@ -2602,6 +2636,139 @@ export const OrderDetailScreen = ({
                   {isSubmittingDispute ? "Submitting..." : "Submit Dispute"}
                 </motion.button>
               </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Order Receipt Sheet — opened by tapping the summary card */}
+      <AnimatePresence>
+        {showReceipt && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 z-50"
+              onClick={() => setShowReceipt(false)}
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 350, mass: 0.8 }}
+              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6 max-h-[85dvh] overflow-y-auto scrollbar-hide ${SHEET_BG}`}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-text-secondary" />
+                  <h3 className="text-[17px] font-semibold text-text-primary">
+                    Order receipt
+                  </h3>
+                </div>
+                <button onClick={() => setShowReceipt(false)} aria-label="Close receipt">
+                  <X className="w-5 h-5 text-text-tertiary" />
+                </button>
+              </div>
+
+              {/* Headline — direction + amount + total (rate already inclusive of fees) */}
+              <div className="mb-4">
+                <p className="text-[22px] font-semibold text-text-primary tracking-[-0.01em]">
+                  {activeOrder.type === "buy" ? "Buying" : "Selling"}{" "}
+                  {formatCrypto(parseFloat(activeOrder.cryptoAmount))} USDT
+                </p>
+                <p className="text-[13px] text-text-secondary mt-1">
+                  {fiatSym(activeOrder.fiatCode)}{" "}
+                  {formatCrypto(parseFloat(activeOrder.fiatAmount))} total
+                  <span className="text-text-tertiary"> · inclusive of all fees</span>
+                </p>
+              </div>
+
+              {/* Details */}
+              <div className={`rounded-2xl divide-y divide-border-subtle ${CARD}`}>
+                <ReceiptRow label="Rate">
+                  {formatRate(activeOrder.merchant.rate)} {fiatSym(activeOrder.fiatCode)}/USDT
+                </ReceiptRow>
+                <ReceiptRow label="Status">
+                  {activeOrder.status === "cancelled"
+                    ? "Cancelled"
+                    : activeOrder.status === "expired"
+                      ? "Expired"
+                      : activeOrder.status === "complete"
+                        ? "Completed"
+                        : `Step ${activeOrder.step} of 4`}
+                </ReceiptRow>
+                <ReceiptRow label="Payment method">
+                  {activeOrder.merchant.paymentMethod === "cash" ? "Cash" : "Bank"}
+                </ReceiptRow>
+                {activeOrder.merchant.name && (
+                  <ReceiptRow label={activeOrder.type === "buy" ? "Seller" : "Payer"}>
+                    {activeOrder.merchant.name}
+                  </ReceiptRow>
+                )}
+                <ReceiptRow label="Order ID">
+                  <button
+                    type="button"
+                    onClick={() => copyField("orderId", activeOrder.id)}
+                    className="inline-flex items-center gap-1.5 font-mono text-text-secondary hover:text-text-primary"
+                  >
+                    {activeOrder.id.slice(0, 8)}…
+                    {copiedField === "orderId" ? (
+                      <Check className="w-3.5 h-3.5 text-success" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                    )}
+                  </button>
+                </ReceiptRow>
+                {activeOrder.escrowTradeId != null && (
+                  <ReceiptRow label="Trade ID">
+                    <span className="font-mono">#{activeOrder.escrowTradeId}</span>
+                  </ReceiptRow>
+                )}
+                <ReceiptRow label="Created">
+                  {fmtDateTime(activeOrder.createdAt)}
+                </ReceiptRow>
+                {activeOrder.status !== "cancelled" &&
+                  activeOrder.status !== "expired" &&
+                  activeOrder.status !== "complete" && (
+                    <ReceiptRow label="Expires">
+                      {fmtDateTime(activeOrder.expiresAt)}
+                    </ReceiptRow>
+                  )}
+                {activeOrder.escrowTxHash && (
+                  <ReceiptRow label="Escrow tx">
+                    <a
+                      href={explorerUrl("tx", activeOrder.escrowTxHash)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-mono text-text-secondary hover:text-text-primary"
+                    >
+                      {activeOrder.escrowTxHash.slice(0, 6)}…{activeOrder.escrowTxHash.slice(-4)}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </ReceiptRow>
+                )}
+                {activeOrder.releaseTxHash && (
+                  <ReceiptRow label="Release tx">
+                    <a
+                      href={explorerUrl("tx", activeOrder.releaseTxHash)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-mono text-text-secondary hover:text-text-primary"
+                    >
+                      {activeOrder.releaseTxHash.slice(0, 6)}…{activeOrder.releaseTxHash.slice(-4)}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </ReceiptRow>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowReceipt(false)}
+                className={`mt-5 w-full py-3 rounded-xl text-[15px] font-medium ${MUTED_BTN}`}
+              >
+                Done
+              </button>
             </motion.div>
           </>
         )}

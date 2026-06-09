@@ -46,6 +46,7 @@ interface MerchantChatTabsProps {
     userName: string,
     orderNumber: string,
     orderType?: "buy" | "sell",
+    userAvatarUrl?: string | null,
   ) => void;
   onOpenDisputeChat?: (orderId: string, userName: string) => void;
   onClearUnread?: (orderId: string) => void;
@@ -136,16 +137,12 @@ export function MerchantChatTabs({
     "payment_confirmed",
     "releasing",
   ]);
-  const activeConversations = orderConversations.filter((c) =>
-    ACTIVE_STATUSES.has(c.order_status),
-  );
-  const activeUnread = activeConversations.reduce(
+  const inboxUnread = orderConversations.reduce(
     (sum, c) => sum + (c.unread_count || 0),
     0,
   );
 
-  const visibleConversations =
-    activeTab === "active" ? activeConversations : orderConversations;
+  const visibleConversations = orderConversations;
 
   // suppress unused warning — dispute data used in future dispute tab
   void isLoadingDisputes;
@@ -199,8 +196,8 @@ export function MerchantChatTabs({
       )}
 
       {/* Tab strip */}
-      <div style={{ padding: "0 0 12px" }}>
-        <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, padding: 3 }}>
+      <div style={{ padding: hideHeading ? "2px 16px 8px" : "0 0 8px" }}>
+        <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, width: "100%" }}>
           {/* sliding thumb */}
           <div style={{
             position: "absolute", top: 3, bottom: 3, borderRadius: 11,
@@ -211,13 +208,13 @@ export function MerchantChatTabs({
           }} />
           <button
             onClick={() => setActiveTab("active")}
-            style={{ flex: 1, position: "relative", zIndex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700, color: activeTab === "active" ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s" }}
+            style={{ flex: 1, position: "relative", zIndex: 1, padding: "7px 0", fontSize: 13, fontWeight: 700, color: activeTab === "active" ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s" }}
           >
-            Active Chat{activeUnread > 0 ? ` · ${activeUnread}` : ""}
+            Inbox{inboxUnread > 0 ? ` · ${inboxUnread}` : ""}
           </button>
           <button
             onClick={() => setActiveTab("support")}
-            style={{ flex: 1, position: "relative", zIndex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700, color: activeTab === "support" ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            style={{ flex: 1, position: "relative", zIndex: 1, padding: "7px 0", fontSize: 13, fontWeight: 700, color: activeTab === "support" ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
@@ -243,7 +240,7 @@ export function MerchantChatTabs({
               </svg>
             </div>
             <div style={{ fontWeight: 700, fontSize: 15, color: "#f5f5f7" }}>
-              No active order chats
+              No chats yet
             </div>
             <div style={{ color: "#86868b", fontSize: 13, fontWeight: 500, marginTop: 5, lineHeight: 1.4 }}>
               Chats open automatically when you<br />accept or place an order.
@@ -273,6 +270,7 @@ export function MerchantChatTabs({
                       conv.user.username,
                       conv.order_number,
                       conv.order_type,
+                      conv.user.avatar_url,
                     );
                     fetchWithAuth(`/api/orders/${conv.order_id}/messages`, {
                       method: "PATCH",
@@ -292,14 +290,22 @@ export function MerchantChatTabs({
                 >
                   {/* Avatar */}
                   <div style={{ position: "relative", flexShrink: 0 }}>
-                    <div style={{
-                      width: 46, height: 46, borderRadius: 999,
-                      background: "linear-gradient(150deg,#ff8a3d,#ff5d73)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: "#fff", fontWeight: 800, fontSize: 16,
-                    }}>
-                      {initials}
-                    </div>
+                    {conv.user.avatar_url ? (
+                      <img
+                        src={conv.user.avatar_url}
+                        alt={conv.user.username}
+                        style={{ width: 46, height: 46, borderRadius: 999, objectFit: "cover", border: "1px solid rgba(255,255,255,0.08)" }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 46, height: 46, borderRadius: 999,
+                        background: "linear-gradient(150deg,#ff8a3d,#ff5d73)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: "#fff", fontWeight: 800, fontSize: 16,
+                      }}>
+                        {initials}
+                      </div>
+                    )}
                     {/* Online dot */}
                     <span style={{
                       position: "absolute", bottom: 1, right: 1,
@@ -323,50 +329,40 @@ export function MerchantChatTabs({
 
                   {/* Content */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Row 1: name + time */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                    {/* Row 1: username + trade badge + time */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3, gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
                         <span style={{ fontWeight: 800, fontSize: 15, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {conv.user.username}
+                          {conv.user.username || "Merchant"}
                         </span>
-                        {hasUnread && (
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b8e9d4" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                          </svg>
-                        )}
+                        <span style={{
+                          flexShrink: 0,
+                          fontSize: 11, fontWeight: 700,
+                          color: "#aeaeb2",
+                          background: "rgba(255,255,255,0.07)",
+                          border: "1px solid rgba(255,255,255,0.10)",
+                          borderRadius: 6, padding: "1px 7px", whiteSpace: "nowrap",
+                        }}>
+                          {conv.order_type === "buy" ? "Buy" : "Sell"} {fiatSymbol}{Number(conv.fiat_amount).toLocaleString()}
+                        </span>
                       </div>
-                      <span style={{ fontSize: 11.5, color: "#86868b", flexShrink: 0, marginLeft: 8, fontWeight: 500 }}>
+                      <span style={{ fontSize: 11.5, color: "#86868b", flexShrink: 0, marginLeft: 4, fontWeight: 500 }}>
                         {formatRelativeTime(timestamp)}
                       </span>
                     </div>
 
                     {/* Row 2: last message + unread pill */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                       <span style={{ fontSize: 13, color: hasUnread ? "#f5f5f7" : "#86868b", fontWeight: hasUnread ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                         {conv.last_message
                           ? truncate(conv.last_message.content, 40)
-                          : `#${conv.order_number}`}
+                          : "No messages yet"}
                       </span>
                       {hasUnread && (
                         <span style={{ flexShrink: 0, background: "#b8e9d4", color: "#08080a", fontSize: 11, fontWeight: 800, borderRadius: 999, padding: "1px 7px" }}>
                           {conv.unread_count}
                         </span>
                       )}
-                    </div>
-
-                    {/* Row 3: order pill + status */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{
-                        fontSize: 11.5, fontWeight: 700, color: "#aeaeb2",
-                        background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)",
-                        borderRadius: 8, padding: "2px 8px", whiteSpace: "nowrap",
-                        fontVariantNumeric: "tabular-nums",
-                      }}>
-                        {Number(conv.crypto_amount).toFixed(2)} USDT → {fiatSymbol}{Number(conv.fiat_amount).toLocaleString()}
-                      </span>
-                      <span style={{ fontSize: 11.5, fontWeight: 700, color: isActive ? "#b8e9d4" : "#5a5a60", whiteSpace: "nowrap" }}>
-                        {conv.order_status}
-                      </span>
                     </div>
                   </div>
                 </button>

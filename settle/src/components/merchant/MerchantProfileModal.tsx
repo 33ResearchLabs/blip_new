@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, Check, AlertCircle, Shield } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { BlinkingAvatar } from '@/components/ui/BlinkingAvatar';
+
+const CLASSIC_SEEDS = [
+  'Felix', 'Aneka', 'Max', 'Luna',
+  'Charlie', 'Oliver', 'Milo', 'Sophie',
+];
 
 // 50 pre-made avatar options using DiceBear API and other sources
 const PRESET_AVATARS = [
@@ -70,11 +76,11 @@ const PRESET_AVATARS = [
 
 const TIER_COLORS: Record<string, string> = {
   newcomer: 'text-white/40',
-  bronze: 'text-primary/70',
-  silver: 'text-foreground/60',
+  bronze: 'text-[#f5f5f7]/70',
+  silver: 'text-white/60',
   gold: 'text-yellow-400',
-  platinum: 'text-blue-200',
-  diamond: 'text-cyan-300',
+  platinum: 'text-white/60',
+  diamond: 'text-white/60',
 };
 
 interface MerchantProfileModalProps {
@@ -201,7 +207,7 @@ export function MerchantProfileModal({
                   </div>
                 )}
                 {success && (
-                  <div className="absolute inset-0 bg-green-500/80 rounded-full flex items-center justify-center">
+                  <div className="absolute inset-0 bg-white/[0.06] rounded-full flex items-center justify-center">
                     <Check className="w-6 h-6 text-white" />
                   </div>
                 )}
@@ -219,7 +225,7 @@ export function MerchantProfileModal({
                       <div className="flex items-center gap-1.5 ml-2">
                         <div className="w-16 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-primary/60 rounded-full transition-all"
+                            className="h-full bg-white/[0.06] rounded-full transition-all"
                             style={{ width: `${reputation.progress.progress}%` }}
                           />
                         </div>
@@ -239,17 +245,18 @@ export function MerchantProfileModal({
               <label className="block text-xs text-white/40 font-mono uppercase tracking-wider mb-2">Bio</label>
               <textarea
                 value={bio}
-                onChange={(e) => setBio(e.target.value.slice(0, 200))}
+                onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell traders about yourself..."
                 rows={2}
-                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/30 resize-none transition-colors"
+                maxLength={200}
+                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-none transition-colors"
               />
               <div className="flex items-center justify-between mt-1.5">
                 <span className="text-[10px] text-white/20 font-mono">{bio.length}/200</span>
                 <button
                   onClick={handleSaveBio}
                   disabled={isSavingBio || bio === (currentBio || '')}
-                  className="px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 text-[11px] text-primary font-medium hover:bg-primary/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
+                  className="px-3 py-1 rounded-lg bg-white/[0.06] border border-white/[0.12] text-[11px] text-[#f5f5f7] font-medium hover:bg-white/[0.08] transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
                 >
                   {isSavingBio ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                   Save Bio
@@ -263,13 +270,68 @@ export function MerchantProfileModal({
                 <label className="block text-xs text-white/40 font-mono uppercase tracking-wider mb-2">Badges</label>
                 <div className="flex flex-wrap gap-2">
                   {reputation.score.badges.map((badge: string) => (
-                    <span key={badge} className="px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/60 font-medium">
+                    <span key={badge} className="px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.09] text-[11px] text-white/70 font-medium">
                       {badge.replace(/_/g, ' ')}
                     </span>
                   ))}
                 </div>
               </div>
             )}
+
+            {/* Classics — animated blinking avatars */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <label className="block text-xs text-white/40 font-mono uppercase tracking-wider">Classics</label>
+                <span style={{
+                  fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  padding: '2px 8px', borderRadius: 99,
+                  background: 'rgba(184,233,212,0.1)', border: '1px solid rgba(184,233,212,0.22)',
+                  color: '#b8e9d4',
+                }}>Animated</span>
+              </div>
+              <div className="grid grid-cols-8 gap-2">
+                {CLASSIC_SEEDS.map((seed) => {
+                  const val = `blip:classic:${seed}`;
+                  const active = selectedPreset === val;
+                  return (
+                    <motion.button
+                      key={seed}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.93 }}
+                      onClick={() => handlePresetSelect(val)}
+                      disabled={isUploading}
+                      title={seed}
+                      style={{
+                        position: 'relative',
+                        borderRadius: 999,
+                        overflow: 'hidden',
+                        aspectRatio: '1',
+                        border: active ? '2px solid rgba(184,233,212,0.6)' : '2px solid rgba(255,255,255,0.08)',
+                        boxShadow: active ? '0 0 0 2px rgba(184,233,212,0.18)' : 'none',
+                        background: 'none',
+                        cursor: isUploading ? 'not-allowed' : 'pointer',
+                        opacity: isUploading ? 0.5 : 1,
+                        padding: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'border-color 0.15s, box-shadow 0.15s',
+                      }}
+                    >
+                      <BlinkingAvatar seed={seed} size={52} />
+                      {active && !success && isUploading && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 999 }}>
+                          <Loader2 className="w-4 h-4 text-white animate-spin" />
+                        </div>
+                      )}
+                      {active && success && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(184,233,212,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 999 }}>
+                          <Check className="w-3.5 h-3.5 text-[#b8e9d4]" />
+                        </div>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Avatar Grid */}
             <label className="block text-xs text-white/40 font-mono uppercase tracking-wider mb-3">Choose Avatar</label>
@@ -283,13 +345,13 @@ export function MerchantProfileModal({
                   disabled={isUploading}
                   className={`relative aspect-square rounded-full overflow-hidden border-2 transition-all ${
                     selectedPreset === avatarUrl
-                      ? 'border-primary ring-2 ring-primary/30'
+                      ? 'border-white/30 ring-2 ring-white/20'
                       : 'border-white/10 hover:border-border-strong'
                   } ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <img src={avatarUrl} alt={`Avatar ${index + 1}`} className="absolute inset-0 w-full h-full object-cover" />
                   {selectedPreset === avatarUrl && !success && (
-                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-white/[0.06] flex items-center justify-center">
                       {isUploading && <Loader2 className="w-6 h-6 text-white animate-spin" />}
                     </div>
                   )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -171,6 +172,7 @@ export interface SupportScreenProps {
 }
 
 export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps) => {
+  const router = useRouter();
   const [query, setQuery] = useState("");
 
   const handleBack = () => {
@@ -191,9 +193,16 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
     window.open(TELEGRAM_COMMUNITY_URL, "_blank", "noopener,noreferrer");
   };
 
-  // Stub: a future "/support/tickets" route would land here. For now defer
-  // to Telegram so the affordance is never a dead-end.
-  const handleMyTickets = () => openTelegramDm();
+  // "My Tickets" opens the user's own ticket list (GET /api/issues,
+  // user-scoped) where they can track status + read our replies.
+  const handleMyTickets = () => {
+    try { sessionStorage.setItem("blip_return_screen", "support"); } catch { /* ignore */ }
+    router.push("/user/my-issues");
+  };
+
+  const raiseTicket = () => {
+    setScreen("raise-ticket");
+  };
 
   // Filter the issues grid by the search query so the empty state is real
   // (something the user can hit with a typo or unrelated term).
@@ -205,49 +214,34 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
 
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
-      {/* ── Header — back + title on the left, "My Tickets" pill on the right ── */}
-      <header className="px-5 pt-10 pb-3 shrink-0 flex items-center gap-3">
+      {/* ── Header — matches Activity / Notifications / Messages / Profile tabs ── */}
+      <header className="px-5 pt-4 pb-4 shrink-0">
         <motion.button
           whileTap={{ scale: 0.92 }}
           onClick={handleBack}
           aria-label="Back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle"
+          className="w-9 h-9 rounded-[14px] flex items-center justify-center bg-surface-card border border-border-subtle mb-3"
         >
           <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </motion.button>
-        <h1 className="text-[17px] font-semibold text-text-primary">Support</h1>
-        <div className="flex-1" />
-        <motion.button
-          whileTap={{ scale: 0.95 }}
-          whileHover={{ y: -1 }}
-          onClick={handleMyTickets}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl ${CARD} hover:bg-surface-hover transition-colors`}
-        >
-          <Ticket className="w-[15px] h-[15px] text-text-secondary" strokeWidth={2} />
-          <span className="text-[12px] font-bold text-text-primary">My Tickets</span>
-        </motion.button>
+        <div className="flex items-center justify-between">
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Support</p>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={handleMyTickets}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-[14px] ${CARD}`}
+          >
+            <Ticket className="w-[15px] h-[15px] text-text-secondary" strokeWidth={2} />
+            <span className="text-[12px] font-bold text-text-primary">My Tickets</span>
+          </motion.button>
+        </div>
       </header>
 
       {/* ── Scrollable body ── */}
-      <div className="flex-1 px-5 pb-8 overflow-y-auto scrollbar-hide">
-        <div className="mx-auto w-full max-w-[440px]">
+      <div className="flex-1 px-5 pb-28 overflow-y-auto scrollbar-hide">
+        <div className="mx-auto w-full max-w-[440px] md:max-w-[min(1100px,97vw)]">
 
-          {/* ── 1. Hero ── */}
-          <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="pt-4 pb-6"
-          >
-            <h2 className="text-[40px] font-extrabold tracking-[-0.035em] leading-[1.02] text-text-primary">
-              Need help?
-            </h2>
-            <p className="mt-2 text-[14px] font-medium text-text-secondary">
-              You are in the right place.
-            </p>
-          </motion.section>
-
-          {/* ── 2. Quick actions — 3 tall cards ── */}
+          {/* ── 2. Quick actions — 2 tall cards ── */}
           <motion.section
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -255,9 +249,8 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
             className="mb-5"
           >
             <div className="grid grid-cols-2 gap-2.5">
-              {/* <QuickAction label="Live Chat"   Icon={MessageCircle} onClick={openTelegramDm} /> */}
-              <QuickAction label="Telegram"    Icon={Send}          onClick={openTelegramDm} />
-              <QuickAction label="Help Center" Icon={BookOpen}      onClick={openTelegramDm} />
+              <QuickAction label="Raise a ticket" Icon={Ticket} onClick={raiseTicket} />
+              <QuickAction label="Telegram"       Icon={Send}   onClick={openTelegramDm} />
             </div>
           </motion.section>
 
@@ -331,7 +324,7 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
                     key={key}
                     title={title}
                     Icon={Icon}
-                    onClick={openTelegramDm}
+                    onClick={raiseTicket}
                   />
                 ))}
               </div>

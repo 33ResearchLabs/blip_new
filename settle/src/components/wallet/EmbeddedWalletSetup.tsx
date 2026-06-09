@@ -209,18 +209,18 @@ export function EmbeddedWalletSetup({ actorId, onWalletCreated, onClose }: Embed
             <summary className="px-3 py-2 text-[11px] font-mono cursor-pointer select-none" style={{ color: colors.text.tertiary }}>
               Also show base58 private key (advanced)
             </summary>
-            <div className="relative px-3 pb-3">
-              <div className="p-3 rounded-lg font-mono text-xs break-all select-all"
+            <div className="px-3 pb-3">
+              <div className="relative p-3 pr-10 rounded-lg font-mono text-xs break-all select-all"
                 style={{ background: colors.bg.primary, border: `1px solid ${colors.border.subtle}`, color: colors.text.secondary }}>
                 {backupKey}
+                <button
+                  onClick={handleCopyKey}
+                  className="absolute top-2 right-2 p-1.5 rounded-md transition-colors"
+                  style={{ background: colors.surface.active }}
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" style={{ color: colors.text.tertiary }} />}
+                </button>
               </div>
-              <button
-                onClick={handleCopyKey}
-                className="absolute top-5 right-5 p-1.5 rounded-md transition-colors"
-                style={{ background: colors.surface.active }}
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" style={{ color: colors.text.tertiary }} />}
-              </button>
             </div>
           </details>
 
@@ -554,11 +554,22 @@ function PinFieldDisplay({
   const dotEmpty = isLight ? 'rgba(15,23,42,0.22)' : 'rgba(255,255,255,0.18)';
   const digitColor = isLight ? '#0f172a' : '#fff';
 
+  // Root is a div (not a button): it carries an interactive `trailing` button
+  // (the show/hide eye toggle), and a <button> may not contain another
+  // <button> — that nesting triggers a React hydration error. role/tabIndex/
+  // keydown preserve the tap-to-focus button semantics.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="w-full text-left rounded-xl px-4 py-3 transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className="w-full text-left rounded-xl px-4 py-3 transition-colors cursor-pointer"
       style={{
         background: fieldBg,
         border: `1px solid ${active ? colors.accent.primary : fieldBorder}`,
@@ -602,6 +613,6 @@ function PinFieldDisplay({
         </div>
         {trailing}
       </div>
-    </button>
+    </div>
   );
 }

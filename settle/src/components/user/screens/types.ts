@@ -1,5 +1,5 @@
 // Types
-export type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade" | "wallet" | "notifications" | "support" | "rewards";
+export type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade" | "wallet" | "notifications" | "support" | "rewards" | "raise-ticket" | "send" | "reputation";
 export type TradeType = "buy" | "sell";
 export type TradePreference = "fast" | "cheap" | "best";
 export type PaymentMethod = "bank" | "cash";
@@ -11,6 +11,7 @@ export interface Merchant {
   id: string;
   display_name: string;
   business_name: string;
+  username?: string;
   rating: number;
   total_trades: number;
   is_online: boolean;
@@ -112,6 +113,7 @@ export interface Order {
   merchant: {
     id: string;
     name: string;
+    username?: string;
     rating: number;
     trades: number;
     rate: number;

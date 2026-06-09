@@ -2,8 +2,10 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import api from '@/lib/api/client';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { clearAuthStorageOnLogout } from '@/lib/auth/logoutCleanup';
 import type { User, Order, OrderWithRelations, MerchantOfferWithMerchant, UserBankAccount } from '@/lib/types/database';
+import type { PaymentMethodItem } from '@/components/user/PaymentMethodSelector';
 
 // Types for context
 interface AppState {
@@ -18,6 +20,12 @@ interface AppState {
 
   // Bank Accounts
   bankAccounts: UserBankAccount[];
+
+  // Saved payment methods — preloaded at login so the trade screen's payment
+  // sheet opens already populated instead of fetching on open (no flash).
+  // `paymentMethodsLoaded` distinguishes "not fetched yet" from "genuinely none".
+  paymentMethods: PaymentMethodItem[];
+  paymentMethodsLoaded: boolean;
 
   // Trade settings
   tradePreference: 'fast' | 'cheap' | 'best';
@@ -41,6 +49,10 @@ interface AppContextType extends AppState {
   fetchBankAccounts: () => Promise<void>;
   addBankAccount: (data: { bank_name: string; account_name: string; iban: string }) => Promise<void>;
 
+  // Payment method actions. Accepts an explicit userId because the user app
+  // identifies via useUserAuth, not AppContext.user.
+  fetchPaymentMethods: (userId?: string) => Promise<void>;
+
   // Settings
   setTradePreference: (pref: 'fast' | 'cheap' | 'best') => void;
   setPaymentMethod: (method: 'bank' | 'cash') => void;
@@ -59,6 +71,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     orders: [],
     activeOrder: null,
     bankAccounts: [],
+    paymentMethods: [],
+    paymentMethodsLoaded: false,
     tradePreference: 'fast',
     paymentMethod: 'bank',
   });
@@ -111,6 +125,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       orders: [],
       activeOrder: null,
       bankAccounts: [],
+      paymentMethods: [],
+      paymentMethodsLoaded: false,
     }));
   }, []);
 
@@ -238,6 +254,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [state.user?.id]);
 
+  // Fetch payment methods — cached in context so the trade screen's selector
+  // can seed from it instantly. Never throws; the selector still has its own
+  // fetch as a fallback, so a failure here just means it loads on open as before.
+  const fetchPaymentMethods = useCallback(async (userId?: string) => {
+    const uid = userId ?? state.user?.id;
+    if (!uid) return;
+    try {
+      const res = await fetchWithAuth(`/api/users/${uid}/payment-methods`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.data)) {
+        setState(s => ({ ...s, paymentMethods: data.data, paymentMethodsLoaded: true }));
+      }
+    } catch {
+      // Swallow — selector falls back to its own on-open fetch.
+    }
+  }, [state.user?.id]);
+
+  // Preload once the user id is known (login or restored session). Reliable
+  // even on first login, where calling it inside connectWallet would read a
+  // stale (null) user id from the callback closure.
+  useEffect(() => {
+    if (state.user?.id) fetchPaymentMethods();
+  }, [state.user?.id, fetchPaymentMethods]);
+
   // Settings
   const setTradePreference = useCallback((pref: 'fast' | 'cheap' | 'best') => {
     setState(s => ({ ...s, tradePreference: pref }));
@@ -259,6 +300,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     submitReview,
     fetchBankAccounts,
     addBankAccount,
+    fetchPaymentMethods,
     setTradePreference,
     setPaymentMethod,
     refreshOrder,
@@ -293,6 +335,11 @@ export function useOrders() {
 export function useBankAccounts() {
   const { bankAccounts, fetchBankAccounts, addBankAccount } = useApp();
   return { bankAccounts, fetchBankAccounts, addBankAccount };
+}
+
+export function useUserPaymentMethods() {
+  const { paymentMethods, paymentMethodsLoaded, fetchPaymentMethods } = useApp();
+  return { paymentMethods, paymentMethodsLoaded, fetchPaymentMethods };
 }
 
 export function useTradeSettings() {

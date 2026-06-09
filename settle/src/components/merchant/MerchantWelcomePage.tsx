@@ -109,7 +109,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
   ];
 
   return (
-    <div className="merchant-welcome min-h-screen bg-[var(--mw-bg-primary)] text-[var(--mw-text-primary)] overflow-x-hidden">
+    <div className="merchant-welcome min-h-screen bg-[var(--mw-bg)] text-[var(--mw-text)] overflow-x-hidden">
       {/* Ambient glow */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-[var(--mw-glow-hero)] rounded-full blur-[180px]" />
@@ -117,19 +117,19 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
       </div>
 
       {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 bg-[var(--mw-bg-primary)]/80 backdrop-blur-xl border-b border-[var(--mw-divider)]">
+      <nav className="fixed top-0 w-full z-50 bg-[var(--mw-bg)]/80 backdrop-blur-xl border-b border-[var(--mw-divider)]">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Zap className="w-6 h-6 text-[var(--mw-text-primary)] fill-[var(--mw-text-primary)]" />
+            <Zap className="w-6 h-6 text-[var(--mw-text)] fill-[var(--mw-text)]" />
             <span className="text-lg leading-none">
-              <span className="font-bold text-[var(--mw-text-primary)]">Blip</span>{" "}
+              <span className="font-bold text-[var(--mw-text)]">Blip</span>{" "}
               <span className="italic text-[var(--mw-text-secondary)]">money</span>
             </span>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={onSignIn}
-              className="text-sm text-[var(--mw-text-tertiary)] hover:text-[var(--mw-text-primary)] transition-colors"
+              className="text-sm text-[var(--mw-text-tertiary)] hover:text-[var(--mw-text)] transition-colors"
             >
               Sign In
             </button>
@@ -162,7 +162,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
 
               <motion.h1
                 variants={fadeUp}
-                className="text-4xl sm:text-5xl md:text-[3.5rem] font-extrabold text-[var(--mw-text-primary)] leading-[1.1] tracking-tight mb-5"
+                className="text-4xl sm:text-5xl md:text-[3.5rem] font-extrabold text-[var(--mw-text)] leading-[1.1] tracking-tight mb-5"
               >
                 Own the Flow
                 <br />
@@ -244,9 +244,9 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                   />
 
                   {/* ── Navbar ── */}
-                  <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--mw-bg-primary)] border-b border-[var(--mw-divider)]">
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--mw-bg)] border-b border-[var(--mw-divider)]">
                     <div className="flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-[var(--mw-text-primary)] fill-[var(--mw-text-primary)]" />
+                      <Zap className="w-3.5 h-3.5 text-[var(--mw-text)] fill-[var(--mw-text)]" />
                       <span className="text-[10px] font-bold text-[var(--mw-text-secondary)]">Blip <span className="italic font-normal text-[var(--mw-text-muted)]">money</span></span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -282,7 +282,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                           <Wallet className="w-2 h-2 text-[var(--mw-text-muted)]" />
                           <span className="text-[6px] text-[var(--mw-text-muted)] uppercase tracking-wider font-mono">Available Balance</span>
                         </div>
-                        <p className="text-lg font-black text-[var(--mw-text-primary)] font-mono leading-none">5,150</p>
+                        <p className="text-lg font-black text-[var(--mw-text)] font-mono leading-none">5,150</p>
                         <p className="text-[8px] text-[var(--mw-text-muted)] font-mono mt-0.5">USDT</p>
                         <div className="flex items-center gap-1 mt-1">
                           <TrendingUp className="w-2 h-2 text-[var(--mw-success)]" />
@@ -301,7 +301,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                           <div className="flex-1 text-center text-[6px] py-0.5 rounded bg-[var(--mw-surface)] text-[var(--mw-text-muted)] font-mono">USDT/AED</div>
                           <div className="flex-1 text-center text-[6px] py-0.5 rounded bg-[var(--mw-accent-dim)] border border-[var(--mw-border)] text-[var(--mw-accent)] font-mono font-bold">USDT/INR</div>
                         </div>
-                        <p className="text-sm font-bold text-[var(--mw-text-primary)] font-mono text-center">92.15</p>
+                        <p className="text-sm font-bold text-[var(--mw-text)] font-mono text-center">92.15</p>
                         <p className="text-[7px] text-[var(--mw-text-muted)] font-mono text-center">INR / USDT</p>
                       </div>
 
@@ -312,7 +312,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                           <span className="text-[6px] px-1 py-0.5 rounded bg-[var(--mw-accent-dim)] text-[var(--mw-accent)]/60 font-mono">MAX</span>
                         </div>
                         <div className="flex items-baseline gap-0.5">
-                          <span className="text-sm font-bold text-[var(--mw-text-primary)] font-mono">196</span>
+                          <span className="text-sm font-bold text-[var(--mw-text)] font-mono">196</span>
                           <span className="text-[8px] text-[var(--mw-text-muted)] font-mono">USDT</span>
                         </div>
                         <p className="text-[7px] text-[var(--mw-text-muted)] font-mono">= 18,061 INR</p>
@@ -431,9 +431,9 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                       </div>
                       <div className="flex-1 p-1.5 space-y-1 overflow-hidden">
                         {[
-                          { rank: 1, name: 'shubh_trade', vol: '$48.2K', medal: 'text-yellow-400' },
-                          { rank: 2, name: 'crypto_desk', vol: '$35.1K', medal: 'text-gray-300' },
-                          { rank: 3, name: 'gorav_pay', vol: '$28.7K', medal: 'text-amber-600' },
+                          { rank: 1, name: 'shubh_trade', vol: '$48.2K', medal: 'text-[#f5f5f7]' },
+                          { rank: 2, name: 'crypto_desk', vol: '$35.1K', medal: 'text-white/60' },
+                          { rank: 3, name: 'gorav_pay', vol: '$28.7K', medal: 'text-white/40' },
                           { rank: 4, name: 'deep_finance', vol: '$22.0K', medal: 'text-[var(--mw-text-muted)]' },
                           { rank: 5, name: 'proto_net', vol: '$18.5K', medal: 'text-[var(--mw-text-muted)]' },
                         ].map((t) => (
@@ -506,7 +506,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                   </div>
 
                   {/* Bottom status bar */}
-                  <div className="flex items-center justify-between px-3 py-1 bg-[var(--mw-bg-primary)] border-t border-[var(--mw-divider)]">
+                  <div className="flex items-center justify-between px-3 py-1 bg-[var(--mw-bg)] border-t border-[var(--mw-divider)]">
                     <div className="flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-[var(--mw-success)]" />
                       <span className="text-[7px] text-[var(--mw-text-muted)] font-mono">Connected</span>
@@ -559,7 +559,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
           >
             {stats.map((s, i) => (
               <div key={i} className="text-center">
-                <div className="text-xl sm:text-2xl font-bold text-[var(--mw-text-primary)] mb-1 font-mono">
+                <div className="text-xl sm:text-2xl font-bold text-[var(--mw-text)] mb-1 font-mono">
                   {s.value}
                 </div>
                 <div className="text-[11px] text-[var(--mw-text-muted)] uppercase tracking-wider">
@@ -578,7 +578,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
             viewport={{ once: true, margin: "-80px" }}
             className="text-center mb-14"
           >
-            <h2 className="text-2xl sm:text-3xl font-bold text-[var(--mw-text-primary)] mb-3">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[var(--mw-text)] mb-3">
               How It Works
             </h2>
             <p className="text-sm text-[var(--mw-text-muted)]">
@@ -610,7 +610,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                 >
                   {step.icon}
                 </div>
-                <h4 className="text-sm font-bold text-[var(--mw-text-primary)] mb-1.5">
+                <h4 className="text-sm font-bold text-[var(--mw-text)] mb-1.5">
                   {step.title}
                 </h4>
                 <p className="text-xs text-[var(--mw-text-muted)] leading-relaxed">
@@ -629,7 +629,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
             viewport={{ once: true, margin: "-80px" }}
             className="text-center mb-14"
           >
-            <h2 className="text-2xl sm:text-3xl font-bold text-[var(--mw-text-primary)] mb-3">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[var(--mw-text)] mb-3">
               Built for Professionals
             </h2>
             <p className="text-sm text-[var(--mw-text-muted)]">
@@ -650,7 +650,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                 <div className="w-11 h-11 rounded-xl bg-[var(--mw-surface)] flex items-center justify-center mb-4 text-[var(--mw-text-tertiary)] group-hover:text-[var(--mw-accent)] group-hover:bg-[var(--mw-accent-dim)] transition-colors">
                   {f.icon}
                 </div>
-                <h4 className="text-sm font-bold text-[var(--mw-text-primary)] mb-1.5">
+                <h4 className="text-sm font-bold text-[var(--mw-text)] mb-1.5">
                   {f.title}
                 </h4>
                 <p className="text-xs text-[var(--mw-text-muted)] leading-relaxed">
@@ -677,7 +677,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                   Earn More
                 </span>
               </div>
-              <h3 className="text-2xl sm:text-3xl font-bold text-[var(--mw-text-primary)] mb-3 leading-tight">
+              <h3 className="text-2xl sm:text-3xl font-bold text-[var(--mw-text)] mb-3 leading-tight">
                 Set Your Own Spreads. <br className="hidden sm:block" />
                 Keep 100% of Your Margin.
               </h3>
@@ -711,7 +711,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
               <div className="w-16 h-16 rounded-2xl bg-[var(--mw-accent-dim)] flex items-center justify-center mb-5">
                 <Wallet className="w-8 h-8 text-[var(--mw-accent)]" />
               </div>
-              <h4 className="text-lg font-bold text-[var(--mw-text-primary)] mb-2">
+              <h4 className="text-lg font-bold text-[var(--mw-text)] mb-2">
                 KYB Verified
               </h4>
               <p className="text-xs text-[var(--mw-text-muted)] mb-5 leading-relaxed">
@@ -733,7 +733,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
             className="relative overflow-hidden p-10 sm:p-16 rounded-[32px] text-center bg-[var(--mw-bg-secondary)] border border-[var(--mw-border)]"
           >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.03),transparent)]" />
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--mw-text-primary)] mb-4 relative z-10">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--mw-text)] mb-4 relative z-10">
               Ready to Start Earning?
             </h2>
             <p className="text-[var(--mw-text-tertiary)] text-sm sm:text-base mb-8 max-w-md mx-auto relative z-10">
@@ -743,7 +743,7 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 relative z-10">
               <button
                 onClick={onGetStarted}
-                className="w-full sm:w-auto px-10 py-4 bg-[var(--mw-text-primary)] text-[var(--mw-bg-primary)] rounded-2xl font-bold text-sm hover:opacity-90 transition-all"
+                className="w-full sm:w-auto px-10 py-4 bg-[var(--mw-text)] text-[var(--mw-bg)] rounded-2xl font-bold text-sm hover:opacity-90 transition-all"
               >
                 Create Merchant Account
               </button>
@@ -762,8 +762,8 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
       <footer className="border-t border-[var(--mw-divider)] py-10">
         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-[var(--mw-text-primary)] fill-[var(--mw-text-primary)]" />
-            <span className="text-sm font-bold text-[var(--mw-text-primary)]">
+            <Zap className="w-5 h-5 text-[var(--mw-text)] fill-[var(--mw-text)]" />
+            <span className="text-sm font-bold text-[var(--mw-text)]">
               Blip <span className="italic font-normal text-[var(--mw-text-tertiary)]">money</span>
             </span>
           </div>

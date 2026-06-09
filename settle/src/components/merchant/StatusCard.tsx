@@ -436,14 +436,14 @@ export const StatusCard = memo(function StatusCard({
         <div className="flex items-center gap-4 relative z-10">
           {reputationTier && (
             <span className="flex items-center gap-1">
-              <Shield className="w-2.5 h-2.5 text-primary/60" />
+              <Shield className="w-2.5 h-2.5 text-[#f5f5f7]/60" />
               <span className="text-foreground/70 font-bold tabular-nums">
                 {reputationTier.score}
               </span>
             </span>
           )}
           <span className="flex items-center gap-1">
-            <Coins className="w-2.5 h-2.5 text-amber-400/80" />
+            <Coins className="w-2.5 h-2.5 text-white/50" />
             <span className="text-foreground/70 font-bold tabular-nums">
               {coinBalance != null ? coinBalance.toLocaleString('en-US') : "—"}
             </span>
@@ -474,7 +474,7 @@ export const StatusCard = memo(function StatusCard({
       <div data-tour="fund-wallet" className="flex-1 flex flex-col items-center justify-center px-4 py-2 gap-2 relative">
         {/* Ambient glow behind amount */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-48 h-24 bg-primary/[0.03] rounded-full blur-[60px]" />
+          <div className="w-48 h-24 bg-white/[0.06] rounded-full blur-[60px]" />
         </div>
 
         {/* USDT Label + wallet-actions gear menu.
@@ -521,7 +521,7 @@ export const StatusCard = memo(function StatusCard({
                 <button
                   type="button"
                   onClick={onAddWallet}
-                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/[0.12] border border-primary/30 text-[11px] font-bold text-primary font-mono hover:bg-primary/[0.18] transition-colors"
+                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.12] text-[11px] font-bold text-[#f5f5f7] font-mono hover:bg-white/[0.06] transition-colors"
                 >
                   <Lock className="w-3 h-3" />
                   Unlock Wallet
@@ -541,7 +541,7 @@ export const StatusCard = memo(function StatusCard({
                 <button
                   type="button"
                   onClick={onAddWallet}
-                  className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/[0.10] border border-primary/25 text-[10px] font-bold text-primary font-mono hover:bg-primary/15 transition-colors"
+                  className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.12] text-[10px] font-bold text-[#f5f5f7] font-mono hover:bg-white/[0.08] transition-colors"
                 >
                   <Plus className="w-2.5 h-2.5" />
                   Add Wallet
@@ -639,13 +639,13 @@ export const StatusCard = memo(function StatusCard({
 
         {/* 24h Earnings badge */}
         {todayEarnings !== 0 && (
-          <div className="mt-2.5 flex items-center gap-1 px-2 py-0.5 bg-primary/[0.06] border border-primary/15 rounded-full relative z-10">
-            <TrendingUp className="w-2.5 h-2.5 text-primary" />
-            <span className="text-[10px] font-bold text-primary font-mono tabular-nums">
+          <div className="mt-2.5 flex items-center gap-1 px-2 py-0.5 bg-white/[0.06] border border-white/[0.12] rounded-full relative z-10">
+            <TrendingUp className="w-2.5 h-2.5 text-[#f5f5f7]" />
+            <span className="text-[10px] font-bold text-[#f5f5f7] font-mono tabular-nums">
               {todayEarnings > 0 ? "+" : ""}
               {todayEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
             </span>
-            <span className="text-[9px] text-primary/50 font-mono">24h</span>
+            <span className="text-[9px] text-[#f5f5f7]/50 font-mono">24h</span>
           </div>
         )}
 
@@ -779,7 +779,7 @@ export const StatusCard = memo(function StatusCard({
                         if (e.key === "Escape") setShowInrInput(false);
                       }}
                       placeholder="0"
-                      className="w-14 bg-foreground/[0.03] border border-foreground/[0.08] rounded px-1 py-0.5 text-[10px] text-white font-mono outline-none focus:border-white/20"
+                      className="w-14 bg-foreground/[0.03] border border-foreground/[0.08] rounded px-1 py-0.5 text-[10px] text-white font-mono outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
                       autoFocus
                     />
                     <button
@@ -799,9 +799,9 @@ export const StatusCard = memo(function StatusCard({
 
             {/* Success toast */}
             {conversionSuccess && (
-              <div className="flex items-center gap-1.5 py-1 px-2 bg-primary/[0.06] border border-primary/20 rounded">
-                <Check className="w-3 h-3 text-primary" />
-                <span className="text-[9px] text-primary">
+              <div className="flex items-center gap-1.5 py-1 px-2 bg-white/[0.06] border border-white/[0.12] rounded">
+                <Check className="w-3 h-3 text-[#f5f5f7]" />
+                <span className="text-[9px] text-[#f5f5f7]">
                   {conversionSuccess}
                 </span>
               </div>
@@ -845,7 +845,7 @@ export const StatusCard = memo(function StatusCard({
                 onClick={() => { if (tf !== marketTimeframe) { setMarketData(null); setMarketTimeframe(tf); } }}
                 className={`px-1.5 py-[2px] rounded text-[8px] font-mono font-bold transition-all ${
                   marketTimeframe === tf
-                    ? 'bg-primary/10 text-primary border border-primary/20'
+                    ? 'bg-white/[0.06] text-[#f5f5f7] border border-white/[0.12]'
                     : 'text-foreground/20 hover:text-foreground/35'
                 }`}
               >
@@ -874,8 +874,8 @@ export const StatusCard = memo(function StatusCard({
                   <span
                     className={`text-[7px] font-mono px-1 py-[1px] rounded ${
                       marketData.price_mode === "MANUAL"
-                        ? "bg-primary/10 text-primary border border-primary/15"
-                        : "bg-green-500/10 text-green-400 border border-green-500/15"
+                        ? "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.12]"
+                        : "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.09]"
                     }`}
                   >
                     {marketData.price_mode}
@@ -885,7 +885,7 @@ export const StatusCard = memo(function StatusCard({
                       <span
                         className={`text-lg font-bold font-mono tabular-nums ${
                           marketData.price_mode === "MANUAL"
-                            ? "text-primary"
+                            ? "text-[#f5f5f7]"
                             : "text-white"
                         }`}
                       >
@@ -896,7 +896,7 @@ export const StatusCard = memo(function StatusCard({
                       {prevAvgRef.current !== null &&
                         prevAvgRef.current !== marketData.avg_5m &&
                         (marketData.avg_5m > prevAvgRef.current ? (
-                          <TrendingUp className="w-3 h-3 text-green-400" />
+                          <TrendingUp className="w-3 h-3 text-[#f5f5f7]" />
                         ) : (
                           <TrendingDown className="w-3 h-3 text-red-400" />
                         ))}
@@ -943,7 +943,7 @@ export const StatusCard = memo(function StatusCard({
                                 100 >
                               0
                                 ? "text-red-400"
-                                : "text-green-400"
+                                : "text-[#f5f5f7]"
                             }`}
                           >
                             {((customRefPrice - marketData.avg_5m) /
@@ -963,7 +963,7 @@ export const StatusCard = memo(function StatusCard({
                       </div>
                       <button
                         onClick={() => setShowRefPriceInput(true)}
-                        className="px-2 py-1 rounded bg-foreground/[0.04] hover:bg-accent-subtle border border-primary/20 text-[9px] text-primary font-bold transition-all"
+                        className="px-2 py-1 rounded bg-foreground/[0.04] hover:bg-accent-subtle border border-white/[0.12] text-[9px] text-[#f5f5f7] font-bold transition-all"
                       >
                         {customRefPrice
                           ? `${marketPair === "usdt_inr" ? "₹" : ""}${customRefPrice.toFixed(2)}${marketPair === "usdt_aed" ? " AED" : ""}`
@@ -981,7 +981,7 @@ export const StatusCard = memo(function StatusCard({
                           }
                           placeholder={marketData.avg_5m.toFixed(2)}
                           step={marketPair === "usdt_aed" ? "0.0001" : "0.01"}
-                          className="flex-1 bg-foreground/[0.02] border border-foreground/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-primary/30"
+                          className="flex-1 bg-foreground/[0.02] border border-foreground/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
                           autoFocus
                         />
                         <button
@@ -993,7 +993,7 @@ export const StatusCard = memo(function StatusCard({
                               setShowRefPriceInput(false);
                             }
                           }}
-                          className="px-2 py-1 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded text-[9px] text-primary font-bold"
+                          className="px-2 py-1 bg-white/[0.06] hover:bg-white/[0.08] border border-white/[0.12] rounded text-[9px] text-[#f5f5f7] font-bold"
                         >
                           Set
                         </button>
@@ -1020,7 +1020,7 @@ export const StatusCard = memo(function StatusCard({
                                 100 >
                               0
                                 ? "text-red-400"
-                                : "text-green-400"
+                                : "text-[#f5f5f7]"
                             }`}
                           >
                             {((parseFloat(refPriceInputValue) -
@@ -1123,7 +1123,7 @@ function WalletAddressRow({ onOpenDeposit }: { onOpenDeposit?: () => void }) {
           {address.slice(0, 6)}…{address.slice(-4)}
         </span>
         {copied ? (
-          <CheckIcon className="w-3 h-3 text-emerald-400" />
+          <CheckIcon className="w-3 h-3 text-[#f5f5f7]" />
         ) : (
           <CopyIcon className="w-3 h-3" />
         )}

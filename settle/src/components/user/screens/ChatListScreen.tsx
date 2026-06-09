@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { MessageCircle, Shield, AlertTriangle, Bell } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { Screen, Order } from "./types";
 
 type TimeFilter = 'today' | '7d' | '30d' | 'all';
@@ -32,6 +33,7 @@ export interface ChatListScreenProps {
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   maxW: string;
   notificationCount?: number;
+  hideBottomNav?: boolean;
 }
 
 export const ChatListScreen = ({
@@ -42,6 +44,7 @@ export const ChatListScreen = ({
   setOrders,
   maxW,
   notificationCount = 0,
+  hideBottomNav = false,
 }: ChatListScreenProps) => {
   const [activeTab, setActiveTab] = useState<'chats' | 'disputes'>('chats');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
@@ -119,10 +122,9 @@ export const ChatListScreen = ({
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
       {/* ── Header ── */}
-      <header className="px-5 pt-10 pb-3 shrink-0">
+      <header className="px-5 pt-4 pb-4 shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase mb-1">Inbox</p>
             <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Messages</p>
           </div>
           <button
@@ -146,7 +148,7 @@ export const ChatListScreen = ({
           className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
             activeTab === 'chats'
               ? 'bg-accent text-accent-text'
-              : 'bg-surface-hover text-text-tertiary'
+              : 'bg-surface-hover text-text-secondary-strong'
           }`}
         >
           <MessageCircle size={13} strokeWidth={2.2} />
@@ -164,7 +166,7 @@ export const ChatListScreen = ({
           className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
             activeTab === 'disputes'
               ? 'bg-accent text-accent-text'
-              : 'bg-surface-hover text-text-tertiary'
+              : 'bg-surface-hover text-text-secondary-strong'
           }`}
         >
           <Shield size={13} strokeWidth={2.2} />
@@ -189,7 +191,7 @@ export const ChatListScreen = ({
       </div>
 
       {/* ── List ── */}
-      <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pt-2 pb-28 overflow-y-auto scrollbar-hide">
         {displayGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 border bg-surface-card border-border-subtle">
@@ -230,18 +232,18 @@ export const ChatListScreen = ({
                 >
                   {/* Avatar */}
                   <div className="relative shrink-0">
-                    <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${
-                      isDispute
-                        ? 'bg-surface-active border border-border-medium'
-                        : hasUnread
-                          ? 'bg-accent'
-                          : 'bg-surface-active'
-                    }`}>
-                      {isDispute
-                        ? <AlertTriangle size={18} className="text-text-secondary" />
-                        : <span className={`text-[17px] font-extrabold ${hasUnread ? 'text-accent-text' : 'text-text-tertiary'}`}>{initial}</span>
-                      }
-                    </div>
+                    {isDispute ? (
+                      <div className="w-11 h-11 rounded-[14px] flex items-center justify-center bg-surface-active border border-border-medium">
+                        <AlertTriangle size={18} className="text-text-secondary" />
+                      </div>
+                    ) : (
+                      <UserAvatar
+                        src={order.merchant?.avatarUrl}
+                        seed={order.merchant?.name}
+                        size={44}
+                        style={{ borderRadius: 14 }}
+                      />
+                    )}
                     {hasUnread && (
                       <div className={`absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center border-2 border-surface-base ${
                         isDispute ? 'bg-text-primary' : 'bg-accent'
@@ -294,7 +296,7 @@ export const ChatListScreen = ({
         )}
       </div>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} />
+      {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} />}
     </div>
   );
 };

@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Wallet,
+  Copy,
+  Check,
   Sun,
   Moon,
   ChevronRight,
@@ -16,19 +18,70 @@ import {
   Mail,
   Gift,
   Coins,
+  Star,
+  Sparkles,
+  BadgeCheck,
+  Camera,
+  Phone,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { copyToClipboard } from "@/lib/clipboard";
+import { useUser } from "@/context/AppContext";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { UserAvatarModal } from "@/components/user/UserAvatarModal";
 
 /**
- * Compact stats row shown in the profile header next to the avatar.
- * Surfaces the two numbers a user cares about most at a glance:
- *   - "{n} Blip Points" with the coin glyph
- *   - reputation score (300–900)
+ * Account card shown at the top of the profile screen. Membership badge,
+ * avatar with online dot, name + (phone-verified) check, and Blip Points /
+ * Reputation stat tiles.
+ *
+ * Blip Points + reputation come from the same endpoints the old header chip
+ * row used. The blue verified check is gated on a `phone_verified` flag read
+ * defensively off the auth user — user-side phone verification isn't built
+ * yet, so this stays off until that ships, then lights up automatically.
  */
-function ProfileHeaderStats() {
+function AccountCard({
+  userId,
+  userName,
+  userAvatar,
+  setUserAvatar,
+  walletConnected,
+  tier,
+}: {
+  userId: string | null;
+  userName: string;
+  userAvatar: string | null;
+  setUserAvatar: (v: string | null) => void;
+  walletConnected: boolean;
+  tier: string | null;
+}) {
+  const { user } = useUser();
+  const phoneVerified = Boolean(
+    (user as { phone_verified?: boolean } | null)?.phone_verified,
+  );
+
   const [coins, setCoins] = useState<number | null>(null);
   const [repScore, setRepScore] = useState<number | null>(null);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+
+  // Persist the new avatar into both the lifted profile state (so the card
+  // re-renders immediately) and the cached session user in localStorage — the
+  // session-restore path reads avatar_url off blip_user, so without this the
+  // pick would visually reset on the next reload.
+  const handleAvatarUpdated = (url: string) => {
+    setUserAvatar(url);
+    try {
+      const raw = localStorage.getItem('blip_user');
+      if (raw) {
+        const cached = JSON.parse(raw);
+        cached.avatar_url = url;
+        localStorage.setItem('blip_user', JSON.stringify(cached));
+      }
+    } catch {
+      /* localStorage unavailable — in-memory state still updated */
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -50,25 +103,99 @@ function ProfileHeaderStats() {
     return () => { cancelled = true; };
   }, []);
 
+  const subtitle = phoneVerified ? 'Verified Pro Trader' : tier ? tier : 'Unverified';
+
   return (
-    <div className="flex items-center gap-2 mb-2 flex-wrap">
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-raised border border-border-subtle text-text-secondary text-[11px] font-semibold">
-        <Coins size={11} />
-        <span className="tabular-nums text-text-primary">{coins != null ? coins.toLocaleString('en-US') : '—'}</span>
-        <span className="text-text-tertiary">Blip Points</span>
-      </span>
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-raised border border-border-subtle text-text-secondary text-[11px] font-semibold">
-        <Shield size={11} />
-        <span className="tabular-nums text-text-primary">{repScore != null ? repScore : '—'}</span>
-        <span className="text-text-tertiary">Rep</span>
-      </span>
+    <>
+    <div className={`rounded-[20px] p-4 ${CARD}`}>
+      {/* Membership badge + accent flourish */}
+      <div className="flex items-start justify-between mb-4">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-active border border-border-medium text-text-secondary-strong text-[10px] font-bold tracking-[0.12em] uppercase">
+          <Star size={11} className="fill-current" />
+          Regular Member
+        </span>
+        <Sparkles size={16} className="text-text-tertiary shrink-0" />
+      </div>
+
+      {/* Identity row */}
+      <div className="flex items-center gap-3 mb-4">
+        <button
+          type="button"
+          onClick={() => setShowAvatarModal(true)}
+          aria-label="Change avatar"
+          className="relative shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <UserAvatar
+            src={userAvatar}
+            seed={userName}
+            size={48}
+            className="border border-border-medium"
+            alt={userName || 'Your avatar'}
+          />
+          {/* Wallet status dot — moved to the top-right so the edit badge
+              owns the bottom-right corner. */}
+          <span
+            className={`absolute top-0 right-0 w-3 h-3 rounded-full border-2 border-surface-card ${walletConnected ? '' : 'bg-text-quaternary'}`}
+            style={walletConnected ? { background: 'var(--color-success)' } : undefined}
+            aria-label={walletConnected ? 'Online' : 'Offline'}
+          />
+          {/* Edit affordance — tap to open the avatar picker. */}
+          <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-accent border-2 border-surface-card flex items-center justify-center">
+            <Camera size={10} className="text-accent-text" />
+          </span>
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="text-[17px] font-bold tracking-[-0.02em] text-text-primary truncate">
+              {userName || 'User'}
+            </p>
+            {phoneVerified && (
+              <BadgeCheck size={16} className="shrink-0" style={{ color: 'var(--color-info)' }} />
+            )}
+          </div>
+          <p className="text-[12px] font-medium text-text-tertiary truncate mt-0.5">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="rounded-[14px] px-3 py-2.5 bg-surface-base border border-border-subtle">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Coins size={12} className="text-text-tertiary" />
+            <span className={CARD_LABEL}>Blip Points</span>
+          </div>
+          <p className="text-[18px] font-bold tracking-[-0.02em] text-text-primary tabular-nums leading-none">
+            {coins != null ? coins.toLocaleString('en-US') : '—'}
+          </p>
+        </div>
+        <div className="rounded-[14px] px-3 py-2.5 bg-surface-base border border-border-subtle">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Shield size={12} className="text-text-tertiary" />
+            <span className={CARD_LABEL}>Reputation</span>
+          </div>
+          <p className="text-[18px] font-bold tracking-[-0.02em] text-text-primary tabular-nums leading-none">
+            {repScore != null ? repScore : '—'}
+          </p>
+        </div>
+      </div>
     </div>
+
+    <UserAvatarModal
+      isOpen={showAvatarModal}
+      onClose={() => setShowAvatarModal(false)}
+      userId={userId}
+      currentAvatar={userAvatar}
+      userName={userName}
+      onAvatarUpdated={handleAvatarUpdated}
+    />
+    </>
   );
 }
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { BottomNav } from "./BottomNav";
 import { PaymentMethodsManager } from "../PaymentMethodsManager";
-import { AppLockSettingsCard } from "@/components/app-lock/AppLockSettingsCard";
 import { SettingsGroup } from "@/components/settings/SettingsGroup";
 import { SettingsRow } from "@/components/settings/SettingsRow";
 import { StatusPill } from "@/components/settings/StatusPill";
@@ -81,8 +208,13 @@ const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 // Class-string aliases — mirror the Card / SectionLabel / CardLabel components
 // for places where we compose with extra utility classes inline.
 const CARD = "bg-surface-card border border-border-subtle";
-const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
-const CARD_LABEL = SECTION_LABEL;
+const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-secondary-strong uppercase";
+// In-card labels (stat/balance labels, …) use a darker shade than section
+// headers so they stay legible on card backgrounds.
+const CARD_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-secondary uppercase";
+// Strong in-card label — uses the primary text color, matching the app-lock
+// PIN screen. Applied to the Reputation + Solana network labels.
+const CARD_LABEL_STRONG = "text-[10px] font-bold tracking-[0.22em] text-text-primary uppercase";
 
 // Reputation bar heights (index → tailwind h-*)
 const REP_BAR_H = ["h-2", "h-3", "h-4", "h-5", "h-6"]; // 8,12,16,20,24px
@@ -92,6 +224,8 @@ export interface ProfileScreenProps {
   setScreen: (s: Screen) => void;
   userId: string | null;
   userName: string;
+  userAvatar: string | null;
+  setUserAvatar: (v: string | null) => void;
   completedOrders: Order[];
   timedOutOrders: Order[];
   // Solana wallet
@@ -141,6 +275,7 @@ export interface ProfileScreenProps {
   setLoginError: (v: string) => void;
   setLoginForm: (v: { username: string; password: string; email: string }) => void;
   maxW: string;
+  hideBottomNav?: boolean;
 }
 
 export const ProfileScreen = ({
@@ -148,6 +283,8 @@ export const ProfileScreen = ({
   setScreen,
   userId,
   userName,
+  userAvatar,
+  setUserAvatar,
   completedOrders,
   timedOutOrders,
   solanaWallet,
@@ -171,8 +308,20 @@ export const ProfileScreen = ({
   setLoginError,
   setLoginForm,
   maxW,
+  hideBottomNav = false,
 }: ProfileScreenProps) => {
   const router = useRouter();
+
+  const { user } = useUser();
+
+  // Copy the connected Solana wallet address with a brief check-mark confirm.
+  const [copiedAddr, setCopiedAddr] = useState(false);
+  const handleCopyAddress = async () => {
+    if (!solanaWallet.walletAddress) return;
+    await copyToClipboard(solanaWallet.walletAddress);
+    setCopiedAddr(true);
+    setTimeout(() => setCopiedAddr(false), 1600);
+  };
 
   // Derived identity metrics — kept at render-top so header + identity card
   // can reference the same numbers without re-deriving them inline.
@@ -214,39 +363,43 @@ export const ProfileScreen = ({
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
-      {/* ── Header ── Hero profile banner: avatar with connection dot, name,
-          tier line, and a tappable wallet pill (replaces the separate copy
-          button for a cleaner one-tap interaction). */}
-      <header className="px-5 pt-10 pb-5 shrink-0">
-        <p className={`${SECTION_LABEL} mb-3`}>Account</p>
-        <div className="flex items-start gap-4">
-          <div className="relative shrink-0">
-            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center bg-surface-raised border border-border-medium">
-              <span className="text-[24px] font-bold tracking-[-0.03em] text-text-primary">
-                {(userName || 'U').charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <span
-              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-surface-base ${
-                solanaWallet.connected ? 'bg-text-primary' : 'bg-text-quaternary'
-              }`}
-              aria-label={solanaWallet.connected ? 'Wallet connected' : 'Wallet disconnected'}
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[22px] font-bold tracking-[-0.03em] text-text-primary leading-none truncate mb-1.5">
-              {userName || 'User'}
-            </p>
-            {/* Rep score + Blip Points chip row — sits directly below
-                the user name so the most important "who am I worth"
-                signals are immediately legible next to the avatar. */}
-            <ProfileHeaderStats />
-          </div>
+      {/* ── Header ── matches the Messages screen: big title + a rounded-square
+          icon button. Static; the account card + the rest scroll underneath. */}
+      <header className="px-5 pt-4 pb-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+            Profile
+          </p>
+          <button
+            onClick={toggleTheme}
+            aria-label="Toggle appearance"
+            className="relative p-2.5 rounded-[14px] bg-surface-card border border-border-subtle"
+          >
+            {theme === 'dark' ? (
+              <Moon size={18} className="text-text-tertiary" />
+            ) : (
+              <Sun size={18} className="text-text-tertiary" />
+            )}
+          </button>
         </div>
       </header>
 
       {/* ── Scrollable content ── */}
-      <div className="flex-1 px-5 pb-24 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pt-0 pb-28 overflow-y-auto scrollbar-hide">
+
+        {/* Account card — membership badge, avatar + online dot, name +
+            (phone-verified) check, and Blip Points / Reputation tiles. */}
+        <p className={`${SECTION_LABEL} mb-2`}>Account</p>
+        <div className="mb-3">
+          <AccountCard
+            userId={userId}
+            userName={userName}
+            userAvatar={userAvatar}
+            setUserAvatar={setUserAvatar}
+            walletConnected={solanaWallet.connected}
+            tier={tier}
+          />
+        </div>
 
         {/* Identity card \u2014 combines reputation + stats into a single cohesive
             block. Reputation row sits on top with a progress bar showing
@@ -261,7 +414,7 @@ export const ProfileScreen = ({
                     <Shield size={13} className="text-text-secondary" />
                   </div>
                   <div>
-                    <p className={`${CARD_LABEL} leading-none mb-1`}>Reputation</p>
+                    <p className={`${CARD_LABEL_STRONG} leading-none mb-1`}>Reputation</p>
                     <p className="text-[15px] font-bold tracking-[-0.02em] text-text-primary leading-none">
                       {tier}
                     </p>
@@ -296,8 +449,8 @@ export const ProfileScreen = ({
                 <Shield size={13} className="text-text-tertiary" />
               </div>
               <div>
-                <p className={`${CARD_LABEL} leading-none mb-1`}>Reputation</p>
-                <p className="text-[13px] font-semibold text-text-tertiary leading-none">
+                <p className={`${CARD_LABEL_STRONG} leading-none mb-1`}>Reputation</p>
+                <p className="text-[13px] font-semibold text-text-secondary leading-none">
                   Complete your first trade to earn a tier
                 </p>
               </div>
@@ -336,19 +489,34 @@ export const ProfileScreen = ({
                 <Wallet size={15} className={solanaWallet.connected ? 'text-text-primary' : 'text-text-tertiary'} />
               </div>
               <div className="min-w-0">
-                <p className={`${CARD_LABEL} mb-0.5`}>
+                <p className={`${CARD_LABEL_STRONG} mb-0.5`}>
                   {solanaWallet.connected ? networkLabel() : 'Not Connected'}
                 </p>
-                <p className="text-[13px] font-bold text-text-primary font-mono truncate">
-                  {solanaWallet.connected && solanaWallet.walletAddress
-                    ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
-                    : 'Connect your wallet'}
-                </p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-[13px] font-semibold text-text-secondary font-mono truncate">
+                    {solanaWallet.connected && solanaWallet.walletAddress
+                      ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
+                      : 'Connect your wallet'}
+                  </p>
+                  {solanaWallet.connected && solanaWallet.walletAddress && (
+                    <button
+                      onClick={handleCopyAddress}
+                      aria-label="Copy wallet address"
+                      className="shrink-0 p-1 -m-0.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+                    >
+                      {copiedAddr ? (
+                        <Check size={13} className="text-success" />
+                      ) : (
+                        <Copy size={13} />
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
             {solanaWallet.connected && (
               <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface-raised border border-border-subtle shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-primary" />
+                <span className="w-1.5 h-1.5 rounded-full bg-success" />
                 <span className="text-[9px] font-bold tracking-[0.1em] uppercase text-text-secondary">Live</span>
               </span>
             )}
@@ -395,10 +563,10 @@ export const ProfileScreen = ({
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={() => router.push('/user/wallet')}
-                    className="w-full mt-2 h-10 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-raised border border-border-subtle text-[12px] font-bold text-text-secondary tracking-[-0.01em]"
+                    className="w-full mt-2 h-10 rounded-[12px] flex items-center justify-center gap-1.5 bg-surface-raised border border-border-subtle text-[12px] font-bold text-text-primary tracking-[-0.01em]"
                   >
                     Manage Wallet
-                    <ChevronRight size={14} className="text-text-tertiary" />
+                    <ChevronRight size={14} className="text-text-secondary" />
                   </motion.button>
                 )}
               </div>
@@ -426,20 +594,6 @@ export const ProfileScreen = ({
 
         {/* ── 1. Payment Methods (own card, always-visible list) ── */}
         <PaymentMethodsManager userId={userId} />
-
-        {/* ── 2. Security & Privacy ── */}
-        <div className="flex items-center justify-between mb-2 px-1">
-          <div className="flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-white/40" />
-            <span className={SECTION_LABEL}>Security &amp; Privacy</span>
-          </div>
-          <span className="inline-flex items-center gap-1 text-[9.5px] font-bold tracking-[0.16em] uppercase text-text-tertiary">
-            Protected
-          </span>
-        </div>
-        <div className="mb-6">
-          <AppLockSettingsCard userId={userId} />
-        </div>
 
         {/* Resolved Disputes — rich list kept inline so each card retains
             its existing layout (orderNumber, won/lost/split badge, amount,
@@ -523,7 +677,7 @@ export const ProfileScreen = ({
         {/* ── 6. Help & Support ── */}
         <SettingsGroup label="Help & Support" icon={<LifeBuoy className="w-3.5 h-3.5" />}>
           <SettingsRow
-            href="/faq"
+            href="/user/faq"
             icon={<HelpCircle className="w-[15px] h-[15px]" />}
             title="FAQs"
             subtitle="Common questions answered"
@@ -565,15 +719,17 @@ export const ProfileScreen = ({
             if (solanaWallet.disconnect) {
               solanaWallet.disconnect();
             }
-            window.location.href = '/';
+            // Send logged-out users to the dedicated login route, not the
+            // root "/" marketing landing.
+            window.location.href = '/user/login';
           }}
-          className="w-full h-12 flex items-center justify-center gap-2 rounded-lg bg-white border border-white text-[14px] font-bold text-black tracking-[-0.01em]">
-          <LogOut size={16} className="text-invert" />
+          className="w-full h-12 flex items-center justify-center gap-2 rounded-[18px] bg-surface-card border border-border-subtle text-[14px] font-bold text-text-primary tracking-[-0.01em] hover:bg-surface-hover transition-colors">
+          <LogOut size={16} className="text-text-secondary" />
           Sign Out
         </motion.button>
       </div>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
+      {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />}
     </div>
   );
 };

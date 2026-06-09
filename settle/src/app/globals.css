@@ -94,6 +94,14 @@
   /* Legacy */
   --muted: #525252;
   --muted-bg: #131313;
+
+  /* Chat bubbles */
+  --chat-own-bg: #f5f5f7;
+  --chat-own-text: #0a0a0a;
+  --chat-own-border: rgba(255,255,255,0.15);
+  --chat-them-bg: #1e2128;
+  --chat-them-text: rgba(255,255,255,0.90);
+  --chat-them-border: rgba(255,255,255,0.08);
 }
 
 /* Light mode (Solarized Light) */
@@ -127,6 +135,12 @@
   --color-warning: #d97706;
   --color-error: #dc2626;
   --color-info: #2563eb;
+  --chat-own-bg: #d4d4d4;
+  --chat-own-text: #073642;
+  --chat-own-border: rgba(0,0,0,0.12);
+  --chat-them-bg: #ffffff;
+  --chat-them-text: rgba(7,54,66,0.90);
+  --chat-them-border: rgba(0,0,0,0.08);
 }
 
 /* Clean White — higher specificity to override :root.light */
@@ -161,6 +175,12 @@
   --color-warning: #d97706;
   --color-error: #dc2626;
   --color-info: #3B82F6;
+  --chat-own-bg: #e5e5ea;
+  --chat-own-text: #111827;
+  --chat-own-border: rgba(0,0,0,0.10);
+  --chat-them-bg: #f3f4f6;
+  --chat-them-text: rgba(17,24,39,0.90);
+  --chat-them-border: rgba(0,0,0,0.08);
 }
 
 /* Midnight Navy */
@@ -339,6 +359,7 @@
   --color-foreground: var(--foreground);
   --color-text-primary: var(--color-text-primary);
   --color-text-secondary: var(--color-text-secondary);
+  --color-text-secondary-strong: var(--color-text-secondary-strong);
   --color-text-tertiary: var(--color-text-tertiary);
   --color-text-quaternary: var(--color-text-quaternary);
   --color-card: var(--card);

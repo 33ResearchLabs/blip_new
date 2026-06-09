@@ -69,6 +69,7 @@ import {
   versionRequiresHelper,
   MAX_UNLOCK_FAILURES,
   changeWalletPassword,
+  requestPersistentStorage,
 } from '@/lib/wallet/embeddedWallet';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { createKeypairWalletAdapter } from '@/lib/wallet/keypairWalletAdapter';
@@ -227,6 +228,19 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
   const touchActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
   }, []);
+
+  // Keep the encrypted wallet from being auto-evicted by the browser.
+  // Whenever a wallet is present (locked or unlocked) we ask for persistent
+  // storage so the blob survives e.g. Safari's 7-day script-writable-storage
+  // cap. Fires on mount for existing wallets AND right after an import flips
+  // the state to 'unlocked' — import is exactly the engaged moment some
+  // browsers require before granting persistence. Best-effort: the helper
+  // never throws and changes nothing about how the wallet is stored.
+  useEffect(() => {
+    if (walletState === 'unlocked' || walletState === 'locked') {
+      void requestPersistentStorage();
+    }
+  }, [walletState]);
 
   // Refresh balances
   const refreshBalances = useCallback(async () => {

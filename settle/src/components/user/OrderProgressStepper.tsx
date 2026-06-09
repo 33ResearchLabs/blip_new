@@ -70,16 +70,16 @@ export function OrderProgressStepper({ status }: OrderProgressStepperProps) {
   // Terminal failure → single pill, no stepper.
   if (lower === "cancelled" || lower === "expired") {
     return (
-      <div className="mx-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-300 text-[12px] font-semibold">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+      <div className="mx-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-error-dim border border-error-border text-error text-[12px] font-semibold">
+        <span className="w-1.5 h-1.5 rounded-full bg-error" />
         {lower === "cancelled" ? "Cancelled" : "Timed out"}
       </div>
     );
   }
   if (lower === "disputed") {
     return (
-      <div className="mx-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 text-[12px] font-semibold">
-        <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+      <div className="mx-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-warning-dim border border-warning-border text-warning text-[12px] font-semibold">
+        <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
         Under review
       </div>
     );
@@ -100,7 +100,7 @@ export function OrderProgressStepper({ status }: OrderProgressStepperProps) {
                 <div
                   className={`flex-1 h-[2px] ${idx === 0 ? "opacity-0" : ""} ${
                     step.state === "done" || step.state === "active"
-                      ? "bg-green-500/60"
+                      ? "bg-success/60"
                       : "bg-white/15"
                   }`}
                 />
@@ -109,7 +109,7 @@ export function OrderProgressStepper({ status }: OrderProgressStepperProps) {
                 {/* Right connector */}
                 <div
                   className={`flex-1 h-[2px] ${isLast ? "opacity-0" : ""} ${
-                    step.state === "done" ? "bg-green-500/60" : "bg-white/15"
+                    step.state === "done" ? "bg-success/60" : "bg-white/15"
                   }`}
                 />
               </div>
@@ -135,7 +135,7 @@ export function OrderProgressStepper({ status }: OrderProgressStepperProps) {
 function StepDot({ state }: { state: StepState }) {
   if (state === "done") {
     return (
-      <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shrink-0">
+      <div className="w-6 h-6 rounded-full bg-success flex items-center justify-center shrink-0">
         <Check className="w-3.5 h-3.5 text-black" strokeWidth={3} />
       </div>
     );

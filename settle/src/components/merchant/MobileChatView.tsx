@@ -10,8 +10,8 @@ export interface MobileChatViewProps {
   orderConversations: OrderConversation[];
   totalUnread: number;
   isLoadingConversations: boolean;
-  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell' } | null;
-  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
+  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell'; userAvatarUrl?: string | null } | null;
+  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell', userAvatarUrl?: string | null) => void;
   onCloseOrderChat: () => void;
   onClearUnread: (orderId: string) => void;
   onClearAllUnread?: () => void;
@@ -31,10 +31,20 @@ export function MobileChatView({
   playSound,
 }: MobileChatViewProps) {
   return (
-    // The parent <main> in MerchantMobileContent already has `pb-20` to
-    // clear the fixed bottom nav. Adding a second bottom padding here
-    // would stack 64+80=144px of empty space below the chat composer.
-    <div className="h-full flex flex-col">
+    // In chat mode the parent <main> uses overflow-hidden with NO bottom
+    // padding, so this div is the sole clearance for the fixed bottom nav
+    // (~58px tall). Use a safe-area-aware value instead of a flat pb-24:
+    // 4rem (64px) on non-notched devices → small gap above the nav, plus
+    // the home-indicator inset on notched devices → same gap everywhere.
+    // Skipped inside an active order chat — the bottom nav is hidden there.
+    <div
+      className="h-full flex flex-col"
+      style={
+        !activeOrderChat
+          ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4rem)" }
+          : undefined
+      }
+    >
       {activeOrderChat && merchantId ? (
         <OrderChatView
           orderId={activeOrderChat.orderId}
@@ -42,6 +52,7 @@ export function MobileChatView({
           userName={activeOrderChat.userName}
           orderNumber={activeOrderChat.orderNumber}
           orderType={activeOrderChat.orderType}
+          userAvatarUrl={activeOrderChat.userAvatarUrl}
           onBack={onCloseOrderChat}
           onSendSound={() => playSound('send')}
         />

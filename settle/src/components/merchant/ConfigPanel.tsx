@@ -361,13 +361,13 @@ export const ConfigPanel = memo(function ConfigPanel({
         <div className={`${rowSizing} flex flex-col`}>
           <div className="flex items-center justify-between mb-2 @max-h-[400px]:mb-1.5 @max-h-[320px]:mb-1 @max-h-[240px]:mb-0.5 gap-1 min-w-0 shrink-0">
             <div className="flex items-center gap-1.5 @max-[240px]:gap-1 min-w-0">
-              <ArrowRightLeft className="w-3.5 h-3.5 @max-[240px]:w-3 @max-[240px]:h-3 text-primary/60 shrink-0" />
+              <ArrowRightLeft className="w-3.5 h-3.5 @max-[240px]:w-3 @max-[240px]:h-3 text-[#f5f5f7]/60 shrink-0" />
               <span className="text-[11px] @max-[280px]:text-[10px] @max-[220px]:text-[9px] font-bold text-foreground/50 uppercase tracking-wider">
                 Amount
               </span>
               {/* Corridor badge — driven by StatusCard trading pair. Below
                   280px the "USDT /" prefix is dropped to save width. */}
-              <span className="ml-2 @max-[320px]:ml-1 px-1.5 @max-[240px]:px-1 py-0.5 rounded text-[9px] @max-[240px]:text-[8px] font-bold font-mono tracking-wider bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
+              <span className="ml-2 @max-[320px]:ml-1 px-1.5 @max-[240px]:px-1 py-0.5 rounded text-[9px] @max-[240px]:text-[8px] font-bold font-mono tracking-wider bg-white/[0.06] text-[#f5f5f7] border border-white/[0.12] whitespace-nowrap">
                 <span className="@max-[280px]:hidden">USDT / </span>
                 {pair === "usdt_inr" ? "INR" : "AED"}
               </span>
@@ -379,7 +379,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                   cryptoAmount: maxAmount.toFixed(0),
                 })
               }
-              className="text-[10px] @max-[280px]:text-[9px] @max-[220px]:text-[8px] text-primary/70 hover:text-primary font-mono font-bold transition-colors px-1.5 @max-[240px]:px-1 py-0.5 rounded bg-primary/[0.06] hover:bg-primary/10 shrink-0 whitespace-nowrap"
+              className="text-[10px] @max-[280px]:text-[9px] @max-[220px]:text-[8px] text-[#f5f5f7]/70 hover:text-white font-mono font-bold transition-colors px-1.5 @max-[240px]:px-1 py-0.5 rounded bg-white/[0.06] hover:bg-white/[0.08] shrink-0 whitespace-nowrap"
             >
               MAX
               {/* The numeric value is dropped below 200px so the button
@@ -409,7 +409,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                 setOpenTradeForm({ ...openTradeForm, cryptoAmount: clamped });
               }}
               placeholder="0"
-              className="absolute inset-0 w-full h-full bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-4 @max-[240px]:px-3 text-xl @max-h-[480px]:text-lg @max-h-[400px]:text-base @max-h-[320px]:text-sm @max-h-[240px]:text-xs font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-primary/30 focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
+              className="absolute inset-0 w-full h-full bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-4 @max-[240px]:px-3 text-xl @max-h-[480px]:text-lg @max-h-[400px]:text-base @max-h-[320px]:text-sm @max-h-[240px]:text-xs font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-white/[0.12] focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/25 font-mono pointer-events-none">
               USDT
@@ -524,7 +524,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                           }}
                           className={`w-full flex items-start gap-2 px-3 py-2 text-left transition-colors ${
                             isSelected
-                              ? "bg-primary/[0.06] text-foreground/90"
+                              ? "bg-white/[0.06] text-foreground/90"
                               : "hover:bg-foreground/[0.04] text-foreground/60"
                           }`}
                         >
@@ -556,8 +556,8 @@ export const ConfigPanel = memo(function ConfigPanel({
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left border-t border-foreground/[0.06] hover:bg-foreground/[0.04] transition-colors"
                     >
-                      <Plus className="w-3 h-3 text-primary/60" />
-                      <span className="text-[11px] font-bold text-primary/70">
+                      <Plus className="w-3 h-3 text-[#f5f5f7]/60" />
+                      <span className="text-[11px] font-bold text-[#f5f5f7]/70">
                         Add Payment Method
                       </span>
                     </button>
@@ -631,7 +631,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                   }
                   className={`flex-1 h-full rounded-xl transition-all border flex flex-col items-center justify-center gap-0.5 px-1 min-w-0 ${
                     isSelected
-                      ? "bg-primary/[0.08] border-primary/20"
+                      ? "bg-white/[0.06] border-white/[0.12]"
                       : "bg-foreground/[0.02] hover:bg-foreground/[0.04] border-foreground/[0.04]"
                   }`}
                 >
@@ -644,7 +644,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                   <div className="flex items-center gap-1 @max-[200px]:hidden">
                     <TierIcon
                       className={`w-3 h-3 shrink-0 @max-[240px]:hidden ${
-                        isSelected ? "text-primary" : "text-foreground/20"
+                        isSelected ? "text-[#f5f5f7]" : "text-foreground/20"
                       }`}
                     />
                     <span
@@ -658,10 +658,10 @@ export const ConfigPanel = memo(function ConfigPanel({
                   {key === 'fastest' ? (
                     <div className="flex items-center justify-center gap-1">
                       <span className="text-[10px] font-black font-mono tabular-nums text-foreground/20 line-through">+2.5%</span>
-                      <span className="text-[11px] font-black font-mono tabular-nums text-green-400">0%</span>
+                      <span className="text-[11px] font-black font-mono tabular-nums text-[#f5f5f7]">0%</span>
                     </div>
                   ) : (
-                    <div className={`text-[11px] font-black font-mono tabular-nums ${isSelected ? "text-primary" : "text-white/25"}`}>
+                    <div className={`text-[11px] font-black font-mono tabular-nums ${isSelected ? "text-[#f5f5f7]" : "text-white/25"}`}>
                       +{t.base}%
                     </div>
                   )}
@@ -675,7 +675,7 @@ export const ConfigPanel = memo(function ConfigPanel({
         {false && <div data-tour="boost">
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider font-bold flex items-center gap-1">
-              <Flame className="w-3 h-3 text-primary/40" />
+              <Flame className="w-3 h-3 text-[#f5f5f7]/40" />
               Boost
               <InfoTooltip
                 side="bottom"
@@ -694,7 +694,7 @@ export const ConfigPanel = memo(function ConfigPanel({
             </label>
             <button
               onClick={() => setShowPriorityInput(!showPriorityInput)}
-              className="text-[9px] text-primary/50 hover:text-primary font-mono font-bold transition-colors"
+              className="text-[9px] text-[#f5f5f7]/50 hover:text-white font-mono font-bold transition-colors"
             >
               {showPriorityInput ? "hide" : "manual"}
             </button>
@@ -752,7 +752,7 @@ export const ConfigPanel = memo(function ConfigPanel({
                 <span className="text-[9px] text-foreground/15 font-mono font-bold">
                   DECAY
                 </span>
-                <span className="text-[9px] text-primary/50 font-mono font-bold">
+                <span className="text-[9px] text-[#f5f5f7]/50 font-mono font-bold">
                   {priorityFee}% → 0%
                 </span>
               </div>
@@ -762,11 +762,11 @@ export const ConfigPanel = memo(function ConfigPanel({
         </div>}
 
         {/* Testing rewards banner */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-green-500/[0.08] border border-green-500/20">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.09]">
           <span className="text-base">🎁</span>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold text-green-400 leading-tight">$5 testing rewards</p>
-            <p className="text-[10px] text-green-400/60 leading-tight">Earn for completing your first trades</p>
+            <p className="text-[11px] font-bold text-[#f5f5f7] leading-tight">$5 testing rewards</p>
+            <p className="text-[10px] text-[#f5f5f7]/60 leading-tight">Earn for completing your first trades</p>
           </div>
         </div>
 
@@ -784,12 +784,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               onCreateOrder("buy", priorityFee, pair);
             }}
             disabled={isDisabled}
-            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5 min-w-0 px-1"
-            style={{
-              backgroundColor: "var(--primary)",
-              color: "var(--background)",
-              boxShadow: "0 2px 12px var(--primary-dim)",
-            }}
+            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg bg-[#f5f5f7] text-[#0b0b0c] font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5 min-w-0 px-1"
           >
             {isCreatingTrade && openTradeForm.tradeType === "buy" ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -840,7 +835,7 @@ export const ConfigPanel = memo(function ConfigPanel({
         {cryptoAmount > 0 && (
           <div className="flex items-center justify-between px-1 text-[9px] font-mono text-foreground/20">
             {promoActive && (
-              <span className="text-green-400/60">🎁 -$5 applied</span>
+              <span className="text-[#f5f5f7]/60">🎁 -$5 applied</span>
             )}
             <span className="tabular-nums ml-auto">
               B {pricing.buyRate.toFixed(4)} · S {pricing.sellRate.toFixed(4)}
@@ -854,7 +849,7 @@ export const ConfigPanel = memo(function ConfigPanel({
           className="w-full flex items-center justify-between px-3 py-2.5 mt-1 rounded-xl bg-foreground/[0.03] hover:bg-foreground/[0.06] border border-foreground/[0.06] transition-all"
         >
           <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-primary/60" />
+            <Package className="w-4 h-4 text-[#f5f5f7]/60" />
             <span className="text-[11px] font-semibold text-foreground/70">My Offers</span>
           </div>
           <ChevronRight className={`w-4 h-4 text-foreground/30 transition-transform duration-200 ${showOffers ? 'rotate-90' : ''}`} />

@@ -1,0 +1,330 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { Shield, Star, ArrowLeft, Loader2, CheckCircle2, Clock, TrendingUp, Award } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+
+const TIER_COLORS: Record<string, { text: string; bg: string; border: string }> = {
+  newcomer: { text: 'text-foreground/50', bg: 'bg-foreground/[0.04]', border: 'border-foreground/[0.08]' },
+  bronze: { text: 'text-amber-700', bg: 'bg-amber-500/15', border: 'border-amber-500/30' },
+  silver: { text: 'text-slate-600', bg: 'bg-slate-500/15', border: 'border-slate-400/40' },
+  gold: { text: 'text-yellow-600', bg: 'bg-yellow-500/15', border: 'border-yellow-500/30' },
+  platinum: { text: 'text-white/60', bg: 'bg-white/[0.06]', border: 'border-white/[0.09]' },
+  diamond: { text: 'text-white/60', bg: 'bg-white/[0.06]', border: 'border-cyan-500/30' },
+};
+
+const BADGE_ICONS: Record<string, string> = {
+  fast_trader: '⚡', high_volume: '📈', trusted: '🛡️', veteran: '🎖️',
+  perfect_rating: '⭐', dispute_free: '✅', consistent: '📊',
+  whale: '🐋', early_adopter: '🚀', arbiter_approved: '⚖️',
+};
+
+interface ProfileData {
+  merchant: {
+    id: string;
+    display_name: string;
+    username: string;
+    avatar_url: string | null;
+    bio: string | null;
+    rating: number;
+    rating_count: number;
+    total_trades: number;
+    total_volume: number;
+    is_online: boolean;
+    created_at: string;
+  };
+  reputation: {
+    score: {
+      total_score: number;
+      review_score: number;
+      execution_score: number;
+      volume_score: number;
+      consistency_score: number;
+      trust_score: number;
+      tier: string;
+      badges: string[];
+    };
+    breakdown: {
+      reviews: { count: number; average_rating: string };
+      execution: { total_orders: number; completion_rate: number; avg_completion_time_mins: number; completed_orders: number };
+      volume: { total_volume_usd: number; last_30_days_volume: number; last_7_days_volume: number };
+      trust: { disputes_raised: number; disputes_lost: number };
+    };
+    tierInfo: { name: string; color: string; description: string };
+    badgeInfo?: { name: string; icon: string; description: string }[];
+    progress: { currentTier: string; nextTier: string | null; progress: number };
+    rank: number | null;
+  } | null;
+}
+
+export default function MerchantProfilePage() {
+  const params = useParams();
+  const router = useRouter();
+  const merchantId = params.id as string;
+  const [data, setData] = useState<ProfileData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!merchantId) return;
+
+    Promise.all([
+      fetchWithAuth(`/api/merchant/${merchantId}`).then(r => r.json()),
+      fetchWithAuth(`/api/reputation?entityId=${merchantId}&entityType=merchant`).then(r => r.json()),
+    ])
+      .then(([merchantRes, repRes]) => {
+        if (!merchantRes.success) {
+          setError('Merchant not found');
+          return;
+        }
+        setData({
+          merchant: merchantRes.data,
+          reputation: repRes.success ? repRes.data : null,
+        });
+      })
+      .catch(() => setError('Failed to load profile'))
+      .finally(() => setIsLoading(false));
+  }, [merchantId]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-6 h-6 text-[#f5f5f7]/40 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <p className="text-foreground/40">{error || 'Profile not found'}</p>
+        <button onClick={() => router.back()} className="text-[#f5f5f7] text-sm hover:underline">Go back</button>
+      </div>
+    );
+  }
+
+  const { merchant, reputation } = data;
+  const tier = reputation?.score.tier || 'newcomer';
+  const tierStyle = TIER_COLORS[tier] || TIER_COLORS.newcomer;
+  const accountAge = Math.floor((Date.now() - new Date(merchant.created_at).getTime()) / 86400000);
+
+  const scoreComponents = reputation ? [
+    { label: 'Review', score: reputation.score.review_score, weight: 30 },
+    { label: 'Execution', score: reputation.score.execution_score, weight: 25 },
+    { label: 'Volume', score: reputation.score.volume_score, weight: 15 },
+    { label: 'Consistency', score: reputation.score.consistency_score, weight: 15 },
+    { label: 'Trust', score: reputation.score.trust_score, weight: 15 },
+  ] : [];
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-lg mx-auto px-4 py-6">
+        {/* Back button */}
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-1.5 text-foreground/30 hover:text-foreground/60 text-sm mb-6 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </button>
+
+        {/* Profile header */}
+        <div className="glass-card rounded-2xl border border-foreground/[0.06] p-6 mb-4">
+          <div className="flex items-start gap-4">
+            {/* Avatar */}
+            <div className="relative shrink-0">
+              {merchant.avatar_url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={merchant.avatar_url} alt={merchant.display_name} width={80} height={80} className="w-20 h-20 rounded-full object-cover border-2 border-foreground/10" />
+              ) : (
+                <div className="w-20 h-20 rounded-full border-2 border-foreground/10 flex items-center justify-center text-3xl bg-foreground/5">
+                  {merchant.display_name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              {merchant.is_online && (
+                <div className="absolute bottom-0 right-0 w-4 h-4 bg-white/[0.08] border-2 border-background rounded-full" />
+              )}
+            </div>
+
+            {/* Name + tier */}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl font-bold text-foreground truncate">{merchant.display_name}</h1>
+              <p className="text-xs text-foreground/30 font-mono">@{merchant.username}</p>
+
+              {reputation && (
+                <div className="flex items-center gap-2 mt-2">
+                  <div className={`relative overflow-hidden flex items-center gap-1.5 px-3 py-1 rounded-lg ${tierStyle.bg} border ${tierStyle.border} shadow-sm`}>
+                    {/* Glossy shine effect */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-100%] animate-[shimmer_3s_infinite]" />
+                    <Shield className={`w-3.5 h-3.5 ${tierStyle.text} relative z-10`} />
+                    <span className={`text-xs font-bold ${tierStyle.text} relative z-10`}>{reputation.tierInfo.name}</span>
+                  </div>
+                  <span className="text-sm font-bold text-foreground/60 font-mono">{reputation.score.total_score}</span>
+                  <span className="text-[10px] text-foreground/40 font-mono">/1000</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bio */}
+          {merchant.bio && (
+            <p className="mt-4 text-sm text-foreground/50 leading-relaxed">{merchant.bio}</p>
+          )}
+
+          {/* Quick stats row — prefer reputation API data over stale DB columns */}
+          <div className="grid grid-cols-4 gap-3 mt-5 pt-5 border-t border-foreground/[0.04]">
+            <div className="text-center">
+              <div className="text-lg font-bold text-foreground font-mono">
+                {reputation?.breakdown?.execution?.total_orders ?? merchant.total_trades}
+              </div>
+              <div className="text-[9px] text-foreground/25 font-mono uppercase">Trades</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-foreground font-mono">
+                {(() => {
+                  const vol = reputation?.breakdown?.volume?.total_volume_usd ?? merchant.total_volume;
+                  return vol >= 1000 ? `$${(vol / 1000).toFixed(1)}k` : `$${Math.round(vol)}`;
+                })()}
+              </div>
+              <div className="text-[9px] text-foreground/25 font-mono uppercase">Volume</div>
+            </div>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-0.5">
+                <Star className="w-3.5 h-3.5 fill-white/50 text-[#f5f5f7]" />
+                <span className="text-lg font-bold text-foreground font-mono">
+                  {reputation?.breakdown?.reviews?.average_rating
+                    ? Number(reputation.breakdown.reviews.average_rating).toFixed(1)
+                    : Number(merchant.rating).toFixed(1)}
+                </span>
+              </div>
+              <div className="text-[9px] text-foreground/25 font-mono uppercase">
+                {reputation?.breakdown?.reviews?.count ?? merchant.rating_count} reviews
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-foreground font-mono">{accountAge}d</div>
+              <div className="text-[9px] text-foreground/25 font-mono uppercase">Age</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Reputation breakdown */}
+        {reputation && (
+          <div className="glass-card rounded-2xl border border-foreground/[0.06] p-5 mb-4">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="w-4 h-4 text-foreground/30" />
+              <h2 className="text-xs font-bold text-foreground/50 font-mono uppercase tracking-wider">Reputation Breakdown</h2>
+            </div>
+
+            {/* Progress to next tier */}
+            {reputation.progress.nextTier && (
+              <div className="mb-5 p-3 bg-foreground/[0.02] rounded-xl border border-foreground/[0.04]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] text-foreground/30 font-mono">
+                    {reputation.tierInfo.name} → {reputation.progress.nextTier.charAt(0).toUpperCase() + reputation.progress.nextTier.slice(1)}
+                  </span>
+                  <span className="text-[10px] text-foreground/40 font-mono font-bold">{Math.round(reputation.progress.progress)}%</span>
+                </div>
+                <div className="w-full h-2 bg-foreground/[0.04] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-white/70 to-white/60 rounded-full transition-all"
+                    style={{ width: `${reputation.progress.progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Score bars */}
+            <div className="space-y-3">
+              {scoreComponents.map((comp) => (
+                <div key={comp.label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] text-foreground/50 font-medium">{comp.label}</span>
+                    <span className="text-[10px] text-foreground/30 font-mono">{comp.score}/100 ({comp.weight}%)</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-foreground/[0.04] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-white/[0.06] rounded-full transition-all"
+                      style={{ width: `${comp.score}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Rank */}
+            {reputation.rank && (
+              <div className="mt-4 pt-4 border-t border-foreground/[0.04] flex items-center justify-between">
+                <span className="text-[10px] text-foreground/30 font-mono uppercase">Global Rank</span>
+                <span className="text-sm font-bold text-[#f5f5f7] font-mono">#{reputation.rank}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Badges */}
+        {reputation && reputation.score.badges.length > 0 && (
+          <div className="glass-card rounded-2xl border border-foreground/[0.06] p-5 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Award className="w-4 h-4 text-foreground/30" />
+              <h2 className="text-xs font-bold text-foreground/50 font-mono uppercase tracking-wider">Badges</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(reputation.badgeInfo || reputation.score.badges.map((b: string) => ({
+                name: b.replace(/_/g, ' '),
+                icon: BADGE_ICONS[b] || '🏅',
+                description: '',
+              }))).map((badge: { name: string; icon: string; description: string }) => (
+                <div
+                  key={badge.name}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-foreground/[0.03] border border-foreground/[0.06]"
+                  title={badge.description}
+                >
+                  <span className="text-sm">{badge.icon}</span>
+                  <span className="text-[11px] text-foreground/60 font-medium capitalize">{badge.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Performance stats */}
+        {reputation?.breakdown && (
+          <div className="glass-card rounded-2xl border border-foreground/[0.06] p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle2 className="w-4 h-4 text-foreground/30" />
+              <h2 className="text-xs font-bold text-foreground/50 font-mono uppercase tracking-wider">Performance</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-foreground/[0.02] rounded-xl">
+                <div className="text-[9px] text-foreground/25 font-mono uppercase mb-1">Completion Rate</div>
+                <div className="text-base font-bold text-foreground font-mono">
+                  {(reputation.breakdown.execution.completion_rate * 100).toFixed(0)}%
+                </div>
+              </div>
+              <div className="p-3 bg-foreground/[0.02] rounded-xl">
+                <div className="text-[9px] text-foreground/25 font-mono uppercase mb-1">Avg Speed</div>
+                <div className="text-base font-bold text-foreground font-mono">
+                  {reputation.breakdown.execution.avg_completion_time_mins}m
+                </div>
+              </div>
+              <div className="p-3 bg-foreground/[0.02] rounded-xl">
+                <div className="text-[9px] text-foreground/25 font-mono uppercase mb-1">Completed</div>
+                <div className="text-base font-bold text-foreground font-mono">
+                  {reputation.breakdown.execution.completed_orders}
+                </div>
+              </div>
+              <div className="p-3 bg-foreground/[0.02] rounded-xl">
+                <div className="text-[9px] text-foreground/25 font-mono uppercase mb-1">Disputes Lost</div>
+                <div className="text-base font-bold text-foreground font-mono">
+                  {reputation.breakdown.trust.disputes_lost}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

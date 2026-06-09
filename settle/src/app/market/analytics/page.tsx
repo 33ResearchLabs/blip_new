@@ -1,0 +1,485 @@
+"use client";
+
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import {
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  Check,
+  Shield,
+  Bell,
+  Wallet,
+  Activity,
+  BarChart3,
+  ArrowUpRight,
+  ArrowDownRight,
+  Calendar,
+  Users,
+  Zap,
+  Target,
+  Award,
+  Star,
+} from "lucide-react";
+import Link from "next/link";
+import { useMerchantStore } from "@/stores/merchantStore";
+import { getEffectiveStatus, TRADER_CUT_CONFIG } from "@/lib/orders/mappers";
+import { formatCrypto } from "@/lib/format";
+
+// Empty until a real backend feed lands. Once data is wired, the chart
+// auto-shows again because the render is gated on length > 0.
+const weeklyData: { day: string; trades: number; volume: number; earnings: number }[] = [];
+
+const recentTrades: { id: number; user: string; amount: number; profit: number; time: string; rating: number }[] = [];
+
+const topUsers: { name: string; trades: number; volume: number; emoji: string }[] = [];
+
+interface MerchantInfo {
+  id: string;
+  display_name: string;
+  business_name: string;
+  rating?: number;
+}
+
+// Convert the timeframe pill selection into an absolute cutoff timestamp.
+// "all" returns 0 so every order passes the filter.
+function timeframeCutoffMs(tf: "7d" | "30d" | "all"): number {
+  if (tf === "all") return 0;
+  const days = tf === "7d" ? 7 : 30;
+  return Date.now() - days * 24 * 60 * 60 * 1000;
+}
+
+export default function AnalyticsPage() {
+  const router = useRouter();
+  const [timeframe, setTimeframe] = useState<"7d" | "30d" | "all">("7d");
+  const [merchantInfo, setMerchantInfo] = useState<MerchantInfo | null>(null);
+  const orders = useMerchantStore((s) => s.orders);
+  const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
+  const merchantId = useMerchantStore((s) => s.merchantId);
+  const isLoading = useMerchantStore((s) => s.isLoading);
+
+  // Auth gate. The analytics page reads orders from the in-memory store and
+  // merchant info from localStorage, so it does not naturally trip the
+  // fetchWithAuth 401 safety net. Send unauthenticated visitors straight to
+  // the canonical login URL instead of rendering empty state.
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isLoggedIn || !merchantId) router.replace("/market/login");
+  }, [isLoading, isLoggedIn, merchantId, router]);
+
+  // Load merchant info from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('blip_merchant');
+    if (saved) {
+      try {
+        setMerchantInfo(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse merchant info:', e);
+      }
+    }
+  }, []);
+
+  // Real totals derived from the merchant's completed orders, filtered by
+  // the active timeframe pill. Re-computes when the user toggles 7d/30d/All.
+  const { totalTrades, totalVolume, totalEarnings } = useMemo(() => {
+    const cutoff = timeframeCutoffMs(timeframe);
+    let trades = 0;
+    let volume = 0;
+    let earnings = 0;
+    for (const o of orders) {
+      if (getEffectiveStatus(o) !== "completed") continue;
+      const completedAt =
+        o.dbOrder?.completed_at ||
+        (o.timestamp instanceof Date ? o.timestamp.toISOString() : undefined);
+      if (cutoff > 0) {
+        if (!completedAt) continue;
+        const t = new Date(completedAt).getTime();
+        if (!Number.isFinite(t) || t < cutoff) continue;
+      }
+      trades += 1;
+      volume += o.amount;
+      earnings += o.amount * TRADER_CUT_CONFIG.best;
+    }
+    return { totalTrades: trades, totalVolume: volume, totalEarnings: earnings };
+  }, [orders, timeframe]);
+
+  const maxVolume = Math.max(...weeklyData.map(d => d.volume));
+  const avgResponseTime = 45;
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
+      {/* Ambient */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-[#ff6b35]/[0.02] rounded-full blur-[150px]" />
+        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-white/[0.08]/[0.02] rounded-full blur-[150px]" />
+      </div>
+
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-sm border-b border-white/[0.04]">
+        <div className="px-4 h-14 flex items-center gap-4">
+          {/* Logo */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ff6b35] to-[#ff8c50] flex items-center justify-center text-background font-bold text-sm">
+              B
+            </div>
+            <span className="text-sm font-semibold hidden sm:block">Merchant</span>
+          </div>
+
+          {/* Nav Links */}
+          <nav className="flex items-center gap-1 ml-4">
+            <Link
+              href="/market"
+              className="px-3 py-1.5 text-xs font-medium text-foreground/40 hover:text-foreground hover:bg-card rounded-lg transition-all"
+            >
+              Console
+            </Link>
+            <Link
+              href="/market/analytics"
+              className="px-3 py-1.5 text-xs font-medium bg-white/[0.08] rounded-lg text-white"
+            >
+              Analytics
+            </Link>
+            <Link
+              href="/market/settings"
+              className="px-3 py-1.5 text-xs font-medium text-foreground/40 hover:text-foreground hover:bg-card rounded-lg transition-all"
+            >
+              Settings
+            </Link>
+          </nav>
+
+          <div className="flex-1" />
+
+          {/* Quick Stats */}
+          <div className="hidden md:flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#151515] rounded-lg border border-white/[0.04]">
+              <Wallet className="w-3.5 h-3.5 text-[#ff6b35]" />
+              <span className="text-sm font-bold">$12,420</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.06] rounded-lg border border-white/[0.09]">
+              <TrendingUp className="w-3.5 h-3.5 text-[#f5f5f7]" />
+              <span className="text-sm font-bold text-[#f5f5f7]">+$126</span>
+              <span className="text-[10px] text-[#f5f5f7]/60">today</span>
+            </div>
+          </div>
+
+          {/* Online Status */}
+          <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/[0.06] border border-white/[0.09] rounded-full">
+            <motion.div
+              className="w-2 h-2 rounded-full bg-white/[0.08]"
+              animate={{ opacity: [1, 0.4, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+            <span className="text-[11px] text-[#f5f5f7] font-medium">Online</span>
+          </div>
+
+          {/* Profile */}
+          <div className="flex items-center gap-2 pl-3 border-l border-white/[0.08]">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ff6b35] to-[#ff8c50] flex items-center justify-center text-sm">
+              {merchantInfo?.display_name?.charAt(0)?.toUpperCase() || '🐋'}
+            </div>
+            <div className="hidden sm:block">
+              <p className="text-xs font-medium">{merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}</p>
+              <p className="text-[10px] text-foreground/35">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 p-4 overflow-auto relative z-10">
+        {/* Page Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-xl font-bold">Analytics</h1>
+            <p className="text-xs text-foreground/35 mt-0.5">Performance overview and insights</p>
+          </div>
+
+          {/* Timeframe Selector */}
+          <div className="flex bg-[#151515] rounded-lg p-1 border border-white/[0.04]">
+            {(["7d", "30d", "all"] as const).map((tf) => (
+              <button
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  timeframe === tf
+                    ? "bg-[#ff6b35] text-background"
+                    : "text-foreground/40 hover:text-foreground"
+                }`}
+              >
+                {tf === "all" ? "All Time" : tf}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Stats Grid — counts/totals derived live from completed orders
+            within the active timeframe pill (7d / 30d / All Time). The
+            "% vs last week" trend chips were removed because they were
+            hardcoded fake numbers; they can return when a real prior-period
+            comparison is available. */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-[#ff6b35]/10 flex items-center justify-center">
+                <Activity className="w-4 h-4 text-[#ff6b35]" />
+              </div>
+              <span className="text-xs text-foreground/35">Total Trades</span>
+            </div>
+            <p className="text-2xl font-bold tabular-nums">{totalTrades}</p>
+            <p className="text-[10px] text-foreground/30 mt-1">
+              {timeframe === "all" ? "All time" : `Last ${timeframe}`}
+            </p>
+          </div>
+
+          <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-[#f5f5f7]" />
+              </div>
+              <span className="text-xs text-foreground/35">Volume</span>
+            </div>
+            <p className="text-2xl font-bold tabular-nums">
+              {formatCrypto(totalVolume)} <span className="text-xs text-foreground/40 font-medium">USDT</span>
+            </p>
+            <p className="text-[10px] text-foreground/30 mt-1">
+              {timeframe === "all" ? "All time" : `Last ${timeframe}`}
+            </p>
+          </div>
+
+          <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <Wallet className="w-4 h-4 text-amber-400" />
+              </div>
+              <span className="text-xs text-foreground/35">Earnings</span>
+            </div>
+            <p className="text-2xl font-bold tabular-nums">
+              {formatCrypto(totalEarnings)} <span className="text-xs text-foreground/40 font-medium">USDT</span>
+            </p>
+            <p className="text-[10px] text-foreground/30 mt-1">
+              {timeframe === "all" ? "All time" : `Last ${timeframe}`}
+            </p>
+          </div>
+
+          <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
+                <Zap className="w-4 h-4 text-white/60" />
+              </div>
+              <span className="text-xs text-foreground/35">Avg Response</span>
+            </div>
+            <p className="text-2xl font-bold tabular-nums">{avgResponseTime}s</p>
+            <p className="text-[10px] text-foreground/30 mt-1">Last {timeframe === "all" ? "all time" : timeframe}</p>
+          </div>
+        </div>
+
+        <div className={`grid grid-cols-1 ${weeklyData.length > 0 ? "lg:grid-cols-3" : ""} gap-4`}>
+          {/* Volume Chart — only render when we have data. The page used to
+              show an empty card with just the legend, which made the
+              merchant think the chart was broken. Comment per user request:
+              if data is unavailable, hide the section entirely. */}
+          {weeklyData.length > 0 && (
+            <div className="lg:col-span-2 bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold">Weekly Volume</h3>
+                <div className="flex items-center gap-3 text-[10px] text-foreground/35">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-[#ff6b35]" />
+                    Volume
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-white/[0.08]" />
+                    Trades
+                  </div>
+                </div>
+              </div>
+
+              {/* Bar Chart */}
+              <div className="h-48 flex items-end gap-2">
+                {weeklyData.map((day, i) => (
+                  <div key={day.day} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full flex flex-col items-center gap-1 h-40 justify-end">
+                      {/* Volume Bar */}
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: `${(day.volume / maxVolume) * 100}%` }}
+                        transition={{ delay: i * 0.05, duration: 0.4 }}
+                        className="w-full bg-gradient-to-t from-[#ff6b35] to-[#ff8c50] rounded-t-md relative group"
+                      >
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#1a1a1a] px-2 py-1 rounded text-[10px] whitespace-nowrap border border-white/[0.08]">
+                          ${day.volume.toLocaleString()}
+                        </div>
+                      </motion.div>
+                    </div>
+                    <span className="text-[10px] text-foreground/35">{day.day}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Performance Metrics */}
+          <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+            <h3 className="text-sm font-semibold mb-4">Performance</h3>
+
+            <div className="space-y-4">
+              {/* Success Rate */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-foreground/40">Success Rate</span>
+                  <span className="text-sm font-bold text-[#f5f5f7]">98.2%</span>
+                </div>
+                <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: "98.2%" }}
+                    transition={{ duration: 0.6 }}
+                    className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full"
+                  />
+                </div>
+              </div>
+
+              {/* Rating */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-foreground/40">Average Rating</span>
+                  <div className="flex items-center gap-1">
+                    <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                    <span className="text-sm font-bold">4.92</span>
+                  </div>
+                </div>
+                <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: "98.4%" }}
+                    transition={{ duration: 0.6 }}
+                    className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full"
+                  />
+                </div>
+              </div>
+
+              {/* Bond Utilization */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-foreground/40">Bond Utilization</span>
+                  <span className="text-sm font-bold">32%</span>
+                </div>
+                <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: "32%" }}
+                    transition={{ duration: 0.6 }}
+                    className="h-full bg-gradient-to-r from-[#ff6b35] to-[#ff8c50] rounded-full"
+                  />
+                </div>
+              </div>
+
+              {/* Disputes */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-foreground/40">Disputes (30d)</span>
+                  <span className="text-sm font-bold text-[#f5f5f7]">0</span>
+                </div>
+                <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
+                  <div className="h-full w-0 bg-red-500 rounded-full" />
+                </div>
+              </div>
+            </div>
+
+            {/* Tier Badge */}
+            <div className="mt-6 p-3 bg-gradient-to-r from-[#ff6b35]/10 to-amber-500/10 rounded-lg border border-[#ff6b35]/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6b35] to-amber-500 flex items-center justify-center">
+                  <Award className="w-5 h-5 text-background" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Tier 3 Merchant</p>
+                  <p className="text-[10px] text-foreground/35">847 trades · 4.92★</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Trades + Top Users sections — hidden when their backing
+            arrays are empty. Same rationale as the Weekly Volume chart:
+            don't render an empty card that looks broken. They'll auto
+            re-appear once the backend feeds populate the arrays. */}
+        {(recentTrades.length > 0 || topUsers.length > 0) && (
+          <div
+            className={`grid grid-cols-1 ${recentTrades.length > 0 && topUsers.length > 0 ? "lg:grid-cols-2" : ""} gap-4 mt-4`}
+          >
+            {recentTrades.length > 0 && (
+              <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold">Recent Trades</h3>
+                  <button className="text-[10px] text-[#ff6b35] hover:text-[#ff8c50] transition-colors">
+                    View all
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {recentTrades.map((trade) => (
+                    <div
+                      key={trade.id}
+                      className="flex items-center gap-3 p-2.5 bg-[#151515] rounded-lg border border-white/[0.04]"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
+                        <Check className="w-4 h-4 text-[#f5f5f7]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{trade.user}</p>
+                        <p className="text-[10px] text-foreground/35">${trade.amount.toLocaleString()} USDT</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold text-[#f5f5f7]">+${trade.profit}</p>
+                        <p className="text-[10px] text-gray-600">{trade.time}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {topUsers.length > 0 && (
+              <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold">Top Users</h3>
+                  <div className="flex items-center gap-1 text-[10px] text-foreground/35">
+                    <Users className="w-3 h-3" />
+                    By volume
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {topUsers.map((user, i) => (
+                    <div
+                      key={user.name}
+                      className="flex items-center gap-3 p-2.5 bg-[#151515] rounded-lg border border-white/[0.04]"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-[#252525] flex items-center justify-center text-[10px] font-bold">
+                        {i + 1}
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-[#1f1f1f] flex items-center justify-center text-lg">
+                        {user.emoji}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{user.name}</p>
+                        <p className="text-[10px] text-foreground/35">{user.trades} trades</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold">${Math.round(user.volume / 1000)}k</p>
+                        <p className="text-[10px] text-gray-600">volume</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

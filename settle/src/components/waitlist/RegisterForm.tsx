@@ -55,12 +55,48 @@ function checkPasswordStrength(password: string) {
 }
 
 function deriveUsernameFromEmail(email: string): string {
-  // Settle backend's validateUserUsername requires 3–30 chars,
-  // alphanumeric + underscore. The email prefix usually fits; sanitise
-  // anything else by stripping non-allowed chars and padding to 3.
+  // Settle backend's validateUserUsername requires 4–20 chars,
+  // alphanumeric + underscore. The email prefix (before @) usually fits;
+  // sanitise anything else by stripping non-allowed chars, cap at 20, and
+  // pad short prefixes up to the 4-char minimum.
   const raw = email.trim().split("@")[0] || "user";
-  const cleaned = raw.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 30);
-  return cleaned.length >= 3 ? cleaned : `${cleaned}_user`.slice(0, 30);
+  const cleaned = raw.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 20);
+  return cleaned.length >= 4 ? cleaned : `${cleaned}_user`.slice(0, 20);
+}
+
+// Email-only signups derive the handle from the email prefix, which may
+// already be taken (e.g. girish@gmail.com and girish@yahoo.com both want
+// "girish"). Mirror the Google flow: probe the availability endpoint and
+// suffix _2, _3, … until free so a collision doesn't fail signup. The backend
+// remains the source of truth on insert, so this is best-effort dedupe.
+async function deriveUniqueUsernameFromEmail(email: string): Promise<string> {
+  const base = deriveUsernameFromEmail(email);
+
+  const isAvailable = async (candidate: string): Promise<boolean> => {
+    try {
+      const res = await fetch(
+        `/api/auth/user/username-availability?username=${encodeURIComponent(candidate)}`,
+        { cache: "no-store" },
+      );
+      const data = await res.json().catch(() => null);
+      return !!data?.data?.available;
+    } catch {
+      // Network hiccup — let the backend's unique constraint decide.
+      return true;
+    }
+  };
+
+  if (await isAvailable(base)) return base;
+
+  for (let i = 2; i <= 50; i++) {
+    const suffix = `_${i}`;
+    const trimmed = base.slice(0, 20 - suffix.length).replace(/_+$/g, "");
+    const candidate = `${trimmed}${suffix}`;
+    if (candidate.length >= 4 && (await isAvailable(candidate))) return candidate;
+  }
+
+  // Last resort: random 4-char tail (still validated/deduped server-side).
+  return `${base.slice(0, 15)}_${Math.random().toString(36).slice(2, 6)}`.slice(0, 20);
 }
 
 export default function RegisterForm({ role }: RegisterFormProps) {
@@ -148,6 +184,13 @@ export default function RegisterForm({ role }: RegisterFormProps) {
       const fp = fpRef.current ?? (await collectFingerprint().catch(() => null));
       const behavior = telemetryRef.current?.snapshot() ?? null;
 
+      // Email-only user signup: derive a UNIQUE handle from the email prefix
+      // so a taken prefix doesn't reject the registration. Merchants pick a
+      // username later during onboarding, so skip it for them.
+      const derivedUsername = isMerchant
+        ? null
+        : await deriveUniqueUsernameFromEmail(trimmedEmail);
+
       const body: Record<string, unknown> = isMerchant
         ? {
             action: "register",
@@ -162,9 +205,9 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           }
         : {
             action: "register",
-            // Derived from email so the futureStick-style email-only UI
-            // still satisfies the settle backend's validateUserUsername.
-            username: deriveUsernameFromEmail(trimmedEmail),
+            // Derived (and de-duplicated) from the email prefix so the
+            // email-only UI still satisfies the backend's validateUserUsername.
+            username: derivedUsername,
             email: trimmedEmail,
             password,
             referral_code: referralCode.trim() || undefined,

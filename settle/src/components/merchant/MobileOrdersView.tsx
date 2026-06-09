@@ -7,7 +7,6 @@ import {
   Activity,
   MessageCircle,
   User,
-  Loader2,
   Search,
   Volume2,
   VolumeX,
@@ -19,10 +18,14 @@ import {
 import { formatFiat } from "@/lib/format";
 import { HoldSwipe } from "@/components/merchant/OrderCardParts";
 import { useMerchantStore, type PendingFilter } from "@/stores/merchantStore";
+import { useSounds } from "@/hooks/useSounds";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import type { Order } from "@/types/merchant";
 
-const PENDING_FILTER_OPTIONS: ReadonlyArray<{ key: PendingFilter; label: string }> = [
+const PENDING_FILTER_OPTIONS: ReadonlyArray<{
+  key: PendingFilter;
+  label: string;
+}> = [
   { key: "all", label: "All" },
   { key: "mineable", label: "Mineable" },
   { key: "premium", label: "Premium" },
@@ -86,7 +89,10 @@ function formatCountdown(secs: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function formatTimeTaken(createdAt?: string, updatedAt?: string): string | null {
+function formatTimeTaken(
+  createdAt?: string,
+  updatedAt?: string,
+): string | null {
   if (!createdAt || !updatedAt) return null;
   const diffMs = new Date(updatedAt).getTime() - new Date(createdAt).getTime();
   if (diffMs <= 0) return null;
@@ -100,126 +106,337 @@ function formatTimeTaken(createdAt?: string, updatedAt?: string): string | null 
 
 /* ── Card with timer hook (no hooks inside .map()) ── */
 function OrderCardTimer({
-  order, merchantId, isCreatedByMe, onAcceptOrder, acceptingOrderId,
-  onOpenChat, setMobileView, onCancelOrder, cancellingOrderId,
+  order,
+  merchantId,
+  isCreatedByMe,
+  onAcceptOrder,
+  acceptingOrderId,
+  onOpenChat,
+  setMobileView,
+  onCancelOrder,
+  cancellingOrderId,
 }: {
-  order: Order; merchantId: string | null;
+  order: Order;
+  merchantId: string | null;
   isCreatedByMe: (o: Order) => boolean;
-  onAcceptOrder: (o: Order) => void; acceptingOrderId?: string | null;
-  onOpenChat: (o: Order) => void; setMobileView: (v: 'orders'|'escrow'|'chat'|'history'|'marketplace') => void;
-  onCancelOrder?: (o: Order) => void; cancellingOrderId?: string | null;
+  onAcceptOrder: (o: Order) => void;
+  acceptingOrderId?: string | null;
+  onOpenChat: (o: Order) => void;
+  setMobileView: (
+    v: "orders" | "escrow" | "chat" | "history" | "marketplace",
+  ) => void;
+  onCancelOrder?: (o: Order) => void;
+  cancellingOrderId?: string | null;
 }) {
   const countdown = useCountdown(order.expiresIn);
   const [dismissed, setDismissed] = useState(false);
 
-  const effStatus: string = (order as any).status || (order as any)?.dbOrder?.status || "pending";
-  const isExpired     = countdown <= 0;
+  const effStatus: string =
+    (order as any).status || (order as any)?.dbOrder?.status || "pending";
+  const isExpired = countdown <= 0;
   const isActivelyPending = effStatus === "pending" && countdown > 0;
-  const isCompleted   = effStatus === "completed";
-  const isBad         = ["disputed","cancelled","expired"].includes(effStatus);
-  const isOngoing     = !isCompleted && !isBad;
-  const isMine        = isCreatedByMe(order);
-  const expiringSoon  = !isExpired && countdown <= 120;
+  const isCompleted = effStatus === "completed";
+  const isBad = ["disputed", "cancelled", "expired"].includes(effStatus);
+  const isOngoing = !isCompleted && !isBad;
+  const isMine = isCreatedByMe(order);
+  const expiringSoon = !isExpired && countdown <= 120;
 
   // Countdown as fraction of 15-min window for the progress bar
   const timeFrac = Math.min(1, countdown / 900);
   const low = timeFrac < 0.25;
 
   // User info
-  const rawName = order.user || (order.dbOrder as any)?.user?.username || (order.dbOrder as any)?.user?.name || "";
-  const isPlaceholder = rawName.startsWith("open_order_") || rawName.startsWith("m2m_") || rawName === "Unknown";
+  const rawName =
+    order.user ||
+    (order.dbOrder as any)?.user?.username ||
+    (order.dbOrder as any)?.user?.name ||
+    "";
+  const isPlaceholder =
+    rawName.startsWith("open_order_") ||
+    rawName.startsWith("m2m_") ||
+    rawName === "Unknown";
   const displayName = isPlaceholder ? "Open Order" : rawName;
   const rawAvatarUrl = order.user_avatar ?? undefined;
-  const avatarUrl = rawAvatarUrl && /^https?:\/\/|^\//.test(rawAvatarUrl) ? rawAvatarUrl : undefined;
+  const avatarUrl =
+    rawAvatarUrl && /^https?:\/\/|^\//.test(rawAvatarUrl)
+      ? rawAvatarUrl
+      : undefined;
   const isVerified = (order.dbOrder as any)?.user?.is_verified ?? false;
-  const initials = displayName.split(" ").map((w: string) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+  const initials = displayName
+    .split(" ")
+    .map((w: string) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
   // Stats
-  const rating        = (order.dbOrder as any)?.user?.rating        ?? (order.dbOrder as any)?.merchant?.rating        ?? null;
-  const totalTrades   = (order.dbOrder as any)?.user?.total_trades  ?? (order.dbOrder as any)?.merchant?.total_trades  ?? null;
+  const rating =
+    (order.dbOrder as any)?.user?.rating ??
+    (order.dbOrder as any)?.merchant?.rating ??
+    null;
+  const totalTrades =
+    (order.dbOrder as any)?.user?.total_trades ??
+    (order.dbOrder as any)?.merchant?.total_trades ??
+    null;
   const completionRate = (order.dbOrder as any)?.user?.completion_rate ?? null;
 
   // Payment method
-  const pmType  = order.lockedPaymentMethod?.type || order.dbOrder?.payment_method;
-  const pmName  = order.lockedPaymentMethod?.label || order.lockedPaymentMethod?.details?.name as string | undefined;
-  const pmLabel = pmName || (pmType === "upi" ? "UPI" : pmType === "bank" ? "Bank Transfer" : pmType === "cash" ? "Cash" : pmType ? pmType.toUpperCase() : null);
-  const PmIcon  = pmType === "upi" ? Zap : pmType === "bank" ? Landmark : pmType === "cash" ? Banknote : CreditCard;
+  const pmType =
+    order.lockedPaymentMethod?.type || order.dbOrder?.payment_method;
+  const pmName =
+    order.lockedPaymentMethod?.label ||
+    (order.lockedPaymentMethod?.details?.name as string | undefined);
+  const pmLabel =
+    pmName ||
+    (pmType === "upi"
+      ? "UPI"
+      : pmType === "bank"
+      ? "Bank Transfer"
+      : pmType === "cash"
+      ? "Cash"
+      : pmType
+      ? pmType.toUpperCase()
+      : null);
+  const PmIcon =
+    pmType === "upi"
+      ? Zap
+      : pmType === "bank"
+      ? Landmark
+      : pmType === "cash"
+      ? Banknote
+      : CreditCard;
 
   // Amounts
-  const fiatCur   = order.toCurrency   || "AED";
+  const fiatCur = order.toCurrency || "AED";
   const viewerSide = getViewerSide(order.dbOrder, merchantId);
-  const fiatLabel  = viewerSide === "seller" ? "YOU RECEIVE" : "YOU PAY OUT";
+  const fiatLabel = viewerSide === "seller" ? "YOU RECEIVE" : "YOU PAY OUT";
 
   // Hero fiat: integer only — strip all decimals (e.g. "₹2,561" not "₹2,561.25")
-  const heroFiat = formatFiat(Math.round(order.total), fiatCur).replace(/\.00$/, '');
+  const heroFiat = formatFiat(Math.round(order.total), fiatCur).replace(
+    /\.00$/,
+    "",
+  );
   // Earnings chip fiat amount (e.g. "+₹12.5")
-  const earningFiat = order.amount * (order.protocolFeePercent ?? 0.5) / 100 * (order.rate || 1);
-  const heroEarning = earningFiat > 0
-    ? formatFiat(earningFiat, fiatCur).replace(/\.?0+$/, '')
-    : null;
+  const earningFiat =
+    ((order.amount * (order.protocolFeePercent ?? 0.5)) / 100) *
+    (order.rate || 1);
+  const heroEarning =
+    earningFiat > 0
+      ? formatFiat(earningFiat, fiatCur).replace(/\.?0+$/, "")
+      : null;
   // Rate display: 1 decimal (e.g. "102.5"), spread next to it (e.g. "+0.50")
-  const heroRate   = (order.rate || 0).toFixed(1);
-  const heroSpread = order.rate && order.protocolFeePercent
-    ? `+${(order.rate * order.protocolFeePercent / 100).toFixed(2)}`
-    : null;
+  const heroRate = (order.rate || 0).toFixed(1);
+  const heroSpread =
+    order.rate && order.protocolFeePercent
+      ? `+${((order.rate * order.protocolFeePercent) / 100).toFixed(2)}`
+      : null;
 
   // Progress bar for non-pending live orders
   const progressStages: Record<string, number> = {
-    pending: 20, accepted: 40, escrowed: 60, payment_sent: 80, completed: 100,
-    disputed: 100, cancelled: 100, expired: 100,
+    pending: 20,
+    accepted: 40,
+    escrowed: 60,
+    payment_sent: 80,
+    completed: 100,
+    disputed: 100,
+    cancelled: 100,
+    expired: 100,
   };
   const progressPct = progressStages[effStatus] ?? 20;
-  const barColor    = isCompleted ? "#34d399" : isBad ? "#f87171" : "#fb923c";
-  const barGlow     = isCompleted ? "0 0 8px rgba(52,211,153,0.7)" : isBad ? "none" : "0 0 8px rgba(251,146,60,0.7)";
+  const barColor = isCompleted ? "#f5f5f7" : isBad ? "#f87171" : "#fb923c";
+  const barGlow = isCompleted
+    ? "none"
+    : isBad
+    ? "none"
+    : "0 0 8px rgba(251,146,60,0.7)";
 
   // Time taken for terminal orders
-  const timeTaken = isCompleted || isBad
-    ? formatTimeTaken((order.dbOrder as any)?.created_at, (order.dbOrder as any)?.updated_at)
-    : null;
+  const timeTaken =
+    isCompleted || isBad
+      ? formatTimeTaken(
+          (order.dbOrder as any)?.created_at,
+          (order.dbOrder as any)?.updated_at,
+        )
+      : null;
 
   if (dismissed) {
     return (
-      <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 22, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Order skipped</span>
-        <button onClick={() => setDismissed(false)} style={{ fontSize: 12, color: "#b8e9d4", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Undo</button>
+      <div
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.09)",
+          borderRadius: 22,
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 13,
+            color: "rgba(255,255,255,0.3)",
+            fontWeight: 600,
+          }}
+        >
+          Order skipped
+        </span>
+        <button
+          onClick={() => setDismissed(false)}
+          style={{
+            fontSize: 12,
+            color: "rgba(255,255,255,0.7)",
+            fontWeight: 700,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          Undo
+        </button>
       </div>
     );
   }
 
   return (
-    <div style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 22, overflow: "hidden", backdropFilter: "blur(20px) saturate(150%)", marginBottom: 12, opacity: isExpired ? 0.62 : 1 }}>
-      <div style={{ padding: 13 }}>
-
+    <div
+      style={{
+        background: "rgba(255,255,255,0.055)",
+        border: "1px solid rgba(255,255,255,0.09)",
+        borderRadius: 18,
+        overflow: "hidden",
+        backdropFilter: "blur(20px) saturate(150%)",
+        marginBottom: 9,
+        opacity: isExpired ? 0.62 : 1,
+      }}
+    >
+      <div style={{ padding: 11 }}>
         {/* ── EXPIRED HEADER ── */}
         {isExpired && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 11 }}>
-            <span style={{ padding: "3px 9px", borderRadius: 999, background: "rgba(255,90,95,0.12)", border: "1px solid rgba(255,90,95,0.3)", color: "#ff7a7e", fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em" }}>EXPIRED</span>
-            <span style={{ color: "#5a5a60", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>0:00 · not accepted</span>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 11,
+            }}
+          >
+            <span
+              style={{
+                padding: "3px 9px",
+                borderRadius: 999,
+                background: "rgba(255,90,95,0.12)",
+                border: "1px solid rgba(255,90,95,0.3)",
+                color: "#ff7a7e",
+                fontSize: 10.5,
+                fontWeight: 800,
+                letterSpacing: "0.04em",
+              }}
+            >
+              EXPIRED
+            </span>
+            <span
+              style={{
+                color: "#5a5a60",
+                fontSize: 11,
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+              }}
+            >
+              0:00 · not accepted
+            </span>
           </div>
         )}
 
         {/* ── TRUST BLOCK ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 10,
+          }}
+        >
           {/* 36px gradient avatar with initials */}
-          <span style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: avatarUrl ? "transparent" : "linear-gradient(150deg,#ff8a3d,#ff5d73)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13, overflow: "hidden" }}>
-            {avatarUrl ? <img src={avatarUrl} style={{ width: 36, height: 36, objectFit: "cover" }} alt="" /> : initials}
+          <span
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 999,
+              flexShrink: 0,
+              background: avatarUrl
+                ? "transparent"
+                : "linear-gradient(150deg,#ff8a3d,#ff5d73)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              fontWeight: 800,
+              fontSize: 13,
+              overflow: "hidden",
+            }}
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                style={{ width: 36, height: 36, objectFit: "cover" }}
+                alt=""
+              />
+            ) : (
+              initials
+            )}
           </span>
 
           {/* Text column */}
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Row 1: name + verified shield */}
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <b style={{ fontSize: 13.5, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</b>
+              <b
+                style={{
+                  fontSize: 12.5,
+                  color: "#f5f5f7",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {displayName}
+              </b>
               {isVerified && (
-                <span style={{ color: "#b8e9d4", display: "flex", flexShrink: 0 }}>
+                <span
+                  style={{
+                    color: "rgba(255,255,255,0.7)",
+                    display: "flex",
+                    flexShrink: 0,
+                  }}
+                >
                   <Shield style={{ width: 11, height: 11 }} />
                 </span>
               )}
             </div>
             {/* Row 2: star rating + payment method */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, color: "#86868b", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 2,
+                color: "#86868b",
+                fontSize: 11.5,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
               {rating && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#ffb020" }}>
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    color: "#ffb020",
+                  }}
+                >
                   ★<b style={{ color: "#fff" }}>{Number(rating).toFixed(1)}</b>
                 </span>
               )}
@@ -232,7 +449,15 @@ function OrderCardTimer({
             </div>
             {/* Row 3: completion + release time */}
             {completionRate != null && (
-              <div style={{ marginTop: 2, color: "#5a5a60", fontSize: 10.5, fontWeight: 600, whiteSpace: "nowrap" }}>
+              <div
+                style={{
+                  marginTop: 2,
+                  color: "#5a5a60",
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
                 {completionRate}% completion · ~2m release
               </div>
             )}
@@ -241,30 +466,115 @@ function OrderCardTimer({
           {/* Right: chat + user icon buttons 32×32 */}
           <div style={{ display: "flex", gap: 7, flexShrink: 0 }}>
             <button
-              onClick={() => { onOpenChat(order); setMobileView("chat"); }}
-              style={{ width: 32, height: 32, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
+              onClick={() => {
+                onOpenChat(order);
+                setMobileView("chat");
+              }}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.055)",
+                border: "1px solid rgba(255,255,255,0.09)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#aeaeb2",
+                cursor: "pointer",
+              }}
+            >
               <MessageCircle style={{ width: 15, height: 15 }} />
             </button>
             <button
-              style={{ width: 32, height: 32, borderRadius: 999, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", cursor: "pointer" }}>
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.055)",
+                border: "1px solid rgba(255,255,255,0.09)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#aeaeb2",
+                cursor: "pointer",
+              }}
+            >
               <User style={{ width: 15, height: 15 }} />
             </button>
           </div>
         </div>
 
         {/* ── FULL-BLEED DIVIDER ── */}
-        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "11px -13px" }} />
+        <div
+          style={{
+            height: 1,
+            background: "rgba(255,255,255,0.08)",
+            margin: "9px -11px",
+          }}
+        />
 
         {/* ── PAYOUT HERO ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 11, marginBottom: 14 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-end",
+            marginTop: 11,
+            marginBottom: 14,
+          }}
+        >
           {/* Left: fiat label + big number + earnings chip */}
           <div>
-            <div style={{ color: "#86868b", fontWeight: 700, fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{fiatLabel}</div>
+            <div
+              style={{
+                color: "#86868b",
+                fontWeight: 700,
+                fontSize: 9.5,
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                marginBottom: 2,
+              }}
+            >
+              {fiatLabel}
+            </div>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 7 }}>
-              <span style={{ fontSize: 25, fontWeight: 800, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", color: "#f5f5f7" }}>{heroFiat}</span>
+              <span
+                style={{
+                  fontSize: 22,
+                  fontWeight: 800,
+                  lineHeight: 0.95,
+                  fontVariantNumeric: "tabular-nums",
+                  letterSpacing: "-0.02em",
+                  color: "#f5f5f7",
+                }}
+              >
+                {heroFiat}
+              </span>
               {!isMine && isActivelyPending && heroEarning && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2, padding: "3px 8px", borderRadius: 999, background: "rgba(184,233,212,0.12)", border: "1px solid rgba(184,233,212,0.3)", color: "#b8e9d4", fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap" }}>
-                  <svg viewBox="0 0 24 24" width={10} height={10} fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    marginBottom: 2,
+                    padding: "3px 8px",
+                    borderRadius: 999,
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.09)",
+                    color: "rgba(255,255,255,0.7)",
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width={10}
+                    height={10}
+                    fill="currentColor"
+                  >
+                    <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
+                  </svg>
                   +{heroEarning}
                 </span>
               )}
@@ -272,23 +582,78 @@ function OrderCardTimer({
           </div>
           {/* Right: USDT amount + rate */}
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "#f5f5f7" }}>
-              {Math.round(order.amount)} <span style={{ fontSize: 10.5, color: "#86868b" }}>USDT</span>
+            <div
+              style={{
+                fontSize: 14.5,
+                fontWeight: 800,
+                fontVariantNumeric: "tabular-nums",
+                color: "#f5f5f7",
+              }}
+            >
+              {Math.round(order.amount)}{" "}
+              <span style={{ fontSize: 10.5, color: "#86868b" }}>USDT</span>
             </div>
-            <div style={{ color: "#86868b", fontSize: 11, fontWeight: 600, marginTop: 1, whiteSpace: "nowrap" }}>
-              @ {heroRate}{heroSpread && <span style={{ color: "#b8e9d4" }}> · +{heroSpread.replace('+', '')}</span>}
+            <div
+              style={{
+                color: "#86868b",
+                fontSize: 11,
+                fontWeight: 600,
+                marginTop: 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              @ {heroRate}
+              {heroSpread && (
+                <span style={{ color: "rgba(255,255,255,0.5)" }}>
+                  {" "}
+                  · +{heroSpread.replace("+", "")}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         {/* ── ACTION ROW ── */}
         {isExpired ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, height: 44, borderRadius: 22, border: "1px dashed rgba(255,255,255,0.16)", color: "#86868b", fontSize: 12.5, fontWeight: 700 }}>
-            <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              marginTop: 12,
+              height: 44,
+              borderRadius: 22,
+              border: "1px dashed rgba(255,255,255,0.16)",
+              color: "#86868b",
+              fontSize: 12.5,
+              fontWeight: 700,
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width={14}
+              height={14}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7.5V12l3 2" />
+            </svg>
             Expired · moved to History
           </div>
         ) : isActivelyPending ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginTop: 12,
+            }}
+          >
             {!isMine ? (
               <HoldSwipe
                 onAccept={() => onAcceptOrder(order)}
@@ -297,14 +662,12 @@ function OrderCardTimer({
               />
             ) : (
               onCancelOrder && (
-                <button
-                  onClick={() => onCancelOrder(order)}
-                  disabled={cancellingOrderId === order.id}
-                  style={{ width: "100%", height: 48, borderRadius: 14, border: "1px solid rgba(255,255,255,0.10)", fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "rgba(255,255,255,0.04)", cursor: cancellingOrderId === order.id ? "not-allowed" : "pointer", opacity: cancellingOrderId === order.id ? 0.4 : 1 }}>
-                  {cancellingOrderId === order.id
-                    ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" />
-                    : <><X style={{ width: 16, height: 16 }} /> Cancel Order</>}
-                </button>
+                <HoldSwipe
+                  onAccept={() => onCancelOrder(order)}
+                  loading={cancellingOrderId === order.id}
+                  height={48}
+                  variant="cancel"
+                />
               )
             )}
           </div>
@@ -312,30 +675,88 @@ function OrderCardTimer({
 
         {/* ── COUNTDOWN FOOTER (pending orders only) ── */}
         {isActivelyPending && !isExpired && (
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
-            <span style={{ width: 6, height: 6, borderRadius: 9, background: low || expiringSoon ? "#ff5a5f" : "#b8e9d4", flexShrink: 0 }} />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              marginTop: 10,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 9,
+                background:
+                  low || expiringSoon ? "#ff5a5f" : "rgba(255,255,255,0.7)",
+                flexShrink: 0,
+              }}
+            />
             <span style={{ fontWeight: 700, fontSize: 11, color: "#86868b" }}>
-              <b style={{ fontVariantNumeric: "tabular-nums", color: low || expiringSoon ? "#ff5a5f" : "#fff" }}>{formatCountdown(countdown)}</b>
-              {" "}left to accept
+              <b
+                style={{
+                  fontVariantNumeric: "tabular-nums",
+                  color: low || expiringSoon ? "#ff5a5f" : "#fff",
+                }}
+              >
+                {formatCountdown(countdown)}
+              </b>{" "}
+              left to accept
             </span>
           </div>
         )}
 
         {/* Terminal order time taken (when not in stats line) */}
         {!isActivelyPending && timeTaken && totalTrades == null && (
-          <div style={{ marginTop: 4, fontSize: 10, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }}>{timeTaken}</div>
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 10,
+              color: "rgba(255,255,255,0.2)",
+              fontFamily: "monospace",
+            }}
+          >
+            {timeTaken}
+          </div>
         )}
       </div>
 
       {/* ── BOTTOM PROGRESS BAR — flush to card edge ── */}
       {isActivelyPending && !isExpired && (
-        <div style={{ height: 3, margin: "9px -13px -13px", background: "rgba(255,255,255,0.06)" }}>
-          <div style={{ height: "100%", width: `${timeFrac * 100}%`, background: low || expiringSoon ? "#ff5a5f" : "#f5f5f7", boxShadow: low || expiringSoon ? "0 0 8px rgba(255,90,95,0.5)" : "0 0 8px rgba(255,255,255,0.45)", transition: "width 1s linear" }} />
+        <div
+          style={{
+            height: 3,
+            margin: "8px -11px -11px",
+            background: "rgba(255,255,255,0.06)",
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${timeFrac * 100}%`,
+              background: low || expiringSoon ? "#ff5a5f" : "#f5f5f7",
+              boxShadow:
+                low || expiringSoon
+                  ? "0 0 8px rgba(255,90,95,0.5)"
+                  : "0 0 8px rgba(255,255,255,0.45)",
+              transition: "width 1s linear",
+            }}
+          />
         </div>
       )}
       {isOngoing && !isActivelyPending && (
         <div style={{ height: 3, background: "rgba(255,255,255,0.06)" }}>
-          <div style={{ height: "100%", width: `${progressPct}%`, backgroundColor: barColor, boxShadow: barGlow, borderRadius: 999, transition: "width 0.6s ease-out" }} />
+          <div
+            style={{
+              height: "100%",
+              width: `${progressPct}%`,
+              backgroundColor: barColor,
+              boxShadow: barGlow,
+              borderRadius: 999,
+              transition: "width 0.6s ease-out",
+            }}
+          />
         </div>
       )}
     </div>
@@ -352,7 +773,9 @@ export interface MobileOrdersViewProps {
   onAcceptOrder: (order: Order) => void;
   acceptingOrderId?: string | null;
   onOpenChat: (order: Order) => void;
-  setMobileView: (view: 'orders' | 'escrow' | 'chat' | 'history' | 'marketplace') => void;
+  setMobileView: (
+    view: "orders" | "escrow" | "chat" | "history" | "marketplace",
+  ) => void;
   // Cancel a still-pending order the merchant created themselves.
   // Routed at the page level to either the escrow-cancel modal or the
   // no-escrow cancel call depending on whether escrow has been locked.
@@ -377,6 +800,10 @@ export function MobileOrdersView({
   const setPendingFilter = useMerchantStore((s) => s.setPendingFilter);
   const soundEnabled = useMerchantStore((s) => s.soundEnabled);
   const setSoundEnabled = useMerchantStore((s) => s.setSoundEnabled);
+  // Play a confirmation chime when sound is switched on. The tap is also the
+  // user gesture that unlocks the Web Audio context on mobile — without it the
+  // AudioContext stays suspended and later new_order alerts never play.
+  const { playSound } = useSounds();
   // For YOU PAY / YOU RECEIVE perspective in the gradient amounts panel.
   const merchantId = useMerchantStore((s) => s.merchantId);
   // Pull the FULL orders array from the same store the desktop pending
@@ -421,8 +848,12 @@ export function MobileOrdersView({
   // Client-side filter off the same pendingOrders array; uses the order.isMyOrder
   // flag populated at mapping time.
   type ViewTab = "all" | "pending" | "mine";
-  const [view, setView] = useState<ViewTab>("pending");
-  const tabIndex = view === "all" ? 0 : view === "pending" ? 1 : 2;
+  // Pending tab hidden on mobile — the "All" tab already shows every order.
+  // Kept (commented, not removed) so it can be re-enabled later.
+  // const [view, setView] = useState<ViewTab>("pending");
+  const [view, setView] = useState<ViewTab>("all");
+  // 3-tab index: const tabIndex = view === "all" ? 0 : view === "pending" ? 1 : 2;
+  const tabIndex = view === "all" ? 0 : 1; // 2 tabs now: all=0, mine=1
 
   // "All" view = full orders feed from the store, every status (pending /
   //   accepted / escrowed / payment_sent / completed / cancelled / …),
@@ -498,89 +929,246 @@ export function MobileOrdersView({
 
   const tabs = [
     { id: "all" as ViewTab, label: "All", count: allCount },
-    { id: "pending" as ViewTab, label: "Pending", count: pendingTabCount },
+    // Pending tab hidden — "All" already shows every order (commented, not removed).
+    // { id: "pending" as ViewTab, label: "Pending", count: pendingTabCount },
     { id: "mine" as ViewTab, label: "My Orders", count: myCount },
   ];
 
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Close search bar when query is cleared
+  const handleSearchClose = () => {
+    setSearchQuery("");
+    setSearchOpen(false);
+  };
+
+  // Full-width orders panel — 480px centered cap removed so cards fill the
+  // width on tablet/wide viewports. Phones (≤480px) are unaffected.
+  // Old cap: <div style={{ maxWidth: 480, margin: "0 auto" }}>
   return (
     <div>
-      {/* ── TAB STRIP ── */}
-      <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, padding: 3, marginBottom: 12 }}>
-        {/* sliding thumb */}
-        <div style={{
-          position: "absolute", top: 3, bottom: 3, borderRadius: 11,
-          background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
-          transition: "left 0.22s cubic-bezier(0.22,1,0.36,1), width 0.22s",
-          left: `calc(${tabIndex} * (100% - 6px) / 3 + 3px)`,
-          width: "calc((100% - 6px) / 3)",
-          pointerEvents: "none",
-        }} />
-        {tabs.map((tab) => {
-          const isActive = view === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setView(tab.id)}
-              style={{ flex: 1, position: "relative", zIndex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? "rgba(245,245,247,0.55)" : "rgba(134,134,139,0.7)" }}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── SEARCH + FILTER ROW ── */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-        {/* Search input */}
-        <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
-          <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "#5a5a60", pointerEvents: "none" }} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search orders…"
-            maxLength={100}
-            style={{ width: "100%", height: 42, paddingLeft: 34, paddingRight: searchQuery ? 32 : 14, borderRadius: 14, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: "#f5f5f7", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+      {/* ── TOP ROW: tabs + icons all in one line ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: searchOpen ? 8 : 14,
+        }}
+      >
+        {/* Sliding tab strip — shrinks to make room for icons */}
+        <div
+          style={{
+            position: "relative",
+            display: "flex",
+            flex: 1,
+            minWidth: 0,
+            background: "rgba(255,255,255,0.055)",
+            border: "1px solid rgba(255,255,255,0.09)",
+            borderRadius: 12,
+            padding: 3,
+            height: 34,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: 3,
+              bottom: 3,
+              borderRadius: 11,
+              background: "rgba(255,255,255,0.10)",
+              border: "1px solid rgba(255,255,255,0.14)",
+              transition: "left 0.22s cubic-bezier(0.22,1,0.36,1), width 0.22s",
+              left: `calc(${tabIndex} * (100% - 6px) / 2 + 3px)`,
+              width: "calc((100% - 6px) / 2)",
+              pointerEvents: "none",
+            }}
           />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              aria-label="Clear search"
-              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", padding: 4, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#5a5a60" }}
-            >
-              <X style={{ width: 12, height: 12 }} />
-            </button>
-          )}
+          {tabs.map((tab) => {
+            const isActive = view === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setView(tab.id)}
+                style={{
+                  flex: 1,
+                  position: "relative",
+                  zIndex: 1,
+                  padding: "0 4px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: isActive ? "#f5f5f7" : "#86868b",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  borderRadius: 9,
+                  transition: "color 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 4,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {tab.label}
+                {tab.count > 0 && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: isActive
+                        ? "rgba(245,245,247,0.55)"
+                        : "rgba(134,134,139,0.7)",
+                    }}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Filter dropdown */}
-        <div style={{ height: 42, display: "flex", alignItems: "center" }}>
+        {/* Icon buttons: search · filter · sound */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            alignItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={() => {
+              setSearchOpen((s) => !s);
+              if (searchOpen) handleSearchClose();
+            }}
+            aria-label="Search orders"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background:
+                searchOpen || searchQuery
+                  ? "rgba(255,255,255,0.10)"
+                  : "rgba(255,255,255,0.055)",
+              border: `1px solid ${
+                searchOpen || searchQuery
+                  ? "rgba(255,255,255,0.18)"
+                  : "rgba(255,255,255,0.09)"
+              }`,
+              color: searchOpen || searchQuery ? "#f5f5f7" : "#5a5a60",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            <Search style={{ width: 15, height: 15 }} />
+          </button>
+
           <FilterDropdown<PendingFilter>
             value={pendingFilter}
             onChange={setPendingFilter}
             ariaLabel="Filter pending orders"
             align="right"
             options={PENDING_FILTER_OPTIONS}
-            triggerClassName="!rounded-[14px] !h-[42px] !py-0 !text-[12px]"
+            triggerClassName="!rounded-[12px] !h-[38px] !w-[38px] !p-0 !text-[12px]"
           />
-        </div>
 
-        {/* Sound toggle */}
-        <button
-          onClick={() => setSoundEnabled(!soundEnabled)}
-          aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
-          aria-pressed={soundEnabled}
-          style={{ width: 42, height: 42, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", color: soundEnabled ? "#b8e9d4" : "#5a5a60", cursor: "pointer" }}
-        >
-          {soundEnabled ? <Volume2 style={{ width: 16, height: 16 }} /> : <VolumeX style={{ width: 16, height: 16 }} />}
-        </button>
+          <button
+            onClick={() => {
+              const next = !soundEnabled;
+              setSoundEnabled(next);
+              if (next) playSound("notification");
+            }}
+            aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
+            aria-pressed={soundEnabled}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(255,255,255,0.055)",
+              border: "1px solid rgba(255,255,255,0.09)",
+              color: soundEnabled ? "rgba(255,255,255,0.7)" : "#5a5a60",
+              cursor: "pointer",
+            }}
+          >
+            {soundEnabled ? (
+              <Volume2 style={{ width: 15, height: 15 }} />
+            ) : (
+              <VolumeX style={{ width: 15, height: 15 }} />
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* ── SEARCH INPUT — expands below when open ── */}
+      {searchOpen && (
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <Search
+            style={{
+              position: "absolute",
+              left: 11,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 13,
+              height: 13,
+              color: "#5a5a60",
+              pointerEvents: "none",
+            }}
+          />
+          <input
+            type="text"
+            autoFocus
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by user, amount, currency…"
+            maxLength={100}
+            style={{
+              width: "100%",
+              height: 34,
+              paddingLeft: 32,
+              paddingRight: searchQuery ? 30 : 12,
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.055)",
+              border: "1px solid rgba(255,255,255,0.09)",
+              color: "#f5f5f7",
+              fontSize: 13,
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                padding: 4,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#5a5a60",
+              }}
+            >
+              <X style={{ width: 12, height: 12 }} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── ORDER LIST or EMPTY STATE ── */}
       {filteredPendingOrders.length > 0 ? (
@@ -624,18 +1212,52 @@ export function MobileOrdersView({
           }
           return (
             <div style={{ textAlign: "center", paddingTop: 120 }}>
-              <div style={{ width: 64, height: 64, borderRadius: 22, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: "#86868b" }}>
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 22,
+                  background: "rgba(255,255,255,0.055)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 16px",
+                  color: "#86868b",
+                }}
+              >
                 <Activity className="w-7 h-7" />
               </div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#f5f5f7" }}>{message}</div>
-              <div style={{ color: "#86868b", fontSize: 13, fontWeight: 500, marginTop: 5 }}>New opportunities will appear here live.</div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#f5f5f7" }}>
+                {message}
+              </div>
+              <div
+                style={{
+                  color: "#86868b",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  marginTop: 5,
+                }}
+              >
+                New opportunities will appear here live.
+              </div>
               {hasActiveFilters && (
                 <button
                   onClick={() => {
                     setSearchQuery("");
                     setPendingFilter("all");
                   }}
-                  style={{ marginTop: 12, padding: "7px 18px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.12)", background: "none", color: "#86868b", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                  style={{
+                    marginTop: 12,
+                    padding: "7px 18px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "none",
+                    color: "#86868b",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
                 >
                   Clear filters
                 </button>

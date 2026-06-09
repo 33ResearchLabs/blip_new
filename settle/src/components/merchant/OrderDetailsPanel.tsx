@@ -194,8 +194,8 @@ const STATUS_CONFIG: Record<
   { color: string; bgColor: string; icon: typeof CheckCircle; label: string }
 > = {
   open: {
-    color: "text-blue-400",
-    bgColor: "bg-blue-400/10",
+    color: "text-white/60",
+    bgColor: "bg-white/[0.06]",
     icon: Clock,
     label: "Open",
   },
@@ -212,8 +212,8 @@ const STATUS_CONFIG: Record<
     label: "Accepted",
   },
   escrowed: {
-    color: "text-purple-400",
-    bgColor: "bg-purple-400/10",
+    color: "text-white/60",
+    bgColor: "bg-white/[0.06]",
     icon: Shield,
     label: "Escrowed",
   },
@@ -536,9 +536,9 @@ export function OrderDetailsPanel({
     return (
       <span className="flex items-center gap-1 text-xs">
         <span
-          className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-green-500" : "bg-white/25"}`}
+          className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-white/[0.08]" : "bg-white/25"}`}
         />
-        <span className={isOnline ? "text-green-400" : "text-white/40"}>
+        <span className={isOnline ? "text-[#f5f5f7]" : "text-white/40"}>
           {isOnline
             ? "Online"
             : `last seen ${formatLastSeen(member?.lastSeen || null)}`}
@@ -714,7 +714,7 @@ export function OrderDetailsPanel({
                         <span>•</span>
                         <div className="flex items-center gap-0.5">
                           {[1, 2, 3, 4, 5].map((s) => (
-                            <Star key={s} className={`w-2.5 h-2.5 ${s <= Math.round(buyerRating || 0) ? "fill-primary text-primary" : "text-white/15"}`} />
+                            <Star key={s} className={`w-2.5 h-2.5 ${s <= Math.round(buyerRating || 0) ? "fill-white/50 text-[#f5f5f7]" : "text-white/15"}`} />
                           ))}
                         </div>
                         {buyerRating != null && <span className="font-mono">{buyerRating.toFixed(1)}</span>}
@@ -768,7 +768,7 @@ export function OrderDetailsPanel({
                         <span>•</span>
                         <div className="flex items-center gap-0.5">
                           {[1, 2, 3, 4, 5].map((s) => (
-                            <Star key={s} className={`w-2.5 h-2.5 ${s <= Math.round(sellerRating || 0) ? "fill-primary text-primary" : "text-white/15"}`} />
+                            <Star key={s} className={`w-2.5 h-2.5 ${s <= Math.round(sellerRating || 0) ? "fill-white/50 text-[#f5f5f7]" : "text-white/15"}`} />
                           ))}
                         </div>
                         {sellerRating != null && <span className="font-mono">{sellerRating.toFixed(1)}</span>}
@@ -850,7 +850,7 @@ export function OrderDetailsPanel({
                                     {value}
                                   </span>
                                   {copiedField === key ? (
-                                    <Check className="w-3 h-3 text-green-400" />
+                                    <Check className="w-3 h-3 text-[#f5f5f7]" />
                                   ) : (
                                     <Copy className="w-3 h-3 text-white/30" />
                                   )}
@@ -907,7 +907,7 @@ export function OrderDetailsPanel({
                                     {value}
                                   </span>
                                   {copiedField === key ? (
-                                    <Check className="w-3 h-3 text-green-400" />
+                                    <Check className="w-3 h-3 text-[#f5f5f7]" />
                                   ) : (
                                     <Copy className="w-3 h-3 text-white/30" />
                                   )}
@@ -925,11 +925,11 @@ export function OrderDetailsPanel({
                           const lpm = order.locked_payment_method!;
                           const typeIcon =
                             lpm.type === "upi" ? (
-                              <Smartphone className="w-3.5 h-3.5 text-green-400" />
+                              <Smartphone className="w-3.5 h-3.5 text-[#f5f5f7]" />
                             ) : lpm.type === "bank" ? (
-                              <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                              <Building2 className="w-3.5 h-3.5 text-white/60" />
                             ) : (
-                              <CreditCard className="w-3.5 h-3.5 text-purple-400" />
+                              <CreditCard className="w-3.5 h-3.5 text-white/60" />
                             );
 
                           // Build display fields based on type
@@ -1017,8 +1017,8 @@ export function OrderDetailsPanel({
                           return (
                             <div className="space-y-2 pt-3 border-t border-white/[0.06]">
                               <div className="flex items-center gap-1.5">
-                                <Lock className="w-3 h-3 text-primary" />
-                                <p className="text-[11px] text-primary uppercase tracking-wide font-bold">
+                                <Lock className="w-3 h-3 text-[#f5f5f7]" />
+                                <p className="text-[11px] text-[#f5f5f7] uppercase tracking-wide font-bold">
                                   Send {order.fiat_currency || 'AED'} Here
                                 </p>
                               </div>
@@ -1046,7 +1046,7 @@ export function OrderDetailsPanel({
                                         {value}
                                       </span>
                                       {copiedField === key ? (
-                                        <Check className="w-3 h-3 text-green-400" />
+                                        <Check className="w-3 h-3 text-[#f5f5f7]" />
                                       ) : (
                                         <Copy className="w-3 h-3 text-white/30" />
                                       )}
@@ -1113,7 +1113,7 @@ export function OrderDetailsPanel({
                                             {value}
                                           </span>
                                           {copiedField === key ? (
-                                            <Check className="w-3 h-3 text-green-400" />
+                                            <Check className="w-3 h-3 text-[#f5f5f7]" />
                                           ) : (
                                             <Copy className="w-3 h-3 text-white/30" />
                                           )}
@@ -1146,7 +1146,7 @@ export function OrderDetailsPanel({
                                     className="p-1 rounded hover:bg-accent-subtle"
                                   >
                                     {copiedField === "user_bank_legacy" ? (
-                                      <Check className="w-3 h-3 text-green-400" />
+                                      <Check className="w-3 h-3 text-[#f5f5f7]" />
                                     ) : (
                                       <Copy className="w-3 h-3 text-white/30" />
                                     )}
@@ -1246,7 +1246,7 @@ export function OrderDetailsPanel({
                             )}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary hover:text-primary/80 transition-colors"
+                            className="text-[#f5f5f7] hover:text-white/80 transition-colors"
                             title="View on Blipscan"
                           >
                             <ExternalLink className="w-4 h-4" />
@@ -1584,9 +1584,9 @@ export function OrderDetailsPanel({
                         order.buyer_merchant?.business_name ||
                         "Counterparty";
                   return (
-                    <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
+                    <div className="bg-white/[0.06] border border-white/[0.12] rounded-xl p-4">
                       <div className="flex items-center gap-3 mb-3">
-                        <XCircle className="w-5 h-5 text-primary" />
+                        <XCircle className="w-5 h-5 text-[#f5f5f7]" />
                         <div className="flex-1">
                           <p className="text-sm font-semibold text-white">
                             Cancel Requested by {requesterLabel}
@@ -1604,10 +1604,10 @@ export function OrderDetailsPanel({
                             onClose();
                           }}
                           disabled={isRequestingCancel}
-                          className="flex-1 py-2.5 rounded-xl bg-primary/20 text-primary/80 text-sm font-semibold hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-[#f5f5f7]/80 text-sm font-semibold hover:bg-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                           {isRequestingCancel ? (
-                            <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                            <div className="w-4 h-4 border-2 border-white/[0.12] border-t-white/60 rounded-full animate-spin" />
                           ) : null}
                           Agree to Cancel
                         </button>
@@ -1628,9 +1628,9 @@ export function OrderDetailsPanel({
 
                 // I requested it — show waiting state
                 return (
-                  <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
+                  <div className="bg-white/[0.06] border border-white/[0.12] rounded-xl p-4">
                     <div className="flex items-center gap-3">
-                      <Clock className="w-5 h-5 text-primary animate-pulse" />
+                      <Clock className="w-5 h-5 text-[#f5f5f7] animate-pulse" />
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-white">
                           Cancel Request Sent
@@ -1654,11 +1654,11 @@ export function OrderDetailsPanel({
                   // If order was recently extended, show success
                   if (order.last_extended_at) {
                     return (
-                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
+                      <div className="bg-white/[0.06] border border-white/[0.09] rounded-xl p-4">
                         <div className="flex items-center gap-3">
-                          <Check className="w-5 h-5 text-emerald-400" />
+                          <Check className="w-5 h-5 text-[#f5f5f7]" />
                           <div className="flex-1">
-                            <p className="text-sm font-semibold text-emerald-300">
+                            <p className="text-sm font-semibold text-[#f5f5f7]">
                               Time Extended
                             </p>
                             <p className="text-xs text-white/50">
@@ -1733,12 +1733,12 @@ export function OrderDetailsPanel({
                     onClose();
                   }}
                   disabled={isRequestingCancel}
-                  className="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-sm font-medium flex items-center justify-center gap-2
-                         hover:bg-primary/20 transition-colors border border-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full py-2.5 rounded-xl bg-white/[0.06] text-[#f5f5f7] text-sm font-medium flex items-center justify-center gap-2
+                         hover:bg-white/[0.08] transition-colors border border-white/[0.12] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isRequestingCancel ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-white/[0.12] border-t-white/60 rounded-full animate-spin" />
                       Requesting...
                     </>
                   ) : (
@@ -1813,10 +1813,10 @@ export function OrderDetailsPanel({
 
               const variantClasses = {
                 green:
-                  "bg-primary/20 text-primary hover:bg-primary/30 border-primary/30",
+                  "bg-white/[0.06] text-[#f5f5f7] hover:bg-white/[0.08] border-white/[0.12]",
                 blue: "bg-white/[0.06] text-white/80 hover:bg-accent-subtle border-white/[0.10]",
                 red: "bg-white/[0.04] text-white/50 hover:bg-accent-subtle border-white/[0.06]",
-                gold: "bg-primary/20 text-primary hover:bg-primary/30 border-primary/30",
+                gold: "bg-white/[0.06] text-[#f5f5f7] hover:bg-white/[0.08] border-white/[0.12]",
               };
 
               // Per-handler loading state. The parent passes `pendingAction`
@@ -1887,8 +1887,8 @@ export function OrderDetailsPanel({
             {onOpenChat && (
               <button
                 onClick={handleOpenChat}
-                className="w-full py-3 rounded-xl bg-primary/20 text-primary font-semibold flex items-center justify-center gap-2
-                         hover:bg-primary/30 transition-colors border border-primary/30"
+                className="w-full py-3 rounded-xl bg-white/[0.06] text-[#f5f5f7] font-semibold flex items-center justify-center gap-2
+                         hover:bg-white/[0.08] transition-colors border border-white/[0.12]"
               >
                 <MessageCircle className="w-5 h-5" />
                 Open Chat with {username}

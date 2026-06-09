@@ -17,6 +17,7 @@ import { uuidSchema } from '@/lib/validation/schemas';
 import {
   requireAuth,
   requireTokenAuth,
+  requireApiKeyScope,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -126,6 +127,8 @@ export async function POST(
       ? await requireTokenAuth(request)
       : await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErr) return scopeErr;
     __marks.push(__mark('auth'));
 
     // 3b. Idempotency-Key header is MANDATORY for any state-changing action
@@ -811,6 +814,8 @@ export async function GET(
 
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+    const scopeErrGet = requireApiKeyScope(auth, 'orders:read');
+    if (scopeErrGet) return scopeErrGet;
 
     const canAccess = await canAccessOrder(auth, id);
     if (!canAccess) {

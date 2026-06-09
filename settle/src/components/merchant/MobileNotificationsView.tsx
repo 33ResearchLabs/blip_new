@@ -61,12 +61,15 @@ interface NotifRowProps {
   n: Notification;
   onMarkRead: (id: string) => void;
   onSelectOrder: (orderId: string) => void;
+  onAction?: () => void;
 }
 
-function NotifRow({ n, onMarkRead, onSelectOrder }: NotifRowProps) {
+function NotifRow({ n, onMarkRead, onSelectOrder, onAction }: NotifRowProps) {
   const ty = NT[n.type] ?? NT.system;
+  const isClickable = !!(n.orderId || onAction);
   const handleClick = () => {
     if (!n.read) onMarkRead(n.id);
+    if (onAction) { onAction(); return; }
     if (n.orderId) onSelectOrder(n.orderId);
   };
   return (
@@ -75,7 +78,7 @@ function NotifRow({ n, onMarkRead, onSelectOrder }: NotifRowProps) {
       style={{
         display: "flex", gap: 12, alignItems: "flex-start",
         padding: "12px 14px", borderRadius: 16, marginBottom: 4,
-        cursor: n.orderId ? "pointer" : "default",
+        cursor: isClickable ? "pointer" : "default",
         background: !n.read ? "rgba(255,255,255,0.045)" : "transparent",
         border: !n.read ? `1px solid ${T.hair}` : "1px solid transparent",
         transition: "background 0.15s",
@@ -115,7 +118,10 @@ export interface MobileNotificationsViewProps {
   onMarkAllRead: () => void;
   onSelectOrder: (orderId: string) => void;
   onClose: () => void;
+  onWelcomeTap?: () => void;
 }
+
+const WELCOME_MSG = "Welcome to Blip Markets — tap to see what's new";
 
 export function MobileNotificationsView({
   notifications,
@@ -123,6 +129,7 @@ export function MobileNotificationsView({
   onMarkAllRead,
   onSelectOrder,
   onClose,
+  onWelcomeTap,
 }: MobileNotificationsViewProps) {
   const unread = notifications.filter((n) => !n.read).length;
 
@@ -183,7 +190,13 @@ export function MobileNotificationsView({
             Recent
           </div>
           {notifications.map((n) => (
-            <NotifRow key={n.id} n={n} onMarkRead={onMarkRead} onSelectOrder={onSelectOrder} />
+            <NotifRow
+              key={n.id}
+              n={n}
+              onMarkRead={onMarkRead}
+              onSelectOrder={onSelectOrder}
+              onAction={n.message === WELCOME_MSG ? onWelcomeTap : undefined}
+            />
           ))}
         </div>
       )}

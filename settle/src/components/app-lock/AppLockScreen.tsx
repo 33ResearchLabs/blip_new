@@ -65,6 +65,11 @@ export function AppLockScreen() {
     return () => clearInterval(id);
   }, [userId, errorTick]);
 
+  // Clear the "Try again in Xs" error message once the cooldown expires.
+  useEffect(() => {
+    if (cooldownLeft === 0) setError('');
+  }, [cooldownLeft]);
+
   const tryBiometric = async () => {
     if (!userId || biometricRunning || busy) return;
     setBiometricRunning(true);
@@ -157,20 +162,39 @@ export function AppLockScreen() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center overflow-y-auto"
-      style={{
-        background: isLight ? 'rgba(248,250,252,0.96)' : 'rgba(6,6,6,0.96)',
-        backdropFilter: 'blur(20px)',
-        paddingTop: 'max(env(safe-area-inset-top, 16px), 16px)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 16px)',
-        paddingLeft: 'max(env(safe-area-inset-left, 16px), 16px)',
-        paddingRight: 'max(env(safe-area-inset-right, 16px), 16px)',
-      }}
+      className="fixed inset-0 z-[200] flex justify-center"
+      // Transparent so the app's own frame (var(--user-frame), rendered
+      // behind this overlay) shows through on the sides — the lock then
+      // matches the app's frame colour on desktop without re-deriving the
+      // theme here. The centred panel below (440px phone / 720px tablet,
+      // matching the app frame) still covers all content.
+      style={{ background: 'transparent' }}
       role="dialog"
       aria-modal="true"
       aria-label="App locked"
     >
-      <div className="w-full max-w-sm space-y-4 sm:space-y-6 my-auto">
+      {/* App-width column — must mirror the app frame EXACTLY (page.tsx Panel:
+          max-w-[440px] phone, md:max-w-[min(1100px,97vw)] ≥768px) so the lock
+          fully covers the widened app content instead of leaking it on the
+          sides (e.g. on a foldable). Keep these two in sync. On desktop the
+          transparent outer shows the app-frame colour beside the panel. The
+          frosted panel + blur live here; the inner PIN UI stays centred ~440. */}
+      <div
+        className="relative w-full max-w-[440px] md:max-w-[min(1100px,97vw)] flex items-start sm:items-center justify-center overflow-y-auto"
+        style={{
+          background: isLight ? 'rgba(248,250,252,0.96)' : 'rgba(6,6,6,0.96)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          paddingTop: 'max(env(safe-area-inset-top, 16px), 16px)',
+          paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 16px)',
+          paddingLeft: 'max(env(safe-area-inset-left, 16px), 16px)',
+          paddingRight: 'max(env(safe-area-inset-right, 16px), 16px)',
+        }}
+      >
+        {/* Frosted panel bg spans the full app width (covers all content), but
+            the PIN UI stays a comfortable ~440px centred so the keypad doesn't
+            stretch on a 720px tablet panel. */}
+        <div className="w-full max-w-[440px] mx-auto space-y-4 sm:space-y-6 my-auto">
         {/* Header */}
         <div className="flex flex-col items-center gap-2 sm:gap-3 pt-1 sm:pt-2">
           <div
@@ -250,6 +274,7 @@ export function AppLockScreen() {
           {loggingOut ? <Loader2 className="w-3 h-3 animate-spin" /> : <LogOut className="w-3 h-3" />}
           {loggingOut ? 'Signing out…' : 'Sign out instead'}
         </button>
+        </div>
       </div>
     </motion.div>
   );

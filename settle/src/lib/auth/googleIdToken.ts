@@ -100,17 +100,18 @@ function jwkToPem(jwk: JWK): string {
   return keyObject.export({ type: 'spki', format: 'pem' }) as string;
 }
 
-function expectedAudience(): string | null {
-  return (
-    process.env.GOOGLE_CLIENT_ID ||
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
-    null
-  );
+function expectedAudiences(): Set<string> {
+  const ids = [
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_ID_EXTENSION,
+  ].filter(Boolean) as string[];
+  return new Set(ids);
 }
 
 export async function verifyGoogleIdToken(credential: string): Promise<GoogleIdentity | null> {
-  const aud = expectedAudience();
-  if (!aud) {
+  const allowedAuds = expectedAudiences();
+  if (allowedAuds.size === 0) {
     console.error('[google-oauth] GOOGLE_CLIENT_ID is not configured');
     return null;
   }
@@ -150,7 +151,7 @@ export async function verifyGoogleIdToken(credential: string): Promise<GoogleIde
   if (!valid) return null;
 
   if (!payload.iss || !ALLOWED_ISS.has(payload.iss)) return null;
-  if (payload.aud !== aud) return null;
+  if (!payload.aud || !allowedAuds.has(payload.aud)) return null;
   const now = Math.floor(Date.now() / 1000);
   if (!payload.exp || payload.exp + CLOCK_SKEW_SECONDS < now) return null;
   if (!payload.sub || !payload.email) return null;

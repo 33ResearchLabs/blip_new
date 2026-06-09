@@ -23,10 +23,10 @@ import { networkLabel, explorerUrl } from "@/lib/solana/networkLabel";
 import { BottomNav } from "./BottomNav";
 
 const T = {
-  hi: "rgba(255,255,255,0.96)",
-  md: "rgba(255,255,255,0.55)",
-  lo: "rgba(255,255,255,0.32)",
-  xl: "rgba(255,255,255,0.18)",
+  hi: "var(--color-text-primary)",
+  md: "var(--color-text-secondary)",
+  lo: "var(--color-text-tertiary)",
+  xl: "var(--color-text-tertiary)",
 };
 
 const SPRING = { type: "spring" as const, stiffness: 420, damping: 32, mass: 0.8 };
@@ -51,6 +51,7 @@ export interface EscrowLockScreenProps {
   setShowWalletModal: (v: boolean) => void;
   onConnectWallet?: () => void;
   fiatCurrency?: string;
+  hideBottomNav?: boolean;
   solanaWallet: {
     connected: boolean;
     walletAddress: string | null;
@@ -81,6 +82,7 @@ export const EscrowLockScreen = ({
   setShowWalletModal,
   onConnectWallet,
   fiatCurrency = 'AED',
+  hideBottomNav = false,
   solanaWallet,
 }: EscrowLockScreenProps) => {
   const fiatSymbol = fiatCurrency === 'INR' ? '₹' : fiatCurrency === 'USD' ? '$' : 'د.إ';
@@ -123,7 +125,7 @@ export const EscrowLockScreen = ({
   return (
     <div
       className="relative flex flex-col min-h-[100dvh] overflow-y-auto"
-      style={{ background: "#07090F" }}
+      style={{ background: "var(--color-bg-primary)" }}
     >
       {/* Ambient white glow at top — confirmation context */}
       <div
@@ -131,7 +133,7 @@ export const EscrowLockScreen = ({
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 28%, transparent 60%)",
+            "radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255,176,46,0.10) 0%, rgba(255,176,46,0.04) 28%, transparent 60%)",
         }}
       />
       <div
@@ -139,13 +141,13 @@ export const EscrowLockScreen = ({
         className="absolute inset-0 pointer-events-none"
         style={{
           backgroundImage:
-            "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.025) 1px, transparent 0)",
+            "radial-gradient(circle at 1px 1px, rgba(20,21,26,0.025) 1px, transparent 0)",
           backgroundSize: "26px 26px",
         }}
       />
 
       {/* ── Header ── */}
-      <header className="relative z-10 max-w-[440px] mx-auto w-full px-5 pt-5">
+      <header className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 pt-5">
         <div className="flex items-center justify-between">
           <motion.button
             whileTap={{ scale: 0.92 }}
@@ -157,8 +159,8 @@ export const EscrowLockScreen = ({
             className="flex items-center justify-center"
             style={{
               width: 38, height: 38, borderRadius: 13,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "var(--color-surface-card)",
+              border: "1px solid var(--color-border-medium)",
               backdropFilter: "blur(12px)",
               WebkitBackdropFilter: "blur(12px)",
             }}
@@ -175,20 +177,20 @@ export const EscrowLockScreen = ({
       </header>
 
       {/* ── Content ── */}
-      <div className="relative z-10 max-w-[440px] mx-auto w-full px-5 pt-7 pb-32 flex flex-col" style={{ gap: 14 }}>
+      <div className="relative z-10 max-w-[440px] md:max-w-[min(1100px,97vw)] mx-auto w-full px-5 pt-7 pb-32 flex flex-col" style={{ gap: 14 }}>
         {/* Hero — lock medallion + title + subtitle */}
         <div className="flex items-center" style={{ gap: 14 }}>
           <div
             className="flex items-center justify-center shrink-0 relative overflow-hidden"
             style={{
               width: 50, height: 50, borderRadius: 16,
-              background: "linear-gradient(135deg, #1A1F2C 0%, #0B0F17 100%)",
-              border: "1px solid rgba(255,255,255,0.10)",
+              background: "var(--color-surface-card)",
+              border: "1px solid var(--color-border-medium)",
               boxShadow:
-                "0 8px 22px -10px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)",
+                "0 8px 22px -10px rgba(20,21,26,0.18), inset 0 1px 0 rgba(255,255,255,0.10)",
             }}
           >
-            <Lock size={22} strokeWidth={2.2} style={{ color: "#FFFFFF" }} />
+            <Lock size={22} strokeWidth={2.2} style={{ color: "var(--color-text-primary)" }} />
           </div>
           <div className="min-w-0">
             <h2 style={{
@@ -217,8 +219,8 @@ export const EscrowLockScreen = ({
           style={{
             padding: "13px 14px",
             borderRadius: 18,
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.06)",
+            background: "var(--color-surface-card)",
+            border: "1px solid var(--color-border-subtle)",
             backdropFilter: "blur(14px)",
             WebkitBackdropFilter: "blur(14px)",
           }}
@@ -230,8 +232,8 @@ export const EscrowLockScreen = ({
                 <span
                   style={{
                     width: 6, height: 6, borderRadius: 999,
-                    background: "#FFFFFF",
-                    boxShadow: "0 0 6px rgba(255,255,255,0.55)",
+                    background: "#ffb02e",
+                    boxShadow: "0 0 6px rgba(255,176,46,0.55)",
                   }}
                 />
                 <span style={{
@@ -256,13 +258,13 @@ export const EscrowLockScreen = ({
               style={{
                 marginTop: 10,
                 paddingTop: 10,
-                borderTop: "1px solid rgba(255,255,255,0.06)",
+                borderTop: "1px solid var(--color-border-subtle)",
               }}
             >
               <span style={{ fontSize: 13, fontWeight: 600, color: T.md }}>Balance</span>
               <span style={{
                 fontSize: 13, fontWeight: 700,
-                color: balanceOk ? T.hi : "#F87171",
+                color: balanceOk ? T.hi : "var(--color-error)",
                 fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
               }}>
                 {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '...'} USDT
@@ -277,8 +279,8 @@ export const EscrowLockScreen = ({
           style={{
             padding: "13px 14px",
             borderRadius: 18,
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.06)",
+            background: "var(--color-surface-card)",
+            border: "1px solid var(--color-border-subtle)",
             backdropFilter: "blur(14px)",
             WebkitBackdropFilter: "blur(14px)",
           }}
@@ -294,7 +296,7 @@ export const EscrowLockScreen = ({
               className="flex items-center justify-between"
               style={{
                 padding: "9px 0",
-                borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.05)" : undefined,
+                borderBottom: i < arr.length - 1 ? "1px solid var(--color-border-subtle)" : undefined,
               }}
             >
               <span style={{ fontSize: 13, fontWeight: 600, color: T.md }}>{row.label}</span>
@@ -332,16 +334,16 @@ export const EscrowLockScreen = ({
                 gap: 11,
                 padding: "11px 12px",
                 borderRadius: 16,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.06)",
+                background: "var(--color-surface-card)",
+                border: "1px solid var(--color-border-subtle)",
               }}
             >
               <div
                 className="flex items-center justify-center shrink-0"
                 style={{
                   width: 32, height: 32, borderRadius: 10,
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "var(--color-surface-hover)",
+                  border: "1px solid var(--color-border-medium)",
                 }}
               >
                 <Smartphone size={14} strokeWidth={2.2} style={{ color: T.md }} />
@@ -376,16 +378,16 @@ export const EscrowLockScreen = ({
                 gap: 11,
                 padding: "11px 12px",
                 borderRadius: 16,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.06)",
+                background: "var(--color-surface-card)",
+                border: "1px solid var(--color-border-subtle)",
               }}
             >
               <div
                 className="flex items-center justify-center shrink-0"
                 style={{
                   width: 32, height: 32, borderRadius: 10,
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "var(--color-surface-hover)",
+                  border: "1px solid var(--color-border-medium)",
                 }}
               >
                 {selectedPaymentMethod.type === 'upi' ? (
@@ -438,14 +440,14 @@ export const EscrowLockScreen = ({
                 style={{
                   padding: 14,
                   borderRadius: 16,
-                  background: "rgba(245,158,11,0.10)",
-                  border: "1px solid rgba(245,158,11,0.28)",
+                  background: "var(--color-warning-dim)",
+                  border: "1px solid var(--color-warning-border)",
                 }}
               >
                 <div className="flex items-start" style={{ gap: 10 }}>
-                  <AlertTriangle size={16} strokeWidth={2.2} style={{ color: "#F59E0B", flexShrink: 0, marginTop: 2 }} />
+                  <AlertTriangle size={16} strokeWidth={2.2} style={{ color: "var(--color-warning)", flexShrink: 0, marginTop: 2 }} />
                   <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 13, fontWeight: 800, color: "#FBBF24" }}>Wallet Needs Reconnection</p>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: "var(--color-warning)" }}>Wallet Needs Reconnection</p>
                     <p style={{ fontSize: 11, fontWeight: 600, color: T.md, marginTop: 2 }}>
                       The escrow program is not ready. Please reconnect your wallet.
                     </p>
@@ -460,8 +462,8 @@ export const EscrowLockScreen = ({
                     className="flex-1"
                     style={{
                       padding: "9px 0", borderRadius: 11,
-                      background: "#FFFFFF",
-                      color: "#0B0F14",
+                      background: "#ffb02e",
+                      color: "#0b0b0d",
                       fontSize: 12, fontWeight: 800, letterSpacing: "-0.005em",
                     }}
                   >
@@ -471,8 +473,8 @@ export const EscrowLockScreen = ({
                     onClick={() => solanaWallet.reinitializeProgram()}
                     style={{
                       padding: "9px 14px", borderRadius: 11,
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "var(--color-surface-hover)",
+                      border: "1px solid var(--color-border-medium)",
                       color: T.md,
                       fontSize: 12, fontWeight: 700,
                     }}
@@ -500,14 +502,14 @@ export const EscrowLockScreen = ({
                 style={{
                   padding: 14,
                   borderRadius: 16,
-                  background: "rgba(239,68,68,0.10)",
-                  border: "1px solid rgba(239,68,68,0.28)",
+                  background: "var(--color-error-dim)",
+                  border: "1px solid var(--color-error-border)",
                 }}
               >
                 <div className="flex items-start" style={{ gap: 10 }}>
-                  <AlertTriangle size={16} strokeWidth={2.2} style={{ color: "#F87171", flexShrink: 0, marginTop: 2 }} />
+                  <AlertTriangle size={16} strokeWidth={2.2} style={{ color: "var(--color-error)", flexShrink: 0, marginTop: 2 }} />
                   <div className="flex-1">
-                    <p style={{ fontSize: 13, fontWeight: 800, color: "#FCA5A5" }}>Transaction Failed</p>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: "var(--color-error)" }}>Transaction Failed</p>
                     <p style={{ fontSize: 11, fontWeight: 600, color: T.md, marginTop: 2 }}>{escrowError}</p>
                   </div>
                 </div>
@@ -516,8 +518,8 @@ export const EscrowLockScreen = ({
                   className="w-full"
                   style={{
                     marginTop: 12, padding: "9px 0", borderRadius: 11,
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "var(--color-surface-hover)",
+                    border: "1px solid var(--color-border-medium)",
                     color: T.md,
                     fontSize: 12, fontWeight: 700,
                   }}
@@ -550,10 +552,10 @@ export const EscrowLockScreen = ({
                     border: "1px solid rgba(16,185,129,0.32)",
                   }}
                 >
-                  <Lock size={16} strokeWidth={2.4} style={{ color: "#34D399" }} />
+                  <Lock size={16} strokeWidth={2.4} style={{ color: "var(--color-success)" }} />
                 </div>
                 <div>
-                  <p style={{ fontSize: 14, fontWeight: 800, color: "#6EE7B7" }}>Escrow Locked</p>
+                  <p style={{ fontSize: 14, fontWeight: 800, color: "var(--color-success)" }}>Escrow Locked</p>
                   <p style={{ fontSize: 11, fontWeight: 600, color: T.md, marginTop: 1 }}>Your USDT is secured on-chain</p>
                 </div>
               </div>
@@ -566,7 +568,7 @@ export const EscrowLockScreen = ({
                   style={{
                     gap: 5,
                     fontSize: 12, fontWeight: 700,
-                    color: "#34D399",
+                    color: "var(--color-success)",
                   }}
                 >
                   View Transaction <ExternalLink size={11} strokeWidth={2.4} />
@@ -578,8 +580,8 @@ export const EscrowLockScreen = ({
               style={{
                 padding: 14,
                 borderRadius: 18,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.06)",
+                background: "var(--color-surface-card)",
+                border: "1px solid var(--color-border-subtle)",
               }}
             >
               <div className="flex items-center" style={{ gap: 11 }}>
@@ -587,7 +589,7 @@ export const EscrowLockScreen = ({
                   className="flex items-center justify-center"
                   style={{
                     width: 36, height: 36, borderRadius: 12,
-                    background: "rgba(255,255,255,0.06)",
+                    background: "var(--color-surface-hover)",
                   }}
                 >
                   <Clock size={16} strokeWidth={2.4} style={{ color: T.md }} />
@@ -602,11 +604,11 @@ export const EscrowLockScreen = ({
               <div
                 style={{
                   marginTop: 10, height: 3, borderRadius: 999,
-                  background: "rgba(255,255,255,0.05)", overflow: "hidden",
+                  background: "var(--color-surface-hover)", overflow: "hidden",
                 }}
               >
                 <motion.div
-                  style={{ height: "100%", width: "30%", background: "rgba(255,255,255,0.25)" }}
+                  style={{ height: "100%", width: "30%", background: "rgba(255,176,46,0.55)" }}
                   animate={{ x: ["-100%", "300%"] }}
                   transition={{ duration: 1.6, repeat: Infinity, ease: "linear" }}
                 />
@@ -620,12 +622,12 @@ export const EscrowLockScreen = ({
               style={{
                 minHeight: 54,
                 borderRadius: 16,
-                background: "#FFFFFF",
-                color: "#0B0F14",
+                background: "#ffb02e",
+                color: "#0b0b0d",
                 fontSize: 15, fontWeight: 800, letterSpacing: "-0.005em",
-                border: "1px solid rgba(255,255,255,0.6)",
+                border: "1px solid rgba(20,21,26,0.18)",
                 boxShadow:
-                  "0 14px 28px -10px rgba(255,255,255,0.20), inset 0 1px 0 rgba(255,255,255,0.85)",
+                  "0 14px 28px -10px rgba(255,176,46,0.40), inset 0 1px 0 rgba(255,255,255,0.85)",
               }}
             >
               View Order Details
@@ -639,8 +641,8 @@ export const EscrowLockScreen = ({
               minHeight: 56,
               borderRadius: 18,
               gap: 8,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.10)",
+              background: "var(--color-surface-hover)",
+              border: "1px solid var(--color-border-medium)",
               color: T.md,
               fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em",
             }}
@@ -660,11 +662,11 @@ export const EscrowLockScreen = ({
               minHeight: 56,
               borderRadius: 18,
               gap: 8,
-              background: "#FFFFFF",
-              border: "1px solid rgba(255,255,255,0.6)",
-              color: "#0B0F14",
+              background: "#ffb02e",
+              border: "1px solid rgba(20,21,26,0.18)",
+              color: "#0b0b0d",
               fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em",
-              boxShadow: "0 14px 28px -10px rgba(255,255,255,0.20), inset 0 1px 0 rgba(255,255,255,0.85)",
+              boxShadow: "0 14px 28px -10px rgba(255,176,46,0.40), inset 0 1px 0 rgba(255,255,255,0.85)",
             }}
           >
             <Wallet size={15} strokeWidth={2.6} />
@@ -677,8 +679,8 @@ export const EscrowLockScreen = ({
               minHeight: 56,
               borderRadius: 18,
               gap: 8,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "var(--color-surface-hover)",
+              border: "1px solid var(--color-border-medium)",
               color: T.lo,
               fontSize: 15, fontWeight: 800,
             }}
@@ -694,11 +696,13 @@ export const EscrowLockScreen = ({
         )}
       </div>
 
-      <BottomNav
-        screen={screen}
-        setScreen={setScreen}
-        maxW="max-w-[440px] mx-auto"
-      />
+      {!hideBottomNav && (
+        <BottomNav
+          screen={screen}
+          setScreen={setScreen}
+          maxW="max-w-[440px] mx-auto"
+        />
+      )}
     </div>
   );
 };
@@ -712,15 +716,15 @@ function TradeRoute() {
   ];
 
   const colorOf = (s: "done" | "active" | "pending") =>
-    s === "active" ? "#0B0F14" : s === "done" ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.20)";
+    s === "active" ? "#0b0b0d" : s === "done" ? "var(--color-text-secondary)" : "var(--color-text-tertiary)";
 
   return (
     <div
       style={{
         padding: "12px 14px",
         borderRadius: 18,
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: "var(--color-surface-card)",
+        border: "1px solid var(--color-border-subtle)",
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
       }}
@@ -735,21 +739,21 @@ function TradeRoute() {
                   className="flex items-center justify-center relative"
                   animate={n.state === "active" ? {
                     boxShadow: [
-                      "0 0 0 0 rgba(255,255,255,0.30), 0 6px 14px -6px rgba(0,0,0,0.55)",
-                      "0 0 0 8px rgba(255,255,255,0.0), 0 6px 14px -6px rgba(0,0,0,0.55)",
+                      "0 0 0 0 rgba(255,176,46,0.40), 0 6px 14px -6px rgba(20,21,26,0.18)",
+                      "0 0 0 8px rgba(255,176,46,0.0), 0 6px 14px -6px rgba(20,21,26,0.18)",
                     ],
                   } : undefined}
                   transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
                   style={{
                     width: 34, height: 34, borderRadius: 11,
                     background: n.state === "active"
-                      ? "#FFFFFF"
+                      ? "#ffb02e"
                       : n.state === "done"
-                      ? "rgba(255,255,255,0.06)"
-                      : "rgba(255,255,255,0.03)",
+                      ? "var(--color-surface-hover)"
+                      : "var(--color-surface-hover)",
                     border: n.state === "active"
-                      ? "1px solid rgba(255,255,255,0.55)"
-                      : "1px solid rgba(255,255,255,0.08)",
+                      ? "1px solid rgba(20,21,26,0.18)"
+                      : "1px solid var(--color-border-medium)",
                   }}
                 >
                   <n.Icon size={14} strokeWidth={2.4} style={{ color: c }} />
@@ -757,7 +761,7 @@ function TradeRoute() {
                 <span style={{
                   fontSize: 9, fontWeight: 800, letterSpacing: "0.10em",
                   textTransform: "uppercase",
-                  color: n.state === "pending" ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.78)",
+                  color: n.state === "pending" ? "var(--color-text-tertiary)" : "var(--color-text-secondary-strong)",
                 }}>
                   {n.label}
                 </span>
@@ -769,7 +773,7 @@ function TradeRoute() {
                     style={{
                       position: "absolute", inset: 0,
                       borderRadius: 999,
-                      background: "rgba(255,255,255,0.08)",
+                      background: "var(--color-border-medium)",
                     }}
                   />
                   {/* Animated dashes — only between done→active (left segment) */}
@@ -780,7 +784,7 @@ function TradeRoute() {
                         top: 0, bottom: 0, left: 0, right: 0,
                         borderRadius: 999,
                         backgroundImage:
-                          "repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 6px, transparent 6px 12px)",
+                          "repeating-linear-gradient(90deg, rgba(255,176,46,0.85) 0 6px, transparent 6px 12px)",
                         backgroundSize: "12px 100%",
                       }}
                       animate={{ backgroundPositionX: ["0px", "12px"] }}
@@ -814,8 +818,8 @@ function NetworkTicker() {
       style={{
         padding: "8px 12px",
         borderRadius: 12,
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: "var(--color-surface-card)",
+        border: "1px solid var(--color-border-subtle)",
       }}
     >
       <div className="flex items-center" style={{ gap: 8 }}>
@@ -824,8 +828,8 @@ function NetworkTicker() {
           transition={{ duration: 1.6, repeat: Infinity }}
           style={{
             width: 6, height: 6, borderRadius: 999,
-            background: "#FFFFFF",
-            boxShadow: "0 0 6px rgba(255,255,255,0.55)",
+            background: "#ffb02e",
+            boxShadow: "0 0 6px rgba(255,176,46,0.55)",
           }}
         />
         <span style={{
@@ -891,8 +895,8 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
         height: 56,
         borderRadius: 999,
         padding: PAD,
-        background: "rgba(255,255,255,0.05)",
-        border: "1px solid rgba(255,255,255,0.10)",
+        background: "var(--color-surface-hover)",
+        border: "1px solid var(--color-border-medium)",
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
       }}
@@ -906,7 +910,7 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
           width: fillWidth,
           borderRadius: 999,
           background:
-            "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.18) 100%)",
+            "linear-gradient(90deg, rgba(255,176,46,0.18) 0%, rgba(255,176,46,0.40) 100%)",
         }}
       />
 
@@ -949,19 +953,19 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
           width: THUMB,
           height: THUMB,
           borderRadius: 999,
-          background: "#FFFFFF",
-          border: "1px solid rgba(255,255,255,0.55)",
+          background: "#ffb02e",
+          border: "1px solid rgba(20,21,26,0.18)",
           boxShadow:
-            "0 6px 14px -6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.85)",
+            "0 6px 14px -6px rgba(20,21,26,0.18), inset 0 1px 0 rgba(255,255,255,0.85)",
           touchAction: "pan-y",
           cursor: "grab",
         }}
         className="absolute flex items-center justify-center"
       >
         {confirmed ? (
-          <Loader2 size={18} className="animate-spin" style={{ color: "#0B0F14" }} />
+          <Loader2 size={18} className="animate-spin" style={{ color: "#0b0b0d" }} />
         ) : (
-          <Lock size={16} strokeWidth={2.6} style={{ color: "#0B0F14" }} />
+          <Lock size={16} strokeWidth={2.6} style={{ color: "#0b0b0d" }} />
         )}
       </motion.div>
     </div>

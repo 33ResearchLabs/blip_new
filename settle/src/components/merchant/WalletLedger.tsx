@@ -117,8 +117,8 @@ function getTypeLabel(entryType: string): string {
 
 function getTypeColor(entryType: string, amount: number): { text: string; bg: string; border: string } {
   if (entryType === 'CORRIDOR_FEE') return { text: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
-  if (entryType === 'ESCROW_REFUND') return { text: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' };
-  if (amount >= 0) return { text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
+  if (entryType === 'ESCROW_REFUND') return { text: 'text-white/60', bg: 'bg-white/[0.06]', border: 'border-white/[0.09]' };
+  if (amount >= 0) return { text: 'text-white/70', bg: 'bg-white/[0.06]', border: 'border-white/[0.09]' };
   return { text: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' };
 }
 
@@ -244,8 +244,8 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
           {walletBalance != null && (
             <div className="bg-white/[0.02] rounded-2xl p-5 border border-white/[0.06]">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-blue-400" />
+                <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/[0.09] flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-white/60" />
                 </div>
                 <span className="text-[14px] font-bold text-white">Wallet Balance</span>
               </div>
@@ -257,12 +257,12 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
           )}
           <div className="bg-white/[0.02] rounded-2xl p-5 border border-white/[0.06] relative overflow-hidden">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-emerald-400" />
+              <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/[0.09] flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-white/70" />
               </div>
               <span className="text-[14px] font-bold text-white">Total Credits</span>
             </div>
-            <p className="text-4xl font-bold text-emerald-400 font-mono tabular-nums leading-none">
+            <p className="text-4xl font-bold text-white/70 font-mono tabular-nums leading-none">
               +{formatUSDT(summary.total_credits)}
             </p>
             <p className="text-[11px] text-white/35 mt-2">USDT</p>
@@ -317,7 +317,7 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
                     key={t.value}
                     onClick={() => { setTimeRange(t.value); setShowTimeDropdown(false); }}
                     className={`w-full px-3 py-1.5 text-sm text-left hover:bg-white/10 transition-colors
-                      ${timeRange === t.value ? 'text-emerald-400' : 'text-white/80'}`}
+                      ${timeRange === t.value ? 'text-[#f5f5f7]' : 'text-white/80'}`}
                   >
                     {t.label}
                   </button>
@@ -343,7 +343,7 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
                     key={t.value}
                     onClick={() => { setTxType(t.value); setShowTypeDropdown(false); }}
                     className={`w-full px-3 py-1.5 text-sm text-left hover:bg-white/10 transition-colors
-                      ${txType === t.value ? 'text-emerald-400' : 'text-white/80'}`}
+                      ${txType === t.value ? 'text-[#f5f5f7]' : 'text-white/80'}`}
                   >
                     {t.label}
                   </button>
@@ -454,7 +454,7 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
 
                   {/* Amount */}
                   <div className="text-right">
-                    <p className={`text-sm font-bold font-mono tabular-nums ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <p className={`text-sm font-bold font-mono tabular-nums ${isPositive ? 'text-white/70' : 'text-red-400'}`}>
                       {isPositive ? '+' : ''}{formatUSDT(entry.amount)}
                     </p>
                     <p className="text-[10px] text-white/30 font-mono">USDT</p>

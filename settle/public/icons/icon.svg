@@ -1,13 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Blip Money PWA icon — white lightning bolt on pure black. Matches
-       the in-app logo (Lucide Zap, filled). Rounded square for iOS / Android
-       icon mask compliance; the inner glyph stays inside the maskable
-       safe-area (~80% center). -->
   <rect width="512" height="512" rx="112" fill="#000000"/>
-  <g transform="translate(96 64) scale(13.333)">
-    <polygon
-      points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
-      fill="#ffffff"
-    />
+  <g transform="translate(58 58) scale(3.3)">
+    <path d="M20 60 L36 60 L48 24 L72 96 L84 60 L100 60"
+      fill="none" stroke="#ffffff" stroke-width="11"
+      stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>

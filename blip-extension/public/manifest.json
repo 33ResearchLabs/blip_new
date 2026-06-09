@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Blip",
+  "version": "1.0.0",
+  "description": "Buy and sell USDT instantly — your Blip wallet in every tab.",
+  "icons": {
+    "16":  "icons/icon16.png",
+    "32":  "icons/icon32.png",
+    "48":  "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Blip",
+    "default_icon": {
+      "16":  "icons/icon16.png",
+      "32":  "icons/icon32.png",
+      "48":  "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "notifications",
+    "alarms",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://app.blip.money/*",
+    "https://*.blip.money/*"
+  ],
+  "oauth2": {
+    "client_id": "722454220824-mbserknlggmb8fs3q210donqv1qk3529.apps.googleusercontent.com",
+    "scopes": ["openid", "email", "profile"]
+  }
+}

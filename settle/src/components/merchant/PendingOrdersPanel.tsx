@@ -320,14 +320,14 @@ const OrderList = memo(function OrderList({
                 >
                   {/* Live pulse dot */}
                   <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-[#f5f5f7] opacity-75 animate-ping" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#f5f5f7]" />
                   </span>
                   {/* Processing banner */}
                   {acceptingOrderId === mOrder.id && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-primary/10 border border-primary/20">
-                      <Loader2 className="w-3 h-3 text-primary animate-spin" />
-                      <span className="text-[9px] text-primary font-mono font-bold tracking-wider uppercase">
+                    <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-white/[0.06] border border-white/[0.12]">
+                      <Loader2 className="w-3 h-3 text-[#f5f5f7] animate-spin" />
+                      <span className="text-[9px] text-[#f5f5f7] font-mono font-bold tracking-wider uppercase">
                         Accepting...
                       </span>
                     </div>
@@ -344,8 +344,8 @@ const OrderList = memo(function OrderList({
                   {/* Row 1: User + tags on left, timer on right */}
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <div className="w-7 h-7 rounded-lg bg-primary/[0.06] flex items-center justify-center shrink-0 text-sm border border-primary/20">
-                        <Zap className="w-3.5 h-3.5 text-primary" />
+                      <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 text-sm border border-white/[0.12]">
+                        <Zap className="w-3.5 h-3.5 text-[#f5f5f7]" />
                       </div>
                       <span className="text-xs font-medium text-white truncate">
                         {mOrder.creator_username || `#${mOrder.order_number}`}
@@ -353,7 +353,7 @@ const OrderList = memo(function OrderList({
                       <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-[var(--color-error)]/10 border-[var(--color-error)]/20 text-[var(--color-error)]">
                         You Pay
                       </span>
-                      <span className="flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-primary/10 border-primary/20 text-primary">
+                      <span className="flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]">
                         <Zap className="w-2.5 h-2.5" />
                         PRIORITY
                       </span>
@@ -366,7 +366,7 @@ const OrderList = memo(function OrderList({
                     {/* Timer */}
                     <div
                       className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
-                        liveExpiry <= 120 ? "text-red-400" : "text-primary"
+                        liveExpiry <= 120 ? "text-red-400" : "text-[#f5f5f7]"
                       }`}
                     >
                       {liveExpiry <= 0
@@ -396,12 +396,12 @@ const OrderList = memo(function OrderList({
                       className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-1 ${
                         liveExpiry <= 120
                           ? "bg-red-500/10 border border-red-500/20"
-                          : "bg-primary/10 border border-primary/20"
+                          : "bg-white/[0.06] border border-white/[0.12]"
                       }`}
                     >
                       <span className="text-xs shrink-0">🔥</span>
                       <span
-                        className={`text-[10px] font-bold ${liveExpiry <= 120 ? "text-red-400" : "text-primary"}`}
+                        className={`text-[10px] font-bold ${liveExpiry <= 120 ? "text-red-400" : "text-[#f5f5f7]"}`}
                       >
                         {liveExpiry <= 120
                           ? "Expiring soon! Act now"
@@ -422,10 +422,10 @@ const OrderList = memo(function OrderList({
                     </span>
                     <ArrowRight className="w-3 h-3 text-foreground/20" />
                     <span className="text-sm tabular-nums">
-                      <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
+                      <span className="text-[10px] text-[#f5f5f7] font-mono mr-1">
                         Get
                       </span>
-                      <span className="font-bold text-[var(--color-success)]">
+                      <span className="font-bold text-[#f5f5f7]">
                         {fiatTotal.toLocaleString()}{" "}
                         {(mOrder as any).corridor_id === "USDT_INR"
                           ? "INR"
@@ -433,7 +433,7 @@ const OrderList = memo(function OrderList({
                       </span>
                     </span>
                     {yourCut > 0 && (
-                      <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+                      <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#f5f5f7]">
                         +${yourCut.toFixed(2)}
                       </span>
                     )}
@@ -445,7 +445,7 @@ const OrderList = memo(function OrderList({
                       @ {livePrice}
                     </span>
                     {livePremiumPct > 0 && (
-                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#f5f5f7]">
                         +{livePremiumPct.toFixed(2)}%
                       </span>
                     )}
@@ -459,8 +459,8 @@ const OrderList = memo(function OrderList({
                         disabled={acceptingOrderId === mOrder.id}
                         className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
                           acceptingOrderId === mOrder.id
-                            ? "bg-primary/50 text-black/60 cursor-wait"
-                            : "bg-primary text-background hover:bg-primary"
+                            ? "bg-white/[0.06] text-black/60 cursor-wait"
+                            : "bg-[#f5f5f7] text-[#0b0b0c] hover:bg-white/90"
                         }`}
                       >
                         {acceptingOrderId === mOrder.id ? (
@@ -485,7 +485,7 @@ const OrderList = memo(function OrderList({
                     return (
                       <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04] rounded-b-lg overflow-hidden">
                         <div
-                          className={`h-full transition-[width] duration-1000 ease-linear ${liveExpiry <= 120 ? "bg-red-400" : "bg-primary"}`}
+                          className={`h-full transition-[width] duration-1000 ease-linear ${liveExpiry <= 120 ? "bg-red-400" : "bg-[#f5f5f7]"}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -558,8 +558,8 @@ const OrderList = memo(function OrderList({
                   pinging halo isn't clipped. */}
               {isActivelyPendingForDot && (
                 <span className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 flex h-2.5 w-2.5 z-20 pointer-events-none">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-60 animate-ping" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-[#f5f5f7] opacity-60 animate-ping" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#f5f5f7]" />
                 </span>
               )}
               <div
@@ -628,7 +628,7 @@ const OrderList = memo(function OrderList({
                               <InfoTooltip side="bottom" title={username} description="Counterparty stats." items={tooltipItems} />
                             </div>
                             <div className="flex items-center gap-1 mt-0.5">
-                              <span className={`text-[10px] font-mono font-semibold ${order.type === 'buy' ? 'text-emerald-400' : 'text-red-400'}`}>
+                              <span className={`text-[10px] font-mono font-semibold ${order.type === 'buy' ? 'text-[#f5f5f7]' : 'text-red-400'}`}>
                                 {order.type?.toUpperCase() || "TRADE"}
                               </span>
                               {pmType && (
@@ -649,8 +649,8 @@ const OrderList = memo(function OrderList({
                             disabled={acceptingOrderId === order.id}
                             className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all press-effect ${
                               acceptingOrderId === order.id
-                                ? "bg-primary/30 text-white/40 cursor-wait"
-                                : "bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
+                                ? "bg-white/[0.06] text-white/40 cursor-wait"
+                                : "bg-[#f5f5f7] text-[#0b0b0c] font-bold hover:bg-white/90"
                             }`}
                           >
                             {acceptingOrderId === order.id ? (
@@ -695,9 +695,26 @@ const OrderList = memo(function OrderList({
                       </div>
 
                       {/* ── Timer + rate footer ── */}
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center justify-between gap-2 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-white/15 font-mono tabular-nums">
+                            @ {order.rate.toFixed(2)}
+                          </span>
+                          {extraPct > 0 && (
+                            <span className="text-[10px] font-mono text-[#f5f5f7]/70">+{extraPct.toFixed(1)}%</span>
+                          )}
+                          {isMyOwnOrder && onCancelOrder && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
+                              className="text-[10px] text-red-400/50 hover:text-red-400 transition-colors font-mono"
+                            >
+                              cancel
+                            </button>
+                          )}
+                        </div>
                         {isActivelyPending ? (
-                          <div className={`flex items-center gap-1 text-[11px] font-mono tabular-nums ${order.expiresIn <= 120 ? "text-red-400" : "text-white/30"}`}>
+                          <div className="flex items-center gap-1 text-[11px] font-mono tabular-nums text-red-400">
                             <Clock className="w-3 h-3" />
                             {order.expiresIn >= 3600
                               ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
@@ -715,21 +732,6 @@ const OrderList = memo(function OrderList({
                               </span>
                             ) : null;
                           })()
-                        )}
-                        <span className="text-[10px] text-white/15 font-mono tabular-nums">
-                          @ {order.rate.toFixed(2)}
-                        </span>
-                        {extraPct > 0 && (
-                          <span className="text-[10px] font-mono text-primary/70">+{extraPct.toFixed(1)}%</span>
-                        )}
-                        {isMyOwnOrder && onCancelOrder && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
-                            className="ml-auto text-[10px] text-red-400/50 hover:text-red-400 transition-colors font-mono"
-                          >
-                            cancel
-                          </button>
                         )}
                       </div>
                     </>
@@ -749,7 +751,7 @@ const OrderList = memo(function OrderList({
                   return (
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04]">
                       <div
-                        className={`h-full transition-[width] duration-1000 ease-linear ${order.expiresIn <= 120 ? "bg-red-400" : "bg-primary"}`}
+                        className={`h-full transition-[width] duration-1000 ease-linear ${order.expiresIn <= 120 ? "bg-red-400" : "bg-[#f5f5f7]"}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -1188,7 +1190,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             }}
             className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border transition-all ${
               soundEnabled
-                ? "bg-primary/15 border-primary/30 text-primary"
+                ? "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]"
                 : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/25 hover:bg-foreground/[0.05]"
             }`}
             title={soundEnabled ? "Sound on" : "Sound off"}
@@ -1209,7 +1211,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             onClick={() => setSearchVisible((v) => { if (v) setSearchQuery(""); return !v; })}
             className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border transition-all ${
               searchVisible || searchQuery
-                ? "bg-primary/[0.12] text-primary border-primary/20"
+                ? "bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]"
                 : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/25 hover:bg-foreground/[0.05]"
             }`}
             title="Search"
@@ -1223,7 +1225,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
               className={`inline-flex items-center gap-1 h-7 px-1.5 text-[9px] font-mono border rounded transition-colors ${
                 pendingFilter !== "all"
-                  ? "bg-primary/[0.12] text-primary border-primary/20"
+                  ? "bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]"
                   : "bg-foreground/[0.02] text-white/30 border-foreground/[0.06] hover:border-border-strong"
               }`}
             >
@@ -1244,7 +1246,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                       key={f}
                       onClick={() => { setPendingFilter(f); setFilterDropdownOpen(false); }}
                       className={`w-full px-3 py-1.5 text-left text-[10px] font-medium transition-colors ${
-                        pendingFilter === f ? "bg-primary/[0.10] text-primary" : "text-foreground/60 hover:bg-foreground/[0.04]"
+                        pendingFilter === f ? "bg-white/[0.06] text-[#f5f5f7]" : "text-foreground/60 hover:bg-foreground/[0.04]"
                       }`}
                     >
                       {f === "all" ? "All" : f === "mineable" ? "Mineable" : f === "premium" ? "High Premium" : f === "large" ? "Large" : "Expiring"}
@@ -1298,7 +1300,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
 
         {/* Search input (shown when toggled) */}
         {searchVisible && (
-          <div className="flex items-center gap-1.5 mt-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors">
+          <div className="flex items-center gap-1.5 mt-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-white/[0.12] transition-colors">
             <Search className="w-3 h-3 text-foreground/20 shrink-0" />
             <input
               type="search" role="searchbox" name="orders-search"
@@ -1333,33 +1335,6 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                 {f}
               </button>
             ))}
-          </div>
-        )}
-
-        {/* Search (collapsed by default) + Filter + Sort */}
-        {searchVisible && (
-          <div className="flex items-center gap-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors mb-1.5">
-            <Search className="w-3 h-3 text-foreground/20 shrink-0" />
-            <input
-              type="search"
-              role="searchbox"
-              name="orders-search"
-              autoComplete="off"
-              data-1p-ignore="true"
-              data-lpignore="true"
-              data-form-type="other"
-              maxLength={100}
-              autoFocus
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search orders..."
-              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none focus-visible:outline-none font-mono"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery("")} className="text-foreground/30 hover:text-foreground/60">
-                <X className="w-3 h-3" />
-              </button>
-            )}
           </div>
         )}
 
@@ -1539,32 +1514,32 @@ const MY_STATUS_BADGE: Record<
   },
   escrowed: {
     label: "Escrowed",
-    cls: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    cls: "bg-white/[0.06] text-white/60 border-white/[0.09]",
     Icon: CircleDot,
   },
   accepted: {
     label: "Accepted",
-    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    cls: "bg-white/[0.06] text-[#f5f5f7] border-white/[0.09]",
     Icon: CheckCircle2,
   },
   payment_pending: {
     label: "Payment Pending",
-    cls: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+    cls: "bg-white/[0.06] text-white/60 border-white/[0.09]",
     Icon: CircleDot,
   },
   payment_sent: {
     label: "Payment Sent",
-    cls: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+    cls: "bg-white/[0.06] text-white/60 border-white/[0.09]",
     Icon: CircleDot,
   },
   payment_confirmed: {
     label: "Confirmed",
-    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    cls: "bg-white/[0.06] text-[#f5f5f7] border-white/[0.09]",
     Icon: CheckCircle2,
   },
   completed: {
     label: "Completed",
-    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    cls: "bg-white/[0.06] text-[#f5f5f7] border-white/[0.09]",
     Icon: CheckCircle2,
   },
   cancelled: {
@@ -1690,7 +1665,7 @@ const MyOrdersList = memo(function MyOrdersList({
             {/* Row 1: emoji + name + status badge | timestamp */}
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-foreground/[0.03] flex items-center justify-center shrink-0 text-sm border border-foreground/[0.08] shadow-sm">
+                <div className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center shrink-0 text-sm border border-foreground/[0.08] shadow-sm">
                   {avatarChar}
                 </div>
                 <span className="flex items-center gap-1 text-[12px] font-semibold text-white min-w-0">
@@ -1746,7 +1721,7 @@ const MyOrdersList = memo(function MyOrdersList({
             <div className="relative mb-2 rounded-xl overflow-hidden backdrop-blur-sm">
               <div className="absolute inset-0 bg-gradient-to-br from-foreground/[0.05] via-foreground/[0.02] to-transparent" />
               <div
-                className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-emerald-500/[0.08] via-emerald-500/[0.03] to-transparent`}
+                className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-white/[0.04] via-white/[0.02] to-transparent`}
               />
               <div className="absolute inset-0 rounded-xl border border-foreground/[0.08]" />
 
@@ -1754,17 +1729,17 @@ const MyOrdersList = memo(function MyOrdersList({
                 <div className="flex-1 px-3.5 py-2.5">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
+                      className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-white/[0.30]" : "bg-foreground/30"}`}
                     />
                     <span
-                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${left.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
+                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${left.isReceive ? "text-[#f5f5f7]" : "text-foreground/50"}`}
                     >
                       {left.label}
                     </span>
                   </div>
                   <div className="flex items-baseline gap-1.5">
                     <span
-                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${left.isReceive ? "text-emerald-400" : "text-white"}`}
+                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${left.isReceive ? "text-[#f5f5f7]" : "text-white"}`}
                     >
                       {left.amount}
                     </span>
@@ -1776,7 +1751,7 @@ const MyOrdersList = memo(function MyOrdersList({
 
                 <div className="flex items-center shrink-0">
                   <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-foreground/[0.08] to-background border border-foreground/[0.12] flex items-center justify-center -mx-4 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.5)] z-10 backdrop-blur-sm">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-foreground/[0.08] to-background border border-foreground/[0.12] flex items-center justify-center -mx-4 shadow-black/20 z-10 backdrop-blur-sm">
                     <ArrowRightLeft
                       className="w-3 h-3 text-foreground/60"
                       strokeWidth={2.5}
@@ -1788,17 +1763,17 @@ const MyOrdersList = memo(function MyOrdersList({
                 <div className="flex-1 px-3.5 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-1.5 mb-1.5">
                     <span
-                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${right.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
+                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${right.isReceive ? "text-[#f5f5f7]" : "text-foreground/50"}`}
                     >
                       {right.label}
                     </span>
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
+                      className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-white/[0.30]" : "bg-foreground/30"}`}
                     />
                   </div>
                   <div className="flex items-baseline justify-end gap-1.5">
                     <span
-                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${right.isReceive ? "text-emerald-400" : "text-white"}`}
+                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${right.isReceive ? "text-[#f5f5f7]" : "text-white"}`}
                     >
                       {right.amount}
                     </span>

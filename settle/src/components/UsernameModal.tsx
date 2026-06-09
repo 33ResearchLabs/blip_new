@@ -31,7 +31,7 @@ export default function UsernameModal({
 
   // Validate username format
   const validateUsername = (value: string): string | null => {
-    if (value.length < 3) return 'Username must be at least 3 characters';
+    if (value.length < 4) return 'Username must be at least 4 characters';
     if (value.length > 20) return 'Username must be 20 characters or less';
     if (!/^[a-zA-Z0-9_]+$/.test(value)) return 'Only letters, numbers, and underscores allowed';
     return null;
@@ -216,7 +216,7 @@ export default function UsernameModal({
 
               {/* Format Helper */}
               <p className="mt-2 text-xs" style={{ color: colors.text.tertiary }}>
-                3-20 characters • Letters, numbers, and underscores only
+                4-20 characters • Letters, numbers, and underscores only
               </p>
             </div>
 

@@ -428,7 +428,7 @@ function SecurityRow({
       )}
 
       {expanded && children && (
-        <div className="px-4 pb-3.5 pl-[60px] -mt-1">{children}</div>
+        <div className="px-4 pt-1 pb-4 pl-[60px]">{children}</div>
       )}
     </div>
   );
@@ -443,7 +443,7 @@ function StatusBadge({ status }: { status: StatusPill }) {
         : 'text-white/45 bg-white/[0.03] border-white/[0.05]';
   return (
     <span
-      className={`inline-flex items-center gap-1.5 h-[22px] px-2 rounded-full text-[10px] font-semibold tracking-[0.04em] border ${toneCls}`}
+      className={`inline-flex items-center gap-1.5 h-[28px] px-2.5 rounded-full text-[10px] font-semibold tracking-[0.04em] border ${toneCls}`}
     >
       {status.tone === 'on' && (
         <span className="w-1 h-1 rounded-full bg-black" />
@@ -696,11 +696,15 @@ function ChangePasswordSheet({
       return;
     }
     if (next.length < 8 || next.length > 24) {
-      setError('New password must be 8–24 characters.');
+      setError('New password must be 8-24 characters.');
+      return;
+    }
+    if (next === current) {
+      setError('New password must be different from your current password.');
       return;
     }
     if (next !== confirm) {
-      setError('Passwords don’t match.');
+      setError("Passwords don't match.");
       return;
     }
     setBusy(true);
@@ -756,7 +760,7 @@ function ChangePasswordSheet({
   return (
     <Sheet title="Change Password" onClose={onClose}>
       <p className="text-[12px] text-white/55 mb-3">
-        Enter your current password, then choose a new one (8–24 characters).
+        Enter your current password, then choose a new one (8-24 characters).
       </p>
 
       <PasswordInput

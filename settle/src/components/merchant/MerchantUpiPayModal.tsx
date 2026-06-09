@@ -110,7 +110,7 @@ export function MerchantUpiPayModal({ order, open, onClose, onMarkPaid }: Props)
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-[121] bg-surface-base text-text-primary rounded-t-3xl border-t border-border-medium shadow-2xl"
+            className="fixed inset-x-0 bottom-0 z-[121] bg-surface-base text-text-[#f5f5f7] rounded-t-3xl border-t border-border-medium shadow-2xl"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -149,14 +149,14 @@ export function MerchantUpiPayModal({ order, open, onClose, onMarkPaid }: Props)
               <div className="mt-3 flex gap-2">
                 <button
                   onClick={copyUpi}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold bg-surface-card hover:bg-surface-hover border border-border-medium text-text-primary"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold bg-surface-card hover:bg-surface-hover border border-border-medium text-text-[#f5f5f7]"
                 >
                   {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   {copied ? "Copied" : "Copy UPI link"}
                 </button>
                 <a
                   href={upiUrl}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold bg-surface-card hover:bg-surface-hover border border-border-medium text-text-primary"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold bg-surface-card hover:bg-surface-hover border border-border-medium text-text-[#f5f5f7]"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   Open UPI app
@@ -194,7 +194,7 @@ export function MerchantUpiPayModal({ order, open, onClose, onMarkPaid }: Props)
 
               <button
                 onClick={onClose}
-                className="mt-2 w-full py-2.5 rounded-xl text-[12px] font-medium text-text-tertiary hover:text-text-primary"
+                className="mt-2 w-full py-2.5 rounded-xl text-[12px] font-medium text-text-tertiary hover:text-text-[#f5f5f7]"
               >
                 Close — I'll do this later
               </button>
