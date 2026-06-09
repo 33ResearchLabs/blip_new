@@ -16,6 +16,7 @@ import {
   IndianRupee,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { formatFiat, formatCrypto } from "@/lib/format";
 import type { Screen } from "./types";
 
 const CARD = "bg-surface-card border border-border-subtle";
@@ -72,6 +73,7 @@ export function SupportTicketScreen({
     orderId: "",
   });
   const [orders, setOrders] = useState<RecentOrder[]>([]);
+  const [orderExpanded, setOrderExpanded] = useState(false); // expand selected order's details
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -255,25 +257,129 @@ export function SupportTicketScreen({
                         (optional)
                       </span>
                     </label>
-                    <div className="relative">
-                      <select
-                        value={form.orderId}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, orderId: e.target.value }))
-                        }
-                        className={`w-full appearance-none px-4 py-3 pr-9 rounded-[14px] ${CARD} text-[13px] text-text-primary bg-transparent outline-none focus:border-border-medium transition-colors`}
+                    <div className="rounded-[14px] border border-border-subtle divide-y divide-border-subtle overflow-hidden max-h-72 overflow-y-auto">
+                      {/* No specific order */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm((f) => ({ ...f, orderId: "" }));
+                          setOrderExpanded(false);
+                        }}
+                        className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left transition-colors ${
+                          form.orderId === "" ? "bg-surface-hover" : "hover:bg-surface-hover"
+                        }`}
                       >
-                        <option value="">No specific order</option>
-                        {orders.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            #{o.order_number} · {o.type.toUpperCase()} ·{" "}
-                            {o.fiat_currency}{" "}
-                            {Number(o.fiat_amount).toLocaleString()} ·{" "}
-                            {o.status}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
+                        <span className="text-[13px] text-text-primary">No specific order</span>
+                        <span
+                          className={`w-4 h-4 rounded-full border shrink-0 flex items-center justify-center ${
+                            form.orderId === "" ? "border-accent" : "border-border-medium"
+                          }`}
+                        >
+                          {form.orderId === "" && (
+                            <span className="w-2 h-2 rounded-full bg-accent" />
+                          )}
+                        </span>
+                      </button>
+
+                      {orders.map((o) => {
+                        const selected = form.orderId === o.id;
+                        return (
+                          <div key={o.id} className={selected ? "bg-surface-hover" : ""}>
+                            <div className="flex items-stretch">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setForm((f) => ({ ...f, orderId: o.id }));
+                                  setOrderExpanded(false);
+                                }}
+                                className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-hover transition-colors"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-[13px] font-bold text-text-primary">
+                                      #{o.order_number}
+                                    </span>
+                                    <span
+                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                        o.type === "buy"
+                                          ? "bg-emerald-500/15 text-emerald-400"
+                                          : "bg-blue-500/15 text-blue-400"
+                                      }`}
+                                    >
+                                      {o.type.toUpperCase()}
+                                    </span>
+                                    <span className="text-[11px] text-text-tertiary">{o.status}</span>
+                                  </div>
+                                  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-text-tertiary">
+                                    <span className="tabular-nums text-text-secondary">
+                                      {formatFiat(Number(o.fiat_amount), o.fiat_currency)}
+                                    </span>
+                                    <span>·</span>
+                                    <span className="tabular-nums">
+                                      {new Date(o.created_at).toLocaleDateString("en-US", {
+                                        day: "2-digit",
+                                        month: "short",
+                                      })}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span
+                                  className={`w-4 h-4 rounded-full border shrink-0 flex items-center justify-center ${
+                                    selected ? "border-accent" : "border-border-medium"
+                                  }`}
+                                >
+                                  {selected && <span className="w-2 h-2 rounded-full bg-accent" />}
+                                </span>
+                              </button>
+                              {selected && (
+                                <button
+                                  type="button"
+                                  onClick={() => setOrderExpanded((v) => !v)}
+                                  aria-label="Order details"
+                                  className="px-3 flex items-center justify-center text-text-tertiary hover:text-text-secondary border-l border-border-subtle"
+                                >
+                                  <ChevronDown
+                                    className={`w-4 h-4 transition-transform ${orderExpanded ? "rotate-180" : ""}`}
+                                  />
+                                </button>
+                              )}
+                            </div>
+                            {selected && orderExpanded && (
+                              <div className="px-4 pb-3 pt-1 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] border-t border-border-subtle">
+                                <div>
+                                  <div className="text-text-tertiary">Crypto</div>
+                                  <div className="text-text-primary tabular-nums">
+                                    {formatCrypto(Number(o.crypto_amount))} USDT
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-text-tertiary">Fiat</div>
+                                  <div className="text-text-primary tabular-nums">
+                                    {formatFiat(Number(o.fiat_amount), o.fiat_currency)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-text-tertiary">Status</div>
+                                  <div className="text-text-primary">{o.status}</div>
+                                </div>
+                                <div>
+                                  <div className="text-text-tertiary">Date</div>
+                                  <div className="text-text-primary tabular-nums">
+                                    {new Date(o.created_at).toLocaleString("en-US", {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      hour12: false,
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

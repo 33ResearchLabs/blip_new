@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ChevronLeft } from 'lucide-react';
 import { ChatRoom } from '@/components/chat/ChatRoom';
 import { useRealtimeChat } from '@/hooks/useRealtimeChat';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
@@ -123,8 +123,55 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
   const typeLabel = orderType === 'buy' ? 'BUY' : 'SELL';
   const typeColor = orderType === 'buy' ? 'text-[#f5f5f7] bg-white/[0.06] border-white/[0.09]' : 'text-orange-400 bg-orange-500/15 border-orange-500/20';
 
+  // Counterparty presence for the header. In U2M the counterparty is the
+  // user; in M2M it's the other merchant — so match "anyone online who isn't
+  // me / compliance / system" rather than a fixed actorType.
+  const isCounterpartyOnline = !!chatWindow?.presence?.some(
+    (p) => p.isOnline && p.actorId !== merchantId && p.actorType !== 'compliance' && p.actorType !== 'system',
+  );
+  const isCounterpartyTyping = !!chatWindow?.isTyping;
+
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
+      {/* Header — back button + counterparty + buy/sell + presence */}
+      <div className="shrink-0 px-3 py-2 border-b border-foreground/[0.04] flex items-center gap-2">
+        <button
+          onClick={onBack}
+          aria-label="Back to chats"
+          className="shrink-0 p-1 rounded hover:bg-foreground/[0.06] transition-colors text-foreground/40 hover:text-foreground/70"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <div className="shrink-0 w-7 h-7 rounded-lg bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center text-sm">
+          {getUserEmoji(userName)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-medium text-foreground/80 truncate">{userName}</p>
+            <span className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded border font-mono ${typeColor}`}>
+              <TypeIcon className="w-2.5 h-2.5" />
+              {typeLabel}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 mt-0.5">
+            {isCounterpartyTyping ? (
+              <span className="text-[12px] font-mono text-[#f5f5f7]">typing...</span>
+            ) : (
+              <>
+                <span className={`w-1.5 h-1.5 rounded-full ${isCounterpartyOnline ? 'bg-emerald-500' : 'bg-white/25'}`} />
+                <span className={`text-[12px] font-mono ${isCounterpartyOnline ? 'text-[#f5f5f7]' : 'text-foreground/35'}`}>
+                  {isCounterpartyOnline ? 'Online' : 'Offline'}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        {orderNumber && (
+          <span className="shrink-0 text-[10px] px-1.5 py-0.5 bg-foreground/[0.04] text-foreground/35 rounded font-mono truncate max-w-[90px]">
+            #{orderNumber}
+          </span>
+        )}
+      </div>
 
       {/* Chat Room */}
       <div className="flex-1 min-h-0">

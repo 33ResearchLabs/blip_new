@@ -1482,9 +1482,6 @@ function DetailPanel({
               </div>
             </div>
           </FieldBlock>
-          <FieldBlock label="Version">
-            <span className="text-foreground/80">{device.version || '—'}</span>
-          </FieldBlock>
           <FieldBlock label="Platform">
             <span className="text-foreground/80">{device.platform || '—'}</span>
           </FieldBlock>

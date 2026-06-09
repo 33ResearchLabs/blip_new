@@ -23,6 +23,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  Clock,
   Copy,
   RefreshCw,
   Download,
@@ -32,6 +33,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { copyToClipboard } from "@/lib/clipboard";
+import { formatFiat, formatCrypto } from "@/lib/format";
 
 // Class tokens lifted from the surrounding Settings tabs so this panel reads
 // as native tab content rather than a pasted-in surface.
@@ -217,6 +219,7 @@ export function MerchantSupportPanel({
   const [step, setStep] = useState<"category" | "form" | "success">("category");
   const [form, setForm] = useState<TicketForm>(INITIAL_FORM);
   const [orders, setOrders] = useState<RecentOrder[]>([]);
+  const [orderExpanded, setOrderExpanded] = useState(false); // expand selected order's details
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -635,67 +638,85 @@ export function MerchantSupportPanel({
           </div>
         ) : (
           <ul className="space-y-2">
-            {(issues ?? []).map((issue) => (
-              <li key={issue.id}>
-                <button
-                  type="button"
-                  onClick={() => openDetail(issue.id)}
-                  className={`w-full text-left rounded-xl ${CARD} hover:bg-white/[0.04] transition-colors flex items-start gap-3 px-4 py-3`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <StatusBadge status={issue.status} />
-                      <span className="text-[10px] uppercase tracking-wide text-white/40">
-                        {prettyCategory(issue.category)}
-                      </span>
+            {(issues ?? []).map((issue) => {
+              const accent =
+                issue.status === "open"
+                  ? "bg-amber-400"
+                  : issue.status === "in_progress"
+                    ? "bg-sky-400"
+                    : issue.status === "resolved"
+                      ? "bg-emerald-400"
+                      : issue.status === "rejected"
+                        ? "bg-rose-400"
+                        : "bg-white/25";
+              return (
+                <li key={issue.id}>
+                  <button
+                    type="button"
+                    onClick={() => openDetail(issue.id)}
+                    className="group w-full text-left rounded-2xl border border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.12] transition-colors overflow-hidden flex items-stretch"
+                  >
+                    {/* status accent rail */}
+                    <span className={`w-1 shrink-0 ${accent}`} aria-hidden="true" />
+                    <div className="flex-1 min-w-0 flex items-center gap-3 pl-3.5 pr-3 py-3.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <StatusBadge status={issue.status} />
+                          <span className="px-1.5 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.06] text-[10px] font-medium uppercase tracking-wide text-white/45">
+                            {prettyCategory(issue.category)}
+                          </span>
+                        </div>
+                        <div className="text-[14.5px] font-semibold text-white truncate leading-tight">
+                          {issue.title}
+                        </div>
+                        <div className="text-[12px] text-white/45 line-clamp-1 mt-0.5">
+                          {issue.description}
+                        </div>
+                        <div className="flex items-center gap-2.5 mt-2.5 text-[10.5px] text-white/35">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {relativeTime(issue.created_at)}
+                          </span>
+                          <span className="w-0.5 h-0.5 rounded-full bg-white/25" aria-hidden="true" />
+                          <span>Updated {relativeTime(issue.updated_at)}</span>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void handleCopyRowId(issue.id);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                void handleCopyRowId(issue.id);
+                              }
+                            }}
+                            className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] hover:text-white/70 font-mono cursor-pointer transition-colors"
+                            title="Copy tracking ID"
+                          >
+                            {copiedId === issue.id ? (
+                              <>
+                                <Check className="w-2.5 h-2.5 text-emerald-400" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-2.5 h-2.5" />
+                                {`${issue.id.slice(0, 8)}…${issue.id.slice(-4)}`}
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-white/25 group-hover:text-white/55 group-hover:translate-x-0.5 transition-all shrink-0 self-center" />
                     </div>
-                    <div className="text-[14px] font-medium text-white truncate">
-                      {issue.title}
-                    </div>
-                    <div className="text-[12px] text-white/50 line-clamp-1">
-                      {issue.description}
-                    </div>
-                    <div className="flex items-center gap-3 mt-1.5 text-[10px] text-white/40">
-                      <span>Filed {relativeTime(issue.created_at)}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>Updated {relativeTime(issue.updated_at)}</span>
-                      <span aria-hidden="true">·</span>
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          void handleCopyRowId(issue.id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            void handleCopyRowId(issue.id);
-                          }
-                        }}
-                        className="inline-flex items-center gap-1 hover:text-white/70 font-mono cursor-pointer"
-                        title="Copy tracking ID"
-                      >
-                        {copiedId === issue.id ? (
-                          <>
-                            <Check className="w-2.5 h-2.5 text-white" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-2.5 h-2.5" />
-                            {`${issue.id.slice(0, 8)}…${issue.id.slice(-4)}`}
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-white/30 shrink-0 mt-1" />
-                </button>
-              </li>
-            ))}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -1091,24 +1112,129 @@ export function MerchantSupportPanel({
                     (optional)
                   </span>
                 </label>
-                <div className="relative">
-                  <select
-                    value={form.orderId}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, orderId: e.target.value }))
-                    }
-                    className={`${INPUT} appearance-none pr-9`}
+                <div className="rounded-xl border border-white/[0.08] divide-y divide-white/[0.06] overflow-hidden max-h-72 overflow-y-auto">
+                  {/* No specific order */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((f) => ({ ...f, orderId: "" }));
+                      setOrderExpanded(false);
+                    }}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors ${
+                      form.orderId === "" ? "bg-white/[0.05]" : "hover:bg-white/[0.03]"
+                    }`}
                   >
-                    <option value="">No specific order</option>
-                    {orders.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        #{o.order_number} · {o.type.toUpperCase()} ·{" "}
-                        {o.fiat_currency}{" "}
-                        {Number(o.fiat_amount).toLocaleString()} · {o.status}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                    <span className="text-[13px] text-white/80">No specific order</span>
+                    <span
+                      className={`w-4 h-4 rounded-full border shrink-0 flex items-center justify-center ${
+                        form.orderId === "" ? "border-white" : "border-white/25"
+                      }`}
+                    >
+                      {form.orderId === "" && (
+                        <span className="w-2 h-2 rounded-full bg-white" />
+                      )}
+                    </span>
+                  </button>
+
+                  {orders.map((o) => {
+                    const selected = form.orderId === o.id;
+                    return (
+                      <div key={o.id} className={selected ? "bg-white/[0.04]" : ""}>
+                        <div className="flex items-stretch">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm((f) => ({ ...f, orderId: o.id }));
+                              setOrderExpanded(false);
+                            }}
+                            className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.03] transition-colors"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[13px] font-semibold text-white">
+                                  #{o.order_number}
+                                </span>
+                                <span
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                    o.type === "buy"
+                                      ? "bg-emerald-500/15 text-emerald-300"
+                                      : "bg-blue-500/15 text-blue-300"
+                                  }`}
+                                >
+                                  {o.type.toUpperCase()}
+                                </span>
+                                <span className="text-[11px] text-white/45">{o.status}</span>
+                              </div>
+                              <div className="mt-0.5 flex items-center gap-2 text-[11px] text-white/45">
+                                <span className="tabular-nums text-white/70">
+                                  {formatFiat(Number(o.fiat_amount), o.fiat_currency)}
+                                </span>
+                                <span>·</span>
+                                <span className="tabular-nums">
+                                  {new Date(o.created_at).toLocaleDateString("en-US", {
+                                    day: "2-digit",
+                                    month: "short",
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                            <span
+                              className={`w-4 h-4 rounded-full border shrink-0 flex items-center justify-center ${
+                                selected ? "border-white" : "border-white/25"
+                              }`}
+                            >
+                              {selected && <span className="w-2 h-2 rounded-full bg-white" />}
+                            </span>
+                          </button>
+                          {selected && (
+                            <button
+                              type="button"
+                              onClick={() => setOrderExpanded((v) => !v)}
+                              aria-label="Order details"
+                              className="px-3 flex items-center justify-center text-white/40 hover:text-white/70 border-l border-white/[0.06]"
+                            >
+                              <ChevronDown
+                                className={`w-4 h-4 transition-transform ${orderExpanded ? "rotate-180" : ""}`}
+                              />
+                            </button>
+                          )}
+                        </div>
+                        {selected && orderExpanded && (
+                          <div className="px-3 pb-3 pt-1 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] border-t border-white/[0.06]">
+                            <div>
+                              <div className="text-white/40">Crypto</div>
+                              <div className="text-white/85 tabular-nums">
+                                {formatCrypto(Number(o.crypto_amount))} USDT
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-white/40">Fiat</div>
+                              <div className="text-white/85 tabular-nums">
+                                {formatFiat(Number(o.fiat_amount), o.fiat_currency)}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-white/40">Status</div>
+                              <div className="text-white/85">{o.status}</div>
+                            </div>
+                            <div>
+                              <div className="text-white/40">Date</div>
+                              <div className="text-white/85 tabular-nums">
+                                {new Date(o.created_at).toLocaleString("en-US", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: false,
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
