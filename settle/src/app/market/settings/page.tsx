@@ -2137,7 +2137,7 @@ export default function MerchantSettingsPage({
           )}
 
           </div>
-        </div>
+        </motion.main>
       </div>
 
       <PaymentMethodModal
