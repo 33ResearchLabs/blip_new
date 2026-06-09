@@ -284,7 +284,7 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
                 }}
                 className="shrink-0 text-text-tertiary hover:text-text-secondary transition-colors"
               >
-                <Mic className="w-[17px] h-[17px]" strokeWidth={2} />
+                {/* <Mic className="w-[17px] h-[17px]" strokeWidth={2} /> */}
               </button>
             </div>
           </motion.section>

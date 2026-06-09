@@ -385,7 +385,7 @@ export const ProfileScreen = ({
       </header>
 
       {/* ── Scrollable content ── */}
-      <div className="flex-1 px-5 pt-0 pb-28 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 px-5 pt-0 pb-[80px] overflow-y-auto scrollbar-hide">
 
         {/* Account card — membership badge, avatar + online dot, name +
             (phone-verified) check, and Blip Points / Reputation tiles. */}

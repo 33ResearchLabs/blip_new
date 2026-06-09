@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Lock, Key, AlertTriangle, Check } from 'lucide-react';
+import { Loader2, Lock, Key, AlertTriangle, Check, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { colors } from "@/lib/design/theme";
 import { AppPinPad } from '@/components/app-lock/AppPinPad';
@@ -156,6 +156,19 @@ export function UnlockWalletPrompt({
           <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>
             {mode === 'setPinEnter' || mode === 'setPinConfirm' ? 'Set your PIN' : 'Unlock Wallet'}
           </h2>
+          {/* Close (X) — top-right. Hidden during PIN-setup so the user
+              doesn't bail mid-migration. */}
+          {onClose && mode !== 'setPinEnter' && mode !== 'setPinConfirm' && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5"
+              style={{ color: colors.text.tertiary }}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <AnimatePresence mode="wait">
@@ -272,7 +285,7 @@ export function UnlockWalletPrompt({
         {/* Footer: mode-dependent links. Hidden during PIN-setup so the
             user doesn't bail mid-migration. */}
         {mode !== 'setPinEnter' && mode !== 'setPinConfirm' && (
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <div className="flex items-center gap-3">
               {mode === 'pin' && onMigrateToPin && (
                 <button
@@ -315,15 +328,6 @@ export function UnlockWalletPrompt({
                 </button>
               )}
             </div>
-            {onClose && (
-              <button
-                onClick={onClose}
-                className="text-[11px] font-mono transition-colors"
-                style={{ color: colors.text.tertiary }}
-              >
-                Cancel
-              </button>
-            )}
           </div>
         )}
       </motion.div>
