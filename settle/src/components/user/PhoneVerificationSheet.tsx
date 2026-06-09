@@ -140,7 +140,7 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
     setBusy(true);
     setError("");
     try {
-      // reCAPTCHA Enterprise assessment — blocks high-risk phone numbers before Firebase sends SMS
+      // reCAPTCHA Enterprise assessment — fail open so reCAPTCHA issues never block legitimate users
       if (RECAPTCHA_SITE_KEY) {
         try {
           const token = await getRecaptchaToken('PHONE_VERIFICATION');
@@ -149,13 +149,17 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phone: fullPhone, recaptcha_token: token }),
           });
-          const data = await res.json();
           if (!res.ok) {
-            setError(data.message ?? 'Request blocked. Please try again later.');
-            return;
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 429) {
+              setError(data.message ?? 'Request blocked. Please try again later.');
+              setBusy(false);
+              return;
+            }
+            // Non-429 errors: fail open and proceed
           }
         } catch {
-          // Fail open — if reCAPTCHA is unavailable, proceed anyway
+          // Fail open — reCAPTCHA unavailable, proceed anyway
         }
       }
 
@@ -165,7 +169,14 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
       setStep("otp");
       startCooldown();
     } catch (err: any) {
-      setError(err.message?.includes('invalid-phone') ? 'Invalid phone number.' : 'Failed to send OTP. Try again.');
+      const msg = err?.message ?? '';
+      if (msg.includes('invalid-phone-number') || msg.includes('invalid-phone')) {
+        setError('Invalid phone number. Use format +91XXXXXXXXXX.');
+      } else if (msg.includes('too-many-requests')) {
+        setError('Too many attempts. Please try again later.');
+      } else {
+        setError(`Failed to send OTP: ${msg || 'Unknown error'}`);
+      }
     } finally {
       setBusy(false);
     }
