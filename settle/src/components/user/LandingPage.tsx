@@ -575,7 +575,7 @@ export function LandingPage({
                       setLoginForm({ ...loginForm, username: e.target.value.trim() });
                       setTouched(t => ({ ...t, username: true }));
                     }}
-                    placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'username or you@email.com'}
+                    placeholder={authMode === 'register' ? '4–20 chars · letters, numbers, _' : 'username or you@email.com'}
                     autoCapitalize="none"
                     autoCorrect="off"
                     maxLength={authMode === 'register' ? 20 : 254}
