@@ -31,6 +31,8 @@ import {
   Palette,
   Lock,
   Trophy,
+  Gauge,
+  ArrowRight,
   BookOpen,
   AtSign,
   X,
@@ -46,6 +48,7 @@ import { WalletLedger } from "@/components/merchant/WalletLedger";
 import { PaymentMethodModal, PaymentMethodInlineForm } from "@/components/merchant/PaymentMethodModal";
 import { PhoneVerificationModal } from "@/components/merchant/PhoneVerificationModal";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { formatFiat } from "@/lib/format";
 import { useCorridorPrices } from "@/hooks/useCorridorPrices";
 import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { useTheme, THEMES, type Theme } from "@/context/ThemeContext";
@@ -163,6 +166,7 @@ type SettingsTab =
   | "security"
   | "theme"
   | "payments"
+  | "limits"
   | "rates"
   | "notifications"
   | "liquidity"
@@ -412,6 +416,21 @@ export default function MerchantSettingsPage({
   // mode. `null` means the modal opens in add mode. Set when the merchant
   // clicks the Pencil on a row, cleared when the modal closes.
   const [editingPaymentMethod, setEditingPaymentMethod] = useState<MerchantPaymentMethod | null>(null);
+
+  // Trading limits (effective daily + per-trade caps from GET /api/limits/me)
+  const [limitsData, setLimitsData] = useState<any>(null);
+  const [limitsLoading, setLimitsLoading] = useState(false);
+  const [limitsError, setLimitsError] = useState<string | null>(null);
+
+  // Limit-increase requests (history + the request modal)
+  const [limitRequests, setLimitRequests] = useState<any[]>([]);
+  const [limitRequestsViewAll, setLimitRequestsViewAll] = useState(false);
+  const [showLimitRequestModal, setShowLimitRequestModal] = useState(false);
+  const [lrKind, setLrKind] = useState<"daily" | "per_transaction">("daily");
+  const [lrAmount, setLrAmount] = useState(""); // requested amount, in INR
+  const [lrReason, setLrReason] = useState("");
+  const [lrSubmitting, setLrSubmitting] = useState(false);
+  const [lrError, setLrError] = useState<string | null>(null);
 
   // Notifications
   const [notifSettings, setNotifSettings] = useState({
@@ -734,6 +753,97 @@ export default function MerchantSettingsPage({
     }
   }, [activeTab, fetchPaymentMethods]);
 
+  // Fetch effective trading limits when the Limits tab opens. The endpoint
+  // (/api/limits/me) accepts merchant tokens and returns the effective daily +
+  // per-trade caps, trailing-24h usage and the resolved tier/rep multiplier.
+  const fetchLimits = useCallback(async () => {
+    setLimitsLoading(true);
+    setLimitsError(null);
+    try {
+      const res = await fetchWithAuth("/api/limits/me");
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) {
+        setLimitsData(json.data);
+      } else {
+        setLimitsError(json?.error || "Couldn't load your limits");
+      }
+    } catch (err) {
+      console.error("Failed to load limits:", err);
+      setLimitsError("Couldn't load your limits");
+    } finally {
+      setLimitsLoading(false);
+    }
+  }, []);
+
+  // The merchant's limit-increase request history (newest first).
+  const fetchLimitRequests = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/limits/requests");
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success && Array.isArray(json.data)) {
+        setLimitRequests(json.data);
+      }
+    } catch (err) {
+      console.error("Failed to load limit requests:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "limits") {
+      fetchLimits();
+      fetchLimitRequests();
+    }
+  }, [activeTab, fetchLimits, fetchLimitRequests]);
+
+  const openLimitRequest = (kind: "daily" | "per_transaction") => {
+    setLrKind(kind);
+    setLrAmount("");
+    setLrReason("");
+    setLrError(null);
+    setShowLimitRequestModal(true);
+  };
+
+  const submitLimitRequest = async () => {
+    setLrError(null);
+    const requestedUsd = Number(lrAmount.replace(/,/g, ""));
+    if (!Number.isFinite(requestedUsd) || requestedUsd <= 0) {
+      setLrError("Enter a valid amount.");
+      return;
+    }
+    const currentUsd =
+      lrKind === "daily"
+        ? Number(limitsData?.base?.dailyUsd ?? 0)
+        : Number(limitsData?.base?.perTradeUsd ?? 0);
+    if (requestedUsd <= currentUsd) {
+      setLrError("Requested limit must be higher than your current limit.");
+      return;
+    }
+    setLrSubmitting(true);
+    try {
+      const res = await fetchWithAuth("/api/limits/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: lrKind,
+          requested_limit_usd: requestedUsd,
+          reason: lrReason.trim() || undefined,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) {
+        setShowLimitRequestModal(false);
+        await fetchLimitRequests();
+      } else {
+        setLrError(json?.error || "Couldn't submit your request.");
+      }
+    } catch (err) {
+      console.error("Failed to submit limit request:", err);
+      setLrError("Couldn't submit your request.");
+    } finally {
+      setLrSubmitting(false);
+    }
+  };
+
   const handleAddBank = async () => {
     if (!newBank.bank_name || !newBank.account_name || !newBank.iban) return;
     setIsAddingBank(true);
@@ -837,6 +947,7 @@ export default function MerchantSettingsPage({
     { id: "security", label: "Security", icon: Lock },
     { id: "theme", label: "Theme", icon: Palette },
     { id: "payments", label: "Payments", icon: CreditCard },
+    { id: "limits", label: "Limits", icon: Gauge },
   ];
   const preferenceTabs: { id: SettingsTab; label: string; icon: any }[] = [
     { id: "notifications", label: "Alerts", icon: Bell },
@@ -941,18 +1052,21 @@ export default function MerchantSettingsPage({
               </div>
             </div>
 
-            {/* Support — opens the support/ticketing panel in the bottom-sheet */}
-            <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
-              <button
-                onClick={() => { setActiveTab("support"); setMobileSheetOpen(true); }}
-                className="flex items-center gap-3.5 w-full px-4 py-3.5 bg-white/[0.02] active:bg-white/[0.06] transition-colors text-left"
-              >
-                <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
-                  <HelpCircle className="w-4 h-4 text-white/60" />
-                </div>
-                <span className="flex-1 text-[14px] text-white/80">Support</span>
-                <ChevronRight className="w-4 h-4 text-white/20" />
-              </button>
+            {/* Support section — opens the support/ticketing panel in the bottom-sheet */}
+            <div>
+              <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest px-1 mb-2">Support</p>
+              <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
+                <button
+                  onClick={() => { setActiveTab("support"); setMobileSheetOpen(true); }}
+                  className="flex items-center gap-3.5 w-full px-4 py-3.5 bg-white/[0.02] active:bg-white/[0.06] transition-colors text-left"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
+                    <HelpCircle className="w-4 h-4 text-white/60" />
+                  </div>
+                  <span className="flex-1 text-[14px] text-white/80">Support</span>
+                  <ChevronRight className="w-4 h-4 text-white/20" />
+                </button>
+              </div>
             </div>
 
             {/* Logout */}
@@ -1014,18 +1128,22 @@ export default function MerchantSettingsPage({
               );
             })}
 
-            <div className="mt-auto pt-6 space-y-3">
-              <button
-                onClick={() => { setActiveTab("support"); setMobileSheetOpen(true); }}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all w-full ${
-                  activeTab === "support"
-                    ? "bg-white/[0.08] text-white"
-                    : "text-white/40 hover:text-foreground/60 hover:bg-card"
-                }`}
-              >
-                <HelpCircle className="w-4 h-4" />
-                Support
-              </button>
+            <p className="px-3 mt-5 mb-2 text-[10px] font-bold tracking-[0.18em] text-white/30 uppercase">
+              Support
+            </p>
+            <button
+              onClick={() => setActiveTab("support")}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all whitespace-nowrap w-full ${
+                activeTab === "support"
+                  ? "bg-white/[0.08] text-white"
+                  : "text-white/40 hover:text-foreground/60 hover:bg-card"
+              }`}
+            >
+              <HelpCircle className="w-4 h-4 shrink-0" />
+              Support
+            </button>
+
+            <div className="mt-auto pt-6">
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium text-red-400/70 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/[0.06] transition-all w-full"
@@ -1968,6 +2086,240 @@ export default function MerchantSettingsPage({
           )}
 
 
+          {/* Limits Tab */}
+          {activeTab === "limits" && (
+            <div className="space-y-5 max-w-3xl">
+              {limitsLoading && !limitsData ? (
+                <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-12 text-center">
+                  <Loader2 className="w-5 h-5 text-white/20 mx-auto animate-spin" />
+                  <p className="text-xs text-white/30 mt-3">Loading limits…</p>
+                </div>
+              ) : limitsError ? (
+                <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-8 text-center">
+                  <AlertCircle className="w-6 h-6 text-white/30 mx-auto mb-3" />
+                  <p className="text-sm text-white/60">{limitsError}</p>
+                  <button
+                    onClick={fetchLimits}
+                    className="mt-4 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-[13px] text-white/80 hover:bg-white/[0.1] transition-colors"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : limitsData ? (
+                (() => {
+                  // Caps are the flat base limits ($50 daily / $25 per-trade),
+                  // shown in USD. "Used" for daily is the trailing-24h volume;
+                  // for per-transaction it's the largest single trade in 24h
+                  // (per-transaction isn't a cumulative spend).
+                  const blocks = [
+                    {
+                      key: "daily",
+                      label: "Daily Limit",
+                      Icon: Calendar,
+                      usedUsd: Number(limitsData.trailing_24h_usd ?? 0),
+                      capUsd: Number(limitsData.base?.dailyUsd ?? 0),
+                    },
+                    {
+                      key: "per_transaction",
+                      label: "Per Transaction Limit",
+                      Icon: CreditCard,
+                      usedUsd: Number(limitsData.largest_trade_24h_usd ?? 0),
+                      capUsd: Number(limitsData.base?.perTradeUsd ?? 0),
+                    },
+                  ] as const;
+                  const visibleRequests = limitRequestsViewAll
+                    ? limitRequests
+                    : limitRequests.slice(0, 3);
+                  return (
+                    <>
+                      {/* Card 1 — Limit Overview */}
+                      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 sm:p-6">
+                        <h3 className="text-[15px] font-semibold text-white mb-5">
+                          Limit Overview
+                        </h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-0 lg:divide-x lg:divide-white/[0.06]">
+                          {blocks.map((b, idx) => {
+                            const remainingUsd = Math.max(
+                              b.capUsd - b.usedUsd,
+                              0,
+                            );
+                            const pct =
+                              b.capUsd > 0
+                                ? Math.min(100, (b.usedUsd / b.capUsd) * 100)
+                                : 0;
+                            const Icon = b.Icon;
+                            return (
+                              <div
+                                key={b.key}
+                                className={idx === 0 ? "lg:pr-7" : "lg:pl-7"}
+                              >
+                                <div className="flex items-center gap-3 mb-4">
+                                  <div className="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                                    <Icon className="w-4 h-4 text-white/50" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-[12px] text-white/40">
+                                      {b.label}
+                                    </p>
+                                    <p className="text-2xl font-bold text-white leading-tight">
+                                      {formatFiat(b.usedUsd, "USD")}
+                                    </p>
+                                    <p className="text-[12px] text-white/30">
+                                      of {formatFiat(b.capUsd, "USD")}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-white transition-all"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between mt-2 text-[12px]">
+                                  <span className="text-white/40">
+                                    {Math.round(pct)}% used
+                                  </span>
+                                  <span className="text-white/40">
+                                    {formatFiat(remainingUsd, "USD")} remaining
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Card 2 — Need a higher limit? */}
+                      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                          <TrendingUp className="w-5 h-5 text-white/50" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[15px] font-semibold text-white">
+                            Need a higher limit?
+                          </p>
+                          <p className="text-[13px] text-white/40">
+                            Request an increase to handle higher transaction
+                            volumes.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => openLimitRequest("daily")}
+                          className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white/[0.04] border border-white/[0.12] text-[13px] font-medium text-white hover:bg-white/[0.08] transition-colors"
+                        >
+                          Request Limit Increase
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Card 3 — Recent Limit Requests */}
+                      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 sm:p-6">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-[15px] font-semibold text-white">
+                            Recent Limit Requests
+                          </h3>
+                          {limitRequests.length > 3 && (
+                            <button
+                              onClick={() =>
+                                setLimitRequestsViewAll((v) => !v)
+                              }
+                              className="text-[12px] text-white/40 hover:text-white/70 transition-colors"
+                            >
+                              {limitRequestsViewAll ? "Show less" : "View All"}
+                            </button>
+                          )}
+                        </div>
+
+                        {limitRequests.length === 0 ? (
+                          <div className="py-8 text-center">
+                            <p className="text-[13px] text-white/30">
+                              No limit requests yet.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-white/[0.04]">
+                            {visibleRequests.map((r: any) => {
+                              const kindLabel =
+                                r.kind === "daily"
+                                  ? "Daily Limit Increase"
+                                  : "Per Transaction Limit Increase";
+                              const created = new Date(r.created_at);
+                              const status = r.status as
+                                | "pending"
+                                | "approved"
+                                | "rejected";
+                              const statusStyle =
+                                status === "approved"
+                                  ? "bg-green-500/10 text-green-400 border-green-500/20"
+                                  : status === "rejected"
+                                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                                    : "bg-amber-500/10 text-amber-300 border-amber-500/20";
+                              const RowIcon =
+                                r.kind === "daily" ? Calendar : CreditCard;
+                              return (
+                                <div
+                                  key={r.id}
+                                  className="flex items-center gap-3 py-3.5"
+                                >
+                                  <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                                    <RowIcon className="w-4 h-4 text-white/40" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[13px] font-medium text-white truncate">
+                                      {kindLabel}
+                                    </p>
+                                    <p className="text-[11px] text-white/30">
+                                      {created.toLocaleDateString("en-US", {
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric",
+                                      })}
+                                      ,{" "}
+                                      {created.toLocaleTimeString("en-US", {
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                      })}
+                                    </p>
+                                  </div>
+                                  <span
+                                    className={`text-[10px] font-semibold capitalize px-2 py-1 rounded-md border ${statusStyle}`}
+                                  >
+                                    {status}
+                                  </span>
+                                  <div className="hidden sm:flex items-center gap-2 text-[12px] text-white/50 shrink-0">
+                                    <span>
+                                      {formatFiat(
+                                        Number(r.current_limit_usd),
+                                        "USD",
+                                      )}
+                                    </span>
+                                    <ArrowRight className="w-3.5 h-3.5 text-white/30" />
+                                    <span className="text-white/80">
+                                      {formatFiat(
+                                        Number(r.requested_limit_usd),
+                                        "USD",
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-white/25 text-center pt-1">
+                        We typically respond to limit requests within 24–48
+                        hours.
+                      </p>
+                    </>
+                  );
+                })()
+              ) : null}
+            </div>
+          )}
+
+
           {/* Notifications Tab */}
           {activeTab === "notifications" && (
             <div className="space-y-6">
@@ -2173,6 +2525,132 @@ export default function MerchantSettingsPage({
         }}
       />
 
+      {/* Request Limit Increase modal */}
+      <AnimatePresence>
+        {showLimitRequestModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={() => !lrSubmitting && setShowLimitRequestModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-[#0d0d0f] border border-white/[0.08] rounded-2xl p-6"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-semibold text-white">
+                  Request Limit Increase
+                </h3>
+                <button
+                  onClick={() =>
+                    !lrSubmitting && setShowLimitRequestModal(false)
+                  }
+                  className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Which limit */}
+              <p className="text-[12px] text-white/40 mb-2">Which limit?</p>
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                {(
+                  [
+                    { k: "daily", label: "Daily" },
+                    { k: "per_transaction", label: "Per Transaction" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.k}
+                    onClick={() => setLrKind(opt.k)}
+                    className={`px-3 py-2.5 rounded-xl text-[13px] font-medium border transition-colors ${
+                      lrKind === opt.k
+                        ? "bg-white/[0.08] border-white/20 text-white"
+                        : "bg-white/[0.02] border-white/[0.06] text-white/50 hover:text-white/80"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Current limit for the selected kind */}
+              <div className="flex items-center justify-between mb-4 px-3.5 py-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                <span className="text-[12px] text-white/40">
+                  Current{" "}
+                  {lrKind === "daily" ? "daily" : "per-transaction"} limit
+                </span>
+                <span className="text-[13px] font-medium text-white">
+                  {formatFiat(
+                    lrKind === "daily"
+                      ? Number(limitsData?.base?.dailyUsd ?? 0)
+                      : Number(limitsData?.base?.perTradeUsd ?? 0),
+                    "USD",
+                  )}
+                </span>
+              </div>
+
+              {/* Requested amount (USD) */}
+              <label className="block text-[12px] text-white/40 mb-2">
+                Requested limit ($)
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={lrAmount}
+                onChange={(e) =>
+                  setLrAmount(e.target.value.replace(/[^0-9.]/g, ""))
+                }
+                maxLength={14}
+                placeholder="e.g. 200"
+                className="w-full px-3.5 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] text-white text-sm placeholder:text-white/20 focus:outline-none focus:border-white/20 mb-4"
+              />
+
+              {/* Reason */}
+              <label className="block text-[12px] text-white/40 mb-2">
+                Reason (optional)
+              </label>
+              <textarea
+                value={lrReason}
+                onChange={(e) => setLrReason(e.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder="Tell us why you need a higher limit…"
+                className="w-full px-3.5 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] text-white text-sm placeholder:text-white/20 focus:outline-none focus:border-white/20 resize-none mb-2"
+              />
+
+              {lrError && (
+                <p className="text-[12px] text-red-400 mb-2">{lrError}</p>
+              )}
+
+              <div className="flex gap-3 mt-3">
+                <button
+                  onClick={() => setShowLimitRequestModal(false)}
+                  disabled={lrSubmitting}
+                  className="flex-1 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[13px] font-medium text-white/70 hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitLimitRequest}
+                  disabled={lrSubmitting}
+                  className="flex-1 px-4 py-3 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-white/90 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                >
+                  {lrSubmitting && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  {lrSubmitting ? "Submitting…" : "Submit Request"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

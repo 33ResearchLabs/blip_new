@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, successResponse, forbiddenResponse } from '@/lib/middleware/auth';
-import { getEffectiveLimits, getTrailing24hVolumeUsd, COIN_LIMIT_TIERS, BASE_LIMITS } from '@/lib/coins/limits';
+import { getEffectiveLimits, getTrailing24hVolumeUsd, getLargestTrade24hUsd, COIN_LIMIT_TIERS, BASE_LIMITS } from '@/lib/coins/limits';
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -21,10 +21,12 @@ export async function GET(request: NextRequest) {
 
   const limits = await getEffectiveLimits(auth.actorId, actorType);
   const trailing = await getTrailing24hVolumeUsd(auth.actorId, actorType);
+  const largestTrade = await getLargestTrade24hUsd(auth.actorId, actorType);
 
   return successResponse({
     effective: limits,
     trailing_24h_usd: trailing,
+    largest_trade_24h_usd: largestTrade,
     headroom_usd: Math.max(limits.dailyUsd - trailing, 0),
     base: BASE_LIMITS,
     tiers: COIN_LIMIT_TIERS,
