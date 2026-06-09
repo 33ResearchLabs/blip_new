@@ -812,8 +812,8 @@ export default function MerchantSettingsPage({
     }
     const currentUsd =
       lrKind === "daily"
-        ? Number(limitsData?.base?.dailyUsd ?? 0)
-        : Number(limitsData?.base?.perTradeUsd ?? 0);
+        ? Number(limitsData?.effective?.dailyUsd ?? 0)
+        : Number(limitsData?.effective?.perTradeUsd ?? 0);
     if (requestedUsd <= currentUsd) {
       setLrError("Requested limit must be higher than your current limit.");
       return;
@@ -2124,14 +2124,14 @@ export default function MerchantSettingsPage({
                       label: "Daily Limit",
                       Icon: Calendar,
                       usedUsd: Number(limitsData.trailing_24h_usd ?? 0),
-                      capUsd: Number(limitsData.base?.dailyUsd ?? 0),
+                      capUsd: Number(limitsData.effective?.dailyUsd ?? 0),
                     },
                     {
                       key: "per_transaction",
                       label: "Per Transaction Limit",
                       Icon: CreditCard,
                       usedUsd: Number(limitsData.largest_trade_24h_usd ?? 0),
-                      capUsd: Number(limitsData.base?.perTradeUsd ?? 0),
+                      capUsd: Number(limitsData.effective?.perTradeUsd ?? 0),
                     },
                   ] as const;
                   const visibleRequests = limitRequestsViewAll
@@ -2595,8 +2595,8 @@ export default function MerchantSettingsPage({
                 <span className="text-[13px] font-medium text-white">
                   {formatFiat(
                     lrKind === "daily"
-                      ? Number(limitsData?.base?.dailyUsd ?? 0)
-                      : Number(limitsData?.base?.perTradeUsd ?? 0),
+                      ? Number(limitsData?.effective?.dailyUsd ?? 0)
+                      : Number(limitsData?.effective?.perTradeUsd ?? 0),
                     "USD",
                   )}
                 </span>
