@@ -149,13 +149,13 @@ export function MerchantChatTabs({
   void disputeConversations;
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#08080a", color: "#f5f5f7" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--background)", color: "var(--foreground)" }}>
       {/* Header */}
       {!hideHeading && (
-        <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid rgba(255,255,255,0.09)" }}>
+        <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid var(--border)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontWeight: 800, fontSize: 13, color: "#f5f5f7", letterSpacing: "-0.01em" }}>Messages</span>
+              <span style={{ fontWeight: 800, fontSize: 13, color: "var(--foreground)", letterSpacing: "-0.01em" }}>Messages</span>
               {totalUnread + disputeUnread > 0 && (
                 <span style={{ fontSize: 11, fontWeight: 700, color: "#08080a", background: "#b8e9d4", padding: "1px 7px", borderRadius: 999 }}>
                   {totalUnread + disputeUnread}
@@ -185,7 +185,7 @@ export function MerchantChatTabs({
               {onClose && (
                 <button
                   onClick={onClose}
-                  style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", color: "#86868b", cursor: "pointer" }}
+                  style={{ width: 28, height: 28, borderRadius: 8, background: "var(--card)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)", cursor: "pointer" }}
                 >
                   <X style={{ width: 14, height: 14 }} />
                 </button>
@@ -197,24 +197,24 @@ export function MerchantChatTabs({
 
       {/* Tab strip */}
       <div style={{ padding: hideHeading ? "2px 16px 8px" : "0 0 8px" }}>
-        <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, width: "100%" }}>
+        <div style={{ position: "relative", display: "flex", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 3, width: "100%" }}>
           {/* sliding thumb */}
           <div style={{
             position: "absolute", top: 3, bottom: 3, borderRadius: 11,
-            background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
+            background: "var(--border-strong)", border: "1px solid var(--border-strong)",
             transition: "left 0.22s cubic-bezier(0.22,1,0.36,1), width 0.22s",
             left: activeTab === "active" ? 3 : "calc(50% + 1.5px)",
             width: "calc(50% - 4.5px)",
           }} />
           <button
             onClick={() => setActiveTab("active")}
-            style={{ flex: 1, position: "relative", zIndex: 1, padding: "7px 0", fontSize: 13, fontWeight: 700, color: activeTab === "active" ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s" }}
+            style={{ flex: 1, position: "relative", zIndex: 1, padding: "7px 0", fontSize: 13, fontWeight: 700, color: activeTab === "active" ? "var(--foreground)" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s" }}
           >
             Inbox{inboxUnread > 0 ? ` · ${inboxUnread}` : ""}
           </button>
           <button
             onClick={() => setActiveTab("support")}
-            style={{ flex: 1, position: "relative", zIndex: 1, padding: "7px 0", fontSize: 13, fontWeight: 700, color: activeTab === "support" ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            style={{ flex: 1, position: "relative", zIndex: 1, padding: "7px 0", fontSize: 13, fontWeight: 700, color: activeTab === "support" ? "var(--foreground)" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
@@ -234,15 +234,15 @@ export function MerchantChatTabs({
           </div>
         ) : visibleConversations.length === 0 ? (
           <div style={{ textAlign: "center", paddingTop: 80 }}>
-            <div style={{ width: 60, height: 60, borderRadius: 20, background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: "#86868b" }}>
+            <div style={{ width: 60, height: 60, borderRadius: 20, background: "var(--card)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: "var(--color-text-secondary)" }}>
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             </div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#f5f5f7" }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "var(--foreground)" }}>
               No chats yet
             </div>
-            <div style={{ color: "#86868b", fontSize: 13, fontWeight: 500, marginTop: 5, lineHeight: 1.4 }}>
+            <div style={{ color: "var(--color-text-secondary)", fontSize: 13, fontWeight: 500, marginTop: 5, lineHeight: 1.4 }}>
               Chats open automatically when you<br />accept or place an order.
             </div>
           </div>
@@ -284,7 +284,7 @@ export function MerchantChatTabs({
                     padding: "13px 16px",
                     background: "none", border: "none", cursor: "pointer",
                     borderBottom: idx < visibleConversations.length - 1
-                      ? "1px solid rgba(255,255,255,0.09)"
+                      ? "1px solid var(--border)"
                       : "none",
                   }}
                 >
@@ -294,7 +294,7 @@ export function MerchantChatTabs({
                       <img
                         src={conv.user.avatar_url}
                         alt={conv.user.username}
-                        style={{ width: 46, height: 46, borderRadius: 999, objectFit: "cover", border: "1px solid rgba(255,255,255,0.08)" }}
+                        style={{ width: 46, height: 46, borderRadius: 999, objectFit: "cover", border: "1px solid var(--border)" }}
                       />
                     ) : (
                       <div style={{
@@ -310,7 +310,7 @@ export function MerchantChatTabs({
                     <span style={{
                       position: "absolute", bottom: 1, right: 1,
                       width: 11, height: 11, borderRadius: 999,
-                      background: "#b8e9d4", boxShadow: "0 0 0 2.5px #08080a",
+                      background: "#b8e9d4", boxShadow: "0 0 0 2.5px var(--background)",
                     }} />
                     {/* Unread badge */}
                     {hasUnread && (
@@ -320,7 +320,7 @@ export function MerchantChatTabs({
                         background: "#b8e9d4", color: "#08080a",
                         fontSize: 11, fontWeight: 800,
                         borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center",
-                        padding: "0 4px", boxShadow: "0 0 0 2px #08080a",
+                        padding: "0 4px", boxShadow: "0 0 0 2px var(--background)",
                       }}>
                         {conv.unread_count > 9 ? "9+" : conv.unread_count}
                       </span>
@@ -332,28 +332,28 @@ export function MerchantChatTabs({
                     {/* Row 1: username + trade badge + time */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3, gap: 6 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
-                        <span style={{ fontWeight: 800, fontSize: 15, color: "#f5f5f7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <span style={{ fontWeight: 800, fontSize: 15, color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {conv.user.username || "Merchant"}
                         </span>
                         <span style={{
                           flexShrink: 0,
                           fontSize: 11, fontWeight: 700,
-                          color: "#aeaeb2",
-                          background: "rgba(255,255,255,0.07)",
-                          border: "1px solid rgba(255,255,255,0.10)",
+                          color: "var(--color-text-secondary)",
+                          background: "var(--card)",
+                          border: "1px solid var(--border)",
                           borderRadius: 6, padding: "1px 7px", whiteSpace: "nowrap",
                         }}>
                           {conv.order_type === "buy" ? "Buy" : "Sell"} {fiatSymbol}{Number(conv.fiat_amount).toLocaleString()}
                         </span>
                       </div>
-                      <span style={{ fontSize: 11.5, color: "#86868b", flexShrink: 0, marginLeft: 4, fontWeight: 500 }}>
+                      <span style={{ fontSize: 11.5, color: "var(--color-text-secondary)", flexShrink: 0, marginLeft: 4, fontWeight: 500 }}>
                         {formatRelativeTime(timestamp)}
                       </span>
                     </div>
 
                     {/* Row 2: last message + unread pill */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                      <span style={{ fontSize: 13, color: hasUnread ? "#f5f5f7" : "#86868b", fontWeight: hasUnread ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
+                      <span style={{ fontSize: 13, color: hasUnread ? "var(--foreground)" : "var(--color-text-secondary)", fontWeight: hasUnread ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                         {conv.last_message
                           ? truncate(conv.last_message.content, 40)
                           : "No messages yet"}

@@ -54,6 +54,10 @@
   --color-bg-secondary: #0c0c0c;
   --color-bg-tertiary: #131313;
 
+  /* Navbar chrome — defaults to the active theme's dashboard background.
+     Only the mono theme overrides this to its dedicated near-black value. */
+  --navbar-bg: var(--background);
+
   /* Text hierarchy — white with opacity layers */
   --foreground: #ffffff;
   --color-text-primary: rgba(255, 255, 255, 0.92);
@@ -291,6 +295,7 @@
   --color-bg-primary: #060606;
   --color-bg-secondary: #0c0c0c;
   --color-bg-tertiary: #131313;
+  --navbar-bg: rgba(7, 7, 16, 0.96); /* #070710 @ 96% — mono-only navbar */
   --color-text-primary: rgba(255, 255, 255, 0.92);
   --color-text-secondary: rgba(255, 255, 255, 0.50);
   --color-text-tertiary: rgba(255, 255, 255, 0.30);

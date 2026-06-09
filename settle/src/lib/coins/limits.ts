@@ -17,6 +17,19 @@ export const BASE_LIMITS = {
   perTradeUsd: 25,
 } as const;
 
+/**
+ * Merchant per-side trade limits (USD, cumulative over the trailing 24h).
+ * Single source of truth for both the Settings → Limits display AND the
+ * enforcement on merchant order creation. Change these two numbers to adjust
+ * the caps everywhere — nothing else hardcodes them.
+ *   buyUsd  — cap on volume where the merchant is the BUYER (sends fiat).
+ *   sellUsd — cap on volume where the merchant is the SELLER (locks crypto).
+ */
+export const MERCHANT_SIDE_LIMITS = {
+  buyUsd: 50,
+  sellUsd: 100,
+} as const;
+
 export const COIN_LIMIT_TIERS = {
   L1: { dailyUsd: 500,    perTradeUsd: 150,   costCoins: 500,    requiresKyc: false },
   L2: { dailyUsd: 2_000,  perTradeUsd: 500,   costCoins: 2_000,  requiresKyc: false },
@@ -197,6 +210,75 @@ export async function getLargestTrade24hUsd(
     [actorId],
   );
   return Number(row?.mx ?? 0);
+}
+
+/**
+ * The merchant's trailing-24h USD volume, split by the side the merchant
+ * played in each order. Crypto is a USD stablecoin (USDT ≈ $1), so
+ * crypto_amount is the USD notional (see getTrailing24hVolumeUsd).
+ *
+ * Role rules mirror resolveTradeRole (handleOrderAction.ts):
+ *   - SELLER (sell volume): merchant_id = M, AND (it's M2M OR a BUY order).
+ *       · M2M: merchant_id is ALWAYS the seller.
+ *       · non-M2M BUY order: the merchant is the seller (locks crypto). This
+ *         also covers merchant self-broadcast SELL, stored as type='buy'.
+ *   - BUYER (buy volume): buyer_merchant_id = M (M2M buyer / self-broadcast
+ *       BUY), OR a non-M2M SELL order where merchant_id = M (merchant buys).
+ */
+export async function getMerchant24hSideVolumeUsd(
+  merchantId: string,
+): Promise<{ buyUsd: number; sellUsd: number }> {
+  const row = await queryOne<{ buy_usd: number; sell_usd: number }>(
+    `SELECT
+        COALESCE(SUM(crypto_amount) FILTER (
+          WHERE buyer_merchant_id = $1
+             OR (merchant_id = $1 AND buyer_merchant_id IS NULL AND type = 'sell')
+        ), 0) AS buy_usd,
+        COALESCE(SUM(crypto_amount) FILTER (
+          WHERE merchant_id = $1
+            AND (buyer_merchant_id IS NOT NULL OR type = 'buy')
+        ), 0) AS sell_usd
+       FROM orders
+      WHERE (merchant_id = $1 OR buyer_merchant_id = $1)
+        AND status IN ('completed','accepted','escrowed','payment_sent')
+        AND created_at >= NOW() - INTERVAL '24 hours'`,
+    [merchantId],
+  );
+  return {
+    buyUsd: Number(row?.buy_usd ?? 0),
+    sellUsd: Number(row?.sell_usd ?? 0),
+  };
+}
+
+/**
+ * Check a proposed merchant trade against the per-side (buy/sell) cap.
+ * Cumulative over 24h: blocks when existing side volume + this order would
+ * exceed the cap. Called from the merchant order-create guard.
+ */
+export async function checkMerchantSideLimit(args: {
+  merchantId: string;
+  side: 'buy' | 'sell';
+  orderAmountUsd: number;
+}): Promise<{
+  allowed: boolean;
+  reason?: 'BUY_LIMIT_EXCEEDED' | 'SELL_LIMIT_EXCEEDED';
+  limitUsd: number;
+  usedUsd: number;
+}> {
+  const { buyUsd, sellUsd } = await getMerchant24hSideVolumeUsd(args.merchantId);
+  const limitUsd =
+    args.side === 'buy' ? MERCHANT_SIDE_LIMITS.buyUsd : MERCHANT_SIDE_LIMITS.sellUsd;
+  const usedUsd = args.side === 'buy' ? buyUsd : sellUsd;
+
+  if (usedUsd + args.orderAmountUsd > limitUsd) {
+    return {
+      allowed: false,
+      reason: args.side === 'buy' ? 'BUY_LIMIT_EXCEEDED' : 'SELL_LIMIT_EXCEEDED',
+      limitUsd,
+      usedUsd,
+    };
+  }
+  return { allowed: true, limitUsd, usedUsd };
 }
 
 /**

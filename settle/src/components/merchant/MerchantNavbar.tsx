@@ -30,7 +30,7 @@ import { Logo } from "@/components/shared/Logo";
 
 const CORRIDOR_OPTIONS = [{ key: "USDT_INR", label: "🇮🇳 USDT / INR" }] as const;
 
-export type NavPage = "dashboard" | "wallet" | "settings" | "ops";
+export type NavPage = "dashboard" | "wallet" | "settings" | "rewards" | "ops";
 
 interface MerchantNavbarProps {
   activePage: NavPage;
@@ -172,7 +172,7 @@ export function MerchantNavbar({
 
   return (
     <>
-      <header className={`sticky top-0 z-50 bg-[#070710]/96 backdrop-blur-md border-b border-white/[0.06]${mobileTitle ? " pt-[2%] lg:pt-0" : ""}`}>
+      <header className={`sticky top-0 z-50 bg-[var(--navbar-bg)] backdrop-blur-md border-b border-white/[0.06]${mobileTitle ? " pt-[2%] lg:pt-0" : ""}`}>
         {/* Per-tab mobile screens (mobileTitle set) get a taller two-line
             large-title bar; desktop is fixed at 50px and overlay/home screens
             keep the compact 48px height. */}
@@ -309,6 +309,13 @@ export function MerchantNavbar({
                   Settings
                 </Link>
               )}
+              <Link
+                href="/market/rewards"
+                className={pill(activePage === "rewards")}
+                onClick={onNavLinkClick}
+              >
+                Rewards
+              </Link>
               {merchantInfo?.has_ops_access && (
                 <Link
                   href="/ops"
@@ -639,6 +646,16 @@ export function MerchantNavbar({
                     <GearSix className="w-5 h-5" /> Settings
                   </Link>
                 )}
+                <Link
+                  href="/market/rewards"
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    onNavLinkClick?.();
+                  }}
+                  className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
+                >
+                  <Coins className="w-5 h-5" /> Rewards
+                </Link>
                 {merchantInfo?.has_ops_access && (
                   <>
                     <div className="mx-4 my-2 border-t border-foreground/[0.06]" />
