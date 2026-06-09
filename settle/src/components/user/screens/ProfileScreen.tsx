@@ -29,6 +29,7 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useUser } from "@/context/AppContext";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { PhoneVerificationSheet } from "@/components/user/PhoneVerificationSheet";
 import { UserAvatarModal } from "@/components/user/UserAvatarModal";
 
 /**
@@ -313,6 +314,12 @@ export const ProfileScreen = ({
   const router = useRouter();
 
   const { user } = useUser();
+  const [phoneVerifiedLocal, setPhoneVerifiedLocal] = useState(
+    Boolean((user as { phone_verified?: boolean } | null)?.phone_verified),
+  );
+  const phoneVerifiedProfile = phoneVerifiedLocal ||
+    Boolean((user as { phone_verified?: boolean } | null)?.phone_verified);
+  const [showPhoneVerify, setShowPhoneVerify] = useState(false);
 
   // Copy the connected Solana wallet address with a brief check-mark confirm.
   const [copiedAddr, setCopiedAddr] = useState(false);
@@ -639,7 +646,23 @@ export const ProfileScreen = ({
           </section>
         )}
 
-        {/* ── 4. Preferences ── */}
+        {/* ── 4. Security ── */}
+        <SettingsGroup label="Security" icon={<Shield className="w-3.5 h-3.5" />}>
+          <SettingsRow
+            icon={<Phone className="w-[15px] h-[15px]" />}
+            title="Phone Verification"
+            subtitle={phoneVerifiedProfile ? "Verified" : "Tap to verify your phone"}
+            onClick={phoneVerifiedProfile ? undefined : () => setShowPhoneVerify(true)}
+            hideChevron={phoneVerifiedProfile}
+            trailing={
+              phoneVerifiedProfile ? (
+                <BadgeCheck size={18} className="text-blue-400 shrink-0" />
+              ) : undefined
+            }
+          />
+        </SettingsGroup>
+
+        {/* ── 5. Preferences ── */}
         <SettingsGroup label="Preferences" icon={<Sliders className="w-3.5 h-3.5" />}>
           <SettingsRow
             icon={theme === 'dark' ? <Moon className="w-[15px] h-[15px]" /> : <Sun className="w-[15px] h-[15px]" />}
@@ -730,6 +753,15 @@ export const ProfileScreen = ({
       </div>
 
       {!hideBottomNav && <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />}
+
+      <PhoneVerificationSheet
+        open={showPhoneVerify}
+        onClose={() => setShowPhoneVerify(false)}
+        onVerified={() => {
+          setShowPhoneVerify(false);
+          setPhoneVerifiedLocal(true);
+        }}
+      />
     </div>
   );
 };

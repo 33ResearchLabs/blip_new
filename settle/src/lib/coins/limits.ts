@@ -1,27 +1,58 @@
 /**
- * Effective trade limits — combines:
- *   - Base limits (default for accounts with no rep/coins/KYC)
- *   - Reputation tier multiplier (300–900 CIBIL scale, post-Phase-4)
- *   - Active coin_limit_unlocks row (L1/L2/L3/L4)
- *   - KYC gate (L4+ requires KYC)
+ * Effective trade limits — three-layer stack:
  *
- * Reads run on every order create — keep it O(1) with one or two
- * indexed lookups.
+ *   Layer 1 — KYC base tier (floor, always active):
+ *     KYC 0 (none):   $25/trade,  $25/day
+ *     KYC 1 (light):  $100/trade, $200/day
+ *     KYC 2 (mid):    $500/trade, $1,000/day
+ *     KYC 3 (full):   $2,000/trade, $5,000/day
+ *
+ *   Layer 2 — Coin unlock (buys a higher ceiling for 30 days):
+ *     L1: $500 daily / $150/trade — costs 500 coins
+ *     L2: $2,000 / $500           — costs 2,000 coins
+ *     L3: $10,000 / $2,000        — costs 10,000 coins  (KYC 2+ required)
+ *     L4: $50,000 / $10,000       — costs 50,000 coins  (KYC 3 required)
+ *
+ *   Layer 3 — Reputation multiplier (applied on top of whichever is higher):
+ *     New/Newcomer: 1× · Bronze: 2× · Silver: 4× · Gold: 8× · Platinum: 12×
+ *
+ * The effective limit is max(KYC base, active coin unlock) × rep multiplier.
+ * A coin unlock below the user's KYC base is silently ignored (KYC base wins).
+ *
+ * Reads run on every order create — keep it O(1) with two indexed lookups.
  */
 
 import { query, queryOne } from '@/lib/db';
 import type { WaitlistActorType } from '@/lib/types/database';
 
-export const BASE_LIMITS = {
-  dailyUsd: 50,
-  perTradeUsd: 25,
+/**
+ * Two KYC states only (full KYC not available yet):
+ *   0 = no KYC  — phone number not verified
+ *   1 = light   — phone/email verified (all we check for now)
+ *
+ * KYC-0 accounts also have a time-based ramp:
+ *   Days 1–2:  $25/trade,  $100/day
+ *   Day 3+:    $100/trade, $300/day   (same as light KYC floor)
+ */
+export const KYC_BASE_LIMITS = {
+  0: { dailyUsd: 100, perTradeUsd: 25  },   // days 1-2 (ramp applied in getEffectiveLimits)
+  1: { dailyUsd: 300, perTradeUsd: 100 },
 } as const;
+
+/** No-KYC day-1/2 floor before the day-3 ramp kicks in. */
+export const KYC0_INITIAL_LIMITS = { dailyUsd: 100, perTradeUsd: 25 } as const;
+/** No-KYC day-3+ limits (same as KYC-1 floor intentionally). */
+export const KYC0_RAMPED_LIMITS  = { dailyUsd: 300, perTradeUsd: 100 } as const;
+
+export type KycLevel = keyof typeof KYC_BASE_LIMITS;
+
+/** Kept for backwards compat — equals KYC-0 floor */
+export const BASE_LIMITS = KYC_BASE_LIMITS[0];
 
 /**
  * Merchant per-side trade limits (USD, cumulative over the trailing 24h).
  * Single source of truth for both the Settings → Limits display AND the
- * enforcement on merchant order creation. Change these two numbers to adjust
- * the caps everywhere — nothing else hardcodes them.
+ * enforcement on merchant order creation.
  *   buyUsd  — cap on volume where the merchant is the BUYER (sends fiat).
  *   sellUsd — cap on volume where the merchant is the SELLER (locks crypto).
  */
@@ -30,11 +61,15 @@ export const MERCHANT_SIDE_LIMITS = {
   sellUsd: 100,
 } as const;
 
+/**
+ * Coin unlock tiers — no KYC gate on any tier (full KYC not shipped yet).
+ * Light KYC (level 1) is still required for L3/L4 as a basic spam guard.
+ */
 export const COIN_LIMIT_TIERS = {
-  L1: { dailyUsd: 500,    perTradeUsd: 150,   costCoins: 500,    requiresKyc: false },
-  L2: { dailyUsd: 2_000,  perTradeUsd: 500,   costCoins: 2_000,  requiresKyc: false },
-  L3: { dailyUsd: 10_000, perTradeUsd: 2_000, costCoins: 10_000, requiresKyc: false },
-  L4: { dailyUsd: 50_000, perTradeUsd: 10_000, costCoins: 50_000, requiresKyc: true },
+  L1: { dailyUsd: 500,    perTradeUsd: 150,   costCoins: 500,    requiresKyc: 0 },
+  L2: { dailyUsd: 2_000,  perTradeUsd: 500,   costCoins: 2_000,  requiresKyc: 0 },
+  L3: { dailyUsd: 10_000, perTradeUsd: 2_000, costCoins: 10_000, requiresKyc: 1 },
+  L4: { dailyUsd: 50_000, perTradeUsd: 10_000, costCoins: 50_000, requiresKyc: 1 },
 } as const;
 
 export type CoinLimitTier = keyof typeof COIN_LIMIT_TIERS;
@@ -42,7 +77,12 @@ export type CoinLimitTier = keyof typeof COIN_LIMIT_TIERS;
 export interface EffectiveLimits {
   dailyUsd: number;
   perTradeUsd: number;
-  source: 'base' | CoinLimitTier;
+  /** Which layer is driving the limit: KYC base tier or a coin unlock. */
+  source: 'kyc' | CoinLimitTier;
+  /** KYC level that was read (0 or 1). */
+  kycLevel: KycLevel;
+  /** Days since account creation — used to show "limits increase on day 3" */
+  accountAgeDays: number;
   expiresAt: Date | null;
   reputationMultiplier: number;
 }
@@ -55,21 +95,26 @@ interface UnlockRow {
 }
 
 /**
- * Compute the current effective limits for an actor. Combines:
- *   1. The most generous active coin_limit_unlocks row (or base).
- *   2. The reputation tier multiplier (looked up if a reputation_scores
- *      row exists; otherwise 1.0).
+ * Compute the current effective limits for an actor.
  *
- * NOTE: until Phase 4 lands the rebase, reputation tier names are the
- * legacy newcomer/bronze/.../diamond set. The multiplier table below
- * maps both legacy and new names so we can ship Phase 3 + 4 in any order.
+ * Stack (highest wins per field):
+ *   1. KYC-base tier — always the floor (no coins needed).
+ *   2. Active coin_limit_unlocks row — overrides KYC base when higher.
+ *      A coin unlock below the user's KYC floor is ignored.
+ *   3. Reputation multiplier — applied on top of whichever is higher.
  */
 export async function getEffectiveLimits(
   actorId: string,
   actorType: WaitlistActorType,
 ): Promise<EffectiveLimits> {
-  // Three independent indexed reads — run concurrently to keep this O(1)-ish
-  // on the order-create hot path.
+  // Read KYC level, account age, unlock, rep multiplier, and admin overrides concurrently.
+  const { kycLevel, accountAgeDays } = await getKycInfo(actorId, actorType);
+
+  // KYC-0 time-based ramp: days 1–2 → lower floor, day 3+ → same as KYC-1.
+  const kycBase = kycLevel === 0
+    ? (accountAgeDays < 3 ? KYC0_INITIAL_LIMITS : KYC0_RAMPED_LIMITS)
+    : KYC_BASE_LIMITS[kycLevel];
+
   const [unlock, repMult, overrides] = await Promise.all([
     queryOne<UnlockRow>(
       `SELECT tier, daily_limit_usd, per_trade_usd, expires_at
@@ -83,18 +128,20 @@ export async function getEffectiveLimits(
     getApprovedLimitOverrides(actorId, actorType),
   ]);
 
-  // Base/tier cap, scaled by reputation. The admin-approved override (see
-  // getApprovedLimitOverrides) then raises — never lowers — the result via
-  // Math.max, so an approval grants the requested cap without disturbing
-  // the coins/reputation math for anyone else.
-  const baseDaily = unlock ? unlock.daily_limit_usd : BASE_LIMITS.dailyUsd;
-  const basePerTrade = unlock ? unlock.per_trade_usd : BASE_LIMITS.perTradeUsd;
+  // Pick the higher of KYC base vs coin unlock, then apply rep multiplier.
+  const rawDaily    = unlock ? Math.max(kycBase.dailyUsd, unlock.daily_limit_usd) : kycBase.dailyUsd;
+  const rawPerTrade = unlock ? Math.max(kycBase.perTradeUsd, unlock.per_trade_usd) : kycBase.perTradeUsd;
+
+  const source: 'kyc' | CoinLimitTier =
+    unlock && unlock.daily_limit_usd > kycBase.dailyUsd ? unlock.tier : 'kyc';
 
   return {
-    dailyUsd: Math.max(Math.floor(baseDaily * repMult), overrides.dailyUsd ?? 0),
-    perTradeUsd: Math.max(Math.floor(basePerTrade * repMult), overrides.perTradeUsd ?? 0),
-    source: unlock ? unlock.tier : 'base',
-    expiresAt: unlock ? unlock.expires_at : null,
+    dailyUsd:    Math.max(Math.floor(rawDaily * repMult),    overrides.dailyUsd ?? 0),
+    perTradeUsd: Math.max(Math.floor(rawPerTrade * repMult), overrides.perTradeUsd ?? 0),
+    source,
+    kycLevel,
+    accountAgeDays,
+    expiresAt: source !== 'kyc' && unlock ? unlock.expires_at : null,
     reputationMultiplier: repMult,
   };
 }
@@ -103,8 +150,6 @@ export async function getEffectiveLimits(
  * Per-actor limit override sourced from APPROVED limit-increase requests.
  * The latest approved request of each kind ('daily' / 'per_transaction')
  * is the granted cap for that dimension; null means no approved override.
- * An admin approving a request in the Support Tickets → Limit Requests
- * view is what creates these rows (PATCH /api/admin/limit-requests/:id).
  */
 export async function getApprovedLimitOverrides(
   actorId: string,
@@ -124,6 +169,24 @@ export async function getApprovedLimitOverrides(
     else if (r.kind === 'per_transaction') perTradeUsd = Number(r.requested_limit_usd);
   }
   return { dailyUsd, perTradeUsd };
+}
+
+async function getKycInfo(
+  actorId: string,
+  actorType: WaitlistActorType,
+): Promise<{ kycLevel: KycLevel; accountAgeDays: number }> {
+  const table = actorType === 'merchant' ? 'merchants' : 'users';
+  const col   = actorType === 'merchant' ? 'verification_level' : 'kyc_level';
+  const row   = await queryOne<{ lvl: number; created_at: Date }>(
+    `SELECT COALESCE(${col}, 0) AS lvl, created_at FROM ${table} WHERE id = $1`,
+    [actorId],
+  );
+  const raw = row?.lvl ?? 0;
+  const kycLevel = Math.min(1, Math.max(0, raw)) as KycLevel;
+  const accountAgeDays = row?.created_at
+    ? Math.floor((Date.now() - new Date(row.created_at).getTime()) / 86_400_000)
+    : 0;
+  return { kycLevel, accountAgeDays };
 }
 
 /** Reputation tier → daily/per-trade multiplier. Tier name compatible

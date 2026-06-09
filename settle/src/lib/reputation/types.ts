@@ -179,7 +179,8 @@ export const REPUTATION_WEIGHTS = {
  * Tier thresholds — CIBIL-style 300–900 scale (rebased in migration 133).
  *
  * Defaults:
- *   - New accounts spawn at 500 (matches the "New" tier base).
+ *   - New accounts with no orders and no reviews are pinned at exactly 500.
+ *   - Once activity begins the full CIBIL-style formula kicks in (300–900).
  *   - Floor 300 (Restricted); cap 900 (Platinum).
  *
  * Tier keys are unchanged for backwards-compat with existing reputation

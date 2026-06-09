@@ -1,6 +1,7 @@
 "use client";
 
-import { Send, MessageCircle, Clock, ArrowUpRight, ArrowDownLeft, ChevronRight } from "lucide-react";
+import { Send, MessageCircle, Clock, ArrowUpRight, ArrowDownLeft, ChevronRight, Gift, Copy, Check } from "lucide-react";
+import { useState, useCallback } from "react";
 import type { Screen, Order } from "@/components/user/screens/types";
 import { formatCrypto, formatFiat } from "@/lib/format";
 
@@ -11,6 +12,7 @@ interface DesktopRightPanelProps {
   pendingOrders: Order[];
   setActiveOrderId: (id: string) => void;
   selectedPair?: "usdt_aed" | "usdt_inr";
+  referralCode?: string | null;
 }
 
 function statusDot(status: string) {
@@ -38,8 +40,17 @@ export function DesktopRightPanel({
   pendingOrders,
   setActiveOrderId,
   selectedPair = "usdt_inr",
+  referralCode,
 }: DesktopRightPanelProps) {
   const fiatCurrency = selectedPair === "usdt_aed" ? "AED" : "INR";
+  const [copied, setCopied] = useState(false);
+  const copyCode = useCallback(() => {
+    if (!referralCode) return;
+    navigator.clipboard.writeText(referralCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [referralCode]);
   const hasActiveOrder = activeOrder && !["complete", "completed", "cancelled", "expired"].includes(activeOrder.status);
 
   return (
@@ -161,6 +172,64 @@ export function DesktopRightPanel({
           </div>
         </div>
       )}
+
+      {/* Refer & Earn card */}
+      <div style={{ marginTop: "auto", paddingTop: 20 }}>
+        <div style={{
+          background: "linear-gradient(160deg, #0f1118 0%, #0c0e15 100%)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          borderRadius: 16,
+          padding: "20px 14px 16px",
+          textAlign: "center",
+          position: "relative",
+          overflow: "hidden",
+        }}>
+          {/* Subtle radial glow behind badge */}
+          <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 120, height: 80, borderRadius: "50%", background: "radial-gradient(ellipse, rgba(255,176,46,0.10) 0%, transparent 70%)", pointerEvents: "none" }} />
+
+          {/* Badge */}
+          <div style={{ position: "relative", width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(145deg, #ffb02e, #ff8a3d)", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 18px rgba(255,176,46,0.35), 0 0 0 4px rgba(255,176,46,0.10)" }}>
+            <Gift size={22} color="#0c0e15" strokeWidth={2.2} />
+          </div>
+
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#f5f5f7", letterSpacing: "-0.3px", marginBottom: 6 }}>Share &amp; Earn</div>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", lineHeight: 1.65, marginBottom: 14, padding: "0 4px" }}>
+            Invite a friend to Blip. When they complete their first trade, you both earn BLIP points.
+          </p>
+
+          {/* Benefits */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14, textAlign: "left" }}>
+            {[
+              { icon: "👥", text: "Friends earn 100 pts on first trade" },
+              { icon: "⚡", text: "You earn 100 pts per referral" },
+            ].map(({ icon, text }) => (
+              <div key={text} style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 9, padding: "7px 9px" }}>
+                <span style={{ fontSize: 13 }}>{icon}</span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: 500, lineHeight: 1.4 }}>{text}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA / code */}
+          {referralCode ? (
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.25)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 5 }}>Your referral code</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 800, color: "#ffb02e", letterSpacing: "0.08em", textAlign: "center", fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {referralCode}
+                </div>
+                <button onClick={copyCode} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(255,176,46,0.3)", background: copied ? "rgba(255,176,46,0.18)" : "rgba(255,176,46,0.08)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, transition: "all 0.15s" }}>
+                  {copied ? <Check size={13} color="#ffb02e" /> : <Copy size={13} color="#ffb02e" />}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <a href="/waitlist/dashboard" style={{ display: "block", padding: "9px 0", borderRadius: 9, background: "linear-gradient(135deg, #ffb02e, #ff8a3d)", color: "#0c0e15", fontSize: 11.5, fontWeight: 800, letterSpacing: "0.04em", textDecoration: "none", boxShadow: "0 4px 14px rgba(255,176,46,0.25)" }}>
+              Invite Friends
+            </a>
+          )}
+        </div>
+      </div>
     </aside>
   );
 }

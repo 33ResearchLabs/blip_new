@@ -356,14 +356,19 @@ export function calculateReputationScore(stats: EntityStats): ReputationScore {
   // Deduplicate flags
   const uniqueFlags = [...new Set(flags)];
 
+  // Fresh-account anchor: if no orders and no reviews yet, pin to exactly 500
+  // so every new user starts from the same known baseline.
+  const isFreshAccount =
+    stats.total_orders === 0 && stats.review_count === 0;
+
   // CIBIL-style rebase: internal 0–1000 → external 300–900.
   // Linear map: external = 300 + (internal/1000) * 600.
   // - Internal 0    → external 300 (floor, Restricted)
-  // - Internal ~333 → external 500 (New, default for fresh accounts)
   // - Internal 1000 → external 900 (cap, Platinum)
   // Forced "risky" overrides land at floor 300.
+  // Fresh accounts bypass the formula and land at exactly 500.
   totalScore = Math.max(0, Math.min(1000, Math.round(totalScore)));
-  totalScore = Math.round(300 + (totalScore / 1000) * 600);
+  totalScore = isFreshAccount ? 500 : Math.round(300 + (totalScore / 1000) * 600);
   const tier = forceRisky ? 'risky' : getTierFromScore(totalScore);
 
   // Calculate badges

@@ -53,18 +53,25 @@ export async function POST(request: NextRequest) {
   const tier: CoinLimitTier = parsed.data.tier;
   const config = COIN_LIMIT_TIERS[tier];
 
-  // KYC gate for L4. Until the KYC system ships, this short-circuits
-  // off the existing `kyc_verified` boolean on the actor row (added in
-  // an earlier migration; default false for everyone).
-  if (config.requiresKyc) {
+  // KYC gate — each tier requires a minimum KYC level (0 = none, 3 = full).
+  if (config.requiresKyc > 0) {
     const { queryOne } = await import('@/lib/db');
     const table = actorType === 'merchant' ? 'merchants' : 'users';
-    const row = await queryOne<{ kyc_verified: boolean | null }>(
-      `SELECT kyc_verified FROM ${table} WHERE id = $1`,
+    const col   = actorType === 'merchant' ? 'verification_level' : 'kyc_level';
+    const row   = await queryOne<{ lvl: number | null }>(
+      `SELECT COALESCE(${col}, 0) AS lvl FROM ${table} WHERE id = $1`,
       [actorId],
     );
-    if (!row?.kyc_verified) {
-      return forbiddenResponse('KYC required for this tier');
+    if ((row?.lvl ?? 0) < config.requiresKyc) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'KYC_REQUIRED',
+          required_kyc_level: config.requiresKyc,
+          message: `This tier requires KYC level ${config.requiresKyc} or above`,
+        },
+        { status: 403 },
+      );
     }
   }
 

@@ -850,6 +850,7 @@ export default function UserDesktopPage() {
         pendingOrders={pendingOrders}
         setActiveOrderId={setActiveOrderId}
         selectedPair={tradeCreation.selectedPair}
+        referralCode={referralInfo.code}
       />
 
       <UserModals

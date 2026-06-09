@@ -83,7 +83,7 @@ export async function initializeReputationTables(): Promise<void> {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       entity_id UUID NOT NULL,
       entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('user', 'merchant')),
-      total_score INTEGER NOT NULL DEFAULT 0,
+      total_score INTEGER NOT NULL DEFAULT 500,
       review_score INTEGER NOT NULL DEFAULT 50,
       execution_score INTEGER NOT NULL DEFAULT 50,
       volume_score INTEGER NOT NULL DEFAULT 0,
