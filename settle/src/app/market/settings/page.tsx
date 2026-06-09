@@ -1470,17 +1470,24 @@ export default function MerchantSettingsPage({
                         <Copy className="w-3.5 h-3.5" />
                       )}
                     </button>
-                    <button
-                      aria-label="Edit username"
-                      onClick={() => {
-                        setUsernameInput(merchant.username);
-                        setUsernameError(null);
-                        setIsEditingUsername(true);
-                      }}
-                      className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Username is set-once. Show the edit pen only while the
+                        handle hasn't been claimed yet (username_customized_at
+                        is still NULL, surfaced as usernameClaimed). After the
+                        merchant commits it, the row is permanently read-only —
+                        the backend rejects further changes regardless. */}
+                    {!usernameClaimed && (
+                      <button
+                        aria-label="Edit username"
+                        onClick={() => {
+                          setUsernameInput(merchant.username);
+                          setUsernameError(null);
+                          setIsEditingUsername(true);
+                        }}
+                        className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="py-3 border-b border-white/[0.04]">

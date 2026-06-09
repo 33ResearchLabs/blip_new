@@ -110,14 +110,25 @@ export async function PATCH(request: NextRequest) {
     // Changing it requires a wallet-bound support flow (legacy
     // `update_username` action on /api/auth/merchant, which verifies a
     // wallet signature).
-    // Fetch current username to allow same-name no-op short-circuit.
-    const lockCheck = await query<{ username: string | null }>(
-      `SELECT username FROM merchants WHERE id = $1`,
+    // Fetch current username + customization flag to enforce set-once.
+    const lockCheck = await query<{
+      username: string | null;
+      username_customized_at: Date | null;
+    }>(
+      `SELECT username, username_customized_at FROM merchants WHERE id = $1`,
       [auth.actorId]
     );
     const existing = lockCheck[0];
+    // Same-name no-op: re-submitting the current handle always succeeds,
+    // even once locked (lets the onboarding "confirm" path keep working).
     if (existing?.username && existing.username.toLowerCase() === username.toLowerCase()) {
       return successResponse({ username: existing.username });
+    }
+    // Set-once: a merchant who already committed a handle can't rename here.
+    // Mirrors the user route (POST /api/auth/user/username). Changing it
+    // afterwards is a wallet-bound support flow (legacy update_username).
+    if (existing?.username_customized_at) {
+      return validationErrorResponse(['Username already set and cannot be changed']);
     }
 
     // Uniqueness check across both tables. Case-insensitive match — we
