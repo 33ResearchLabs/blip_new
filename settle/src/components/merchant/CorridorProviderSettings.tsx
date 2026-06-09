@@ -132,12 +132,12 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
             aria-checked={isActive}
             onClick={() => setIsActive(!isActive)}
             className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${
-              isActive ? 'bg-[#f5f5f7]' : 'bg-white/[0.10]'
+              isActive ? 'bg-[var(--foreground)]' : 'bg-white/[0.10]'
             }`}
           >
             <div
-              className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-all ${
-                isActive ? 'left-[22px]' : 'left-0.5'
+              className={`w-5 h-5 rounded-full shadow-sm absolute top-0.5 transition-all ${
+                isActive ? 'left-[22px] bg-[var(--background)]' : 'left-0.5 bg-[var(--foreground)]'
               }`}
             />
           </button>
@@ -219,12 +219,12 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
           aria-checked={autoAccept}
           onClick={() => setAutoAccept(!autoAccept)}
           className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${
-            autoAccept ? 'bg-[#f5f5f7]' : 'bg-white/[0.10]'
+            autoAccept ? 'bg-[var(--foreground)]' : 'bg-white/[0.10]'
           }`}
         >
           <div
-            className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-all ${
-              autoAccept ? 'left-[26px]' : 'left-0.5'
+            className={`w-5 h-5 rounded-full shadow-sm absolute top-0.5 transition-all ${
+              autoAccept ? 'left-[26px] bg-[var(--background)]' : 'left-0.5 bg-[var(--foreground)]'
             }`}
           />
         </button>

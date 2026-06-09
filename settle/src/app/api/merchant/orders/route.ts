@@ -455,6 +455,36 @@ export async function POST(request: NextRequest) {
       ]);
     }
 
+    // Per-side trade-limit guard (USD, cumulative over the trailing 24h). The
+    // merchant is the SELLER only on a non-M2M sell-intent broadcast; otherwise
+    // (buy-intent broadcast, or M2M where the creator is the buyer) they're the
+    // BUYER. Caps come from MERCHANT_SIDE_LIMITS (single source of truth, same
+    // values shown in Settings → Limits). This runs before the dry-run return
+    // too, so an over-limit order is rejected BEFORE the frontend locks USDT
+    // on-chain. crypto_amount is the USD notional (USDT ≈ $1), matching the
+    // limit denomination.
+    const merchantSide: 'buy' | 'sell' =
+      !isM2MTrade && creatorIsSeller ? 'sell' : 'buy';
+    const { checkMerchantSideLimit } = await import('@/lib/coins/limits');
+    const sideLimitCheck = await checkMerchantSideLimit({
+      merchantId: merchant_id,
+      side: merchantSide,
+      orderAmountUsd: crypto_amount,
+    });
+    if (!sideLimitCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'TRADE_LIMIT_EXCEEDED',
+          reason: sideLimitCheck.reason,
+          side: merchantSide,
+          limit_usd: sideLimitCheck.limitUsd,
+          used_usd: sideLimitCheck.usedUsd,
+        },
+        { status: 402 },
+      );
+    }
+
     const orderMerchantId: string | null = isM2MTrade
       ? target_merchant_id
       : (creatorIsSeller ? merchant_id : null);

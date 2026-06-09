@@ -47,6 +47,7 @@ import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { WalletLedger } from "@/components/merchant/WalletLedger";
 import { PaymentMethodModal, PaymentMethodInlineForm } from "@/components/merchant/PaymentMethodModal";
 import { PhoneVerificationModal } from "@/components/merchant/PhoneVerificationModal";
+import { MerchantXVerificationModal } from "@/components/merchant/MerchantXVerificationModal";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { formatFiat } from "@/lib/format";
 import { useCorridorPrices } from "@/hooks/useCorridorPrices";
@@ -432,6 +433,13 @@ export default function MerchantSettingsPage({
   const [lrSubmitting, setLrSubmitting] = useState(false);
   const [lrError, setLrError] = useState<string | null>(null);
 
+  // X (Twitter) account verification — self-attested, display-only (does NOT
+  // change limits). null = not loaded/not verified; otherwise the verified row.
+  const [xVerif, setXVerif] = useState<{ x_username: string; verified_at: string } | null>(
+    null,
+  );
+  const [showXVerifyModal, setShowXVerifyModal] = useState(false);
+
   // Notifications
   const [notifSettings, setNotifSettings] = useState({
     sound: true,
@@ -788,12 +796,26 @@ export default function MerchantSettingsPage({
     }
   }, []);
 
+  // The merchant's X verification (or null if they haven't verified yet).
+  const fetchXVerification = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/limits/x-verification");
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) {
+        setXVerif(json.data ?? null);
+      }
+    } catch (err) {
+      console.error("Failed to load X verification:", err);
+    }
+  }, []);
+
   useEffect(() => {
     if (activeTab === "limits") {
       fetchLimits();
       fetchLimitRequests();
+      fetchXVerification();
     }
-  }, [activeTab, fetchLimits, fetchLimitRequests]);
+  }, [activeTab, fetchLimits, fetchLimitRequests, fetchXVerification]);
 
   const openLimitRequest = (kind: "daily" | "per_transaction") => {
     setLrKind(kind);
@@ -2114,24 +2136,25 @@ export default function MerchantSettingsPage({
                 </div>
               ) : limitsData ? (
                 (() => {
-                  // Caps are the flat base limits ($50 daily / $25 per-trade),
-                  // shown in USD. "Used" for daily is the trailing-24h volume;
-                  // for per-transaction it's the largest single trade in 24h
-                  // (per-transaction isn't a cumulative spend).
+                  // Buy/Sell caps + real trailing-24h usage, both from
+                  // /api/limits/me (merchant-only `buy`/`sell` objects, driven
+                  // by MERCHANT_SIDE_LIMITS server-side). Usage fills as the
+                  // merchant trades each side; the same caps are enforced on
+                  // order creation.
                   const blocks = [
                     {
-                      key: "daily",
-                      label: "Daily Limit",
-                      Icon: Calendar,
-                      usedUsd: Number(limitsData.trailing_24h_usd ?? 0),
-                      capUsd: Number(limitsData.effective?.dailyUsd ?? 0),
+                      key: "buy",
+                      label: "Buy Limit",
+                      Icon: ShoppingCart,
+                      usedUsd: Number(limitsData.buy?.usedUsd ?? 0),
+                      capUsd: Number(limitsData.buy?.limitUsd ?? 50),
                     },
                     {
-                      key: "per_transaction",
-                      label: "Per Transaction Limit",
-                      Icon: CreditCard,
-                      usedUsd: Number(limitsData.largest_trade_24h_usd ?? 0),
-                      capUsd: Number(limitsData.effective?.perTradeUsd ?? 0),
+                      key: "sell",
+                      label: "Sell Limit",
+                      Icon: TrendingUp,
+                      usedUsd: Number(limitsData.sell?.usedUsd ?? 0),
+                      capUsd: Number(limitsData.sell?.limitUsd ?? 100),
                     },
                   ] as const;
                   const visibleRequests = limitRequestsViewAll
@@ -2139,6 +2162,53 @@ export default function MerchantSettingsPage({
                     : limitRequests.slice(0, 3);
                   return (
                     <>
+                      {/* Card — Buy & Sell Limits (display-only). */}
+                      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 sm:p-6">
+                        <h3 className="text-[15px] font-semibold text-white mb-5">
+                          Trade Limits
+                        </h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-0 lg:divide-x lg:divide-white/[0.06]">
+                          {(
+                            [
+                              {
+                                key: "buy",
+                                label: "Buy Limit",
+                                Icon: ShoppingCart,
+                                capUsd: Number(limitsData.buy?.limitUsd ?? 50),
+                              },
+                              {
+                                key: "sell",
+                                label: "Sell Limit",
+                                Icon: TrendingUp,
+                                capUsd: Number(limitsData.sell?.limitUsd ?? 100),
+                              },
+                            ] as const
+                          ).map((b, idx) => {
+                            const Icon = b.Icon;
+                            return (
+                              <div
+                                key={b.key}
+                                className={idx === 0 ? "lg:pr-7" : "lg:pl-7"}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                                    <Icon className="w-4 h-4 text-white/50" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-[12px] text-white/40">
+                                      {b.label}
+                                    </p>
+                                    <p className="text-2xl font-bold text-white leading-tight">
+                                      {formatFiat(b.capUsd, "USD")}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
                       {/* Card 1 — Limit Overview */}
                       <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 sm:p-6">
                         <h3 className="text-[15px] font-semibold text-white mb-5">
@@ -2217,6 +2287,65 @@ export default function MerchantSettingsPage({
                           Request Limit Increase
                           <ArrowRight className="w-4 h-4" />
                         </button>
+                      </div>
+
+                      {/* Card — Social Verification (X / Twitter). Self-attested,
+                          display-only: a Verified badge, no effect on limits. */}
+                      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 sm:p-6">
+                        <h3 className="text-[15px] font-semibold text-white mb-4">
+                          Social Verification
+                        </h3>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                          <div className="w-12 h-12 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                              aria-hidden="true"
+                              className="w-5 h-5 text-white/70"
+                            >
+                              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[15px] font-semibold text-white">
+                              Verify your X account
+                            </p>
+                            <p className="text-[13px] text-white/40">
+                              {xVerif ? (
+                                <>
+                                  Verified as{" "}
+                                  <span className="text-white/70">
+                                    @{xVerif.x_username}
+                                  </span>
+                                </>
+                              ) : (
+                                "Follow @blip_money on X and confirm your handle."
+                              )}
+                            </p>
+                          </div>
+                          {xVerif ? (
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-green-500/10 text-green-400 border border-green-500/20">
+                                <Check className="w-3.5 h-3.5" />
+                                Verified
+                              </span>
+                              <button
+                                onClick={() => setShowXVerifyModal(true)}
+                                className="text-[12px] text-white/40 hover:text-white/70 transition-colors"
+                              >
+                                Change
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setShowXVerifyModal(true)}
+                              className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white/[0.04] border border-white/[0.12] text-[13px] font-medium text-white hover:bg-white/[0.08] transition-colors"
+                            >
+                              Verify
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Card 3 — Recent Limit Requests */}
@@ -2658,6 +2787,16 @@ export default function MerchantSettingsPage({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* X (Twitter) account verification modal — self-attested, display-only. */}
+      <MerchantXVerificationModal
+        isOpen={showXVerifyModal}
+        onClose={() => setShowXVerifyModal(false)}
+        currentHandle={xVerif?.x_username}
+        onVerified={() => {
+          fetchXVerification();
+        }}
+      />
     </div>
   );
 }
