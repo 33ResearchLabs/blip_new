@@ -32,6 +32,7 @@ import {
   useState,
 } from 'react';
 import { formatCount, formatPercentage } from '@/lib/format';
+import { LimitRequestsPanel } from './LimitRequestsPanel';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -383,6 +384,10 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
+  // Which dataset this panel shows: support tickets (default) or merchant/user
+  // limit-increase requests. Toggled by the segmented control in the header.
+  const [view, setView] = useState<'tickets' | 'limits'>('tickets');
+
   // Server-side filters (sent to API)
   const [statusFilter, setStatusFilter] = useState<IssueStatus | ''>('');
   const [categoryFilter, setCategoryFilter] = useState<IssueCategory | ''>('');
@@ -633,8 +638,56 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
   };
 
   // ─── Render ────────────────────────────────────────────────────────────
+  // Segmented toggle shared by both views — switches this panel between
+  // support tickets and merchant/user limit-increase requests.
+  const viewToggle = (
+    <div className="inline-flex items-center gap-1 rounded-lg bg-card border border-border p-0.5 self-start">
+      <button
+        type="button"
+        onClick={() => setView('tickets')}
+        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
+          view === 'tickets'
+            ? 'bg-foreground/[0.08] text-foreground/90'
+            : 'text-foreground/45 hover:text-foreground/70'
+        }`}
+      >
+        Support Tickets
+      </button>
+      <button
+        type="button"
+        onClick={() => setView('limits')}
+        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
+          view === 'limits'
+            ? 'bg-foreground/[0.08] text-foreground/90'
+            : 'text-foreground/45 hover:text-foreground/70'
+        }`}
+      >
+        Limit Requests
+      </button>
+    </div>
+  );
+
+  // Limit Requests view — a focused sub-panel; no ticket stats/table here.
+  if (view === 'limits') {
+    return (
+      <div className="flex flex-col gap-4">
+        {viewToggle}
+        <div>
+          <h1 className="text-xl font-bold leading-tight text-foreground/90">
+            Limit Requests
+          </h1>
+          <p className="text-[12px] text-foreground/45 mt-0.5">
+            Review &amp; approve merchant &amp; user limit-increase requests
+          </p>
+        </div>
+        <LimitRequestsPanel />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      {viewToggle}
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

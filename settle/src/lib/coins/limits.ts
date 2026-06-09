@@ -9,7 +9,7 @@
  * indexed lookups.
  */
 
-import { queryOne } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import type { WaitlistActorType } from '@/lib/types/database';
 
 export const BASE_LIMITS = {
@@ -55,34 +55,62 @@ export async function getEffectiveLimits(
   actorId: string,
   actorType: WaitlistActorType,
 ): Promise<EffectiveLimits> {
-  const unlock = await queryOne<UnlockRow>(
-    `SELECT tier, daily_limit_usd, per_trade_usd, expires_at
-       FROM coin_limit_unlocks
-      WHERE actor_type = $1 AND actor_id = $2 AND expires_at > NOW()
-   ORDER BY daily_limit_usd DESC
-      LIMIT 1`,
-    [actorType, actorId],
-  );
+  // Three independent indexed reads — run concurrently to keep this O(1)-ish
+  // on the order-create hot path.
+  const [unlock, repMult, overrides] = await Promise.all([
+    queryOne<UnlockRow>(
+      `SELECT tier, daily_limit_usd, per_trade_usd, expires_at
+         FROM coin_limit_unlocks
+        WHERE actor_type = $1 AND actor_id = $2 AND expires_at > NOW()
+     ORDER BY daily_limit_usd DESC
+        LIMIT 1`,
+      [actorType, actorId],
+    ),
+    getReputationMultiplier(actorId, actorType),
+    getApprovedLimitOverrides(actorId, actorType),
+  ]);
 
-  const repMult = await getReputationMultiplier(actorId, actorType);
-
-  if (!unlock) {
-    return {
-      dailyUsd: Math.floor(BASE_LIMITS.dailyUsd * repMult),
-      perTradeUsd: Math.floor(BASE_LIMITS.perTradeUsd * repMult),
-      source: 'base',
-      expiresAt: null,
-      reputationMultiplier: repMult,
-    };
-  }
+  // Base/tier cap, scaled by reputation. The admin-approved override (see
+  // getApprovedLimitOverrides) then raises — never lowers — the result via
+  // Math.max, so an approval grants the requested cap without disturbing
+  // the coins/reputation math for anyone else.
+  const baseDaily = unlock ? unlock.daily_limit_usd : BASE_LIMITS.dailyUsd;
+  const basePerTrade = unlock ? unlock.per_trade_usd : BASE_LIMITS.perTradeUsd;
 
   return {
-    dailyUsd: Math.floor(unlock.daily_limit_usd * repMult),
-    perTradeUsd: Math.floor(unlock.per_trade_usd * repMult),
-    source: unlock.tier,
-    expiresAt: unlock.expires_at,
+    dailyUsd: Math.max(Math.floor(baseDaily * repMult), overrides.dailyUsd ?? 0),
+    perTradeUsd: Math.max(Math.floor(basePerTrade * repMult), overrides.perTradeUsd ?? 0),
+    source: unlock ? unlock.tier : 'base',
+    expiresAt: unlock ? unlock.expires_at : null,
     reputationMultiplier: repMult,
   };
+}
+
+/**
+ * Per-actor limit override sourced from APPROVED limit-increase requests.
+ * The latest approved request of each kind ('daily' / 'per_transaction')
+ * is the granted cap for that dimension; null means no approved override.
+ * An admin approving a request in the Support Tickets → Limit Requests
+ * view is what creates these rows (PATCH /api/admin/limit-requests/:id).
+ */
+export async function getApprovedLimitOverrides(
+  actorId: string,
+  actorType: WaitlistActorType,
+): Promise<{ dailyUsd: number | null; perTradeUsd: number | null }> {
+  const rows = await query<{ kind: string; requested_limit_usd: number }>(
+    `SELECT DISTINCT ON (kind) kind, requested_limit_usd
+       FROM limit_increase_requests
+      WHERE actor_type = $1 AND actor_id = $2 AND status = 'approved'
+   ORDER BY kind, reviewed_at DESC NULLS LAST`,
+    [actorType, actorId],
+  );
+  let dailyUsd: number | null = null;
+  let perTradeUsd: number | null = null;
+  for (const r of rows) {
+    if (r.kind === 'daily') dailyUsd = Number(r.requested_limit_usd);
+    else if (r.kind === 'per_transaction') perTradeUsd = Number(r.requested_limit_usd);
+  }
+  return { dailyUsd, perTradeUsd };
 }
 
 /** Reputation tier → daily/per-trade multiplier. Tier name compatible

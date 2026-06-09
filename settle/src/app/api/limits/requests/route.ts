@@ -19,7 +19,7 @@ import {
   forbiddenResponse,
 } from '@/lib/middleware/auth';
 import { query, queryOne } from '@/lib/db';
-import { BASE_LIMITS } from '@/lib/coins/limits';
+import { getEffectiveLimits } from '@/lib/coins/limits';
 import { z } from 'zod';
 
 interface LimitRequestRow {
@@ -85,8 +85,12 @@ export async function POST(request: NextRequest) {
   }
   const { kind, requested_limit_usd, reason } = parsed.data;
 
+  // "Current" is the actor's effective cap (base/tier × rep, raised by any
+  // already-approved override) — so a follow-up request must exceed what
+  // they've already been granted, not just the base.
+  const effective = await getEffectiveLimits(actorId, actorType);
   const currentLimitUsd =
-    kind === 'daily' ? BASE_LIMITS.dailyUsd : BASE_LIMITS.perTradeUsd;
+    kind === 'daily' ? effective.dailyUsd : effective.perTradeUsd;
 
   if (requested_limit_usd <= currentLimitUsd) {
     return validationErrorResponse([
