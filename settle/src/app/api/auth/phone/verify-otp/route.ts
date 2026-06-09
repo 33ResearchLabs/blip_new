@@ -4,6 +4,7 @@ import { requireTokenAuth, validationErrorResponse, errorResponse, successRespon
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
 import { query as dbQuery } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { annotatePhoneAssessment } from '@/lib/recaptcha';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,9 +31,9 @@ export async function POST(request: NextRequest) {
 
   // Fetch latest unused, unexpired OTP for this user+phone
   const rows = await dbQuery<{
-    id: string; code: string; attempts: number; expires_at: string;
+    id: string; code: string; attempts: number; expires_at: string; assessment_id: string | null;
   }>(
-    `SELECT id, code, attempts, expires_at FROM phone_otp_codes
+    `SELECT id, code, attempts, expires_at, assessment_id FROM phone_otp_codes
      WHERE user_id = $1 AND phone = $2 AND used = FALSE AND expires_at > NOW()
      ORDER BY created_at DESC LIMIT 1`,
     [userId, phone]
@@ -50,6 +51,14 @@ export async function POST(request: NextRequest) {
   // Max 5 attempts before invalidating
   if (otp.attempts >= 5) {
     await dbQuery('UPDATE phone_otp_codes SET used = TRUE WHERE id = $1', [otp.id]);
+    if (otp.assessment_id) {
+      void annotatePhoneAssessment({
+        assessmentId: otp.assessment_id,
+        phone,
+        reason: 'FAILED_TWO_FACTOR',
+        annotation: 'FRAUDULENT',
+      });
+    }
     return NextResponse.json(
       { success: false, error: 'TOO_MANY_ATTEMPTS', message: 'Too many attempts. Please request a new code.' },
       { status: 400 }
@@ -59,6 +68,13 @@ export async function POST(request: NextRequest) {
   if (otp.code !== code) {
     await dbQuery('UPDATE phone_otp_codes SET attempts = attempts + 1 WHERE id = $1', [otp.id]);
     const remaining = 5 - (otp.attempts + 1);
+    if (otp.assessment_id) {
+      void annotatePhoneAssessment({
+        assessmentId: otp.assessment_id,
+        phone,
+        reason: 'FAILED_TWO_FACTOR',
+      });
+    }
     return NextResponse.json(
       { success: false, error: 'INVALID_OTP', message: `Incorrect code. ${remaining} attempt${remaining === 1 ? '' : 's'} left.` },
       { status: 400 }
@@ -68,6 +84,16 @@ export async function POST(request: NextRequest) {
   // Mark used + verify the user's phone
   await dbQuery('UPDATE phone_otp_codes SET used = TRUE WHERE id = $1', [otp.id]);
   await dbQuery('UPDATE users SET phone_verified = TRUE WHERE id = $1', [userId]);
+
+  // Annotate: OTP successfully verified
+  if (otp.assessment_id) {
+    void annotatePhoneAssessment({
+      assessmentId: otp.assessment_id,
+      phone,
+      reason: 'PASSED_TWO_FACTOR',
+      annotation: 'LEGITIMATE',
+    });
+  }
 
   logger.info('[Phone] Verified', { userId });
   return successResponse({ phone_verified: true });

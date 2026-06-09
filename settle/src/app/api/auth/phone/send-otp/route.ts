@@ -5,11 +5,13 @@ import { requireTokenAuth, validationErrorResponse, errorResponse } from '@/lib/
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 import { query as dbQuery } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { createPhoneAssessment, annotatePhoneAssessment } from '@/lib/recaptcha';
 
 export const dynamic = 'force-dynamic';
 
 const schema = z.object({
   phone: z.string().regex(/^\+[1-9]\d{6,14}$/, 'Phone must be in E.164 format e.g. +919876543210'),
+  recaptcha_token: z.string().optional(),
 });
 
 function getTwilioClient() {
@@ -36,8 +38,22 @@ export async function POST(request: NextRequest) {
     return validationErrorResponse(parsed.error.errors.map(e => e.message));
   }
 
-  const { phone } = parsed.data;
+  const { phone, recaptcha_token } = parsed.data;
   const userId = auth.actorId;
+
+  // reCAPTCHA Enterprise assessment — blocks high-risk phone numbers
+  let assessmentId = '';
+  if (recaptcha_token) {
+    const assessment = await createPhoneAssessment(recaptcha_token, phone, userId);
+    assessmentId = assessment.assessmentId;
+    if (!assessment.allowed) {
+      logger.warn('[Phone] reCAPTCHA blocked OTP send', { userId, risk: assessment.risk });
+      return NextResponse.json(
+        { success: false, error: 'RECAPTCHA_BLOCKED', message: 'Request blocked. Please try again later.' },
+        { status: 429 }
+      );
+    }
+  }
 
   // Check phone not already taken by another account
   const existing = await dbQuery<{ id: string }>(
@@ -70,9 +86,9 @@ export async function POST(request: NextRequest) {
       [userId]
     );
     await dbQuery(
-      `INSERT INTO phone_otp_codes (user_id, phone, code, expires_at)
-       VALUES ($1, $2, $3, NOW() + INTERVAL '10 minutes')`,
-      [userId, phone, code]
+      `INSERT INTO phone_otp_codes (user_id, phone, code, expires_at, assessment_id)
+       VALUES ($1, $2, $3, NOW() + INTERVAL '10 minutes', $4)`,
+      [userId, phone, code, assessmentId || null]
     );
 
     // Save phone on user row (unverified) so verify step knows what to check
@@ -81,8 +97,17 @@ export async function POST(request: NextRequest) {
       [phone, userId]
     );
 
+    // Annotate: SMS was initiated
+    if (assessmentId) {
+      void annotatePhoneAssessment({
+        assessmentId,
+        phone,
+        reason: 'INITIATED_TWO_FACTOR',
+      });
+    }
+
     logger.info('[Phone] OTP sent', { userId, phone: phone.slice(0, 6) + '****' });
-    return NextResponse.json({ success: true, message: 'OTP sent' });
+    return NextResponse.json({ success: true, message: 'OTP sent', assessmentId });
   } catch (err) {
     const e = err as any;
     logger.error('[Phone] Failed to send OTP', { error: e.message, code: e.code });

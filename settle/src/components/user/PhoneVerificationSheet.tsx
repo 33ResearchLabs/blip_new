@@ -7,6 +7,37 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 
+const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? '';
+
+function loadRecaptchaScript(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') return resolve();
+    if ((window as any).grecaptcha?.enterprise) return resolve();
+    const existing = document.getElementById('recaptcha-enterprise-script');
+    if (existing) { existing.addEventListener('load', () => resolve()); return; }
+    const script = document.createElement('script');
+    script.id = 'recaptcha-enterprise-script';
+    script.src = `https://www.google.com/recaptcha/enterprise.js?render=${RECAPTCHA_SITE_KEY}`;
+    script.async = true;
+    script.onload = () => resolve();
+    document.head.appendChild(script);
+  });
+}
+
+async function getRecaptchaToken(action: string): Promise<string> {
+  await loadRecaptchaScript();
+  return new Promise((resolve, reject) => {
+    (window as any).grecaptcha.enterprise.ready(async () => {
+      try {
+        const token = await (window as any).grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, { action });
+        resolve(token);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -93,6 +124,7 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
     if (recaptchaRef.current) recaptchaRef.current.innerHTML = '';
     recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, recaptchaRef.current!, {
       size: 'invisible',
+      siteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY,
       callback: () => {},
       'expired-callback': () => {
         recaptchaVerifierRef.current = null;
@@ -108,6 +140,25 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
     setBusy(true);
     setError("");
     try {
+      // reCAPTCHA Enterprise assessment — blocks high-risk phone numbers before Firebase sends SMS
+      if (RECAPTCHA_SITE_KEY) {
+        try {
+          const token = await getRecaptchaToken('PHONE_VERIFICATION');
+          const res = await fetchWithAuth('/api/auth/phone/assess', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: fullPhone, recaptcha_token: token }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setError(data.message ?? 'Request blocked. Please try again later.');
+            return;
+          }
+        } catch {
+          // Fail open — if reCAPTCHA is unavailable, proceed anyway
+        }
+      }
+
       const authInstance = getFirebaseAuth();
       const verifier = await setupRecaptcha();
       confirmationRef.current = await signInWithPhoneNumber(authInstance, fullPhone, verifier);
