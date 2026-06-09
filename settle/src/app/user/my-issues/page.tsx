@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   Check,
   ChevronRight,
+  Clock,
   Copy,
   LifeBuoy,
   Loader2,
@@ -180,64 +181,82 @@ export default function UserMyIssuesPage() {
           <EmptyState filtered={!!statusFilter} />
         ) : (
           <ul className="space-y-2">
-            {sortedIssues.map((issue) => (
-              <li
-                key={issue.id}
-                className="rounded-2xl border border-border-subtle bg-surface-card hover:bg-surface-hover transition"
-              >
-                <Link
-                  href={`/user/my-issues/${issue.id}`}
-                  className="flex items-start gap-3 px-4 py-3.5"
+            {sortedIssues.map((issue) => {
+              const accent =
+                issue.status === "open"
+                  ? "bg-amber-400"
+                  : issue.status === "in_progress"
+                    ? "bg-sky-400"
+                    : issue.status === "resolved"
+                      ? "bg-emerald-400"
+                      : issue.status === "rejected"
+                        ? "bg-rose-400"
+                        : "bg-zinc-400/40";
+              return (
+                <li
+                  key={issue.id}
+                  className="rounded-2xl border border-border-subtle bg-surface-card hover:bg-surface-hover hover:border-border-medium transition overflow-hidden"
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <StatusBadge status={issue.status} />
-                      <span className="text-[10px] uppercase tracking-wide text-text-tertiary">
-                        {prettyCategory(issue.category)}
-                      </span>
+                  <Link
+                    href={`/user/my-issues/${issue.id}`}
+                    className="group flex items-stretch"
+                  >
+                    {/* status accent rail */}
+                    <span className={`w-1 shrink-0 ${accent}`} aria-hidden="true" />
+                    <div className="flex-1 min-w-0 flex items-center gap-3 pl-3.5 pr-3 py-3.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <StatusBadge status={issue.status} />
+                          <span className="px-1.5 py-0.5 rounded-md bg-surface-raised border border-border-subtle text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+                            {prettyCategory(issue.category)}
+                          </span>
+                        </div>
+                        <div className="text-[14.5px] font-semibold text-text-primary truncate leading-tight">
+                          {issue.title}
+                        </div>
+                        <div className="text-[12px] text-text-tertiary line-clamp-1 mt-0.5">
+                          {issue.description}
+                        </div>
+                        <div className="flex items-center gap-2.5 mt-2.5 text-[10.5px] text-text-tertiary">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock size={11} />
+                            {relativeTime(issue.created_at)}
+                          </span>
+                          <span className="w-0.5 h-0.5 rounded-full bg-text-tertiary/50" aria-hidden="true" />
+                          <span>Updated {relativeTime(issue.updated_at)}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void handleCopyId(issue.id);
+                            }}
+                            className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-surface-raised border border-border-subtle hover:bg-surface-hover hover:text-text-secondary font-mono transition"
+                            title="Copy tracking ID"
+                          >
+                            {copiedId === issue.id ? (
+                              <>
+                                <Check size={10} className="text-emerald-500" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={10} />
+                                {trimmedShortId(issue.id)}
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <ChevronRight
+                        size={16}
+                        className="text-text-tertiary group-hover:text-text-secondary group-hover:translate-x-0.5 transition-all shrink-0 self-center"
+                      />
                     </div>
-                    <div className="text-[14px] font-semibold text-text-primary truncate">
-                      {issue.title}
-                    </div>
-                    <div className="text-[12px] text-text-tertiary line-clamp-1">
-                      {issue.description}
-                    </div>
-                    <div className="flex items-center gap-2.5 mt-1.5 text-[10px] text-text-tertiary">
-                      <span>Filed {relativeTime(issue.created_at)}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>Updated {relativeTime(issue.updated_at)}</span>
-                      <span aria-hidden="true">·</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          void handleCopyId(issue.id);
-                        }}
-                        className="inline-flex items-center gap-1 hover:text-text-secondary font-mono"
-                        title="Copy tracking ID"
-                      >
-                        {copiedId === issue.id ? (
-                          <>
-                            <Check size={10} />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={10} />
-                            {trimmedShortId(issue.id)}
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className="text-text-tertiary shrink-0 mt-1"
-                  />
-                </Link>
-              </li>
-            ))}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
