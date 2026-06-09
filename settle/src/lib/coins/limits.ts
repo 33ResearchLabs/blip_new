@@ -13,8 +13,8 @@ import { queryOne } from '@/lib/db';
 import type { WaitlistActorType } from '@/lib/types/database';
 
 export const BASE_LIMITS = {
-  dailyUsd: 200,
-  perTradeUsd: 50,
+  dailyUsd: 50,
+  perTradeUsd: 25,
 } as const;
 
 export const COIN_LIMIT_TIERS = {
@@ -143,6 +143,32 @@ export async function getTrailing24hVolumeUsd(
     [actorId],
   );
   return Number(row?.vol ?? 0);
+}
+
+/**
+ * The largest single trade (USD notional) this actor made in the trailing
+ * 24h. Used purely for display — the per-transaction limit isn't a
+ * cumulative spend, so the "usage" we show against it is the biggest single
+ * order, not a running total. Same crypto_amount / actor-role logic as
+ * getTrailing24hVolumeUsd.
+ */
+export async function getLargestTrade24hUsd(
+  actorId: string,
+  actorType: WaitlistActorType,
+): Promise<number> {
+  const actorCol =
+    actorType === 'merchant'
+      ? '(merchant_id = $1 OR buyer_merchant_id = $1)'
+      : 'user_id = $1';
+  const row = await queryOne<{ mx: number }>(
+    `SELECT COALESCE(MAX(crypto_amount), 0) AS mx
+       FROM orders
+      WHERE ${actorCol}
+        AND status IN ('completed','accepted','escrowed','payment_sent')
+        AND created_at >= NOW() - INTERVAL '24 hours'`,
+    [actorId],
+  );
+  return Number(row?.mx ?? 0);
 }
 
 /**
