@@ -36,11 +36,6 @@ export function SendScreen({ orders, setScreen, solanaWallet }: SendScreenProps)
   const inputRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => inputRef.current?.focus(), 120);
-    return () => clearTimeout(t);
-  }, []);
-
   // Pre-fill wallet address when a contact is selected
   useEffect(() => {
     if (selected?.walletAddress) setToAddress(selected.walletAddress);
