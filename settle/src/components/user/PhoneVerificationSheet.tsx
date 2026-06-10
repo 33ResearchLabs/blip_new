@@ -8,6 +8,11 @@ import { initializeApp, getApps } from "firebase/app";
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 
 const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? '';
+// reCAPTCHA Enterprise (the custom fraud-scoring layer) is opt-in. When off
+// (the default), Firebase Phone Auth manages its own reCAPTCHA and no Enterprise
+// key is required — the most reliable path for OTP delivery. Set
+// NEXT_PUBLIC_RECAPTCHA_ENTERPRISE=true once real Enterprise keys are configured.
+const RECAPTCHA_ENTERPRISE_ENABLED = process.env.NEXT_PUBLIC_RECAPTCHA_ENTERPRISE === 'true';
 
 function loadRecaptchaScript(): Promise<void> {
   return new Promise((resolve) => {
@@ -41,7 +46,12 @@ async function getRecaptchaToken(action: string): Promise<string> {
 interface Props {
   open: boolean;
   onClose: () => void;
-  onVerified: () => void;
+  /** Receives the verified E.164 number; arg is optional so existing callers can ignore it. */
+  onVerified: (verifiedPhone?: string) => void;
+  /** Backend route that exchanges the Firebase ID token for a verified flag. Defaults to the user route. */
+  confirmEndpoint?: string;
+  /** Subtitle shown under the title on the phone step. */
+  reason?: string;
 }
 
 type Step = "phone" | "otp" | "success";
@@ -63,7 +73,13 @@ function getFirebaseAuth() {
   return getAuth(app);
 }
 
-export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
+export function PhoneVerificationSheet({
+  open,
+  onClose,
+  onVerified,
+  confirmEndpoint = "/api/auth/phone/confirm",
+  reason = "Required to place buy orders",
+}: Props) {
   const [step, setStep] = useState<Step>("phone");
   const [country, setCountry] = useState(COUNTRY_CODES[0]);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -72,6 +88,9 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
+  // ≥1024px (Tailwind `lg`, matching the merchant settings breakpoint) → centered
+  // desktop modal; below that → bottom sheet (user app + merchant mobile).
+  const [isDesktop, setIsDesktop] = useState(false);
   const otpInputRef = useRef<HTMLInputElement>(null);
   const recaptchaRef = useRef<HTMLDivElement>(null);
   const confirmationRef = useRef<ConfirmationResult | null>(null);
@@ -92,6 +111,14 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
       if (cooldownRef.current) clearInterval(cooldownRef.current);
     };
   }, [open]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     if (step === "otp") setTimeout(() => otpInputRef.current?.focus(), 300);
@@ -124,7 +151,9 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
     if (recaptchaRef.current) recaptchaRef.current.innerHTML = '';
     recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, recaptchaRef.current!, {
       size: 'invisible',
-      siteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY,
+      // Only attach a custom Enterprise siteKey when opted in; otherwise let
+      // Firebase use its own managed reCAPTCHA (standard Phone Auth).
+      ...(RECAPTCHA_ENTERPRISE_ENABLED && RECAPTCHA_SITE_KEY ? { siteKey: RECAPTCHA_SITE_KEY } : {}),
       callback: () => {},
       'expired-callback': () => {
         recaptchaVerifierRef.current = null;
@@ -140,8 +169,9 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
     setBusy(true);
     setError("");
     try {
-      // reCAPTCHA Enterprise assessment — fail open so reCAPTCHA issues never block legitimate users
-      if (RECAPTCHA_SITE_KEY) {
+      // reCAPTCHA Enterprise assessment — opt-in, and fail open so reCAPTCHA
+      // issues never block legitimate users. Skipped entirely unless enabled.
+      if (RECAPTCHA_ENTERPRISE_ENABLED && RECAPTCHA_SITE_KEY) {
         try {
           const token = await getRecaptchaToken('PHONE_VERIFICATION');
           const res = await fetchWithAuth('/api/auth/phone/assess', {
@@ -190,7 +220,7 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
       const result = await confirmationRef.current.confirm(otp);
       const token = await result.user.getIdToken();
 
-      const res = await fetchWithAuth("/api/auth/phone/confirm", {
+      const res = await fetchWithAuth(confirmEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ firebase_token: token, phone: fullPhone }),
@@ -198,7 +228,7 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
       const data = await res.json();
       if (!res.ok) { setError(data.message || "Verification failed"); setOtp(""); return; }
       setStep("success");
-      setTimeout(() => { onVerified(); onClose(); }, 1500);
+      setTimeout(() => { onVerified(fullPhone); onClose(); }, 1500);
     } catch (err: any) {
       setError(err.code === 'auth/invalid-verification-code' ? 'Wrong code. Try again.' : 'Verification failed.');
       setOtp("");
@@ -225,14 +255,23 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
           />
 
           <motion.div
-            initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+            initial={isDesktop ? { opacity: 0, scale: 0.96, x: "-50%", y: "-50%" } : { y: "100%" }}
+            animate={isDesktop ? { opacity: 1, scale: 1, x: "-50%", y: "-50%" } : { y: 0 }}
+            exit={isDesktop ? { opacity: 0, scale: 0.96, x: "-50%", y: "-50%" } : { y: "100%" }}
             transition={{ type: "spring", damping: 26, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-[28px] bg-[#111] border-t border-white/[0.08] px-5 pt-5 pb-10 shadow-2xl"
+            className={
+              isDesktop
+                ? "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md rounded-[28px] bg-[#111] border border-white/[0.08] px-5 pt-6 pb-7 shadow-2xl"
+                : "fixed bottom-0 left-0 right-0 z-50 rounded-t-[28px] bg-[#111] border-t border-white/[0.08] px-5 pt-5 pb-10 shadow-2xl"
+            }
           >
             {/* Invisible recaptcha container */}
             <div ref={recaptchaRef} />
 
-            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-5" />
+            {/* Drag handle — bottom-sheet affordance, mobile only */}
+            {!isDesktop && (
+              <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-5" />
+            )}
 
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
@@ -245,7 +284,7 @@ export function PhoneVerificationSheet({ open, onClose, onVerified }: Props) {
                     {step === "success" ? "Phone Verified" : "Verify Phone"}
                   </p>
                   <p className="text-[11px] text-white/40 mt-0.5">
-                    {step === "phone" && "Required to place buy orders"}
+                    {step === "phone" && reason}
                     {step === "otp" && `Code sent to ${fullPhone}`}
                     {step === "success" && "You're all set"}
                   </p>

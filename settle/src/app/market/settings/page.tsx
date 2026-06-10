@@ -46,7 +46,7 @@ import { CorridorProviderSettings } from "@/components/merchant/CorridorProvider
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { WalletLedger } from "@/components/merchant/WalletLedger";
 import { PaymentMethodModal, PaymentMethodInlineForm } from "@/components/merchant/PaymentMethodModal";
-import { PhoneVerificationModal } from "@/components/merchant/PhoneVerificationModal";
+import { PhoneVerificationSheet } from "@/components/user/PhoneVerificationSheet";
 import { MerchantXVerificationModal } from "@/components/merchant/MerchantXVerificationModal";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { formatFiat } from "@/lib/format";
@@ -225,6 +225,9 @@ export default function MerchantSettingsPage({
     Boolean((merchantInfo as any)?.phone_verified),
   );
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
+  // Once the verified number is locked read-only, "Change" sets this true to
+  // re-enable editing (which forces re-verification of the new number).
+  const [phoneEditUnlocked, setPhoneEditUnlocked] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(
     (merchantInfo as any)?.avatar_url || null,
   );
@@ -978,6 +981,15 @@ export default function MerchantSettingsPage({
   ];
   const tabs = [...accountTabs, ...preferenceTabs];
 
+  // Phone counts as "verified" only while the field still holds the confirmed
+  // number; editing it (before re-verify) drops the verified state.
+  const phoneIsVerified =
+    phoneVerified &&
+    phone.trim() !== "" &&
+    phone.trim() === ((merchant?.phone as string) || "").trim();
+  // Locked (read-only) once verified, until the merchant taps "Change".
+  const phoneLocked = phoneIsVerified && !phoneEditUnlocked;
+
   return (
     <div className="h-screen bg-background text-white flex flex-col overflow-hidden">
       <MerchantNavbar
@@ -1344,17 +1356,23 @@ export default function MerchantSettingsPage({
                     <label className="text-xs text-white/40 font-mono uppercase tracking-wider block">
                       Phone
                     </label>
-                    {/* Badge shows only when the number in the field is the one
-                        that was actually verified — editing it (before re-verify
-                        + save) hides the badge so it never vouches for a number
-                        that hasn't been confirmed. */}
-                    {phoneVerified &&
-                    phone.trim() !== "" &&
-                    phone.trim() === ((merchant?.phone as string) || "").trim() ? (
-                      <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-white/70">
-                        <ShieldCheck className="w-3 h-3" />
-                        Verified
-                      </span>
+                    {/* When verified, the field is locked read-only and shows the
+                        badge + a "Change" link that re-enables editing (which then
+                        requires re-verifying the new number). Otherwise: Verify. */}
+                    {phoneLocked ? (
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-white/70">
+                          <ShieldCheck className="w-3 h-3" />
+                          Verified
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setPhoneEditUnlocked(true)}
+                          className="text-[10px] font-mono uppercase tracking-wider text-white/40 hover:text-white/70 transition-colors"
+                        >
+                          Change
+                        </button>
+                      </div>
                     ) : (
                       <button
                         type="button"
@@ -1370,9 +1388,12 @@ export default function MerchantSettingsPage({
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    readOnly={phoneLocked}
                     placeholder="+971 50 123 4567"
                     maxLength={20}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/[0.12] transition-colors"
+                    className={`w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/[0.12] transition-colors ${
+                      phoneLocked ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
                   />
                 </div>
               </div>
@@ -2639,15 +2660,19 @@ export default function MerchantSettingsPage({
         editingMethod={editingPaymentMethod}
       />
 
-      <PhoneVerificationModal
-        isOpen={showPhoneVerify}
+      <PhoneVerificationSheet
+        open={showPhoneVerify}
         onClose={() => setShowPhoneVerify(false)}
-        currentPhone={phone}
+        confirmEndpoint="/api/merchant/phone/firebase-confirm"
+        reason="Verify your contact number"
         onVerified={(verifiedPhone) => {
+          if (!verifiedPhone) return;
           // Reflect the verified number everywhere the badge logic reads from,
           // so the green "Verified" badge appears immediately without a reload.
           setPhone(verifiedPhone);
           setPhoneVerified(true);
+          // Re-lock the field now that the new number is confirmed.
+          setPhoneEditUnlocked(false);
           setMerchant((prev: any) => ({
             ...prev,
             phone: verifiedPhone,
