@@ -261,8 +261,8 @@ export function PhoneVerificationSheet({
             transition={{ type: "spring", damping: 26, stiffness: 300 }}
             className={
               isDesktop
-                ? "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md rounded-[28px] bg-[#111] border border-white/[0.08] px-5 pt-6 pb-7 shadow-2xl"
-                : "fixed bottom-0 left-0 right-0 z-50 rounded-t-[28px] bg-[#111] border-t border-white/[0.08] px-5 pt-5 pb-10 shadow-2xl"
+                ? "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md rounded-[28px] bg-surface-raised border border-border-subtle px-5 pt-6 pb-7 shadow-2xl"
+                : "fixed bottom-0 left-0 right-0 z-50 rounded-t-[28px] bg-surface-raised border-t border-border-subtle px-5 pt-5 pb-10 shadow-2xl"
             }
           >
             {/* Invisible recaptcha container */}
@@ -270,27 +270,27 @@ export function PhoneVerificationSheet({
 
             {/* Drag handle — bottom-sheet affordance, mobile only */}
             {!isDesktop && (
-              <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-5" />
+              <div className="w-10 h-1 rounded-full bg-border-strong mx-auto mb-5" />
             )}
 
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-[12px] flex items-center justify-center bg-white/[0.06] border border-white/[0.08]">
-                  <Phone size={15} className="text-white/70" />
+                <div className="w-9 h-9 rounded-[12px] flex items-center justify-center bg-surface-active border border-border-subtle">
+                  <Phone size={15} className="text-text-secondary" />
                 </div>
                 <div>
-                  <p className="text-[16px] font-bold text-white/95 tracking-[-0.02em] leading-tight">
+                  <p className="text-[16px] font-bold text-text-primary tracking-[-0.02em] leading-tight">
                     {step === "success" ? "Phone Verified" : "Verify Phone"}
                   </p>
-                  <p className="text-[11px] text-white/40 mt-0.5">
+                  <p className="text-[11px] text-text-tertiary mt-0.5">
                     {step === "phone" && reason}
                     {step === "otp" && `Code sent to ${fullPhone}`}
                     {step === "success" && "You're all set"}
                   </p>
                 </div>
               </div>
-              <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.06] text-white/50 hover:text-white/80 transition-colors">
+              <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-active text-text-tertiary hover:text-text-primary transition-colors">
                 <X size={15} />
               </button>
             </div>
@@ -302,24 +302,24 @@ export function PhoneVerificationSheet({
                   <div className="relative">
                     <button
                       onClick={() => setShowCountryPicker((v) => !v)}
-                      className="h-12 px-3 rounded-[14px] bg-white/[0.06] border border-white/[0.08] flex items-center gap-1.5 text-white/90 text-[14px] font-semibold whitespace-nowrap"
+                      className="h-12 px-3 rounded-[14px] bg-surface-active border border-border-subtle flex items-center gap-1.5 text-text-primary text-[14px] font-semibold whitespace-nowrap"
                     >
                       <span>{country.flag}</span>
                       <span>{country.code}</span>
-                      <ChevronDown size={13} className="text-white/40" />
+                      <ChevronDown size={13} className="text-text-tertiary" />
                     </button>
                     <AnimatePresence>
                       {showCountryPicker && (
                         <motion.div
                           initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                          className="absolute top-14 left-0 z-10 w-36 rounded-[14px] bg-[#1a1a1a] border border-white/[0.08] shadow-xl overflow-hidden"
+                          className="absolute top-14 left-0 z-10 w-36 rounded-[14px] bg-surface-overlay border border-border-subtle shadow-xl overflow-hidden"
                         >
                           {COUNTRY_CODES.map((c) => (
                             <button key={c.code} onClick={() => { setCountry(c); setShowCountryPicker(false); }}
-                              className="w-full px-3 py-2.5 flex items-center gap-2.5 hover:bg-white/[0.06] text-left">
+                              className="w-full px-3 py-2.5 flex items-center gap-2.5 hover:bg-surface-hover text-left">
                               <span className="text-[16px]">{c.flag}</span>
-                              <span className="text-[13px] font-semibold text-white/80">{c.code}</span>
-                              <span className="text-[11px] text-white/40">{c.label}</span>
+                              <span className="text-[13px] font-semibold text-text-secondary">{c.code}</span>
+                              <span className="text-[11px] text-text-tertiary">{c.label}</span>
                             </button>
                           ))}
                         </motion.div>
@@ -331,20 +331,20 @@ export function PhoneVerificationSheet({
                     value={phone}
                     onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setError(""); }}
                     onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                    className="flex-1 h-12 rounded-[14px] bg-white/[0.06] border border-white/[0.08] px-4 text-[16px] font-semibold text-white/95 placeholder:text-white/25 outline-none focus:border-white/20 focus:bg-white/[0.08] transition-colors"
+                    className="flex-1 h-12 rounded-[14px] bg-surface-active border border-border-subtle px-4 text-[16px] font-semibold text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-strong focus:bg-surface-hover transition-colors"
                     autoFocus
                   />
                 </div>
 
                 {error && (
-                  <div className="flex items-center gap-2 text-red-400 text-[12px] font-medium">
+                  <div className="flex items-center gap-2 text-error text-[12px] font-medium">
                     <AlertCircle size={13} />{error}
                   </div>
                 )}
 
                 <motion.button whileTap={{ scale: 0.97 }} onClick={handleSendOtp}
                   disabled={busy || phone.replace(/\D/g, "").length < 7}
-                  className="w-full h-12 rounded-[14px] bg-white text-black text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
+                  className="w-full h-12 rounded-[14px] bg-accent text-accent-text text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
                   {busy ? <Loader2 size={16} className="animate-spin" /> : "Send OTP"}
                 </motion.button>
               </div>
@@ -353,7 +353,7 @@ export function PhoneVerificationSheet({
             {/* Step 2: OTP */}
             {step === "otp" && (
               <div className="space-y-3">
-                <p className="text-[13px] text-white/50 text-center -mt-2 mb-1">Enter the 6-digit code</p>
+                <p className="text-[13px] text-text-secondary text-center -mt-2 mb-1">Enter the 6-digit code</p>
 
                 {/* Tappable OTP boxes with invisible input overlay */}
                 <div
@@ -362,12 +362,12 @@ export function PhoneVerificationSheet({
                 >
                   {[...Array(6)].map((_, i) => (
                     <div key={i}
-                      className={`w-11 h-14 rounded-[12px] border flex items-center justify-center text-[22px] font-bold transition-all ${
+                      className={`w-11 h-14 rounded-[12px] border flex items-center justify-center text-[22px] font-bold transition-all text-text-primary ${
                         i === otp.length
-                          ? "bg-white/[0.08] border-white/40 scale-105"
+                          ? "bg-surface-active border-border-strong scale-105"
                           : otp[i]
-                          ? "bg-white/[0.08] border-white/20 text-white"
-                          : "bg-white/[0.04] border-white/[0.08]"
+                          ? "bg-surface-active border-border-medium"
+                          : "bg-surface-hover border-border-subtle"
                       }`}>
                       {otp[i] ? "•" : ""}
                     </div>
@@ -384,24 +384,24 @@ export function PhoneVerificationSheet({
                 </div>
 
                 {error && (
-                  <div className="flex items-center gap-2 text-red-400 text-[12px] font-medium">
+                  <div className="flex items-center gap-2 text-error text-[12px] font-medium">
                     <AlertCircle size={13} />{error}
                   </div>
                 )}
 
                 <motion.button whileTap={{ scale: 0.97 }} onClick={handleVerifyOtp}
                   disabled={busy || otp.length !== 6}
-                  className="w-full h-12 rounded-[14px] bg-white text-black text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
+                  className="w-full h-12 rounded-[14px] bg-accent text-accent-text text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
                   {busy ? <Loader2 size={16} className="animate-spin" /> : "Verify"}
                 </motion.button>
 
                 <div className="flex items-center justify-between pt-1">
                   <button onClick={() => { setStep("phone"); setOtp(""); setError(""); }}
-                    className="text-[12px] text-white/40 hover:text-white/60 transition-colors">
+                    className="text-[12px] text-text-tertiary hover:text-text-secondary transition-colors">
                     ← Change number
                   </button>
                   <button onClick={handleResend} disabled={resendCooldown > 0 || busy}
-                    className="text-[12px] font-semibold text-white/60 hover:text-white/90 disabled:text-white/30 transition-colors">
+                    className="text-[12px] font-semibold text-text-secondary hover:text-text-primary disabled:text-text-quaternary transition-colors">
                     {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend OTP"}
                   </button>
                 </div>
@@ -414,13 +414,13 @@ export function PhoneVerificationSheet({
                 <motion.div
                   initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", damping: 14 }}
-                  className="w-16 h-16 rounded-full flex items-center justify-center bg-white/[0.06] border border-white/[0.1]"
+                  className="w-16 h-16 rounded-full flex items-center justify-center bg-surface-active border border-border-subtle"
                 >
-                  <ShieldCheck size={32} className="text-green-400" />
+                  <ShieldCheck size={32} className="text-success" />
                 </motion.div>
                 <div className="text-center">
-                  <p className="text-[18px] font-bold text-white/95 tracking-[-0.02em]">Verified!</p>
-                  <p className="text-[13px] text-white/50 mt-1">Your phone is now verified</p>
+                  <p className="text-[18px] font-bold text-text-primary tracking-[-0.02em]">Verified!</p>
+                  <p className="text-[13px] text-text-secondary mt-1">Your phone is now verified</p>
                 </div>
               </div>
             )}

@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useUserPaymentMethods } from '@/context/AppContext';
-import { useUserTheme } from '@/hooks/useUserTheme';
 import type { PaymentMethodItem } from './PaymentMethodSelector';
 
 interface PaymentMethodsManagerProps {
@@ -317,8 +316,6 @@ interface FormSheetProps {
 }
 
 function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetProps) {
-  const { theme: userTheme } = useUserTheme();
-  const isLight = userTheme === 'light';
   const open = mode.kind !== 'closed';
   const editing = mode.kind === 'edit' ? mode.method : null;
 
@@ -431,38 +428,21 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
             className="fixed inset-x-0 bottom-0 z-[60] flex justify-center pointer-events-none"
           >
             <div
-              className="pointer-events-auto w-full max-w-[440px] md:max-w-[720px] max-h-[92dvh] overflow-y-auto rounded-t-[24px] shadow-[0_-20px_60px_-12px_rgba(0,0,0,0.5)]"
-              style={{
-                background: isLight
-                  ? 'linear-gradient(180deg,#ffffff 0%,#f7f8fa 100%)'
-                  : 'linear-gradient(180deg,rgba(28,28,32,0.98) 0%,rgba(18,18,22,0.98) 100%)',
-                border: `1px solid ${isLight ? 'rgba(15,23,42,0.10)' : 'rgba(255,255,255,0.08)'}`,
-                borderBottom: 'none',
-              }}
+              className="pointer-events-auto w-full max-w-[440px] md:max-w-[720px] max-h-[92dvh] overflow-y-auto rounded-t-[24px] bg-surface-raised border border-border-subtle border-b-0 shadow-[0_-20px_60px_-12px_rgba(0,0,0,0.5)]"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Drag handle — bottom-sheet affordance */}
               <div className="flex justify-center pt-3 pb-1">
-                <span
-                  className="block w-9 h-1 rounded-full"
-                  style={{ background: isLight ? 'rgba(15,23,42,0.18)' : 'rgba(255,255,255,0.18)' }}
-                />
+                <span className="block w-9 h-1 rounded-full bg-border-strong" />
               </div>
-              <div
-                className="flex items-center justify-between px-5 py-4"
-                style={{ borderBottom: `1px solid ${isLight ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.06)'}` }}
-              >
-                <p
-                  className="text-[15px] font-bold tracking-[-0.01em]"
-                  style={{ color: 'var(--color-text-primary)' }}
-                >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
+                <p className="text-[15px] font-bold tracking-[-0.01em] text-text-primary">
                   {editing ? 'Edit Payment Method' : 'Add Payment Method'}
                 </p>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-8 h-8 rounded-[10px] flex items-center justify-center transition-colors"
-                  style={{ color: 'var(--color-text-tertiary)' }}
+                  className="w-8 h-8 rounded-[10px] flex items-center justify-center text-text-tertiary hover:text-text-primary transition-colors"
                   aria-label="Close"
                 >
                   <X className="w-4 h-4" />
@@ -477,11 +457,6 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                     const Icon = cfg.Icon;
                     const active = type === t;
                     const disabled = editing !== null && !active;
-                    const activeBg = isLight ? 'rgba(15,23,42,0.06)' : 'rgba(255,255,255,0.06)';
-                    const activeBorder = isLight ? 'rgba(15,23,42,0.16)' : 'rgba(255,255,255,0.14)';
-                    const idleBg = isLight ? 'rgba(15,23,42,0.025)' : 'rgba(255,255,255,0.02)';
-                    const idleBorder = isLight ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.05)';
-                    const idleIcon = isLight ? 'rgba(15,23,42,0.45)' : 'rgba(255,255,255,0.45)';
                     return (
                       <button
                         key={t}
@@ -495,21 +470,20 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                         }}
                         className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-[10px] border transition ${
                           disabled ? 'opacity-40 cursor-not-allowed' : ''
+                        } ${
+                          active
+                            ? 'bg-surface-active border-border-strong'
+                            : 'bg-surface-hover border-border-subtle'
                         }`}
-                        style={{
-                          background: active ? activeBg : idleBg,
-                          borderColor: active ? activeBorder : idleBorder,
-                        }}
                       >
                         <Icon
-                          className="w-3.5 h-3.5"
-                          style={{ color: active ? cfg.color : idleIcon }}
+                          className={`w-3.5 h-3.5 ${active ? '' : 'text-text-tertiary'}`}
+                          style={active ? { color: cfg.color } : undefined}
                         />
                         <span
-                          className="text-[9px] font-bold tracking-[0.08em] uppercase"
-                          style={{
-                            color: active ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
-                          }}
+                          className={`text-[9px] font-bold tracking-[0.08em] uppercase ${
+                            active ? 'text-text-primary' : 'text-text-tertiary'
+                          }`}
                         >
                           {cfg.label}
                         </span>
@@ -523,7 +497,6 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                   onChange={setLabel}
                   placeholder="Label (e.g. Emirates NBD — Salary)"
                   maxLength={100}
-                  isLight={isLight}
                 />
 
                 {type === 'bank' && (
@@ -533,14 +506,12 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                       onChange={(v) => setDetails({ ...details, bank_name: v })}
                       placeholder="Bank Name"
                       maxLength={100}
-                      isLight={isLight}
                     />
                     <FormInput
                       value={details.account_name || ''}
                       onChange={(v) => setDetails({ ...details, account_name: v })}
                       placeholder="Account Holder Name"
                       maxLength={100}
-                      isLight={isLight}
                     />
                     <FormInput
                       value={details.account_number || ''}
@@ -548,7 +519,6 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                       placeholder="Account Number"
                       maxLength={34}
                       mono
-                      isLight={isLight}
                     />
                     <FormInput
                       value={details.ifsc || ''}
@@ -558,7 +528,6 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                       placeholder="IFSC / SWIFT — optional"
                       maxLength={20}
                       mono
-                      isLight={isLight}
                     />
                     <FormInput
                       value={details.iban || ''}
@@ -568,7 +537,6 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                       placeholder="IBAN — optional"
                       maxLength={34}
                       mono
-                      isLight={isLight}
                     />
                   </>
                 )}
@@ -581,14 +549,12 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                       placeholder="UPI ID (e.g. user@oksbi)"
                       maxLength={50}
                       mono
-                      isLight={isLight}
                     />
                     <FormInput
                       value={details.provider || ''}
                       onChange={(v) => setDetails({ ...details, provider: v })}
                       placeholder="Provider — optional (e.g. Google Pay)"
                       maxLength={50}
-                      isLight={isLight}
                     />
                   </>
                 )}
@@ -600,21 +566,18 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                       onChange={(v) => setDetails({ ...details, location_name: v })}
                       placeholder="Location Name"
                       maxLength={100}
-                      isLight={isLight}
                     />
                     <FormInput
                       value={details.location_address || ''}
                       onChange={(v) => setDetails({ ...details, location_address: v })}
                       placeholder="Address"
                       maxLength={200}
-                      isLight={isLight}
                     />
                     <FormInput
                       value={details.meeting_instructions || ''}
                       onChange={(v) => setDetails({ ...details, meeting_instructions: v })}
                       placeholder="Meeting instructions — optional"
                       maxLength={200}
-                      isLight={isLight}
                     />
                   </>
                 )}
@@ -626,27 +589,24 @@ function PaymentMethodFormSheet({ mode, userId, onClose, onSaved }: FormSheetPro
                       onChange={(v) => setDetails({ ...details, method_name: v })}
                       placeholder="Method Name (e.g. Wise, PayPal)"
                       maxLength={50}
-                      isLight={isLight}
                     />
                     <FormInput
                       value={details.account_identifier || ''}
                       onChange={(v) => setDetails({ ...details, account_identifier: v })}
                       placeholder="Account ID / Email / Phone"
                       maxLength={100}
-                      isLight={isLight}
                     />
                     <FormInput
                       value={details.instructions || ''}
                       onChange={(v) => setDetails({ ...details, instructions: v })}
                       placeholder="Instructions — optional"
                       maxLength={200}
-                      isLight={isLight}
                     />
                   </>
                 )}
 
                 {error && (
-                  <p className="text-[12px] text-red-300/95">{error}</p>
+                  <p className="text-[12px] text-error">{error}</p>
                 )}
               </div>
 
@@ -687,18 +647,13 @@ function FormInput({
   placeholder,
   maxLength,
   mono = false,
-  isLight = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
   maxLength: number;
   mono?: boolean;
-  isLight?: boolean;
 }) {
-  const bg = isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.04)';
-  const border = isLight ? 'rgba(15,23,42,0.10)' : 'rgba(255,255,255,0.06)';
-  const focusBorder = isLight ? 'rgba(15,23,42,0.25)' : 'rgba(255,255,255,0.18)';
   return (
     <input
       type="text"
@@ -706,20 +661,9 @@ function FormInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`w-full rounded-[10px] px-3 py-2.5 text-[13px] outline-none transition placeholder:text-text-tertiary ${
+      className={`w-full rounded-[10px] px-3 py-2.5 text-[13px] outline-none transition bg-surface-active border border-border-subtle text-text-primary placeholder:text-text-tertiary focus:border-border-strong ${
         mono ? 'font-mono placeholder:font-sans' : ''
       }`}
-      style={{
-        background: bg,
-        border: `1px solid ${border}`,
-        color: 'var(--color-text-primary)',
-      }}
-      onFocus={(e) => {
-        e.currentTarget.style.borderColor = focusBorder;
-      }}
-      onBlur={(e) => {
-        e.currentTarget.style.borderColor = border;
-      }}
     />
   );
 }

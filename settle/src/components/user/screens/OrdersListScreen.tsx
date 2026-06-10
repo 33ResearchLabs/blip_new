@@ -13,22 +13,23 @@ const CARD = "bg-surface-card border border-border-subtle";
 // "active" = anything not in a terminal state (pending/payment/waiting).
 type StatusFilter = "all" | "active" | "pending" | "payment" | "waiting" | "complete" | "cancelled" | "expired" | "disputed";
 
-const STATUS_FILTER_OPTIONS: ReadonlyArray<FilterOption<StatusFilter>> = [
-  { key: "all",       label: "All" },
-  { key: "active",    label: "Active" },
-  { key: "pending",   label: "Pending" },
-  { key: "waiting",   label: "Escrow" },
-  { key: "payment",   label: "Payment Sent" },
-  { key: "complete",  label: "Completed" },
-  { key: "cancelled", label: "Cancelled" },
-  { key: "expired",   label: "Expired" },
-  { key: "disputed",  label: "Disputed" },
-];
+// Status filter options — kept for when the status dropdown is re-enabled.
+// const STATUS_FILTER_OPTIONS: ReadonlyArray<FilterOption<StatusFilter>> = [
+//   { key: "all",       label: "All" },
+//   { key: "active",    label: "Active" },
+//   { key: "pending",   label: "Pending" },
+//   { key: "waiting",   label: "Escrow" },
+//   { key: "payment",   label: "Payment Sent" },
+//   { key: "complete",  label: "Completed" },
+//   { key: "cancelled", label: "Cancelled" },
+//   { key: "expired",   label: "Expired" },
+//   { key: "disputed",  label: "Disputed" },
+// ];
 
 type TimeFilter = "today" | "7d" | "30d" | "all";
 
 const TIME_FILTER_OPTIONS: ReadonlyArray<FilterOption<TimeFilter>> = [
-  { key: "today", label: "Today" },
+  { key: "today", label: "Recent" },
   { key: "7d",    label: "7 Days" },
   { key: "30d",   label: "30 Days" },
   { key: "all",   label: "All Time" },
@@ -60,8 +61,9 @@ export const OrdersListScreen = ({
   hideBottomNav = false,
 }: OrdersListScreenProps) => {
   // ── Filters ──
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>("7d");
+  // Status filter is fixed to "all" — the dropdown is hidden so every order shows.
+  const statusFilter: StatusFilter = "all";
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("today");
 
   // Combine all orders into one list — the dropdowns drive what's shown.
   const allOrders = useMemo(
@@ -100,7 +102,7 @@ export const OrdersListScreen = ({
       <header className="px-5 pt-4 pb-4 shrink-0">
         <div className="flex items-center justify-between mb-3">
           <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Activity</p>
-          <button
+          {/* <button
             onClick={() => setScreen("notifications")}
             className="relative p-2.5 rounded-[14px] bg-surface-card border border-border-subtle"
           >
@@ -110,18 +112,7 @@ export const OrdersListScreen = ({
                 {notificationCount > 9 ? '9+' : notificationCount}
               </span>
             )}
-          </button>
-        </div>
-
-        {/* Status + Time filter dropdowns */}
-        <div className="flex items-center gap-2">
-          <FilterDropdown
-            ariaLabel="Status filter"
-            align="left"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={STATUS_FILTER_OPTIONS}
-          />
+          </button> */}
           <FilterDropdown
             className="ml-auto"
             ariaLabel="Time range filter"
@@ -129,6 +120,26 @@ export const OrdersListScreen = ({
             onChange={setTimeFilter}
             options={TIME_FILTER_OPTIONS}
           />
+        </div>
+
+        {/* Status + Time filter dropdowns */}
+        <div className="flex items-center gap-2">
+          {/* Status filter hidden — always show all orders (statusFilter stays "all")
+          <FilterDropdown
+            ariaLabel="Status filter"
+            align="left"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={STATUS_FILTER_OPTIONS}
+          />
+          */}
+          {/* <FilterDropdown
+            className="ml-auto"
+            ariaLabel="Time range filter"
+            value={timeFilter}
+            onChange={setTimeFilter}
+            options={TIME_FILTER_OPTIONS}
+          /> */}
         </div>
       </header>
 
