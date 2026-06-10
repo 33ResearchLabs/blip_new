@@ -103,9 +103,16 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
 
   async function afterStream(stream: MediaStream) {
     streamRef.current = stream;
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+    const video = videoRef.current;
+    if (video) {
+      video.srcObject = stream;
+      await video.play();
+      // Wait until the video has actual dimensions before running detection
+      await new Promise<void>(res => {
+        if (video.videoWidth > 0) { res(); return; }
+        video.addEventListener("loadedmetadata", () => res(), { once: true });
+        setTimeout(res, 2000); // fallback
+      });
     }
 
     let faceapi: any;
@@ -123,7 +130,7 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
     const detect = async () => {
       if (!videoRef.current || !canvasRef.current) return;
       const result = await faceapi
-        .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
+        .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.3 }))
         .withFaceLandmarks(true);
 
       const canvas = canvasRef.current;
