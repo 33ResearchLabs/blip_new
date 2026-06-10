@@ -7,7 +7,9 @@ import { TIER_THRESHOLDS } from '@/lib/reputation/types';
  * GET /api/admin/reputation — read-only Reward / Reputation / Trust report.
  *
  * Lists every user OR merchant (?type=user|merchant) with:
- *   - Reward      → Blip points  (e.blip_points + e.locked_blip_points)
+ *   - Reward      → spendable Blip points (e.blip_points) — the same "cash in
+ *                   hand" number users/merchants see on their own screens;
+ *                   locked (maturing/anti-abuse) points reported separately.
  *   - Reputation  → reputation_scores.total_score (300–900 CIBIL scale)
  *   - Trust       → reputation_scores.trust_score (0–100 component)
  *
@@ -26,7 +28,7 @@ import { TIER_THRESHOLDS } from '@/lib/reputation/types';
 const SORT_COLUMNS: Record<string, string> = {
   reputation: 'rs.total_score DESC NULLS LAST',
   trust: 'rs.trust_score DESC NULLS LAST',
-  reward: '(COALESCE(e.blip_points, 0) + COALESCE(e.locked_blip_points, 0)) DESC',
+  reward: 'COALESCE(e.blip_points, 0) DESC',
   rating: 'e.rating DESC NULLS LAST',
   trades: 'e.total_trades DESC',
   newest: 'e.created_at DESC',
@@ -213,7 +215,7 @@ export async function GET(request: NextRequest) {
            FROM ${entityTable} e
            JOIN reputation_scores rs ON rs.entity_id = e.id AND rs.entity_type = '${type}'
            ${placeholderFilter})::text AS avg_reputation,
-        (SELECT COALESCE(SUM(COALESCE(blip_points, 0) + COALESCE(locked_blip_points, 0)), 0)
+        (SELECT COALESCE(SUM(COALESCE(blip_points, 0)), 0)
            FROM ${entityTable} ${placeholderFilter})::text AS total_reward`
     );
 

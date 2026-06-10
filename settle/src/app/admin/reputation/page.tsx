@@ -325,7 +325,7 @@ export default function AdminReputationPage() {
             <SummaryCard
               label="Total Blip Points"
               value={summary != null ? formatCount(summary.totalReward) : "—"}
-              meta={<span className="text-foreground/40">reward balance</span>}
+              meta={<span className="text-foreground/40">spendable balance</span>}
               icon={<Coins className="w-4 h-4" />}
               tone="warning"
             />
@@ -441,14 +441,16 @@ export default function AdminReputationPage() {
                         </div>
                       </div>
 
-                      {/* Reward — Blip points (available + locked) */}
+                      {/* Reward — spendable Blip points (matches what the
+                          user/merchant sees on their own Points screen).
+                          Locked (maturing/anti-abuse) points shown separately. */}
                       <div className="text-right">
-                        <span className={`text-[11px] font-medium tabular-nums ${it.rewardTotal > 0 ? "text-[var(--color-warning)]" : "text-foreground/25"}`}>
-                          {it.rewardTotal > 0 ? formatCount(it.rewardTotal) : "—"}
+                        <span className={`text-[11px] font-medium tabular-nums ${it.blipPoints > 0 ? "text-[var(--color-warning)]" : "text-foreground/25"}`}>
+                          {it.blipPoints > 0 ? formatCount(it.blipPoints) : "—"}
                         </span>
                         {it.lockedBlipPoints > 0 && (
                           <span className="block text-[8px] text-foreground/30 font-mono tabular-nums">
-                            {formatCount(it.lockedBlipPoints)} locked
+                            +{formatCount(it.lockedBlipPoints)} locked
                           </span>
                         )}
                       </div>
