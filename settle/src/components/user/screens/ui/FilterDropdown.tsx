@@ -76,7 +76,7 @@ export function FilterDropdown<T extends string>({
   const triggerClass =
     variant === "square"
       ? "flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all bg-white/[0.04] hover:bg-surface-active text-white border border-white/10 text-[11px] font-semibold tracking-wide"
-      : "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all bg-surface-active text-text-primary border border-border-medium text-[12px] font-bold tracking-[0.05em]";
+      : "flex items-center gap-1.5 px-2 py-1 rounded-full transition-all bg-surface-active text-text-primary border border-border-medium text-[11px] font-bold tracking-[0.05em]";
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
