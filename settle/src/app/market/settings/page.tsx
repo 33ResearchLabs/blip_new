@@ -37,6 +37,7 @@ import {
   AtSign,
   X,
   HelpCircle,
+  Coins,
 } from "lucide-react";
 import { MerchantSupportPanel } from "@/components/merchant/MerchantSupportPanel";
 import Link from "next/link";
@@ -1014,7 +1015,7 @@ export default function MerchantSettingsPage({
             content area scrolls. Anchored at top-[50px] (the height of the
             MerchantNavbar) and capped at the viewport so very long sidebars
             scroll internally instead of pushing the page taller. */}
-        <nav className="lg:w-60 lg:border-r border-white/[0.05] lg:py-6 lg:px-3 shrink-0 flex flex-col lg:h-full lg:overflow-y-auto">
+        <nav className="flex-1 min-h-0 overflow-y-auto flex flex-col border-white/[0.05] lg:flex-none lg:w-60 lg:shrink-0 lg:border-r lg:py-6 lg:px-3 lg:h-full">
           {/* Mobile: iOS-style grouped list — each row opens a bottom-sheet */}
           <div className="flex lg:hidden flex-col gap-6 px-4 py-4 pb-28">
             {/* Profile header card */}
@@ -1039,6 +1040,20 @@ export default function MerchantSettingsPage({
               </div>
               <ChevronRight className="w-4 h-4 text-white/20 shrink-0" />
             </button>
+
+            {/* Rewards — opens the rewards / Blip points page */}
+            <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
+              <button
+                onClick={() => router.push('/market/rewards')}
+                className="flex items-center gap-3.5 w-full px-4 py-3.5 bg-white/[0.02] active:bg-white/[0.06] transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
+                  <Coins className="w-4 h-4 text-white/60" />
+                </div>
+                <span className="flex-1 text-[14px] text-white/80">Rewards</span>
+                <ChevronRight className="w-4 h-4 text-white/20" />
+              </button>
+            </div>
 
             {/* Account section */}
             <div>
