@@ -39,7 +39,7 @@ const SORT_COLUMNS: Record<string, string> = {
   cancelled: 'cancelled_count DESC',
   disputes_total: 'disputes_total DESC',
   balance: 'u.balance DESC',
-  reputation: 'u.reputation_score DESC NULLS LAST',
+  reputation: 'rs.total_score DESC NULLS LAST',
   newest: 'u.created_at DESC',
   oldest: 'u.created_at ASC',
   name: 'u.username ASC',
@@ -189,7 +189,13 @@ export async function GET(request: NextRequest) {
           (SELECT COUNT(*) FROM orders WHERE user_id = u.id AND disputed_at IS NOT NULL AND (disputed_by = 'merchant' OR disputed_by IS NULL)),
           0
         )::text as disputes_against_user,
-        COALESCE(u.reputation_score, 0)::text as reputation_score,
+        -- Reputation now reads the CANONICAL 300–900 score from
+        -- reputation_scores (same source as user/merchant profiles, badges,
+        -- leaderboards and the admin Merchants page) instead of the legacy
+        -- denormalized users.reputation_score column (a different 0–1000 value
+        -- core-api keeps only for order-matching). This keeps the admin Users
+        -- list in lock-step with every other reputation surface.
+        COALESCE(rs.total_score, 0)::text as reputation_score,
         -- Algorithmic threat score (NOT COALESCEd — nullable so the frontend
         -- can render a distinct "Unscored" dash vs a misleading 0).
         rp.wl_score::text as risk_score,
@@ -198,6 +204,7 @@ export async function GET(request: NextRequest) {
         u.updated_at::text
       FROM users u
       LEFT JOIN risk_profiles rp ON rp.entity_id = u.id
+      LEFT JOIN reputation_scores rs ON rs.entity_id = u.id AND rs.entity_type = 'user'
       ${whereClause}
       ${orderClause}
       LIMIT $${limitParam} OFFSET $${offsetParam}

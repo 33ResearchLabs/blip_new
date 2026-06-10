@@ -32,6 +32,7 @@ import {
   formatCrypto,
   formatPercentage,
 } from "@/lib/format";
+import { TIER_INFO, getTierFromScore } from "@/lib/reputation/types";
 
 // ============================================
 // TYPES
@@ -509,6 +510,9 @@ export default function AdminUsersPage() {
                   const avatar = pickAvatar(u.id);
                   const AvatarIcon = avatar.Icon;
                   const isSelected = selected.has(u.id);
+                  // Canonical 300–900 reputation tier (same source as the
+                  // Trust Scores tab / user & merchant profiles).
+                  const repTier = u.reputationScore > 0 ? TIER_INFO[getTierFromScore(u.reputationScore)] : null;
 
                   // "Active" if updated within last 30 days
                   const lastActiveMs = u.updatedAt ? Date.now() - new Date(u.updatedAt).getTime() : Infinity;
@@ -618,16 +622,19 @@ export default function AdminUsersPage() {
                         </span>
                       </div>
 
-                      {/* Rep */}
+                      {/* Rep — canonical 300–900 score, coloured by tier */}
                       <div className="text-right">
-                        <span className={`text-[11px] font-medium tabular-nums ${
-                          u.reputationScore >= 80 ? "text-[var(--color-success)]" :
-                          u.reputationScore >= 50 ? "text-foreground/70" :
-                          u.reputationScore > 0 ? "text-[var(--color-warning)]" :
-                          "text-foreground/25"
-                        }`}>
-                          {u.reputationScore > 0 ? formatCount(u.reputationScore) : "—"}
-                        </span>
+                        {repTier ? (
+                          <span
+                            className="text-[11px] font-medium tabular-nums"
+                            style={{ color: repTier.color }}
+                            title={`${repTier.name} · ${u.reputationScore}/900`}
+                          >
+                            {formatCount(u.reputationScore)}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-foreground/25 tabular-nums">—</span>
+                        )}
                       </div>
 
                       {/* Risk — algorithmic threat score (wl_score). "—" when
