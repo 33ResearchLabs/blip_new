@@ -143,12 +143,17 @@ export function PhoneVerificationSheet({
 
   async function setupRecaptcha() {
     const authInstance = getFirebaseAuth();
+    // Clear existing verifier
     if (recaptchaVerifierRef.current) {
       try { recaptchaVerifierRef.current.clear(); } catch { /* ignore */ }
       recaptchaVerifierRef.current = null;
     }
-    // Re-create the container div so reCAPTCHA always gets a fresh DOM node
-    if (recaptchaRef.current) recaptchaRef.current.innerHTML = '';
+    // Replace container with a fresh div so reCAPTCHA never sees a pre-rendered element
+    if (recaptchaRef.current) {
+      const fresh = document.createElement('div');
+      recaptchaRef.current.replaceWith(fresh);
+      recaptchaRef.current = fresh;
+    }
     recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, recaptchaRef.current!, {
       size: 'invisible',
       // Only attach a custom Enterprise siteKey when opted in; otherwise let
