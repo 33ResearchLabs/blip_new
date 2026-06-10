@@ -76,13 +76,25 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
     setStep("scanning");
     setMessage("Loading camera…");
 
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      setStep("error");
+      setMessage("Camera not supported in this browser. Please use Chrome or Safari.");
+      return;
+    }
+
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-    } catch {
-      setStep("error");
-      setMessage("Camera access denied. Please allow camera and try again.");
-      return;
+    } catch (firstErr: any) {
+      // Some browsers reject the facingMode constraint — retry without it
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      } catch (err: any) {
+        setStep("error");
+        const isDenied = err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError";
+        setMessage(isDenied ? "CAMERA_DENIED" : `Camera error: ${err?.name} — ${err?.message}`);
+        return;
+      }
     }
 
     streamRef.current = stream;
@@ -263,9 +275,23 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                 <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center">
                   <AlertCircle size={40} className="text-red-400" />
                 </div>
-                <p className="text-white/70 text-sm text-center">{message}</p>
+                {message === "CAMERA_DENIED" ? (
+                  <>
+                    <div className="text-center">
+                      <p className="text-white font-medium mb-1">Camera access blocked</p>
+                      <p className="text-white/50 text-sm">To enable it:</p>
+                    </div>
+                    <div className="w-full bg-white/5 rounded-2xl p-4 text-sm text-white/60 space-y-2">
+                      <p>1. Tap the <span className="text-white">🔒 lock icon</span> in your browser's address bar</p>
+                      <p>2. Find <span className="text-white">Camera</span> and set it to <span className="text-white">Allow</span></p>
+                      <p>3. Refresh the page and try again</p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-white/70 text-sm text-center">{message}</p>
+                )}
                 <button
-                  onClick={() => { setStep("intro"); setBlinks(0); blinksRef.current = 0; }}
+                  onClick={() => { setStep("intro"); setBlinks(0); blinksRef.current = 0; setMessage("Position your face in the circle"); }}
                   className="w-full py-3.5 rounded-2xl bg-white/10 text-white font-semibold text-sm"
                 >
                   Try Again
