@@ -373,7 +373,7 @@ export const ProfileScreen = ({
 
       {/* ── Header ── matches the Messages screen: big title + a rounded-square
           icon button. Static; the account card + the rest scroll underneath. */}
-      <header className="px-5 pt-4 pb-4 shrink-0">
+      <header className="px-5 pt-4 pb-0 shrink-0">
         <div className="flex items-center justify-between">
           <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
             Profile
