@@ -24,6 +24,7 @@ import {
   Camera,
   Phone,
   Gauge,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -31,6 +32,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { useUser } from "@/context/AppContext";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { PhoneVerificationSheet } from "@/components/user/PhoneVerificationSheet";
+import { LivenessCheckSheet } from "@/components/user/LivenessCheckSheet";
 import { UserAvatarModal } from "@/components/user/UserAvatarModal";
 
 /**
@@ -321,6 +323,12 @@ export const ProfileScreen = ({
   const phoneVerifiedProfile = phoneVerifiedLocal ||
     Boolean((user as { phone_verified?: boolean } | null)?.phone_verified);
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
+  const [faceVerifiedLocal, setFaceVerifiedLocal] = useState(
+    Boolean((user as { face_verified?: boolean } | null)?.face_verified),
+  );
+  const faceVerified = faceVerifiedLocal ||
+    Boolean((user as { face_verified?: boolean } | null)?.face_verified);
+  const [showLiveness, setShowLiveness] = useState(false);
 
   // Copy the connected Solana wallet address with a brief check-mark confirm.
   const [copiedAddr, setCopiedAddr] = useState(false);
@@ -673,6 +681,18 @@ export const ProfileScreen = ({
               ) : undefined
             }
           />
+          <SettingsRow
+            icon={<ShieldCheck className="w-[15px] h-[15px]" />}
+            title="Liveness Check"
+            subtitle={faceVerified ? "Verified — badge active" : "Blink to earn your Verified badge"}
+            onClick={faceVerified ? undefined : () => setShowLiveness(true)}
+            hideChevron={faceVerified}
+            trailing={
+              faceVerified ? (
+                <BadgeCheck size={18} className="text-emerald-400 shrink-0" />
+              ) : undefined
+            }
+          />
         </SettingsGroup>
 
         {/* ── 5. Preferences ── */}
@@ -779,6 +799,15 @@ export const ProfileScreen = ({
         onVerified={() => {
           setShowPhoneVerify(false);
           setPhoneVerifiedLocal(true);
+        }}
+      />
+
+      <LivenessCheckSheet
+        open={showLiveness}
+        onClose={() => setShowLiveness(false)}
+        onVerified={() => {
+          setShowLiveness(false);
+          setFaceVerifiedLocal(true);
         }}
       />
     </div>

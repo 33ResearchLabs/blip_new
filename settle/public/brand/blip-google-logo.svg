@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#0a0a0f"/>
+  <!-- Waveform mark — centered in upper portion -->
+  <path d="M60 210 L140 210 L170 160 L215 300 L256 120 L297 300 L342 160 L387 210 L452 210"
+        stroke="white" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- blip wordmark below -->
+  <text x="256" y="400"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="110"
+        font-weight="700"
+        fill="white"
+        text-anchor="middle"
+        letter-spacing="-3">blip</text>
+</svg>
