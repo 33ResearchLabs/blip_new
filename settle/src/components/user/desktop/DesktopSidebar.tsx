@@ -8,7 +8,7 @@ import {
   User,
   Send,
   Bell,
-  Gift,
+  Coins,
   HelpCircle,
   Wallet,
 } from "lucide-react";
@@ -55,7 +55,7 @@ export function DesktopSidebar({
       badge: chatUnreadCount || notificationCount,
     },
     { key: "wallet", label: "Wallet", icon: <Wallet size={18} strokeWidth={1.9} /> },
-    { key: "rewards", label: "Rewards", icon: <Gift size={18} strokeWidth={1.9} /> },
+    { key: "points", label: "Rewards", icon: <Coins size={18} strokeWidth={1.9} /> },
     { key: "notifications", label: "Notifications", icon: <Bell size={18} strokeWidth={1.9} />, badge: notificationCount },
     { key: "support", label: "Support", icon: <HelpCircle size={18} strokeWidth={1.9} /> },
     { key: "profile", label: "Profile", icon: <User size={18} strokeWidth={1.9} /> },

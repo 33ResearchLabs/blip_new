@@ -23,6 +23,7 @@ import {
   BadgeCheck,
   Camera,
   Phone,
+  Gauge,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -602,6 +603,18 @@ export const ProfileScreen = ({
         {/* ── 1. Payment Methods (own card, always-visible list) ── */}
         <PaymentMethodsManager userId={userId} />
 
+        {/* ── Trading Limits ── entry point to the user limits screen
+            (daily / per-transaction caps, usage, request-increase + X
+            verification), mirroring the merchant Settings → Limits tab. */}
+        <SettingsGroup label="Trading" icon={<Gauge className="w-3.5 h-3.5" />}>
+          <SettingsRow
+            icon={<Gauge className="w-[15px] h-[15px]" />}
+            title="Trading Limits"
+            subtitle="Daily & per-transaction caps"
+            onClick={() => setScreen("limits")}
+          />
+        </SettingsGroup>
+
         {/* Resolved Disputes — rich list kept inline so each card retains
             its existing layout (orderNumber, won/lost/split badge, amount,
             counterparty). Only rendered when there's at least one. */}
@@ -689,6 +702,12 @@ export const ProfileScreen = ({
 
         {/* ── 5. Rewards ── */}
         <SettingsGroup label="Rewards" icon={<Gift className="w-3.5 h-3.5" />}>
+          <SettingsRow
+            icon={<Coins className="w-[15px] h-[15px]" />}
+            title="Rewards"
+            subtitle="Your Blip Points & how to earn"
+            onClick={() => setScreen("points")}
+          />
           <SettingsRow
             icon={<Gift className="w-[15px] h-[15px]" />}
             title="Invite friends"

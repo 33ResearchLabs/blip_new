@@ -109,6 +109,15 @@ export function PhoneVerificationSheet({
     }
     return () => {
       if (cooldownRef.current) clearInterval(cooldownRef.current);
+      // Tear down the reCAPTCHA widget on close/unmount so reopening the sheet
+      // starts clean — otherwise the stale widget stays registered with
+      // grecaptcha and the next render throws "reCAPTCHA has already been
+      // rendered". clear() removes the widget's DOM; React remounts a fresh
+      // container div on reopen, so no innerHTML reset is needed here.
+      if (recaptchaVerifierRef.current) {
+        try { recaptchaVerifierRef.current.clear(); } catch { /* ignore */ }
+        recaptchaVerifierRef.current = null;
+      }
     };
   }, [open]);
 
@@ -147,9 +156,16 @@ export function PhoneVerificationSheet({
       try { recaptchaVerifierRef.current.clear(); } catch { /* ignore */ }
       recaptchaVerifierRef.current = null;
     }
-    // Re-create the container div so reCAPTCHA always gets a fresh DOM node
-    if (recaptchaRef.current) recaptchaRef.current.innerHTML = '';
-    recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, recaptchaRef.current!, {
+    // grecaptcha tracks "already rendered" state by DOM element, and neither
+    // verifier.clear() nor wiping innerHTML reliably de-registers the element —
+    // so reusing the same container on a retry/resend throws "reCAPTCHA has
+    // already been rendered in this element". Mount each verifier on a brand-new
+    // child node so grecaptcha never sees the same element twice.
+    const host = recaptchaRef.current!;
+    host.innerHTML = '';
+    const node = document.createElement('div');
+    host.appendChild(node);
+    recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, node, {
       size: 'invisible',
       // Only attach a custom Enterprise siteKey when opted in; otherwise let
       // Firebase use its own managed reCAPTCHA (standard Phone Auth).
@@ -261,8 +277,8 @@ export function PhoneVerificationSheet({
             transition={{ type: "spring", damping: 26, stiffness: 300 }}
             className={
               isDesktop
-                ? "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md rounded-[28px] bg-[#111] border border-white/[0.08] px-5 pt-6 pb-7 shadow-2xl"
-                : "fixed bottom-0 left-0 right-0 z-50 rounded-t-[28px] bg-[#111] border-t border-white/[0.08] px-5 pt-5 pb-10 shadow-2xl"
+                ? "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md rounded-[28px] bg-card-solid border border-white/[0.08] px-5 pt-6 pb-7 shadow-2xl"
+                : "fixed bottom-0 left-0 right-0 z-50 rounded-t-[28px] bg-card-solid border-t border-white/[0.08] px-5 pt-5 pb-10 shadow-2xl"
             }
           >
             {/* Invisible recaptcha container */}
@@ -280,7 +296,7 @@ export function PhoneVerificationSheet({
                   <Phone size={15} className="text-white/70" />
                 </div>
                 <div>
-                  <p className="text-[16px] font-bold text-white/95 tracking-[-0.02em] leading-tight">
+                  <p className="text-[16px] font-bold text-foreground tracking-[-0.02em] leading-tight">
                     {step === "success" ? "Phone Verified" : "Verify Phone"}
                   </p>
                   <p className="text-[11px] text-white/40 mt-0.5">
@@ -312,7 +328,7 @@ export function PhoneVerificationSheet({
                       {showCountryPicker && (
                         <motion.div
                           initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                          className="absolute top-14 left-0 z-10 w-36 rounded-[14px] bg-[#1a1a1a] border border-white/[0.08] shadow-xl overflow-hidden"
+                          className="absolute top-14 left-0 z-10 w-36 rounded-[14px] bg-card-solid border border-white/[0.08] shadow-xl overflow-hidden"
                         >
                           {COUNTRY_CODES.map((c) => (
                             <button key={c.code} onClick={() => { setCountry(c); setShowCountryPicker(false); }}
@@ -331,7 +347,7 @@ export function PhoneVerificationSheet({
                     value={phone}
                     onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setError(""); }}
                     onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                    className="flex-1 h-12 rounded-[14px] bg-white/[0.06] border border-white/[0.08] px-4 text-[16px] font-semibold text-white/95 placeholder:text-white/25 outline-none focus:border-white/20 focus:bg-white/[0.08] transition-colors"
+                    className="flex-1 h-12 rounded-[14px] bg-white/[0.06] border border-white/[0.08] px-4 text-[16px] font-semibold text-foreground placeholder:text-white/25 outline-none focus:border-white/20 focus:bg-white/[0.08] transition-colors"
                     autoFocus
                   />
                 </div>
@@ -344,7 +360,7 @@ export function PhoneVerificationSheet({
 
                 <motion.button whileTap={{ scale: 0.97 }} onClick={handleSendOtp}
                   disabled={busy || phone.replace(/\D/g, "").length < 7}
-                  className="w-full h-12 rounded-[14px] bg-white text-black text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
+                  className="w-full h-12 rounded-[14px] bg-accent text-accent-text text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
                   {busy ? <Loader2 size={16} className="animate-spin" /> : "Send OTP"}
                 </motion.button>
               </div>
@@ -391,7 +407,7 @@ export function PhoneVerificationSheet({
 
                 <motion.button whileTap={{ scale: 0.97 }} onClick={handleVerifyOtp}
                   disabled={busy || otp.length !== 6}
-                  className="w-full h-12 rounded-[14px] bg-white text-black text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
+                  className="w-full h-12 rounded-[14px] bg-accent text-accent-text text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
                   {busy ? <Loader2 size={16} className="animate-spin" /> : "Verify"}
                 </motion.button>
 
@@ -419,7 +435,7 @@ export function PhoneVerificationSheet({
                   <ShieldCheck size={32} className="text-green-400" />
                 </motion.div>
                 <div className="text-center">
-                  <p className="text-[18px] font-bold text-white/95 tracking-[-0.02em]">Verified!</p>
+                  <p className="text-[18px] font-bold text-foreground tracking-[-0.02em]">Verified!</p>
                   <p className="text-[13px] text-white/50 mt-1">Your phone is now verified</p>
                 </div>
               </div>

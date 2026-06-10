@@ -80,6 +80,7 @@ export const CAP_POLICIES: Partial<Record<BlipPointEvent, CapPolicy>> = {
   FIVE_STAR_RECEIVED:    { perPeriodAmount: 100, periodKind: 'month' },
   REFERRAL_TRADE_CREDITED: { perPeriodCount: 50, periodKind: 'lifetime' },
   KYC_COMPLETED:         { perPeriodCount: 1,   periodKind: 'lifetime' },
+  X_VERIFIED:            { perPeriodCount: 1,   periodKind: 'lifetime' },
 };
 
 interface AwardArgs {

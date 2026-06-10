@@ -7,9 +7,8 @@
  * Firebase ID token here; we verify the token server-side and promote the
  * number to the merchant's verified phone.
  *
- * Mirrors the column writes of the legacy MSG91 verify-code route
- * (phone, phone_verified, phone_verified_at) so the "Verified" badge logic
- * is unchanged regardless of which provider issued the OTP.
+ * Writes the same columns the "Verified" badge logic reads
+ * (phone, phone_verified, phone_verified_at).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,7 +21,7 @@ import {
   forbiddenResponse,
 } from '@/lib/middleware/auth';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
-import { queryOne, transaction } from '@/lib/db';
+import { queryOne, query } from '@/lib/db';
 import { invalidateMerchantCache } from '@/lib/cache';
 import { logger } from '@/lib/logger';
 
@@ -89,21 +88,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await transaction(async (client) => {
-      await client.query(
-        `UPDATE merchants
-            SET phone = $1, phone_verified = true, phone_verified_at = NOW(), updated_at = NOW()
-          WHERE id = $2`,
-        [phone, merchantId]
-      );
-      // Consume any outstanding legacy MSG91 codes so a stale SMS code can't
-      // also be redeemed after a Firebase verification.
-      await client.query(
-        `UPDATE phone_verification_codes SET consumed_at = NOW()
-          WHERE merchant_id = $1 AND consumed_at IS NULL`,
-        [merchantId]
-      );
-    });
+    await query(
+      `UPDATE merchants
+          SET phone = $1, phone_verified = true, phone_verified_at = NOW(), updated_at = NOW()
+        WHERE id = $2`,
+      [phone, merchantId]
+    );
     invalidateMerchantCache(merchantId);
 
     logger.info('[Phone] Firebase verified (merchant)', { merchantId });

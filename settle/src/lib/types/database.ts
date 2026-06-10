@@ -165,6 +165,7 @@ export type BlipPointEvent =
   | 'FIVE_STAR_RECEIVED'
   | 'REFERRAL_TRADE_CREDITED'
   | 'KYC_COMPLETED'
+  | 'X_VERIFIED'
   | 'COIN_LOCK'
   | 'COIN_UNLOCK'
   | 'COIN_VOID'

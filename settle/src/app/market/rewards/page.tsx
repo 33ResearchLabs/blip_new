@@ -44,7 +44,13 @@ const XIcon: LucideIcon = (({
   className?: string;
   [k: string]: unknown;
 }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true" {...rest}>
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    aria-hidden="true"
+    {...rest}
+  >
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817-5.965 6.817H1.68l7.73-8.835L1.254 2.25h6.825l4.713 6.231 5.452-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644Z" />
   </svg>
 )) as unknown as LucideIcon;
@@ -217,14 +223,19 @@ function TaskRow({ task, index }: { task: OneOffTask; index: number }) {
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold text-white/90 leading-tight truncate">{title}</p>
-        <p className="text-[12px] text-white/40 leading-snug mt-0.5">{description}</p>
+        <p className="text-[14px] font-semibold text-white/90 leading-tight truncate">
+          {title}
+        </p>
+        <p className="text-[12px] text-white/40 leading-snug mt-0.5">
+          {description}
+        </p>
       </div>
 
       {/* Points + status */}
       <div className="flex items-center gap-3 shrink-0">
         <span className="inline-flex items-center gap-1 text-[13px] font-mono font-semibold text-amber-200/90 tabular-nums">
-          <Coins className="w-3.5 h-3.5 text-amber-300/70" />+{formatCount(points)}
+          <Coins className="w-3.5 h-3.5 text-amber-300/70" />+
+          {formatCount(points)}
         </span>
         {done ? (
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-400/[0.12] border border-emerald-400/25 text-emerald-300">
@@ -247,7 +258,11 @@ function TaskRow({ task, index }: { task: OneOffTask; index: number }) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1], delay: index * 0.04 }}
+      transition={{
+        duration: 0.35,
+        ease: [0.22, 1, 0.36, 1],
+        delay: index * 0.04,
+      }}
     >
       {!done && href ? (
         <Link href={href} className="block group">
@@ -266,15 +281,23 @@ function EarnRow({ rule, index }: { rule: EarnRule; index: number }) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1], delay: index * 0.03 }}
+      transition={{
+        duration: 0.35,
+        ease: [0.22, 1, 0.36, 1],
+        delay: index * 0.03,
+      }}
       className="flex items-center gap-3.5 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06]"
     >
       <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 text-white/55">
         <Icon className="w-[17px] h-[17px]" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-semibold text-white/85 leading-tight">{title}</p>
-        <p className="text-[11.5px] text-white/40 leading-snug mt-0.5">{description}</p>
+        <p className="text-[13px] font-semibold text-white/85 leading-tight">
+          {title}
+        </p>
+        <p className="text-[11.5px] text-white/40 leading-snug mt-0.5">
+          {description}
+        </p>
       </div>
       <span className="inline-flex items-center gap-1 text-[13px] font-mono font-semibold text-amber-200/90 tabular-nums shrink-0">
         <Coins className="w-3.5 h-3.5 text-amber-300/70" />
@@ -284,7 +307,8 @@ function EarnRow({ rule, index }: { rule: EarnRule; index: number }) {
   );
 }
 
-const SECTION_LABEL = "text-[11px] font-mono uppercase tracking-[0.18em] text-white/35";
+const SECTION_LABEL =
+  "text-[11px] font-mono uppercase tracking-[0.18em] text-white/35";
 
 // ─── Page ─────────────────────────────────────────────────────────────────
 
@@ -326,7 +350,10 @@ export default function MerchantRewardsPage() {
             {/* Soft gold glow behind the coin */}
             <div
               className="pointer-events-none absolute -top-16 -right-10 w-56 h-56 rounded-full opacity-30 blur-3xl"
-              style={{ background: "radial-gradient(circle, rgba(245,200,80,0.35), transparent 70%)" }}
+              style={{
+                background:
+                  "radial-gradient(circle, rgba(245,200,80,0.35), transparent 70%)",
+              }}
             />
             <div className="relative flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -336,14 +363,18 @@ export default function MerchantRewardsPage() {
                 </p>
                 <div className="mt-4 flex items-center gap-5">
                   <div>
-                    <p className="text-[11px] text-white/35 font-medium">Lifetime earned</p>
+                    <p className="text-[11px] text-white/35 font-medium">
+                      Lifetime earned
+                    </p>
                     <p className="text-[15px] font-bold text-white/80 tabular-nums">
                       {formatCount(REWARDS_DATA.lifetimeEarned)}
                     </p>
                   </div>
                   <div className="w-px h-8 bg-white/[0.08]" />
                   <div>
-                    <p className="text-[11px] text-white/35 font-medium">Locked</p>
+                    <p className="text-[11px] text-white/35 font-medium">
+                      Locked
+                    </p>
                     <p className="text-[15px] font-bold text-white/80 tabular-nums">
                       {formatCount(REWARDS_DATA.locked)}
                     </p>
@@ -352,9 +383,15 @@ export default function MerchantRewardsPage() {
               </div>
               <div
                 className="shrink-0 w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center border border-amber-300/20"
-                style={{ background: "linear-gradient(150deg, rgba(245,210,110,0.18), rgba(245,160,60,0.10))" }}
+                style={{
+                  background:
+                    "linear-gradient(150deg, rgba(245,210,110,0.18), rgba(245,160,60,0.10))",
+                }}
               >
-                <Coins className="w-7 h-7 lg:w-8 lg:h-8 text-amber-300" strokeWidth={1.8} />
+                <Coins
+                  className="w-7 h-7 lg:w-8 lg:h-8 text-amber-300"
+                  strokeWidth={1.8}
+                />
               </div>
             </div>
           </motion.section>
