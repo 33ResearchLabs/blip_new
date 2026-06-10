@@ -76,6 +76,11 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
   // synchronously inside the click handler. Async functions break the gesture
   // activation token on some Android versions even when called first.
   function startScan() {
+    if (!window.isSecureContext) {
+      setStep("error");
+      setMessage("HTTPS_REQUIRED");
+      return;
+    }
     if (!navigator?.mediaDevices?.getUserMedia) {
       setStep("error");
       setMessage("Camera not supported in this browser. Please use Chrome or Safari.");
@@ -275,7 +280,17 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                 <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center">
                   <AlertCircle size={40} className="text-red-400" />
                 </div>
-                {message === "CAMERA_DENIED" ? (
+                {message === "HTTPS_REQUIRED" ? (
+                  <>
+                    <div className="text-center">
+                      <p className="text-text-primary font-medium mb-1">Secure connection required</p>
+                      <p className="text-text-secondary text-sm">Camera only works over HTTPS.</p>
+                    </div>
+                    <div className="w-full bg-surface-active rounded-2xl p-4 text-sm text-text-secondary">
+                      <p>Make sure the address bar shows <span className="text-text-primary">https://</span> before the site URL.</p>
+                    </div>
+                  </>
+                ) : message === "CAMERA_DENIED" ? (
                   <>
                     <div className="text-center">
                       <p className="text-text-primary font-medium mb-1">Camera access blocked</p>
