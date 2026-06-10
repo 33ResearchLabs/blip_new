@@ -44,6 +44,15 @@ export const KYC0_INITIAL_LIMITS = { dailyUsd: 100, perTradeUsd: 25 } as const;
 /** No-KYC day-3+ limits (same as KYC-1 floor intentionally). */
 export const KYC0_RAMPED_LIMITS  = { dailyUsd: 300, perTradeUsd: 100 } as const;
 
+/**
+ * User-side base floor. Regular users start here regardless of KYC level or
+ * account age — a flat $50/day, $25/trade. This is a *base*, not a ceiling:
+ * the reputation multiplier, active coin unlocks, and approved limit-increase
+ * requests still stack on top in getEffectiveLimits. Merchants are unaffected
+ * and keep the KYC-derived base above.
+ */
+export const USER_BASE_LIMITS = { dailyUsd: 50, perTradeUsd: 25 } as const;
+
 export type KycLevel = keyof typeof KYC_BASE_LIMITS;
 
 /** Kept for backwards compat — equals KYC-0 floor */
@@ -110,10 +119,15 @@ export async function getEffectiveLimits(
   // Read KYC level, account age, unlock, rep multiplier, and admin overrides concurrently.
   const { kycLevel, accountAgeDays } = await getKycInfo(actorId, actorType);
 
-  // KYC-0 time-based ramp: days 1–2 → lower floor, day 3+ → same as KYC-1.
-  const kycBase = kycLevel === 0
-    ? (accountAgeDays < 3 ? KYC0_INITIAL_LIMITS : KYC0_RAMPED_LIMITS)
-    : KYC_BASE_LIMITS[kycLevel];
+  // Users get a flat base floor ($50/day, $25/trade) — reputation, coin
+  // unlocks, and approved increases still raise it below. Merchants keep the
+  // KYC-derived base with the KYC-0 time ramp (days 1–2 → lower, day 3+ →
+  // same as KYC-1).
+  const kycBase = actorType === 'user'
+    ? USER_BASE_LIMITS
+    : kycLevel === 0
+      ? (accountAgeDays < 3 ? KYC0_INITIAL_LIMITS : KYC0_RAMPED_LIMITS)
+      : KYC_BASE_LIMITS[kycLevel];
 
   const [unlock, repMult, overrides] = await Promise.all([
     queryOne<UnlockRow>(
