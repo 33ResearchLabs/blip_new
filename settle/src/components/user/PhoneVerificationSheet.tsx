@@ -147,12 +147,15 @@ export function PhoneVerificationSheet({
       try { recaptchaVerifierRef.current.clear(); } catch { /* ignore */ }
       recaptchaVerifierRef.current = null;
     }
-    // Always inject a fresh child div — never render into the same element twice
-    if (!recaptchaRef.current) throw new Error('reCAPTCHA wrapper not mounted');
-    recaptchaRef.current.innerHTML = '';
-    const fresh = document.createElement('div');
-    recaptchaRef.current.appendChild(fresh);
-    recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, fresh, {
+    // Remove any previously appended container from body
+    document.getElementById('blip-recaptcha-host')?.remove();
+    // Append a fresh invisible div to document.body — completely outside React's
+    // managed DOM so React reconciliation can never interfere with it.
+    const container = document.createElement('div');
+    container.id = 'blip-recaptcha-host';
+    container.style.cssText = 'position:fixed;bottom:0;left:0;width:0;height:0;overflow:hidden;';
+    document.body.appendChild(container);
+    recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, container, {
       size: 'invisible',
       ...(RECAPTCHA_ENTERPRISE_ENABLED && RECAPTCHA_SITE_KEY ? { siteKey: RECAPTCHA_SITE_KEY } : {}),
       callback: () => {},
