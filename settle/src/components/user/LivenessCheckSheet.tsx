@@ -72,33 +72,31 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
     return faceapi;
   }
 
-  async function startScan() {
-    // getUserMedia MUST be the first async call — mobile Chrome ties the
-    // permission prompt to the user gesture and breaks if we await anything else first.
+  // Non-async wrapper — Chrome Android requires getUserMedia() to be invoked
+  // synchronously inside the click handler. Async functions break the gesture
+  // activation token on some Android versions even when called first.
+  function startScan() {
     if (!navigator?.mediaDevices?.getUserMedia) {
       setStep("error");
       setMessage("Camera not supported in this browser. Please use Chrome or Safari.");
       return;
     }
 
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-    } catch (firstErr: any) {
-      // Some browsers reject the facingMode constraint — retry without it
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      } catch (err: any) {
-        setStep("error");
-        const isDenied = err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError";
-        setMessage(isDenied ? "CAMERA_DENIED" : `Camera error: ${err?.name} — ${err?.message}`);
-        return;
-      }
-    }
-
     setStep("scanning");
     setMessage("Loading camera…");
 
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "user" } })
+      .catch(() => navigator.mediaDevices.getUserMedia({ video: true }))
+      .then(stream => afterStream(stream))
+      .catch((err: any) => {
+        setStep("error");
+        const isDenied = err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError";
+        setMessage(isDenied ? "CAMERA_DENIED" : `Camera error: ${err?.name} — ${err?.message}`);
+      });
+  }
+
+  async function afterStream(stream: MediaStream) {
     streamRef.current = stream;
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
