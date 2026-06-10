@@ -13,46 +13,44 @@ interface Props {
 
 type Step = "intro" | "scanning" | "success" | "error";
 
-const BLINKS_REQUIRED = 2;
-const BLINK_THRESHOLD = 0.4; // blendshape score: 0=open, 1=closed
+const HOLD_SECONDS = 3; // seconds face must stay in frame
+const DETECT_INTERVAL = 200; // ms between detections
 
-// Guidance based on face bounding box relative to video
 function getFaceGuidance(
-  box: { originX: number; originY: number; width: number; height: number },
+  face: { boundingBox: DOMRectReadOnly },
   vw: number,
   vh: number
 ): string | null {
-  const cx = box.originX + box.width / 2;
-  const cy = box.originY + box.height / 2;
-  const faceRatio = box.width / vw;
+  const b = face.boundingBox;
+  const cx = b.x + b.width / 2;
+  const cy = b.y + b.height / 2;
+  const ratio = b.width / vw;
 
-  if (faceRatio < 0.18) return "Move closer";
-  if (faceRatio > 0.65) return "Move back";
-  if (cx / vw < 0.3) return "Move right";
-  if (cx / vw > 0.7) return "Move left";
-  if (cy / vh < 0.25) return "Move down";
-  if (cy / vh > 0.75) return "Move up";
-  return null; // face is well-positioned
+  if (ratio < 0.2)  return "Move closer";
+  if (ratio > 0.7)  return "Move back";
+  if (cx / vw < 0.28) return "Move right";
+  if (cx / vw > 0.72) return "Move left";
+  if (cy / vh < 0.22) return "Move down";
+  if (cy / vh > 0.78) return "Move up";
+  return null;
 }
 
 export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
-  const [step, setStep]               = useState<Step>("intro");
-  const [blinks, setBlinks]           = useState(0);
-  const [message, setMessage]         = useState("Position your face in the circle");
+  const [step, setStep]       = useState<Step>("intro");
+  const [message, setMessage] = useState("Position your face in the circle");
+  const [progress, setProgress] = useState(0); // 0–100
   const [faceDetected, setFaceDetected] = useState(false);
-  const [busy, setBusy]               = useState(false);
-  const [loadingModels, setLoadingModels] = useState(false);
+  const [busy, setBusy]       = useState(false);
+  const [hasFaceApi, setHasFaceApi] = useState(true);
 
-  const videoRef      = useRef<HTMLVideoElement>(null);
-  const streamRef     = useRef<MediaStream | null>(null);
-  const rafRef        = useRef<number>(0);
-  const landmarkerRef = useRef<any>(null);
-  const eyeWasClosed  = useRef(false);
-  const blinksRef     = useRef(0);
-  const lastTs        = useRef(0);
+  const videoRef    = useRef<HTMLVideoElement>(null);
+  const streamRef   = useRef<MediaStream | null>(null);
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdRef     = useRef(0); // ms face has been held in position
+  const detectorRef = useRef<any>(null);
 
   const stopCamera = useCallback(() => {
-    cancelAnimationFrame(rafRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
   }, []);
@@ -61,36 +59,14 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
     if (!open) {
       stopCamera();
       setStep("intro");
-      setBlinks(0);
-      blinksRef.current = 0;
-      eyeWasClosed.current = false;
+      setProgress(0);
+      holdRef.current = 0;
       setMessage("Position your face in the circle");
       setFaceDetected(false);
     }
   }, [open, stopCamera]);
 
-  async function loadLandmarker() {
-    if (landmarkerRef.current) return landmarkerRef.current;
-    const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
-    const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-    );
-    const landmarker = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath:
-          "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-        delegate: "GPU",
-      },
-      runningMode: "VIDEO",
-      numFaces: 1,
-      outputFaceBlendshapes: true,
-    });
-    landmarkerRef.current = landmarker;
-    return landmarker;
-  }
-
-  // Plain (non-async) click handler — Chrome Android requires getUserMedia()
-  // to be called synchronously inside the gesture handler.
+  // Plain (non-async) — Chrome Android gesture token requires this
   function startScan() {
     if (!window.isSecureContext) {
       setStep("error");
@@ -104,7 +80,7 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
     }
 
     setStep("scanning");
-    setMessage("Loading camera…");
+    setMessage("Starting camera…");
 
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } })
@@ -120,102 +96,86 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
   async function afterStream(stream: MediaStream) {
     streamRef.current = stream;
     const video = videoRef.current;
-    if (video) {
-      video.srcObject = stream;
-      await video.play();
-      await new Promise<void>(res => {
-        if (video.videoWidth > 0) { res(); return; }
-        video.addEventListener("loadedmetadata", () => res(), { once: true });
-        setTimeout(res, 2000);
-      });
+    if (!video) return;
+
+    video.srcObject = stream;
+    await video.play();
+    await new Promise<void>(res => {
+      if (video.videoWidth > 0) { res(); return; }
+      video.addEventListener("loadedmetadata", () => res(), { once: true });
+      setTimeout(res, 2000);
+    });
+
+    // Try native FaceDetector API (Chrome Android / Chrome desktop)
+    let detector: any = null;
+    if ("FaceDetector" in window) {
+      try {
+        detector = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+        detectorRef.current = detector;
+      } catch { /* not supported */ }
     }
 
-    setLoadingModels(true);
-    setMessage("Loading face detection…");
-    let landmarker: any;
-    try {
-      landmarker = await loadLandmarker();
-    } catch {
-      setStep("error");
-      setMessage("Failed to load face detection. Check your connection.");
-      stopCamera();
-      setLoadingModels(false);
+    if (!detector) {
+      // Fallback: no face detection API — just verify camera works and hold for 5s
+      setHasFaceApi(false);
+      setMessage("Hold still…");
+      startHoldTimer(null);
       return;
     }
-    setLoadingModels(false);
+
     setMessage("Position your face in the circle");
+    startHoldTimer(detector);
+  }
 
-    const detect = () => {
+  function startHoldTimer(detector: any | null) {
+    holdRef.current = 0;
+    setProgress(0);
+
+    timerRef.current = setInterval(async () => {
       const video = videoRef.current;
-      if (!video || video.readyState < 2) {
-        rafRef.current = requestAnimationFrame(detect);
-        return;
-      }
+      if (!video) return;
 
-      const now = performance.now();
-      if (now === lastTs.current) {
-        rafRef.current = requestAnimationFrame(detect);
-        return;
-      }
-      lastTs.current = now;
+      if (detector) {
+        let faces: any[] = [];
+        try { faces = await detector.detect(video); } catch { faces = []; }
 
-      const result = landmarker.detectForVideo(video, now);
+        if (!faces.length) {
+          setFaceDetected(false);
+          setMessage("No face detected — look straight at the camera");
+          holdRef.current = 0;
+          setProgress(0);
+          return;
+        }
 
-      if (!result?.faceLandmarks?.length) {
-        setFaceDetected(false);
-        setMessage("No face detected — look straight at the camera");
-        rafRef.current = requestAnimationFrame(detect);
-        return;
-      }
-
-      setFaceDetected(true);
-
-      // Face position guidance using bounding box from landmarks
-      const lms = result.faceLandmarks[0];
-      const xs = lms.map((p: any) => p.x);
-      const ys = lms.map((p: any) => p.y);
-      const minX = Math.min(...xs), maxX = Math.max(...xs);
-      const minY = Math.min(...ys), maxY = Math.max(...ys);
-      const box = { originX: minX, originY: minY, width: maxX - minX, height: maxY - minY };
-      const guidance = getFaceGuidance(box, 1, 1); // normalized coords
-      if (guidance) {
-        setMessage(guidance);
-        rafRef.current = requestAnimationFrame(detect);
-        return;
-      }
-
-      // Blink detection via blendshapes
-      const blendshapes = result.faceBlendshapes?.[0]?.categories ?? [];
-      const getScore = (name: string) =>
-        blendshapes.find((c: any) => c.categoryName === name)?.score ?? 0;
-      const blinkL = getScore("eyeBlinkLeft");
-      const blinkR = getScore("eyeBlinkRight");
-      const eyesClosed = blinkL > BLINK_THRESHOLD && blinkR > BLINK_THRESHOLD;
-
-      if (eyesClosed && !eyeWasClosed.current) {
-        eyeWasClosed.current = true;
-      } else if (!eyesClosed && eyeWasClosed.current) {
-        eyeWasClosed.current = false;
-        blinksRef.current += 1;
-        setBlinks(blinksRef.current);
-        if (blinksRef.current >= BLINKS_REQUIRED) {
-          cancelAnimationFrame(rafRef.current);
-          confirmVerified();
+        const guidance = getFaceGuidance(faces[0], video.videoWidth, video.videoHeight);
+        if (guidance) {
+          setFaceDetected(true);
+          setMessage(guidance);
+          holdRef.current = 0;
+          setProgress(0);
           return;
         }
       }
 
-      const remaining = BLINKS_REQUIRED - blinksRef.current;
+      setFaceDetected(true);
+      holdRef.current += DETECT_INTERVAL;
+      const pct = Math.min(100, Math.round((holdRef.current / (HOLD_SECONDS * 1000)) * 100));
+      setProgress(pct);
+
+      const remaining = Math.ceil((HOLD_SECONDS * 1000 - holdRef.current) / 1000);
       setMessage(
-        blinksRef.current === 0
-          ? "Blink slowly to verify you're real"
-          : `Great! Blink ${remaining} more time${remaining !== 1 ? "s" : ""}`
+        holdRef.current === DETECT_INTERVAL
+          ? "Hold still…"
+          : remaining > 0
+            ? `Hold still… ${remaining}s`
+            : "Verifying…"
       );
 
-      rafRef.current = requestAnimationFrame(detect);
-    };
-
-    rafRef.current = requestAnimationFrame(detect);
+      if (holdRef.current >= HOLD_SECONDS * 1000) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        confirmVerified();
+      }
+    }, DETECT_INTERVAL);
   }
 
   async function confirmVerified() {
@@ -242,6 +202,9 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
     ? faceDetected ? "border-emerald-400" : "border-white/30"
     : "border-white/20";
 
+  const circumference = 2 * Math.PI * 106; // r=106 for w-56 (224px) circle
+  const dashOffset = circumference * (1 - progress / 100);
+
   return (
     <AnimatePresence>
       {open && (
@@ -256,18 +219,16 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
           >
-            {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-white font-semibold text-lg">Liveness Check</h2>
-                <p className="text-white/50 text-sm">Blink to prove you're real</p>
+                <p className="text-white/50 text-sm">Hold still to prove you're real</p>
               </div>
               <button onClick={onClose} className="p-2 rounded-full bg-white/10 text-white/60 hover:bg-white/20">
                 <X size={18} />
               </button>
             </div>
 
-            {/* Intro */}
             {step === "intro" && (
               <div className="flex flex-col items-center gap-6 py-4">
                 <div className="w-24 h-24 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
@@ -286,34 +247,36 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
               </div>
             )}
 
-            {/* Scanning */}
             {step === "scanning" && (
               <div className="flex flex-col items-center gap-4">
-                <div className={`relative w-56 h-56 rounded-full border-4 overflow-hidden ${ringColor} transition-colors duration-300`}>
-                  <video
-                    ref={videoRef}
-                    className="w-full h-full object-cover scale-x-[-1]"
-                    muted playsInline
-                  />
-                  {loadingModels && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-                      <Loader2 size={28} className="text-white animate-spin" />
-                    </div>
-                  )}
+                <div className="relative w-56 h-56">
+                  {/* Progress ring */}
+                  <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 224 224">
+                    <circle cx="112" cy="112" r="106" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
+                    {progress > 0 && (
+                      <circle
+                        cx="112" cy="112" r="106"
+                        fill="none" stroke="#34d399" strokeWidth="4"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={dashOffset}
+                        strokeLinecap="round"
+                        style={{ transition: "stroke-dashoffset 0.2s linear" }}
+                      />
+                    )}
+                  </svg>
+                  {/* Video circle */}
+                  <div className={`absolute inset-[6px] rounded-full border-2 overflow-hidden ${ringColor} transition-colors duration-300`}>
+                    <video
+                      ref={videoRef}
+                      className="w-full h-full object-cover scale-x-[-1]"
+                      muted playsInline
+                    />
+                  </div>
                 </div>
                 <p className="text-white/70 text-sm text-center px-4 min-h-[20px]">{message}</p>
-                <div className="flex gap-2">
-                  {Array.from({ length: BLINKS_REQUIRED }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-3 h-3 rounded-full transition-colors ${i < blinks ? "bg-emerald-400" : "bg-white/20"}`}
-                    />
-                  ))}
-                </div>
               </div>
             )}
 
-            {/* Success */}
             {step === "success" && (
               <div className="flex flex-col items-center gap-4 py-4">
                 <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center">
@@ -324,7 +287,6 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
               </div>
             )}
 
-            {/* Error */}
             {step === "error" && (
               <div className="flex flex-col items-center gap-4 py-4">
                 <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -332,19 +294,13 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                 </div>
                 {message === "HTTPS_REQUIRED" ? (
                   <>
-                    <div className="text-center">
-                      <p className="text-white font-medium mb-1">Secure connection required</p>
-                      <p className="text-white/50 text-sm">Camera only works over HTTPS.</p>
-                    </div>
-                    <div className="w-full bg-white/5 rounded-2xl p-4 text-sm text-white/60">
-                      <p>Make sure the address bar shows <span className="text-white">https://</span> before the site URL.</p>
-                    </div>
+                    <p className="text-white font-medium">Secure connection required</p>
+                    <p className="text-white/50 text-sm text-center">Make sure the address bar shows <span className="text-white">https://</span></p>
                   </>
                 ) : message === "CAMERA_DENIED" ? (
                   <>
                     <div className="text-center">
                       <p className="text-white font-medium mb-1">Camera access blocked</p>
-                      <p className="text-white/50 text-sm">To enable it:</p>
                     </div>
                     <div className="w-full bg-white/5 rounded-2xl p-4 text-sm text-white/60 space-y-2">
                       <p>1. Tap the <span className="text-white">🔒 lock icon</span> in your browser's address bar</p>
@@ -356,7 +312,7 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                   <p className="text-white/70 text-sm text-center">{message}</p>
                 )}
                 <button
-                  onClick={() => { setStep("intro"); setBlinks(0); blinksRef.current = 0; eyeWasClosed.current = false; setMessage("Position your face in the circle"); }}
+                  onClick={() => { setStep("intro"); setProgress(0); holdRef.current = 0; setFaceDetected(false); setMessage("Position your face in the circle"); }}
                   className="w-full py-3.5 rounded-2xl bg-white/10 text-white font-semibold text-sm"
                 >
                   Try Again
