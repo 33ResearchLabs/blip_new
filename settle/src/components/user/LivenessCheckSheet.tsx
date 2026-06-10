@@ -73,9 +73,8 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
   }
 
   async function startScan() {
-    setStep("scanning");
-    setMessage("Loading camera…");
-
+    // getUserMedia MUST be the first async call — mobile Chrome ties the
+    // permission prompt to the user gesture and breaks if we await anything else first.
     if (!navigator?.mediaDevices?.getUserMedia) {
       setStep("error");
       setMessage("Camera not supported in this browser. Please use Chrome or Safari.");
@@ -96,6 +95,9 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
         return;
       }
     }
+
+    setStep("scanning");
+    setMessage("Loading camera…");
 
     streamRef.current = stream;
     if (videoRef.current) {
