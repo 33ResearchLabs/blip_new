@@ -4,18 +4,20 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { MessageCircle, Shield, AlertTriangle, Bell } from "lucide-react";
 import { BottomNav } from "./BottomNav";
-import { FilterDropdown, type FilterOption } from "./ui";
+// FilterDropdown unused — time filter hidden (see below). Kept for re-enabling.
+// import { FilterDropdown, type FilterOption } from "./ui";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { Screen, Order } from "./types";
 
 type TimeFilter = 'today' | '7d' | '30d' | 'all';
 
-const TIME_FILTER_OPTIONS: ReadonlyArray<FilterOption<TimeFilter>> = [
-  { key: 'today', label: 'Today' },
-  { key: '7d',    label: '7 Days' },
-  { key: '30d',   label: '30 Days' },
-  { key: 'all',   label: 'All' },
-];
+// Time filter options — kept for when the time dropdown is re-enabled.
+// const TIME_FILTER_OPTIONS: ReadonlyArray<FilterOption<TimeFilter>> = [
+//   { key: 'today', label: 'Today' },
+//   { key: '7d',    label: '7 Days' },
+//   { key: '30d',   label: '30 Days' },
+//   { key: 'all',   label: 'All' },
+// ];
 
 function getSenderPrefix(order: Order): string {
   const st = order.lastMessage?.senderType;
@@ -47,7 +49,8 @@ export const ChatListScreen = ({
   hideBottomNav = false,
 }: ChatListScreenProps) => {
   const [activeTab, setActiveTab] = useState<'chats' | 'disputes'>('chats');
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
+  // Time filter dropdown is hidden — fixed to 'all' so every message shows.
+  const timeFilter: TimeFilter = 'all';
 
   const filterByTime = (list: Order[]) => {
     if (timeFilter === 'all') return list;
@@ -127,7 +130,7 @@ export const ChatListScreen = ({
           <div>
             <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Messages</p>
           </div>
-          <button
+          {/* <button
             onClick={() => setScreen("notifications")}
             className="relative p-2.5 rounded-[14px] bg-surface-card border border-border-subtle"
           >
@@ -137,7 +140,7 @@ export const ChatListScreen = ({
                 {notificationCount > 9 ? '9+' : notificationCount}
               </span>
             )}
-          </button>
+          </button> */}
         </div>
       </header>
 
@@ -180,7 +183,7 @@ export const ChatListScreen = ({
           )}
         </button>
 
-        {/* Time filter — collapsed into a dropdown on the right */}
+        {/* Time filter hidden — always show all messages (timeFilter stays 'all')
         <FilterDropdown
           className="ml-auto"
           ariaLabel="Time range filter"
@@ -188,6 +191,7 @@ export const ChatListScreen = ({
           onChange={setTimeFilter}
           options={TIME_FILTER_OPTIONS}
         />
+        */}
       </div>
 
       {/* ── List ── */}
