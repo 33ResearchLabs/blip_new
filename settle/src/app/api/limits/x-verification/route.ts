@@ -22,6 +22,7 @@ import {
   getXVerification,
   upsertXVerification,
 } from '@/lib/db/repositories/xAccountVerifications';
+import { awardXVerified } from '@/lib/coins/awards';
 import { z } from 'zod';
 
 export async function GET(request: NextRequest) {
@@ -79,5 +80,15 @@ export async function POST(request: NextRequest) {
     auth.actorId,
     parsed.data.x_username,
   );
+
+  // One-time Blip Points bonus for verifying X. Lifetime-capped (sourceRef
+  // 'x_verification'), so re-verifying / changing the handle never re-credits.
+  // Guarded — a coin-award hiccup must never fail the verification itself.
+  try {
+    await awardXVerified({ actorId: auth.actorId, actorType });
+  } catch (err) {
+    console.error('[x-verification] award failed (non-fatal):', err);
+  }
+
   return successResponse(row);
 }

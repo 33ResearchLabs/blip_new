@@ -52,6 +52,8 @@ import {
   NotificationsScreen,
   SupportScreen,
   RewardsScreen,
+  LimitsScreen,
+  PointsScreen,
 } from "@/components/user/screens";
 
 import { DesktopSidebar } from "@/components/user/desktop/DesktopSidebar";
@@ -691,6 +693,18 @@ export default function UserDesktopPage() {
                 isLoading={referralLoading}
                 hideBottomNav
               />
+            </CenterPanel>
+          )}
+
+          {screen === "limits" && (
+            <CenterPanel k="limits">
+              <LimitsScreen setScreen={setScreen} />
+            </CenterPanel>
+          )}
+
+          {screen === "points" && (
+            <CenterPanel k="points">
+              <PointsScreen setScreen={setScreen} />
             </CenterPanel>
           )}
 

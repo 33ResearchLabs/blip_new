@@ -1,11 +1,10 @@
 "use client";
 
-// Merchant-side X (Twitter) follow verification, shown in Settings → Limits.
-// Two-step, self-attested flow (mirrors the waitlist XFollowVerificationModal
-// but dark-themed to match the merchant settings surface, and backed by its
-// own /api/limits/x-verification endpoint — independent of waitlist_tasks):
-//   1. Follow @blip_money on X (opens in a new tab).
-//   2. Confirm by entering the X handle; the server records it as verified.
+// User-side X (Twitter) follow verification, shown in the user Limits screen.
+// Two-step, self-attested flow mirroring MerchantXVerificationModal but themed
+// with the user app's design tokens (light/dark aware) instead of the merchant
+// dark-only surface. Backed by the same /api/limits/x-verification endpoint,
+// which binds the handle to the authenticated actor — here, the user.
 // Display-only: this does NOT change trade limits.
 
 import { useState, useEffect } from "react";
@@ -16,7 +15,6 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 const X_PROFILE_URL = "https://x.com/blip_money";
 
 // Inline X (formerly Twitter) wordmark — Lucide ships only the legacy bird.
-// Kept local so the modal stays self-contained (same glyph the waitlist uses).
 function XLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" className={className}>
@@ -26,12 +24,12 @@ function XLogo({ className }: { className?: string }) {
 }
 
 const inputClass =
-  "w-full pl-8 pr-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/[0.12] focus:ring-1 focus:ring-white/20 transition-all";
+  "w-full pl-8 pr-4 py-2.5 bg-surface-base border border-border-subtle rounded-xl text-[13px] text-text-primary placeholder:text-text-quaternary focus:outline-none focus:border-border-medium focus:ring-1 focus:ring-accent/30 transition-all";
 
-interface MerchantXVerificationModalProps {
+interface UserXVerificationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Pre-fills the handle field if the merchant has verified before. */
+  /** Pre-fills the handle field if the user has verified before. */
   currentHandle?: string;
   /** Called with the verified handle once verification succeeds. */
   onVerified: (xUsername: string) => void;
@@ -39,12 +37,12 @@ interface MerchantXVerificationModalProps {
 
 type Step = "follow" | "confirm" | "success";
 
-export function MerchantXVerificationModal({
+export function UserXVerificationModal({
   isOpen,
   onClose,
   currentHandle,
   onVerified,
-}: MerchantXVerificationModalProps) {
+}: UserXVerificationModalProps) {
   const [step, setStep] = useState<Step>("follow");
   const [handle, setHandle] = useState("");
   const [error, setError] = useState("");
@@ -109,13 +107,12 @@ export function MerchantXVerificationModal({
 
   return (
     <AnimatePresence>
-      {/* z-[70] to sit above the settings page, matching the phone verification sheet. */}
       <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           onClick={onClose}
         />
 
@@ -124,25 +121,28 @@ export function MerchantXVerificationModal({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 10 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-md bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden"
+          className="relative w-full max-w-md bg-surface-card rounded-2xl border border-border-subtle shadow-2xl overflow-hidden"
         >
           {/* Header */}
-          <div className="relative px-6 pt-6 pb-4 border-b border-white/[0.06]">
+          <div className="relative px-6 pt-6 pb-4 border-b border-border-subtle">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/70 to-white/60 border border-white/[0.12] flex items-center justify-center">
-                  <XLogo className="w-4 h-4 text-[#0b0b0c]" />
+                <div className="w-10 h-10 rounded-xl bg-surface-active border border-border-medium flex items-center justify-center">
+                  <XLogo className="w-4 h-4 text-text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-[15px] font-bold text-white">Verify your X account</h2>
-                  <p className="text-[11px] text-white/30 font-mono mt-0.5">{subtitle}</p>
+                  <h2 className="text-[15px] font-bold text-text-primary">
+                    Verify your X account
+                  </h2>
+                  <p className="text-[11px] text-text-tertiary mt-0.5">{subtitle}</p>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-card rounded-xl transition-colors"
+                aria-label="Close"
+                className="p-2 hover:bg-surface-hover rounded-xl transition-colors"
               >
-                <X className="w-4 h-4 text-white/40" />
+                <X className="w-4 h-4 text-text-tertiary" />
               </button>
             </div>
           </div>
@@ -158,14 +158,14 @@ export function MerchantXVerificationModal({
                   exit={{ opacity: 0, x: -10 }}
                   className="space-y-4"
                 >
-                  <p className="text-[13px] text-white/50 leading-[1.55]">
+                  <p className="text-[13px] text-text-secondary leading-[1.55]">
                     Follow our official X (Twitter) account to stay updated on
                     announcements and rewards, then confirm your handle.
                   </p>
 
                   <button
                     onClick={followNow}
-                    className="w-full py-3 rounded-xl bg-[#f5f5f7] text-background font-bold text-sm hover:bg-white transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-accent text-accent-text font-bold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
                   >
                     <XLogo className="w-3.5 h-3.5" />
                     Follow @blip_money
@@ -174,7 +174,7 @@ export function MerchantXVerificationModal({
 
                   <button
                     onClick={() => setStep("confirm")}
-                    className="block w-full text-center text-[12px] text-white/40 hover:text-white/70 transition-colors"
+                    className="block w-full text-center text-[12px] text-text-tertiary hover:text-text-secondary transition-colors"
                   >
                     I already follow — continue
                   </button>
@@ -190,11 +190,11 @@ export function MerchantXVerificationModal({
                   className="space-y-4"
                 >
                   <div>
-                    <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-2 block">
+                    <label className="text-xs text-text-tertiary uppercase tracking-wider mb-2 block">
                       Your X Username
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-[14px]">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary text-[14px]">
                         @
                       </span>
                       <input
@@ -208,7 +208,7 @@ export function MerchantXVerificationModal({
                         className={inputClass}
                       />
                     </div>
-                    <p className="text-[10px] text-white/25 mt-1.5">
+                    <p className="text-[10px] text-text-quaternary mt-1.5">
                       Enter your handle without the @, so we can verify your follow.
                     </p>
                   </div>
@@ -226,14 +226,14 @@ export function MerchantXVerificationModal({
                         setStep("follow");
                         setError("");
                       }}
-                      className="px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[13px] font-medium text-white/70 hover:bg-white/[0.08] transition-colors"
+                      className="px-4 py-3 rounded-xl bg-surface-active border border-border-subtle text-[13px] font-medium text-text-secondary hover:bg-surface-hover transition-colors"
                     >
                       Back
                     </button>
                     <button
                       onClick={verify}
                       disabled={isBusy || !handle.trim()}
-                      className="flex-1 py-3 rounded-xl bg-[#f5f5f7] text-background font-bold text-sm hover:bg-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="flex-1 py-3 rounded-xl bg-accent text-accent-text font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {isBusy && <Loader2 className="w-4 h-4 animate-spin" />}
                       {isBusy ? "Verifying…" : "Verify follow"}
@@ -250,11 +250,11 @@ export function MerchantXVerificationModal({
                   exit={{ opacity: 0 }}
                   className="flex flex-col items-center text-center py-6"
                 >
-                  <div className="w-14 h-14 rounded-full bg-white/[0.06] border border-white/[0.09] flex items-center justify-center mb-3">
-                    <Check className="w-7 h-7 text-[#f5f5f7]" />
+                  <div className="w-14 h-14 rounded-full bg-surface-active border border-border-medium flex items-center justify-center mb-3">
+                    <Check className="w-7 h-7 text-text-primary" />
                   </div>
-                  <p className="text-sm font-bold text-white">X account verified</p>
-                  <p className="text-[12px] text-white/40 mt-1">
+                  <p className="text-sm font-bold text-text-primary">X account verified</p>
+                  <p className="text-[12px] text-text-tertiary mt-1">
                     @{handle.trim().replace(/^@/, "")} is now verified.
                   </p>
                 </motion.div>

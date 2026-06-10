@@ -236,8 +236,8 @@ export async function updateMerchant(
     fields.push(`phone = $${paramIndex++}`);
     values.push(data.phone);
     // Editing the number through the normal profile PATCH invalidates any prior
-    // SMS verification — a verified badge must never outlive the number it
-    // vouched for. Re-verification happens via /api/merchant/phone/verify-code,
+    // verification — a verified badge must never outlive the number it
+    // vouched for. Re-verification happens via /api/merchant/phone/firebase-confirm,
     // which sets these back to true / NOW().
     fields.push(`phone_verified = false`);
     fields.push(`phone_verified_at = NULL`);

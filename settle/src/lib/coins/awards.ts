@@ -23,6 +23,7 @@ const AMOUNTS = {
   DISPUTE_FREE_MONTH: 100,
   KYC_COMPLETED: 500,
   REFERRAL_FIRST_TRADE: 200,
+  X_VERIFIED: 50,
 } as const;
 
 interface OrderRow {
@@ -187,6 +188,25 @@ export async function awardKycCompleted(args: {
     event: 'KYC_COMPLETED',
     points: AMOUNTS.KYC_COMPLETED,
     sourceRef: 'kyc',
+    metadata: {},
+  });
+}
+
+/**
+ * Award the one-time X (Twitter) verification bonus. Lifetime-capped at 1 by
+ * policy, keyed on a fixed sourceRef so re-verifying (or changing the handle)
+ * never re-credits. Mirrors awardKycCompleted.
+ */
+export async function awardXVerified(args: {
+  actorId: string;
+  actorType: WaitlistActorType;
+}): Promise<AwardResult> {
+  return awardCoins({
+    actorId: args.actorId,
+    actorType: args.actorType,
+    event: 'X_VERIFIED',
+    points: AMOUNTS.X_VERIFIED,
+    sourceRef: 'x_verification',
     metadata: {},
   });
 }

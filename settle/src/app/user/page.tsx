@@ -111,6 +111,8 @@ import {
   SupportScreen,
   SupportTicketScreen,
   RewardsScreen,
+  LimitsScreen,
+  PointsScreen,
 } from "@/components/user/screens";
 import { SendScreen } from "@/components/user/screens/SendScreen";
 import { ReputationScreen } from "@/components/user/screens/ReputationScreen";
@@ -1033,6 +1035,28 @@ export default function Home() {
               cancelledOrderCount={cancelledOrders.length}
               totalOrderCount={orders.length}
             />
+          </Panel>
+        )}
+
+        {screen === "limits" && (
+          <Panel
+            k="limits"
+            anim={slide}
+            style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
+          >
+            <LimitsScreen setScreen={setScreen} />
+          </Panel>
+        )}
+
+        {screen === "points" && (
+          <Panel
+            k="points"
+            anim={slide}
+            style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
+          >
+            <PointsScreen setScreen={setScreen} />
           </Panel>
         )}
 
