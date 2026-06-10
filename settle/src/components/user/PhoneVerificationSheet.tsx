@@ -143,21 +143,17 @@ export function PhoneVerificationSheet({
 
   async function setupRecaptcha() {
     const authInstance = getFirebaseAuth();
-    // Clear existing verifier
     if (recaptchaVerifierRef.current) {
       try { recaptchaVerifierRef.current.clear(); } catch { /* ignore */ }
       recaptchaVerifierRef.current = null;
     }
-    // Replace container with a fresh div so reCAPTCHA never sees a pre-rendered element
-    if (recaptchaRef.current) {
-      const fresh = document.createElement('div');
-      recaptchaRef.current.replaceWith(fresh);
-      recaptchaRef.current = fresh;
-    }
-    recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, recaptchaRef.current!, {
+    // Always inject a fresh child div — never render into the same element twice
+    if (!recaptchaRef.current) throw new Error('reCAPTCHA wrapper not mounted');
+    recaptchaRef.current.innerHTML = '';
+    const fresh = document.createElement('div');
+    recaptchaRef.current.appendChild(fresh);
+    recaptchaVerifierRef.current = new RecaptchaVerifier(authInstance, fresh, {
       size: 'invisible',
-      // Only attach a custom Enterprise siteKey when opted in; otherwise let
-      // Firebase use its own managed reCAPTCHA (standard Phone Auth).
       ...(RECAPTCHA_ENTERPRISE_ENABLED && RECAPTCHA_SITE_KEY ? { siteKey: RECAPTCHA_SITE_KEY } : {}),
       callback: () => {},
       'expired-callback': () => {
