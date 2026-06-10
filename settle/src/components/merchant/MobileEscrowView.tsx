@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { Order } from "@/types/merchant";
 import { useMerchantStore } from "@/stores/merchantStore";
@@ -312,6 +312,29 @@ export function MobileEscrowView({
   const [filter, setFilter] = useState<EscrowStatusFilter>("all");
   const merchantId = useMerchantStore((s) => s.merchantId);
 
+  // Sliding-thumb position is MEASURED from the active tab button rather than
+  // assuming equal 1/N widths — the labels differ in length ("All" vs
+  // "Disputed"), so an equal-quarters calc drifts off and overlaps neighbours.
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [thumb, setThumb] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
+
+  useLayoutEffect(() => {
+    const i = FILTERS.findIndex((f) => f.key === filter);
+    const el = tabRefs.current[i];
+    if (el) setThumb({ left: el.offsetLeft, width: el.offsetWidth });
+  }, [filter]);
+
+  // Keep the thumb aligned if the strip reflows (rotation, font load, resize).
+  useEffect(() => {
+    const recalc = () => {
+      const i = FILTERS.findIndex((f) => f.key === filter);
+      const el = tabRefs.current[i];
+      if (el) setThumb({ left: el.offsetLeft, width: el.offsetWidth });
+    };
+    window.addEventListener("resize", recalc);
+    return () => window.removeEventListener("resize", recalc);
+  }, [filter]);
+
   const filtered = useMemo(() => {
     if (filter === "all") return ongoingOrders;
     return ongoingOrders.filter((o) => {
@@ -326,21 +349,23 @@ export function MobileEscrowView({
 
       {/* Tab strip — same design as New Orders / Chat / History */}
       <div style={{ position: "relative", display: "flex", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: 3, marginBottom: 12, overflowX: "auto", scrollbarWidth: "none", width: "100%" }}>
-        {/* sliding thumb */}
+        {/* sliding thumb — positioned from the measured active tab */}
         <div style={{
           position: "absolute", top: 3, bottom: 3, borderRadius: 11,
           background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
           transition: "left 0.22s cubic-bezier(0.22,1,0.36,1), width 0.22s",
-          left: `calc(${FILTERS.findIndex(f => f.key === filter)} * (100% - 6px) / ${FILTERS.length} + 3px)`,
-          width: `calc((100% - 6px) / ${FILTERS.length})`,
+          left: thumb.left,
+          width: thumb.width,
+          opacity: thumb.width ? 1 : 0,
           pointerEvents: "none",
           flexShrink: 0,
         }} />
-        {FILTERS.map(({ key, label }) => {
+        {FILTERS.map(({ key, label }, i) => {
           const isActive = filter === key;
           return (
             <button
               key={key}
+              ref={(el) => { tabRefs.current[i] = el; }}
               type="button"
               onClick={() => setFilter(key)}
               style={{ flex: 1, minWidth: "max-content", position: "relative", zIndex: 1, padding: "7px 12px", fontSize: 13, fontWeight: 700, color: isActive ? "#f5f5f7" : "#86868b", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", whiteSpace: "nowrap" }}

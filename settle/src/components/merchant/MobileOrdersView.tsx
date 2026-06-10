@@ -1075,7 +1075,7 @@ export function MobileOrdersView({
             ariaLabel="Filter pending orders"
             align="right"
             options={PENDING_FILTER_OPTIONS}
-            triggerClassName="!rounded-[12px] !h-[38px] !w-[38px] !p-0 !text-[12px]"
+            triggerClassName="!rounded-[10px] !h-[34px] !px-2.5 !text-[12px]"
           />
 
           <button
