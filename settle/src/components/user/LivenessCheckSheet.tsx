@@ -190,8 +190,8 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
   }
 
   const ringColor = step === "scanning"
-    ? faceDetected ? "border-emerald-400" : "border-white/30"
-    : "border-white/20";
+    ? faceDetected ? "border-emerald-400" : "border-border-strong"
+    : "border-border-subtle";
 
   return (
     <AnimatePresence>
@@ -203,17 +203,17 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
             onClick={onClose}
           />
           <motion.div
-            className="fixed bottom-0 left-0 right-0 z-50 bg-[#0f0f0f] rounded-t-3xl p-6 pb-10"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-surface-raised border-t border-border-subtle rounded-t-3xl p-6 pb-10"
             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-white font-semibold text-lg">Liveness Check</h2>
-                <p className="text-white/50 text-sm">Blink to prove you're real</p>
+                <h2 className="text-text-primary font-semibold text-lg">Liveness Check</h2>
+                <p className="text-text-secondary text-sm">Blink to prove you're real</p>
               </div>
-              <button onClick={onClose} className="p-2 rounded-full bg-white/10 text-white/60 hover:bg-white/20">
+              <button onClick={onClose} className="p-2 rounded-full bg-surface-active text-text-tertiary hover:text-text-primary">
                 <X size={18} />
               </button>
             </div>
@@ -225,8 +225,8 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                   <Camera size={36} className="text-emerald-400" />
                 </div>
                 <div className="text-center">
-                  <p className="text-white font-medium mb-1">Earn your Verified badge</p>
-                  <p className="text-white/50 text-sm">We'll use your camera to confirm you're a real person. No data is stored.</p>
+                  <p className="text-text-primary font-medium mb-1">Earn your Verified badge</p>
+                  <p className="text-text-secondary text-sm">We'll use your camera to confirm you're a real person. No data is stored.</p>
                 </div>
                 <button
                   onClick={startScan}
@@ -248,12 +248,12 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                   />
                   <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
                 </div>
-                <p className="text-white/70 text-sm text-center px-4">{message}</p>
+                <p className="text-text-secondary text-sm text-center px-4">{message}</p>
                 <div className="flex gap-2">
                   {Array.from({ length: BLINKS_REQUIRED }).map((_, i) => (
                     <div
                       key={i}
-                      className={`w-3 h-3 rounded-full transition-colors ${i < blinks ? "bg-emerald-400" : "bg-white/20"}`}
+                      className={`w-3 h-3 rounded-full transition-colors ${i < blinks ? "bg-emerald-400" : "bg-border-strong"}`}
                     />
                   ))}
                 </div>
@@ -266,8 +266,8 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                 <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center">
                   <ShieldCheck size={40} className="text-emerald-400" />
                 </div>
-                <p className="text-white font-semibold text-lg">You're Verified!</p>
-                <p className="text-white/50 text-sm text-center">Your Verified badge is now active on your profile.</p>
+                <p className="text-text-primary font-semibold text-lg">You're Verified!</p>
+                <p className="text-text-secondary text-sm text-center">Your Verified badge is now active on your profile.</p>
               </div>
             )}
 
@@ -280,21 +280,21 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                 {message === "CAMERA_DENIED" ? (
                   <>
                     <div className="text-center">
-                      <p className="text-white font-medium mb-1">Camera access blocked</p>
-                      <p className="text-white/50 text-sm">To enable it:</p>
+                      <p className="text-text-primary font-medium mb-1">Camera access blocked</p>
+                      <p className="text-text-secondary text-sm">To enable it:</p>
                     </div>
-                    <div className="w-full bg-white/5 rounded-2xl p-4 text-sm text-white/60 space-y-2">
-                      <p>1. Tap the <span className="text-white">🔒 lock icon</span> in your browser's address bar</p>
-                      <p>2. Find <span className="text-white">Camera</span> and set it to <span className="text-white">Allow</span></p>
+                    <div className="w-full bg-surface-active rounded-2xl p-4 text-sm text-text-secondary space-y-2">
+                      <p>1. Tap the <span className="text-text-primary">🔒 lock icon</span> in your browser's address bar</p>
+                      <p>2. Find <span className="text-text-primary">Camera</span> and set it to <span className="text-text-primary">Allow</span></p>
                       <p>3. Refresh the page and try again</p>
                     </div>
                   </>
                 ) : (
-                  <p className="text-white/70 text-sm text-center">{message}</p>
+                  <p className="text-text-secondary text-sm text-center">{message}</p>
                 )}
                 <button
                   onClick={() => { setStep("intro"); setBlinks(0); blinksRef.current = 0; setMessage("Position your face in the circle"); }}
-                  className="w-full py-3.5 rounded-2xl bg-white/10 text-white font-semibold text-sm"
+                  className="w-full py-3.5 rounded-2xl bg-surface-active text-text-primary font-semibold text-sm"
                 >
                   Try Again
                 </button>
