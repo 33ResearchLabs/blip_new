@@ -336,7 +336,6 @@ export function PhoneVerificationSheet({
                     onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setError(""); }}
                     onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
                     className="flex-1 h-12 rounded-[14px] bg-surface-active border border-border-subtle px-4 text-[16px] font-semibold text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-strong focus:bg-surface-hover transition-colors"
-                    autoFocus
                   />
                 </div>
 

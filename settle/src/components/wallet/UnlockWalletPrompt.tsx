@@ -143,10 +143,13 @@ export function UnlockWalletPrompt({
         style={{
           background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`,
           border: `1px solid ${colors.border.subtle}`,
-          minHeight: 'min(660px, 88vh)',
+          // Hug the content instead of forcing a tall 660px card. The outer
+          // wrapper centers the modal vertically, so an auto height keeps the
+          // keypad + footer grouped together near the middle rather than the
+          // keypad floating with a big gap and the footer pinned to the bottom.
           maxHeight: '95vh',
           paddingTop: 'max(1.5rem, env(safe-area-inset-top))',
-          paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+          paddingBottom: 'max(1.75rem, env(safe-area-inset-bottom))',
         }}
       >
         <div className="flex items-center gap-2">
@@ -194,7 +197,7 @@ export function UnlockWalletPrompt({
           </div>
         )}
 
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center justify-center">
           <div style={{ maxWidth: 320, width: '100%' }}>
             <AnimatePresence mode="wait">
               {mode === 'pin' && (
