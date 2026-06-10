@@ -15,7 +15,7 @@ type Step = "intro" | "scanning" | "success" | "error";
 type Task = "blink" | "turn_left" | "turn_right";
 
 const TASKS: Task[] = ["blink", "turn_left", "turn_right"];
-const BLINK_EAR_THRESHOLD = 0.20;
+const BLINK_EAR_THRESHOLD = 0.24;
 const TURN_THRESHOLD = 0.12; // nose offset ratio to trigger head turn
 const EYE_L = [362, 385, 387, 263, 373, 380];
 const EYE_R = [33,  160, 158, 133, 153, 144];
@@ -172,11 +172,10 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
 
       if (currentTask === "blink") {
         const pts = result.landmarks.positions.map((p: any) => [p.x, p.y]);
-        // face-api uses 68 landmarks, not 478 — use classic EAR indices
-        const EL = [45, 47, 46, 42, 44, 43];
-        const ER = [39, 41, 40, 36, 38, 37];
-        const earL = ear(pts, EL);
-        const earR = ear(pts, ER);
+        // face-api 68-point model: left eye 36-41, right eye 42-47
+        // ear(pts, [corner1, top1, top2, corner2, bottom1, bottom2])
+        const earL = ear(pts, [36, 37, 38, 39, 40, 41]);
+        const earR = ear(pts, [42, 43, 44, 45, 46, 47]);
         const avg  = (earL + earR) / 2;
 
         if (avg < BLINK_EAR_THRESHOLD && !eyeWasClosed.current) {
