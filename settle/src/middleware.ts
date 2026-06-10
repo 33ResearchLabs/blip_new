@@ -266,7 +266,7 @@ const STATIC_SECURITY_HEADERS: Record<string, string> = {
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
+  'Permissions-Policy': 'camera=(self), microphone=(), geolocation=(self)',
   // Reporting API v2 endpoint, paired with `report-to` directive in CSP below.
   'Reporting-Endpoints': 'csp-endpoint="/api/csp-report"',
 };
