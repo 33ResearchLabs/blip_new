@@ -344,7 +344,7 @@ export const HomeScreen = ({
         flexShrink: 0,
         background: 'linear-gradient(160deg, #1e1e24 0%, #0f0f12 55%, #161619 100%)',
         color: '#fff',
-        padding: '16px 22px 44px',
+        padding: '16px 16px 44px',
         borderBottomLeftRadius: 36, borderBottomRightRadius: 36,
         boxShadow: '0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
       }}>
@@ -497,7 +497,7 @@ export const HomeScreen = ({
         marginTop: -24,
         boxShadow: '0 -4px 24px rgba(0,0,0,0.18)',
       }}>
-        <div style={{ padding: '20px 22px 100px', minHeight: 380 }}>
+        <div style={{ padding: '20px 16px 100px', minHeight: 380 }}>
 
           {/* SEARCH BAR — the text area opens the send/search (trade) flow; the
               QR pill is a SEPARATE sibling button that opens the scanner. They
