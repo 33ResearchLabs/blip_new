@@ -24,6 +24,7 @@
 
 import { query, queryOne } from '@/lib/db';
 import type { WaitlistActorType } from '@/lib/types/database';
+import { getStakeLimitFloor } from '@/lib/staking/economy';
 
 /**
  * Two KYC states only (full KYC not available yet):
@@ -107,8 +108,8 @@ export type CoinLimitTier = keyof typeof COIN_LIMIT_TIERS;
 export interface EffectiveLimits {
   dailyUsd: number;
   perTradeUsd: number;
-  /** Which layer is driving the limit: KYC base, a verification floor, or a coin unlock. */
-  source: 'kyc' | 'verification' | CoinLimitTier;
+  /** Which layer is driving the limit: KYC base, a verification floor, a staking floor, or a coin unlock. */
+  source: 'kyc' | 'verification' | 'staking' | CoinLimitTier;
   /** KYC level that was read (0 or 1). */
   kycLevel: KycLevel;
   /** Days since account creation — used to show "limits increase on day 3" */
@@ -169,7 +170,7 @@ export async function getEffectiveLimits(
     ),
   };
 
-  const [unlock, rep, overrides] = await Promise.all([
+  const [unlock, stakeFloor, rep, overrides] = await Promise.all([
     queryOne<UnlockRow>(
       `SELECT tier, daily_limit_usd, per_trade_usd, expires_at
          FROM coin_limit_unlocks
@@ -178,22 +179,27 @@ export async function getEffectiveLimits(
         LIMIT 1`,
       [actorType, actorId],
     ),
+    getStakeLimitFloor(actorType, actorId),
     getReputationInfo(actorId, actorType),
     getApprovedLimitOverrides(actorId, actorType),
   ]);
   const repMult = rep.multiplier;
 
-  // Highest floor wins per field: KYC base vs verification floor vs coin unlock.
-  // Then the reputation multiplier scales it, and an approved override floors it.
+  // Highest floor wins per field: KYC base vs verification floor vs staking
+  // floor vs coin unlock. Then the reputation multiplier scales it, and an
+  // approved override floors it.
   const unlockDaily    = unlock?.daily_limit_usd ?? 0;
   const unlockPerTrade = unlock?.per_trade_usd ?? 0;
-  const rawDaily    = Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd, unlockDaily);
-  const rawPerTrade = Math.max(kycBase.perTradeUsd, verifyFloor.perTradeUsd, unlockPerTrade);
+  const rawDaily    = Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd, stakeFloor.dailyUsd, unlockDaily);
+  const rawPerTrade = Math.max(kycBase.perTradeUsd, verifyFloor.perTradeUsd, stakeFloor.perTradeUsd, unlockPerTrade);
 
-  // Label the driving layer (by daily): coin unlock > verification > kyc.
-  let source: 'kyc' | 'verification' | CoinLimitTier = 'kyc';
+  // Label the driving layer (by daily): coin unlock > staking > verification > kyc.
+  let source: 'kyc' | 'verification' | 'staking' | CoinLimitTier = 'kyc';
   if (verifyFloor.dailyUsd > kycBase.dailyUsd) source = 'verification';
-  if (unlock && unlockDaily > Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd)) {
+  if (stakeFloor.dailyUsd > Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd)) {
+    source = 'staking';
+  }
+  if (unlock && unlockDaily > Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd, stakeFloor.dailyUsd)) {
     source = unlock.tier;
   }
 

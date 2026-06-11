@@ -194,12 +194,12 @@ export function UnlockHigherLimits({
           }
         />
 
-        {/* Stake to Increase Limits */}
+        {/* Stake USDT to Increase Limits */}
         <Row
           icon={<Coins className="w-5 h-5" />}
           tone="amber"
-          title="Stake to Increase Limits"
-          desc="Stake BLIP points for a chance to increase your limit up to 10x."
+          title="Stake USDT to Increase Limits"
+          desc="Stake USDT to unlock higher trading limits (up to 10x) and earn rewards."
           surfaces={surfaces}
           action={
             <ActionButton tone="amber" label="Stake" onClick={onOpenStake} />
