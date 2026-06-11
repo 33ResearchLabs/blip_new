@@ -621,6 +621,12 @@ export const ProfileScreen = ({
             subtitle="Daily & per-transaction caps"
             onClick={() => setScreen("limits")}
           />
+          <SettingsRow
+            icon={<Coins className="w-[15px] h-[15px]" />}
+            title="Stake USDT"
+            subtitle="Earn rewards & unlock higher limits"
+            onClick={() => setScreen("stake")}
+          />
         </SettingsGroup>
 
         {/* Resolved Disputes — rich list kept inline so each card retains

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
+  ChevronRight,
   Loader2,
   Gift,
   TrendingUp,
@@ -22,11 +23,12 @@ import {
   Clock,
   History,
   Info,
+  HelpCircle,
   ArrowDownLeft,
   ArrowUpRight,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
-import { formatCrypto, formatFiat, formatPercentage, formatCount } from "@/lib/format";
+import { formatCrypto, formatFiat } from "@/lib/format";
 import type { SurfaceTokens } from "./types";
 
 interface Props {
@@ -34,6 +36,29 @@ interface Props {
   onBack: () => void;
   /** Called after a successful stake/unstake/claim so the parent can refetch limits. */
   onStaked: () => void;
+  /**
+   * Hide the internal back-arrow + "Stake USDT" header below the `lg` breakpoint.
+   * Used by the merchant Settings → Stake tab on mobile, where the settings sheet
+   * already provides its own "Stake" header + close button (the internal one is
+   * redundant there). Desktop still shows it. Defaults to false (always shown).
+   */
+  hideHeaderOnMobile?: boolean;
+  /**
+   * Drop the component's own outer horizontal padding + max-width centering so it
+   * fills a host container that already provides those (e.g. the merchant Settings
+   * content area, which has `p-5 lg:p-6` + `max-w-3xl`). Without this the merchant
+   * tab gets double padding and a narrower column than the Limits tab. The user-app
+   * screen and the in-limits overlay leave it false (they render it bare).
+   */
+  embedded?: boolean;
+  /**
+   * Fully hide the internal back-arrow + title header (all breakpoints). Used when
+   * the host renders its own page header — e.g. the user-app StakeScreen, which
+   * provides the stacked header that matches the Trading Limits screen.
+   */
+  hideHeader?: boolean;
+  /** Navigate to help/support (drives the "Need Help?" card). Wired per host. */
+  onHelp?: () => void;
 }
 
 interface Snapshot {
@@ -62,13 +87,12 @@ type Mode = "stake" | "unstake";
 
 const PERCENTS = [25, 50, 75, 100] as const;
 
-export function StakeUSDTView({ surfaces, onBack, onStaked }: Props) {
+export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, embedded, hideHeader, onHelp }: Props) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<Mode>("stake");
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -101,15 +125,8 @@ export function StakeUSDTView({ surfaces, onBack, onStaked }: Props) {
     fetchSnap();
   }, [fetchSnap]);
 
-  const apyPct = snap ? snap.apyBps / 100 : 8;
   const available = mode === "stake" ? snap?.availableBalance ?? 0 : snap?.principal ?? 0;
   const amountNum = Number(amount) || 0;
-
-  // Live earnings estimate from the typed amount (falls back to current principal).
-  const previewPrincipal = amountNum > 0 ? amountNum : snap?.principal ?? 0;
-  const dailyRate = (apyPct / 100) / 365;
-  const estDaily = previewPrincipal * dailyRate;
-  const estMonthly = estDaily * 30;
 
   const setPct = (pct: number) => {
     const v = (available * pct) / 100;
@@ -152,29 +169,6 @@ export function StakeUSDTView({ surfaces, onBack, onStaked }: Props) {
     }
   };
 
-  const claimRewards = async () => {
-    setError(null);
-    setNotice(null);
-    setClaiming(true);
-    try {
-      const res = await fetchWithAuth("/api/staking/claim", { method: "POST" });
-      const json = await res.json().catch(() => null);
-      if (res.ok && json?.success) {
-        setNotice(`Claimed ${formatCrypto(json.data?.claimed)} USDT.`);
-        await fetchSnap();
-        if (showHistory) await fetchHistory();
-        onStaked();
-        return;
-      }
-      setError(json?.error || "Couldn't claim rewards.");
-    } catch (err) {
-      console.error("Failed to claim rewards:", err);
-      setError("Couldn't claim rewards.");
-    } finally {
-      setClaiming(false);
-    }
-  };
-
   const toggleHistory = () => {
     const next = !showHistory;
     setShowHistory(next);
@@ -188,10 +182,10 @@ export function StakeUSDTView({ surfaces, onBack, onStaked }: Props) {
   });
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-5 pt-4 pb-12 space-y-3">
+    <div className={embedded ? "w-full space-y-3" : "w-full max-w-2xl mx-auto px-5 pt-4 pb-12 space-y-3"}>
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 pb-1">
-        <div className="flex items-start gap-3 min-w-0">
+      {!hideHeader && (
+        <div className={`${hideHeaderOnMobile ? "hidden lg:flex" : "flex"} items-center gap-3 pb-1`}>
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={onBack}
@@ -200,29 +194,11 @@ export function StakeUSDTView({ surfaces, onBack, onStaked }: Props) {
           >
             <ChevronLeft className="w-5 h-5 text-text-secondary" />
           </motion.button>
-          <div className="min-w-0">
-            <h1 className="text-[24px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
-              Stake USDT
-            </h1>
-            <p className="text-[13px] text-text-tertiary leading-snug mt-1.5 max-w-[44ch]">
-              Stake USDT and earn rewards while supporting higher trading limits.
-            </p>
-          </div>
+          <h1 className="text-[24px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+            Stake USDT
+          </h1>
         </div>
-        <div
-          className={`shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-2xl border border-border-subtle ${surfaces.card}`}
-        >
-          <div className="w-7 h-7 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-            <TrendingUp className="w-3.5 h-3.5" />
-          </div>
-          <div className="leading-tight">
-            <p className="text-[10px] text-text-tertiary">Staked users</p>
-            <p className="text-[13px] font-bold text-text-primary">
-              {snap ? `${formatCount(snap.stakedUsers)}+` : "—"}
-            </p>
-          </div>
-        </div>
-      </div>
+      )}
 
       {loading ? (
         <div className={`rounded-[20px] p-12 text-center border border-border-subtle ${surfaces.card}`}>
@@ -231,63 +207,24 @@ export function StakeUSDTView({ surfaces, onBack, onStaked }: Props) {
         </div>
       ) : (
         <>
-          {/* Balance / value / rewards */}
+          {/* Staked balance */}
           <motion.div
             {...fade()}
             className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card}`}
           >
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-[12px] text-text-tertiary">Your Staked Balance</p>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                    <span className="text-[13px] font-extrabold">$</span>
-                  </div>
-                  <p className="text-[22px] font-extrabold text-text-primary leading-none tracking-[-0.02em]">
-                    {formatCrypto(snap?.principal)}{" "}
-                    <span className="text-[12px] text-text-tertiary font-semibold">USDT</span>
-                  </p>
-                </div>
-                <p className="text-[11px] text-text-tertiary mt-1">
-                  ≈ {formatFiat(snap?.principal, "USD")}
-                </p>
+            <p className="text-[12px] text-text-tertiary">Your Staked Balance</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                <span className="text-[13px] font-extrabold">$</span>
               </div>
-              <div>
-                <p className="text-[12px] text-text-tertiary">Total Value</p>
-                <p className="text-[22px] font-extrabold text-text-primary leading-none tracking-[-0.02em] mt-1.5">
-                  {formatFiat(snap?.totalValue, "USD")}
-                </p>
-                <p className="text-[11px] text-emerald-500 font-semibold mt-1">
-                  {formatPercentage(apyPct)} APY
-                </p>
-              </div>
+              <p className="text-[22px] font-extrabold text-text-primary leading-none tracking-[-0.02em]">
+                {formatCrypto(snap?.principal)}{" "}
+                <span className="text-[12px] text-text-tertiary font-semibold">USDT</span>
+              </p>
             </div>
-
-            <div className="h-px bg-border-subtle my-4" />
-
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[12px] text-text-tertiary inline-flex items-center gap-1.5">
-                  Pending Rewards <Info className="w-3 h-3" />
-                </p>
-                <p className="text-[15px] font-bold text-text-primary mt-0.5">
-                  {formatCrypto(snap?.pendingRewards)}{" "}
-                  <span className="text-[11px] text-text-tertiary font-semibold">USDT</span>
-                </p>
-                <p className="text-[11px] text-text-tertiary">
-                  ≈ {formatFiat(snap?.pendingRewards, "USD")}
-                </p>
-              </div>
-              <motion.button
-                whileTap={{ scale: 0.96 }}
-                onClick={claimRewards}
-                disabled={claiming || !snap || snap.pendingRewards <= 0}
-                className="shrink-0 inline-flex items-center justify-center gap-2 px-4 h-11 rounded-xl text-[13px] font-bold border border-emerald-500/30 text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors disabled:opacity-50"
-              >
-                {claiming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
-                Claim Rewards
-              </motion.button>
-            </div>
+            <p className="text-[11px] text-text-tertiary mt-1">
+              ≈ {formatFiat(snap?.principal, "USD")}
+            </p>
           </motion.div>
 
           {/* Estimated Benefits */}
@@ -419,27 +356,6 @@ export function StakeUSDTView({ surfaces, onBack, onStaked }: Props) {
             </div>
           </motion.div>
 
-          {/* Est. Earnings */}
-          <motion.div
-            {...fade(0.15)}
-            className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card}`}
-          >
-            <h3 className="text-[14px] font-bold text-text-primary mb-4">Est. Earnings</h3>
-            <div className="grid grid-cols-3 gap-3">
-              <EarnStat label="Est. APY" value={formatPercentage(apyPct)} sub="Annual" />
-              <EarnStat
-                label="Est. Daily Reward"
-                value={`${formatCrypto(estDaily)} USDT`}
-                sub={`≈ ${formatFiat(estDaily, "USD")}`}
-              />
-              <EarnStat
-                label="Est. Monthly Reward"
-                value={`${formatCrypto(estMonthly)} USDT`}
-                sub={`≈ ${formatFiat(estMonthly, "USD")}`}
-              />
-            </div>
-          </motion.div>
-
           {/* Staking Overview */}
           <motion.div
             {...fade(0.2)}
@@ -555,6 +471,29 @@ export function StakeUSDTView({ surfaces, onBack, onStaked }: Props) {
               balance when you claim.
             </p>
           </div>
+
+          {/* Need Help? */}
+          {onHelp && (
+            <motion.button
+              {...fade(0.2)}
+              whileTap={{ scale: 0.99 }}
+              onClick={onHelp}
+              className={`w-full rounded-[20px] p-5 flex items-center gap-3.5 text-left border border-border-subtle ${surfaces.card} ${surfaces.hover} transition-colors`}
+            >
+              <div
+                className={`w-10 h-10 rounded-full border border-border-subtle flex items-center justify-center shrink-0 ${surfaces.chip}`}
+              >
+                <HelpCircle className="w-5 h-5 text-text-secondary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-bold text-text-primary">Need Help?</p>
+                <p className="text-[12px] text-text-tertiary">
+                  Learn more about staking, rewards, and how it works.
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" />
+            </motion.button>
+          )}
         </>
       )}
     </div>
@@ -586,18 +525,6 @@ function Benefit({
       </div>
       <p className="text-[12px] font-bold text-text-primary">{title}</p>
       <p className="text-[10px] text-text-tertiary leading-snug mt-0.5">{desc}</p>
-    </div>
-  );
-}
-
-function EarnStat({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <div>
-      <p className="text-[11px] text-text-tertiary inline-flex items-center gap-1">
-        {label} <Info className="w-2.5 h-2.5" />
-      </p>
-      <p className="text-[15px] font-extrabold text-text-primary leading-tight mt-1">{value}</p>
-      <p className="text-[10px] text-text-tertiary mt-0.5">{sub}</p>
     </div>
   );
 }

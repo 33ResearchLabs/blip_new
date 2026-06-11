@@ -49,6 +49,8 @@ import { WalletLedger } from "@/components/merchant/WalletLedger";
 import { PaymentMethodModal, PaymentMethodInlineForm } from "@/components/merchant/PaymentMethodModal";
 import { PhoneVerificationSheet } from "@/components/user/PhoneVerificationSheet";
 import { TradingLimitsView } from "@/components/shared/limits/TradingLimitsView";
+import { StakeUSDTView } from "@/components/shared/limits/StakeUSDTView";
+import { SURFACES } from "@/components/shared/limits/types";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { formatFiat } from "@/lib/format";
 import { useCorridorPrices } from "@/hooks/useCorridorPrices";
@@ -169,6 +171,7 @@ type SettingsTab =
   | "theme"
   | "payments"
   | "limits"
+  | "stake"
   | "rates"
   | "notifications"
   | "liquidity"
@@ -854,6 +857,7 @@ export default function MerchantSettingsPage({
     { id: "theme", label: "Theme", icon: Palette },
     { id: "payments", label: "Payments", icon: CreditCard },
     { id: "limits", label: "Limits", icon: Gauge },
+    { id: "stake", label: "Stake", icon: Coins },
   ];
   const preferenceTabs: { id: SettingsTab; label: string; icon: any }[] = [
     { id: "notifications", label: "Alerts", icon: Bell },
@@ -1108,13 +1112,16 @@ export default function MerchantSettingsPage({
           animate={!isDesktop && !mobileSheetOpen ? { y: "100%" } : { y: 0 }}
           transition={{ type: "spring", stiffness: 360, damping: 36 }}
         >
-          {/* Mobile sheet header — hidden on desktop */}
+          {/* Mobile sheet header — hidden on desktop. Left spacer balances the
+              close button so the title centers on the FULL width, lining up with
+              the (centered) drag handle above it. */}
           <div className="lg:hidden flex items-center px-5 pt-5 pb-3 border-b border-white/[0.05] shrink-0 relative">
             <div className="absolute left-1/2 -translate-x-1/2 top-2 w-8 h-1 rounded-full bg-white/20" />
+            <span aria-hidden="true" className="w-7 shrink-0" />
             <p className="text-[15px] font-semibold text-white flex-1 text-center">
               {tabs.find(t => t.id === activeTab)?.label ?? (activeTab === "support" ? "Support" : "")}
             </p>
-            <button onClick={() => setMobileSheetOpen(false)} className="p-1.5 rounded-lg text-white/40 hover:text-white/70">
+            <button onClick={() => setMobileSheetOpen(false)} className="w-7 shrink-0 flex items-center justify-center p-1.5 rounded-lg text-white/40 hover:text-white/70">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -2042,6 +2049,21 @@ export default function MerchantSettingsPage({
                     ? router.push("/market")
                     : setActiveTab("support")
                 }
+              />
+            </div>
+          )}
+
+          {/* Stake USDT — shared StakeUSDTView (also used by the user app + the
+              in-limits overlay). Back returns to the Limits tab. */}
+          {activeTab === "stake" && (
+            <div className="max-w-3xl">
+              <StakeUSDTView
+                surfaces={SURFACES.merchant}
+                onBack={() => setActiveTab("limits")}
+                onStaked={() => {}}
+                hideHeaderOnMobile
+                embedded
+                onHelp={() => setActiveTab("support")}
               />
             </div>
           )}

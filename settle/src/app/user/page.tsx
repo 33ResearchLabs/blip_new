@@ -112,6 +112,7 @@ import {
   SupportTicketScreen,
   RewardsScreen,
   LimitsScreen,
+  StakeScreen,
   PointsScreen,
 } from "@/components/user/screens";
 import { SendScreen } from "@/components/user/screens/SendScreen";
@@ -1046,6 +1047,17 @@ export default function Home() {
             desktop={!!isDesktop}
           >
             <LimitsScreen setScreen={setScreen} />
+          </Panel>
+        )}
+
+        {screen === "stake" && (
+          <Panel
+            k="stake"
+            anim={slide}
+            style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
+          >
+            <StakeScreen setScreen={setScreen} />
           </Panel>
         )}
 
