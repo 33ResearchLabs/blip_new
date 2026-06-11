@@ -178,7 +178,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
           Complete the steps below to unlock higher trading limits and trade
           more.
         </p>
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold bg-accent/10 text-accent border border-accent/20 shrink-0">
           <ShieldCheck className="w-3.5 h-3.5" />
           Secure &amp; Verified
         </span>
@@ -275,7 +275,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
               <h3 className="text-[15px] font-bold text-text-primary">
                 Your Current Limits
               </h3>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-accent/10 text-accent border border-accent/20">
                 Active
               </span>
             </div>
@@ -379,7 +379,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
                   const created = new Date(r.created_at);
                   const statusStyle =
                     r.status === "approved"
-                      ? "bg-green-500/10 text-green-500 border-green-500/20"
+                      ? "bg-accent/10 text-accent border-accent/20"
                       : r.status === "rejected"
                         ? "bg-red-500/10 text-red-400 border-red-500/20"
                         : "bg-amber-500/10 text-amber-500 border-amber-500/20";
@@ -603,7 +603,7 @@ function UsageBar({
       </div>
       <div className="h-1.5 rounded-full bg-border-subtle overflow-hidden">
         <div
-          className="h-full rounded-full bg-emerald-500 transition-all"
+          className="h-full rounded-full bg-accent transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>

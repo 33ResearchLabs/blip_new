@@ -78,7 +78,7 @@ function Row({
 
 function VerifiedBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold bg-accent/10 text-accent border border-accent/20">
       <Check className="w-3.5 h-3.5" />
       Verified
     </span>
@@ -211,8 +211,8 @@ export function UnlockHigherLimits({
         />
 
         {/* Tip callout */}
-        <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07]">
-          <div className="w-9 h-9 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+        <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-accent/20 bg-accent/[0.07]">
+          <div className="w-9 h-9 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
             <Trophy className="w-4 h-4" />
           </div>
           <div className="min-w-0">
