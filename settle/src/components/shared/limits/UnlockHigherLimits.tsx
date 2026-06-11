@@ -203,15 +203,7 @@ export function UnlockHigherLimits({
           surfaces={surfaces}
           action={
             xVerified ? (
-              <div className="flex items-center gap-2.5">
-                <VerifiedBadge />
-                <button
-                  onClick={onOpenX}
-                  className="text-[12px] text-text-tertiary hover:text-text-secondary transition-colors"
-                >
-                  Change
-                </button>
-              </div>
+              <VerifiedBadge />
             ) : (
               <ActionButton tone="green" label="Verify" onClick={onOpenX} />
             )
@@ -224,13 +216,11 @@ export function UnlockHigherLimits({
             <Trophy className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[13px] font-bold text-emerald-500">Tip</p>
-            <p className="text-[12px] font-bold text-text-primary leading-snug mt-0.5">
-              Trade now and get back your full trade limit.
+            <p className="text-[13px] font-bold text-text-primary leading-snug">
+              Trade now and increase your trade limit
             </p>
-            <p className="text-[12px] text-text-tertiary leading-snug">
-              Maintain a good reputation score and complete successful trades to
-              automatically restore reduced limits.
+            <p className="text-[12px] text-text-tertiary leading-snug mt-0.5">
+              Maintain a good reputation score and complete successful trades
             </p>
           </div>
         </div>

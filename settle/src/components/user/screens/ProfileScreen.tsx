@@ -623,7 +623,7 @@ export const ProfileScreen = ({
           />
           <SettingsRow
             icon={<Coins className="w-[15px] h-[15px]" />}
-            title="Stake USDT"
+            title="Stake"
             subtitle="Earn rewards & unlock higher limits"
             onClick={() => setScreen("stake")}
           />

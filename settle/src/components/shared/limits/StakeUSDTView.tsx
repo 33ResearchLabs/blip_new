@@ -8,7 +8,7 @@
 // Staking moves real USDT (users/merchants.balance) into a position that accrues
 // rewards at an APY and raises the trading-limit floor. Backed by /api/staking/*.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -21,6 +21,7 @@ import {
   ArrowRight,
   History,
   HelpCircle,
+  Zap,
   ArrowDownLeft,
   ArrowUpRight,
 } from "lucide-react";
@@ -84,6 +85,16 @@ type Mode = "stake" | "unstake";
 
 const PERCENTS = [25, 50, 75, 100] as const;
 
+/** Static "Unlock Trading Limits" reference table (shown below Estimated Benefits). */
+const STAKE_TIER_ROWS = [
+  { stake: "0 USDT", mult: "1x", daily: "$50 / day" },
+  { stake: "100 USDT", mult: "3x", daily: "$150 / day" },
+  { stake: "250 USDT", mult: "5x", daily: "$250 / day" },
+  { stake: "500 USDT", mult: "10x", daily: "$500 / day", recommended: true },
+  { stake: "1,000 USDT", mult: "20x", daily: "$1,000 / day" },
+  { stake: "2,500 USDT", mult: "50x", daily: "$2,500 / day" },
+] as const;
+
 export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, embedded, hideHeader, onHelp }: Props) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,6 +106,12 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
 
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<EventRow[] | null>(null);
+
+  // "Stake Now" on the balance card scrolls to the stake form (works across all
+  // three host scroll containers via scrollIntoView on the nearest scrollable).
+  const formRef = useRef<HTMLDivElement>(null);
+  const scrollToForm = () =>
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const fetchSnap = useCallback(async () => {
     try {
@@ -207,21 +224,31 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
           {/* Staked balance */}
           <motion.div
             {...fade()}
-            className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card}`}
+            className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card} flex items-center justify-between gap-3`}
           >
-            <p className="text-[12px] text-text-tertiary">Your Staked Balance</p>
-            <div className="flex items-center gap-2 mt-1.5">
-              <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                <span className="text-[13px] font-extrabold">$</span>
+            <div className="min-w-0">
+              <p className="text-[12px] text-text-tertiary">Your Staked Balance</p>
+              <div className="flex items-center gap-2 mt-1.5">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                  <span className="text-[13px] font-extrabold">$</span>
+                </div>
+                <p className="text-[22px] font-extrabold text-text-primary leading-none tracking-[-0.02em]">
+                  {formatCrypto(snap?.principal)}{" "}
+                  <span className="text-[12px] text-text-tertiary font-semibold">USDT</span>
+                </p>
               </div>
-              <p className="text-[22px] font-extrabold text-text-primary leading-none tracking-[-0.02em]">
-                {formatCrypto(snap?.principal)}{" "}
-                <span className="text-[12px] text-text-tertiary font-semibold">USDT</span>
+              <p className="text-[11px] text-text-tertiary mt-1">
+                ≈ {formatFiat(snap?.principal, "USD")}
               </p>
             </div>
-            <p className="text-[11px] text-text-tertiary mt-1">
-              ≈ {formatFiat(snap?.principal, "USD")}
-            </p>
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={scrollToForm}
+              className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 h-10 rounded-xl bg-accent text-accent-text text-[13px] font-bold hover:opacity-90 transition-opacity"
+            >
+              Stake Now
+              <ArrowRight className="w-4 h-4" />
+            </motion.button>
           </motion.div>
 
           {/* Estimated Benefits */}
@@ -252,10 +279,84 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
             </div>
           </motion.div>
 
+          {/* Unlock Trading Limits — staking tier reference table */}
+          <motion.div
+            {...fade(0.075)}
+            className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card}`}
+          >
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="text-[14px] font-bold text-text-primary">
+                Unlock Trading Limits
+              </h3>
+              <p className="text-[11px] text-text-tertiary shrink-0 text-right">
+                The more you stake, the more you unlock
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+              <span>Staked USDT</span>
+              <span className="text-center">Limit Multiplier</span>
+              <span className="text-right">Daily Trading Limit</span>
+            </div>
+
+            <div className="space-y-1">
+              {STAKE_TIER_ROWS.map((t) => {
+                const rec = "recommended" in t && t.recommended;
+                return (
+                  <div
+                    key={t.stake}
+                    className={`grid grid-cols-3 gap-2 items-center px-3 py-2.5 rounded-xl ${
+                      rec ? "bg-violet-500/10 border border-violet-500/30" : ""
+                    }`}
+                  >
+                    <span className="text-[12px] font-semibold text-text-primary inline-flex items-center gap-1.5 flex-wrap">
+                      {t.stake}
+                      {rec && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-500">
+                          Recommended
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className={`text-[12px] text-center ${
+                        rec ? "font-bold text-violet-500" : "text-text-secondary"
+                      }`}
+                    >
+                      {t.mult}
+                    </span>
+                    <span
+                      className={`text-[12px] text-right font-semibold ${
+                        rec ? "text-violet-500" : "text-text-primary"
+                      }`}
+                    >
+                      {t.daily}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-start gap-3 mt-4 p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07]">
+              <div className="w-8 h-8 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                <Zap className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[13px] font-bold text-text-primary">
+                  More staking, more power.
+                </p>
+                <p className="text-[12px] text-text-tertiary leading-snug">
+                  Higher staking unlocks higher limits, lower fees and better trust
+                  score.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+
           {/* Stake / Unstake form */}
           <motion.div
+            ref={formRef}
             {...fade(0.1)}
-            className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card}`}
+            className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card} scroll-mt-4`}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[15px] font-bold text-text-primary">
