@@ -271,16 +271,16 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
             onClick={onClose}
           />
           <motion.div
-            className="fixed bottom-0 left-0 right-0 z-50 bg-[#0f0f0f] rounded-t-3xl p-6 pb-10"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-surface-raised border-t border-border-subtle rounded-t-3xl p-6 pb-10"
             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
           >
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-white font-semibold text-lg">Liveness Check</h2>
-                <p className="text-white/50 text-sm">Quick checks to confirm you're real</p>
+                <h2 className="text-text-primary font-semibold text-lg">Liveness Check</h2>
+                <p className="text-text-tertiary text-sm">Quick checks to confirm you're real</p>
               </div>
-              <button onClick={onClose} className="p-2 rounded-full bg-white/10 text-white/60 hover:bg-white/20">
+              <button onClick={onClose} className="p-2 rounded-full bg-surface-active text-text-secondary hover:bg-surface-hover">
                 <X size={18} />
               </button>
             </div>
@@ -291,18 +291,18 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                   <Camera size={36} className="text-emerald-400" />
                 </div>
                 <div className="text-center">
-                  <p className="text-white font-medium mb-1">Earn your Verified badge</p>
-                  <p className="text-white/50 text-sm">We'll ask you to blink and turn your head. No data is stored.</p>
+                  <p className="text-text-primary font-medium mb-1">Earn your Verified badge</p>
+                  <p className="text-text-tertiary text-sm">We'll ask you to blink and turn your head. No data is stored.</p>
                 </div>
                 {/* Task preview pills */}
                 <div className="flex gap-2">
                   {TASKS.map((t) => (
-                    <span key={t} className="px-3 py-1 rounded-full bg-white/8 text-white/60 text-xs">{TASK_LABEL[t]}</span>
+                    <span key={t} className="px-3 py-1 rounded-full bg-surface-active text-text-secondary text-xs">{TASK_LABEL[t]}</span>
                   ))}
                 </div>
                 <button
                   onClick={startScan}
-                  className="w-full py-3.5 rounded-2xl bg-emerald-500 text-white font-semibold text-sm active:scale-95 transition-transform"
+                  className="w-full py-3.5 rounded-2xl bg-emerald-500 text-text-primary font-semibold text-sm active:scale-95 transition-transform"
                 >
                   Start Liveness Check
                 </button>
@@ -328,7 +328,7 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                     <video ref={videoRef} className="w-full h-full object-cover scale-x-[-1]" muted playsInline />
                     {loading && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-                        <Loader2 size={28} className="text-white animate-spin" />
+                        <Loader2 size={28} className="text-text-primary animate-spin" />
                       </div>
                     )}
                   </div>
@@ -339,16 +339,16 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                   {TASKS.map((t, i) => (
                     <div key={t} className="flex items-center gap-1.5">
                       <div className={`w-2 h-2 rounded-full transition-colors ${
-                        i < taskIdx ? "bg-emerald-400" : i === taskIdx ? "bg-white" : "bg-white/20"
+                        i < taskIdx ? "bg-emerald-400" : i === taskIdx ? "bg-text-primary" : "bg-surface-hover"
                       }`}/>
                       <span className={`text-xs transition-colors ${
-                        i < taskIdx ? "text-emerald-400" : i === taskIdx ? "text-white" : "text-white/30"
+                        i < taskIdx ? "text-emerald-400" : i === taskIdx ? "text-text-primary" : "text-text-quaternary"
                       }`}>{TASK_LABEL[t]}</span>
                     </div>
                   ))}
                 </div>
 
-                <p className="text-white font-medium text-base text-center min-h-[24px]">{message}</p>
+                <p className="text-text-primary font-medium text-base text-center min-h-[24px]">{message}</p>
               </div>
             )}
 
@@ -357,8 +357,8 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                 <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center">
                   <ShieldCheck size={40} className="text-emerald-400" />
                 </div>
-                <p className="text-white font-semibold text-lg">You're Verified!</p>
-                <p className="text-white/50 text-sm text-center">Your Verified badge is now active on your profile.</p>
+                <p className="text-text-primary font-semibold text-lg">You're Verified!</p>
+                <p className="text-text-tertiary text-sm text-center">Your Verified badge is now active on your profile.</p>
               </div>
             )}
 
@@ -368,16 +368,16 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                   <AlertCircle size={40} className="text-red-400" />
                 </div>
                 {message === "HTTPS_REQUIRED" ? (
-                  <p className="text-white/70 text-sm text-center">Camera requires HTTPS. Make sure the address bar shows <span className="text-white">https://</span></p>
+                  <p className="text-text-secondary text-sm text-center">Camera requires HTTPS. Make sure the address bar shows <span className="text-text-primary">https://</span></p>
                 ) : message === "CAMERA_DENIED" ? (
-                  <div className="w-full bg-white/5 rounded-2xl p-4 text-sm text-white/60 space-y-2">
-                    <p className="text-white font-medium mb-2">Camera access blocked</p>
-                    <p>1. Tap the <span className="text-white">🔒 lock</span> in the address bar</p>
-                    <p>2. Set <span className="text-white">Camera</span> to <span className="text-white">Allow</span></p>
+                  <div className="w-full bg-surface-active rounded-2xl p-4 text-sm text-text-secondary space-y-2">
+                    <p className="text-text-primary font-medium mb-2">Camera access blocked</p>
+                    <p>1. Tap the <span className="text-text-primary">🔒 lock</span> in the address bar</p>
+                    <p>2. Set <span className="text-text-primary">Camera</span> to <span className="text-text-primary">Allow</span></p>
                     <p>3. Refresh and try again</p>
                   </div>
                 ) : (
-                  <p className="text-white/70 text-sm text-center">{message}</p>
+                  <p className="text-text-secondary text-sm text-center">{message}</p>
                 )}
                 <button
                   onClick={() => {
@@ -385,7 +385,7 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                     taskIdxRef.current = 0; setFaceOk(false);
                     blinkCount.current = 0; eyeWasClosed.current = false; taskDone.current = false;
                   }}
-                  className="w-full py-3.5 rounded-2xl bg-white/10 text-white font-semibold text-sm"
+                  className="w-full py-3.5 rounded-2xl bg-surface-active text-text-primary font-semibold text-sm"
                 >
                   Try Again
                 </button>
@@ -394,7 +394,7 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
 
             {busy && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-t-3xl">
-                <Loader2 size={32} className="text-white animate-spin" />
+                <Loader2 size={32} className="text-text-primary animate-spin" />
               </div>
             )}
           </motion.div>

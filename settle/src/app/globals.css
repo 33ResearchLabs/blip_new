@@ -79,6 +79,7 @@
 
   /* White accent — primary CTA color (Apple style) */
   --accent: #ffffff;
+  --accent-text: #0a0a0a; /* contrast for bg-accent buttons */
   --accent-bright: #f5f5f5;
   --accent-dark: #e5e5e5;
   --accent-dim: #d4d4d4;
@@ -129,6 +130,7 @@
   --muted: #586E75;
   --muted-bg: #EEE8D5;
   --accent: #0a0a0a;
+  --accent-text: #ffffff; /* contrast for bg-accent buttons */
   --accent-bright: #171717;
   --accent-dark: #262626;
   --accent-subtle: rgba(0, 0, 0, 0.05);
@@ -169,6 +171,7 @@
   --muted: #6B7280;
   --muted-bg: #F3F4F6;
   --accent: #111827;
+  --accent-text: #ffffff; /* contrast for bg-accent buttons */
   --accent-bright: #1F2937;
   --accent-dark: #374151;
   --accent-subtle: rgba(0, 0, 0, 0.04);
@@ -208,6 +211,7 @@
   --muted: #94A3B8;
   --muted-bg: #161E31;
   --accent: #F1F5F9;
+  --accent-text: #0a0a0a; /* contrast for bg-accent buttons */
   --accent-bright: #E2E8F0;
   --accent-dark: #CBD5E1;
   --accent-subtle: rgba(255, 255, 255, 0.06);
@@ -241,6 +245,7 @@
   --muted: #6B7280;
   --muted-bg: #0D1410;
   --accent: #ECFDF5;
+  --accent-text: #0a0a0a; /* contrast for bg-accent buttons */
   --accent-bright: #D1FAE5;
   --accent-dark: #A7F3D0;
   --accent-subtle: rgba(16, 185, 129, 0.08);
@@ -274,6 +279,7 @@
   --muted: #94A3B8;
   --muted-bg: #16213E;
   --accent: #FFFFFF;
+  --accent-text: #0a0a0a; /* contrast for bg-accent buttons */
   --accent-bright: #F5F5F5;
   --accent-dark: #E5E5E5;
   --accent-subtle: rgba(233, 69, 96, 0.08);
@@ -310,6 +316,7 @@
   --muted: #525252;
   --muted-bg: #131313;
   --accent: #ffffff;
+  --accent-text: #0a0a0a; /* contrast for bg-accent buttons */
   --accent-bright: #f5f5f5;
   --accent-dark: #e5e5e5;
   --accent-dim: #d4d4d4;
@@ -347,6 +354,7 @@
   --muted: #888888;
   --muted-bg: #2D2D2D;
   --accent: #E0E0E0;
+  --accent-text: #0a0a0a; /* contrast for bg-accent buttons */
   --accent-bright: #D4D4D4;
   --accent-dark: #A3A3A3;
   --accent-subtle: rgba(212, 175, 55, 0.08);

@@ -53,6 +53,27 @@ export const KYC0_RAMPED_LIMITS  = { dailyUsd: 300, perTradeUsd: 100 } as const;
  */
 export const USER_BASE_LIMITS = { dailyUsd: 50, perTradeUsd: 25 } as const;
 
+/**
+ * Verification floors — raised by completing identity checks. Each is a *floor*
+ * (like the KYC base): it lifts rawDaily/rawPerTrade before the reputation
+ * multiplier and approved overrides stack on top. Liveness sits above phone, so
+ * a user with both gets the liveness floor (we take the max). These apply to
+ * users too — unlike the KYC base, which users bypass via USER_BASE_LIMITS — so
+ * "Verify Phone / Verify Liveness" on the Trading Limits page actually moves the
+ * cap. Read by getVerificationFloor from phone_verified / face_verified.
+ */
+export const VERIFY_LIMIT_FLOORS = {
+  phone:    { dailyUsd: 300,  perTradeUsd: 100 },
+  liveness: { dailyUsd: 1000, perTradeUsd: 300 },
+} as const;
+
+/**
+ * Trailing-24h unsuccessful-order count (cancelled / disputed / expired) at or
+ * above which the Trading Limits page shows an informational "limits may
+ * decrease" warning. Display-only — no effect on the computed limits.
+ */
+export const LIMIT_DECREASE_ALERT_THRESHOLD = 2;
+
 export type KycLevel = keyof typeof KYC_BASE_LIMITS;
 
 /** Kept for backwards compat — equals KYC-0 floor */
@@ -86,14 +107,18 @@ export type CoinLimitTier = keyof typeof COIN_LIMIT_TIERS;
 export interface EffectiveLimits {
   dailyUsd: number;
   perTradeUsd: number;
-  /** Which layer is driving the limit: KYC base tier or a coin unlock. */
-  source: 'kyc' | CoinLimitTier;
+  /** Which layer is driving the limit: KYC base, a verification floor, or a coin unlock. */
+  source: 'kyc' | 'verification' | CoinLimitTier;
   /** KYC level that was read (0 or 1). */
   kycLevel: KycLevel;
   /** Days since account creation — used to show "limits increase on day 3" */
   accountAgeDays: number;
   expiresAt: Date | null;
   reputationMultiplier: number;
+  /** Reputation tier name (null when unscored) — drives the "Trader Program" row. */
+  reputationTier: string | null;
+  /** Active identity verifications that raise the limit floor. */
+  verifications: { phone: boolean; liveness: boolean };
 }
 
 interface UnlockRow {
@@ -116,8 +141,10 @@ export async function getEffectiveLimits(
   actorId: string,
   actorType: WaitlistActorType,
 ): Promise<EffectiveLimits> {
-  // Read KYC level, account age, unlock, rep multiplier, and admin overrides concurrently.
-  const { kycLevel, accountAgeDays } = await getKycInfo(actorId, actorType);
+  // Read KYC level, account age, verification flags, unlock, reputation, and
+  // admin overrides concurrently.
+  const { kycLevel, accountAgeDays, phoneVerified, faceVerified } =
+    await getKycInfo(actorId, actorType);
 
   // Users get a flat base floor ($50/day, $25/trade) — reputation, coin
   // unlocks, and approved increases still raise it below. Merchants keep the
@@ -129,7 +156,20 @@ export async function getEffectiveLimits(
       ? (accountAgeDays < 3 ? KYC0_INITIAL_LIMITS : KYC0_RAMPED_LIMITS)
       : KYC_BASE_LIMITS[kycLevel];
 
-  const [unlock, repMult, overrides] = await Promise.all([
+  // Verification floor — phone and/or liveness lift the base. Liveness sits
+  // above phone, so take the max of whichever checks are complete.
+  const verifyFloor = {
+    dailyUsd: Math.max(
+      phoneVerified ? VERIFY_LIMIT_FLOORS.phone.dailyUsd : 0,
+      faceVerified  ? VERIFY_LIMIT_FLOORS.liveness.dailyUsd : 0,
+    ),
+    perTradeUsd: Math.max(
+      phoneVerified ? VERIFY_LIMIT_FLOORS.phone.perTradeUsd : 0,
+      faceVerified  ? VERIFY_LIMIT_FLOORS.liveness.perTradeUsd : 0,
+    ),
+  };
+
+  const [unlock, rep, overrides] = await Promise.all([
     queryOne<UnlockRow>(
       `SELECT tier, daily_limit_usd, per_trade_usd, expires_at
          FROM coin_limit_unlocks
@@ -138,16 +178,24 @@ export async function getEffectiveLimits(
         LIMIT 1`,
       [actorType, actorId],
     ),
-    getReputationMultiplier(actorId, actorType),
+    getReputationInfo(actorId, actorType),
     getApprovedLimitOverrides(actorId, actorType),
   ]);
+  const repMult = rep.multiplier;
 
-  // Pick the higher of KYC base vs coin unlock, then apply rep multiplier.
-  const rawDaily    = unlock ? Math.max(kycBase.dailyUsd, unlock.daily_limit_usd) : kycBase.dailyUsd;
-  const rawPerTrade = unlock ? Math.max(kycBase.perTradeUsd, unlock.per_trade_usd) : kycBase.perTradeUsd;
+  // Highest floor wins per field: KYC base vs verification floor vs coin unlock.
+  // Then the reputation multiplier scales it, and an approved override floors it.
+  const unlockDaily    = unlock?.daily_limit_usd ?? 0;
+  const unlockPerTrade = unlock?.per_trade_usd ?? 0;
+  const rawDaily    = Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd, unlockDaily);
+  const rawPerTrade = Math.max(kycBase.perTradeUsd, verifyFloor.perTradeUsd, unlockPerTrade);
 
-  const source: 'kyc' | CoinLimitTier =
-    unlock && unlock.daily_limit_usd > kycBase.dailyUsd ? unlock.tier : 'kyc';
+  // Label the driving layer (by daily): coin unlock > verification > kyc.
+  let source: 'kyc' | 'verification' | CoinLimitTier = 'kyc';
+  if (verifyFloor.dailyUsd > kycBase.dailyUsd) source = 'verification';
+  if (unlock && unlockDaily > Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd)) {
+    source = unlock.tier;
+  }
 
   return {
     dailyUsd:    Math.max(Math.floor(rawDaily * repMult),    overrides.dailyUsd ?? 0),
@@ -155,8 +203,10 @@ export async function getEffectiveLimits(
     source,
     kycLevel,
     accountAgeDays,
-    expiresAt: source !== 'kyc' && unlock ? unlock.expires_at : null,
+    expiresAt: unlock && source === unlock.tier ? unlock.expires_at : null,
     reputationMultiplier: repMult,
+    reputationTier: rep.tier,
+    verifications: { phone: phoneVerified, liveness: faceVerified },
   };
 }
 
@@ -188,11 +238,26 @@ export async function getApprovedLimitOverrides(
 async function getKycInfo(
   actorId: string,
   actorType: WaitlistActorType,
-): Promise<{ kycLevel: KycLevel; accountAgeDays: number }> {
+): Promise<{
+  kycLevel: KycLevel;
+  accountAgeDays: number;
+  phoneVerified: boolean;
+  faceVerified: boolean;
+}> {
   const table = actorType === 'merchant' ? 'merchants' : 'users';
   const col   = actorType === 'merchant' ? 'verification_level' : 'kyc_level';
-  const row   = await queryOne<{ lvl: number; created_at: Date }>(
-    `SELECT COALESCE(${col}, 0) AS lvl, created_at FROM ${table} WHERE id = $1`,
+  // phone_verified (users: 154, merchants: 149) and face_verified (users: 163,
+  // merchants: 164) exist on both tables — COALESCE guards pre-migration rows.
+  const row   = await queryOne<{
+    lvl: number;
+    created_at: Date;
+    phone_verified: boolean | null;
+    face_verified: boolean | null;
+  }>(
+    `SELECT COALESCE(${col}, 0) AS lvl, created_at,
+            COALESCE(phone_verified, FALSE) AS phone_verified,
+            COALESCE(face_verified, FALSE)  AS face_verified
+       FROM ${table} WHERE id = $1`,
     [actorId],
   );
   const raw = row?.lvl ?? 0;
@@ -200,7 +265,12 @@ async function getKycInfo(
   const accountAgeDays = row?.created_at
     ? Math.floor((Date.now() - new Date(row.created_at).getTime()) / 86_400_000)
     : 0;
-  return { kycLevel, accountAgeDays };
+  return {
+    kycLevel,
+    accountAgeDays,
+    phoneVerified: !!row?.phone_verified,
+    faceVerified: !!row?.face_verified,
+  };
 }
 
 /** Reputation tier → daily/per-trade multiplier. Tier name compatible
@@ -221,17 +291,18 @@ const REP_TIER_MULTIPLIER: Record<string, number> = {
   // multipliers apply, so we don't need to disambiguate.)
 };
 
-async function getReputationMultiplier(
+async function getReputationInfo(
   actorId: string,
   actorType: WaitlistActorType,
-): Promise<number> {
+): Promise<{ tier: string | null; multiplier: number }> {
   const row = await queryOne<{ tier: string | null }>(
     `SELECT tier FROM reputation_scores
       WHERE entity_id = $1 AND entity_type = $2`,
     [actorId, actorType],
   );
-  if (!row?.tier) return 1.0;
-  return REP_TIER_MULTIPLIER[row.tier.toLowerCase()] ?? 1.0;
+  const tier = row?.tier ?? null;
+  if (!tier) return { tier: null, multiplier: 1.0 };
+  return { tier, multiplier: REP_TIER_MULTIPLIER[tier.toLowerCase()] ?? 1.0 };
 }
 
 /**
@@ -261,6 +332,31 @@ export async function getTrailing24hVolumeUsd(
     [actorId],
   );
   return Number(row?.vol ?? 0);
+}
+
+/**
+ * Count of unsuccessful orders (cancelled / disputed / expired) for this actor
+ * in the trailing 24h. Drives the informational "limits may decrease" warning
+ * on the Trading Limits page — DISPLAY ONLY, it does not change any limit.
+ * Same actor-role SQL as getTrailing24hVolumeUsd.
+ */
+export async function getUnsuccessful24hCount(
+  actorId: string,
+  actorType: WaitlistActorType,
+): Promise<number> {
+  const actorCol =
+    actorType === 'merchant'
+      ? '(merchant_id = $1 OR buyer_merchant_id = $1)'
+      : 'user_id = $1';
+  const row = await queryOne<{ n: number }>(
+    `SELECT COUNT(*)::int AS n
+       FROM orders
+      WHERE ${actorCol}
+        AND status IN ('cancelled','disputed','expired')
+        AND created_at >= NOW() - INTERVAL '24 hours'`,
+    [actorId],
+  );
+  return Number(row?.n ?? 0);
 }
 
 /**

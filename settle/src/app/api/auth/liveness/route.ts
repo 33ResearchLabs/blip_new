@@ -13,14 +13,17 @@ export async function POST(request: NextRequest) {
   const auth = await requireTokenAuth(request);
   if (auth instanceof NextResponse) return auth;
 
-  const userId = auth.actorId;
+  const actorId = auth.actorId;
+  // Liveness applies to user and merchant accounts. Both tables carry
+  // face_verified / face_verified_at (users: migration 163, merchants: 164).
+  const table = auth.actorType === 'merchant' ? 'merchants' : 'users';
 
   try {
     await dbQuery(
-      `UPDATE users SET face_verified = TRUE, face_verified_at = NOW() WHERE id = $1`,
-      [userId]
+      `UPDATE ${table} SET face_verified = TRUE, face_verified_at = NOW() WHERE id = $1`,
+      [actorId]
     );
-    logger.info('[Liveness] Face verified', { userId });
+    logger.info('[Liveness] Face verified', { actorId, actorType: auth.actorType });
     return successResponse({ face_verified: true });
   } catch (err) {
     logger.error('[Liveness] Failed to update', { error: (err as Error).message });
