@@ -28,6 +28,7 @@ import { getOrderChannel } from "@/lib/pusher/channels";
 import { ORDER_EVENTS, CHAT_EVENTS } from "@/lib/pusher/events";
 import { formatLastSeen } from "./helpers";
 import type { Screen, Order } from "./types";
+import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { RefObject } from "react";
 
 export interface ChatViewScreenProps {
@@ -79,6 +80,7 @@ export const ChatViewScreen = ({
   userId,
 }: ChatViewScreenProps) => {
   const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   // Mutual cancel state (only relevant when order is disputed)
   const [myMutualCancel, setMyMutualCancel] = useState(false);
@@ -565,6 +567,12 @@ export const ChatViewScreen = ({
           <button onClick={() => setScreen("chats")} className="p-2 -ml-2">
             <ChevronLeft className="w-6 h-6 text-text-primary" />
           </button>
+          <button
+            type="button"
+            onClick={() => setShowProfile(true)}
+            aria-label="View merchant profile"
+            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+          >
           <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[16px] bg-accent/20 border border-accent/30 text-accent overflow-hidden shrink-0">
             {activeOrder.merchant.avatarUrl ? (
               <img
@@ -576,8 +584,8 @@ export const ChatViewScreen = ({
               (activeOrder.merchant.name || 'M').charAt(0).toUpperCase()
             )}
           </div>
-          <div className="flex-1">
-            <p className="text-[15px] font-semibold text-text-primary">
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-semibold text-text-primary truncate">
               {activeOrder.merchant.username ? `@${activeOrder.merchant.username}` : activeOrder.merchant.name}
             </p>
             <div className="flex items-center gap-1.5">
@@ -595,6 +603,7 @@ export const ChatViewScreen = ({
               )}
             </div>
           </div>
+          </button>
           <button
             onClick={() => setScreen("order")}
             className="p-2 rounded-full bg-surface-card"
@@ -618,6 +627,19 @@ export const ChatViewScreen = ({
           </span>
         </div>
       </div>
+
+      {/* Counterparty profile — opened by tapping the chat header. */}
+      <ProfileSheet
+        open={showProfile}
+        entityType="merchant"
+        id={activeOrder.merchant.id}
+        variant="user"
+        onClose={() => setShowProfile(false)}
+        onStartTrade={() => {
+          setShowProfile(false);
+          setScreen("trade");
+        }}
+      />
 
       {/* Messages Area — only this scrolls; min-h-0 lets flex-1 actually
           constrain inside the flex column instead of growing past it. */}
