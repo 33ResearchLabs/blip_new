@@ -7,7 +7,7 @@
 // this renders the body (subtitle + badge downward).
 
 import { useCallback, useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
   CreditCard,
@@ -17,8 +17,10 @@ import {
   Loader2,
   AlertCircle,
   ArrowRight,
+  ArrowDown,
   ChevronRight,
   HelpCircle,
+  X,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { formatFiat } from "@/lib/format";
@@ -26,7 +28,6 @@ import { UserXVerificationModal } from "@/components/user/UserXVerificationModal
 import { MerchantXVerificationModal } from "@/components/merchant/MerchantXVerificationModal";
 import { UnlockHigherLimits } from "./UnlockHigherLimits";
 import { StakeUSDTView } from "./StakeUSDTView";
-import { LimitDecreaseAlert } from "./LimitDecreaseAlert";
 import { RequestIncreaseModal } from "./RequestIncreaseModal";
 import { RequestDetailModal } from "./RequestDetailModal";
 import {
@@ -65,6 +66,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
   const [showStake, setShowStake] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
   const [reqKind, setReqKind] = useState<RequestKind>("daily");
+  const [showDecreaseInfo, setShowDecreaseInfo] = useState(false);
 
   const fetchLimits = useCallback(async () => {
     setLoading(true);
@@ -208,10 +210,22 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
           <motion.div {...fade()} className="grid grid-cols-2 gap-3">
             {summary.map((b) => {
               const Icon = b.Icon;
+              // Daily limit "decreased" state — red ↓ + reason + tappable popup.
+              const isDailyDecrease = b.key === "daily" && !!data.decrease_alert;
+              const unsuccessful = Number(data.unsuccessful_24h ?? 0);
               return (
                 <div
                   key={b.key}
-                  className={`rounded-[20px] p-4 border border-border-subtle ${surfaces.card}`}
+                  onClick={
+                    isDailyDecrease ? () => setShowDecreaseInfo(true) : undefined
+                  }
+                  role={isDailyDecrease ? "button" : undefined}
+                  tabIndex={isDailyDecrease ? 0 : undefined}
+                  className={`rounded-[20px] p-4 border border-border-subtle ${surfaces.card} ${
+                    isDailyDecrease
+                      ? `cursor-pointer ${surfaces.hover} transition-colors`
+                      : ""
+                  }`}
                 >
                   <div className="flex items-center gap-2.5 mb-2">
                     <div
@@ -221,10 +235,19 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
                     </div>
                     <p className="text-[12px] text-text-tertiary">{b.label}</p>
                   </div>
-                  <p className="text-[22px] font-extrabold text-text-primary leading-none tracking-[-0.02em]">
+                  <p className="text-[22px] font-extrabold text-text-primary leading-none tracking-[-0.02em] inline-flex items-center gap-1">
                     {formatFiat(b.value, "USD")}
+                    {isDailyDecrease && (
+                      <ArrowDown className="w-4 h-4 text-red-500" />
+                    )}
                   </p>
-                  <p className="text-[11px] text-text-tertiary mt-1">{b.sub}</p>
+                  {isDailyDecrease ? (
+                    <p className="text-[11px] text-red-500 mt-1">
+                      Due to {unsuccessful} unsuccessful trade
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-text-tertiary mt-1">{b.sub}</p>
+                  )}
                 </div>
               );
             })}
@@ -296,13 +319,6 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
                   />
                 );
               })}
-
-              {data.decrease_alert && (
-                <LimitDecreaseAlert
-                  count={Number(data.unsuccessful_24h ?? 0)}
-                  surfaces={surfaces}
-                />
-              )}
             </div>
           </motion.div>
 
@@ -334,7 +350,8 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
             </motion.button>
           </motion.div>
 
-          {/* Recent Limit Requests */}
+          {/* Recent Limit Requests — only shown when requests exist */}
+          {requests.length > 0 && (
           <motion.div
             {...fade(0.2)}
             className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card}`}
@@ -353,14 +370,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
               )}
             </div>
 
-            {requests.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="text-[13px] text-text-tertiary">
-                  No limit requests yet.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border-subtle">
+            <div className="divide-y divide-border-subtle">
                 {visibleRequests.map((r) => {
                   const kindLabel =
                     r.kind === "daily"
@@ -421,8 +431,8 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
                   );
                 })}
               </div>
-            )}
           </motion.div>
+          )}
 
           {/* Need Help? */}
           <motion.button
@@ -452,6 +462,53 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
           </p>
         </>
       ) : null}
+
+      {/* Daily-limit decrease popup — opened by tapping the Daily Limit card. */}
+      <AnimatePresence>
+        {showDecreaseInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowDecreaseInfo(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              onClick={(e) => e.stopPropagation()}
+              className={`w-full max-w-sm rounded-2xl p-6 border border-border-subtle ${surfaces.card}`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center">
+                  <ArrowDown className="w-5 h-5" />
+                </div>
+                <button
+                  onClick={() => setShowDecreaseInfo(false)}
+                  aria-label="Close"
+                  className={`p-1.5 rounded-lg text-text-tertiary hover:text-text-primary ${surfaces.hover} transition-colors`}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-[15px] font-bold text-text-primary mb-1.5">
+                Trade now and get back your full trade limit.
+              </p>
+              <p className="text-[13px] text-text-tertiary leading-relaxed">
+                Maintain a good reputation score and complete successful trades to
+                automatically restore reduced limits.
+              </p>
+              <button
+                onClick={() => setShowDecreaseInfo(false)}
+                className="mt-5 w-full px-4 py-3 rounded-xl bg-accent text-accent-text text-[13px] font-bold hover:opacity-90 transition-opacity"
+              >
+                Got it
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modals */}
       <RequestIncreaseModal
