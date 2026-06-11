@@ -92,22 +92,28 @@ export const SURFACES: Record<LimitsVariant, SurfaceTokens> = {
 
 /**
  * Distinct per-action CTA colors from the mockup (green Verify, violet Liveness,
- * amber Stake, blue Trade). Fixed Tailwind palette on purpose — these are
- * semantic action colors, not theme accents, and read well on light + dark.
+ * amber Stake, blue Trade). Uses arbitrary hex values on purpose:
+ *  - `violet` is only referenced here, so the named Tailwind utility wasn't
+ *    being generated (the icon/button rendered colorless); arbitrary values are
+ *    always emitted regardless of palette scanning.
+ *  - `text-[#fff]` (not `text-white`) escapes the user-light / merchant-light
+ *    `text-white` → dark remap, so button labels stay legible on the saturated
+ *    fill in every theme. Amber is light, so it pairs with dark text.
  */
 export const ACTION_BTN: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-emerald-500 hover:bg-emerald-600 text-white",
-    violet: "bg-violet-500 hover:bg-violet-600 text-white",
-    amber: "bg-amber-500 hover:bg-amber-600 text-white",
-    blue: "bg-blue-500 hover:bg-blue-600 text-white",
+    green: "bg-[#10b981] hover:bg-[#0ea372] text-[#ffffff]",
+    violet: "bg-[#8b5cf6] hover:bg-[#7c4ddb] text-[#ffffff]",
+    amber: "bg-[#f59e0b] hover:bg-[#e08e09] text-[#1a1a1a]",
+    blue: "bg-[#3b82f6] hover:bg-[#2f77ec] text-[#ffffff]",
   };
 
-/** Soft tinted icon backgrounds matching each action color. */
+/** Soft tinted icon backgrounds matching each action color (arbitrary hex so
+ *  the violet tint actually renders; /15 reads cleanly on light + dark). */
 export const ACTION_ICON: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-emerald-500/10 text-emerald-500",
-    violet: "bg-violet-500/10 text-violet-500",
-    amber: "bg-amber-500/10 text-amber-500",
-    blue: "bg-blue-500/10 text-blue-500",
+    green: "bg-[#10b981]/15 text-[#10b981]",
+    violet: "bg-[#8b5cf6]/15 text-[#8b5cf6]",
+    amber: "bg-[#f59e0b]/15 text-[#d97706]",
+    blue: "bg-[#3b82f6]/15 text-[#3b82f6]",
   };

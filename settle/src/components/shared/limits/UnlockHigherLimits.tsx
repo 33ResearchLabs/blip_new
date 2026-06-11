@@ -72,9 +72,7 @@ function Row({
           {desc}
         </p>
       </div>
-      <div className="shrink-0 flex justify-end items-center min-w-[120px]">
-        {action}
-      </div>
+      <div className="shrink-0 flex justify-end items-center">{action}</div>
     </div>
   );
 }
@@ -85,7 +83,7 @@ function ComingSoonButton() {
       type="button"
       disabled
       aria-disabled="true"
-      className="inline-flex items-center justify-center w-[120px] h-10 rounded-xl text-[12px] font-bold bg-text-primary/[0.06] text-text-tertiary border border-border-subtle cursor-not-allowed whitespace-nowrap"
+      className="inline-flex items-center justify-center h-9 px-3.5 min-w-[92px] rounded-xl text-[12px] font-bold bg-text-primary/[0.06] text-text-tertiary border border-border-subtle cursor-not-allowed whitespace-nowrap"
     >
       Coming Soon
     </button>
@@ -114,7 +112,7 @@ function ActionButton({
     <motion.button
       whileTap={{ scale: 0.96 }}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1.5 w-[120px] h-10 rounded-xl text-[13px] font-bold transition-colors ${ACTION_BTN[tone]}`}
+      className={`inline-flex items-center justify-center gap-1.5 h-9 px-3.5 min-w-[92px] rounded-xl text-[13px] font-bold transition-colors ${ACTION_BTN[tone]}`}
     >
       {label}
       <ArrowRight className="w-4 h-4" />
