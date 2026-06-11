@@ -30,7 +30,7 @@ export function StakeScreen({ setScreen }: StakeScreenProps) {
           <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </motion.button>
         <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
-          Stake USDT
+          Stake
         </p>
       </header>
 
