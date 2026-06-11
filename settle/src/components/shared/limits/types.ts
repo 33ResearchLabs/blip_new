@@ -95,29 +95,24 @@ export const SURFACES: Record<LimitsVariant, SurfaceTokens> = {
 };
 
 /**
- * Distinct per-action CTA colors from the mockup (green Verify, violet Liveness,
- * amber Stake, blue Trade). Uses arbitrary hex values on purpose:
- *  - `violet` is only referenced here, so the named Tailwind utility wasn't
- *    being generated (the icon/button rendered colorless); arbitrary values are
- *    always emitted regardless of palette scanning.
- *  - `text-[#fff]` (not `text-white`) escapes the user-light / merchant-light
- *    `text-white` → dark remap, so button labels stay legible on the saturated
- *    fill in every theme. Amber is light, so it pairs with dark text.
+ * Unlock-row CTA buttons — all use the theme accent (yellow on the user app, the
+ * merchant theme color on merchant) with its paired `--accent-text` for legible
+ * contrast in every theme. Tone keys kept so callers don't change.
  */
 export const ACTION_BTN: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-[#10b981] hover:bg-[#0ea372] text-[#ffffff]",
-    violet: "bg-[#8b5cf6] hover:bg-[#7c4ddb] text-[#ffffff]",
-    amber: "bg-[#f59e0b] hover:bg-[#e08e09] text-[#1a1a1a]",
-    blue: "bg-[#3b82f6] hover:bg-[#2f77ec] text-[#ffffff]",
+    green: "bg-accent text-accent-text hover:opacity-90",
+    violet: "bg-accent text-accent-text hover:opacity-90",
+    amber: "bg-accent text-accent-text hover:opacity-90",
+    blue: "bg-accent text-accent-text hover:opacity-90",
   };
 
-/** Soft tinted icon backgrounds matching each action color (arbitrary hex so
- *  the violet tint actually renders; /15 reads cleanly on light + dark). */
+/** Unlock-row icon tints — all follow the theme accent (yellow on the user app,
+ *  the merchant theme color on merchant). Tone keys kept so callers don't change. */
 export const ACTION_ICON: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-[#10b981]/15 text-[#10b981]",
-    violet: "bg-[#8b5cf6]/15 text-[#8b5cf6]",
-    amber: "bg-[#f59e0b]/15 text-[#d97706]",
-    blue: "bg-[#3b82f6]/15 text-[#3b82f6]",
+    green: "bg-accent/15 text-accent",
+    violet: "bg-accent/15 text-accent",
+    amber: "bg-accent/15 text-accent",
+    blue: "bg-accent/15 text-accent",
   };
