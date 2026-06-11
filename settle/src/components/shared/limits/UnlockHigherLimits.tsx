@@ -54,21 +54,21 @@ function Row({
 }) {
   return (
     <div
-      className={`flex items-center gap-3.5 p-3.5 rounded-2xl border border-border-subtle ${surfaces.inset}`}
+      className={`flex items-center gap-3 p-3 rounded-2xl border border-border-subtle ${surfaces.inset}`}
     >
       <div
-        className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${ACTION_ICON[tone]}`}
+        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${ACTION_ICON[tone]}`}
       >
         {icon}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="text-[14px] font-bold text-text-primary leading-tight">
+          <p className="text-[13px] font-bold text-text-primary leading-tight">
             {title}
           </p>
           {badge}
         </div>
-        <p className="text-[12px] text-text-tertiary leading-snug mt-0.5">
+        <p className="text-[11.5px] text-text-tertiary leading-snug mt-0.5">
           {desc}
         </p>
       </div>
@@ -83,7 +83,7 @@ function ComingSoonButton() {
       type="button"
       disabled
       aria-disabled="true"
-      className="inline-flex items-center justify-center h-9 px-3.5 min-w-[92px] rounded-xl text-[12px] font-bold bg-text-primary/[0.06] text-text-tertiary border border-border-subtle cursor-not-allowed whitespace-nowrap"
+      className="inline-flex items-center justify-center h-9 px-3 min-w-[72px] rounded-xl text-[11px] font-bold bg-text-primary/[0.06] text-text-tertiary border border-border-subtle cursor-not-allowed whitespace-nowrap"
     >
       Coming Soon
     </button>
@@ -112,10 +112,10 @@ function ActionButton({
     <motion.button
       whileTap={{ scale: 0.96 }}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1.5 h-9 px-3.5 min-w-[92px] rounded-xl text-[13px] font-bold transition-colors ${ACTION_BTN[tone]}`}
+      className={`inline-flex items-center justify-center gap-1 h-9 px-3 min-w-[72px] rounded-xl text-[12px] font-bold transition-colors ${ACTION_BTN[tone]}`}
     >
       {label}
-      <ArrowRight className="w-4 h-4" />
+      <ArrowRight className="w-3.5 h-3.5" />
     </motion.button>
   );
 }
@@ -146,8 +146,8 @@ export function UnlockHigherLimits({
       : "Trade actively to unlock up to 3x higher limits.";
 
   return (
-    <div className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card}`}>
-      <h3 className="text-[15px] font-bold text-text-primary mb-4">
+    <div className={`rounded-[20px] p-4 border border-border-subtle ${surfaces.card}`}>
+      <h3 className="text-[15px] font-bold text-text-primary mb-3">
         Unlock Higher Limits
       </h3>
 
