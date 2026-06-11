@@ -6,7 +6,6 @@ import {
   Smartphone,
   ScanFace,
   Coins,
-  TrendingUp,
   Trophy,
   Check,
   ArrowRight,
@@ -77,19 +76,6 @@ function Row({
   );
 }
 
-function ComingSoonButton() {
-  return (
-    <button
-      type="button"
-      disabled
-      aria-disabled="true"
-      className="inline-flex items-center justify-center h-9 px-3 min-w-[72px] rounded-xl text-[11px] font-bold bg-text-primary/[0.06] text-text-tertiary border border-border-subtle cursor-not-allowed whitespace-nowrap"
-    >
-      Coming Soon
-    </button>
-  );
-}
-
 function VerifiedBadge() {
   return (
     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
@@ -135,15 +121,6 @@ export function UnlockHigherLimits({
   const phoneVerified = !!data?.verifications?.phone;
   const livenessVerified = !!data?.verifications?.liveness;
   const xVerified = !!data?.verifications?.x;
-  const repTier = data?.reputation?.tier ?? data?.effective?.reputationTier ?? null;
-  const repMult = Number(
-    data?.reputation?.multiplier ?? data?.effective?.reputationMultiplier ?? 1,
-  );
-
-  const traderDesc =
-    repTier && repMult > 1
-      ? `${cap(repTier)} tier active — ${formatMult(repMult)} higher limits. Trade more to climb.`
-      : "Trade actively to unlock up to 3x higher limits.";
 
   return (
     <div className={`rounded-[20px] p-4 border border-border-subtle ${surfaces.card}`}>
@@ -157,7 +134,7 @@ export function UnlockHigherLimits({
           icon={<Smartphone className="w-5 h-5" />}
           tone="green"
           title="Verify Phone Number"
-          desc="Verify your phone to raise your daily limit."
+          desc="Unlock limit up to $50"
           surfaces={surfaces}
           action={
             phoneVerified ? (
@@ -177,7 +154,7 @@ export function UnlockHigherLimits({
           icon={<ScanFace className="w-5 h-5" />}
           tone="violet"
           title="Verify Liveness"
-          desc="Complete a quick liveness check to unlock higher limits."
+          desc="Unlock limit up to $50"
           surfaces={surfaces}
           action={
             livenessVerified ? (
@@ -192,26 +169,16 @@ export function UnlockHigherLimits({
           }
         />
 
-        {/* Stake USDT to Increase Limits */}
+        {/* Stake to Increase Limits */}
         <Row
           icon={<Coins className="w-5 h-5" />}
           tone="amber"
-          title="Stake USDT to Increase Limits"
-          desc="Stake USDT to unlock higher trading limits (up to 10x) and earn rewards."
+          title="Stake to Increase Limits"
+          desc="Stake BLIP points for a chance to increase"
           surfaces={surfaces}
           action={
             <ActionButton tone="amber" label="Stake" onClick={onOpenStake} />
           }
-        />
-
-        {/* Important Trader Program */}
-        <Row
-          icon={<TrendingUp className="w-5 h-5" />}
-          tone="blue"
-          title="Important Trader Program"
-          desc={traderDesc}
-          surfaces={surfaces}
-          action={<ComingSoonButton />}
         />
 
         {/* Keep X / Twitter social verification */}
@@ -258,9 +225,12 @@ export function UnlockHigherLimits({
           </div>
           <div className="min-w-0">
             <p className="text-[13px] font-bold text-emerald-500">Tip</p>
+            <p className="text-[12px] font-bold text-text-primary leading-snug mt-0.5">
+              Trade now and get back your full trade limit.
+            </p>
             <p className="text-[12px] text-text-tertiary leading-snug">
-              Trade successfully and maintain good account activity to increase
-              your limits faster.
+              Maintain a good reputation score and complete successful trades to
+              automatically restore reduced limits.
             </p>
           </div>
         </div>
@@ -311,13 +281,4 @@ function ScopeWrap({
   children: ReactNode;
 }) {
   return enabled ? <div className="user-scope">{children}</div> : <>{children}</>;
-}
-
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function formatMult(m: number): string {
-  // 2 → "2×", 1.5 → "1.5×"
-  return `${Number.isInteger(m) ? m : m.toFixed(1)}×`;
 }

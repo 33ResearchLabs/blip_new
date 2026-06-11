@@ -217,7 +217,7 @@ function TaskRow({
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold text-text-primary leading-tight truncate">
+          <p className="text-[14px] font-semibold text-text-primary leading-tight">
             {title}
           </p>
           <p className="text-[12px] text-text-tertiary leading-snug mt-0.5">

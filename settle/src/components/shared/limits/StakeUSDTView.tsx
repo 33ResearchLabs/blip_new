@@ -14,15 +14,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Gift,
   TrendingUp,
   Percent,
   ShieldCheck,
   Lock,
   ArrowRight,
-  Clock,
   History,
-  Info,
   HelpCircle,
   ArrowDownLeft,
   ArrowUpRight,
@@ -195,7 +192,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
             <ChevronLeft className="w-5 h-5 text-text-secondary" />
           </motion.button>
           <h1 className="text-[24px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
-            Stake USDT
+            Stake
           </h1>
         </div>
       )}
@@ -244,7 +241,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
                 icon={<Percent className="w-4 h-4" />}
                 tone="blue"
                 title="Earn Rewards"
-                desc="Earn daily rewards on your staked USDT"
+                desc="Get upto 10% discount on transaction fee."
               />
               <Benefit
                 icon={<ShieldCheck className="w-4 h-4" />}
@@ -387,20 +384,6 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
                 value="Flexible"
                 sub="No lock-in"
               />
-              <OverviewStat
-                icon={<Gift className="w-3.5 h-3.5" />}
-                tone="violet"
-                label="Total Rewards"
-                value={`${formatCrypto(snap?.lifetimeRewards)} USDT`}
-                sub={`≈ ${formatFiat(snap?.lifetimeRewards, "USD")}`}
-              />
-              <OverviewStat
-                icon={<Clock className="w-3.5 h-3.5" />}
-                tone="amber"
-                label="Next Reward"
-                value={snap && snap.principal > 0 ? "Daily" : "—"}
-                sub={snap && snap.principal > 0 ? "Accruing" : "Not available"}
-              />
             </div>
 
             {showHistory && (
@@ -461,16 +444,6 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
               </div>
             )}
           </motion.div>
-
-          <div className="flex items-start gap-3 p-4 rounded-[20px] border border-blue-500/20 bg-blue-500/[0.07]">
-            <div className="w-8 h-8 rounded-full bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
-              <Info className="w-4 h-4" />
-            </div>
-            <p className="text-[12px] text-text-tertiary leading-snug">
-              You can unstake anytime. Rewards are calculated daily and credited to your
-              balance when you claim.
-            </p>
-          </div>
 
           {/* Need Help? */}
           {onHelp && (
