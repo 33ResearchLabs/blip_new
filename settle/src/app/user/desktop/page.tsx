@@ -53,6 +53,7 @@ import {
   SupportScreen,
   RewardsScreen,
   LimitsScreen,
+  StakeScreen,
   PointsScreen,
 } from "@/components/user/screens";
 
@@ -699,6 +700,12 @@ export default function UserDesktopPage() {
           {screen === "limits" && (
             <CenterPanel k="limits">
               <LimitsScreen setScreen={setScreen} />
+            </CenterPanel>
+          )}
+
+          {screen === "stake" && (
+            <CenterPanel k="stake">
+              <StakeScreen setScreen={setScreen} />
             </CenterPanel>
           )}
 

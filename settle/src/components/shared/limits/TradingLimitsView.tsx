@@ -478,6 +478,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
             surfaces={surfaces}
             onBack={() => setShowStake(false)}
             onStaked={fetchLimits}
+            onHelp={() => onNavigate?.("help")}
           />
         </div>
       )}
