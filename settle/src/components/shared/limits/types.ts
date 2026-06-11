@@ -73,6 +73,8 @@ export interface SurfaceTokens {
   chip: string;
   /** Hover state for interactive rows. */
   hover: string;
+  /** Opaque full-screen page background (for the Stake USDT overlay). */
+  screen: string;
 }
 
 export const SURFACES: Record<LimitsVariant, SurfaceTokens> = {
@@ -81,12 +83,14 @@ export const SURFACES: Record<LimitsVariant, SurfaceTokens> = {
     inset: "bg-surface-base",
     chip: "bg-surface-active",
     hover: "hover:bg-surface-hover",
+    screen: "bg-surface-base",
   },
   merchant: {
     card: "bg-white/[0.02]",
     inset: "bg-white/[0.02]",
     chip: "bg-white/[0.04]",
     hover: "hover:bg-white/[0.06]",
+    screen: "bg-background",
   },
 };
 

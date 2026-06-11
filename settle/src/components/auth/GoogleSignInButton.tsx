@@ -22,7 +22,10 @@ declare global {
       accounts: {
         id: {
           initialize: (config: GsiConfig) => void;
-          renderButton: (parent: HTMLElement, options: RenderButtonOptions) => void;
+          renderButton: (
+            parent: HTMLElement,
+            options: RenderButtonOptions,
+          ) => void;
           prompt: () => void;
           cancel: () => void;
         };
@@ -74,7 +77,9 @@ function loadGisScript(): Promise<void> {
     );
     if (existing) {
       existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("GIS load failed")));
+      existing.addEventListener("error", () =>
+        reject(new Error("GIS load failed")),
+      );
       return;
     }
     const s = document.createElement("script");
@@ -151,10 +156,17 @@ export default function GoogleSignInButton({
 
     loadGisScript()
       .then(() => {
-        if (cancelled || !window.google?.accounts?.id || !containerRef.current) return;
+        if (cancelled || !window.google?.accounts?.id || !containerRef.current)
+          return;
         const inCapacitor = isCapacitor();
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.blip.money";
-        const state = encodeURIComponent(JSON.stringify({ role, redirect: role === "merchant" ? "/market" : "/" }));
+        const appUrl =
+          process.env.NEXT_PUBLIC_APP_URL || "https://app.blip.money";
+        const state = encodeURIComponent(
+          JSON.stringify({
+            role,
+            redirect: role === "merchant" ? "/market" : "/",
+          }),
+        );
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (resp) => {

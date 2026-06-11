@@ -225,39 +225,39 @@ export function MerchantNavbar({
             {/* Mobile — the active tab name reads as the screen title. Falls
                 back to @username only if no title was supplied. */}
             <div className="flex lg:hidden items-center gap-2 min-w-0">
-              {!onBack && (
-                mobileTitle ? (
-                  // Two-line large-title block. No negative margin: the header
-                  // padding (px-3 = 12px) already matches the content column
-                  // below (<main> p-3 = 12px), so the title's left edge lines up
-                  // with the tab strip / search field / order cards on every tab.
-                  <div className="flex flex-col justify-center min-w-0 ml-3">
-                    <span className="text-[19px] font-semibold text-white tracking-[-0.01em] truncate leading-none">
-                      {mobileTitle}
+              {mobileTitle ? (
+                // Two-line large-title block. When a back arrow is present
+                // (onBack) the title sits next to it iOS-style, so the arrow
+                // supplies the leading space and we drop to ml-1. Without a
+                // back arrow the header padding (px-3 = 12px) already matches
+                // the content column below (<main> p-3 = 12px), so ml-3 keeps
+                // the title's left edge lined up with the tab strip / cards.
+                <div className={`flex flex-col justify-center min-w-0 ${onBack ? "ml-1" : "ml-3"}`}>
+                  <span className="text-[19px] font-semibold text-white tracking-[-0.01em] truncate leading-none">
+                    {mobileTitle}
+                  </span>
+                  {mobileSubtitle && (
+                    <span className="mt-[6px] text-[12px] font-medium text-white/40 truncate leading-none">
+                      {mobileSubtitle}
                     </span>
-                    {mobileSubtitle && (
-                      <span className="mt-[6px] text-[12px] font-medium text-white/40 truncate leading-none">
-                        {mobileSubtitle}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <UserAvatar
-                      src={merchantInfo?.avatar_url}
-                      seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
-                      size={26}
-                      alt={displayName}
-                      className="border border-white/[0.1] shrink-0"
-                    />
-                    <span className="text-[15px] font-semibold text-white/90 tracking-tight truncate">
-                      {merchantInfo?.username
-                        ? `@${merchantInfo.username}`
-                        : merchantInfo?.display_name || "Merchant"}
-                    </span>
-                  </>
-                )
-              )}
+                  )}
+                </div>
+              ) : !onBack ? (
+                <>
+                  <UserAvatar
+                    src={merchantInfo?.avatar_url}
+                    seed={merchantInfo?.username || merchantInfo?.display_name || "merchant"}
+                    size={26}
+                    alt={displayName}
+                    className="border border-white/[0.1] shrink-0"
+                  />
+                  <span className="text-[15px] font-semibold text-white/90 tracking-tight truncate">
+                    {merchantInfo?.username
+                      ? `@${merchantInfo.username}`
+                      : merchantInfo?.display_name || "Merchant"}
+                  </span>
+                </>
+              ) : null}
             </div>
           </div>
 

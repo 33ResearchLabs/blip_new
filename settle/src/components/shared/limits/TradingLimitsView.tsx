@@ -25,7 +25,7 @@ import { formatFiat } from "@/lib/format";
 import { UserXVerificationModal } from "@/components/user/UserXVerificationModal";
 import { MerchantXVerificationModal } from "@/components/merchant/MerchantXVerificationModal";
 import { UnlockHigherLimits } from "./UnlockHigherLimits";
-import { StakeLimitModal } from "./StakeLimitModal";
+import { StakeUSDTView } from "./StakeUSDTView";
 import { LimitDecreaseAlert } from "./LimitDecreaseAlert";
 import { RequestIncreaseModal } from "./RequestIncreaseModal";
 import { RequestDetailModal } from "./RequestDetailModal";
@@ -468,13 +468,19 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
         onClose={() => setSelected(null)}
         surfaces={surfaces}
       />
-      <StakeLimitModal
-        open={showStake}
-        onClose={() => setShowStake(false)}
-        surfaces={surfaces}
-        tiers={data?.tiers}
-        onStaked={fetchLimits}
-      />
+      {/* Stake USDT — full-screen overlay (works identically in the user app,
+          merchant desktop, and merchant mobile; no host-routing changes). */}
+      {showStake && (
+        <div
+          className={`fixed inset-0 z-[120] overflow-y-auto scrollbar-hide ${surfaces.screen} ${variant === "merchant" ? "text-white" : ""}`}
+        >
+          <StakeUSDTView
+            surfaces={surfaces}
+            onBack={() => setShowStake(false)}
+            onStaked={fetchLimits}
+          />
+        </div>
+      )}
       {variant === "merchant" ? (
         <MerchantXVerificationModal
           isOpen={showX}
