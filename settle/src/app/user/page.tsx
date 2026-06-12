@@ -908,6 +908,8 @@ export default function Home() {
                 tradeCreation.selectedPaymentMethod?.id || null
               }
               onSelectPaymentMethod={tradeCreation.setSelectedPaymentMethod}
+              buyerPaymentTypes={tradeCreation.buyerPaymentTypes}
+              onToggleBuyerPaymentType={tradeCreation.toggleBuyerPaymentType}
               selectedPair={tradeCreation.selectedPair}
               onPairChange={tradeCreation.setSelectedPair}
               setCurrentRate={tradeCreation.setCurrentRate}
@@ -967,6 +969,7 @@ export default function Home() {
               handleOpenChat={userEffects.handleOpenChat}
               markPaymentSent={orderActions.markPaymentSent}
               confirmFiatReceived={orderActions.confirmFiatReceived}
+              refetchActiveOrder={userEffects.refetchActiveOrder}
               rating={rating}
               setRating={setRating}
               submitReview={orderActions.submitRating}

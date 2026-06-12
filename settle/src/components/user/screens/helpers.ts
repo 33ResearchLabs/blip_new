@@ -128,6 +128,9 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     lockedPaymentMethod: dbOrder.locked_payment_method || null,
     // Merchant's payment method (where buyer sends fiat to merchant)
     merchantPaymentMethod: mpm || null,
+    // BUY (Way-1): merchant's accounts matching the buyer's chosen rails — the
+    // buyer picks one to pay into. Empty array until a merchant accepts.
+    merchantMatchingPaymentMethods: dbOrder.merchant_matching_payment_methods || [],
     // Per-order rating
     userRating: dbOrder.user_rating || null,
   };

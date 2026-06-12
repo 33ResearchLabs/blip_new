@@ -11,6 +11,8 @@ import {
   ChevronDown,
   X,
   CreditCard,
+  Smartphone,
+  Check,
 } from "lucide-react";
 import type {
   Screen,
@@ -58,6 +60,9 @@ export interface TradeCreationScreenProps {
   solanaWallet: { connected: boolean; usdtBalance: number | null };
   selectedPaymentMethodId: string | null;
   onSelectPaymentMethod: (method: PaymentMethodItem | null) => void;
+  // BUY orders (Way-1): the payment rails the buyer can pay with (multi-select).
+  buyerPaymentTypes: string[];
+  onToggleBuyerPaymentType: (t: string) => void;
   selectedPair?: "usdt_aed" | "usdt_inr";
   onPairChange?: (pair: "usdt_aed" | "usdt_inr") => void;
   setCurrentRate?: (rate: number) => void;
@@ -77,6 +82,15 @@ function formatAmountInput(value: string): string {
 }
 
 const QUICK_AMOUNTS = ["100", "500", "1000", "5000"];
+
+// BUY orders (Way-1): the payment rails a buyer can offer to pay with. The
+// order is shown only to merchants who support at least one of these, and the
+// buyer pays into the matching merchant account after a merchant accepts.
+const BUY_PAY_TYPES: { key: string; label: string; Icon: typeof CreditCard }[] = [
+  { key: "bank", label: "Bank", Icon: CreditCard },
+  { key: "upi", label: "UPI", Icon: Smartphone },
+  { key: "cash", label: "Cash", Icon: Banknote },
+];
 
 // Human label for a PaymentMethodItem.type, shown under the chosen-method card.
 const PM_TYPE_LABEL: Record<string, string> = {
@@ -180,6 +194,8 @@ export const TradeCreationScreen = ({
   solanaWallet,
   selectedPaymentMethodId,
   onSelectPaymentMethod,
+  buyerPaymentTypes,
+  onToggleBuyerPaymentType,
   selectedPair,
   onPairChange,
   setCurrentRate,
@@ -190,6 +206,11 @@ export const TradeCreationScreen = ({
   const T = isLight ? TOKENS_LIGHT : TOKENS_DARK;
   const hasAmount = !!amount && parseFloat(amount) > 0;
   const isBuy = tradeType === "buy";
+  // BUY needs ≥1 pay rail ticked; SELL needs a receive account chosen.
+  const needsPaymentChoice = isBuy
+    ? buyerPaymentTypes.length === 0
+    : !selectedPaymentMethodId;
+  const canSubmit = hasAmount && !needsPaymentChoice;
   const accent = isBuy
     ? isLight ? "#059669" : "#34D399"
     : isLight ? "#DC2626" : "#F87171";
@@ -229,11 +250,12 @@ export const TradeCreationScreen = ({
   const [chosenMethod, setChosenMethod] = useState<PaymentMethodItem | null>(null);
 
   // Pre-select the default payment method from the login-time cache so the
-  // "Pay With" / "Receive To" row shows it immediately — without the user
-  // having to open the sheet first. Works for both Buy and Sell.
+  // "Receive To" row shows it immediately — without the user having to open
+  // the sheet first. SELL only: buy now uses the pay-rail multi-select, not
+  // the user's own saved account.
   const { paymentMethods: cachedPaymentMethods } = useUserPaymentMethods();
   useEffect(() => {
-    if (chosenMethod || !cachedPaymentMethods.length) return;
+    if (isBuy || chosenMethod || !cachedPaymentMethods.length) return;
     const pick =
       (selectedPaymentMethodId
         ? cachedPaymentMethods.find((m) => m.id === selectedPaymentMethodId)
@@ -842,24 +864,69 @@ export const TradeCreationScreen = ({
         )}
 
 
-        {/* Payment method — minimal single-line row */}
-        <button
-          onClick={() => setShowAddMethods(true)}
-          className="w-full flex items-center justify-between mb-4"
-          style={{ padding: "13px 16px", borderRadius: 14, background: T.surface1, border: `1px solid ${T.border1}` }}
-        >
-          <div className="flex items-center" style={{ gap: 10 }}>
-            {chosenMethod?.type === "cash" ? (
-              <Banknote size={16} strokeWidth={2} style={{ color: T.md }} />
-            ) : (
-              <CreditCard size={16} strokeWidth={2} style={{ color: T.md }} />
-            )}
-            <span style={{ fontSize: 14, fontWeight: 700, color: chosenMethod ? T.hi : T.md }}>
-              {chosenMethod ? chosenMethod.label : (isBuy ? "Select pay method" : "Select receive method")}
-            </span>
+        {/* Payment method.
+            BUY  → multi-select of pay rails (Bank / UPI / Cash). The buyer can
+                   tick more than one; the order is shown only to merchants who
+                   support one of them, and the buyer pays the merchant's match.
+            SELL → single receive-account picker (unchanged). */}
+        {isBuy ? (
+          <div className="mb-4">
+            <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", color: T.lo, textTransform: "uppercase", marginBottom: 6 }}>
+              How you'll pay
+            </p>
+            <div className="grid grid-cols-3" style={{ gap: 8 }}>
+              {BUY_PAY_TYPES.map(({ key, label, Icon }) => {
+                const on = buyerPaymentTypes.includes(key);
+                return (
+                  <motion.button
+                    key={key}
+                    type="button"
+                    onClick={() => onToggleBuyerPaymentType(key)}
+                    whileTap={{ scale: 0.96 }}
+                    animate={{
+                      background: on ? T.activeTileBg : T.surface1,
+                      borderColor: on ? T.activeTileBorder : T.border1,
+                    }}
+                    transition={{ duration: 0.2 }}
+                    className="relative flex flex-col items-center justify-center"
+                    style={{ padding: "13px 4px", borderRadius: 14, borderWidth: 1, borderStyle: "solid", gap: 6 }}
+                  >
+                    {on && (
+                      <span
+                        className="absolute flex items-center justify-center"
+                        style={{ top: 6, right: 6, width: 15, height: 15, borderRadius: 999, background: T.activeTileText }}
+                      >
+                        <Check size={10} strokeWidth={3.5} style={{ color: T.activeTileBg }} />
+                      </span>
+                    )}
+                    <Icon size={17} strokeWidth={2} style={{ color: on ? T.activeTileText : T.md }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: on ? T.activeTileText : T.hi }}>
+                      {label}
+                    </span>
+                  </motion.button>
+                );
+              })}
+            </div>
           </div>
-          <span style={{ fontSize: 13, fontWeight: 700, color: T.lo }}>Change</span>
-        </button>
+        ) : (
+          <button
+            onClick={() => setShowAddMethods(true)}
+            className="w-full flex items-center justify-between mb-4"
+            style={{ padding: "13px 16px", borderRadius: 14, background: T.surface1, border: `1px solid ${T.border1}` }}
+          >
+            <div className="flex items-center" style={{ gap: 10 }}>
+              {chosenMethod?.type === "cash" ? (
+                <Banknote size={16} strokeWidth={2} style={{ color: T.md }} />
+              ) : (
+                <CreditCard size={16} strokeWidth={2} style={{ color: T.md }} />
+              )}
+              <span style={{ fontSize: 14, fontWeight: 700, color: chosenMethod ? T.hi : T.md }}>
+                {chosenMethod ? chosenMethod.label : "Select receive method"}
+              </span>
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: T.lo }}>Change</span>
+          </button>
+        )}
 
         {/* Priority — sliding segmented */}
         <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", color: T.lo, textTransform: "uppercase", marginBottom: 6 }}>
@@ -939,13 +1006,13 @@ export const TradeCreationScreen = ({
         {/* CTA — lives inside the sheet so it scrolls with content */}
         <motion.button
           onClick={startTrade}
-          disabled={!hasAmount || isLoading || !userId}
-          whileTap={hasAmount ? { scale: 0.985 } : undefined}
+          disabled={!canSubmit || isLoading || !userId}
+          whileTap={canSubmit ? { scale: 0.985 } : undefined}
           animate={{
-            background: hasAmount && !isLoading ? T.ctaActiveBg : T.ctaInactiveBg,
-            color: hasAmount && !isLoading ? T.ctaActiveText : T.md,
-            borderColor: hasAmount && !isLoading ? T.ctaActiveBorder : T.ctaInactiveBorder,
-            boxShadow: hasAmount && !isLoading ? T.ctaActiveShadow : "none",
+            background: canSubmit && !isLoading ? T.ctaActiveBg : T.ctaInactiveBg,
+            color: canSubmit && !isLoading ? T.ctaActiveText : T.md,
+            borderColor: canSubmit && !isLoading ? T.ctaActiveBorder : T.ctaInactiveBorder,
+            boxShadow: canSubmit && !isLoading ? T.ctaActiveShadow : "none",
           }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           className="w-full flex items-center justify-center mt-3"
@@ -962,13 +1029,15 @@ export const TradeCreationScreen = ({
         >
           {isLoading ? (
             <Loader2 size={18} className="animate-spin" />
-          ) : hasAmount ? (
+          ) : !hasAmount ? (
+            "Enter Amount"
+          ) : needsPaymentChoice ? (
+            isBuy ? "Select how you'll pay" : "Select where to receive"
+          ) : (
             <>
               {isBuy ? <ArrowDownLeft size={16} strokeWidth={2.6} /> : <ArrowUpRight size={16} strokeWidth={2.6} />}
               {isBuy ? "Buy" : "Sell"} {formatAmountInput(amount)} USDT
             </>
-          ) : (
-            "Enter Amount"
           )}
         </motion.button>
       </motion.div>

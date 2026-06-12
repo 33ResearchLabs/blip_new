@@ -439,6 +439,19 @@ export interface OrderWithRelations extends Order {
   user: User;
   merchant: Merchant;
   offer: MerchantOffer;
+  /**
+   * BUY orders (Way-1): the assigned merchant's ACTIVE payment methods whose
+   * type matches the buyer's `buyer_payment_types`. Populated once a merchant
+   * is assigned (after accept); empty array otherwise. The buyer picks one of
+   * these to pay into. See migration 166 and getOrderWithRelations.
+   */
+  merchant_matching_payment_methods?: Array<{
+    id: string;
+    type: string;
+    name: string;
+    details: string;
+    is_default: boolean;
+  }>;
 }
 
 // API Request/Response types

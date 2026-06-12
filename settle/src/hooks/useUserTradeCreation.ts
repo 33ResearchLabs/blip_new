@@ -66,6 +66,15 @@ export function useUserTradeCreation({
   const [escrowError, setEscrowError] = useState<string | null>(null);
   const [selectedBankDetails, setSelectedBankDetails] = useState<SelectedBankDetails | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodItem | null>(null);
+  // BUY orders (Way-1): the payment rails the buyer can pay with — one or
+  // more of 'bank' | 'upi' | 'cash'. Sent as `buyer_payment_types`; the order
+  // is later shown only to merchants who support one of these. Sell orders do
+  // NOT use this — the seller picks their own receive account instead.
+  const [buyerPaymentTypes, setBuyerPaymentTypes] = useState<string[]>([]);
+  const toggleBuyerPaymentType = (t: string) =>
+    setBuyerPaymentTypes((prev) =>
+      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
+    );
 
   // Per-submission idempotency keys for the order-creation flows that have
   // no on-chain anchor (BUY orders that don't escrow first). Held in refs so
@@ -101,9 +110,15 @@ export function useUserTradeCreation({
       return;
     }
 
-    // Sell orders (user receives fiat) require a selected payment method
+    // Sell orders: the user RECEIVES fiat, so they must pick a receive account.
     if (tradeType === 'sell' && !selectedPaymentMethod) {
       showAlert('Payment Method Required', 'Please select a payment method where you want to receive fiat.', 'warning');
+      return;
+    }
+    // Buy orders (Way-1): the user PAYS fiat, so they pick one or more payment
+    // rails they can pay with. The matching merchant's account is shown later.
+    if (tradeType === 'buy' && buyerPaymentTypes.length === 0) {
+      showAlert('Payment Method Required', 'Please choose at least one way you can pay (Bank, UPI or Cash).', 'warning');
       return;
     }
 
@@ -166,7 +181,17 @@ export function useUserTradeCreation({
           user_id: userId,
           crypto_amount: parseFloat(amount),
           type: 'buy',
-          payment_method: paymentMethod,
+          // Coarse single method for the legacy bank-vs-cash order UI: 'cash'
+          // only when cash is the sole pick, else 'bank' (any electronic rail).
+          // The full multi-select list rides along as buyer_payment_types below.
+          payment_method:
+            buyerPaymentTypes.length === 1 && buyerPaymentTypes[0] === 'cash'
+              ? 'cash'
+              : 'bank',
+          // Buyer's accepted payment rails (one or more). The order is shown
+          // only to merchants who support one of these; the buyer pays into
+          // the matching merchant account after a merchant accepts.
+          buyer_payment_types: buyerPaymentTypes,
           preference: tradePreference,
           buyer_wallet_address: solanaWallet.walletAddress,
           pair: selectedPair,
@@ -648,6 +673,7 @@ export function useUserTradeCreation({
     escrowError, setEscrowError,
     selectedBankDetails, setSelectedBankDetails,
     selectedPaymentMethod, setSelectedPaymentMethod,
+    buyerPaymentTypes, setBuyerPaymentTypes, toggleBuyerPaymentType,
     startTrade,
     confirmCashOrder,
     confirmEscrow,

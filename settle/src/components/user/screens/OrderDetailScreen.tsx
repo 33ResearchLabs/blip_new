@@ -29,7 +29,7 @@ import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
 import { compressImage } from "@/lib/utils/compressImage";
 import { explorerUrl } from "@/lib/solana/networkLabel";
-import type { Screen, Order } from "./types";
+import type { Screen, Order, MerchantPaymentMethod } from "./types";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import {
   type RefObject,
@@ -246,6 +246,9 @@ export interface OrderDetailScreenProps {
   setShowWalletModal: (v: boolean) => void;
   userId: string | null;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
+  // Re-fetch the active order (full relations) — used after the buyer picks a
+  // merchant pay-into account so the realtime copy reflects the new selection.
+  refetchActiveOrder?: () => Promise<void> | void;
   playSound: (
     sound:
       | "message"
@@ -309,6 +312,7 @@ export const OrderDetailScreen = ({
   setShowWalletModal,
   userId,
   setOrders,
+  refetchActiveOrder,
   playSound,
   maxW,
 }: OrderDetailScreenProps) => {
@@ -410,6 +414,54 @@ export const OrderDetailScreen = ({
     },
     [handleCopy],
   );
+  // ── Part 4: buyer picks which of the merchant's matching accounts to pay ──
+  // After a merchant accepts a broadcast buy order, the order carries the
+  // merchant's accounts whose type matches the buyer's chosen rails. The buyer
+  // taps one; we persist it (merchant_payment_method_id) and reflect the pick
+  // locally so the existing "where to pay" details render.
+  const matchingPayMethods = activeOrder.merchantMatchingPaymentMethods ?? [];
+  const needsPayMethodPick =
+    activeOrder.type === "buy" &&
+    !activeOrder.merchantPaymentMethod &&
+    matchingPayMethods.length > 0;
+  const handleChoosePayMethod = useLocalCallback(
+    async (method: MerchantPaymentMethod) => {
+      if (isLoading) return;
+      setIsLoading(true);
+      try {
+        const res = await fetchWithAuth(
+          `/api/orders/${activeOrder.id}/pay-method`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ method_id: method.id }),
+          },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success) {
+          showAlert("Couldn't select", data?.error || "Please try again.", "error");
+          playSound("error");
+          return;
+        }
+        // Optimistic for the list copy, then refetch so the realtime copy
+        // (which wins in the activeOrder merge) reflects the persisted choice.
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === activeOrder.id ? { ...o, merchantPaymentMethod: method } : o,
+          ),
+        );
+        await refetchActiveOrder?.();
+        playSound("click");
+      } catch {
+        showAlert("Couldn't select", "Please try again.", "error");
+        playSound("error");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [activeOrder.id, isLoading, setIsLoading, setOrders, refetchActiveOrder, playSound],
+  );
+
   const [pendingImage, setPendingImage] = useLocalState<{
     file: File;
     previewUrl: string;
@@ -1542,8 +1594,39 @@ export const OrderDetailScreen = ({
                             </>
                           ) : (
                             <>
+                              {/* Part 4: buyer chooses which of the merchant's
+                                  matching accounts to pay into. Shown until a
+                                  method is chosen; tapping one persists it. */}
+                              {needsPayMethodPick && (
+                                <div className={`rounded-xl p-3 space-y-2 ${CARD}`}>
+                                  <p className="text-[11px] uppercase tracking-wide text-text-tertiary">
+                                    Choose where to pay
+                                  </p>
+                                  {matchingPayMethods.map((pm) => (
+                                    <button
+                                      key={pm.id}
+                                      disabled={isLoading}
+                                      onClick={() => handleChoosePayMethod(pm)}
+                                      className="w-full flex items-center justify-between gap-2 rounded-lg p-3 border border-border-medium hover:bg-surface-hover disabled:opacity-50 text-left"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="text-[14px] font-medium text-text-primary truncate">
+                                          {pm.name}
+                                        </p>
+                                        <p className="text-[12px] text-text-secondary truncate font-mono">
+                                          {pm.details}
+                                        </p>
+                                      </div>
+                                      <span className="text-[10px] font-bold uppercase tracking-wide text-text-tertiary flex-shrink-0">
+                                        {pm.type}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                               {/* Warning when merchant has no payment method configured */}
-                              {!activeOrder.merchantPaymentMethod &&
+                              {!needsPayMethodPick &&
+                                !activeOrder.merchantPaymentMethod &&
                                 !activeOrder.lockedPaymentMethod &&
                                 !activeOrder.merchant.bank &&
                                 !activeOrder.merchant.iban && (
@@ -1898,12 +1981,14 @@ export const OrderDetailScreen = ({
                                 <motion.button
                                   whileTap={{ scale: 0.98 }}
                                   onClick={markPaymentSent}
-                                  disabled={isLoading}
+                                  disabled={isLoading || needsPayMethodPick}
                                   className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${PRIMARY_BTN}`}
                                 >
                                   {isLoading
                                     ? "Processing..."
-                                    : "I've sent the payment"}
+                                    : needsPayMethodPick
+                                      ? "Choose where to pay"
+                                      : "I've sent the payment"}
                                 </motion.button>
                               </div>
                             </>

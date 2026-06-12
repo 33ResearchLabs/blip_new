@@ -97,6 +97,8 @@ export interface DbOrder {
   locked_payment_method?: LockedPaymentMethod | null;
   // Merchant's payment method (where buyer sends fiat)
   merchant_payment_method?: MerchantPaymentMethod | null;
+  // BUY (Way-1): merchant's accounts matching the buyer's chosen rails
+  merchant_matching_payment_methods?: MerchantPaymentMethod[] | null;
   // Per-order rating fields
   user_rating?: number | null;
   user_rated_at?: string | null;
@@ -172,6 +174,10 @@ export interface Order {
   lockedPaymentMethod?: LockedPaymentMethod | null;
   // Merchant's payment method (where buyer sends fiat to merchant)
   merchantPaymentMethod?: MerchantPaymentMethod | null;
+  // BUY (Way-1): the assigned merchant's payment accounts whose type matches
+  // the buyer's chosen rails. The buyer picks one to pay into. Empty until a
+  // merchant accepts; once the buyer picks, merchantPaymentMethod is set.
+  merchantMatchingPaymentMethods?: MerchantPaymentMethod[];
 }
 
 export interface BankAccount {

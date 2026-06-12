@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
       user_bank_account,
       buyer_wallet_address,
       payment_method_id,
+      buyer_payment_types,
       escrow_trade_id,
       escrow_trade_pda,
       escrow_pda,
@@ -227,6 +228,30 @@ export async function POST(request: NextRequest) {
         return validationErrorResponse(['Invalid or inactive payment method']);
       }
       verifiedPaymentMethodId = verifiedPm.id;
+    }
+
+    // ── Broadcast BUY orders MUST declare the buyer's payment rails ──────
+    // The buyer picks one or more payment types (bank/upi/cash/…) they can
+    // pay with; the order is then shown only to merchants who support one of
+    // them. Without this the order is unmatchable.
+    //  - Scoped to user-initiated orders (actorType === 'user') so internal
+    //    `system` flows are unaffected.
+    //  - Exempt the offer-matched cash flow (offer_id present): a merchant is
+    //    already known and the rail is implied by the chosen offer.
+    // The mobile/desktop UI already gates this; server-side enforcement keeps
+    // any other client (API tests, third-party tools) from creating an
+    // unmatchable buy order.
+    const hasBuyerPaymentTypes =
+      Array.isArray(buyer_payment_types) && buyer_payment_types.length > 0;
+    if (
+      type === 'buy' &&
+      auth.actorType === 'user' &&
+      !offer_id &&
+      !hasBuyerPaymentTypes
+    ) {
+      return validationErrorResponse([
+        'BUY orders require at least one payment method type. Provide buyer_payment_types.',
+      ]);
     }
 
     // ── SELL ORDERS: manual merchant-claim model (no offer matching) ────
@@ -446,6 +471,9 @@ export async function POST(request: NextRequest) {
             accepted_at: null,
             ref_price_at_create: buyRate,
             payment_method_id: verifiedPaymentMethodId,
+            // Buyer's accepted payment rails (Way-1 broadcast buy). Merchants
+            // are filtered to these; buyer pays into the merchant's match.
+            buyer_payment_types: hasBuyerPaymentTypes ? buyer_payment_types : undefined,
             corridor_id: orderCorridorId,
             fiat_currency: orderFiatCurrency,
           },

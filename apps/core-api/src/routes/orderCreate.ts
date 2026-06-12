@@ -136,6 +136,9 @@ interface CreateOrderPayload {
   payment_method_id?: string;
   // Merchant's payment method (where buyer sends fiat)
   merchant_payment_method_id?: string;
+  // BUY orders: payment rails the buyer can pay with, e.g. ['bank','upi'].
+  // Drives the merchant order-feed filter and the buyer's pay-into options.
+  buyer_payment_types?: string[];
   // UPI scan-to-pay metadata. Set only when this sell order originated from
   // the in-app UPI QR scanner — the accepting merchant uses these to pay
   // the user's scanned destination (NOT the user themselves).
@@ -197,6 +200,12 @@ function buildOrderInsertParams(data: CreateOrderPayload & { corridor_id?: strin
     ['payment_method_id', data.payment_method_id],
     // Merchant's payment method (where buyer sends fiat)
     ['merchant_payment_method_id', data.merchant_payment_method_id],
+    // BUY: buyer's accepted payment rails (TEXT[]). Skip when empty so the
+    // optionals loop (undefined/null check) leaves the column NULL.
+    ['buyer_payment_types',
+      Array.isArray(data.buyer_payment_types) && data.buyer_payment_types.length > 0
+        ? data.buyer_payment_types
+        : undefined],
     // UPI scan-to-pay metadata (see migration 121)
     ['upi_vpa', data.upi_vpa],
     ['upi_payee_name', data.upi_payee_name],

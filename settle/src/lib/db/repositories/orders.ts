@@ -111,6 +111,11 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
               )
               ELSE NULL
             END as merchant_payment_method,
+            -- Part 3 (migration 166): the assigned merchant's ACTIVE payment
+            -- methods whose type matches the buyer's chosen rails. Empty until a
+            -- merchant is assigned (merchant_id set on accept) or when the order
+            -- carries no buyer_payment_types (sell / legacy). The buyer picks one.
+            COALESCE(mpm_match.methods, '[]'::json) as merchant_matching_payment_methods,
             COALESCE(chat_agg.unread_count, 0) as unread_count
      FROM orders o
      LEFT JOIN users u ON o.user_id = u.id
@@ -119,6 +124,22 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
      LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
      LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
      LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
+     LEFT JOIN LATERAL (
+       SELECT json_agg(
+                json_build_object(
+                  'id', x.id,
+                  'type', x.type,
+                  'name', x.name,
+                  'details', x.details,
+                  'is_default', x.is_default
+                ) ORDER BY x.is_default DESC, x.created_at
+              ) as methods
+       FROM merchant_payment_methods x
+       WHERE x.merchant_id = o.merchant_id
+         AND x.is_active = true
+         AND o.buyer_payment_types IS NOT NULL
+         AND x.type = ANY(o.buyer_payment_types)
+     ) mpm_match ON true
      LEFT JOIN LATERAL (
        SELECT COUNT(*) FILTER (
          WHERE cm.sender_type IN ('merchant', 'compliance')
@@ -475,16 +496,36 @@ export async function getAllPendingOrdersForMerchant(
       FROM chat_messages cm WHERE cm.order_id = o.id
     ) chat_combined ON true
     WHERE (
-        -- OPEN orders: broadcast pending/escrowed that are NOT yet taken by another merchant
-        (o.status IN ('pending', 'escrowed')
-         AND (o.buyer_merchant_id IS NULL
-              OR o.buyer_merchant_id = $1
-              OR (o.buyer_merchant_id = o.merchant_id AND o.accepted_at IS NULL))
-         AND o.accepted_at IS NULL
-        )
+        (
+          -- Broadcast / claimable visibility (open + unclaimed, not yet taken)
+          (
+            -- OPEN orders: broadcast pending/escrowed that are NOT yet taken by another merchant
+            (o.status IN ('pending', 'escrowed')
+             AND (o.buyer_merchant_id IS NULL
+                  OR o.buyer_merchant_id = $1
+                  OR (o.buyer_merchant_id = o.merchant_id AND o.accepted_at IS NULL))
+             AND o.accepted_at IS NULL
+            )
 
-        -- Unclaimed sell orders (merchant_id IS NULL, broadcast to all merchants)
-        OR (o.merchant_id IS NULL AND o.status IN ('pending', 'escrowed') AND o.accepted_at IS NULL)
+            -- Unclaimed orders (merchant_id IS NULL, broadcast to all merchants)
+            OR (o.merchant_id IS NULL AND o.status IN ('pending', 'escrowed') AND o.accepted_at IS NULL)
+          )
+          -- Part 2 (migration 166): a BUY order that declares buyer_payment_types
+          -- is only shown to merchants who have an ACTIVE payment method of a
+          -- matching type. Sell / legacy / M2M orders have no buyer_payment_types
+          -- and pass via the IS NULL escape. This guard applies ONLY to broadcast
+          -- visibility — NOT to the "orders I own / created" clauses below — so a
+          -- merchant never loses sight of an order already assigned to them.
+          AND (
+            o.buyer_payment_types IS NULL
+            OR EXISTS (
+              SELECT 1 FROM merchant_payment_methods mpm2
+              WHERE mpm2.merchant_id = $1
+                AND mpm2.is_active = true
+                AND mpm2.type = ANY(o.buyer_payment_types)
+            )
+          )
+        )
 
         -- All orders where I'm the assigned merchant — INCLUDES terminal statuses
         -- on purpose. The frontend filters this list per-tab (pendingOrders by
@@ -518,6 +559,58 @@ export async function getAllPendingOrdersForMerchant(
   const results = await query<OrderWithRelations>(sql, params);
 
   return results;
+}
+
+/**
+ * Part 4 (migration 166): the BUYER of a broadcast buy order chooses which of
+ * the assigned merchant's matching payment accounts to pay into. Sets
+ * orders.merchant_payment_method_id after validating, inside one locked txn:
+ *   - the order is a BUY owned by this buyer,
+ *   - a merchant is assigned and the order is still in a pre-payment state,
+ *   - the chosen method belongs to that merchant, is active, and its type is
+ *     one the buyer offered (buyer_payment_types).
+ * Returns { ok } or { ok:false, reason } — the route maps reasons to responses.
+ * Not a financial transition, but FOR UPDATE guards against a concurrent
+ * status change racing the selection.
+ */
+export async function setBuyOrderMerchantPaymentMethod(
+  orderId: string,
+  methodId: string,
+  buyerUserId: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const result = await transaction(async (client) => {
+    const { rows } = await client.query(
+      `SELECT id, type, user_id, merchant_id, status, buyer_payment_types
+         FROM orders WHERE id = $1 FOR UPDATE`,
+      [orderId],
+    );
+    const order = rows[0];
+    if (!order) return { ok: false, reason: 'not_found' };
+    if (order.type !== 'buy') return { ok: false, reason: 'not_buy' };
+    if (order.user_id !== buyerUserId) return { ok: false, reason: 'not_buyer' };
+    if (!order.merchant_id) return { ok: false, reason: 'no_merchant' };
+    if (!['accepted', 'escrowed', 'payment_pending'].includes(order.status)) {
+      return { ok: false, reason: 'bad_status' };
+    }
+
+    const { rows: methodRows } = await client.query(
+      `SELECT id FROM merchant_payment_methods
+        WHERE id = $1 AND merchant_id = $2 AND is_active = true
+          AND ($3::text[] IS NULL OR type = ANY($3::text[]))`,
+      [methodId, order.merchant_id, order.buyer_payment_types],
+    );
+    if (methodRows.length === 0) return { ok: false, reason: 'invalid_method' };
+
+    await client.query(
+      `UPDATE orders SET merchant_payment_method_id = $1, updated_at = NOW() WHERE id = $2`,
+      [methodId, orderId],
+    );
+    return { ok: true };
+  });
+
+  // Bust the read-through caches so the next order fetch reflects the choice.
+  if (result.ok) await invalidateOrderCache(orderId);
+  return result;
 }
 
 export async function createOrder(data: {
