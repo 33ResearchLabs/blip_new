@@ -95,24 +95,26 @@ export const SURFACES: Record<LimitsVariant, SurfaceTokens> = {
 };
 
 /**
- * Unlock-row CTA buttons — all use the theme accent (yellow on the user app, the
- * merchant theme color on merchant) with its paired `--accent-text` for legible
- * contrast in every theme. Tone keys kept so callers don't change.
+ * Unlock-row CTA buttons — minimalistic soft yellow background (`bg-accent/15`)
+ * with `--accent-text` for the label, i.e. black in light mode / white in dark
+ * mode. Icon and label never use yellow themselves. Tone keys kept so callers
+ * don't change.
  */
 export const ACTION_BTN: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-accent text-accent-text hover:opacity-90",
-    violet: "bg-accent text-accent-text hover:opacity-90",
-    amber: "bg-accent text-accent-text hover:opacity-90",
-    blue: "bg-accent text-accent-text hover:opacity-90",
+    green: "bg-accent/15 text-accent-text hover:bg-accent/25",
+    violet: "bg-accent/15 text-accent-text hover:bg-accent/25",
+    amber: "bg-accent/15 text-accent-text hover:bg-accent/25",
+    blue: "bg-accent/15 text-accent-text hover:bg-accent/25",
   };
 
-/** Unlock-row icon tints — all follow the theme accent (yellow on the user app,
- *  the merchant theme color on merchant). Tone keys kept so callers don't change. */
+/** Unlock-row icon circles — minimalistic soft yellow background (`bg-accent/15`)
+ *  with `--accent-text` for the glyph (black in light mode / white in dark mode),
+ *  never yellow itself. */
 export const ACTION_ICON: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-accent/15 text-accent",
-    violet: "bg-accent/15 text-accent",
-    amber: "bg-accent/15 text-accent",
-    blue: "bg-accent/15 text-accent",
+    green: "bg-accent/15 text-accent-text",
+    violet: "bg-accent/15 text-accent-text",
+    amber: "bg-accent/15 text-accent-text",
+    blue: "bg-accent/15 text-accent-text",
   };

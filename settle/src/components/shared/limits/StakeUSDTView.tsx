@@ -205,11 +205,11 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
             whileTap={{ scale: 0.92 }}
             onClick={onBack}
             aria-label="Back"
-            className={`w-9 h-9 rounded-[14px] flex items-center justify-center shrink-0 border border-border-subtle ${surfaces.card}`}
+            className={`w-9 h-9 rounded-[14px] flex items-center justify-center shrink-0 border border-border-subtle md:hidden ${surfaces.card}`}
           >
-            <ChevronLeft className="w-5 h-5 text-text-secondary" />
+            <ChevronLeft className="w-5 h-5 text-text-secondary " />
           </motion.button>
-          <h1 className="text-[24px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+          <h1 className="text-lg font-bold  text-text-primary ">
             Stake
           </h1>
         </div>
@@ -225,7 +225,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
           {/* Staked balance */}
           <motion.div
             {...fade()}
-            className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card} flex items-center justify-between gap-3`}
+            className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card} flex items-center  gap-3`}
           >
             <div className="min-w-0">
               <p className="text-[12px] text-text-tertiary">Your Staked Balance</p>
@@ -246,9 +246,9 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
               whileTap={{ scale: 0.92 }}
               onClick={scrollToForm}
               aria-label="Stake"
-              className="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-xl bg-accent text-accent-text hover:opacity-90 transition-opacity"
+              className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-xl bg-accent text-accent-text hover:opacity-90 transition-opacity"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-3 h-3" />
             </motion.button>
           </motion.div>
 

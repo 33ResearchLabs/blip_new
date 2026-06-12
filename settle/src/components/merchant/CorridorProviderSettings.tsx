@@ -218,7 +218,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
           role="switch"
           aria-checked={autoAccept}
           onClick={() => setAutoAccept(!autoAccept)}
-          className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${
+          className={`w-12 h-6 rounded-full transition-all relative shrink-0 mr-[48px] ${
             autoAccept ? 'bg-[var(--foreground)]' : 'bg-white/[0.10]'
           }`}
         >

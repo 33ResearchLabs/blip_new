@@ -1125,12 +1125,14 @@ export default function MerchantSettingsPage({
               <X className="w-4 h-4" />
             </button>
           </div>
-          {/* Desktop panel header — hidden on mobile */}
-          <div className="hidden lg:flex items-center gap-3 px-6 py-4 border-b border-white/[0.05] shrink-0">
+          {/* Desktop panel header — hidden on mobile. `lg:self-start` keeps it at
+              the TOP of the left column instead of stretching to full height
+              (which would vertically center its text). */}
+          <div className="hidden lg:flex lg:self-start items-center gap-3 px-6 py-8 border-b border-white/[0.05] shrink-0 w-50">
             <span className="text-[11px] font-semibold tracking-[0.15em] uppercase text-white/30">Settings</span>
             <span className="text-white/20 text-xs">›</span>
             <span className="text-[13px] font-semibold text-white/80">
-              {tabs.find(t => t.id === activeTab)?.label}
+              {tabs.find(t => t.id === activeTab)?.label ?? (activeTab === "support" ? "Support" : "")}
             </span>
           </div>
           {/* Content scroll area */}
@@ -1222,7 +1224,7 @@ export default function MerchantSettingsPage({
               <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-4">
                 <div>
                   <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-2 block">
-                    Name
+                    Display Name
                   </label>
                   <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3">
                     <span className="text-sm text-white flex-1">{merchant?.username || displayName || "—"}</span>
@@ -1336,7 +1338,7 @@ export default function MerchantSettingsPage({
           {activeTab === "account" && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-2xl font-bold mb-1">Account</h2>
+                <h2 className="text-lg font-bold mb-1">Account</h2>
                 <p className="text-sm text-white/40">
                   Account details and trading stats
                 </p>
@@ -1420,7 +1422,7 @@ export default function MerchantSettingsPage({
                         is still NULL, surfaced as usernameClaimed). After the
                         merchant commits it, the row is permanently read-only —
                         the backend rejects further changes regardless. */}
-                    {!usernameClaimed && (
+                    {/* {!usernameClaimed && (
                       <button
                         aria-label="Edit username"
                         onClick={() => {
@@ -1432,7 +1434,7 @@ export default function MerchantSettingsPage({
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
-                    )}
+                    )} */}
                   </div>
                 ) : (
                   <div className="py-3 border-b border-white/[0.04]">
@@ -1703,7 +1705,7 @@ export default function MerchantSettingsPage({
                         className={`text-lg font-bold leading-none ${
                           merchant?.status === "active"
                             ? "text-[#f5f5f7]"
-                            : "text-red-400"
+                            : "text-white"
                         }`}
                       >
                         {(merchant?.status || "active").charAt(0).toUpperCase() +
@@ -1885,7 +1887,7 @@ export default function MerchantSettingsPage({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* LEFT — list / empty state */}
               <div>
-                <h2 className="text-2xl font-bold mb-1">Payment Methods</h2>
+                <h2 className="text-lg font-bold mb-1">Payment Methods</h2>
                 <p className="text-sm text-white/40 mb-5">
                   Bank, card, crypto, cash and mobile methods used to send or
                   receive funds
@@ -2073,7 +2075,7 @@ export default function MerchantSettingsPage({
           {activeTab === "notifications" && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-2xl font-bold mb-1">Notifications</h2>
+                <h2 className="text-lg font-bold mb-1">Notifications</h2>
                 <p className="text-sm text-white/40">
                   Configure alerts and sounds
                 </p>
@@ -2177,7 +2179,7 @@ export default function MerchantSettingsPage({
           {activeTab === "liquidity" && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-2xl font-bold mb-1">Liquidity Provider</h2>
+                <h2 className="text-lg font-bold mb-1">Liquidity Provider</h2>
                 <p className="text-sm text-white/40">
                   Earn fees by providing liquidity for other traders
                 </p>
@@ -2402,7 +2404,7 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-1">Reputation Score</h2>
+        <h2 className="text-lg font-bold mb-1">Reputation Score</h2>
         <p className="text-sm text-white/40">
           Your reputation based on trading history, speed, and trust
         </p>

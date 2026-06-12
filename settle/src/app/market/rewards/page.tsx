@@ -215,7 +215,7 @@ function TaskRow({ task, index }: { task: OneOffTask; index: number }) {
       <div
         className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
           done
-            ? "bg-emerald-400/[0.08] border-emerald-400/20 text-emerald-300"
+            ? "bg-white/10 border-white/20 text-white"
             : "bg-white/[0.04] border-white/[0.08] text-white/60"
         }`}
       >
@@ -233,12 +233,12 @@ function TaskRow({ task, index }: { task: OneOffTask; index: number }) {
 
       {/* Points + status */}
       <div className="flex items-center gap-3 shrink-0">
-        <span className="inline-flex items-center gap-1 text-[13px] font-mono font-semibold text-amber-200/90 tabular-nums">
-          <Coins className="w-3.5 h-3.5 text-amber-300/70" />+
+        <span className="inline-flex items-center gap-1 text-[13px] font-mono font-semibold text-white/90 tabular-nums">
+          <Coins className="w-3.5 h-3.5 text-white/60" />+
           {formatCount(points)}
         </span>
         {done ? (
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-400/[0.12] border border-emerald-400/25 text-emerald-300">
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/12 border border-white/25 text-white">
             <Check className="w-3.5 h-3.5" strokeWidth={2.6} />
           </span>
         ) : href ? (
@@ -299,8 +299,8 @@ function EarnRow({ rule, index }: { rule: EarnRule; index: number }) {
           {description}
         </p>
       </div>
-      <span className="inline-flex items-center gap-1 text-[13px] font-mono font-semibold text-amber-200/90 tabular-nums shrink-0">
-        <Coins className="w-3.5 h-3.5 text-amber-300/70" />
+      <span className="inline-flex items-center gap-1 text-[13px] font-mono font-semibold text-white/90 tabular-nums shrink-0">
+        <Coins className="w-3.5 h-3.5 text-white/60" />
         {points}
       </span>
     </motion.div>
@@ -347,12 +347,12 @@ export default function MerchantRewardsPage() {
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 lg:p-8"
           >
-            {/* Soft gold glow behind the coin */}
+            {/* Soft white glow behind the coin */}
             <div
               className="pointer-events-none absolute -top-16 -right-10 w-56 h-56 rounded-full opacity-30 blur-3xl"
               style={{
                 background:
-                  "radial-gradient(circle, rgba(245,200,80,0.35), transparent 70%)",
+                  "radial-gradient(circle, rgba(255,255,255,0.25), transparent 70%)",
               }}
             />
             <div className="relative flex items-start justify-between gap-4">
@@ -382,14 +382,14 @@ export default function MerchantRewardsPage() {
                 </div>
               </div>
               <div
-                className="shrink-0 w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center border border-amber-300/20"
+                className="shrink-0 w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center border border-white/20"
                 style={{
                   background:
-                    "linear-gradient(150deg, rgba(245,210,110,0.18), rgba(245,160,60,0.10))",
+                    "linear-gradient(150deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))",
                 }}
               >
                 <Coins
-                  className="w-7 h-7 lg:w-8 lg:h-8 text-amber-300"
+                  className="w-7 h-7 lg:w-8 lg:h-8 text-white"
                   strokeWidth={1.8}
                 />
               </div>
