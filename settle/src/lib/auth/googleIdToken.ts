@@ -21,11 +21,14 @@
  * null return into a generic 401.
  */
 
-import { createPublicKey, createVerify } from 'crypto';
-import type { JsonWebKey } from 'crypto';
+import { createPublicKey, createVerify } from "crypto";
+import type { JsonWebKey } from "crypto";
 
-const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
-const ALLOWED_ISS = new Set(['accounts.google.com', 'https://accounts.google.com']);
+const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
+const ALLOWED_ISS = new Set([
+  "accounts.google.com",
+  "https://accounts.google.com",
+]);
 const CLOCK_SKEW_SECONDS = 60;
 const JWKS_TTL_MS = 60 * 60 * 1000;
 
@@ -71,7 +74,7 @@ async function fetchJwks(force = false): Promise<JWK[]> {
   if (!force && jwksCache && Date.now() - jwksCache.fetchedAt < JWKS_TTL_MS) {
     return jwksCache.keys;
   }
-  const res = await fetch(GOOGLE_JWKS_URL, { cache: 'no-store' });
+  const res = await fetch(GOOGLE_JWKS_URL, { cache: "no-store" });
   if (!res.ok) throw new Error(`Failed to fetch Google JWKS: ${res.status}`);
   const data = (await res.json()) as { keys: JWK[] };
   jwksCache = { fetchedAt: Date.now(), keys: data.keys };
@@ -89,15 +92,18 @@ async function findKey(kid: string): Promise<JWK | null> {
 }
 
 function b64urlDecode(input: string): Buffer {
-  const pad = input.length % 4 === 0 ? '' : '='.repeat(4 - (input.length % 4));
-  const normalized = input.replace(/-/g, '+').replace(/_/g, '/') + pad;
-  return Buffer.from(normalized, 'base64');
+  const pad = input.length % 4 === 0 ? "" : "=".repeat(4 - (input.length % 4));
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/") + pad;
+  return Buffer.from(normalized, "base64");
 }
 
 function jwkToPem(jwk: JWK): string {
   // Node's createPublicKey accepts a JWK directly; export as PEM for createVerify.
-  const keyObject = createPublicKey({ key: jwk as unknown as JsonWebKey, format: 'jwk' });
-  return keyObject.export({ type: 'spki', format: 'pem' }) as string;
+  const keyObject = createPublicKey({
+    key: jwk as unknown as JsonWebKey,
+    format: "jwk",
+  });
+  return keyObject.export({ type: "spki", format: "pem" }) as string;
 }
 
 function expectedAudiences(): Set<string> {
@@ -109,34 +115,36 @@ function expectedAudiences(): Set<string> {
   return new Set(ids);
 }
 
-export async function verifyGoogleIdToken(credential: string): Promise<GoogleIdentity | null> {
+export async function verifyGoogleIdToken(
+  credential: string,
+): Promise<GoogleIdentity | null> {
   const allowedAuds = expectedAudiences();
   if (allowedAuds.size === 0) {
-    console.error('[google-oauth] GOOGLE_CLIENT_ID is not configured');
+    console.error("[google-oauth] GOOGLE_CLIENT_ID is not configured");
     return null;
   }
 
-  if (typeof credential !== 'string' || credential.length < 20) {
+  if (typeof credential !== "string" || credential.length < 20) {
     return null;
   }
 
-  const parts = credential.split('.');
+  const parts = credential.split(".");
   if (parts.length !== 3) return null;
   const [headerB64, payloadB64, signatureB64] = parts;
 
   let header: JwtHeader;
   let payload: GoogleIdTokenPayload;
   try {
-    header = JSON.parse(b64urlDecode(headerB64).toString('utf8'));
-    payload = JSON.parse(b64urlDecode(payloadB64).toString('utf8'));
+    header = JSON.parse(b64urlDecode(headerB64).toString("utf8"));
+    payload = JSON.parse(b64urlDecode(payloadB64).toString("utf8"));
   } catch {
     return null;
   }
 
-  if (header.alg !== 'RS256' || !header.kid) return null;
+  if (header.alg !== "RS256" || !header.kid) return null;
 
   const key = await findKey(header.kid).catch((err) => {
-    console.error('[google-oauth] JWKS lookup failed:', err);
+    console.error("[google-oauth] JWKS lookup failed:", err);
     return null;
   });
   if (!key) return null;
@@ -145,7 +153,7 @@ export async function verifyGoogleIdToken(credential: string): Promise<GoogleIde
   const signingInput = `${headerB64}.${payloadB64}`;
   const signature = b64urlDecode(signatureB64);
 
-  const verifier = createVerify('RSA-SHA256');
+  const verifier = createVerify("RSA-SHA256");
   verifier.update(signingInput);
   const valid = verifier.verify(pem, signature);
   if (!valid) return null;

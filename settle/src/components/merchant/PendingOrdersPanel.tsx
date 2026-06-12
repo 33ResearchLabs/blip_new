@@ -632,6 +632,42 @@ const OrderList = memo(function OrderList({
                     ? order.protocolFeePercent - (order.spreadPreference === "fastest" ? 2.5 : order.spreadPreference === "best" ? 2.0 : 1.5)
                     : 0;
 
+                  // Order-details rows for the ⓘ tooltip. Values mirror what the
+                  // card itself shows (same rounding/formatting) so the tooltip
+                  // never disagrees with the card.
+                  const createdRaw = order.dbOrder?.created_at || order.timestamp;
+                  const createdDate = createdRaw
+                    ? createdRaw instanceof Date
+                      ? createdRaw
+                      : new Date(createdRaw)
+                    : null;
+                  const expiresLabel =
+                    order.expiresIn > 0
+                      ? order.expiresIn >= 3600
+                        ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
+                        : order.expiresIn >= 60
+                          ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
+                          : `${order.expiresIn}s`
+                      : "Expired";
+                  const orderDetailItems: InfoTooltipItem[] = [
+                    { label: "Order ID", value: order.dbOrder?.order_number ? `#${order.dbOrder.order_number}` : (username || "—") },
+                    { label: "Order Type", value: order.type?.toUpperCase() || "—" },
+                    { label: "Amount", value: `${cryptoAmt} ${primaryCcy}` },
+                    { label: "Price", value: `${order.rate.toFixed(2)} ${secondaryCcy}` },
+                    { label: "Total", value: `${fiatAmt} ${secondaryCcy}` },
+                    { label: "Payment Method", value: pmType ? pmLabel[pmType] || pmType : "—" },
+                    ...(createdDate
+                      ? [{
+                          label: "Created",
+                          value: createdDate.toLocaleString("en-US", {
+                            day: "numeric", month: "short", year: "numeric",
+                            hour: "2-digit", minute: "2-digit",
+                          }),
+                        }]
+                      : []),
+                    { label: "Expires in", value: expiresLabel },
+                  ];
+
                   return (
                     <>
                       {/* ── Row 1: Avatar / Name / Handle · Action top-right ── */}
@@ -657,7 +693,15 @@ const OrderList = memo(function OrderList({
                               <span className="text-[13px] font-semibold text-white/90 leading-tight truncate">
                                 {soloName || "—"}
                               </span>
-                              <InfoTooltip side="bottom" title={username} description="Counterparty stats." items={tooltipItems} />
+                              <InfoTooltip
+                                side="bottom"
+                                title={username}
+                                description="Counterparty stats."
+                                sections={[
+                                  { items: tooltipItems },
+                                  { heading: "Order details", items: orderDetailItems },
+                                ]}
+                              />
                             </div>
                             <div className="flex items-center gap-1 mt-0.5">
                               <span className={`text-[10px] font-mono font-semibold ${order.type === 'buy' ? 'text-[#f5f5f7]' : 'text-red-400'}`}>

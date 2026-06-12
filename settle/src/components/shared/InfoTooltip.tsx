@@ -25,6 +25,12 @@ export interface InfoTooltipItem {
   value: string;
 }
 
+/** A titled group of label/value rows, rendered below the main items. */
+export interface InfoTooltipSection {
+  heading?: string;
+  items: InfoTooltipItem[];
+}
+
 interface InfoTooltipProps {
   /** Plain text — use for short, single-paragraph tooltips */
   text?: string;
@@ -34,6 +40,8 @@ interface InfoTooltipProps {
   description?: string;
   /** Key/value rows under the description (e.g. "Fast → quick match, less profit") */
   items?: InfoTooltipItem[];
+  /** Extra titled sections of label/value rows (label left, value right) */
+  sections?: InfoTooltipSection[];
   /** Position relative to the icon. Default: "top" */
   side?: 'top' | 'bottom' | 'left' | 'right';
   /** Icon size. Default: "xs" (12px) */
@@ -56,6 +64,7 @@ export function InfoTooltip({
   title,
   description,
   items,
+  sections,
   side = 'top',
   size = 'xs',
   className = '',
@@ -140,7 +149,12 @@ export function InfoTooltip({
     };
   }, [open]);
 
-  const hasStructured = !!(title || description || (items && items.length > 0));
+  const hasStructured = !!(
+    title ||
+    description ||
+    (items && items.length > 0) ||
+    (sections && sections.length > 0)
+  );
 
   const popup =
     open && coords && typeof document !== 'undefined'
@@ -188,6 +202,30 @@ export function InfoTooltip({
                       ))}
                     </div>
                   )}
+                  {sections &&
+                    sections.map((section, si) => (
+                      <div key={si}>
+                        <div className="h-px bg-background/10 mx-3" />
+                        {section.heading && (
+                          <div className="px-3 pt-2 pb-0.5 text-[9px] font-bold uppercase tracking-wider text-background/40">
+                            {section.heading}
+                          </div>
+                        )}
+                        <div className={`px-3 ${section.heading ? 'pb-2' : 'py-2'} space-y-1.5`}>
+                          {section.items.map((item, i) => (
+                            <div
+                              key={i}
+                              className="flex items-start justify-between gap-3 text-[10.5px] leading-snug"
+                            >
+                              <span className="text-background/50 shrink-0">{item.label}</span>
+                              <span className="font-semibold text-right break-all min-w-0">
+                                {item.value}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                 </div>
               ) : (
                 <div className="rounded-lg bg-foreground text-background text-[11px] font-medium px-2.5 py-2 leading-snug shadow-xl shadow-black/40">

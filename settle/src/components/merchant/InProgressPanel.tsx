@@ -29,6 +29,7 @@ import {
   InfoTooltip,
   type InfoTooltipItem,
 } from "@/components/shared/InfoTooltip";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 // Rule badge content for the "In Progress" header. Items labels are kept
 // short so they fit the 52px min-width label column in InfoTooltip, with
@@ -260,7 +261,15 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 {/* Row 1: Counterparty + type on left, timer on right */}
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <div className="text-base shrink-0">{order.emoji}</div>
+                    <UserAvatar
+                      src={order.user_avatar}
+                      seed={order.user || "user"}
+                      size={20}
+                      alt={order.user}
+                      className="shrink-0"
+                      style={{ borderRadius: 6 }}
+                    />
+
                     {(() => {
                       const { seller, buyer } = getPartyNames(order.dbOrder);
                       const bothKnown = !!seller && !!buyer;
