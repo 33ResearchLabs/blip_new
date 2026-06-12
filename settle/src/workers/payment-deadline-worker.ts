@@ -383,11 +383,11 @@ async function processDisputeAutoResolve(): Promise<void> {
       crypto_amount: number; crypto_currency: string;
       fiat_amount: number; fiat_currency: string; type: string;
       escrow_tx_hash: string | null; escrow_creator_wallet: string | null;
-      escrow_trade_id: number | null;
+      escrow_trade_id: number | null; refund_tx_hash: string | null;
     }>(
       `SELECT id, status, user_id, merchant_id, buyer_merchant_id,
               order_number, crypto_amount, crypto_currency, fiat_amount, fiat_currency, type,
-              escrow_tx_hash, escrow_creator_wallet, escrow_trade_id
+              escrow_tx_hash, escrow_creator_wallet, escrow_trade_id, refund_tx_hash
        FROM orders
        WHERE status = 'disputed'
          AND dispute_auto_resolve_at IS NOT NULL
@@ -411,8 +411,12 @@ async function processDisputeAutoResolve(): Promise<void> {
         // Same constraint as processEscrowExpiries: sign on-chain refund
         // first, then update DB. atomicCancelWithRefund refuses to cancel
         // an order with escrow_tx_hash unless we pass refundTxHash.
-        let refundTxHash: string | undefined;
-        if (order.escrow_tx_hash) {
+        //
+        // Reuse a refund already recorded on a prior partial run so we never
+        // re-submit an on-chain refund for the same escrow — and so a status
+        // transition that failed last tick can still complete this tick.
+        let refundTxHash: string | undefined = order.refund_tx_hash ?? undefined;
+        if (order.escrow_tx_hash && !refundTxHash) {
           if (!order.escrow_creator_wallet || order.escrow_trade_id == null) {
             logger.warn('[DisputeAutoResolve] Missing on-chain refund inputs; skipping (will retry next tick)', {
               orderId: order.id,
@@ -432,6 +436,29 @@ async function processDisputeAutoResolve(): Promise<void> {
             continue;
           }
           refundTxHash = onChain.txHash;
+
+          // Persist the refund proof to the DB *before* the status transition.
+          // atomicCancelWithRefund records refund_tx_hash only inside its own
+          // transaction; if that transaction fails, the on-chain signature
+          // would otherwise be lost and the order would strand in 'disputed'
+          // with the escrow already returned. Recording it here (idempotent
+          // COALESCE — never overwrites an existing hash) lets a re-tried
+          // transition complete. Sentinels mean the escrow was already closed:
+          // no real signature, and the column is unique-indexed, so skip them.
+          const REFUND_SENTINELS = new Set(['escrow-already-closed', 'already-refunded']);
+          if (!REFUND_SENTINELS.has(refundTxHash)) {
+            try {
+              await query(
+                `UPDATE orders SET refund_tx_hash = COALESCE(refund_tx_hash, $1) WHERE id = $2`,
+                [refundTxHash, order.id]
+              );
+            } catch (persistErr) {
+              logger.warn('[DisputeAutoResolve] Could not pre-persist refund_tx_hash (will still attempt cancel)', {
+                orderId: order.id,
+                error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+              });
+            }
+          }
         }
 
         const result = await atomicCancelWithRefund(
@@ -498,11 +525,18 @@ async function processStuckOnChainEscrows(): Promise<void> {
     // Skip if backend signer is not configured
     if (!getBackendKeypair()) return;
 
-    // Find expired/cancelled/disputed orders that have on-chain escrow but
-    // no refund tx recorded, AND whose backoff window has elapsed. Orders
-    // that just failed get skipped until refund_retry_after passes — this
-    // stops a single chronically-failing row from burning the whole batch
-    // every 30s. See migration 107.
+    // Find expired/cancelled orders that have on-chain escrow but no refund
+    // tx recorded, AND whose backoff window has elapsed. Orders that just
+    // failed get skipped until refund_retry_after passes — this stops a
+    // single chronically-failing row from burning the whole batch every 30s.
+    // See migration 107.
+    //
+    // 'disputed' is intentionally NOT swept here: a disputed order's escrow
+    // may only be refunded by the dispute-resolution paths (the auto-resolve
+    // job, which applies the payment_sent fund-safety guard, or compliance
+    // finalize). This generic sweep has no such guard, so including 'disputed'
+    // let it refund payment_sent disputes — where the buyer may have paid
+    // fiat — and then leave them stuck in 'disputed' with no status change.
     // Historic bug: this worker was the only path that ever recorded an
     // on-chain refund, but it wrote into release_tx_hash. release = funds
     // to buyer (happy path); refund = funds back to seller. We now record
@@ -516,7 +550,7 @@ async function processStuckOnChainEscrows(): Promise<void> {
     }>(
       `SELECT id, order_number, status, escrow_creator_wallet, escrow_trade_id, refund_retry_count
        FROM orders
-       WHERE status IN ('expired', 'cancelled', 'disputed')
+       WHERE status IN ('expired', 'cancelled')
          AND escrow_tx_hash IS NOT NULL
          AND refund_tx_hash IS NULL
          AND release_tx_hash IS NULL
