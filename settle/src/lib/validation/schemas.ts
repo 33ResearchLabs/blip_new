@@ -289,6 +289,10 @@ export const createOrderSchema = z.object({
   // buyer_merchant_id removed — user-created orders must NOT set this field.
   // M2M trades use /api/merchant/orders which has its own schema.
   payment_method_id: uuidSchema.optional(), // Fiat receiver's selected payment method
+  // BUY orders: the payment rails the buyer can pay with (one or more).
+  // The order is shown only to merchants who support at least one of these,
+  // and the buyer pays into the merchant's matching method. See migration 166.
+  buyer_payment_types: z.array(paymentMethodSchema).min(1).max(6).optional(),
   // Escrow fields for sell orders — user locks escrow on-chain before creating order
   escrow_trade_id: z.number().optional(),
   escrow_trade_pda: z.string().max(64).optional(),
