@@ -40,7 +40,7 @@ export function ReputationScreen({
 
       {/* Body */}
       <div className="flex-1 px-5 pb-10 overflow-y-auto scrollbar-hide">
-        <div className="mx-auto w-full max-w-[440px] space-y-3">
+        <div className="space-y-3">
 
           {/* Cancel rate — big number, no color drama */}
           <motion.div

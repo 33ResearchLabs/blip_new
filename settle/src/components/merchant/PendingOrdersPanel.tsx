@@ -35,6 +35,8 @@ import {
   type InfoTooltipItem,
 } from "@/components/shared/InfoTooltip";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
+import type { ProfileEntityType } from "@/components/shared/profile/types";
 import {
   useCorridorPrices,
   resolveCorridorRef,
@@ -211,6 +213,12 @@ const OrderList = memo(function OrderList({
     return () => clearInterval(id);
   }, []);
 
+  // Counterparty profile sheet — opened by tapping a card's avatar/name.
+  const [profileTarget, setProfileTarget] = useState<{
+    entityType: ProfileEntityType;
+    id: string;
+  } | null>(null);
+
   const virtualizer = useVirtualizer({
     count: filteredOrders.length,
     getScrollElement: () => parentRef.current,
@@ -239,6 +247,7 @@ const OrderList = memo(function OrderList({
   }
 
   return (
+    <>
     <div ref={parentRef} className="flex-1 overflow-y-auto p-1.5">
       <div
         style={{
@@ -580,6 +589,19 @@ const OrderList = memo(function OrderList({
                   // ── Resolve all display data up-front ──────────────────
                   const { seller, buyer } = getPartyNames(order.dbOrder);
                   const soloName = seller || buyer || order.user || null;
+                  // Counterparty for the profile sheet. For a normal U2M order
+                  // the counterparty is the user who placed it; for an M2M order
+                  // it's the buyer merchant. Mirrors getPartyNames' M2M rule.
+                  const _db = order.dbOrder;
+                  const _userIsPlaceholder =
+                    typeof _db?.user?.username === "string" &&
+                    (_db.user.username.startsWith("open_order_") ||
+                      _db.user.username.startsWith("m2m_"));
+                  const cpIsM2M = _userIsPlaceholder || !!_db?.buyer_merchant_id;
+                  const cpEntityType: ProfileEntityType = cpIsM2M ? "merchant" : "user";
+                  const cpEntityId: string | null = cpIsM2M
+                    ? _db?.buyer_merchant_id || _db?.buyer_merchant?.id || null
+                    : _db?.user?.id || _db?.user_id || null;
                   const username = order.dbOrder?.user?.username || order.user;
                   const avatarSrc =
                     (order.dbOrder?.user?.avatar_url as string | undefined) ||
@@ -611,7 +633,14 @@ const OrderList = memo(function OrderList({
                     <>
                       {/* ── Row 1: Avatar / Name / Handle · Action top-right ── */}
                       <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`flex items-center gap-2.5 min-w-0 ${cpEntityId ? "cursor-pointer" : ""}`}
+                          onClick={(e) => {
+                            if (!cpEntityId) return;
+                            e.stopPropagation();
+                            setProfileTarget({ entityType: cpEntityType, id: cpEntityId });
+                          }}
+                        >
                           <div className="relative shrink-0">
                             <UserAvatar
                               src={avatarSrc}
@@ -763,6 +792,16 @@ const OrderList = memo(function OrderList({
         })}
       </div>
     </div>
+
+    {/* Counterparty profile — opened by tapping a card's avatar/name above. */}
+    <ProfileSheet
+      open={!!profileTarget}
+      entityType={profileTarget?.entityType ?? null}
+      id={profileTarget?.id ?? null}
+      variant="merchant"
+      onClose={() => setProfileTarget(null)}
+    />
+    </>
   );
 });
 
