@@ -409,14 +409,16 @@ export function MerchantNavbar({
                         />
                         <div className="min-w-0">
                           <p className="text-[12px] font-medium text-foreground truncate">
-                            {displayName}
+                            {merchantInfo?.display_name ||
+                              merchantInfo?.business_name ||
+                              merchantInfo?.username ||
+                              "Merchant"}
                           </p>
-                          {merchantInfo?.business_name &&
-                            merchantInfo.business_name !== displayName && (
-                              <p className="text-[10px] text-foreground/40 truncate">
-                                {merchantInfo.business_name}
-                              </p>
-                            )}
+                          {merchantInfo?.username && (
+                            <p className="text-[10px] text-foreground/40 truncate">
+                              @{merchantInfo.username}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -578,14 +580,16 @@ export function MerchantNavbar({
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">
-                      {displayName}
+                      {merchantInfo?.display_name ||
+                        merchantInfo?.business_name ||
+                        merchantInfo?.username ||
+                        "Merchant"}
                     </p>
-                    {merchantInfo?.business_name &&
-                      merchantInfo.business_name !== displayName && (
-                        <p className="text-[11px] text-foreground/40 truncate">
-                          {merchantInfo.business_name}
-                        </p>
-                      )}
+                    {merchantInfo?.username && (
+                      <p className="text-[11px] text-foreground/40 truncate">
+                        @{merchantInfo.username}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button
