@@ -27,6 +27,7 @@ import { useOrphanedEscrowRecovery } from "@/hooks/useOrphanedEscrowRecovery";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { DesktopSidebar } from "@/components/user/desktop/DesktopSidebar";
 import { DesktopRightPanel } from "@/components/user/desktop/DesktopRightPanel";
@@ -509,6 +510,65 @@ export default function Home() {
       window.location.replace("/user/login");
     }
   }, [auth.isInitializing, screen]);
+
+  // Session guard while the embedded wallet is locked.
+  //
+  // The "Unlock Wallet" PIN pad is driven purely by the LOCAL keystore lock
+  // state — it makes no protected API call, so the global 401 redirect in
+  // fetchWithAuth never fires while it's on screen. If the auth session dies
+  // in the background (e.g. the 15-min access token lapses while the user
+  // sits on the PIN pad), nothing would otherwise bounce them to login and
+  // they'd be stuck entering a PIN against a dead session.
+  //
+  // So whenever the wallet is locked for a signed-in user, poll the session:
+  // on mount, on a 60s interval, and on tab focus. The moment the server says
+  // the session is gone, run the shared logout sweep and hand off to
+  // /user/login with the session-expired banner.
+  useEffect(() => {
+    if (auth.isInitializing) return;
+    if (!auth.userId) return;
+    if (embeddedWallet?.state !== "locked") return;
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+
+    const verifySession = async () => {
+      try {
+        const res = await fetchWithAuth(
+          `/api/auth/user?action=check_session&user_id=${auth.userId}`,
+        );
+        if (cancelled) return;
+        let valid = res.ok;
+        if (res.ok) {
+          try {
+            const data = await res.json();
+            valid = !!(data?.success && data?.data?.valid);
+          } catch {
+            valid = false;
+          }
+        }
+        if (!valid && !cancelled) {
+          clearAuthStorageOnLogout();
+          window.location.replace("/user/login?reason=session_expired");
+        }
+      } catch {
+        // Network blip — don't log the user out on a transient failure.
+        // The next interval tick (or a real protected call) will catch a
+        // genuinely dead session.
+      }
+    };
+
+    verifySession();
+    const interval = window.setInterval(verifySession, 60_000);
+    const onFocus = () => verifySession();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [auth.isInitializing, auth.userId, embeddedWallet?.state]);
 
   // Refer & Earn data — sourced from the same waitlist row as
   // /waitlist/dashboard so the code shown here is the user's *real*

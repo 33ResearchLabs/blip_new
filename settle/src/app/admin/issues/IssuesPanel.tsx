@@ -32,6 +32,7 @@ import {
   useState,
 } from 'react';
 import { formatCount, formatPercentage } from '@/lib/format';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { LimitRequestsPanel } from './LimitRequestsPanel';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -432,7 +433,7 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
       if (categoryFilter) qs.set('category', categoryFilter);
       if (priorityFilter) qs.set('priority', priorityFilter);
       qs.set('limit', '500');
-      const res = await fetch(`/api/admin/issues?${qs.toString()}`);
+      const res = await fetchWithAuth(`/api/admin/issues?${qs.toString()}`);
       if (res.status === 404) {
         setError(
           'Issue reporting is disabled. Set ENABLE_ISSUE_REPORTING=true on the server.',
@@ -589,7 +590,7 @@ export default function IssuesPanel({ onRefreshStateChange }: IssuesPanelProps) 
     ) => {
       setSavingAction(true);
       try {
-        const res = await fetch(`/api/admin/issues/${id}`, {
+        const res = await fetchWithAuth(`/api/admin/issues/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),
@@ -1352,7 +1353,7 @@ function DetailPanel({
 
     // ── Reporter account summary (user OR merchant) ──
     if (reporterId && issue.actor_type === 'user') {
-      fetch(`/api/admin/users?search=${reporterId}&limit=1`)
+      fetchWithAuth(`/api/admin/users?search=${reporterId}&limit=1`)
         .then((r) => r.json())
         .then((d) => {
           const u = d?.data?.users?.[0] ?? d?.data?.[0];
@@ -1376,7 +1377,7 @@ function DetailPanel({
         })
         .catch(() => {});
     } else if (reporterId && issue.actor_type === 'merchant') {
-      fetch(`/api/admin/merchants?search=${reporterId}&limit=1`)
+      fetchWithAuth(`/api/admin/merchants?search=${reporterId}&limit=1`)
         .then((r) => r.json())
         .then((d) => {
           const m = d?.data?.merchants?.[0] ?? d?.data?.[0];
@@ -1406,7 +1407,7 @@ function DetailPanel({
     // ── Linked order — complete summary ──
     if (linkedOrderId) {
       setLinkedOrderLoading(true);
-      fetch(`/api/admin/orders?order_id=${linkedOrderId}`)
+      fetchWithAuth(`/api/admin/orders?order_id=${linkedOrderId}`)
         .then((r) => r.json())
         .then((d) => {
           const rows = Array.isArray(d?.data) ? d.data : (d?.data?.orders ?? []);

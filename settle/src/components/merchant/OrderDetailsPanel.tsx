@@ -36,6 +36,8 @@ import {
 } from "@/lib/orders/statusResolver";
 import { copyToClipboard } from "@/lib/clipboard";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
+import type { ProfileEntityType } from "@/components/shared/profile/types";
 
 interface OrderDetails {
   id: string;
@@ -348,6 +350,10 @@ export function OrderDetailsPanel({
   const [showBuyer, setShowBuyer] = useState(true);
   const [showSeller, setShowSeller] = useState(true);
   const [showEscrow, setShowEscrow] = useState(false);
+  const [profileTarget, setProfileTarget] = useState<{
+    entityType: ProfileEntityType;
+    id: string;
+  } | null>(null);
 
   // ── Live presence (online/offline + last seen) — hooks must run on every
   // render, so they live above the early `if (!order) return` below.
@@ -614,7 +620,24 @@ export function OrderDetailsPanel({
         ? order.merchant?.rating
         : order.user?.rating);
 
+  // Counterparty identity for the profile sheet (mirrors the PresenceBadge logic).
+  const buyerEntityType: ProfileEntityType = isM2M
+    ? "merchant"
+    : isBuyOrder
+      ? "user"
+      : "merchant";
+  const buyerEntityId = isM2M
+    ? order.buyer_merchant?.id
+    : isBuyOrder
+      ? order.user?.id
+      : order.merchant?.id;
+  const sellerEntityType: ProfileEntityType =
+    isM2M || isBuyOrder ? "merchant" : "user";
+  const sellerEntityId =
+    isM2M || isBuyOrder ? order.merchant?.id : order.user?.id;
+
   return (
+    <>
     <div className="fixed inset-0 z-50" onClick={onClose}>
       {/* Blur backdrop */}
       <div className="absolute inset-0 backdrop-blur-sm" />
@@ -703,7 +726,15 @@ export function OrderDetailsPanel({
               </button>
               {showBuyer && (
                 <div className="mt-2 space-y-2">
-                  <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      buyerEntityId &&
+                      setProfileTarget({ entityType: buyerEntityType, id: buyerEntityId })
+                    }
+                    disabled={!buyerEntityId}
+                    className="flex items-center gap-2 w-full text-left disabled:cursor-default"
+                  >
                     <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center text-sm shrink-0">
                       🦊
                     </div>
@@ -725,7 +756,7 @@ export function OrderDetailsPanel({
                         />
                       </div>
                     </div>
-                  </div>
+                  </button>
                   {buyerWallet && (
                     <button
                       onClick={() => handleCopy(buyerWallet, "buyer_wallet")}
@@ -757,7 +788,15 @@ export function OrderDetailsPanel({
               </button>
               {showSeller && (
                 <div className="mt-2 space-y-2">
-                  <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      sellerEntityId &&
+                      setProfileTarget({ entityType: sellerEntityType, id: sellerEntityId })
+                    }
+                    disabled={!sellerEntityId}
+                    className="flex items-center gap-2 w-full text-left disabled:cursor-default"
+                  >
                     <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center text-sm shrink-0">
                       🏪
                     </div>
@@ -779,7 +818,7 @@ export function OrderDetailsPanel({
                         />
                       </div>
                     </div>
-                  </div>
+                  </button>
                   {sellerWallet && (
                     <button
                       onClick={() => handleCopy(sellerWallet, "seller_wallet")}
@@ -1898,6 +1937,17 @@ export function OrderDetailsPanel({
         </div>
       </div>
     </div>
+
+    {/* Counterparty profile — opened by tapping a Buyer/Seller card above. */}
+    <ProfileSheet
+      open={!!profileTarget}
+      entityType={profileTarget?.entityType ?? null}
+      id={profileTarget?.id ?? null}
+      variant="merchant"
+      onClose={() => setProfileTarget(null)}
+      onMessage={onOpenChat ? () => { setProfileTarget(null); handleOpenChat(); } : undefined}
+    />
+    </>
   );
 }
 

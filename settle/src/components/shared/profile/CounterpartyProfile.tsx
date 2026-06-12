@@ -5,7 +5,7 @@
 // Themed via the shared SURFACES tokens so it reads in user + merchant scopes and
 // light/dark. Data comes from GET /api/profile/[entityType]/[id] (ProfileData).
 
-import { useState } from "react";
+// import { useState } from "react"; // Follow button hidden (see below)
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -29,7 +29,7 @@ import {
   FileWarning,
   Gauge,
   Check,
-  UserPlus,
+  // UserPlus, // Follow button hidden (see below)
 } from "lucide-react";
 import { formatFiat, formatCount, formatPercentage } from "@/lib/format";
 import type { SurfaceTokens } from "@/components/shared/limits/types";
@@ -84,7 +84,8 @@ export function CounterpartyProfile({
   onStartTrade,
   onReport,
 }: Props) {
-  const [following, setFollowing] = useState(false);
+  // Follow is hidden for now (no follow backend yet) — see commented button below.
+  // const [following, setFollowing] = useState(false);
   const card = `rounded-[20px] border border-border-subtle ${surfaces.card}`;
   const active = relativeTime(data.lastActive, data.isOnline);
 
@@ -146,6 +147,7 @@ export function CounterpartyProfile({
               )}
             </p>
           </div>
+          {/* Follow — hidden until a follow backend exists.
           <button
             onClick={() => setFollowing((f) => !f)}
             className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-full text-[12px] font-bold border transition-colors ${
@@ -157,6 +159,7 @@ export function CounterpartyProfile({
             {following ? <Check className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
             {following ? "Following" : "Follow"}
           </button>
+          */}
         </div>
 
         {/* Trust Score */}
@@ -169,12 +172,9 @@ export function CounterpartyProfile({
               What is this? <ChevronRight className="w-3.5 h-3.5" />
             </span>
           </div>
-          <div className="text-center mt-2">
-            <p className="text-[40px] font-extrabold text-text-primary leading-none">
-              {data.trust.score}
-              <span className="text-[18px] text-text-tertiary font-bold"> / 100</span>
-            </p>
-            <p className={`text-[15px] font-bold mt-1 ${BAND_COLOR[data.trust.band]}`}>
+          {/* Numeric score (e.g. 40 / 100) intentionally hidden — show only the band. */}
+          <div className="text-center mt-3">
+            <p className={`text-[28px] font-extrabold leading-none ${BAND_COLOR[data.trust.band]}`}>
               {data.trust.band}
             </p>
           </div>
