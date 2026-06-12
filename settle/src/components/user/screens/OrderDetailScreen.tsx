@@ -30,6 +30,7 @@ import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/Im
 import { compressImage } from "@/lib/utils/compressImage";
 import { explorerUrl } from "@/lib/solana/networkLabel";
 import type { Screen, Order } from "./types";
+import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import {
   type RefObject,
   useState as useLocalState,
@@ -314,6 +315,7 @@ export const OrderDetailScreen = ({
   // Suppress unused-param lint: `copied` is part of the prop API but not rendered here.
   void copied;
   const [showEmojiPicker, setShowEmojiPicker] = useLocalState(false);
+  const [showProfile, setShowProfile] = useLocalState(false);
   const [isUploading, setIsUploading] = useLocalState(false);
   const [copiedField, setCopiedField] = useLocalState<string | null>(null);
   const [reviewText, setReviewText] = useLocalState("");
@@ -2428,7 +2430,12 @@ export const OrderDetailScreen = ({
         {/* Merchant */}
         <div className={`mt-4 rounded-2xl p-4 ${CARD}`}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => activeOrder.merchant.name && setShowProfile(true)}
+              disabled={!activeOrder.merchant.name}
+              className="flex items-center gap-3 text-left disabled:cursor-default"
+            >
               <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-accent text-accent-text">
                 {(activeOrder.merchant.name || 'M').charAt(0)}
               </div>
@@ -2451,7 +2458,7 @@ export const OrderDetailScreen = ({
                   </span>
                 </div>
               </div>
-            </div>
+            </button>
             <button
               onClick={handleOpenChat}
               className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active"
@@ -2460,6 +2467,19 @@ export const OrderDetailScreen = ({
             </button>
           </div>
         </div>
+
+        {/* Counterparty profile — opened by tapping the merchant name/avatar above. */}
+        <ProfileSheet
+          open={showProfile}
+          entityType="merchant"
+          id={activeOrder.merchant.id}
+          variant="user"
+          onClose={() => setShowProfile(false)}
+          onMessage={() => {
+            setShowProfile(false);
+            handleOpenChat();
+          }}
+        />
 
         {/* Cancel & Dispute Buttons - Show for active orders (step 2-3) */}
         {activeOrder.step >= 2 &&
