@@ -50,13 +50,21 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
-    // Security: enforce actor matches authenticated identity (JWT only).
-    if (parseResult.data.actor_id !== auth.actorId) {
-      return forbiddenResponse('actor_id does not match authenticated identity');
+    // Identity is taken ONLY from the verified JWT — never from the client
+    // body. The body's actor_* fields are legacy/advisory and can legitimately
+    // go stale (e.g. a long-lived tab whose in-memory userId desynced from a
+    // rotated session cookie), which previously produced a spurious 403 that
+    // blocked the real participant from cancelling. We derive the actor from
+    // auth.actorType/auth.actorId — both cryptographically verified, so this
+    // cannot be spoofed — and proxy those forward (proxyCoreApi re-signs the
+    // x-actor-id header from this value). Requests that already matched are
+    // byte-identical; only the stale-but-authenticated case changes (it now
+    // proceeds as the true identity instead of 403-ing).
+    if (auth.actorType !== 'user' && auth.actorType !== 'merchant') {
+      return forbiddenResponse('Only a user or merchant can request cancellation');
     }
-    if (parseResult.data.actor_type === 'merchant' && auth.actorType !== 'merchant') {
-      return forbiddenResponse("actor_type='merchant' requires a merchant token");
-    }
+    const actorType = auth.actorType;
+    const actorId = auth.actorId;
 
     // ── STATUS + ROLE VALIDATION ──
     // Cancel only allowed from open, accepted, or escrowed statuses
@@ -80,11 +88,11 @@ export async function POST(
       );
     }
 
-    const role = resolveTradeRole(cancelOrder, parseResult.data.actor_id);
+    const role = resolveTradeRole(cancelOrder, actorId);
     if (role !== 'buyer' && role !== 'seller') {
       logger.warn('[CancelRequest] Rejected — actor is not a participant', {
         orderId: id,
-        actorId: parseResult.data.actor_id,
+        actorId,
         resolvedRole: role,
       });
       return NextResponse.json(
@@ -108,7 +116,7 @@ export async function POST(
       async () => {
         const resp = await proxyCoreApi(`/v1/orders/${id}/cancel-request`, {
           method: 'POST',
-          body: parseResult.data,
+          body: { ...parseResult.data, actor_type: actorType, actor_id: actorId },
           // Forward the same key so core-api's idempotency_log keys off
           // the same value. Required: core-api now rejects missing key.
           idempotencyKey: effectiveKey,
@@ -145,12 +153,15 @@ export async function PUT(
       return validationErrorResponse(errors);
     }
 
-    // Security: enforce actor matches authenticated identity (JWT only).
-    if (parseResult.data.actor_id !== auth.actorId) {
-      return forbiddenResponse('actor_id does not match authenticated identity');
-    }
-    if (parseResult.data.actor_type === 'merchant' && auth.actorType !== 'merchant') {
-      return forbiddenResponse("actor_type='merchant' requires a merchant token");
+    // Identity is taken ONLY from the verified JWT — see the POST handler for
+    // the full rationale. The client body's actor_* fields are advisory and can
+    // desync from the session cookie (this is the "Agree to Cancel" 403 bug:
+    // a stale in-memory userId no longer matching the rotated session cookie).
+    // We override them with the cryptographically-verified auth identity before
+    // proxying — byte-identical for already-matching requests, and it unblocks
+    // the genuine participant whose body value had gone stale.
+    if (auth.actorType !== 'user' && auth.actorType !== 'merchant') {
+      return forbiddenResponse('Only a user or merchant can respond to a cancellation');
     }
 
     // Idempotency-Key is REQUIRED on the respond path — the underlying core-api
@@ -167,7 +178,7 @@ export async function PUT(
 
     return proxyCoreApi(`/v1/orders/${id}/cancel-request`, {
       method: 'PUT',
-      body: parseResult.data,
+      body: { ...parseResult.data, actor_type: auth.actorType, actor_id: auth.actorId },
       idempotencyKey,
     });
   } catch (error) {
