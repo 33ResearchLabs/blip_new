@@ -330,6 +330,11 @@ function forceLogoutAndRedirect(): void {
   let bannerQs = hadAuthEvidence ? '?reason=session_expired' : '';
   if (path.startsWith('/market')) {
     target = '/market/login';
+  } else if (path.startsWith('/user')) {
+    // User app lives at /user — bounce straight to its own sign-in route
+    // instead of relying on /login's re-redirect (avoids a double hop and
+    // keeps the ?reason=session_expired banner intact).
+    target = '/user/login';
   } else if (path.startsWith('/admin')) {
     target = '/admin';
     bannerQs = hadAuthEvidence ? '?session=expired' : '';

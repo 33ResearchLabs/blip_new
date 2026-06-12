@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { usePusher } from "@/context/PusherContext";
 import { ADMIN_COOKIE_SENTINEL } from "@/lib/api/adminSession";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import {
   formatCount,
   formatCrypto,
@@ -177,8 +178,8 @@ export default function LiveDashboardPage() {
     try {
       // Cookie auto-sent on same-origin fetch — no Bearer header needed.
       const [ordersRes, statsRes] = await Promise.all([
-        fetch("/api/admin/orders?limit=200", { signal: controller.signal }),
-        fetch("/api/admin/stats", { signal: controller.signal }),
+        fetchWithAuth("/api/admin/orders?limit=200", { signal: controller.signal }),
+        fetchWithAuth("/api/admin/stats", { signal: controller.signal }),
       ]);
       const [ordersData, statsData] = await Promise.all([
         ordersRes.json(),

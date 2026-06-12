@@ -37,6 +37,7 @@ import { useMerchantConversations } from "@/hooks/useMerchantConversations";
 import { useTradeCreation } from "@/hooks/useTradeCreation";
 import { useMerchantRealtimeEvents } from "@/hooks/useMerchantRealtimeEvents";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { clearAuthStorageOnLogout } from "@/lib/auth/logoutCleanup";
 import { formatCrypto, formatCount } from "@/lib/format";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { MerchantModals } from "@/components/merchant/MerchantModals";
@@ -289,6 +290,71 @@ export default function MerchantDashboard() {
     const qs = searchParams.toString();
     router.replace(`/market/login${qs ? `?${qs}` : ""}`);
   }, [isLoading, isLoggedIn, searchParams, router]);
+
+  // Session guard while the embedded wallet is locked (merchant twin of the
+  // user-app guard in src/app/user/page.tsx).
+  //
+  // The UnlockWalletModal renders purely from the LOCAL keystore lock state
+  // (embeddedWallet?.state === "locked") and makes no protected API call, so
+  // fetchWithAuth's global 401 redirect never fires while it's on screen. If
+  // the session dies in the background (e.g. the 15-min access cookie lapses
+  // while the merchant sits on the PIN pad), nothing would otherwise bounce
+  // them to login — they'd keep entering a PIN against a dead session.
+  //
+  // So while the wallet is locked for a signed-in merchant, poll the session
+  // on mount, on a 60s interval, and on tab focus. On a definitive "invalid"
+  // we run the SAME logout path forceLogoutAndRedirect() already uses for the
+  // merchant — clearAuthStorageOnLogout() + clear the in-memory sessionToken
+  // + hard-nav to /market/login?reason=session_expired — so there's no new
+  // logout behavior, only a new trigger. Transient network errors are
+  // swallowed so a blip can't log a valid merchant out.
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isLoggedIn) return;
+    if (!merchantId) return;
+    if (embeddedWallet?.state !== "locked") return;
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+
+    const verifySession = async () => {
+      try {
+        const res = await fetchWithAuth(
+          `/api/auth/merchant?action=check_session&merchant_id=${merchantId}`,
+        );
+        if (cancelled) return;
+        let valid = res.ok;
+        if (res.ok) {
+          try {
+            const data = await res.json();
+            valid = !!(data?.success && data?.data?.valid);
+          } catch {
+            valid = false;
+          }
+        }
+        if (!valid && !cancelled) {
+          clearAuthStorageOnLogout();
+          useMerchantStore.getState().setSessionToken(null);
+          window.location.replace("/market/login?reason=session_expired");
+        }
+      } catch {
+        // Network blip — don't log a valid merchant out on a transient
+        // failure. The next interval tick (or a real protected call) will
+        // catch a genuinely dead session.
+      }
+    };
+
+    verifySession();
+    const interval = window.setInterval(verifySession, 60_000);
+    const onFocus = () => verifySession();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [isLoading, isLoggedIn, merchantId, embeddedWallet?.state]);
 
   const {
     notifications,

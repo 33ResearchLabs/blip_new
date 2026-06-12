@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface ErrorLogRow {
   id: string;
@@ -144,7 +145,7 @@ export default function ErrorLogsPanel({ onRefreshStateChange }: ErrorLogsPanelP
         const body = grouped
           ? { type: row.type, message: row.message, resolved: true }
           : { ids: [row.id], resolved: true };
-        const res = await fetch(`/api/admin/error-logs`, {
+        const res = await fetchWithAuth(`/api/admin/error-logs`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -176,7 +177,7 @@ export default function ErrorLogsPanel({ onRefreshStateChange }: ErrorLogsPanelP
       if (grouped) qs.set('grouped', 'true');
       qs.set('limit', '200');
 
-      const res = await fetch(`/api/admin/error-logs?${qs.toString()}`);
+      const res = await fetchWithAuth(`/api/admin/error-logs?${qs.toString()}`);
       if (res.status === 404) {
         setError('Error tracking is disabled. Set ENABLE_ERROR_TRACKING=true on the server.');
         setRows([]);
@@ -293,7 +294,7 @@ export default function ErrorLogsPanel({ onRefreshStateChange }: ErrorLogsPanelP
             )
               return;
             try {
-              const res = await fetch('/api/admin/error-logs?scope=test', {
+              const res = await fetchWithAuth('/api/admin/error-logs?scope=test', {
                 method: 'DELETE',
               });
               const data = await res.json().catch(() => ({}));
@@ -322,7 +323,7 @@ export default function ErrorLogsPanel({ onRefreshStateChange }: ErrorLogsPanelP
             try {
               const results = await Promise.all(
                 rows.map((r) =>
-                  fetch('/api/admin/error-logs', {
+                  fetchWithAuth('/api/admin/error-logs', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(
