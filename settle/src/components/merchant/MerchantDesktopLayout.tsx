@@ -186,6 +186,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     onOpenPaymentMethods, onOpenSettings,
   } = props;
 
+  // New Orders panel collapse — local UI state (mirrors Active Trades collapse).
+  const [newOrdersCollapsed, setNewOrdersCollapsed] = useState(false);
+
   // Real-time "locked in escrow" total — sums crypto amounts for ongoing
   // orders where THIS merchant is the escrow funder (seller role, own
   // merchant id, or explicitly is-my-order). Previously hardcoded to 245.5
@@ -319,11 +322,13 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onLoadMore={loadMoreOrders}
                 hasMore={hasMoreOrders}
                 isLoadingMore={isLoadingMore}
+                collapsed={newOrdersCollapsed}
+                onCollapseChange={setNewOrdersCollapsed}
               />
             ) : (
               <>
                 <div
-                  style={{ height: "60%" }}
+                  style={newOrdersCollapsed ? undefined : { height: "60%" }}
                   className="flex flex-col border-b border-section-divider"
                 >
                   <PendingOrdersPanel
@@ -337,6 +342,8 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                     onCancelOrder={handleCancelOrder}
                     onOpenChat={handleOpenChat}
                     fetchOrders={fetchOrders}
+                    collapsed={newOrdersCollapsed}
+                    onCollapseChange={setNewOrdersCollapsed}
                   />
                 </div>
                 <div className="flex-1 flex flex-col min-h-0">

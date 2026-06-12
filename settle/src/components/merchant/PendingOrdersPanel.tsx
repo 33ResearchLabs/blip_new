@@ -57,6 +57,9 @@ interface PendingOrdersPanelProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+  // Collapse (mirrors Active Trades panel)
+  collapsed?: boolean;
+  onCollapseChange?: (collapsed: boolean) => void;
 }
 
 // Compute which side ('seller' | 'buyer') the viewing merchant is on for
@@ -818,6 +821,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   onLoadMore,
   hasMore = false,
   isLoadingMore = false,
+  collapsed = false,
+  onCollapseChange,
 }: PendingOrdersPanelProps) {
   // Live per-corridor reference prices for the "Premium" filter predicate.
   // Shares the same module-level singleton as OrderList's hook call —
@@ -1188,37 +1193,28 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   });
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={`flex flex-col ${collapsed ? "" : "h-full"}`}>
       {/* Header — single row */}
       <div className="px-2 py-1.5 border-b border-section-divider">
-        <div className="flex items-center gap-1 min-w-0">
-          {/* Title */}
-          <span className="text-[11px] font-semibold text-white/70 tracking-tight shrink-0 mr-1">New Orders</span>
-
-          {/* Live glow dot */}
-          <span className="relative flex shrink-0 h-2 w-2 ml-0.5 mr-0.5" title="Live feed">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-60" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.9)]" />
-          </span>
-
-          {/* Tabs */}
-          <div className="inline-flex items-center gap-0.5 h-7 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] shrink-0">
-            {(["all", "pending", "mine"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setView(tab)}
-                className={`h-full px-2 inline-flex items-center rounded-md text-[9px] font-bold transition-all ${
-                  view === tab
-                    ? "bg-white/[0.08] text-white/90 border border-white/[0.12]"
-                    : "text-foreground/35 hover:text-foreground/60 border border-transparent"
-                }`}
-              >
-                {tab === "all" ? "All" : tab === "pending" ? "Pending" : "Mine"}
-              </button>
-            ))}
+        {/* Header row 1: title + utilities (mirrors Active Trades two-row header) */}
+        <div className={`flex items-center justify-between gap-1 min-w-0 ${collapsed ? "" : "mb-1.5"}`}>
+          {/* Title + live dot — clicking toggles collapse (mirrors Active Trades) */}
+          <div
+            className={`flex items-center gap-1 min-w-0 ${onCollapseChange ? "cursor-pointer select-none" : ""}`}
+            onClick={onCollapseChange ? () => onCollapseChange(!collapsed) : undefined}
+          >
+            <ChevronDown
+              className={`w-3 h-3 text-foreground/30 shrink-0 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
+            />
+            <span className="text-[11px] font-semibold text-white/70 tracking-tight shrink-0">New Orders</span>
+            <span className="relative flex shrink-0 h-2 w-2 ml-0.5" title="Live feed">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.9)]" />
+            </span>
           </div>
 
-          <div className="flex-1" />
+          {/* Utilities: sound · refresh · search · count */}
+          <div className="flex items-center gap-1 shrink-0">
 
           {/* Sound */}
           <button
@@ -1257,6 +1253,36 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           >
             <Search className="w-3 h-3" />
           </button>
+
+          {/* Count */}
+          <span className="shrink-0 inline-flex items-center justify-center h-7 min-w-[1.75rem] px-1.5 text-[9px] border border-foreground/[0.08] text-foreground/40 rounded-full font-mono tabular-nums">
+            {filteredOrders.length}
+          </span>
+        </div>
+      </div>
+
+      {!collapsed && (
+        <>
+      {/* Header row 2: tabs + filter/sort */}
+      <div className="flex items-center gap-1 min-w-0">
+        {/* Tabs */}
+        <div className="inline-flex items-center gap-0.5 h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] shrink-0">
+          {(["all", "pending", "mine"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setView(tab)}
+              className={`h-full px-3 inline-flex items-center rounded-md text-[11px] font-bold transition-all ${
+                view === tab
+                  ? "bg-white/[0.08] text-white/90 border border-white/[0.12]"
+                  : "text-foreground/35 hover:text-foreground/60 border border-transparent"
+              }`}
+            >
+              {tab === "all" ? "All" : tab === "pending" ? "Pending" : "Mine"}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1" />
 
           {/* Filter dropdown */}
           <div className="relative shrink-0">
@@ -1331,10 +1357,6 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             </AnimatePresence>
           </div>
 
-          {/* Count badge */}
-          <span className="shrink-0 inline-flex items-center justify-center h-7 min-w-[1.75rem] px-1.5 text-[9px] border border-foreground/[0.08] text-foreground/40 rounded-full font-mono tabular-nums">
-            {filteredOrders.length}
-          </span>
         </div>
 
         {/* Search input (shown when toggled) */}
@@ -1495,9 +1517,13 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             </motion.div>
           )}
         </AnimatePresence>
+        </>
+      )}
       </div>
 
       {/* Orders List */}
+      {!collapsed && (
+        <>
       {view === "mine" ? (
         <MyOrdersList
           orders={filteredOrders}
@@ -1536,6 +1562,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             )}
           </button>
         </div>
+      )}
+        </>
       )}
     </div>
   );

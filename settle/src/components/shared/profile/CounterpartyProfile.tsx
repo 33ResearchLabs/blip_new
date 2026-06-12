@@ -53,7 +53,7 @@ const BAND_COLOR: Record<TrustBand, string> = {
 };
 
 const RISK_COLOR: Record<RiskLevel, string> = {
-  Low: "text-green-500",
+  Low: "text-accent",
   Medium: "text-orange-500",
   High: "text-red-500",
 };
@@ -121,7 +121,7 @@ export function CounterpartyProfile({
               </div>
             )}
             {data.isOnline && (
-              <span className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-[var(--background)]" />
+              <span className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-accent border-2 border-[var(--background)]" />
             )}
           </div>
           <div className="min-w-0 flex-1">
@@ -132,7 +132,7 @@ export function CounterpartyProfile({
             {data.username && (
               <p className="text-[13px] text-text-tertiary">@{data.username}</p>
             )}
-            <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+            <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-[11px] font-bold bg-accent/10 text-accent border border-accent/20">
               <Award className="w-3.5 h-3.5" />
               {data.tierLabel}
             </span>
@@ -142,7 +142,7 @@ export function CounterpartyProfile({
               {active && (
                 <>
                   <span className="w-1 h-1 rounded-full bg-text-tertiary" />
-                  <span className={data.isOnline ? "text-green-500" : ""}>{active}</span>
+                  <span className={data.isOnline ? "text-accent" : ""}>{active}</span>
                 </>
               )}
             </p>
@@ -213,7 +213,7 @@ export function CounterpartyProfile({
               <VerifRow icon={<XLogo />} label="X (Twitter) Verified" ok={data.verifications.x} />
             </div>
             <div className={`mt-3 flex items-center gap-2.5 px-3.5 py-3 rounded-xl border border-border-subtle ${surfaces.inset}`}>
-              <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" />
+              <ShieldCheck className="w-4 h-4 text-accent shrink-0" />
               <p className="text-[12px] text-text-secondary flex-1">
                 Security: <span className="font-bold text-text-primary">{data.verifications.securityLevel}</span>
               </p>
@@ -225,7 +225,7 @@ export function CounterpartyProfile({
             <h3 className="text-[14px] font-bold text-text-primary mb-3">Trading Stats</h3>
             <div className="space-y-2.5">
               <StatRow icon={<TrendingUp className="w-4 h-4" />} label="Total Trades" value={formatCount(data.stats.totalTrades)} />
-              <StatRow icon={<Activity className="w-4 h-4" />} label="Success Rate" value={formatPercentage(data.stats.successRate)} valueClass="text-green-500" />
+              <StatRow icon={<Activity className="w-4 h-4" />} label="Success Rate" value={formatPercentage(data.stats.successRate)} valueClass="text-accent" />
               <StatRow icon={<Gauge className="w-4 h-4" />} label="Trade Volume" value={formatFiat(data.stats.volumeUsd, "USD")} />
               <StatRow icon={<Clock className="w-4 h-4" />} label="Avg. Trade Size" value={formatFiat(data.stats.avgTradeUsd, "USD")} />
             </div>
@@ -256,7 +256,7 @@ export function CounterpartyProfile({
                     {Array.from({ length: 5 }).map((_, i) => (
                       <Star
                         key={i}
-                        className={`w-3.5 h-3.5 ${i < Math.round(r.rating) ? "text-green-500 fill-green-500" : "text-text-quaternary"}`}
+                        className={`w-3.5 h-3.5 ${i < Math.round(r.rating) ? "text-accent fill-accent" : "text-text-quaternary"}`}
                       />
                     ))}
                   </div>
@@ -273,7 +273,7 @@ export function CounterpartyProfile({
         {/* Risk Overview */}
         <div className={`${card} p-5`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center shrink-0">
               <Shield className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
@@ -299,7 +299,7 @@ export function CounterpartyProfile({
             <h3 className="text-[14px] font-bold text-text-primary">Limits &amp; Tier</h3>
             <span className="text-[12px] text-accent font-semibold">View Limits</span>
           </div>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-accent/10 text-accent border border-accent/20">
             <Award className="w-3.5 h-3.5" />
             {data.limits.tierLabel}
           </span>
@@ -371,12 +371,12 @@ function relativeReview(iso: string): string {
 function VerifRow({ icon, label, ok }: { icon: React.ReactNode; label: string; ok: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
-      <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${ok ? "bg-green-500/10 text-green-500" : "bg-text-primary/[0.05] text-text-tertiary"}`}>
+      <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${ok ? "bg-accent/10 text-accent" : "bg-text-primary/[0.05] text-text-tertiary"}`}>
         {icon}
       </span>
       <span className="text-[13px] text-text-secondary flex-1">{label}</span>
       {ok ? (
-        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 inline-flex items-center gap-1">
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-accent/10 text-accent inline-flex items-center gap-1">
           <Check className="w-3 h-3" /> Verified
         </span>
       ) : (
@@ -399,7 +399,7 @@ function StatRow({ icon, label, value, valueClass }: { icon: React.ReactNode; la
 function RiskStat({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div className="flex flex-col items-center text-center gap-1.5">
-      <span className="w-8 h-8 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center">{icon}</span>
+      <span className="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center">{icon}</span>
       <span className="text-[10px] text-text-tertiary leading-snug">{label}</span>
     </div>
   );
@@ -412,7 +412,7 @@ function SocialItem({ icon, label, handle, verified }: { icon: React.ReactNode; 
       <p className="text-[11px] font-semibold text-text-primary">{label}</p>
       <p className="text-[10px] text-text-tertiary truncate max-w-full">{handle}</p>
       {verified && (
-        <span className="text-[10px] text-green-500 font-semibold inline-flex items-center gap-0.5">
+        <span className="text-[10px] text-accent font-semibold inline-flex items-center gap-0.5">
           <Check className="w-2.5 h-2.5" /> Verified
         </span>
       )}
