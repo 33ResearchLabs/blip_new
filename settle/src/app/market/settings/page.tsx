@@ -276,6 +276,15 @@ export default function MerchantSettingsPage({
   // as a quiet read-only row by default — matching the Display Name pattern.
   const [isEditingUsername, setIsEditingUsername] = useState(false);
 
+  // Inline display-name editor on the Account tab. The pencil flips the
+  // read-only row into an input + Save form (mirroring the username row)
+  // instead of bouncing to the Profile tab — that round-trip was circular
+  // since Profile's "Change in Account" just sends the merchant back here.
+  const [isEditingDisplayName, setIsEditingDisplayName] = useState(false);
+  const [displayNameInput, setDisplayNameInput] = useState("");
+  const [displayNameSaving, setDisplayNameSaving] = useState(false);
+  const [displayNameError, setDisplayNameError] = useState<string | null>(null);
+
   const RESERVED_USERNAMES = [
     'blip', 'blipmoney', 'blipapp', 'blip_money', 'blip_app',
     'blipsupport', 'blipceo', 'blipteam', 'blipofficial', 'bliphelp',
@@ -582,6 +591,54 @@ export default function MerchantSettingsPage({
       setSaveError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Inline display-name save (Account tab). Patches just display_name /
+  // business_name so it doesn't depend on the Profile tab's bundled save.
+  const handleSaveDisplayName = async () => {
+    const id = merchantId || merchant?.id;
+    if (!id) return;
+
+    const next = displayNameInput.trim();
+    if (next.length === 0) {
+      setDisplayNameError("Display name can't be empty");
+      return;
+    }
+    if (next === (merchant?.display_name || "")) {
+      setIsEditingDisplayName(false);
+      return;
+    }
+
+    setDisplayNameSaving(true);
+    setDisplayNameError(null);
+
+    try {
+      const updates = { display_name: next, business_name: next };
+      const res = await fetchWithAuth(`/api/merchant/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update display name");
+      }
+
+      const data = await res.json();
+      setMerchant(data.data);
+      // Keep the Profile tab's form state in sync so it reflects the new value.
+      setDisplayName(next);
+      setMerchantInfo((prev: any) => ({ ...prev, ...updates }));
+      void refreshOnboarding();
+      setIsEditingDisplayName(false);
+    } catch (err) {
+      setDisplayNameError(
+        err instanceof Error ? err.message : "Save failed",
+      );
+    } finally {
+      setDisplayNameSaving(false);
     }
   };
 
@@ -1118,7 +1175,7 @@ export default function MerchantSettingsPage({
           <div className="lg:hidden flex items-center px-5 pt-5 pb-3 border-b border-white/[0.05] shrink-0 relative">
             <div className="absolute left-1/2 -translate-x-1/2 top-2 w-8 h-1 rounded-full bg-white/20" />
             <span aria-hidden="true" className="w-7 shrink-0" />
-            <p className="text-[15px] font-semibold text-white flex-1 text-center">
+            <p className="text-[12px] font-semibold text-white flex-1 text-center">
               {tabs.find(t => t.id === activeTab)?.label ?? (activeTab === "support" ? "Support" : "")}
             </p>
             <button onClick={() => setMobileSheetOpen(false)} className="w-7 shrink-0 flex items-center justify-center p-1.5 rounded-lg text-white/40 hover:text-white/70">
@@ -1128,7 +1185,7 @@ export default function MerchantSettingsPage({
           {/* Desktop panel header — hidden on mobile. `lg:self-start` keeps it at
               the TOP of the left column instead of stretching to full height
               (which would vertically center its text). */}
-          <div className="hidden lg:flex lg:self-start items-center gap-3 px-6 py-8 border-b border-white/[0.05] shrink-0 w-50">
+          <div className="hidden lg:flex lg:self-start items-center gap-3 px-6 py-2 border-b border-white/[0.05] shrink-0 w-50">
             <span className="text-[11px] font-semibold tracking-[0.15em] uppercase text-white/30">Settings</span>
             <span className="text-white/20 text-xs">›</span>
             <span className="text-[13px] font-semibold text-white/80">
@@ -1227,10 +1284,19 @@ export default function MerchantSettingsPage({
                     Display Name
                   </label>
                   <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3">
-                    <span className="text-sm text-white flex-1">{merchant?.username || displayName || "—"}</span>
+                    <span className="text-sm text-white flex-1">{merchant?.display_name || displayName || "—"}</span>
                     <button
                       type="button"
-                      onClick={() => setActiveTab("account")}
+                      onClick={() => {
+                        // Jump to the Account tab AND open the inline editor so
+                        // the merchant lands directly on the edit field.
+                        setDisplayNameInput(
+                          merchant?.display_name || displayName || "",
+                        );
+                        setDisplayNameError(null);
+                        setIsEditingDisplayName(true);
+                        setActiveTab("account");
+                      }}
                       className="text-[11px] text-white/30 hover:text-white/60 transition-colors"
                     >
                       Change in Account
@@ -1354,28 +1420,96 @@ export default function MerchantSettingsPage({
                 </p>
 
                 {/* Display Name — the public-facing name shown in chat,
-                    order cards, and merchant lists. Editable, but the
-                    editor lives on the Profile tab; the pencil here jumps
-                    there instead of duplicating the form. Falls back to
-                    the live `displayName` state in case the merchant
-                    just edited it on the Profile tab and merchant store
-                    hasn't refreshed yet. */}
-                <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
-                  <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                    <User className="w-4 h-4 text-white/60" />
+                    order cards, and merchant lists. Edited inline right here:
+                    the pencil flips the read-only row into an input + Save
+                    form (mirroring the Username row). Falls back to the live
+                    `displayName` state in case the merchant just edited it on
+                    the Profile tab and the merchant store hasn't refreshed. */}
+                {!isEditingDisplayName ? (
+                  <div className="flex items-center gap-4 py-3 border-b border-white/[0.04]">
+                    <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4 text-white/60" />
+                    </div>
+                    <p className="flex-1 text-[13px] text-white/60">Display Name</p>
+                    <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">
+                      {merchant?.display_name || displayName || "—"}
+                    </p>
+                    <button
+                      aria-label="Edit display name"
+                      onClick={() => {
+                        setDisplayNameInput(
+                          merchant?.display_name || displayName || "",
+                        );
+                        setDisplayNameError(null);
+                        setIsEditingDisplayName(true);
+                      }}
+                      className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <p className="flex-1 text-[13px] text-white/60">Display Name</p>
-                  <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">
-                    {merchant?.display_name || displayName || "—"}
-                  </p>
-                  <button
-                    aria-label="Edit display name"
-                    onClick={() => setActiveTab("profile")}
-                    className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                ) : (
+                  <div className="py-3 border-b border-white/[0.04]">
+                    <div className="flex items-center gap-4">
+                      <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 text-white/60" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] text-white/60 mb-1.5">
+                          Display Name
+                        </p>
+                        <input
+                          type="text"
+                          value={displayNameInput}
+                          onChange={(e) => {
+                            setDisplayNameInput(e.target.value);
+                            if (displayNameError) setDisplayNameError(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveDisplayName();
+                            if (e.key === "Escape") {
+                              setIsEditingDisplayName(false);
+                              setDisplayNameError(null);
+                            }
+                          }}
+                          placeholder="Your display name"
+                          maxLength={50}
+                          autoFocus
+                          className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/30 transition-colors"
+                        />
+                        {displayNameError && (
+                          <p className="text-[11px] text-red-400 mt-1.5">
+                            {displayNameError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 mt-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingDisplayName(false);
+                          setDisplayNameError(null);
+                        }}
+                        disabled={displayNameSaving}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveDisplayName}
+                        disabled={displayNameSaving}
+                        className="px-4 py-1.5 rounded-lg text-[12px] font-bold bg-[#f5f5f7] text-[#0b0b0c] hover:bg-white transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+                      >
+                        {displayNameSaving && (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        )}
+                        {displayNameSaving ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Username — editable until the merchant runs the
                     customize-username flow (which flips
