@@ -23,16 +23,22 @@ export const STAKE_APY_BPS = 800;
 export const SECONDS_PER_YEAR = 365 * 24 * 60 * 60; // 31_536_000
 
 /**
- * Staked-USDT → trading-limit floor. Thresholds mirror COIN_LIMIT_TIERS so the
- * "increase your trading limits up to 10x" promise holds: staking more lifts the
- * floor the same way the old BLIP-points unlock did. Active for as long as the
- * principal stays at/above the threshold (no 30-day expiry, unlike coin unlocks).
+ * Staked-USDT → trading-limit MULTIPLIER (Stake-Based Limit Boost spec).
+ * Staking multiplies the actor's base daily/per-trade limit — it does NOT set an
+ * absolute USD floor and does NOT change Trust/reputation. The highest tier whose
+ * threshold the principal meets wins; below 100 USDT there is no boost (1x).
+ * Active for as long as the principal stays at/above the threshold (no expiry,
+ * unlike coin unlocks). Final limit = base limit × multiplier.
+ *
+ *   >= 2,500 USDT → 50x      >= 1,000 → 20x      >= 500 → 10x
+ *   >=   250 USDT →  5x      >=   100 →  3x      <  100 →  1x (no boost)
  */
 export const STAKE_LIMIT_TIERS = [
-  { minStakeUsd: 10_000, dailyUsd: 50_000, perTradeUsd: 10_000, tier: 'S4' },
-  { minStakeUsd: 2_000,  dailyUsd: 10_000, perTradeUsd: 2_000,  tier: 'S3' },
-  { minStakeUsd: 500,    dailyUsd: 2_000,  perTradeUsd: 500,    tier: 'S2' },
-  { minStakeUsd: 100,    dailyUsd: 500,    perTradeUsd: 150,    tier: 'S1' },
+  { minStakeUsd: 2_500, multiplier: 50, tier: 'S5' },
+  { minStakeUsd: 1_000, multiplier: 20, tier: 'S4' },
+  { minStakeUsd: 500,   multiplier: 10, tier: 'S3' },
+  { minStakeUsd: 250,   multiplier: 5,  tier: 'S2' },
+  { minStakeUsd: 100,   multiplier: 3,  tier: 'S1' },
 ] as const;
 
 const SECONDS_PER_DAY = 24 * 60 * 60;
@@ -126,17 +132,18 @@ export async function getStakingSnapshot(
 }
 
 /**
- * Staking-derived limit floor for getEffectiveLimits. O(1) single read of the
- * principal; returns the highest tier whose threshold the principal meets.
+ * Staking-derived limit MULTIPLIER for getEffectiveLimits. O(1) single read of
+ * the principal; returns the multiplier of the highest tier the principal meets
+ * (1 = no stake boost). `tier` is the label for display/source attribution.
  */
-export async function getStakeLimitFloor(
+export async function getStakeMultiplier(
   accountType: WaitlistActorType,
   accountId: string,
-): Promise<{ dailyUsd: number; perTradeUsd: number; tier: string | null }> {
-  const none = { dailyUsd: 0, perTradeUsd: 0, tier: null };
+): Promise<{ multiplier: number; tier: string | null; principal: number }> {
+  const none = { multiplier: 1, tier: null, principal: 0 };
   // This runs inside getEffectiveLimits on EVERY order-create. If migration 165
   // hasn't landed in this environment yet, treat a missing table as "no staking
-  // floor" rather than throwing and breaking the order-create / limits path.
+  // boost" rather than throwing and breaking the order-create / limits path.
   let pos: { principal: string } | null = null;
   try {
     pos = await queryOne<{ principal: string }>(
@@ -145,16 +152,16 @@ export async function getStakeLimitFloor(
       [accountType, accountId],
     );
   } catch (err) {
-    console.error('[staking] getStakeLimitFloor fallback (table missing?)', err);
+    console.error('[staking] getStakeMultiplier fallback (table missing?)', err);
     return none;
   }
   const principal = pos ? Number(pos.principal) : 0;
   for (const t of STAKE_LIMIT_TIERS) {
     if (principal >= t.minStakeUsd) {
-      return { dailyUsd: t.dailyUsd, perTradeUsd: t.perTradeUsd, tier: t.tier };
+      return { multiplier: t.multiplier, tier: t.tier, principal };
     }
   }
-  return none;
+  return { ...none, principal };
 }
 
 /** Ensure a position row exists and lock it FOR UPDATE; returns the locked row. */
