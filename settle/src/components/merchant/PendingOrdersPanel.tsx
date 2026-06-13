@@ -251,63 +251,341 @@ const OrderList = memo(function OrderList({
 
   return (
     <>
-    <div ref={parentRef} className="flex-1 overflow-y-auto p-1.5">
-      <div
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const order = filteredOrders[virtualRow.index];
-          const isMempoolOrder = (order as any).isMempoolOrder;
-          const isMyMempoolOrder = (order as any).isMyMempoolOrder;
+      <div ref={parentRef} className="flex-1 overflow-y-auto p-1.5">
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const order = filteredOrders[virtualRow.index];
+            const isMempoolOrder = (order as any).isMempoolOrder;
+            const isMyMempoolOrder = (order as any).isMyMempoolOrder;
 
-          if (isMempoolOrder) {
-            const mOrder = order as any;
-            const amount = Number(mOrder.amount_usdt);
+            if (isMempoolOrder) {
+              const mOrder = order as any;
+              const amount = Number(mOrder.amount_usdt);
 
-            // Live decay: compute elapsed since data was received
-            const elapsed = Math.floor(
-              (now - (mOrder._receivedAt || now)) / 1000,
+              // Live decay: compute elapsed since data was received
+              const elapsed = Math.floor(
+                (now - (mOrder._receivedAt || now)) / 1000,
+              );
+              const liveExpiry = Math.max(
+                0,
+                mOrder.seconds_until_expiry - elapsed,
+              );
+
+              // Premium decays between bumps (resets on next data fetch)
+              const bumpInterval = mOrder.bump_interval_sec || 60;
+              const bumpStep = mOrder.bump_step_bps || 10;
+              const decayPerSec = bumpStep / bumpInterval;
+              const decayedBps = Math.max(
+                mOrder.premium_bps_current - bumpStep,
+                mOrder.premium_bps_current - elapsed * decayPerSec,
+              );
+              const livePremiumPct = decayedBps / 100;
+              const livePrice = (
+                Number(mOrder.ref_price_at_create) *
+                (1 + decayedBps / 10000)
+              ).toFixed(2);
+
+              // YOUR CUT — what the merchant earns by accepting
+              const yourCut = amount * (decayedBps / 10000);
+
+              // Decay progress: 1.0 right after bump, 0.0 at next bump
+              const decayProgress = Math.max(
+                0,
+                Math.min(1, 1 - (elapsed * decayPerSec) / bumpStep),
+              );
+
+              // Max possible earnings (at premium cap)
+              const maxCut = amount * (mOrder.premium_bps_cap / 10000);
+
+              const fiatTotal = Math.round(amount * Number(livePrice));
+
+              return (
+                <div
+                  key={mOrder.id}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                  className="pb-1"
+                >
+                  <div
+                    onClick={() => onSelectMempoolOrder(mOrder)}
+                    className={`relative p-2.5 rounded-xl transition-colors cursor-pointer ${
+                      isMyMempoolOrder ? "opacity-50" : ""
+                    }`}
+                    style={{
+                      background: isMyMempoolOrder
+                        ? "rgba(255,255,255,0.01)"
+                        : "#111113",
+                      border: isMyMempoolOrder
+                        ? "1px solid rgba(255,255,255,0.03)"
+                        : "1px solid rgba(249,115,22,0.22)",
+                      borderLeft: isMyMempoolOrder
+                        ? undefined
+                        : "2px solid rgba(249,115,22,0.45)",
+                    }}
+                    onMouseEnter={(e) =>
+                      !isMyMempoolOrder &&
+                      (e.currentTarget.style.borderColor =
+                        "rgba(249,115,22,0.38)")
+                    }
+                    onMouseLeave={(e) =>
+                      !isMyMempoolOrder &&
+                      (e.currentTarget.style.borderColor =
+                        "rgba(249,115,22,0.22)")
+                    }
+                  >
+                    {/* Live pulse dot */}
+                    <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-[#f5f5f7] opacity-75 animate-ping" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#f5f5f7]" />
+                    </span>
+                    {/* Processing banner */}
+                    {acceptingOrderId === mOrder.id && (
+                      <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-white/[0.06] border border-white/[0.12]">
+                        <Loader2 className="w-3 h-3 text-[#f5f5f7] animate-spin" />
+                        <span className="text-[9px] text-[#f5f5f7] font-mono font-bold tracking-wider uppercase">
+                          Accepting...
+                        </span>
+                      </div>
+                    )}
+                    {/* Waiting banner for own orders */}
+                    {isMyMempoolOrder && !acceptingOrderId && (
+                      <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-foreground/[0.02] border border-foreground/[0.04]">
+                        <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
+                        <span className="text-[9px] text-foreground/30 font-mono font-bold tracking-wider uppercase">
+                          Waiting for acceptance
+                        </span>
+                      </div>
+                    )}
+                    {/* Row 1: User + tags on left, timer on right */}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 text-sm border border-white/[0.12]">
+                          <Zap className="w-3.5 h-3.5 text-[#f5f5f7]" />
+                        </div>
+                        <span className="text-xs font-medium text-white truncate">
+                          {mOrder.creator_username || `#${mOrder.order_number}`}
+                        </span>
+                        <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-[var(--color-error)]/10 border-[var(--color-error)]/20 text-[var(--color-error)]">
+                          You Pay
+                        </span>
+                        <span className="flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]">
+                          <Zap className="w-2.5 h-2.5" />
+                          PRIORITY
+                        </span>
+                        {isMyMempoolOrder && (
+                          <span className="px-1 py-0.5 bg-foreground/[0.04] border border-foreground/[0.06] rounded text-[9px] font-bold text-foreground/40">
+                            YOURS
+                          </span>
+                        )}
+                      </div>
+                      {/* Timer */}
+                      <div
+                        className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
+                          liveExpiry <= 120 ? "text-red-400" : "text-[#f5f5f7]"
+                        }`}
+                      >
+                        {liveExpiry <= 0
+                          ? "Expired"
+                          : liveExpiry >= 3600
+                          ? `${Math.floor(liveExpiry / 3600)}h ${Math.floor(
+                              (liveExpiry % 3600) / 60,
+                            )}m`
+                          : liveExpiry >= 60
+                          ? `${Math.floor(liveExpiry / 60)}m ${
+                              liveExpiry % 60
+                            }s`
+                          : `${liveExpiry}s`}
+                        <span
+                          className="animate-pulse"
+                          style={{
+                            filter:
+                              liveExpiry <= 120
+                                ? "drop-shadow(0 0 6px #ef4444)"
+                                : "drop-shadow(0 0 4px #f97316)",
+                          }}
+                        >
+                          🔥
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Warning banner when under 5 minutes */}
+                    {liveExpiry > 0 && liveExpiry <= 300 && (
+                      <div
+                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-1 ${
+                          liveExpiry <= 120
+                            ? "bg-red-500/10 border border-red-500/20"
+                            : "bg-white/[0.06] border border-white/[0.12]"
+                        }`}
+                      >
+                        <span className="text-xs shrink-0">🔥</span>
+                        <span
+                          className={`text-[10px] font-bold ${
+                            liveExpiry <= 120
+                              ? "text-red-400"
+                              : "text-[#f5f5f7]"
+                          }`}
+                        >
+                          {liveExpiry <= 120
+                            ? "Expiring soon! Act now"
+                            : `Expires in ${Math.floor(liveExpiry / 60)}m ${
+                                liveExpiry % 60
+                              }s`}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Row 2: You Pay / You Get */}
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm tabular-nums">
+                        <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
+                          Pay
+                        </span>
+                        <span className="font-bold text-foreground">
+                          {Math.round(amount).toLocaleString()} USDT
+                        </span>
+                      </span>
+                      <ArrowRight className="w-3 h-3 text-foreground/20" />
+                      <span className="text-sm tabular-nums">
+                        <span className="text-[10px] text-[#f5f5f7] font-mono mr-1">
+                          Get
+                        </span>
+                        <span className="font-bold text-[#f5f5f7]">
+                          {fiatTotal.toLocaleString()}{" "}
+                          {(mOrder as any).corridor_id === "USDT_INR"
+                            ? "INR"
+                            : "AED"}
+                        </span>
+                      </span>
+                      {yourCut > 0 && (
+                        <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#f5f5f7]">
+                          +${yourCut.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Row 3: Rate + action button */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-foreground/40 font-mono">
+                        @ {livePrice}
+                      </span>
+                      {livePremiumPct > 0 && (
+                        <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#f5f5f7]">
+                          +{livePremiumPct.toFixed(2)}%
+                        </span>
+                      )}
+                      <div className="flex-1" />
+                      {!isMyMempoolOrder && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAcceptOrder(mOrder);
+                          }}
+                          disabled={acceptingOrderId === mOrder.id}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
+                            acceptingOrderId === mOrder.id
+                              ? "bg-white/[0.06] text-black/60 cursor-wait"
+                              : "bg-[#f5f5f7] text-[#0b0b0c] hover:bg-white/90"
+                          }`}
+                        >
+                          {acceptingOrderId === mOrder.id ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />{" "}
+                              Accepting...
+                            </>
+                          ) : (
+                            order.dbOrder?.primaryAction?.label ||
+                            (order.escrowTxHash ? "MINE" : "ACCEPT")
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    {/* Countdown timer bar (bottom) */}
+                    {(() => {
+                      const total = Math.max(
+                        1,
+                        mOrder.seconds_until_expiry || 1,
+                      );
+                      const pct = Math.max(
+                        0,
+                        Math.min(100, (liveExpiry / total) * 100),
+                      );
+                      return (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04] rounded-b-lg overflow-hidden">
+                          <div
+                            className={`h-full transition-[width] duration-1000 ease-linear ${
+                              liveExpiry <= 120 ? "bg-red-400" : "bg-[#f5f5f7]"
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              );
+            }
+
+            // Premium vs the LIVE per-corridor reference price (AED and INR
+            // have different price levels — AED ≈ 3.67, INR ≈ 83 — so we
+            // can't share a single fallback). Live price comes from the
+            // shared useCorridorPrices hook backed by /api/corridor/dynamic-rate.
+            // Falls through to the order's stored ref_price_at_create if live
+            // is unavailable.
+            const liveRef = resolveCorridorRef(
+              corridorPrices,
+              order.dbOrder?.corridor_id,
+              order.toCurrency || order.dbOrder?.fiat_currency,
             );
-            const liveExpiry = Math.max(
-              0,
-              mOrder.seconds_until_expiry - elapsed,
-            );
+            const storedRef = Number(order.dbOrder?.ref_price_at_create);
+            const refPrice =
+              liveRef && liveRef > 0
+                ? liveRef
+                : Number.isFinite(storedRef) && storedRef > 0
+                ? storedRef
+                : null;
+            const premium =
+              refPrice && order.rate
+                ? ((order.rate - refPrice) / refPrice) * 100
+                : 0;
+            const isHighPremium = premium > 0.5;
+            // Mine = escrow already locked (just send fiat)
+            // Accept = no escrow yet (you'll lock escrow next)
+            const isMineable = !!order.escrowTxHash;
+            const dbUsername = order.dbOrder?.user?.username || "";
+            const isPlaceholderUser =
+              dbUsername.startsWith("open_order_") ||
+              dbUsername.startsWith("m2m_");
+            // For M2M: the placer is buyer_merchant_id — only they should see "YOURS" / hidden button
+            // The counterparty (merchant_id / seller) should see the ACCEPT button
+            const isM2MOrder = !!order.buyerMerchantId && isPlaceholderUser;
+            const isMyOwnOrder = isM2MOrder
+              ? order.buyerMerchantId === merchantInfo?.id
+              : !!order.isMyOrder ||
+                (isPlaceholderUser &&
+                  order.orderMerchantId === merchantInfo?.id);
 
-            // Premium decays between bumps (resets on next data fetch)
-            const bumpInterval = mOrder.bump_interval_sec || 60;
-            const bumpStep = mOrder.bump_step_bps || 10;
-            const decayPerSec = bumpStep / bumpInterval;
-            const decayedBps = Math.max(
-              mOrder.premium_bps_current - bumpStep,
-              mOrder.premium_bps_current - elapsed * decayPerSec,
-            );
-            const livePremiumPct = decayedBps / 100;
-            const livePrice = (
-              Number(mOrder.ref_price_at_create) *
-              (1 + decayedBps / 10000)
-            ).toFixed(2);
-
-            // YOUR CUT — what the merchant earns by accepting
-            const yourCut = amount * (decayedBps / 10000);
-
-            // Decay progress: 1.0 right after bump, 0.0 at next bump
-            const decayProgress = Math.max(
-              0,
-              Math.min(1, 1 - (elapsed * decayPerSec) / bumpStep),
-            );
-
-            // Max possible earnings (at premium cap)
-            const maxCut = amount * (mOrder.premium_bps_cap / 10000);
-
-            const fiatTotal = Math.round(amount * Number(livePrice));
+            const effStatusForDot: string =
+              order.status || order.dbOrder?.status || "pending";
+            const isActivelyPendingForDot =
+              effStatusForDot === "pending" && order.expiresIn > 0;
 
             return (
               <div
-                key={mOrder.id}
+                key={order.id}
                 ref={virtualizer.measureElement}
                 data-index={virtualRow.index}
                 style={{
@@ -319,185 +597,429 @@ const OrderList = memo(function OrderList({
                 }}
                 className="pb-1"
               >
-                <div
-                  onClick={() => onSelectMempoolOrder(mOrder)}
-                  className={`relative p-2.5 rounded-xl transition-colors cursor-pointer ${isMyMempoolOrder ? "opacity-50" : ""}`}
-                  style={{
-                    background: isMyMempoolOrder ? "rgba(255,255,255,0.01)" : "#111113",
-                    border: isMyMempoolOrder ? "1px solid rgba(255,255,255,0.03)" : "1px solid rgba(249,115,22,0.22)",
-                    borderLeft: isMyMempoolOrder ? undefined : "2px solid rgba(249,115,22,0.45)",
-                  }}
-                  onMouseEnter={(e) => !isMyMempoolOrder && (e.currentTarget.style.borderColor = "rgba(249,115,22,0.38)")}
-                  onMouseLeave={(e) => !isMyMempoolOrder && (e.currentTarget.style.borderColor = "rgba(249,115,22,0.22)")}
-                >
-                  {/* Live pulse dot */}
-                  <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-[#f5f5f7] opacity-75 animate-ping" />
+                {/* Live pulse dot — sits exactly on the card's top-left corner.
+                  Rendered OUTSIDE the overflow-hidden inner wrapper so the
+                  pinging halo isn't clipped. */}
+                {isActivelyPendingForDot && (
+                  <span className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 flex h-2.5 w-2.5 z-20 pointer-events-none">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-[#f5f5f7] opacity-60 animate-ping" />
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#f5f5f7]" />
                   </span>
-                  {/* Processing banner */}
-                  {acceptingOrderId === mOrder.id && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-white/[0.06] border border-white/[0.12]">
-                      <Loader2 className="w-3 h-3 text-[#f5f5f7] animate-spin" />
-                      <span className="text-[9px] text-[#f5f5f7] font-mono font-bold tracking-wider uppercase">
-                        Accepting...
-                      </span>
-                    </div>
-                  )}
-                  {/* Waiting banner for own orders */}
-                  {isMyMempoolOrder && !acceptingOrderId && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-foreground/[0.02] border border-foreground/[0.04]">
-                      <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
-                      <span className="text-[9px] text-foreground/30 font-mono font-bold tracking-wider uppercase">
-                        Waiting for acceptance
-                      </span>
-                    </div>
-                  )}
-                  {/* Row 1: User + tags on left, timer on right */}
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 text-sm border border-white/[0.12]">
-                        <Zap className="w-3.5 h-3.5 text-[#f5f5f7]" />
-                      </div>
-                      <span className="text-xs font-medium text-white truncate">
-                        {mOrder.creator_username || `#${mOrder.order_number}`}
-                      </span>
-                      <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-[var(--color-error)]/10 border-[var(--color-error)]/20 text-[var(--color-error)]">
-                        You Pay
-                      </span>
-                      <span className="flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]">
-                        <Zap className="w-2.5 h-2.5" />
-                        PRIORITY
-                      </span>
-                      {isMyMempoolOrder && (
-                        <span className="px-1 py-0.5 bg-foreground/[0.04] border border-foreground/[0.06] rounded text-[9px] font-bold text-foreground/40">
-                          YOURS
-                        </span>
-                      )}
-                    </div>
-                    {/* Timer */}
-                    <div
-                      className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
-                        liveExpiry <= 120 ? "text-red-400" : "text-[#f5f5f7]"
-                      }`}
-                    >
-                      {liveExpiry <= 0
-                        ? "Expired"
-                        : liveExpiry >= 3600
-                          ? `${Math.floor(liveExpiry / 3600)}h ${Math.floor((liveExpiry % 3600) / 60)}m`
-                          : liveExpiry >= 60
-                            ? `${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s`
-                            : `${liveExpiry}s`}
-                      <span
-                        className="animate-pulse"
-                        style={{
-                          filter:
-                            liveExpiry <= 120
-                              ? "drop-shadow(0 0 6px #ef4444)"
-                              : "drop-shadow(0 0 4px #f97316)",
-                        }}
-                      >
-                        🔥
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Warning banner when under 5 minutes */}
-                  {liveExpiry > 0 && liveExpiry <= 300 && (
-                    <div
-                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-1 ${
-                        liveExpiry <= 120
-                          ? "bg-red-500/10 border border-red-500/20"
-                          : "bg-white/[0.06] border border-white/[0.12]"
-                      }`}
-                    >
-                      <span className="text-xs shrink-0">🔥</span>
-                      <span
-                        className={`text-[10px] font-bold ${liveExpiry <= 120 ? "text-red-400" : "text-[#f5f5f7]"}`}
-                      >
-                        {liveExpiry <= 120
-                          ? "Expiring soon! Act now"
-                          : `Expires in ${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s`}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Row 2: You Pay / You Get */}
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm tabular-nums">
-                      <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
-                        Pay
-                      </span>
-                      <span className="font-bold text-foreground">
-                        {Math.round(amount).toLocaleString()} USDT
-                      </span>
-                    </span>
-                    <ArrowRight className="w-3 h-3 text-foreground/20" />
-                    <span className="text-sm tabular-nums">
-                      <span className="text-[10px] text-[#f5f5f7] font-mono mr-1">
-                        Get
-                      </span>
-                      <span className="font-bold text-[#f5f5f7]">
-                        {fiatTotal.toLocaleString()}{" "}
-                        {(mOrder as any).corridor_id === "USDT_INR"
-                          ? "INR"
-                          : "AED"}
-                      </span>
-                    </span>
-                    {yourCut > 0 && (
-                      <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#f5f5f7]">
-                        +${yourCut.toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Row 3: Rate + action button */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-foreground/40 font-mono">
-                      @ {livePrice}
-                    </span>
-                    {livePremiumPct > 0 && (
-                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#f5f5f7]">
-                        +{livePremiumPct.toFixed(2)}%
-                      </span>
-                    )}
-                    <div className="flex-1" />
-                    {!isMyMempoolOrder && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAcceptOrder(mOrder);
-                        }}
-                        disabled={acceptingOrderId === mOrder.id}
-                        className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
-                          acceptingOrderId === mOrder.id
-                            ? "bg-white/[0.06] text-black/60 cursor-wait"
-                            : "bg-[#f5f5f7] text-[#0b0b0c] hover:bg-white/90"
-                        }`}
-                      >
-                        {acceptingOrderId === mOrder.id ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />{" "}
-                            Accepting...
-                          </>
-                        ) : (
-                          order.dbOrder?.primaryAction?.label ||
-                          (order.escrowTxHash ? "MINE" : "ACCEPT")
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  {/* Countdown timer bar (bottom) */}
+                )}
+                <div
+                  data-testid={`order-card-${order.id}`}
+                  onClick={() => onSelectOrder(order)}
+                  className={`relative p-3 rounded-xl transition-all cursor-pointer overflow-hidden ${
+                    isMyOwnOrder ? "opacity-50" : ""
+                  }`}
+                  style={{
+                    background: isMyOwnOrder
+                      ? "rgba(255,255,255,0.01)"
+                      : "#111113",
+                    border: isMineable
+                      ? "1px solid rgba(249,115,22,0.25)"
+                      : "1px solid rgba(255,255,255,0.07)",
+                    borderLeft: isMineable
+                      ? "2px solid rgba(249,115,22,0.5)"
+                      : undefined,
+                  }}
+                  onMouseEnter={(e) =>
+                    !isMyOwnOrder &&
+                    (e.currentTarget.style.borderColor =
+                      "rgba(255,255,255,0.13)")
+                  }
+                  onMouseLeave={(e) =>
+                    !isMyOwnOrder &&
+                    (e.currentTarget.style.borderColor = isMineable
+                      ? "rgba(249,115,22,0.25)"
+                      : "rgba(255,255,255,0.07)")
+                  }
+                >
                   {(() => {
-                    const total = Math.max(1, mOrder.seconds_until_expiry || 1);
+                    // ── Resolve all display data up-front ──────────────────
+                    const { seller, buyer } = getPartyNames(order.dbOrder);
+                    const soloName = seller || buyer || order.user || null;
+                    // Counterparty for the profile sheet. For a normal U2M order
+                    // the counterparty is the user who placed it; for an M2M order
+                    // it's the buyer merchant. Mirrors getPartyNames' M2M rule.
+                    const _db = order.dbOrder;
+                    const _userIsPlaceholder =
+                      typeof _db?.user?.username === "string" &&
+                      (_db.user.username.startsWith("open_order_") ||
+                        _db.user.username.startsWith("m2m_"));
+                    const cpIsM2M =
+                      _userIsPlaceholder || !!_db?.buyer_merchant_id;
+                    const cpEntityType: ProfileEntityType = cpIsM2M
+                      ? "merchant"
+                      : "user";
+                    const cpEntityId: string | null = cpIsM2M
+                      ? _db?.buyer_merchant_id ||
+                        _db?.buyer_merchant?.id ||
+                        null
+                      : _db?.user?.id || _db?.user_id || null;
+                    const username =
+                      order.dbOrder?.user?.username || order.user;
+                    // For open/market (M2M) orders the counterparty "username"
+                    // is an internal placeholder like `open_order_…` that isn't
+                    // a real name and overflows the tooltip. In that case show
+                    // the friendly order ref (#BM-…) instead; keep the real
+                    // username for normal user trades.
+                    const _isPlaceholderCp =
+                      typeof username === "string" &&
+                      (username.startsWith("open_order_") ||
+                        username.startsWith("m2m_"));
+                    const _orderRef = order.dbOrder?.order_number
+                      ? `#${order.dbOrder.order_number}`
+                      : null;
+                    const tooltipTitle = _isPlaceholderCp
+                      ? _orderRef ?? "Open Order"
+                      : username;
+                    const avatarSrc =
+                      (order.dbOrder?.user?.avatar_url as string | undefined) ||
+                      (order as any).user_avatar ||
+                      null;
+                    const rating = order.dbOrder?.user?.rating;
+                    const trades = order.dbOrder?.user?.total_trades ?? 0;
+                    const tooltipItems: InfoTooltipItem[] = [
+                      {
+                        label: "Rating",
+                        value:
+                          rating != null
+                            ? `★ ${Number(rating).toFixed(1)} / 5.0`
+                            : "No rating yet",
+                      },
+                      { label: "Trades", value: `${trades} completed` },
+                      {
+                        label: "Trust",
+                        value:
+                          trades >= 50
+                            ? "Verified trader"
+                            : trades >= 10
+                            ? "Regular trader"
+                            : "New trader",
+                      },
+                    ];
+                    const pmType =
+                      order.lockedPaymentMethod?.type ||
+                      order.dbOrder?.payment_method ||
+                      (order.userBankDetails ? "bank" : null);
+                    const pmLabel: Record<string, string> = {
+                      bank: "Bank",
+                      cash: "Cash",
+                      upi: "UPI",
+                    };
+                    const effStatus: string =
+                      order.status || order.dbOrder?.status || "pending";
+                    const isActivelyPending =
+                      effStatus === "pending" && order.expiresIn > 0;
+                    const viewerSide = getViewerSide(
+                      order.dbOrder,
+                      merchantInfo?.id,
+                    );
+                    const cryptoAmt = Math.round(order.amount).toLocaleString();
+                    const fiatAmt = Math.round(order.total).toLocaleString();
+                    const primaryAmt = cryptoAmt;
+                    const primaryCcy = order.fromCurrency;
+                    const secondaryAmt = fiatAmt;
+                    const secondaryCcy = order.toCurrency;
+                    const payLabel =
+                      viewerSide === "seller" ? "you pay" : "you receive";
+                    const extraPct =
+                      order.protocolFeePercent != null
+                        ? order.protocolFeePercent -
+                          (order.spreadPreference === "fastest"
+                            ? 2.5
+                            : order.spreadPreference === "best"
+                            ? 2.0
+                            : 1.5)
+                        : 0;
+
+                    // Order-details rows for the ⓘ tooltip. Values mirror what the
+                    // card itself shows (same rounding/formatting) so the tooltip
+                    // never disagrees with the card.
+                    const createdRaw =
+                      order.dbOrder?.created_at || order.timestamp;
+                    const createdDate = createdRaw
+                      ? createdRaw instanceof Date
+                        ? createdRaw
+                        : new Date(createdRaw)
+                      : null;
+                    const expiresLabel =
+                      order.expiresIn > 0
+                        ? order.expiresIn >= 3600
+                          ? `${Math.floor(
+                              order.expiresIn / 3600,
+                            )}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
+                          : order.expiresIn >= 60
+                          ? `${Math.floor(order.expiresIn / 60)}m ${
+                              order.expiresIn % 60
+                            }s`
+                          : `${order.expiresIn}s`
+                        : "Expired";
+                    const orderDetailItems: InfoTooltipItem[] = [
+                      {
+                        label: "Order ID",
+                        value: order.dbOrder?.order_number
+                          ? `#${order.dbOrder.order_number}`
+                          : username || "—",
+                      },
+                      {
+                        label: "Order Type",
+                        value: order.type?.toUpperCase() || "—",
+                      },
+                      { label: "Amount", value: `${cryptoAmt} ${primaryCcy}` },
+                      {
+                        label: "Price",
+                        value: `${order.rate.toFixed(2)} ${secondaryCcy}`,
+                      },
+                      { label: "Total", value: `${fiatAmt} ${secondaryCcy}` },
+                      {
+                        label: "Payment Method",
+                        value: pmType ? pmLabel[pmType] || pmType : "—",
+                      },
+                      ...(createdDate
+                        ? [
+                            {
+                              label: "Created",
+                              value: createdDate.toLocaleString("en-US", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }),
+                            },
+                          ]
+                        : []),
+                      { label: "Expires in", value: expiresLabel },
+                    ];
+
+                    return (
+                      <>
+                        {/* ── Row 1: Avatar / Name / Handle · Action top-right ── */}
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div
+                            className={`flex items-center gap-2.5 min-w-0 ${
+                              cpEntityId ? "cursor-pointer" : ""
+                            }`}
+                            onClick={(e) => {
+                              if (!cpEntityId) return;
+                              e.stopPropagation();
+                              setProfileTarget({
+                                entityType: cpEntityType,
+                                id: cpEntityId,
+                              });
+                            }}
+                          >
+                            <div className="relative shrink-0">
+                              <UserAvatar
+                                src={avatarSrc}
+                                seed={soloName || "U"}
+                                size={36}
+                                className="rounded-full border border-white/[0.08]"
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[13px] font-semibold text-white/90 leading-tight truncate">
+                                  {soloName || "—"}
+                                </span>
+                                <InfoTooltip
+                                  side="bottom"
+                                  title={tooltipTitle}
+                                  description="Counterparty stats."
+                                  sections={[
+                                    { items: tooltipItems },
+                                    {
+                                      heading: "Order details",
+                                      items: orderDetailItems,
+                                    },
+                                  ]}
+                                />
+                              </div>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span
+                                  className={`text-[10px] font-mono font-semibold ${
+                                    order.type === "buy"
+                                      ? "text-[#f5f5f7]"
+                                      : "text-red-400"
+                                  }`}
+                                >
+                                  {order.type?.toUpperCase() || "TRADE"}
+                                </span>
+                                {pmType && (
+                                  <span className="text-[10px] text-white/20 font-mono">
+                                    · {pmLabel[pmType] || pmType}
+                                  </span>
+                                )}
+                                {isMyOwnOrder && (
+                                  <span className="text-[10px] text-white/20 font-mono">
+                                    · yours
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Top-right: status pill or accept button */}
+                          {isActivelyPending && !isMyOwnOrder ? (
+                            <button
+                              data-testid="order-primary-action"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onAcceptOrder(order);
+                              }}
+                              disabled={acceptingOrderId === order.id}
+                              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all press-effect ${
+                                acceptingOrderId === order.id
+                                  ? "bg-white/[0.06] text-white/40 cursor-wait"
+                                  : "bg-[#f5f5f7] text-[#0b0b0c] font-bold hover:bg-white/90"
+                              }`}
+                            >
+                              {acceptingOrderId === order.id ? (
+                                <>
+                                  <Loader2 className="w-3 h-3 animate-spin" />{" "}
+                                  Accepting…
+                                </>
+                              ) : (
+                                <>
+                                  {order.dbOrder?.primaryAction?.label ||
+                                    (isMineable ? "Mine" : "Accept")}{" "}
+                                  →
+                                </>
+                              )}
+                            </button>
+                          ) : isActivelyPending && isMyOwnOrder ? (
+                            <span className="flex items-center gap-1 text-[10px] font-mono text-white/20 shrink-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-white/20 animate-pulse" />
+                              waiting
+                            </span>
+                          ) : (
+                            (() => {
+                              const badge =
+                                MY_STATUS_BADGE[effStatus] ||
+                                MY_STATUS_BADGE.pending;
+                              const StatusIcon = badge.Icon;
+                              return (
+                                <span
+                                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono font-semibold border shrink-0 ${badge.cls}`}
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+                                  {badge.label}
+                                </span>
+                              );
+                            })()
+                          )}
+                        </div>
+
+                        {/* ── Primary amount — big and left-aligned ── */}
+                        <div className="mb-1">
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-[26px] font-bold tabular-nums leading-none text-white/90 tracking-tight">
+                              {primaryAmt}
+                            </span>
+                            <span className="text-[13px] font-medium text-white/35">
+                              {primaryCcy}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[11px] text-white/30">→</span>
+                            <span className="text-[12px] font-mono tabular-nums text-white/40">
+                              {secondaryAmt}{" "}
+                              <span className="text-white/25">
+                                {secondaryCcy}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* ── Timer + rate footer ── */}
+                        <div className="flex items-center justify-between gap-2 mt-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-white/15 font-mono tabular-nums">
+                              @ {order.rate.toFixed(2)}
+                            </span>
+                            {extraPct > 0 && (
+                              <span className="text-[10px] font-mono text-[#f5f5f7]/70">
+                                +{extraPct.toFixed(1)}%
+                              </span>
+                            )}
+                            {isMyOwnOrder && onCancelOrder && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onCancelOrder(order);
+                                }}
+                                className="text-[10px] text-red-400/50 hover:text-red-400 transition-colors font-mono"
+                              >
+                                cancel
+                              </button>
+                            )}
+                          </div>
+                          {isActivelyPending ? (
+                            <div className="flex items-center gap-1 text-[11px] font-mono tabular-nums text-red-400">
+                              <Clock className="w-3 h-3" />
+                              {order.expiresIn >= 3600
+                                ? `${Math.floor(
+                                    order.expiresIn / 3600,
+                                  )}h ${Math.floor(
+                                    (order.expiresIn % 3600) / 60,
+                                  )}m`
+                                : order.expiresIn >= 60
+                                ? `${Math.floor(order.expiresIn / 60)}m ${
+                                    order.expiresIn % 60
+                                  }s`
+                                : `${order.expiresIn}s`}
+                            </div>
+                          ) : (
+                            (() => {
+                              const ts =
+                                order.dbOrder?.completed_at ||
+                                order.dbOrder?.cancelled_at ||
+                                order.dbOrder?.created_at ||
+                                order.timestamp;
+                              const tsDate =
+                                ts instanceof Date
+                                  ? ts
+                                  : ts
+                                  ? new Date(ts)
+                                  : null;
+                              return tsDate ? (
+                                <span className="text-[10px] text-white/20 font-mono tabular-nums">
+                                  {tsDate.toLocaleString([], {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              ) : null;
+                            })()
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                  {/* Countdown timer bar (bottom) — only for actively-pending orders */}
+                  {(() => {
+                    const effStatus: string =
+                      order.status || order.dbOrder?.status || "pending";
+                    if (effStatus !== "pending" || order.expiresIn <= 0)
+                      return null;
+                    const total = 900;
                     const pct = Math.max(
                       0,
-                      Math.min(100, (liveExpiry / total) * 100),
+                      Math.min(100, (order.expiresIn / total) * 100),
                     );
                     return (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04] rounded-b-lg overflow-hidden">
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04]">
                         <div
-                          className={`h-full transition-[width] duration-1000 ease-linear ${liveExpiry <= 120 ? "bg-red-400" : "bg-[#f5f5f7]"}`}
+                          className={`h-full transition-[width] duration-1000 ease-linear ${
+                            order.expiresIn <= 120
+                              ? "bg-red-400"
+                              : "bg-[#f5f5f7]"
+                          }`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -506,348 +1028,18 @@ const OrderList = memo(function OrderList({
                 </div>
               </div>
             );
-          }
-
-          // Premium vs the LIVE per-corridor reference price (AED and INR
-          // have different price levels — AED ≈ 3.67, INR ≈ 83 — so we
-          // can't share a single fallback). Live price comes from the
-          // shared useCorridorPrices hook backed by /api/corridor/dynamic-rate.
-          // Falls through to the order's stored ref_price_at_create if live
-          // is unavailable.
-          const liveRef = resolveCorridorRef(
-            corridorPrices,
-            order.dbOrder?.corridor_id,
-            order.toCurrency || order.dbOrder?.fiat_currency,
-          );
-          const storedRef = Number(order.dbOrder?.ref_price_at_create);
-          const refPrice =
-            liveRef && liveRef > 0
-              ? liveRef
-              : Number.isFinite(storedRef) && storedRef > 0
-                ? storedRef
-                : null;
-          const premium =
-            refPrice && order.rate
-              ? ((order.rate - refPrice) / refPrice) * 100
-              : 0;
-          const isHighPremium = premium > 0.5;
-          // Mine = escrow already locked (just send fiat)
-          // Accept = no escrow yet (you'll lock escrow next)
-          const isMineable = !!order.escrowTxHash;
-          const dbUsername = order.dbOrder?.user?.username || "";
-          const isPlaceholderUser =
-            dbUsername.startsWith("open_order_") ||
-            dbUsername.startsWith("m2m_");
-          // For M2M: the placer is buyer_merchant_id — only they should see "YOURS" / hidden button
-          // The counterparty (merchant_id / seller) should see the ACCEPT button
-          const isM2MOrder = !!order.buyerMerchantId && isPlaceholderUser;
-          const isMyOwnOrder = isM2MOrder
-            ? order.buyerMerchantId === merchantInfo?.id
-            : !!order.isMyOrder ||
-              (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id);
-
-          const effStatusForDot: string =
-            order.status || order.dbOrder?.status || "pending";
-          const isActivelyPendingForDot =
-            effStatusForDot === "pending" && order.expiresIn > 0;
-
-          return (
-            <div
-              key={order.id}
-              ref={virtualizer.measureElement}
-              data-index={virtualRow.index}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-              className="pb-1"
-            >
-              {/* Live pulse dot — sits exactly on the card's top-left corner.
-                  Rendered OUTSIDE the overflow-hidden inner wrapper so the
-                  pinging halo isn't clipped. */}
-              {isActivelyPendingForDot && (
-                <span className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 flex h-2.5 w-2.5 z-20 pointer-events-none">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-[#f5f5f7] opacity-60 animate-ping" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#f5f5f7]" />
-                </span>
-              )}
-              <div
-                data-testid={`order-card-${order.id}`}
-                onClick={() => onSelectOrder(order)}
-                className={`relative p-3 rounded-xl transition-all cursor-pointer overflow-hidden ${isMyOwnOrder ? "opacity-50" : ""}`}
-                style={{
-                  background: isMyOwnOrder ? "rgba(255,255,255,0.01)" : "#111113",
-                  border: isMineable
-                    ? "1px solid rgba(249,115,22,0.25)"
-                    : "1px solid rgba(255,255,255,0.07)",
-                  borderLeft: isMineable ? "2px solid rgba(249,115,22,0.5)" : undefined,
-                }}
-                onMouseEnter={(e) => !isMyOwnOrder && (e.currentTarget.style.borderColor = "rgba(255,255,255,0.13)")}
-                onMouseLeave={(e) => !isMyOwnOrder && (e.currentTarget.style.borderColor = isMineable ? "rgba(249,115,22,0.25)" : "rgba(255,255,255,0.07)")}
-              >
-                {(() => {
-                  // ── Resolve all display data up-front ──────────────────
-                  const { seller, buyer } = getPartyNames(order.dbOrder);
-                  const soloName = seller || buyer || order.user || null;
-                  // Counterparty for the profile sheet. For a normal U2M order
-                  // the counterparty is the user who placed it; for an M2M order
-                  // it's the buyer merchant. Mirrors getPartyNames' M2M rule.
-                  const _db = order.dbOrder;
-                  const _userIsPlaceholder =
-                    typeof _db?.user?.username === "string" &&
-                    (_db.user.username.startsWith("open_order_") ||
-                      _db.user.username.startsWith("m2m_"));
-                  const cpIsM2M = _userIsPlaceholder || !!_db?.buyer_merchant_id;
-                  const cpEntityType: ProfileEntityType = cpIsM2M ? "merchant" : "user";
-                  const cpEntityId: string | null = cpIsM2M
-                    ? _db?.buyer_merchant_id || _db?.buyer_merchant?.id || null
-                    : _db?.user?.id || _db?.user_id || null;
-                  const username = order.dbOrder?.user?.username || order.user;
-                  const avatarSrc =
-                    (order.dbOrder?.user?.avatar_url as string | undefined) ||
-                    (order as any).user_avatar || null;
-                  const rating = order.dbOrder?.user?.rating;
-                  const trades = order.dbOrder?.user?.total_trades ?? 0;
-                  const tooltipItems: InfoTooltipItem[] = [
-                    { label: "Rating", value: rating != null ? `★ ${Number(rating).toFixed(1)} / 5.0` : "No rating yet" },
-                    { label: "Trades", value: `${trades} completed` },
-                    { label: "Trust", value: trades >= 50 ? "Verified trader" : trades >= 10 ? "Regular trader" : "New trader" },
-                  ];
-                  const pmType = order.lockedPaymentMethod?.type || order.dbOrder?.payment_method || (order.userBankDetails ? "bank" : null);
-                  const pmLabel: Record<string, string> = { bank: "Bank", cash: "Cash", upi: "UPI" };
-                  const effStatus: string = order.status || order.dbOrder?.status || "pending";
-                  const isActivelyPending = effStatus === "pending" && order.expiresIn > 0;
-                  const viewerSide = getViewerSide(order.dbOrder, merchantInfo?.id);
-                  const cryptoAmt = Math.round(order.amount).toLocaleString();
-                  const fiatAmt = Math.round(order.total).toLocaleString();
-                  const primaryAmt = cryptoAmt;
-                  const primaryCcy = order.fromCurrency;
-                  const secondaryAmt = fiatAmt;
-                  const secondaryCcy = order.toCurrency;
-                  const payLabel = viewerSide === "seller" ? "you pay" : "you receive";
-                  const extraPct = order.protocolFeePercent != null
-                    ? order.protocolFeePercent - (order.spreadPreference === "fastest" ? 2.5 : order.spreadPreference === "best" ? 2.0 : 1.5)
-                    : 0;
-
-                  // Order-details rows for the ⓘ tooltip. Values mirror what the
-                  // card itself shows (same rounding/formatting) so the tooltip
-                  // never disagrees with the card.
-                  const createdRaw = order.dbOrder?.created_at || order.timestamp;
-                  const createdDate = createdRaw
-                    ? createdRaw instanceof Date
-                      ? createdRaw
-                      : new Date(createdRaw)
-                    : null;
-                  const expiresLabel =
-                    order.expiresIn > 0
-                      ? order.expiresIn >= 3600
-                        ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
-                        : order.expiresIn >= 60
-                          ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
-                          : `${order.expiresIn}s`
-                      : "Expired";
-                  const orderDetailItems: InfoTooltipItem[] = [
-                    { label: "Order ID", value: order.dbOrder?.order_number ? `#${order.dbOrder.order_number}` : (username || "—") },
-                    { label: "Order Type", value: order.type?.toUpperCase() || "—" },
-                    { label: "Amount", value: `${cryptoAmt} ${primaryCcy}` },
-                    { label: "Price", value: `${order.rate.toFixed(2)} ${secondaryCcy}` },
-                    { label: "Total", value: `${fiatAmt} ${secondaryCcy}` },
-                    { label: "Payment Method", value: pmType ? pmLabel[pmType] || pmType : "—" },
-                    ...(createdDate
-                      ? [{
-                          label: "Created",
-                          value: createdDate.toLocaleString("en-US", {
-                            day: "numeric", month: "short", year: "numeric",
-                            hour: "2-digit", minute: "2-digit",
-                          }),
-                        }]
-                      : []),
-                    { label: "Expires in", value: expiresLabel },
-                  ];
-
-                  return (
-                    <>
-                      {/* ── Row 1: Avatar / Name / Handle · Action top-right ── */}
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div
-                          className={`flex items-center gap-2.5 min-w-0 ${cpEntityId ? "cursor-pointer" : ""}`}
-                          onClick={(e) => {
-                            if (!cpEntityId) return;
-                            e.stopPropagation();
-                            setProfileTarget({ entityType: cpEntityType, id: cpEntityId });
-                          }}
-                        >
-                          <div className="relative shrink-0">
-                            <UserAvatar
-                              src={avatarSrc}
-                              seed={soloName || "U"}
-                              size={36}
-                              className="rounded-full border border-white/[0.08]"
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[13px] font-semibold text-white/90 leading-tight truncate">
-                                {soloName || "—"}
-                              </span>
-                              <InfoTooltip
-                                side="bottom"
-                                title={username}
-                                description="Counterparty stats."
-                                sections={[
-                                  { items: tooltipItems },
-                                  { heading: "Order details", items: orderDetailItems },
-                                ]}
-                              />
-                            </div>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <span className={`text-[10px] font-mono font-semibold ${order.type === 'buy' ? 'text-[#f5f5f7]' : 'text-red-400'}`}>
-                                {order.type?.toUpperCase() || "TRADE"}
-                              </span>
-                              {pmType && (
-                                <span className="text-[10px] text-white/20 font-mono">· {pmLabel[pmType] || pmType}</span>
-                              )}
-                              {isMyOwnOrder && (
-                                <span className="text-[10px] text-white/20 font-mono">· yours</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Top-right: status pill or accept button */}
-                        {isActivelyPending && !isMyOwnOrder ? (
-                          <button
-                            data-testid="order-primary-action"
-                            onClick={(e) => { e.stopPropagation(); onAcceptOrder(order); }}
-                            disabled={acceptingOrderId === order.id}
-                            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all press-effect ${
-                              acceptingOrderId === order.id
-                                ? "bg-white/[0.06] text-white/40 cursor-wait"
-                                : "bg-[#f5f5f7] text-[#0b0b0c] font-bold hover:bg-white/90"
-                            }`}
-                          >
-                            {acceptingOrderId === order.id ? (
-                              <><Loader2 className="w-3 h-3 animate-spin" /> Accepting…</>
-                            ) : (
-                              <>{order.dbOrder?.primaryAction?.label || (isMineable ? "Mine" : "Accept")} →</>
-                            )}
-                          </button>
-                        ) : isActivelyPending && isMyOwnOrder ? (
-                          <span className="flex items-center gap-1 text-[10px] font-mono text-white/20 shrink-0">
-                            <span className="w-1.5 h-1.5 rounded-full bg-white/20 animate-pulse" />
-                            waiting
-                          </span>
-                        ) : (
-                          (() => {
-                            const badge = MY_STATUS_BADGE[effStatus] || MY_STATUS_BADGE.pending;
-                            const StatusIcon = badge.Icon;
-                            return (
-                              <span className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono font-semibold border shrink-0 ${badge.cls}`}>
-                                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
-                                {badge.label}
-                              </span>
-                            );
-                          })()
-                        )}
-                      </div>
-
-                      {/* ── Primary amount — big and left-aligned ── */}
-                      <div className="mb-1">
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-[26px] font-bold tabular-nums leading-none text-white/90 tracking-tight">
-                            {primaryAmt}
-                          </span>
-                          <span className="text-[13px] font-medium text-white/35">{primaryCcy}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className="text-[11px] text-white/30">→</span>
-                          <span className="text-[12px] font-mono tabular-nums text-white/40">
-                            {secondaryAmt} <span className="text-white/25">{secondaryCcy}</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* ── Timer + rate footer ── */}
-                      <div className="flex items-center justify-between gap-2 mt-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-white/15 font-mono tabular-nums">
-                            @ {order.rate.toFixed(2)}
-                          </span>
-                          {extraPct > 0 && (
-                            <span className="text-[10px] font-mono text-[#f5f5f7]/70">+{extraPct.toFixed(1)}%</span>
-                          )}
-                          {isMyOwnOrder && onCancelOrder && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
-                              className="text-[10px] text-red-400/50 hover:text-red-400 transition-colors font-mono"
-                            >
-                              cancel
-                            </button>
-                          )}
-                        </div>
-                        {isActivelyPending ? (
-                          <div className="flex items-center gap-1 text-[11px] font-mono tabular-nums text-red-400">
-                            <Clock className="w-3 h-3" />
-                            {order.expiresIn >= 3600
-                              ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
-                              : order.expiresIn >= 60
-                                ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
-                                : `${order.expiresIn}s`}
-                          </div>
-                        ) : (
-                          (() => {
-                            const ts = order.dbOrder?.completed_at || order.dbOrder?.cancelled_at || order.dbOrder?.created_at || order.timestamp;
-                            const tsDate = ts instanceof Date ? ts : ts ? new Date(ts) : null;
-                            return tsDate ? (
-                              <span className="text-[10px] text-white/20 font-mono tabular-nums">
-                                {tsDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                              </span>
-                            ) : null;
-                          })()
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
-                {/* Countdown timer bar (bottom) — only for actively-pending orders */}
-                {(() => {
-                  const effStatus: string =
-                    order.status || order.dbOrder?.status || "pending";
-                  if (effStatus !== "pending" || order.expiresIn <= 0)
-                    return null;
-                  const total = 900;
-                  const pct = Math.max(
-                    0,
-                    Math.min(100, (order.expiresIn / total) * 100),
-                  );
-                  return (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04]">
-                      <div
-                        className={`h-full transition-[width] duration-1000 ease-linear ${order.expiresIn <= 120 ? "bg-red-400" : "bg-[#f5f5f7]"}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          );
-        })}
+          })}
+        </div>
       </div>
-    </div>
 
-    {/* Counterparty profile — opened by tapping a card's avatar/name above. */}
-    <ProfileSheet
-      open={!!profileTarget}
-      entityType={profileTarget?.entityType ?? null}
-      id={profileTarget?.id ?? null}
-      variant="merchant"
-      onClose={() => setProfileTarget(null)}
-    />
+      {/* Counterparty profile — opened by tapping a card's avatar/name above. */}
+      <ProfileSheet
+        open={!!profileTarget}
+        entityType={profileTarget?.entityType ?? null}
+        id={profileTarget?.id ?? null}
+        variant="merchant"
+        onClose={() => setProfileTarget(null)}
+      />
     </>
   );
 });
@@ -1138,8 +1330,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           liveRef && liveRef > 0
             ? liveRef
             : Number.isFinite(storedRef) && storedRef > 0
-              ? storedRef
-              : null;
+            ? storedRef
+            : null;
         if (!refPrice || !order.rate) return false;
         const premium = ((order.rate - refPrice) / refPrice) * 100;
         return premium > 0.5;
@@ -1241,372 +1433,476 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       {/* Header — single row */}
       <div className="px-2 py-1.5 border-b border-section-divider">
         {/* Header row 1: title + utilities (mirrors Active Trades two-row header) */}
-        <div className={`flex items-center justify-between gap-1 min-w-0 ${collapsed ? "" : "mb-1.5"}`}>
+        <div
+          className={`flex items-center justify-between gap-1 min-w-0 ${
+            collapsed ? "" : "mb-1.5"
+          }`}
+        >
           {/* Title + live dot — clicking toggles collapse (mirrors Active Trades) */}
           <div
-            className={`flex items-center gap-1 min-w-0 ${onCollapseChange ? "cursor-pointer select-none" : ""}`}
-            onClick={onCollapseChange ? () => onCollapseChange(!collapsed) : undefined}
+            className={`flex items-center gap-1 min-w-0 ${
+              onCollapseChange ? "cursor-pointer select-none" : ""
+            }`}
+            onClick={
+              onCollapseChange ? () => onCollapseChange(!collapsed) : undefined
+            }
           >
             <ChevronDown
-              className={`w-3 h-3 text-foreground/30 shrink-0 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
+              className={`w-3 h-3 text-foreground/30 shrink-0 transition-transform duration-200 ${
+                collapsed ? "-rotate-90" : ""
+              }`}
             />
-            <span className="text-[11px] font-semibold text-white/70 tracking-tight shrink-0">New Orders</span>
-            <span className="relative flex shrink-0 h-2 w-2 ml-0.5" title="Live feed">
+            <span className="text-[11px] font-semibold text-white/70 tracking-tight shrink-0">
+              New Orders
+            </span>
+            <span
+              className="relative flex shrink-0 h-2 w-2 ml-0.5"
+              title="Live feed"
+            >
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-60" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.9)]" />
             </span>
           </div>
 
-          {/* Utilities: sound · refresh · search · count */}
-          <div className="flex items-center gap-1 shrink-0">
-
-          {/* Sound */}
-          <button
-            onClick={() => {
-              const next = !soundEnabled;
-              setSoundEnabled(next);
-              if (next) setTimeout(() => playSound?.("notification"), 0);
-            }}
-            className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border transition-all ${
-              soundEnabled
-                ? "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]"
-                : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/25 hover:bg-foreground/[0.05]"
-            }`}
-            title={soundEnabled ? "Sound on" : "Sound off"}
-          >
-            {soundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
-          </button>
-
-          {/* Refresh */}
-          <button
-            onClick={fetchOrders}
-            className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border border-foreground/[0.06] bg-foreground/[0.02] hover:bg-foreground/[0.05] transition-colors"
-          >
-            <RotateCcw className="w-3 h-3 text-foreground/25" />
-          </button>
-
-          {/* Search toggle */}
-          <button
-            onClick={() => setSearchVisible((v) => { if (v) setSearchQuery(""); return !v; })}
-            className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border transition-all ${
-              searchVisible || searchQuery
-                ? "bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]"
-                : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/25 hover:bg-foreground/[0.05]"
-            }`}
-            title="Search"
-          >
-            <Search className="w-3 h-3" />
-          </button>
-
-          {/* Count */}
+          {/* Count (utilities moved to the tabs row below) */}
           <span className="shrink-0 inline-flex items-center justify-center h-7 min-w-[1.75rem] px-1.5 text-[9px] border border-foreground/[0.08] text-foreground/40 rounded-full font-mono tabular-nums">
             {filteredOrders.length}
           </span>
         </div>
-      </div>
 
-      {!collapsed && (
-        <>
-      {/* Header row 2: tabs + filter/sort */}
-      <div className="flex items-center gap-1 min-w-0">
-        {/* Tabs */}
-        <div className="inline-flex items-center gap-0.5 h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] shrink-0">
-          {(["all", "pending", "mine"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setView(tab)}
-              className={`h-full px-3 inline-flex items-center rounded-md text-[11px] font-bold transition-all ${
-                view === tab
-                  ? "bg-white/[0.08] text-white/90 border border-white/[0.12]"
-                  : "text-foreground/35 hover:text-foreground/60 border border-transparent"
-              }`}
-            >
-              {tab === "all" ? "All" : tab === "pending" ? "Pending" : "Mine"}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1" />
-
-          {/* Filter dropdown */}
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
-              className={`inline-flex items-center gap-1 h-7 px-1.5 text-[9px] font-mono border rounded transition-colors ${
-                pendingFilter !== "all"
-                  ? "bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]"
-                  : "bg-foreground/[0.02] text-white/30 border-foreground/[0.06] hover:border-border-strong"
-              }`}
-            >
-              {{ all: "Filter", mineable: "Mine", premium: "Prem", large: "Large", expiring: "Exp" }[pendingFilter]}
-              <ChevronDown className={`w-2.5 h-2.5 transition-transform ${filterDropdownOpen ? "rotate-180" : ""}`} />
-            </button>
-            <AnimatePresence>
-              {filterDropdownOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-1 z-30 bg-card-solid border border-foreground/[0.08] rounded-lg shadow-xl py-1 min-w-[110px]"
-                >
-                  {(["all", "mineable", "premium", "large", "expiring"] as const).map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => { setPendingFilter(f); setFilterDropdownOpen(false); }}
-                      className={`w-full px-3 py-1.5 text-left text-[10px] font-medium transition-colors ${
-                        pendingFilter === f ? "bg-white/[0.06] text-[#f5f5f7]" : "text-foreground/60 hover:bg-foreground/[0.04]"
-                      }`}
-                    >
-                      {f === "all" ? "All" : f === "mineable" ? "Mineable" : f === "premium" ? "High Premium" : f === "large" ? "Large" : "Expiring"}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Sort dropdown */}
-          <div className="relative shrink-0" ref={sortDropdownRef}>
-            <button
-              onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-              className="inline-flex items-center gap-1 h-7 px-1.5 text-[9px] font-mono text-white/30 bg-foreground/[0.02] border border-foreground/[0.06] rounded hover:border-border-strong transition-colors"
-            >
-              {{ time: "Time", premium: "Prem", amount: "Size", rating: "★" }[pendingSortBy]}
-              <ChevronDown className={`w-2.5 h-2.5 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`} />
-            </button>
-            <AnimatePresence>
-              {sortDropdownOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-1 z-50 min-w-[100px] bg-[#1a1a1a] border border-foreground/[0.08] rounded-lg shadow-xl overflow-hidden"
-                >
-                  {([{ value: "time", label: "Time" }, { value: "premium", label: "Premium" }, { value: "amount", label: "Size" }, { value: "rating", label: "Rating" }] as const).map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => { setPendingSortBy(opt.value); setSortDropdownOpen(false); }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-mono transition-colors ${
-                        pendingSortBy === opt.value ? "text-foreground/70 bg-foreground/[0.06]" : "text-white/35 hover:text-foreground/50 hover:bg-foreground/[0.04]"
-                      }`}
-                    >
-                      {opt.label}
-                      {pendingSortBy === opt.value && <Check className="w-2.5 h-2.5 text-foreground/50" />}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-        </div>
-
-        {/* Search input (shown when toggled) */}
-        {searchVisible && (
-          <div className="flex items-center gap-1.5 mt-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-white/[0.12] transition-colors">
-            <Search className="w-3 h-3 text-foreground/20 shrink-0" />
-            <input
-              type="search" role="searchbox" name="orders-search"
-              autoComplete="off" data-1p-ignore="true" data-lpignore="true" data-form-type="other"
-              maxLength={100} autoFocus
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search orders..."
-              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none focus-visible:outline-none font-mono"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery("")} className="text-foreground/30 hover:text-foreground/60">
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* My Orders sub-filter */}
-        {view === "mine" && (
-          <div className="flex items-center gap-1 mt-1.5">
-            {(["all", "active", "completed", "cancelled", "expired"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setMyFilter(f)}
-                className={`px-2 py-1 rounded text-[10px] font-medium transition-all capitalize ${
-                  myFilter === f
-                    ? "bg-white/[0.06] text-white/80 border border-white/[0.10]"
-                    : "text-foreground/25 hover:text-foreground/50 border border-transparent"
-                }`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Advanced Filters */}
-        <AnimatePresence>
-          {showOrderFilters && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden mt-1.5"
-            >
-              <div className="flex flex-wrap items-center gap-1 p-1.5 bg-white/[0.015] rounded-lg border border-foreground/[0.04]">
-                {/* Type */}
-                <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
-                  {(["all", "buy", "sell"] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() =>
-                        setOrderFilters((f: any) => ({ ...f, type: t }))
-                      }
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
-                        orderFilters.type === t
-                          ? "bg-white/[0.08] text-foreground/80"
-                          : "text-foreground/25 hover:text-foreground/40"
-                      }`}
-                    >
-                      {t === "all" ? "Type" : t.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Amount */}
-                <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
-                  {[
-                    { key: "all", label: "Amt" },
-                    { key: "small", label: "<500" },
-                    { key: "medium", label: "500-2k" },
-                    { key: "large", label: "2k+" },
-                  ].map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() =>
-                        setOrderFilters((f: any) => ({ ...f, amount: key }))
-                      }
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
-                        orderFilters.amount === key
-                          ? "bg-white/[0.08] text-foreground/80"
-                          : "text-foreground/25 hover:text-foreground/40"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Method */}
-                <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
-                  {[
-                    { key: "all", label: "Method" },
-                    { key: "bank", label: "Bank" },
-                    { key: "cash", label: "Cash" },
-                  ].map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() =>
-                        setOrderFilters((f: any) => ({ ...f, method: key }))
-                      }
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
-                        orderFilters.method === key
-                          ? "bg-white/[0.08] text-foreground/80"
-                          : "text-foreground/25 hover:text-foreground/40"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Escrow */}
-                <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
-                  {[
-                    { key: "all", label: "All" },
-                    { key: "yes", label: "Secured" },
-                    { key: "no", label: "Open" },
-                  ].map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() =>
-                        setOrderFilters((f: any) => ({ ...f, secured: key }))
-                      }
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
-                        orderFilters.secured === key
-                          ? "bg-white/[0.08] text-foreground/80"
-                          : "text-foreground/25 hover:text-foreground/40"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {Object.values(orderFilters).some((v) => v !== "all") && (
+        {!collapsed && (
+          <>
+            {/* Header row 2: tabs + filter/sort */}
+            <div className="flex items-center gap-1 min-w-0">
+              {/* Tabs */}
+              <div className="inline-flex items-center gap-0.5 h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] shrink-0">
+                {(["all", "pending", "mine"] as const).map((tab) => (
                   <button
-                    onClick={() =>
-                      setOrderFilters({
-                        type: "all",
-                        amount: "all",
-                        method: "all",
-                        secured: "all",
-                      })
-                    }
-                    className="px-1.5 py-0.5 text-[9px] font-medium text-foreground/40 hover:text-foreground/60 transition-colors"
+                    key={tab}
+                    onClick={() => setView(tab)}
+                    className={`h-full px-3 inline-flex items-center rounded-md text-[11px] font-bold transition-all ${
+                      view === tab
+                        ? "bg-white/[0.08] text-white/90 border border-white/[0.12]"
+                        : "text-foreground/35 hover:text-foreground/60 border border-transparent"
+                    }`}
                   >
-                    Clear
+                    {tab === "all"
+                      ? "All"
+                      : tab === "pending"
+                      ? "Pending"
+                      : "Mine"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex-1" />
+
+              {/* Sound */}
+              <button
+                onClick={() => {
+                  const next = !soundEnabled;
+                  setSoundEnabled(next);
+                  if (next) setTimeout(() => playSound?.("notification"), 0);
+                }}
+                className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border transition-all ${
+                  soundEnabled
+                    ? "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]"
+                    : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/25 hover:bg-foreground/[0.05]"
+                }`}
+                title={soundEnabled ? "Sound on" : "Sound off"}
+              >
+                {soundEnabled ? (
+                  <Volume2 className="w-3 h-3" />
+                ) : (
+                  <VolumeX className="w-3 h-3" />
+                )}
+              </button>
+
+              {/* Refresh */}
+              <button
+                onClick={fetchOrders}
+                className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border border-foreground/[0.06] bg-foreground/[0.02] hover:bg-foreground/[0.05] transition-colors"
+              >
+                <RotateCcw className="w-3 h-3 text-foreground/25" />
+              </button>
+
+              {/* Search toggle */}
+              <button
+                onClick={() =>
+                  setSearchVisible((v) => {
+                    if (v) setSearchQuery("");
+                    return !v;
+                  })
+                }
+                className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border transition-all ${
+                  searchVisible || searchQuery
+                    ? "bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]"
+                    : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/25 hover:bg-foreground/[0.05]"
+                }`}
+                title="Search"
+              >
+                <Search className="w-3 h-3" />
+              </button>
+
+              {/* Filter dropdown */}
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+                  className={`inline-flex items-center gap-1 h-7 px-1.5 text-[9px] font-mono border rounded transition-colors ${
+                    pendingFilter !== "all"
+                      ? "bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]"
+                      : "bg-foreground/[0.02] text-white/30 border-foreground/[0.06] hover:border-border-strong"
+                  }`}
+                >
+                  {
+                    {
+                      all: "Filter",
+                      mineable: "Mine",
+                      premium: "Prem",
+                      large: "Large",
+                      expiring: "Exp",
+                    }[pendingFilter]
+                  }
+                  <ChevronDown
+                    className={`w-2.5 h-2.5 transition-transform ${
+                      filterDropdownOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {filterDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-1 z-30 bg-card-solid border border-foreground/[0.08] rounded-lg shadow-xl py-1 min-w-[110px]"
+                    >
+                      {(
+                        [
+                          "all",
+                          "mineable",
+                          "premium",
+                          "large",
+                          "expiring",
+                        ] as const
+                      ).map((f) => (
+                        <button
+                          key={f}
+                          onClick={() => {
+                            setPendingFilter(f);
+                            setFilterDropdownOpen(false);
+                          }}
+                          className={`w-full px-3 py-1.5 text-left text-[10px] font-medium transition-colors ${
+                            pendingFilter === f
+                              ? "bg-white/[0.06] text-[#f5f5f7]"
+                              : "text-foreground/60 hover:bg-foreground/[0.04]"
+                          }`}
+                        >
+                          {f === "all"
+                            ? "All"
+                            : f === "mineable"
+                            ? "Mineable"
+                            : f === "premium"
+                            ? "High Premium"
+                            : f === "large"
+                            ? "Large"
+                            : "Expiring"}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Sort dropdown */}
+              <div className="relative shrink-0" ref={sortDropdownRef}>
+                <button
+                  onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+                  className="inline-flex items-center gap-1 h-7 px-1.5 text-[9px] font-mono text-white/30 bg-foreground/[0.02] border border-foreground/[0.06] rounded hover:border-border-strong transition-colors"
+                >
+                  {
+                    {
+                      time: "Time",
+                      premium: "Prem",
+                      amount: "Size",
+                      rating: "★",
+                    }[pendingSortBy]
+                  }
+                  <ChevronDown
+                    className={`w-2.5 h-2.5 transition-transform ${
+                      sortDropdownOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {sortDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-1 z-50 min-w-[100px] bg-[#1a1a1a] border border-foreground/[0.08] rounded-lg shadow-xl overflow-hidden"
+                    >
+                      {(
+                        [
+                          { value: "time", label: "Time" },
+                          { value: "premium", label: "Premium" },
+                          { value: "amount", label: "Size" },
+                          { value: "rating", label: "Rating" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            setPendingSortBy(opt.value);
+                            setSortDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-mono transition-colors ${
+                            pendingSortBy === opt.value
+                              ? "text-foreground/70 bg-foreground/[0.06]"
+                              : "text-white/35 hover:text-foreground/50 hover:bg-foreground/[0.04]"
+                          }`}
+                        >
+                          {opt.label}
+                          {pendingSortBy === opt.value && (
+                            <Check className="w-2.5 h-2.5 text-foreground/50" />
+                          )}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Search input (shown when toggled) */}
+            {searchVisible && (
+              <div className="flex items-center gap-1.5 mt-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-white/[0.12] transition-colors">
+                <Search className="w-3 h-3 text-foreground/20 shrink-0" />
+                <input
+                  type="search"
+                  role="searchbox"
+                  name="orders-search"
+                  autoComplete="off"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  maxLength={100}
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search orders..."
+                  className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none focus-visible:outline-none font-mono"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="text-foreground/30 hover:text-foreground/60"
+                  >
+                    <X className="w-3 h-3" />
                   </button>
                 )}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        </>
-      )}
+            )}
+
+            {/* My Orders sub-filter */}
+            {view === "mine" && (
+              <div className="flex items-center gap-1 mt-1.5">
+                {(
+                  [
+                    "all",
+                    "active",
+                    "completed",
+                    "cancelled",
+                    "expired",
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setMyFilter(f)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all capitalize ${
+                      myFilter === f
+                        ? "bg-white/[0.06] text-white/80 border border-white/[0.10]"
+                        : "text-foreground/25 hover:text-foreground/50 border border-transparent"
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Advanced Filters */}
+            <AnimatePresence>
+              {showOrderFilters && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden mt-1.5"
+                >
+                  <div className="flex flex-wrap items-center gap-1 p-1.5 bg-white/[0.015] rounded-lg border border-foreground/[0.04]">
+                    {/* Type */}
+                    <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
+                      {(["all", "buy", "sell"] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() =>
+                            setOrderFilters((f: any) => ({ ...f, type: t }))
+                          }
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
+                            orderFilters.type === t
+                              ? "bg-white/[0.08] text-foreground/80"
+                              : "text-foreground/25 hover:text-foreground/40"
+                          }`}
+                        >
+                          {t === "all" ? "Type" : t.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Amount */}
+                    <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
+                      {[
+                        { key: "all", label: "Amt" },
+                        { key: "small", label: "<500" },
+                        { key: "medium", label: "500-2k" },
+                        { key: "large", label: "2k+" },
+                      ].map(({ key, label }) => (
+                        <button
+                          key={key}
+                          onClick={() =>
+                            setOrderFilters((f: any) => ({ ...f, amount: key }))
+                          }
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
+                            orderFilters.amount === key
+                              ? "bg-white/[0.08] text-foreground/80"
+                              : "text-foreground/25 hover:text-foreground/40"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Method */}
+                    <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
+                      {[
+                        { key: "all", label: "Method" },
+                        { key: "bank", label: "Bank" },
+                        { key: "cash", label: "Cash" },
+                      ].map(({ key, label }) => (
+                        <button
+                          key={key}
+                          onClick={() =>
+                            setOrderFilters((f: any) => ({ ...f, method: key }))
+                          }
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
+                            orderFilters.method === key
+                              ? "bg-white/[0.08] text-foreground/80"
+                              : "text-foreground/25 hover:text-foreground/40"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Escrow */}
+                    <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
+                      {[
+                        { key: "all", label: "All" },
+                        { key: "yes", label: "Secured" },
+                        { key: "no", label: "Open" },
+                      ].map(({ key, label }) => (
+                        <button
+                          key={key}
+                          onClick={() =>
+                            setOrderFilters((f: any) => ({
+                              ...f,
+                              secured: key,
+                            }))
+                          }
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
+                            orderFilters.secured === key
+                              ? "bg-white/[0.08] text-foreground/80"
+                              : "text-foreground/25 hover:text-foreground/40"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {Object.values(orderFilters).some((v) => v !== "all") && (
+                      <button
+                        onClick={() =>
+                          setOrderFilters({
+                            type: "all",
+                            amount: "all",
+                            method: "all",
+                            secured: "all",
+                          })
+                        }
+                        className="px-1.5 py-0.5 text-[9px] font-medium text-foreground/40 hover:text-foreground/60 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
+        )}
       </div>
 
       {/* Orders List */}
       {!collapsed && (
         <>
-      {view === "mine" ? (
-        <MyOrdersList
-          orders={filteredOrders}
-          isLoading={myOrdersLoading}
-          onSelectOrder={onSelectOrder}
-          merchantInfo={merchantInfo}
-        />
-      ) : (
-        <OrderList
-          filteredOrders={filteredOrders}
-          merchantInfo={merchantInfo}
-          onSelectOrder={onSelectOrder}
-          onSelectMempoolOrder={onSelectMempoolOrder}
-          onAcceptOrder={onAcceptOrder}
-          onCancelOrder={onCancelOrder}
-          acceptingOrderId={acceptingOrderId}
-        />
-      )}
+          {view === "mine" ? (
+            <MyOrdersList
+              orders={filteredOrders}
+              isLoading={myOrdersLoading}
+              onSelectOrder={onSelectOrder}
+              merchantInfo={merchantInfo}
+            />
+          ) : (
+            <OrderList
+              filteredOrders={filteredOrders}
+              merchantInfo={merchantInfo}
+              onSelectOrder={onSelectOrder}
+              onSelectMempoolOrder={onSelectMempoolOrder}
+              onAcceptOrder={onAcceptOrder}
+              onCancelOrder={onCancelOrder}
+              acceptingOrderId={acceptingOrderId}
+            />
+          )}
 
-      {/* Load More button — only shows on the All / Pending feeds (not the
+          {/* Load More button — only shows on the All / Pending feeds (not the
           "My Orders" tab, which has its own paginator), and only when there
           are already rows visible. Without the empty-list guard the button
           renders under the "No pending orders" empty state — confusing
           because there's nothing to "load more" of from the user's POV. */}
-      {view !== "mine" && filteredOrders.length > 0 && hasMore && onLoadMore && (
-        <div className="px-3 py-2 border-t border-section-divider">
-          <button
-            onClick={onLoadMore}
-            disabled={isLoadingMore}
-            className="w-full py-2 rounded-lg text-[11px] font-bold text-foreground/40 hover:text-foreground/60 bg-foreground/[0.03] hover:bg-foreground/[0.06] border border-foreground/[0.06] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
-          >
-            {isLoadingMore ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              "Load More"
+          {view !== "mine" &&
+            filteredOrders.length > 0 &&
+            hasMore &&
+            onLoadMore && (
+              <div className="px-3 py-2 border-t border-section-divider">
+                <button
+                  onClick={onLoadMore}
+                  disabled={isLoadingMore}
+                  className="w-full py-2 rounded-lg text-[11px] font-bold text-foreground/40 hover:text-foreground/60 bg-foreground/[0.03] hover:bg-foreground/[0.06] border border-foreground/[0.06] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {isLoadingMore ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    "Load More"
+                  )}
+                </button>
+              </div>
             )}
-          </button>
-        </div>
-      )}
         </>
       )}
     </div>
@@ -1730,12 +2026,12 @@ const MyOrdersList = memo(function MyOrdersList({
         const mySide: "seller" | "buyer" = iAmSeller
           ? "seller"
           : iAmBuyer
-            ? "buyer"
-            : seller === myName
-              ? "seller"
-              : buyer === myName
-                ? "buyer"
-                : "seller";
+          ? "buyer"
+          : seller === myName
+          ? "seller"
+          : buyer === myName
+          ? "buyer"
+          : "seller";
         const counterpartyName: string | null =
           mySide === "seller" ? buyer : seller;
         const leftName = mySide === "seller" ? myName : counterpartyName;
@@ -1798,7 +2094,9 @@ const MyOrdersList = memo(function MyOrdersList({
                     </>
                   ) : (
                     <span
-                      className={`whitespace-nowrap ${leftName || rightName ? "" : "text-foreground/40"}`}
+                      className={`whitespace-nowrap ${
+                        leftName || rightName ? "" : "text-foreground/40"
+                      }`}
                       title={
                         leftName || rightName
                           ? `Placed by ${leftName || rightName}`
@@ -1832,7 +2130,11 @@ const MyOrdersList = memo(function MyOrdersList({
             <div className="relative mb-2 rounded-xl overflow-hidden backdrop-blur-sm">
               <div className="absolute inset-0 bg-gradient-to-br from-foreground/[0.05] via-foreground/[0.02] to-transparent" />
               <div
-                className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-white/[0.04] via-white/[0.02] to-transparent`}
+                className={`absolute inset-y-0 ${
+                  right.isReceive ? "right-0" : "left-0"
+                } w-1/2 bg-gradient-to-${
+                  right.isReceive ? "l" : "r"
+                } from-white/[0.04] via-white/[0.02] to-transparent`}
               />
               <div className="absolute inset-0 rounded-xl border border-foreground/[0.08]" />
 
@@ -1840,17 +2142,23 @@ const MyOrdersList = memo(function MyOrdersList({
                 <div className="flex-1 px-3.5 py-2.5">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-white/[0.30]" : "bg-foreground/30"}`}
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        left.isReceive ? "bg-white/[0.30]" : "bg-foreground/30"
+                      }`}
                     />
                     <span
-                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${left.isReceive ? "text-[#f5f5f7]" : "text-foreground/50"}`}
+                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${
+                        left.isReceive ? "text-[#f5f5f7]" : "text-foreground/50"
+                      }`}
                     >
                       {left.label}
                     </span>
                   </div>
                   <div className="flex items-baseline gap-1.5">
                     <span
-                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${left.isReceive ? "text-[#f5f5f7]" : "text-white"}`}
+                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${
+                        left.isReceive ? "text-[#f5f5f7]" : "text-white"
+                      }`}
                     >
                       {left.amount}
                     </span>
@@ -1874,17 +2182,25 @@ const MyOrdersList = memo(function MyOrdersList({
                 <div className="flex-1 px-3.5 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-1.5 mb-1.5">
                     <span
-                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${right.isReceive ? "text-[#f5f5f7]" : "text-foreground/50"}`}
+                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${
+                        right.isReceive
+                          ? "text-[#f5f5f7]"
+                          : "text-foreground/50"
+                      }`}
                     >
                       {right.label}
                     </span>
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-white/[0.30]" : "bg-foreground/30"}`}
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        right.isReceive ? "bg-white/[0.30]" : "bg-foreground/30"
+                      }`}
                     />
                   </div>
                   <div className="flex items-baseline justify-end gap-1.5">
                     <span
-                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${right.isReceive ? "text-[#f5f5f7]" : "text-white"}`}
+                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${
+                        right.isReceive ? "text-[#f5f5f7]" : "text-white"
+                      }`}
                     >
                       {right.amount}
                     </span>

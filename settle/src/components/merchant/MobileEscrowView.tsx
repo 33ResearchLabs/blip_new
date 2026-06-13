@@ -99,9 +99,10 @@ interface ActiveCardProps {
   onOpenDisputeModal: (id: string) => void;
   onOpenCancelModal: (o: Order) => void;
   setMobileView: (v: any) => void;
+  onSelectOrder?: (o: Order) => void;
 }
 
-function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkFiatPaymentSent, onConfirmPayment, onOpenChat, onOpenDisputeModal, onOpenCancelModal, setMobileView }: ActiveCardProps) {
+function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkFiatPaymentSent, onConfirmPayment, onOpenChat, onOpenDisputeModal, onOpenCancelModal, setMobileView, onSelectOrder }: ActiveCardProps) {
   const dbStatus = order.dbOrder?.minimal_status || order.dbOrder?.status;
   const role = order.myRole || "observer";
   const hasBeenAccepted = !!order.dbOrder?.accepted_at;
@@ -168,8 +169,12 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
         </span>
       </div>
 
-      {/* Trust block */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+      {/* Trust block — tap to open the full order detail (OrderQuickView). */}
+      <div
+        onClick={onSelectOrder ? () => onSelectOrder(order) : undefined}
+        role={onSelectOrder ? "button" : undefined}
+        style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10, cursor: onSelectOrder ? "pointer" : undefined }}
+      >
         <span style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: "linear-gradient(150deg,#ff8a3d,#ff5d73)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13 }}>
           {initials}
         </span>
@@ -302,12 +307,14 @@ export interface MobileEscrowViewProps {
   onOpenCancelModal: (order: Order) => void;
   onOpenChat: (order: Order) => void;
   setMobileView: (view: "orders" | "escrow" | "chat" | "history" | "marketplace") => void;
+  onSelectOrder?: (order: Order) => void;
 }
 
 export function MobileEscrowView({
   ongoingOrders, markingDone,
   onOpenEscrowModal, onMarkFiatPaymentSent, onConfirmPayment,
   onOpenDisputeModal, onOpenCancelModal, onOpenChat, setMobileView,
+  onSelectOrder,
 }: MobileEscrowViewProps) {
   const [filter, setFilter] = useState<EscrowStatusFilter>("all");
   const merchantId = useMerchantStore((s) => s.merchantId);
@@ -390,6 +397,7 @@ export function MobileEscrowView({
           onOpenDisputeModal={onOpenDisputeModal}
           onOpenCancelModal={onOpenCancelModal}
           setMobileView={setMobileView}
+          onSelectOrder={onSelectOrder}
         />
       )) : (
         <div style={{ textAlign: "center", paddingTop: 100 }}>

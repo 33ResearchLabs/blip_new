@@ -11,6 +11,10 @@ import {
   Flame,
   ArrowRightLeft,
   Plus,
+  CreditCard,
+  Smartphone,
+  Banknote,
+  Check,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -46,6 +50,17 @@ interface MerchantPaymentMethod {
   is_default?: boolean;
 }
 
+// Payment rails a merchant can pay through when they are the BUYER on a buy
+// order. Selected types ride along as `buyer_payment_types` (same shape the
+// user-side buy flow uses); the order is then shown only to sellers who
+// support one of them.
+const BUY_PAY_TYPES: { key: string; label: string; Icon: typeof CreditCard }[] =
+  [
+    { key: "bank", label: "Bank", Icon: CreditCard },
+    { key: "upi", label: "UPI", Icon: Smartphone },
+    { key: "cash", label: "Cash", Icon: Banknote },
+  ];
+
 interface ConfigPanelProps {
   merchantId: string | null;
   merchantInfo: any;
@@ -57,6 +72,8 @@ interface ConfigPanelProps {
     paymentMethod: "bank" | "cash";
     paymentMethodId?: string;
     spreadPreference: "best" | "fastest" | "cheap";
+    // BUY only: payment rails the merchant (buyer) can pay with.
+    buyerPaymentTypes?: string[];
   };
   setOpenTradeForm: (form: any) => void;
   isCreatingTrade: boolean;
@@ -211,6 +228,8 @@ export const ConfigPanel = memo(function ConfigPanel({
   // its handler (`newPm`/`handleAddPaymentMethod`) is removed; modal owns it.
   const [showAddPm, setShowAddPm] = useState(false);
   const [showPmDropdown, setShowPmDropdown] = useState(false);
+  // "How you'll pay" multi-select dropdown (BUY payment rails).
+  const [showPayTypesDropdown, setShowPayTypesDropdown] = useState(false);
 
   // The `me` alias is resolved server-side from auth.actorId. We do NOT
   // depend on the `merchantId` prop here — that prop hydrates from
@@ -302,6 +321,16 @@ export const ConfigPanel = memo(function ConfigPanel({
 
   const handlePriorityChange = (val: number) => {
     setPriorityFee(Math.min(50, Math.max(0, val)));
+  };
+
+  // Toggle a payment rail (bank/upi/cash) the merchant can pay with on a BUY
+  // order. Stored on the form as `buyerPaymentTypes`; sent only when buying.
+  const toggleBuyerPaymentType = (t: string) => {
+    const cur = openTradeForm.buyerPaymentTypes ?? [];
+    const next = cur.includes(t)
+      ? cur.filter((x) => x !== t)
+      : [...cur, t];
+    setOpenTradeForm({ ...openTradeForm, buyerPaymentTypes: next });
   };
 
   const isDisabled =
@@ -432,20 +461,91 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
         </div>
 
-        {/* Payment Methods — dropdown (weight 1). Height-laddered floor so
-            the selector content (icon + name + account number) stays legible
-            while shrinking to fit. */}
-        <div className={`relative ${rowSizing} flex flex-col z-30`}>
-          {/* Label — this row was the ONLY control without one (Amount,
-              Spread, Boost all have a label above their control). That made
-              the gap below the dropdown (gap + the Spread label) read as
-              larger than the gap above it (gap only). Mirrors the Spread
-              label's classes so every row now carries the same label-gap and
-              the box-to-box spacing is even top-and-bottom. */}
-          <label className="text-[10px] @max-[220px]:text-[9px] text-foreground/30 mb-1 @max-h-[360px]:mb-0.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold shrink-0">
-            Payment
-          </label>
-          {(() => {
+        {/* Payment row (weight 1) — two controls side by side: the buyer
+            payment-type chips (BUY) on the left and the saved-account dropdown
+            (SELL) on the right. Height-laddered floors keep both legible while
+            the panel shrinks. */}
+        <div className={`relative ${rowSizing} flex flex-row gap-2 @max-[240px]:gap-1.5 z-30`}>
+          {/* LEFT — "How you'll pay": payment-type chips. On a BUY order the
+              merchant is the buyer who pays fiat, so these ride along as
+              `buyer_payment_types` (mirrors the user-side buy flow). They have
+              no effect on a SELL (the right-hand account is used instead). */}
+          <div className="flex-1 min-w-0 flex flex-col relative">
+            <label className="text-[10px] @max-[220px]:text-[9px] text-foreground/30 mb-1 @max-h-[360px]:mb-0.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold shrink-0">
+              How you&apos;ll pay
+            </label>
+            {(() => {
+              const selected = openTradeForm.buyerPaymentTypes ?? [];
+              // Closed-state summary: the chosen rails joined ("Bank, UPI").
+              const selectedLabel = BUY_PAY_TYPES.filter((t) =>
+                selected.includes(t.key),
+              )
+                .map((t) => t.label)
+                .join(", ");
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowPayTypesDropdown(!showPayTypesDropdown)}
+                    className="w-full flex-[0.75] min-h-[2.75rem] @max-h-[440px]:min-h-[2.5rem] @max-h-[400px]:min-h-[2.25rem] @max-h-[360px]:min-h-[2rem] @max-h-[320px]:min-h-[1.75rem] @max-h-[280px]:min-h-[1.5rem] @max-h-[240px]:min-h-[1.375rem] flex items-center justify-between gap-2 @max-[240px]:gap-1 px-3 @max-[240px]:px-2 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
+                  >
+                    {selected.length > 0 ? (
+                      <span className="text-[11px] @max-[280px]:text-[10px] @max-[220px]:text-[9px] font-bold text-foreground/80 truncate text-left flex-1">
+                        {selectedLabel}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-foreground/40 truncate text-left flex-1">
+                        Select
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 @max-[220px]:w-3 @max-[220px]:h-3 text-foreground/30 transition-transform shrink-0 ${showPayTypesDropdown ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {showPayTypesDropdown && (
+                    <div className="absolute z-30 top-full left-0 right-0 mt-1 rounded-xl border border-foreground/[0.08] bg-card-solid shadow-lg overflow-hidden">
+                      {BUY_PAY_TYPES.map(({ key, label, Icon }) => {
+                        const on = selected.includes(key);
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => toggleBuyerPaymentType(key)}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                              on
+                                ? "bg-white/[0.06] text-foreground/90"
+                                : "hover:bg-foreground/[0.04] text-foreground/60"
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5 shrink-0" />
+                            <span className="text-[11px] font-bold truncate flex-1">
+                              {label}
+                            </span>
+                            {on && (
+                              <Check
+                                className="w-3.5 h-3.5 shrink-0"
+                                strokeWidth={3}
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          {/* RIGHT — "How you'll get": saved-account dropdown. Used on a SELL
+              order, where the merchant is the seller receiving fiat into this
+              account. Kept here so both controls sit side by side. */}
+          <div className="flex-1 min-w-0 flex flex-col relative">
+            <label className="text-[10px] @max-[220px]:text-[9px] text-foreground/30 mb-1 @max-h-[360px]:mb-0.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold shrink-0">
+              How you&apos;ll get
+            </label>
+            {(() => {
             const pmIcon = (type: string) =>
               type === "bank"
                 ? "🏦"
@@ -566,6 +666,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               </>
             );
           })()}
+          </div>
 
           {/* Add-payment-method modal — replaces the previous inline 2-input
               form. Same modal merchant-settings uses, so the form fields

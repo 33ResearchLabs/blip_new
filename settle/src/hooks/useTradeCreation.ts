@@ -18,6 +18,8 @@ interface UseTradeCreationParams {
     paymentMethodId?: string;
     spreadPreference: "best" | "fastest" | "cheap";
     expiryMinutes: 15 | 90;
+    // BUY orders (merchant is the buyer): rails the merchant can pay with.
+    buyerPaymentTypes?: string[];
   };
   setOpenTradeForm: (form: any) => void;
   setShowOpenTradeModal: (show: boolean) => void;
@@ -35,6 +37,7 @@ const DEFAULT_FORM = {
   paymentMethodId: undefined as string | undefined,
   spreadPreference: "fastest" as const,
   expiryMinutes: 15 as const,
+  buyerPaymentTypes: [] as string[],
 };
 
 export function useTradeCreation({
@@ -51,6 +54,9 @@ export function useTradeCreation({
   refreshBalance,
 }: UseTradeCreationParams) {
   const merchantId = useMerchantStore(s => s.merchantId);
+  // My own display name — so a freshly-created open order shows my name
+  // instead of the generic "Merchant" counterparty fallback (mapDbOrderToUI).
+  const merchantName = useMerchantStore(s => s.merchantInfo?.display_name || s.merchantInfo?.username || null);
   const setOrders = useMerchantStore(s => s.setOrders);
 
   // Per-submission idempotency key for the BUY merchant order create flow
@@ -161,7 +167,7 @@ export function useTradeCreation({
           return;
         }
         if (data.data) {
-          const newOrder = mapDbOrderToUI(data.data, merchantId);
+          const newOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
           setOrders((prev: Order[]) => [newOrder, ...prev.filter((o: Order) => o.id !== newOrder.id)]);
           playSound('trade_complete');
           addNotification('escrow', `Sell order created! ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDT locked in escrow`, data.data?.id);
@@ -195,6 +201,9 @@ export function useTradeCreation({
           crypto_amount: parseFloat(openTradeForm.cryptoAmount),
           payment_method: openTradeForm.paymentMethod, spread_preference: openTradeForm.spreadPreference,
           merchant_payment_method_id: openTradeForm.paymentMethodId,
+          // BUY: rails the merchant (buyer) can pay with — shown only to
+          // sellers who support one. Server ignores it for sell.
+          buyer_payment_types: openTradeForm.buyerPaymentTypes ?? [],
           pair: activeCorridor.toLowerCase(),
         }),
       });
@@ -206,7 +215,7 @@ export function useTradeCreation({
       if (data.data) {
         // Order committed — release the per-submission key.
         buySubmitIdRef.current = null;
-        const newOrder = mapDbOrderToUI(data.data, merchantId);
+        const newOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
         setOrders((prev: Order[]) => [newOrder, ...prev.filter((o: Order) => o.id !== newOrder.id)]);
       }
       setShowOpenTradeModal(false);
@@ -216,7 +225,7 @@ export function useTradeCreation({
     } finally {
       setIsCreatingTrade(false);
     }
-  }, [merchantId, openTradeForm, solanaWallet, effectiveBalance, activeCorridor, playSound, addNotification, refreshBalance]);
+  }, [merchantId, merchantName, openTradeForm, solanaWallet, effectiveBalance, activeCorridor, playSound, addNotification, refreshBalance]);
 
   return { handleCreateTrade };
 }

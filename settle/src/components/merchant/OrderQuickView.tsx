@@ -15,8 +15,27 @@ import {
   ExternalLink,
   Loader2,
   Copy,
+  Hourglass,
+  Users,
+  User,
+  ChevronRight,
+  Banknote,
+  Coins,
+  Info,
+  Wallet,
+  FileText,
+  CheckCircle2,
+  ShieldCheck,
+  AlertTriangle,
+  Headphones,
+  RotateCw,
+  Eye,
 } from "lucide-react";
-import { useState as useLocalState } from "react";
+import {
+  useState as useLocalState,
+  useEffect as useLocalEffect,
+  Fragment,
+} from "react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 // Backend-driven: action buttons read from dbOrder.primaryAction/secondaryAction
@@ -156,6 +175,867 @@ function LockedPaymentMethodCard({
   );
 }
 
+// Shown to a merchant viewing their OWN pending BUY order (broadcast). Before a
+// seller accepts there is no destination account yet, so we surface the payment
+// rails the merchant chose at order time (buyer_payment_types). Accent-themed
+// (var(--accent)) — deliberately NO hardcoded purple.
+function BuyerPayTypesCard({ types }: { types: string[] }) {
+  const META: Record<string, { label: string; Icon: typeof Building2 }> = {
+    bank: { label: "Bank Transfer", Icon: Building2 },
+    upi: { label: "UPI", Icon: Smartphone },
+    cash: { label: "Cash", Icon: Banknote },
+  };
+  return (
+    <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+      <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+        Payment Method (You Will Pay Using)
+      </span>
+      <div className="flex flex-wrap gap-2">
+        {types.map((t) => {
+          const m = META[t] ?? { label: t.toUpperCase(), Icon: CreditCard };
+          const Icon = m.Icon;
+          return (
+            <div
+              key={t}
+              className="flex items-center gap-2 pr-3.5 rounded-full bg-foreground/[0.04] border border-foreground/[0.06]"
+            >
+              <div className="w-8 h-8 rounded-full bg-[var(--accent)]/15 flex items-center justify-center">
+                <Icon className="w-4 h-4 text-[var(--accent)]" />
+              </div>
+              <span className="text-sm font-medium text-foreground">
+                {m.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-start gap-2 pt-2 border-t border-foreground/[0.04]">
+        <Info className="w-3.5 h-3.5 text-foreground/30 mt-0.5 shrink-0" />
+        <p className="text-xs text-foreground/40">
+          You can pay using any of the above methods after a merchant accepts.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// "What happens next" for a broadcast BUY order, from the buyer's perspective.
+const BUY_FLOW_STEPS: { label: string; Icon: typeof User }[] = [
+  { label: "Waiting for\nMerchant", Icon: User },
+  { label: "Merchant\nAccepts", Icon: Users },
+  { label: "Escrow\nLocked", Icon: Lock },
+  { label: "You Pay\nFiat", Icon: Banknote },
+  { label: "USDT\nReleased", Icon: Coins },
+];
+
+// Status + 5-step progress shown on a merchant's OWN pending BUY order.
+function OpenMarketWaitingCard({
+  createdAt,
+  expiresAt,
+  currentStep = 0,
+}: {
+  createdAt?: string | Date | null;
+  expiresAt?: string | Date | null;
+  currentStep?: number;
+}) {
+  const [now, setNow] = useLocalState(() => Date.now());
+  useLocalEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const expiryMs = expiresAt ? new Date(expiresAt).getTime() : 0;
+  const remaining = Math.max(0, Math.floor((expiryMs - now) / 1000));
+  const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const ss = String(remaining % 60).padStart(2, "0");
+  const createdLabel = createdAt
+    ? new Date(createdAt).toLocaleString("en-US", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
+
+  return (
+    <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-4">
+      <div className="flex items-start gap-3">
+        <div className="w-12 h-12 rounded-full border-2 border-[var(--accent)]/40 flex items-center justify-center shrink-0">
+          <Hourglass className="w-5 h-5 text-[var(--accent)]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-semibold text-foreground leading-snug">
+              Open Market – Waiting for Merchant Acceptance
+            </p>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] shrink-0 whitespace-nowrap">
+              Step {currentStep + 1} of {BUY_FLOW_STEPS.length}
+            </span>
+          </div>
+          <p className="text-xs text-foreground/45 mt-1 leading-relaxed">
+            Your order is visible to all merchants. Once a merchant accepts, they
+            will lock USDT in escrow and provide payment details.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 pt-1 text-[11px]">
+        <span className="flex items-center gap-1 text-foreground/40">
+          <Clock className="w-3 h-3" /> Order expires in{" "}
+          {expiryMs > 0 && (
+            <span className="text-[var(--accent)] font-mono font-bold">
+              {mm}:{ss}
+            </span>
+          )}
+        </span>
+        {createdLabel && (
+          <span className="text-foreground/30">Created on {createdLabel}</span>
+        )}
+      </div>
+
+      <div className="pt-3 border-t border-foreground/[0.04]">
+        <p className="text-[10px] text-foreground/35 uppercase tracking-wide font-bold mb-3">
+          What happens next
+        </p>
+        <div className="flex items-start justify-between">
+          {BUY_FLOW_STEPS.map((s, i) => {
+            const active = i <= currentStep;
+            const Icon = s.Icon;
+            return (
+              <Fragment key={i}>
+                <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                      active
+                        ? "bg-[var(--accent)] text-[var(--accent-text)]"
+                        : "bg-foreground/[0.04] text-foreground/30 border border-foreground/[0.06]"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <span
+                    className={`text-[9px] text-center leading-tight whitespace-pre-line ${
+                      active ? "text-foreground/70" : "text-foreground/30"
+                    }`}
+                  >
+                    {`${i + 1}. ${s.label}`}
+                  </span>
+                </div>
+                {i < BUY_FLOW_STEPS.length - 1 && (
+                  <ChevronRight className="w-3 h-3 text-foreground/15 mt-3 shrink-0" />
+                )}
+              </Fragment>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Seller's view of a NEW pending BUY order they can accept (someone else placed
+// it). The mirror of the buyer-side modal: the buyer's chosen rails, the
+// buyer's trust, and the steps that follow acceptance. Accent-themed
+// (var(--accent)) — no purple; the green Accept CTA lives in the action row.
+function AcceptorBuyOrderBody({
+  order,
+  db,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  order: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any;
+}) {
+  const [now, setNow] = useLocalState(() => Date.now());
+  useLocalEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const countdown = (target: string | undefined) => {
+    if (!target) return null;
+    const r = Math.max(0, Math.floor((new Date(target).getTime() - now) / 1000));
+    return `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(r % 60).padStart(2, "0")}`;
+  };
+
+  const PM_META: Record<string, { label: string; Icon: typeof Building2 }> = {
+    bank: { label: "Bank Transfer", Icon: Building2 },
+    upi: { label: "UPI", Icon: Smartphone },
+    cash: { label: "Cash", Icon: Banknote },
+  };
+  const types: string[] = Array.isArray(db.buyer_payment_types)
+    ? db.buyer_payment_types
+    : [];
+  // No "preferred" flag in the model — treat the first chosen rail as preferred.
+  const preferred = types[0];
+
+  const ccy = order.toCurrency || "AED";
+  const sym = fiatSymbol(ccy);
+  const total = Math.round(order.total || 0);
+
+  const buyer = db.user || {};
+  const trades = buyer.total_trades ?? 0;
+  const disputes = buyer.dispute_count ?? 0;
+  const verified = !!buyer.is_verified;
+  const ratingNum = typeof buyer.rating === "number" ? buyer.rating : null;
+  // Rating is 0-5; surface as an x/100 trust score when present.
+  const trustScore =
+    ratingNum != null && ratingNum > 0 ? Math.round((ratingNum / 5) * 100) : null;
+  // Success rate from completed vs disputed trades; null (→ hidden) when none.
+  const successRate =
+    trades > 0 ? Math.round(((trades - disputes) / trades) * 100) : null;
+  // Account age from the buyer's join date.
+  const ageLabel = (() => {
+    const iso = buyer.account_created_at;
+    if (!iso) return null;
+    const months = Math.floor(
+      (now - new Date(iso).getTime()) / (1000 * 60 * 60 * 24 * 30.44),
+    );
+    if (months < 1) return "New";
+    if (months < 12) return `${months} Month${months > 1 ? "s" : ""}`;
+    const years = Math.floor(months / 12);
+    const rem = months % 12;
+    return rem ? `${years}y ${rem}m` : `${years} Year${years > 1 ? "s" : ""}`;
+  })();
+
+  const createdLabel = db.created_at
+    ? new Date(db.created_at).toLocaleString("en-US", {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
+  const orderIdShort =
+    typeof db.id === "string" ? `BLP-${db.id.slice(0, 8).toUpperCase()}` : "—";
+
+  const expiresIn = countdown(db.expires_at);
+
+  const STEPS: { label: string; Icon: typeof Wallet }[] = [
+    { label: "Select Receiving\nAccount", Icon: Wallet },
+    { label: "Lock USDT\nin Escrow", Icon: Lock },
+    { label: "Buyer Receives\nPayment Details", Icon: FileText },
+    { label: `Buyer Sends\n${ccy} Payment`, Icon: Banknote },
+    { label: "You Confirm &\nUSDT Released", Icon: CheckCircle2 },
+  ];
+
+  return (
+    <>
+      {/* Banner */}
+      <div className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)]/[0.06] p-3 flex items-start gap-3">
+        <div className="w-8 h-8 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center shrink-0">
+          <Users className="w-4 h-4 text-[var(--accent)]" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[var(--accent)]">
+            A user has placed a buy order in the open market.
+          </p>
+          <p className="text-xs text-foreground/45 mt-0.5">
+            Accept the order to lock USDT in escrow and provide payment details.
+          </p>
+        </div>
+      </div>
+
+      {/* Order Summary + Buyer Payment Method (2-col on desktop, stacked on mobile) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+          <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+            Order Summary
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-foreground">{order.amount}</span>
+            <span className="text-sm font-semibold text-foreground/60">USDT</span>
+          </div>
+          <div className="text-lg font-bold text-foreground">
+            {sym} {total.toLocaleString()}{" "}
+            <span className="text-xs font-medium text-foreground/40">{ccy}</span>
+          </div>
+          <div className="pt-2 border-t border-foreground/[0.04] space-y-1.5 text-[12px]">
+            <div className="flex justify-between gap-2">
+              <span className="text-foreground/40">Rate (Locked)</span>
+              <span className="font-mono text-foreground/70">
+                1 USDT = {order.rate} {ccy}
+              </span>
+            </div>
+            {expiresIn && (
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/40">Order Expires In</span>
+                <span className="font-mono text-amber-400 font-bold">{expiresIn}</span>
+              </div>
+            )}
+            <div className="flex justify-between gap-2">
+              <span className="text-foreground/40">Order ID</span>
+              <span className="font-mono text-foreground/60 truncate">{orderIdShort}</span>
+            </div>
+            {createdLabel && (
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/40">Created</span>
+                <span className="text-foreground/60">{createdLabel}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+          <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+            Buyer Payment Method
+          </span>
+          <div className="space-y-2.5">
+            {types.map((t) => {
+              const m = PM_META[t] ?? { label: t.toUpperCase(), Icon: CreditCard };
+              const Icon = m.Icon;
+              return (
+                <div key={t} className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-[var(--accent)]/15 flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4 text-[var(--accent)]" />
+                  </div>
+                  <span className="text-sm font-medium text-foreground flex-1">
+                    {m.label}
+                  </span>
+                  <Check className="w-4 h-4 text-emerald-400" strokeWidth={3} />
+                </div>
+              );
+            })}
+          </div>
+          {preferred && (
+            <div className="pt-2 border-t border-foreground/[0.04]">
+              <p className="text-[11px] text-foreground/40 mb-1">Preferred Method</p>
+              <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent)] uppercase">
+                {PM_META[preferred]?.label ?? preferred}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Buyer Trust */}
+      <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-emerald-400" />
+          <span className="text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+            Buyer Trust
+          </span>
+          {trustScore != null && (
+            <span className="ml-auto text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
+              {trustScore}/100
+            </span>
+          )}
+        </div>
+        <div className="space-y-1.5 text-[12px]">
+          <div className="flex justify-between gap-2">
+            <span className="text-foreground/45">Completed Trades</span>
+            <span className="font-semibold text-foreground/80">{trades}</span>
+          </div>
+          {successRate != null && (
+            <div className="flex justify-between gap-2">
+              <span className="text-foreground/45">Success Rate</span>
+              <span className="font-semibold text-emerald-400">{successRate}%</span>
+            </div>
+          )}
+          {ageLabel && (
+            <div className="flex justify-between gap-2">
+              <span className="text-foreground/45">Account Age</span>
+              <span className="font-semibold text-foreground/80">{ageLabel}</span>
+            </div>
+          )}
+          <div className="flex justify-between gap-2">
+            <span className="text-foreground/45">KYC Status</span>
+            <span className={`font-semibold ${verified ? "text-emerald-400" : "text-foreground/50"}`}>
+              {verified ? "Verified" : "Unverified"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* After you accept */}
+      <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
+        <p className="text-[10px] text-foreground/35 uppercase tracking-wide font-bold mb-3">
+          After you accept this order
+        </p>
+        <div className="flex items-start justify-between">
+          {STEPS.map((s, i) => {
+            const Icon = s.Icon;
+            return (
+              <Fragment key={i}>
+                <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-[var(--accent)]/15 flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-[var(--accent)]" />
+                  </div>
+                  <span className="text-[9px] text-center leading-tight whitespace-pre-line text-foreground/45">
+                    {`${i + 1}. ${s.label}`}
+                  </span>
+                </div>
+                {i < STEPS.length - 1 && (
+                  <ChevronRight className="w-3 h-3 text-foreground/15 mt-3 shrink-0" />
+                )}
+              </Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Escrow Protection */}
+      <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-3 flex items-start gap-3">
+        <div className="w-8 h-8 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center shrink-0">
+          <Shield className="w-4 h-4 text-[var(--accent)]" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">Escrow Protection</p>
+          <p className="text-xs text-foreground/45 mt-0.5">
+            Your USDT will be securely locked in escrow. Release happens only
+            after you confirm you have received the payment.
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Merchant's view of an IN-PROGRESS order they're party to (accepted →
+// escrowed → payment_sent). Mirrors AcceptorBuyOrderBody's rich layout but is
+// driven by a per-status STAGE map so every active stage reuses ONE design:
+// the stepper highlights the current step and the banner adapts. The actual
+// CTA (Lock Escrow / Confirm Payment / I've Paid) is rendered by the
+// backend-driven footer below — this body is presentation only.
+function ActiveOrderBody({
+  order,
+  db,
+  role,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  order: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any;
+  role: "buyer" | "seller";
+}) {
+  const [now, setNow] = useLocalState(() => Date.now());
+  const [copiedId, setCopiedId] = useLocalState(false);
+  useLocalEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const isSeller = role === "seller";
+  const ccy = order.toCurrency || "AED";
+  const sym = fiatSymbol(ccy);
+  const amount = order.amount;
+  const total = Math.round(order.total || 0);
+  const status = String(db.status || db.minimal_status || "").toLowerCase();
+
+  const countdown = (target: string | undefined) => {
+    if (!target) return null;
+    const r = Math.max(0, Math.floor((new Date(target).getTime() - now) / 1000));
+    return `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(r % 60).padStart(2, "0")}`;
+  };
+  const expiresIn = countdown(db.expires_at);
+
+  const createdLabel = db.created_at
+    ? new Date(db.created_at).toLocaleString("en-US", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "";
+  const orderIdShort =
+    typeof db.id === "string" ? `BLP-${db.id.slice(0, 8).toUpperCase()}` : "—";
+
+  // ---- progress stepper ----
+  const STEPS: { label: string; Icon: typeof Lock }[] = isSeller
+    ? [
+        { label: "Accepted", Icon: Check },
+        { label: "Lock Escrow", Icon: Lock },
+        { label: "Buyer Pays", Icon: Banknote },
+        { label: "Verify Payment", Icon: ShieldCheck },
+        { label: "Release USDT", Icon: Coins },
+      ]
+    : [
+        { label: "Accepted", Icon: Check },
+        { label: "Seller Locks", Icon: Lock },
+        { label: "You Pay", Icon: Banknote },
+        { label: "Seller Verifies", Icon: ShieldCheck },
+        { label: "USDT Released", Icon: Coins },
+      ];
+  const STEP_BY_STATUS: Record<string, number> = {
+    accepted: 1,
+    escrowed: 2,
+    payment_sent: 3,
+    completed: 4,
+  };
+  const currentStep = STEP_BY_STATUS[status] ?? 1;
+
+  // ---- action / status banner (per stage + role) ----
+  const banner = (() => {
+    if (isSeller) {
+      if (status === "accepted")
+        return { heading: "Action Required", title: `Lock ${amount} USDT in escrow to start the trade.`, sub: "Buyer cannot send payment until escrow is locked.", Icon: Hourglass, urgent: true };
+      if (status === "escrowed")
+        return { heading: "Escrow Locked", title: "Waiting for the buyer to send payment.", sub: "You'll be notified the moment they mark it as paid.", Icon: Clock, urgent: false };
+      if (status === "payment_sent")
+        return { heading: "Action Required", title: `Buyer marked the ${ccy} payment as sent.`, sub: "Verify it landed in your account, then release the USDT.", Icon: ShieldCheck, urgent: true };
+    } else {
+      if (status === "accepted")
+        return { heading: "Please Wait", title: "Seller is locking USDT in escrow.", sub: `You can send ${ccy} once escrow is locked.`, Icon: Clock, urgent: false };
+      if (status === "escrowed")
+        return { heading: "Action Required", title: `Send ${sym}${total.toLocaleString()} to the seller.`, sub: "Mark the payment as sent once you've paid.", Icon: Banknote, urgent: true };
+      if (status === "payment_sent")
+        return { heading: "Please Wait", title: "Seller is verifying your payment.", sub: "USDT will be released to you once confirmed.", Icon: Clock, urgent: false };
+    }
+    return { heading: "In Progress", title: "Trade in progress.", sub: "", Icon: Clock, urgent: false };
+  })();
+  const BannerIcon = banner.Icon;
+
+  // ---- counterparty trust (the buyer, when we're the seller) ----
+  const cp = db.user || {};
+  const trades = cp.total_trades ?? 0;
+  const disputes = cp.dispute_count ?? 0;
+  const verified = !!cp.is_verified;
+  const ratingNum = typeof cp.rating === "number" ? cp.rating : null;
+  const trustScore =
+    ratingNum != null && ratingNum > 0 ? Math.round((ratingNum / 5) * 100) : null;
+  const successRate =
+    trades > 0 ? Math.round(((trades - disputes) / trades) * 100) : null;
+  const ageLabel = (() => {
+    const iso = cp.account_created_at;
+    if (!iso) return null;
+    const months = Math.floor(
+      (now - new Date(iso).getTime()) / (1000 * 60 * 60 * 24 * 30.44),
+    );
+    if (months < 1) return "New";
+    if (months < 12) return `${months} Month${months > 1 ? "s" : ""}`;
+    const years = Math.floor(months / 12);
+    const rem = months % 12;
+    return rem ? `${years}y ${rem}m` : `${years} Year${years > 1 ? "s" : ""}`;
+  })();
+
+  // ---- counterparty payment rails ----
+  const PM_META: Record<string, { label: string; Icon: typeof Building2 }> = {
+    bank: { label: "Bank Transfer", Icon: Building2 },
+    upi: { label: "UPI", Icon: Smartphone },
+    cash: { label: "Cash", Icon: Banknote },
+  };
+  const payTypes: string[] = Array.isArray(db.buyer_payment_types)
+    ? db.buyer_payment_types
+    : [];
+  const preferred = payTypes[0];
+  const pmHeading = isSeller ? "Buyer Payment Method" : "Seller Payment Method";
+  const trustHeading = isSeller ? "Buyer Trust" : "Seller Trust";
+
+  return (
+    <>
+      {/* Action / status banner */}
+      <div
+        className={`rounded-xl border p-4 ${
+          banner.urgent
+            ? "border-amber-500/25 bg-amber-500/[0.06]"
+            : "border-foreground/[0.06] bg-foreground/[0.02]"
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className={`w-11 h-11 rounded-full border-2 flex items-center justify-center shrink-0 ${
+              banner.urgent ? "border-amber-500/40" : "border-foreground/15"
+            }`}
+          >
+            <BannerIcon
+              className={`w-5 h-5 ${banner.urgent ? "text-amber-400" : "text-foreground/50"}`}
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <p
+                className={`text-sm font-bold ${banner.urgent ? "text-amber-400" : "text-foreground/70"}`}
+              >
+                {banner.heading}
+              </p>
+              {expiresIn && (
+                <span className="flex items-center gap-1 text-[11px] text-foreground/40 shrink-0 whitespace-nowrap">
+                  <Clock className="w-3 h-3" /> Expires in{" "}
+                  <span className="font-mono font-bold text-amber-400">{expiresIn}</span>
+                </span>
+              )}
+            </div>
+            <p className="text-sm font-semibold text-foreground mt-0.5 leading-snug">
+              {banner.title}
+            </p>
+            {banner.sub && (
+              <p className="text-xs text-foreground/45 mt-0.5">{banner.sub}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Progress stepper */}
+      <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
+        <div className="flex items-start justify-between">
+          {STEPS.map((s, i) => {
+            const done = i < currentStep;
+            const current = i === currentStep;
+            const Icon = s.Icon;
+            return (
+              <Fragment key={i}>
+                <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                      done
+                        ? "bg-emerald-500 text-white"
+                        : current
+                          ? "bg-amber-500 text-black"
+                          : "bg-foreground/[0.04] text-foreground/30 border border-foreground/[0.06]"
+                    }`}
+                  >
+                    {done ? <Check className="w-4 h-4" strokeWidth={3} /> : <Icon className="w-4 h-4" />}
+                  </div>
+                  <span
+                    className={`text-[9px] text-center leading-tight ${
+                      done
+                        ? "text-foreground/60"
+                        : current
+                          ? "text-amber-400 font-semibold"
+                          : "text-foreground/30"
+                    }`}
+                  >
+                    {s.label}
+                  </span>
+                  {current && (
+                    <span className="text-[8px] text-amber-400/80 font-bold uppercase tracking-wide">
+                      Current
+                    </span>
+                  )}
+                </div>
+                {i < STEPS.length - 1 && (
+                  <ChevronRight
+                    className={`w-3 h-3 mt-3 shrink-0 ${i < currentStep ? "text-emerald-500/50" : "text-foreground/15"}`}
+                  />
+                )}
+              </Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Two-column: order summary + counterparty payment/trust */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Left column */}
+        <div className="space-y-3">
+          <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+            <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+              Order Summary
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-foreground">{amount}</span>
+              <span className="text-sm font-semibold text-foreground/60">USDT</span>
+              <Coins className="w-4 h-4 text-emerald-400/70" />
+            </div>
+            <div className="text-lg font-bold text-foreground">
+              {sym} {total.toLocaleString()}{" "}
+              <span className="text-xs font-medium text-foreground/40">{ccy}</span>
+            </div>
+            <div className="pt-2 border-t border-foreground/[0.04] space-y-1.5 text-[12px]">
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/40 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Rate (Locked)
+                </span>
+                <span className="font-mono text-foreground/70">
+                  1 USDT = {order.rate} {ccy}
+                </span>
+              </div>
+              {expiresIn && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-foreground/40">Rate Locked For</span>
+                  <span className="font-mono text-emerald-400 font-bold">{expiresIn}</span>
+                </div>
+              )}
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/40">Order ID</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(orderIdShort);
+                    setCopiedId(true);
+                    setTimeout(() => setCopiedId(false), 2000);
+                  }}
+                  className="flex items-center gap-1 font-mono text-foreground/60 hover:text-foreground/80 transition-colors max-w-[60%]"
+                >
+                  <span className="truncate">{orderIdShort}</span>
+                  {copiedId ? (
+                    <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                  ) : (
+                    <Copy className="w-3 h-3 text-foreground/30 shrink-0" />
+                  )}
+                </button>
+              </div>
+              {createdLabel && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-foreground/40">Created At</span>
+                  <span className="text-foreground/60">{createdLabel}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Important warning */}
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-amber-400">Important</p>
+              <p className="text-xs text-foreground/50 mt-0.5">
+                {isSeller
+                  ? "Do not release USDT until you have received the payment in your account."
+                  : `Only mark as paid after you've actually sent the ${ccy}.`}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-3">
+          {/* Counterparty payment method */}
+          <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+            <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+              {pmHeading}
+            </span>
+            {payTypes.length > 0 ? (
+              <div className="space-y-2.5">
+                {payTypes.map((t) => {
+                  const m = PM_META[t] ?? { label: t.toUpperCase(), Icon: CreditCard };
+                  const Icon = m.Icon;
+                  return (
+                    <div key={t} className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-[var(--accent)]/15 flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-[var(--accent)]" />
+                      </div>
+                      <span className="text-sm font-medium text-foreground flex-1">
+                        {m.label}
+                      </span>
+                      <Check className="w-4 h-4 text-emerald-400" strokeWidth={3} />
+                    </div>
+                  );
+                })}
+                {preferred && (
+                  <div className="pt-2 border-t border-foreground/[0.04]">
+                    <p className="text-[11px] text-foreground/40 mb-1">Preferred Method</p>
+                    <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent)] uppercase">
+                      {PM_META[preferred]?.label ?? preferred}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-foreground/40">
+                Shared in chat once escrow is locked.
+              </p>
+            )}
+          </div>
+
+          {/* Counterparty trust */}
+          <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-emerald-400" />
+              <span className="text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+                {trustHeading}
+              </span>
+              {trustScore != null && (
+                <span className="ml-auto text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
+                  {trustScore}/100
+                </span>
+              )}
+            </div>
+            <div className="space-y-1.5 text-[12px]">
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/45">Completed Trades</span>
+                <span className="font-semibold text-foreground/80">{trades}</span>
+              </div>
+              {successRate != null && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-foreground/45">Success Rate</span>
+                  <span className="font-semibold text-emerald-400">{successRate}%</span>
+                </div>
+              )}
+              {ageLabel && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-foreground/45">Account Age</span>
+                  <span className="font-semibold text-foreground/80">{ageLabel}</span>
+                </div>
+              )}
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/45">KYC Status</span>
+                <span
+                  className={`font-semibold ${verified ? "text-emerald-400" : "text-foreground/50"}`}
+                >
+                  {verified ? "Verified" : "Unverified"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* "You must lock" feature strip — only at the lock-escrow stage */}
+      {isSeller && status === "accepted" && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="w-12 h-12 rounded-full border-2 border-amber-500/40 flex items-center justify-center">
+              <Lock className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <p className="text-[11px] text-foreground/50">You Must Lock</p>
+              <p className="text-xl font-bold text-foreground leading-tight">
+                {amount} USDT
+              </p>
+              <p className="text-[11px] text-foreground/40">
+                This amount will be secured in escrow.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-5 sm:ml-auto">
+            {[
+              { Icon: Shield, title: "Escrow Protection", sub: "Your funds are 100% secure" },
+              { Icon: RotateCw, title: "Auto Release", sub: "Funds released after confirmation" },
+              { Icon: Headphones, title: "24/7 Support", sub: "We're here to help you" },
+            ].map((f) => {
+              const Icon = f.Icon;
+              return (
+                <div
+                  key={f.title}
+                  className="flex flex-col items-center text-center gap-1 max-w-[88px]"
+                >
+                  <Icon className="w-4 h-4 text-foreground/50" />
+                  <span className="text-[11px] font-semibold text-foreground/70 leading-tight">
+                    {f.title}
+                  </span>
+                  <span className="text-[9px] text-foreground/35 leading-tight">
+                    {f.sub}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* What happens next */}
+      <div className="rounded-xl border border-foreground/[0.04] bg-foreground/[0.02] p-4">
+        <p className="text-[10px] uppercase font-bold text-foreground/35 tracking-wide">
+          What happens next?
+        </p>
+        <p className="text-xs text-foreground/50 mt-1 leading-relaxed">
+          {isSeller
+            ? status === "accepted"
+              ? `Once you lock escrow, the buyer gets your payment details and sends you ${ccy}.`
+              : status === "escrowed"
+                ? "Once the buyer pays, you verify and release the USDT from escrow."
+                : `Confirm the ${ccy} has arrived, then release the USDT to complete the trade.`
+            : status === "escrowed"
+              ? `Send the ${ccy}, mark it as paid, and the seller releases your USDT.`
+              : "The seller releases your USDT once your payment is confirmed."}
+        </p>
+      </div>
+    </>
+  );
+}
+
 export interface OrderQuickViewProps {
   selectedOrder: Order | null;
   merchantId: string | null;
@@ -197,6 +1077,46 @@ export function OrderQuickView({
   onViewFullDetails,
   onOpenDispute,
 }: OrderQuickViewProps) {
+  // Detect the merchant's OWN pending broadcast BUY order (they are the buyer,
+  // no seller has accepted yet). This drives the dedicated "you'll pay using"
+  // + "waiting for merchant" layout. `dbOrder` is the raw row (snake_case);
+  // the feed selects o.* so buyer_payment_types rides along, and my_role is
+  // already 'buyer' for the creator (see getAllPendingOrdersForMerchant).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const qvDb = (selectedOrder?.dbOrder ?? {}) as any;
+  const isOwnPendingBuy =
+    !!selectedOrder &&
+    selectedOrder.myRole === "buyer" &&
+    !!merchantId &&
+    qvDb.buyer_merchant_id === merchantId &&
+    !selectedOrder.sellerPaymentMethod &&
+    !selectedOrder.lockedPaymentMethod &&
+    !qvDb.accepted_at &&
+    Array.isArray(qvDb.buyer_payment_types) &&
+    qvDb.buyer_payment_types.length > 0;
+  // Seller's view: a NEW pending buy order (declared pay types) that I can
+  // accept — placed by someone else, not yet taken. Buy orders are the only
+  // ones carrying buyer_payment_types, so sell orders never match here.
+  const qvStatus = String(qvDb.status || qvDb.minimal_status || "").toLowerCase();
+  const isAcceptableBuyOrder =
+    !!selectedOrder &&
+    !isOwnPendingBuy &&
+    qvDb.buyer_merchant_id !== merchantId &&
+    !qvDb.accepted_at &&
+    !["accepted", "escrowed", "payment_sent", "completed", "cancelled", "expired", "disputed"].includes(qvStatus) &&
+    Array.isArray(qvDb.buyer_payment_types) &&
+    qvDb.buyer_payment_types.length > 0;
+  // In-progress order the merchant is party to (seller or buyer): drives the
+  // rich, stage-aware ActiveOrderBody. Excludes the pending/acceptable cases
+  // above and observer-claimable orders (those keep their own flows).
+  const isActiveOrder =
+    !!selectedOrder &&
+    !isOwnPendingBuy &&
+    !isAcceptableBuyOrder &&
+    (selectedOrder.myRole === "seller" || selectedOrder.myRole === "buyer") &&
+    ["accepted", "escrowed", "payment_sent"].includes(qvStatus);
+  const activeRole: "buyer" | "seller" =
+    selectedOrder?.myRole === "buyer" ? "buyer" : "seller";
   return (
     <AnimatePresence>
       {selectedOrder && (
@@ -212,7 +1132,7 @@ export function OrderQuickView({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md rounded-2xl shadow-2xl overflow-hidden" style={{ background: "#0e0e10", border: "1px solid rgba(255,255,255,0.08)" }}
+            className={`fixed z-50 inset-x-0 bottom-0 mx-auto w-full ${isActiveOrder ? "max-w-2xl" : isAcceptableBuyOrder ? "max-w-xl" : "max-w-md"} lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[90%] max-h-[90dvh] overflow-y-auto overflow-x-hidden rounded-t-2xl lg:rounded-2xl shadow-2xl pb-safe lg:pb-0`} style={{ background: "#0e0e10", border: "1px solid rgba(255,255,255,0.08)" }}
           >
             {/* Header */}
             <div className="px-5 py-4 border-b border-foreground/[0.04] flex items-center justify-between">
@@ -258,6 +1178,12 @@ export function OrderQuickView({
 
             {/* Body */}
             <div className="p-5 space-y-4">
+              {isAcceptableBuyOrder ? (
+                <AcceptorBuyOrderBody order={selectedOrder} db={qvDb} />
+              ) : isActiveOrder ? (
+                <ActiveOrderBody order={selectedOrder} db={qvDb} role={activeRole} />
+              ) : (
+              <>
               {/* Escrow Status */}
               {selectedOrder.escrowTxHash && (
                 <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-3">
@@ -335,6 +1261,12 @@ export function OrderQuickView({
                 const popupBankRole = selectedOrder.myRole || "observer";
                 const iAmBuyerInPopup = popupBankRole === "buyer";
                 if (!iAmBuyerInPopup) return null;
+
+                // Merchant's OWN pending broadcast buy — no seller account
+                // exists yet, so show the rails they chose at order time.
+                if (isOwnPendingBuy) {
+                  return <BuyerPayTypesCard types={qvDb.buyer_payment_types} />;
+                }
 
                 // Priority 1: Seller's merchant payment method (explicitly added by seller)
                 if (selectedOrder.sellerPaymentMethod) {
@@ -493,6 +1425,16 @@ export function OrderQuickView({
 
                 return null;
               })()}
+
+              {/* Merchant's OWN pending broadcast buy — status + what's next. */}
+              {isOwnPendingBuy && (
+                <OpenMarketWaitingCard
+                  createdAt={qvDb.created_at}
+                  expiresAt={qvDb.expires_at}
+                />
+              )}
+              </>
+              )}
             </div>
 
             {/* Cancel Request Banner — shown when counterparty requested cancellation */}
@@ -671,7 +1613,48 @@ export function OrderQuickView({
 
             {/* Actions — Backend-driven: only show what enrichOrderResponse allows */}
             <div className="px-5 pb-5 space-y-2">
-              {(() => {
+              {/* Own pending broadcast buy: the only action is to cancel (no
+                  escrow yet). Shown explicitly so it doesn't depend on the
+                  feed enriching primary/secondary actions. */}
+              {isOwnPendingBuy && (
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  disabled={cancellingOrderId === selectedOrder.id}
+                  onClick={() => {
+                    onCancelOrderWithoutEscrow(selectedOrder.id);
+                    onClose();
+                  }}
+                  className="w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all bg-[var(--color-error)]/10 hover:bg-[var(--color-error)]/20 border-[var(--color-error)]/30 text-[var(--color-error)] disabled:opacity-50"
+                >
+                  {cancellingOrderId === selectedOrder.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <X className="w-4 h-4" />
+                  )}
+                  Cancel Order
+                </motion.button>
+              )}
+              {/* Seller accepting a new pending buy order — prominent green CTA,
+                  shown explicitly (not dependent on feed action enrichment). */}
+              {isAcceptableBuyOrder && (
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  disabled={acceptingOrderId === selectedOrder.id}
+                  onClick={() => {
+                    onAcceptOrder(selectedOrder);
+                    onClose();
+                  }}
+                  className="w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
+                >
+                  {acceptingOrderId === selectedOrder.id ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Zap className="w-5 h-5" />
+                  )}
+                  Accept Order
+                </motion.button>
+              )}
+              {!isOwnPendingBuy && !isAcceptableBuyOrder && (() => {
                 // Read backend-computed actions (source of truth)
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const enriched = selectedOrder.dbOrder as any;
@@ -728,8 +1711,9 @@ export function OrderQuickView({
                 };
 
                 // Action button styles
-                const PRIMARY_STYLE =
-                  "bg-white/[0.06] hover:bg-white/[0.08] border-white/[0.12] hover:border-white/[0.12] text-[#f5f5f7]";
+                const PRIMARY_STYLE = isActiveOrder
+                  ? "bg-amber-500 hover:bg-amber-400 border-amber-500 text-black"
+                  : "bg-white/[0.06] hover:bg-white/[0.08] border-white/[0.12] hover:border-white/[0.12] text-[#f5f5f7]";
                 const PRIMARY_LOADING =
                   "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]/50 cursor-wait";
                 const SECONDARY_STYLE =
@@ -738,6 +1722,17 @@ export function OrderQuickView({
                   "bg-foreground/[0.04] border-foreground/[0.06] text-foreground/40 cursor-not-allowed";
 
                 const loading = isActionLoading(primary.type);
+                // Active orders get a descriptive, amount-aware CTA matching
+                // the rich body; other states keep the backend label verbatim.
+                const primaryLabel = isActiveOrder
+                  ? primary.type === "LOCK_ESCROW"
+                    ? `Lock ${selectedOrder.amount} USDT in Escrow`
+                    : primary.type === "CONFIRM_PAYMENT"
+                      ? "Confirm Payment & Release USDT"
+                      : primary.type === "SEND_PAYMENT"
+                        ? "I've Sent the Payment"
+                        : primary.label
+                  : primary.label;
 
                 return (
                   <>
@@ -747,7 +1742,7 @@ export function OrderQuickView({
                         whileTap={{ scale: 0.98 }}
                         disabled={loading}
                         onClick={() => ACTION_HANDLER[primary.type!]?.()}
-                        className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                        className={`w-full ${isActiveOrder ? "py-4" : "py-3"} rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
                           loading ? PRIMARY_LOADING : PRIMARY_STYLE
                         }`}
                       >
@@ -756,7 +1751,7 @@ export function OrderQuickView({
                         ) : (
                           <Zap className="w-4 h-4" />
                         )}
-                        {primary.label}
+                        {primaryLabel}
                       </motion.button>
                     ) : primary.label &&
                       primary.disabledReason &&
@@ -801,16 +1796,18 @@ export function OrderQuickView({
                 );
               })()}
 
-              <button
-                onClick={() => {
-                  onViewFullDetails(selectedOrder.id);
-                  onClose();
-                }}
-                className="w-full py-3 rounded-xl bg-foreground/[0.04] hover:bg-foreground/[0.08] text-foreground text-sm font-medium flex items-center justify-center gap-2 border border-foreground/[0.04] transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-                View Full Details
-              </button>
+              {!isOwnPendingBuy && (
+                <button
+                  onClick={() => {
+                    onViewFullDetails(selectedOrder.id);
+                    onClose();
+                  }}
+                  className="w-full py-3 rounded-xl bg-foreground/[0.04] hover:bg-foreground/[0.08] text-foreground text-sm font-medium flex items-center justify-center gap-2 border border-foreground/[0.04] transition-colors"
+                >
+                  {isActiveOrder ? <Eye className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
+                  View Full Details
+                </button>
+              )}
 
               {/* <button
                 onClick={() => {

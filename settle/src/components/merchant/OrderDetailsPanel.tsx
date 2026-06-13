@@ -345,6 +345,11 @@ export function OrderDetailsPanel({
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  // Merchant-as-buyer "choose where to pay" picker (Part C.2): bumping
+  // reloadKey re-fetches the order so the chosen account shows.
+  const [reloadKey, setReloadKey] = useState(0);
+  const [choosingPmId, setChoosingPmId] = useState<string | null>(null);
+  const [pmError, setPmError] = useState<string | null>(null);
   const [showTimeline, setShowTimeline] = useState(true);
   const [showBankDetails, setShowBankDetails] = useState(false);
   const [showBuyer, setShowBuyer] = useState(true);
@@ -405,7 +410,33 @@ export function OrderDetailsPanel({
     };
 
     fetchOrder();
-  }, [orderId]);
+  }, [orderId, reloadKey]);
+
+  // Merchant-as-buyer picks which of the seller's matching accounts to pay
+  // into. Mirrors the user-side OrderDetailScreen flow; the endpoint accepts a
+  // merchant actor (Part C.2). On success we re-fetch so the choice sticks.
+  const handleChoosePayMethod = async (method: { id: string }) => {
+    if (choosingPmId) return;
+    setChoosingPmId(method.id);
+    setPmError(null);
+    try {
+      const res = await fetchWithAuth(`/api/orders/${orderId}/pay-method`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method_id: method.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        setPmError(data?.error || "Couldn't select that account. Please try again.");
+        return;
+      }
+      setReloadKey((k) => k + 1);
+    } catch {
+      setPmError("Network error. Please try again.");
+    } finally {
+      setChoosingPmId(null);
+    }
+  };
 
   const handleCopy = async (text: string, field: string) => {
     await copyToClipboard(text);
@@ -1788,6 +1819,81 @@ export function OrderDetailsPanel({
                   )}
                 </button>
               )}
+
+            {/* Merchant-as-buyer "choose where to pay" (Part C.2): after a
+                seller accepts this merchant's buy order, the buyer-merchant
+                picks one of the seller's matching accounts to pay into. The
+                seller's matching methods come from getOrderWithRelations
+                (merchant_matching_payment_methods); the choice is saved via
+                POST /api/orders/[id]/pay-method. */}
+            {(() => {
+              const iAmBuyerMerchant =
+                !!merchantId && order.buyer_merchant?.id === merchantId;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const matching: any[] =
+                (order as any).merchant_matching_payment_methods ?? [];
+              const needsPick =
+                iAmBuyerMerchant &&
+                !!order.merchant_id &&
+                !order.merchant_payment_method &&
+                ["accepted", "escrowed", "payment_pending"].includes(order.status) &&
+                matching.length > 0;
+              if (!needsPick) return null;
+              const pmEmoji = (t: string) =>
+                t === "bank"
+                  ? "🏦"
+                  : t === "cash"
+                    ? "💵"
+                    : t === "upi" || t === "mobile"
+                      ? "📱"
+                      : t === "card"
+                        ? "💳"
+                        : "💰";
+              return (
+                <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-3 space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-foreground/40">
+                    Choose where to pay
+                  </p>
+                  <p className="text-[11px] text-foreground/40 -mt-1">
+                    Pick one of the seller&apos;s accounts to send the payment to.
+                  </p>
+                  {matching.map((pm) => {
+                    const loading = choosingPmId === pm.id;
+                    return (
+                      <button
+                        key={pm.id}
+                        type="button"
+                        disabled={!!choosingPmId}
+                        onClick={() => handleChoosePayMethod(pm)}
+                        className="w-full flex items-center gap-2.5 rounded-lg p-3 border border-foreground/[0.08] hover:bg-foreground/[0.04] disabled:opacity-50 text-left transition-colors"
+                      >
+                        <span className="text-[15px] shrink-0">{pmEmoji(pm.type)}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold text-foreground truncate">
+                            {pm.name}
+                          </p>
+                          {pm.details && (
+                            <p className="text-[11px] text-foreground/50 font-mono truncate">
+                              {pm.details}
+                            </p>
+                          )}
+                        </div>
+                        {loading ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-foreground/40 shrink-0" />
+                        ) : (
+                          <span className="text-[9px] font-bold uppercase tracking-wide text-foreground/30 shrink-0">
+                            {pm.type}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {pmError && (
+                    <p className="text-[11px] text-[var(--color-error)]">{pmError}</p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Action Buttons - uses deriveOrderUI for consistent status/actions */}
             {(() => {

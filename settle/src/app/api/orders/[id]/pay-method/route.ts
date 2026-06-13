@@ -37,8 +37,11 @@ export async function POST(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Only the user who placed the buy order may choose where to pay.
-    if (auth.actorType !== 'user') {
+    // Only the BUYER may choose where to pay. The buyer is a user (their own
+    // buy order) or a merchant (a merchant-placed buy order). The repo verifies
+    // the actor actually owns the order as the buyer; here we just exclude
+    // other actor types (e.g. compliance).
+    if (auth.actorType !== 'user' && auth.actorType !== 'merchant') {
       return forbiddenResponse('Only the buyer can choose a payment method');
     }
 
@@ -57,6 +60,7 @@ export async function POST(
     const result = await setBuyOrderMerchantPaymentMethod(
       idResult.data,
       methodResult.data,
+      auth.actorType,
       auth.actorId,
     );
 

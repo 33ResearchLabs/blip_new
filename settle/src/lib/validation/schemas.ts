@@ -435,6 +435,11 @@ export const merchantCreateOrderSchema = z.object({
   offer_id: uuidSchema.optional(), // If not provided, use merchant's active offer
   target_merchant_id: uuidSchema.optional(), // For M2M trading: trade with another merchant
   merchant_payment_method_id: uuidSchema.optional(), // Seller's specific payment method (where buyer sends fiat)
+  // BUY orders (merchant is the buyer): the payment rails the merchant can pay
+  // with (one or more). The order is shown only to sellers who support one of
+  // these. Mirrors the user-side buy flow — reuses the buyer_payment_types
+  // column. Ignored on sell. See migration 166.
+  buyer_payment_types: z.array(paymentMethodSchema).min(1).max(6).optional(),
   // Optional escrow details (for escrow-first sell orders) — nullish to accept null from mock mode
   escrow_tx_hash: z.string().nullish(),
   escrow_trade_id: z.number().nullish(),

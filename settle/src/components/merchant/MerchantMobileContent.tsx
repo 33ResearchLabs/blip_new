@@ -301,6 +301,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               setMobileView={setMobileView}
               onCancelOrder={handleCancelOrder}
               cancellingOrderId={cancellingOrderId}
+              onSelectOrder={setSelectedOrderPopup}
             />
           )}
           {mobileView === "escrow" && (
@@ -314,6 +315,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               onOpenCancelModal={openCancelModal}
               onOpenChat={handleOpenChat}
               setMobileView={setMobileView}
+              onSelectOrder={setSelectedOrderPopup}
             />
           )}
           {mobileView === "chat" && (
