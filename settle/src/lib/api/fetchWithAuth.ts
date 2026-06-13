@@ -41,6 +41,26 @@ import { useMerchantStore } from '@/stores/merchantStore';
 export interface FetchWithAuthInit extends RequestInit {
   /** Server-side only. Forwarded as `Authorization: Bearer <token>`. */
   token?: string;
+  /**
+   * Session-restore probe — set ONLY by the bootstrap `/api/auth/me` calls
+   * that run on dashboard mount (merchant + compliance).
+   *
+   * Why it exists: on a fresh page load the in-memory `sessionToken` mirror
+   * is `null` (it is never persisted — see merchantStore), so the normal 401
+   * gate below would SKIP the cookie-based silent refresh and log the user
+   * out even though their 7-day `blip_refresh_token` cookie is still valid.
+   *
+   * For a probe, a 401:
+   *   1. STILL attempts one silent refresh via the cookie (ignores the
+   *      `!hadToken` skip), and
+   *   2. NEVER force-logs-out / redirects / counts toward the zombie-logout
+   *      threshold — a genuinely logged-out visitor just gets the 401 back
+   *      and the calling restore hook renders its own logged-out UI in place.
+   *
+   * Net invariant: a probe call never triggers a redirect; it only ever
+   * reports ok / not-ok to its caller. Browser-only; ignored on the server.
+   */
+  sessionProbe?: boolean;
 }
 
 const IS_SERVER = typeof window === 'undefined';
@@ -384,16 +404,20 @@ export function fetchWithAuth(
     return executeServer(input, init, url);
   }
 
-  // Browser GET deduplication
+  // Browser GET deduplication. A session-restore probe gets a DISTINCT cache
+  // key so it can never share an in-flight promise with an ordinary call to
+  // the same URL — the two have different 401 handling (a probe refreshes and
+  // never force-logs-out), and coalescing them would cross-wire that.
   if (method === 'GET') {
-    const existing = inflightGets.get(url);
+    const dedupKey = init?.sessionProbe ? `${url} probe` : url;
+    const existing = inflightGets.get(dedupKey);
     if (existing) return existing.then(res => res.clone());
 
     const promise = executeWithRefresh(input, init, url).finally(() => {
-      inflightGets.delete(url);
+      inflightGets.delete(dedupKey);
     });
 
-    inflightGets.set(url, promise);
+    inflightGets.set(dedupKey, promise);
     return promise.then(res => res.clone());
   }
 
@@ -705,9 +729,10 @@ async function executeWithRefresh(
   url: string,
 ): Promise<Response> {
   // `token` is server-only; if a browser caller passes it, the IS_SERVER
-  // guard inside getAuthHeaders drops it. Strip it from the native init
-  // so it can't leak into the request body or headers via spread.
-  const { token: _stripped, ...nativeInit } = init || {};
+  // guard inside getAuthHeaders drops it. Strip it — and our `sessionProbe`
+  // extension flag — from the native init so neither leaks into the request
+  // body or headers via spread.
+  const { token: _stripped, sessionProbe, ...nativeInit } = init || {};
   void _stripped;
   const authHeaders = getAuthHeaders();
 
@@ -788,7 +813,12 @@ async function executeWithRefresh(
   // longer attach that header. Cookies aren't readable from JS by design,
   // so the in-memory mirror is the only proxy we have.
   const hadToken = !!useMerchantStore.getState().sessionToken;
-  if (!hadToken) {
+  // A session-restore probe is exempt: its in-memory mirror is always null on
+  // a fresh load (never persisted), so this gate would otherwise skip the very
+  // refresh that keeps a logged-in user signed in across a reload. The probe
+  // falls through to attempt the refresh below; it also never counts toward
+  // the zombie threshold (see the refresh-failure branch).
+  if (!hadToken && !sessionProbe) {
     // 401 on a protected route with no in-memory session = strongly
     // suggestive of a zombie state (cookies dead, mirror cleared, but the
     // UI still rendering logged-in chrome from cached state). Count it
@@ -811,7 +841,12 @@ async function executeWithRefresh(
     // effectively dead. The transient case (1-2 failures) still rides on
     // the user's existing cookie — but persistent failure is no longer a
     // zombie state.
-    if (shouldForceLogoutOn401(url)) {
+    //
+    // A session-restore probe is exempt: a failed bootstrap refresh just
+    // means "not logged in", which the calling restore hook renders in place.
+    // Forcing a redirect here would bounce a never-logged-in visitor off the
+    // page; counting it would poison the threshold for the real session.
+    if (!sessionProbe && shouldForceLogoutOn401(url)) {
       if (refreshRes.revoked) {
         forceLogoutAndRedirect();
       } else {
@@ -855,8 +890,10 @@ async function executeWithRefresh(
   }
 
   // If the retry STILL returned 401, the new access token is also being
-  // rejected — the session was revoked between refresh and retry. Force logout.
-  if (retryResponse.status === 401 && shouldForceLogoutOn401(url)) {
+  // rejected — the session was revoked between refresh and retry. Force logout
+  // (except for a session-restore probe, which never redirects — the restore
+  // hook will render the logged-out UI in place on the non-ok response).
+  if (retryResponse.status === 401 && !sessionProbe && shouldForceLogoutOn401(url)) {
     forceLogoutAndRedirect();
   } else if (retryResponse.ok && shouldForceLogoutOn401(url)) {
     // Successful retry on a protected route → session is demonstrably

@@ -242,6 +242,7 @@ export async function POST(request: NextRequest) {
       offer_id,
       target_merchant_id,
       merchant_payment_method_id: requestedPmId,
+      buyer_payment_types,
       escrow_tx_hash,
       escrow_trade_id,
       escrow_trade_pda,
@@ -249,6 +250,21 @@ export async function POST(request: NextRequest) {
       escrow_creator_wallet,
       expiry_minutes,
     } = parseResult.data;
+
+    // A merchant BUY (type === 'buy') means the merchant is the buyer who pays
+    // fiat — they must declare at least one payment rail so the order is
+    // matchable (only sellers supporting one of these will see it). The UI
+    // already gates this; enforce server-side too. Sell orders don't use it.
+    // M2M (target_merchant_id) is exempt: the counterparty is already known.
+    if (
+      type === 'buy' &&
+      !target_merchant_id &&
+      !(Array.isArray(buyer_payment_types) && buyer_payment_types.length > 0)
+    ) {
+      return validationErrorResponse([
+        'BUY orders require at least one payment method type. Provide buyer_payment_types.',
+      ]);
+    }
 
     // Onboarding gate: a merchant cannot place trades until their first-time
     // setup is complete. Skipped onboardings are blocked too — the merchant
@@ -580,6 +596,11 @@ export async function POST(request: NextRequest) {
         protocol_fee_percentage: protocolFeePercentage,
         protocol_fee_amount: protocolFeeAmount,
         buyer_merchant_id: buyerMerchantId,
+        // Buyer payment rails — only meaningful when the merchant is the buyer
+        // (input type 'buy'). core-api stores it on the orders row and the
+        // existing merchant-feed filter shows the order only to sellers whose
+        // active payment methods match one of these types.
+        buyer_payment_types: type === 'buy' ? buyer_payment_types : undefined,
         escrow_tx_hash,
         escrow_trade_id,
         escrow_trade_pda,

@@ -38,6 +38,9 @@ export function useOrderActions({
   openEscrowModalForSell,
 }: UseOrderActionsParams) {
   const merchantId = useMerchantStore(s => s.merchantId);
+  // My own display name — so my freshly-created open order shows my name
+  // instead of the generic "Merchant" counterparty fallback (mapDbOrderToUI).
+  const merchantName = useMerchantStore(s => s.merchantInfo?.display_name || s.merchantInfo?.username || null);
   const orders = useMerchantStore(s => s.orders);
 
   // Sync merchant DB balance from Solana wallet after trade completion.
@@ -892,8 +895,8 @@ export function useOrderActions({
   // DIRECT ORDER CREATION (from ConfigPanel)
   // ═══════════════════════════════════════════════════════════════════
   const handleDirectOrderCreation = async (
-    openTradeForm: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; paymentMethodId?: string; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90 },
-    setOpenTradeForm: React.Dispatch<React.SetStateAction<{ tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; paymentMethodId: string | undefined; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90 }>>,
+    openTradeForm: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; paymentMethodId?: string; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90; buyerPaymentTypes?: string[] },
+    setOpenTradeForm: React.Dispatch<React.SetStateAction<{ tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; paymentMethodId: string | undefined; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90; buyerPaymentTypes: string[] }>>,
     tradeType?: 'buy' | 'sell',
     priorityFee?: number,
     pair: 'usdt_aed' | 'usdt_inr' = 'usdt_aed',
@@ -982,10 +985,22 @@ export function useOrderActions({
           paymentMethodId: undefined,
           spreadPreference: "fastest",
           expiryMinutes: 15,
+          buyerPaymentTypes: [],
         });
 
       } else {
-        // BUY order flow: Create directly
+        // BUY order flow: Create directly. The merchant is the BUYER who pays
+        // fiat, so they must declare at least one payment rail (bank/upi/cash).
+        // These ride along as buyer_payment_types and gate which sellers see
+        // the order — mirrors the user-side buy validation.
+        const buyerPaymentTypes = openTradeForm.buyerPaymentTypes ?? [];
+        if (buyerPaymentTypes.length === 0) {
+          addNotification('system', 'Please choose at least one way you can pay (Bank, UPI or Cash).');
+          playSound('error');
+          setIsCreatingTrade(false);
+          return;
+        }
+
         // Stable per-submission key. A retry within the same click attempt
         // (network blip, strict-mode double-effect) presents the SAME key
         // and collapses on the backend's idempotency_log; reset on success
@@ -1008,6 +1023,9 @@ export function useOrderActions({
             payment_method: openTradeForm.paymentMethod,
             spread_preference: openTradeForm.spreadPreference,
             priority_fee: priorityFee || 0,
+            // Merchant (buyer) payment rails — the order is shown only to
+            // sellers who support one of these. Empty for sell (no-op there).
+            buyer_payment_types: buyerPaymentTypes,
             pair, // 'usdt_aed' | 'usdt_inr' — drives corridor + fiat_currency
           }),
         });
@@ -1021,7 +1039,7 @@ export function useOrderActions({
         if (data.data) {
           // Order committed — release the per-submission key.
           directBuySubmitIdRef.current = null;
-          const newOrder = mapDbOrderToUI(data.data, merchantId);
+          const newOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
           // The raw create response from core-api doesn't carry the
           // per-merchant `is_my_order` flag — only the GET list query
           // (getAllPendingOrdersForMerchant) computes it. Without this, the
@@ -1041,6 +1059,7 @@ export function useOrderActions({
           paymentMethodId: undefined,
           spreadPreference: "fastest",
           expiryMinutes: 15,
+          buyerPaymentTypes: [],
         });
       }
 

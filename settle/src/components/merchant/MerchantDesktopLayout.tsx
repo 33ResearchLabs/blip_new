@@ -82,7 +82,7 @@ export interface MerchantDesktopLayoutProps {
   todayEarnings: number;
   isMerchantOnline: boolean;
   setIsMerchantOnline: React.Dispatch<React.SetStateAction<boolean>>;
-  walletStatus?: 'ok' | 'locked' | 'none';
+  walletStatus?: "ok" | "locked" | "none";
   onAddWallet?: () => void;
 
   // Corridor
@@ -93,7 +93,10 @@ export interface MerchantDesktopLayoutProps {
   openTradeForm: any;
   setOpenTradeForm: (v: any) => void;
   isCreatingTrade: boolean;
-  handleDirectOrderCreation: (tradeType?: "buy" | "sell", priorityFee?: number) => void;
+  handleDirectOrderCreation: (
+    tradeType?: "buy" | "sell",
+    priorityFee?: number,
+  ) => void;
   refreshBalance: () => void;
 
   // Order actions
@@ -116,7 +119,13 @@ export interface MerchantDesktopLayoutProps {
   hasMoreOrders?: boolean;
   isLoadingMore?: boolean;
   openDisputeModal: (orderId: string) => void;
-  setRatingModalData: (data: { orderId: string; counterpartyName: string; counterpartyType: "user" | "merchant" } | null) => void;
+  setRatingModalData: (
+    data: {
+      orderId: string;
+      counterpartyName: string;
+      counterpartyType: "user" | "merchant";
+    } | null,
+  ) => void;
 
   // Collapse states
   inProgressCollapsed: boolean;
@@ -140,12 +149,33 @@ export interface MerchantDesktopLayoutProps {
   orderConversations: OrderConversation[];
   totalUnread: number;
   isLoadingConversations: boolean;
-  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell' } | null;
-  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
+  activeOrderChat: {
+    orderId: string;
+    userName: string;
+    orderNumber: string;
+    orderType?: "buy" | "sell";
+  } | null;
+  onOpenOrderChat: (
+    orderId: string,
+    userName: string,
+    orderNumber: string,
+    orderType?: "buy" | "sell",
+  ) => void;
   onCloseOrderChat: () => void;
   onClearUnread: (orderId: string) => void;
   onClearAllUnread?: () => void;
-  playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
+  playSound: (
+    sound:
+      | "message"
+      | "send"
+      | "trade_start"
+      | "trade_complete"
+      | "notification"
+      | "error"
+      | "click"
+      | "new_order"
+      | "order_complete",
+  ) => void;
   /** Threaded to the OnboardingSetupCard inside NotificationsPanel. */
   onOpenPaymentMethods?: () => void;
   onOpenSettings?: () => void;
@@ -159,31 +189,77 @@ export interface MerchantDesktopLayoutProps {
   onOpenReceive?: () => void;
 }
 
-export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(props: MerchantDesktopLayoutProps) {
-  const [activeDisputeOrderId, setActiveDisputeOrderId] = useState<string | null>(null);
-  const [activeDisputeUserName, setActiveDisputeUserName] = useState('');
+export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(
+  props: MerchantDesktopLayoutProps,
+) {
+  const [activeDisputeOrderId, setActiveDisputeOrderId] = useState<
+    string | null
+  >(null);
+  const [activeDisputeUserName, setActiveDisputeUserName] = useState("");
   const {
     isWideScreen,
-    pendingOrders, ongoingOrders, completedOrders, cancelledOrders,
-    mempoolOrders, leaderboardData,
-    merchantId, merchantInfo, effectiveBalance, todayEarnings,
-    isMerchantOnline, setIsMerchantOnline, walletStatus, onAddWallet,
-    activeCorridor, onCorridorChange,
-    openTradeForm, setOpenTradeForm, isCreatingTrade,
-    handleDirectOrderCreation, refreshBalance,
-    setSelectedOrderPopup, setSelectedMempoolOrder, setSelectedOrderId,
-    acceptOrder, acceptingOrderId, lockingEscrowOrderId, confirmingOrderId, markingDone, cancellingOrderId, handleCancelOrder, handleOpenChat,
-    handleOrderAction, fetchOrders, loadMoreOrders, hasMoreOrders, isLoadingMore, openDisputeModal, setRatingModalData,
-    inProgressCollapsed, setInProgressCollapsed,
-    completedCollapsed, setCompletedCollapsed,
-    activityCollapsed, setActivityCollapsed,
-    leaderboardCollapsed, setLeaderboardCollapsed,
-    leaderboardTab, setLeaderboardTab,
-    notifications, markNotificationRead,
-    orderConversations, totalUnread, isLoadingConversations,
-    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread, onClearAllUnread,
+    pendingOrders,
+    ongoingOrders,
+    completedOrders,
+    cancelledOrders,
+    mempoolOrders,
+    leaderboardData,
+    merchantId,
+    merchantInfo,
+    effectiveBalance,
+    todayEarnings,
+    isMerchantOnline,
+    setIsMerchantOnline,
+    walletStatus,
+    onAddWallet,
+    activeCorridor,
+    onCorridorChange,
+    openTradeForm,
+    setOpenTradeForm,
+    isCreatingTrade,
+    handleDirectOrderCreation,
+    refreshBalance,
+    setSelectedOrderPopup,
+    setSelectedMempoolOrder,
+    setSelectedOrderId,
+    acceptOrder,
+    acceptingOrderId,
+    lockingEscrowOrderId,
+    confirmingOrderId,
+    markingDone,
+    cancellingOrderId,
+    handleCancelOrder,
+    handleOpenChat,
+    handleOrderAction,
+    fetchOrders,
+    loadMoreOrders,
+    hasMoreOrders,
+    isLoadingMore,
+    openDisputeModal,
+    setRatingModalData,
+    inProgressCollapsed,
+    setInProgressCollapsed,
+    completedCollapsed,
+    setCompletedCollapsed,
+    activityCollapsed,
+    setActivityCollapsed,
+    leaderboardCollapsed,
+    setLeaderboardCollapsed,
+    leaderboardTab,
+    setLeaderboardTab,
+    notifications,
+    markNotificationRead,
+    orderConversations,
+    totalUnread,
+    isLoadingConversations,
+    activeOrderChat,
+    onOpenOrderChat,
+    onCloseOrderChat,
+    onClearUnread,
+    onClearAllUnread,
     playSound,
-    onOpenPaymentMethods, onOpenSettings,
+    onOpenPaymentMethods,
+    onOpenSettings,
   } = props;
 
   // New Orders panel collapse — local UI state (mirrors Active Trades collapse).
@@ -198,10 +274,10 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     return ongoingOrders.reduce((sum, o) => {
       const isEscrowFunder =
         o.isMyOrder === true ||
-        o.myRole === 'seller' ||
+        o.myRole === "seller" ||
         (merchantId != null && o.orderMerchantId === merchantId);
       if (!isEscrowFunder) return sum;
-      const amt = typeof o.amount === 'number' ? o.amount : 0;
+      const amt = typeof o.amount === "number" ? o.amount : 0;
       return Number.isFinite(amt) ? sum + amt : sum;
     }, 0);
   }, [ongoingOrders, merchantId]);
@@ -273,14 +349,22 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                     activeCorridor={activeCorridor}
                     onCorridorChange={onCorridorChange}
                     onToggleOnline={() => setIsMerchantOnline((prev) => !prev)}
-                    onOpenCorridor={() => window.open(`/market/mempool?corridor=${activeCorridor}`, "_blank")}
+                    onOpenCorridor={() =>
+                      window.open(
+                        `/market/mempool?corridor=${activeCorridor}`,
+                        "_blank",
+                      )
+                    }
                     onOpenSwap={props.onOpenSwap}
                     onOpenSend={props.onOpenSend}
                     onOpenDeposit={props.onOpenDeposit}
                   />
                 </div>
               </div>
-              <div className="[container-type:size] min-h-0 rounded-xl overflow-hidden border border-white/[0.08] bg-white/[0.02] shadow-[0_2px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)] flex flex-col" style={{ flex: 3 }}>
+              <div
+                className="[container-type:size] min-h-0 rounded-xl overflow-hidden border border-white/[0.08] bg-white/[0.02] shadow-[0_2px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)] flex flex-col"
+                style={{ flex: 3 }}
+              >
                 <CardLabel label="Trade" />
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <ConfigPanel
@@ -306,7 +390,10 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "35%" : "40%"}
           id="center-left"
         >
-          <div className="flex flex-col h-full bg-background border-r border-white/[0.05]" data-tour="pending-panel">
+          <div
+            className="flex flex-col h-full bg-background border-r border-white/[0.05]"
+            data-tour="pending-panel"
+          >
             {isWideScreen ? (
               <PendingOrdersPanel
                 orders={pendingOrders}
@@ -367,7 +454,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           <div className="flex flex-col h-full bg-background border-r border-white/[0.05]">
             <div
               data-tour="inprogress-panel"
-              className={`flex flex-col border-b border-foreground/[0.08] transition-all duration-200 ${inProgressCollapsed ? "" : "flex-1 min-h-0"}`}
+              className={`flex flex-col border-b border-foreground/[0.08] transition-all duration-200 ${
+                inProgressCollapsed ? "" : "flex-1 min-h-0"
+              }`}
             >
               <InProgressPanel
                 orders={ongoingOrders}
@@ -394,7 +483,11 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 {activityCollapsed && inProgressCollapsed && (
                   <div className="flex-1" />
                 )}
-                <div className={`flex flex-col min-h-0 ${activityCollapsed ? '' : 'flex-1'}`}>
+                <div
+                  className={`flex flex-col min-h-0 ${
+                    activityCollapsed ? "" : "flex-1"
+                  }`}
+                >
                   <ActivityPanel
                     merchantId={merchantId}
                     completedOrders={completedOrders}
@@ -414,9 +507,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 </div>
               </>
             )}
-            {isWideScreen && inProgressCollapsed && (
-              <div className="flex-1" />
-            )}
+            {isWideScreen && inProgressCollapsed && <div className="flex-1" />}
           </div>
         </Panel>
         {isWideScreen && (
@@ -431,7 +522,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
               <div className="flex flex-col h-full bg-background border-r border-white/[0.05]">
                 <div
                   data-tour="leaderboard"
-                  className={`flex flex-col border-b border-section-divider transition-all duration-200 ${leaderboardCollapsed ? "" : "flex-1 min-h-0"}`}
+                  className={`flex flex-col border-b border-section-divider transition-all duration-200 ${
+                    leaderboardCollapsed ? "" : "flex-1 min-h-0"
+                  }`}
                 >
                   <LeaderboardPanel
                     leaderboardData={leaderboardData}
@@ -446,7 +539,11 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 {activityCollapsed && leaderboardCollapsed && (
                   <div className="flex-1" />
                 )}
-                <div className={`flex flex-col transition-all duration-200 ${activityCollapsed ? "" : "flex-1 min-h-0"}`}>
+                <div
+                  className={`flex flex-col transition-all duration-200 ${
+                    activityCollapsed ? "" : "flex-1 min-h-0"
+                  }`}
+                >
                   <ActivityPanel
                     merchantId={merchantId}
                     completedOrders={completedOrders}
@@ -482,10 +579,10 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
               onSelectOrder={setSelectedOrderId}
               onOpenChat={(orderId) => {
                 const order =
-                  pendingOrders.find(o => o.id === orderId) ||
-                  ongoingOrders.find(o => o.id === orderId) ||
-                  completedOrders.find(o => o.id === orderId) ||
-                  cancelledOrders.find(o => o.id === orderId);
+                  pendingOrders.find((o) => o.id === orderId) ||
+                  ongoingOrders.find((o) => o.id === orderId) ||
+                  completedOrders.find((o) => o.id === orderId) ||
+                  cancelledOrders.find((o) => o.id === orderId);
                 if (order) handleOpenChat(order);
                 else setSelectedOrderId(orderId);
               }}
@@ -498,7 +595,10 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                   orderId={activeDisputeOrderId}
                   merchantId={merchantId || ""}
                   userName={activeDisputeUserName}
-                  onBack={() => { setActiveDisputeOrderId(null); setActiveDisputeUserName(''); }}
+                  onBack={() => {
+                    setActiveDisputeOrderId(null);
+                    setActiveDisputeUserName("");
+                  }}
                   onSendSound={() => playSound("send")}
                 />
               ) : activeOrderChat ? (
@@ -590,16 +690,13 @@ function MerchantDashboardV2({
   // — if the cursor is inside a droppable, that's the intent. Fall back
   // to rectIntersection (overlap-based) then closestCenter so an out-of-
   // bounds drag still picks a reasonable target.
-  const collisionDetection = React.useCallback<CollisionDetection>(
-    (args) => {
-      const pointer = pointerWithin(args);
-      if (pointer.length > 0) return pointer;
-      const intersecting = rectIntersection(args);
-      if (intersecting.length > 0) return intersecting;
-      return closestCenter(args);
-    },
-    [],
-  );
+  const collisionDetection = React.useCallback<CollisionDetection>((args) => {
+    const pointer = pointerWithin(args);
+    if (pointer.length > 0) return pointer;
+    const intersecting = rectIntersection(args);
+    if (intersecting.length > 0) return intersecting;
+    return closestCenter(args);
+  }, []);
 
   type ContainerId = ColumnId | typeof HIDDEN_CONTAINER_ID;
   const COLUMN_ID_SET = React.useMemo(
@@ -892,8 +989,8 @@ function MerchantDashboardV2({
             const wrapperClass = isLeft
               ? "flex flex-col h-full bg-background border-r border-white/[0.05]"
               : isRight
-                ? "flex flex-col h-full bg-background border-l border-white/[0.05]"
-                : "flex flex-col h-full bg-background border-r border-white/[0.05]";
+              ? "flex flex-col h-full bg-background border-l border-white/[0.05]"
+              : "flex flex-col h-full bg-background border-r border-white/[0.05]";
             const evenSize =
               col.widgets.length > 0
                 ? `${Math.floor(100 / col.widgets.length)}%`
@@ -938,7 +1035,13 @@ function MerchantDashboardV2({
                           {col.widgets.map((wid) => {
                             const Widget = WIDGET_REGISTRY[wid];
                             return (
-                              <div key={wid} className="min-h-0 rounded-xl overflow-hidden flex flex-col border border-white/[0.08] bg-white/[0.02] shadow-[0_2px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]" style={{ flex: wid === "dashboardWidgets" ? 2 : 3 }}>
+                              <div
+                                key={wid}
+                                className="min-h-0 rounded-xl overflow-hidden flex flex-col border border-white/[0.08] bg-white/[0.02] shadow-[0_2px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]"
+                                style={{
+                                  flex: wid === "dashboardWidgets" ? 2 : 3,
+                                }}
+                              >
                                 {/* WidgetShell wraps the WHOLE card (CardLabel header
                                     included) so its drag/hide handle lands in the
                                     "Trade"/"Balance" header bar — consistent with every
@@ -950,7 +1053,14 @@ function MerchantDashboardV2({
                                   fillHeight={true}
                                 >
                                   <div className="h-full flex flex-col">
-                                    <CardLabel label={wid === "dashboardWidgets" ? "Balance" : "Trade"} live={wid === "dashboardWidgets"} />
+                                    <CardLabel
+                                      label={
+                                        wid === "dashboardWidgets"
+                                          ? "Balance"
+                                          : "Trade"
+                                      }
+                                      live={wid === "dashboardWidgets"}
+                                    />
                                     <div className="flex-1 min-h-0 overflow-hidden">
                                       <Widget ctx={ctx} />
                                     </div>
@@ -1030,7 +1140,6 @@ function MerchantDashboardV2({
   );
 }
 
-
 function CardLabel({ label, live }: { label: string; live?: boolean }) {
   return (
     <div className="flex items-center gap-2 h-7 px-3 shrink-0 border-b border-white/[0.06] bg-white/[0.015]">
@@ -1046,7 +1155,6 @@ function CardLabel({ label, live }: { label: string; live?: boolean }) {
     </div>
   );
 }
-
 
 // Column wrapper that's also a dnd-kit droppable so cross-column drag
 // (and drops onto empty columns) works without an inner sentinel widget.

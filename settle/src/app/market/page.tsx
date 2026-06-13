@@ -196,6 +196,11 @@ export default function MerchantDashboard() {
     paymentMethodId: undefined as string | undefined,
     spreadPreference: "fastest" as "best" | "fastest" | "cheap",
     expiryMinutes: 15 as 15 | 90,
+    // BUY orders (merchant is the buyer who pays fiat): the payment rails the
+    // merchant can pay with — one or more of 'bank' | 'upi' | 'cash'. Sent as
+    // `buyer_payment_types`; mirrors the user-side buy flow. SELL ignores this
+    // (the merchant picks their own receive account via paymentMethodId).
+    buyerPaymentTypes: [] as string[],
   });
   const [corridorForm, setCorridorForm] = useState({
     fromCurrency: "USDT",
