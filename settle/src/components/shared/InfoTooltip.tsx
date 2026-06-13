@@ -180,7 +180,7 @@ export function InfoTooltip({
               {hasStructured ? (
                 <div className="rounded-xl bg-foreground text-background shadow-xl shadow-black/40 overflow-hidden">
                   {title && (
-                    <div className="px-3 pt-2.5 pb-1 text-[12px] font-bold leading-tight">
+                    <div className="px-3 pt-2.5 pb-1 text-[12px] font-bold leading-tight break-words">
                       {title}
                     </div>
                   )}

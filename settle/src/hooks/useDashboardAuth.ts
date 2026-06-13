@@ -556,6 +556,13 @@ export function useDashboardAuth({
         const meRes = await fetchWithAuth('/api/auth/me', {
           method: 'GET',
           credentials: 'include',
+          // Session-restore probe: on a fresh load the in-memory sessionToken
+          // mirror is null, so without this flag a 401 from an expired 15-min
+          // access cookie would skip the silent refresh and log the user out
+          // despite a valid 7-day refresh cookie. The probe attempts the
+          // refresh and never force-logs-out — if the user really is signed
+          // out we fall through to the cleanup below and render login in place.
+          sessionProbe: true,
         });
         if (meRes.ok) {
           const meData = await meRes.json();
