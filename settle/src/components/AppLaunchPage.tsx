@@ -175,13 +175,8 @@ export function AppLaunchPage() {
               color: T.onBlack,
             }}
           >
-           
-                    <img
-                      src="/brand/blip-icon-sm.png"
-                      alt="Blip"
-                      className="w-9 h-9 object-contain bg-[#0d0c0a]"
-                    />
-                  
+            <BlipLogo />
+
             <span
               style={{
                 fontWeight: 700,

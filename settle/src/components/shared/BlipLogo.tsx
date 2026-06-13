@@ -15,7 +15,8 @@
  * To swap the asset (e.g. to a transparent-background star), change this
  * one constant — every call site updates automatically.
  */
-const LOGO_SRC = "/brand/blip-icon.png";
+// const LOGO_SRC = "/brand/blip-icon.png";
+const LOGO_SRC = "/brand/blip-icon-bg-remove.png";
 
 interface BlipLogoProps {
   /** Width & height in pixels. Defaults to 36 (matches the old `w-9 h-9`). */

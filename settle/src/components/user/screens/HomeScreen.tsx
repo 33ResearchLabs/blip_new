@@ -355,11 +355,11 @@ export const HomeScreen = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 12,
-                background: 'rgba(255,255,255,0.14)',
+                
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}>
                 {/* <BlipMark /> */}
-                <BlipLogo className="rounded-xl "/>
+                <BlipLogo className="rounded-xl w-12 h-12 "/>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.72 }}>{greeting}</span>
