@@ -632,6 +632,41 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     return depositToEscrowOpen({ amount: params.amount, tradeId });
   }, [depositToEscrowOpen]);
 
+  const createAndLockEscrow = useCallback(async (params: {
+    amount: number;
+    counterparty: string;
+    tradeId?: number;
+    side?: 'buy' | 'sell';
+  }) => {
+    if (!keypair || !program) throw new Error('Wallet not connected');
+    touchActivity();
+    const tradeId = params.tradeId ?? Date.now();
+    const side = params.side ?? 'sell';
+    const amountBN = new BN(Math.floor(params.amount * 1_000_000));
+    const sideEnum = side === 'buy' ? TradeSide.Buy : TradeSide.Sell;
+    const counterpartyPk = new PublicKey(params.counterparty);
+    const [tradePda] = findTradePda(keypair.publicKey, tradeId);
+    const [escrowPda] = findEscrowPda(tradePda);
+
+    const createTx = await buildCreateTradeTx(program, keypair.publicKey, USDT_MINT, {
+      tradeId, amount: amountBN, side: sideEnum, feeBps: FEE_BPS_DEFAULT,
+    });
+    const lockTx = await buildLockEscrowTx(program, keypair.publicKey, tradePda, counterpartyPk, USDT_MINT);
+    const instructions = [...createTx.instructions, ...lockTx.instructions];
+
+    const connection = program.provider.connection;
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+    const tx = new Transaction();
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = keypair.publicKey;
+    instructions.forEach(ix => tx.add(ix));
+    tx.sign(keypair);
+    const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+    await connection.confirmTransaction(sig, 'confirmed');
+
+    return { txHash: sig, success: true, tradePda: tradePda.toString(), escrowPda: escrowPda.toString(), tradeId };
+  }, [keypair, program]);
+
   const lockEscrow = useCallback(async (params: {
     creatorPubkey: string; tradeId: number; counterparty: string;
   }) => {
@@ -887,6 +922,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     acceptTrade,
     depositToEscrow,
     depositToEscrowOpen,
+    createAndLockEscrow,
 
     // V2.3: Payment + disputes
     confirmPayment,

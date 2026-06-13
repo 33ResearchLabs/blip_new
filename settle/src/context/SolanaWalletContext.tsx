@@ -226,6 +226,22 @@ interface SolanaWalletContextType {
     tradeId?: number;
   }>;
 
+  // Create trade + lock escrow WITH a known counterparty in one atomic tx.
+  // Use this for BUY orders where the buyer's wallet is already known —
+  // trade goes directly to Locked state so release_escrow works immediately.
+  createAndLockEscrow: (params: {
+    amount: number;
+    counterparty: string;
+    tradeId?: number;
+    side?: 'buy' | 'sell';
+  }) => Promise<{
+    txHash: string;
+    success: boolean;
+    tradePda?: string;
+    escrowPda?: string;
+    tradeId?: number;
+  }>;
+
   // V2.3: Payment confirmation (buyer only)
   // Transitions: Locked → PaymentSent
   // CRITICAL: After this, auto-refund is FORBIDDEN
@@ -1443,6 +1459,73 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     };
   }, [fundEscrowOnly]);
 
+  // Create trade + lock escrow WITH known counterparty, atomically.
+  // Combines buildCreateTradeTx + buildLockEscrowTx into a single transaction
+  // so the trade lands directly in Locked state. Use for BUY orders where
+  // the buyer's wallet is known upfront — the open (Funded) path can't be
+  // released because the creator can't call acceptTrade on their own trade.
+  const createAndLockEscrow = useCallback(async (params: {
+    amount: number;
+    counterparty: string;
+    tradeId?: number;
+    side?: 'buy' | 'sell';
+  }): Promise<{
+    txHash: string;
+    success: boolean;
+    tradePda?: string;
+    escrowPda?: string;
+    tradeId?: number;
+  }> => {
+    if (!publicKey || !program || !signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    await ensureProtocolConfigInitialized();
+
+    const tradeId = params.tradeId ?? Date.now();
+    const side = params.side ?? 'sell';
+    const counterpartyPk = new PublicKey(params.counterparty);
+    const amountBN = new BN(Math.floor(params.amount * 1_000_000));
+    const sideEnum = side === 'buy' ? TradeSide.Buy : TradeSide.Sell;
+
+    const [tradePda] = findTradePda(publicKey, tradeId);
+    const [escrowPda] = findEscrowPda(tradePda);
+
+    const createTx = await buildCreateTradeTx(
+      program,
+      publicKey,
+      USDT_MINT,
+      { tradeId, amount: amountBN, side: sideEnum, feeBps: FEE_BPS_DEFAULT }
+    );
+    const lockTx = await buildLockEscrowTx(
+      program,
+      publicKey,
+      tradePda,
+      counterpartyPk,
+      USDT_MINT
+    );
+
+    const safeResult = await sendAndConfirmSafe({
+      connection,
+      feePayer: publicKey,
+      signTransaction,
+      instructions: [...createTx.instructions, ...lockTx.instructions],
+      name: 'createAndLockEscrow',
+      maxRetries: 2,
+      priority: 'medium',
+    });
+
+    await refreshBalances();
+
+    return {
+      txHash: safeResult.signature,
+      success: true,
+      tradePda: tradePda.toString(),
+      escrowPda: escrowPda.toString(),
+      tradeId,
+    };
+  }, [publicKey, program, signTransaction, connection, refreshBalances, ensureProtocolConfigInitialized]);
+
   // ============ V2.3: PAYMENT CONFIRMATION & DISPUTES ============
 
   // Confirm payment (buyer only) - transitions Locked → PaymentSent
@@ -1654,6 +1737,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     acceptTrade,
     depositToEscrow,
     depositToEscrowOpen,
+    createAndLockEscrow,
     // V2.3: Payment confirmation & disputes
     confirmPayment,
     openDispute,
@@ -1899,6 +1983,7 @@ const WALLET_NOOP: SolanaWalletContextType = {
   acceptTrade: noopResult,
   depositToEscrow: async () => ({ txHash: '', success: false }),
   depositToEscrowOpen: async () => ({ txHash: '', success: false }),
+  createAndLockEscrow: async () => ({ txHash: '', success: false }),
   confirmPayment: noopResult,
   openDispute: noopResult,
   resolveDispute: noopResult,

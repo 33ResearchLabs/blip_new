@@ -334,6 +334,25 @@ export function useUserOrderActions({
           return;
         }
 
+        // release_escrow closes Trade + Escrow + vault ATA with `close = depositor`,
+        // returning ~0.006494 SOL in rent to the user. But Solana deducts the tx
+        // fee BEFORE executing instructions, so the user needs a small amount of
+        // SOL upfront even though they'll net positive after the tx completes.
+        // acceptTrade + releaseEscrow = two txs, ~0.00002 SOL total fees.
+        // We require 0.0005 SOL as a comfortable buffer.
+        const MIN_SOL_FOR_RELEASE = 0.0005;
+        const releaseSolBal = solanaWallet.solBalance;
+        if (releaseSolBal !== null && releaseSolBal < MIN_SOL_FOR_RELEASE) {
+          showAlert(
+            "Insufficient SOL",
+            `You need at least ${MIN_SOL_FOR_RELEASE} SOL to submit the release transaction. ` +
+            `Your balance is ${releaseSolBal.toFixed(4)} SOL. Note: releasing escrow returns ~0.0065 SOL in account rent back to your wallet.`,
+            "error",
+          );
+          setIsLoading(false);
+          return;
+        }
+
         let releaseResult: { success: boolean; txHash: string; error?: string };
         try {
           try {

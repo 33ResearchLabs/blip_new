@@ -194,6 +194,27 @@ export function useEscrowOperations({
       }
     }
 
+    // SOL check — seller pays escrow creation fees.
+    // create_trade + fund_escrow create 3 on-chain accounts (Trade PDA 238b,
+    // Escrow PDA 146b, vault ATA 165b) requiring ~0.0065 SOL in rent.
+    // All rent is returned at release via `close = depositor`.
+    // Require 0.007 SOL as a buffer above the true minimum.
+    const MIN_SOL_FOR_LOCK = 0.007;
+    const merchantSolBal = solanaWallet.solBalance;
+    if (merchantSolBal !== null && merchantSolBal < MIN_SOL_FOR_LOCK) {
+      dispatch({ type: 'SET_ERROR', op: 'lock', error: `Insufficient SOL. You need at least ${MIN_SOL_FOR_LOCK} SOL but have ${merchantSolBal.toFixed(4)} SOL. Locking escrow deposits ~0.0065 SOL into on-chain accounts — this is returned to you when the trade completes.` });
+      return;
+    }
+    if (merchantSolBal === null) {
+      await refreshBalance();
+      await new Promise(r => setTimeout(r, 500));
+      const solAfterRefresh = solanaWallet.solBalance;
+      if (solAfterRefresh !== null && solAfterRefresh < MIN_SOL_FOR_LOCK) {
+        dispatch({ type: 'SET_ERROR', op: 'lock', error: `Insufficient SOL. You need at least ${MIN_SOL_FOR_LOCK} SOL but have ${solAfterRefresh.toFixed(4)} SOL. Locking escrow deposits ~0.0065 SOL into on-chain accounts — this is returned to you when the trade completes.` });
+        return;
+      }
+    }
+
     const myWallet = solanaWallet.walletAddress;
 
     const hasAcceptorWallet = isValidSolanaAddress(escrowOrder.acceptorWallet);
@@ -286,16 +307,29 @@ export function useEscrowOperations({
       }
     }
 
+    // Determine the counterparty wallet for this order.
+    // For BUY orders the user (buyer) wallet is known at lock time — use
+    // createAndLockEscrow so the trade lands in Locked state directly.
+    // For broadcast/open orders with no counterparty yet, fall back to
+    // depositToEscrowOpen (Funded state, counterparty joins via acceptTrade).
+    const counterpartyWalletForLock = recipientWallet;
+
     try {
-      const escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string } = await solanaWallet.depositToEscrowOpen({
-        amount: escrowOrder.amount,
-        side: 'sell',
-        // Pass through the trade_id we registered (when available) so the
-        // on-chain instruction's PDA matches the worker's lookup. Without
-        // this, the worker would derive a different PDA from a different
-        // trade_id and miss the funds entirely.
-        ...(intentTradeId !== null && { tradeId: intentTradeId }),
-      });
+      const escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string } =
+        counterpartyWalletForLock
+          ? await solanaWallet.createAndLockEscrow({
+              amount: escrowOrder.amount,
+              counterparty: counterpartyWalletForLock,
+              side: 'sell',
+              ...(intentTradeId !== null && { tradeId: intentTradeId }),
+            })
+          : await solanaWallet.depositToEscrowOpen({
+              amount: escrowOrder.amount,
+              side: 'sell',
+              // Pass through the trade_id we registered (when available) so the
+              // on-chain instruction's PDA matches the worker's lookup.
+              ...(intentTradeId !== null && { tradeId: intentTradeId }),
+            });
 
       if (!escrowResult.success || !escrowResult.txHash) {
         throw new Error(escrowResult.error || 'Transaction failed');

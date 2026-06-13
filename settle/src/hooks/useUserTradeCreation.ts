@@ -416,6 +416,37 @@ export function useUserTradeCreation({
       }
     }
 
+    // SOL is required to fund three new on-chain accounts during lock:
+    //   - Trade PDA (238 bytes)  → ~0.002547 SOL rent
+    //   - Escrow PDA (146 bytes) → ~0.001907 SOL rent
+    //   - Vault ATA (165 bytes)  → ~0.002039 SOL rent
+    //   - Two tx fees            → ~0.000010 SOL
+    // Total: ~0.006503 SOL. All rent is RETURNED at release (close = depositor).
+    // We require 0.007 SOL to give a small buffer above the true minimum.
+    const MIN_SOL_FOR_ESCROW = 0.007;
+    const solBal = solanaWallet.solBalance;
+    if (solBal !== null && solBal < MIN_SOL_FOR_ESCROW) {
+      setEscrowError(
+        `Insufficient SOL. You need at least ${MIN_SOL_FOR_ESCROW} SOL but have ${solBal.toFixed(4)} SOL. ` +
+        `Locking escrow creates 3 on-chain accounts that require ~0.0065 SOL as a deposit — this SOL is returned to you when the trade completes.`
+      );
+      setEscrowTxStatus('error');
+      return;
+    }
+    if (solBal === null) {
+      await solanaWallet.refreshBalances();
+      await new Promise(r => setTimeout(r, 500));
+      const solBalAfterRefresh = solanaWallet.solBalance;
+      if (solBalAfterRefresh !== null && solBalAfterRefresh < MIN_SOL_FOR_ESCROW) {
+        setEscrowError(
+          `Insufficient SOL. You need at least ${MIN_SOL_FOR_ESCROW} SOL but have ${solBalAfterRefresh.toFixed(4)} SOL. ` +
+          `Locking escrow creates 3 on-chain accounts that require ~0.0065 SOL as a deposit — this SOL is returned to you when the trade completes.`
+        );
+        setEscrowTxStatus('error');
+        return;
+      }
+    }
+
     setIsLoading(true);
     setEscrowTxStatus('signing');
 
