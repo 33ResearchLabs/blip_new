@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, successResponse, forbiddenResponse } from '@/lib/middleware/auth';
-import { getEffectiveLimits, getTrailing24hVolumeUsd, getLargestTrade24hUsd, getMerchant24hSideVolumeUsd, getUnsuccessful24hCount, COIN_LIMIT_TIERS, BASE_LIMITS, MERCHANT_SIDE_LIMITS, LIMIT_DECREASE_ALERT_THRESHOLD } from '@/lib/coins/limits';
+import { getEffectiveLimits, getTrustBasedLimits, getTrailing24hVolumeUsd, getLargestTrade24hUsd, getMerchant24hSideVolumeUsd, getUnsuccessful24hCount, COIN_LIMIT_TIERS, BASE_LIMITS, MERCHANT_SIDE_LIMITS, LIMIT_DECREASE_ALERT_THRESHOLD } from '@/lib/coins/limits';
 import { getXVerification } from '@/lib/db/repositories/xAccountVerifications';
 
 export async function GET(request: NextRequest) {
@@ -23,6 +23,18 @@ export async function GET(request: NextRequest) {
   const limits = await getEffectiveLimits(auth.actorId, actorType);
   const trailing = await getTrailing24hVolumeUsd(auth.actorId, actorType);
   const largestTrade = await getLargestTrade24hUsd(auth.actorId, actorType);
+
+  // Trust Score system preview (Phase 2): what limits WOULD be under the
+  // Trust-Tier × stake model. Opt-in via ?preview=trust so we don't add the
+  // extra reads to every limits-page load. Read-only; never breaks the endpoint.
+  let trustPreview: Awaited<ReturnType<typeof getTrustBasedLimits>> | null = null;
+  if (request.nextUrl.searchParams.get('preview') === 'trust') {
+    try {
+      trustPreview = await getTrustBasedLimits(auth.actorId, actorType);
+    } catch (e) {
+      console.error('[limits/me] trust preview failed', e);
+    }
+  }
 
   // Inputs for the "Unlock Higher Limits" rows + the informational decrease
   // alert. X verification is self-attested (display-only); phone/liveness come
@@ -66,5 +78,7 @@ export async function GET(request: NextRequest) {
     },
     unsuccessful_24h: unsuccessful24h,
     decrease_alert: unsuccessful24h >= LIMIT_DECREASE_ALERT_THRESHOLD,
+    trust_mode_enabled: limits.source === 'trust',
+    trust_preview: trustPreview,
   });
 }

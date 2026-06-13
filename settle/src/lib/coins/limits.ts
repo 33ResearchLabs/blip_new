@@ -16,15 +16,33 @@
  *   Layer 3 — Reputation multiplier (applied on top of whichever is higher):
  *     New/Newcomer: 1× · Bronze: 2× · Silver: 4× · Gold: 8× · Platinum: 12×
  *
- * The effective limit is max(KYC base, active coin unlock) × rep multiplier.
- * A coin unlock below the user's KYC base is silently ignored (KYC base wins).
+ *   Layer 4 — Stake multiplier (Stake-Based Limit Boost; stacks on reputation):
+ *     100 USDT → 3× · 250 → 5× · 500 → 10× · 1,000 → 20× · 2,500 → 50×
  *
- * Reads run on every order create — keep it O(1) with two indexed lookups.
+ * Effective = max(KYC base, verification floor, active coin unlock)
+ *             × reputation multiplier × stake multiplier, then floored by any
+ *             approved admin override. A coin unlock below the higher floor is
+ *             silently ignored. Staking is a MULTIPLIER, not a floor — it adds
+ *             capacity without changing Trust/reputation.
+ *
+ * Reads run on every order create — keep it O(1) with a few indexed lookups.
  */
 
 import { query, queryOne } from '@/lib/db';
 import type { WaitlistActorType } from '@/lib/types/database';
-import { getStakeLimitFloor } from '@/lib/staking/economy';
+import { getStakeMultiplier } from '@/lib/staking/economy';
+import { getTrustScore } from '@/lib/trust/repository';
+import { computeLimitReduction } from '@/lib/trust/reductions';
+
+/**
+ * Phase 2 rollout flag for the Trust Score limit system. When 'true', effective
+ * limits are computed as (Trust Tier base × stake multiplier) — replacing the
+ * legacy KYC/verification/reputation stack. Defaults OFF so the switch is
+ * deliberate and verifiable: with the flag unset, getEffectiveLimits runs the
+ * exact same code as before (zero regression). Set TRUST_LIMITS_ENABLED=true to
+ * enable after staging verification.
+ */
+const TRUST_LIMITS_ENABLED = process.env.TRUST_LIMITS_ENABLED === 'true';
 
 /**
  * Two KYC states only (full KYC not available yet):
@@ -108,8 +126,11 @@ export type CoinLimitTier = keyof typeof COIN_LIMIT_TIERS;
 export interface EffectiveLimits {
   dailyUsd: number;
   perTradeUsd: number;
-  /** Which layer is driving the limit: KYC base, a verification floor, a staking floor, or a coin unlock. */
-  source: 'kyc' | 'verification' | 'staking' | CoinLimitTier;
+  /** Base layer driving the limit before multipliers: KYC base, a verification
+   *  floor, a coin unlock, or 'trust' (Trust Tier base, when TRUST_LIMITS_ENABLED).
+   *  ('staking' retained for back-compat; staking is now a multiplier — see
+   *  stakeMultiplier — not a base layer.) */
+  source: 'kyc' | 'verification' | 'staking' | 'trust' | CoinLimitTier;
   /** KYC level that was read (0 or 1). */
   kycLevel: KycLevel;
   /** Days since account creation — used to show "limits increase on day 3" */
@@ -118,6 +139,20 @@ export interface EffectiveLimits {
   reputationMultiplier: number;
   /** Reputation tier name (null when unscored) — drives the "Trader Program" row. */
   reputationTier: string | null;
+  /** Stake-based limit multiplier (1 = no stake boost). Stacks on reputation. */
+  stakeMultiplier: number;
+  /** Stake tier label (e.g. 'S3') or null when no stake boost. */
+  stakeTier: string | null;
+  /** Trust Score (0–100) when trust-based limits drive this; else null. */
+  trustScore: number | null;
+  /** Trust tier label (e.g. 'T3 · Trusted Trader') when active; else null. */
+  trustTier: string | null;
+  /** Max simultaneously-open orders for the Trust Tier (trust mode); else null. */
+  maxOpenOrders: number | null;
+  /** Fraction (0–1) the Trust-Tier limit was auto-reduced by (trust mode; 0 otherwise). */
+  limitReductionPct: number;
+  /** Human reasons for any automatic limit reduction (trust mode). */
+  limitReductionReasons: string[];
   /** Active identity verifications that raise the limit floor. */
   verifications: { phone: boolean; liveness: boolean };
 }
@@ -142,6 +177,11 @@ export async function getEffectiveLimits(
   actorId: string,
   actorType: WaitlistActorType,
 ): Promise<EffectiveLimits> {
+  // Trust Score system (Phase 2): when enabled, limits come from the Trust Tier
+  // base × stake multiplier instead of the legacy stack below. Flag-gated so the
+  // legacy path is byte-for-byte unchanged until deliberately switched on.
+  if (TRUST_LIMITS_ENABLED) return getTrustBasedLimits(actorId, actorType);
+
   // Read KYC level, account age, verification flags, unlock, reputation, and
   // admin overrides concurrently.
   const { kycLevel, accountAgeDays, phoneVerified, faceVerified } =
@@ -170,7 +210,7 @@ export async function getEffectiveLimits(
     ),
   };
 
-  const [unlock, stakeFloor, rep, overrides] = await Promise.all([
+  const [unlock, stake, rep, overrides] = await Promise.all([
     queryOne<UnlockRow>(
       `SELECT tier, daily_limit_usd, per_trade_usd, expires_at
          FROM coin_limit_unlocks
@@ -179,40 +219,134 @@ export async function getEffectiveLimits(
         LIMIT 1`,
       [actorType, actorId],
     ),
-    getStakeLimitFloor(actorType, actorId),
+    getStakeMultiplier(actorType, actorId),
     getReputationInfo(actorId, actorType),
     getApprovedLimitOverrides(actorId, actorType),
   ]);
   const repMult = rep.multiplier;
+  const stakeMult = stake.multiplier;
 
-  // Highest floor wins per field: KYC base vs verification floor vs staking
-  // floor vs coin unlock. Then the reputation multiplier scales it, and an
-  // approved override floors it.
+  // Highest floor wins per field: KYC base vs verification floor vs coin unlock.
+  // Then the reputation AND stake multipliers scale it (stake stacks on top of
+  // reputation), and an approved override floors the result.
   const unlockDaily    = unlock?.daily_limit_usd ?? 0;
   const unlockPerTrade = unlock?.per_trade_usd ?? 0;
-  const rawDaily    = Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd, stakeFloor.dailyUsd, unlockDaily);
-  const rawPerTrade = Math.max(kycBase.perTradeUsd, verifyFloor.perTradeUsd, stakeFloor.perTradeUsd, unlockPerTrade);
+  const rawDaily    = Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd, unlockDaily);
+  const rawPerTrade = Math.max(kycBase.perTradeUsd, verifyFloor.perTradeUsd, unlockPerTrade);
 
-  // Label the driving layer (by daily): coin unlock > staking > verification > kyc.
+  // Label the base-layer driver (by daily): coin unlock > verification > kyc.
+  // Staking is now a multiplier (see stakeMultiplier), not a base layer, so it
+  // no longer participates in this attribution.
   let source: 'kyc' | 'verification' | 'staking' | CoinLimitTier = 'kyc';
   if (verifyFloor.dailyUsd > kycBase.dailyUsd) source = 'verification';
-  if (stakeFloor.dailyUsd > Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd)) {
-    source = 'staking';
-  }
-  if (unlock && unlockDaily > Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd, stakeFloor.dailyUsd)) {
+  if (unlock && unlockDaily > Math.max(kycBase.dailyUsd, verifyFloor.dailyUsd)) {
     source = unlock.tier;
   }
 
   return {
-    dailyUsd:    Math.max(Math.floor(rawDaily * repMult),    overrides.dailyUsd ?? 0),
-    perTradeUsd: Math.max(Math.floor(rawPerTrade * repMult), overrides.perTradeUsd ?? 0),
+    dailyUsd:    Math.max(Math.floor(rawDaily * repMult * stakeMult),    overrides.dailyUsd ?? 0),
+    perTradeUsd: Math.max(Math.floor(rawPerTrade * repMult * stakeMult), overrides.perTradeUsd ?? 0),
     source,
     kycLevel,
     accountAgeDays,
     expiresAt: unlock && source === unlock.tier ? unlock.expires_at : null,
     reputationMultiplier: repMult,
     reputationTier: rep.tier,
+    stakeMultiplier: stakeMult,
+    stakeTier: stake.tier,
+    trustScore: null,
+    trustTier: null,
+    maxOpenOrders: null,
+    limitReductionPct: 0,
+    limitReductionReasons: [],
     verifications: { phone: phoneVerified, liveness: faceVerified },
+  };
+}
+
+/**
+ * Trust-Score-based effective limits (Phase 2). Base = the actor's Trust Tier
+ * limit (T0 $0 … T5 $800) × the stake multiplier, then floored by any approved
+ * admin override. T0 (Trust < 20) disables trading entirely — stake does NOT
+ * override a Trust restriction (per spec). Returns the same EffectiveLimits
+ * shape as the legacy path so every consumer keeps working unchanged.
+ *
+ * NOTE: automatic risk reductions (low completion rate, lost disputes, confirmed
+ * chargeback, fraud freeze) are a later phase and not yet applied here. Open-order
+ * caps (maxOpenOrders) are surfaced for display but not yet enforced.
+ */
+export async function getTrustBasedLimits(
+  actorId: string,
+  actorType: WaitlistActorType,
+): Promise<EffectiveLimits> {
+  const trustActor = actorType === 'merchant' ? 'merchant' : 'user';
+  const { kycLevel, accountAgeDays, phoneVerified, faceVerified } =
+    await getKycInfo(actorId, actorType);
+
+  const [trust, stake, overrides] = await Promise.all([
+    getTrustScore(trustActor, actorId),
+    getStakeMultiplier(actorType, actorId),
+    getApprovedLimitOverrides(actorId, actorType),
+  ]);
+  const stakeMult = stake.multiplier;
+  const tier = trust.tierDef;
+
+  // Automatic risk reduction (Phase 4). confirmedChargeback / fraudInvestigation
+  // sources are wired in a later phase (severe-event ledger / risk holds).
+  const reduction = computeLimitReduction({
+    totalOrders: trust.inputs.totalOrders,
+    completedTrades: trust.inputs.completedTrades,
+    disputesLost90d: trust.inputs.disputesLostIn90d,
+    disputesLost180d: trust.inputs.disputesLostIn180d,
+    confirmedChargeback: false,
+    fraudInvestigation: false,
+  });
+
+  // Common fields shared by all branches below.
+  const common = {
+    source: 'trust' as const,
+    kycLevel,
+    accountAgeDays,
+    expiresAt: null,
+    reputationMultiplier: 1,
+    reputationTier: null,
+    stakeMultiplier: stakeMult,
+    stakeTier: stake.tier,
+    trustScore: trust.score,
+    trustTier: `${tier.tier} · ${tier.label}`,
+    verifications: { phone: phoneVerified, liveness: faceVerified },
+  };
+
+  // T0 (Trust < 20): trading disabled regardless of stake, override, or reductions.
+  if (!tier.tradingAllowed) {
+    return {
+      ...common, dailyUsd: 0, perTradeUsd: 0, maxOpenOrders: 0,
+      limitReductionPct: 0,
+      limitReductionReasons: ['Trust Score below 20 — trading restricted'],
+    };
+  }
+
+  // Active fraud investigation: limits frozen.
+  if (reduction.frozen) {
+    return {
+      ...common, dailyUsd: 0, perTradeUsd: 0, maxOpenOrders: tier.maxOpenOrders,
+      limitReductionPct: 1,
+      limitReductionReasons: reduction.reasons,
+    };
+  }
+
+  // Granted = Trust Tier base × stake (admin override floors it). Then apply the
+  // automatic reduction — per spec, reductions come AFTER the stake multiplier.
+  const factor = 1 - reduction.fraction;
+  const grantedDaily    = Math.max(tier.dailyUsd * stakeMult,    overrides.dailyUsd ?? 0);
+  const grantedPerTrade = Math.max(tier.perOrderUsd * stakeMult, overrides.perTradeUsd ?? 0);
+
+  return {
+    ...common,
+    dailyUsd:    Math.floor(grantedDaily * factor),
+    perTradeUsd: Math.floor(grantedPerTrade * factor),
+    maxOpenOrders: tier.maxOpenOrders,
+    limitReductionPct: reduction.fraction,
+    limitReductionReasons: reduction.reasons,
   };
 }
 
