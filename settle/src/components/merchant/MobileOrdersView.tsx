@@ -115,6 +115,7 @@ function OrderCardTimer({
   setMobileView,
   onCancelOrder,
   cancellingOrderId,
+  onSelectOrder,
 }: {
   order: Order;
   merchantId: string | null;
@@ -127,6 +128,7 @@ function OrderCardTimer({
   ) => void;
   onCancelOrder?: (o: Order) => void;
   cancellingOrderId?: string | null;
+  onSelectOrder?: (o: Order) => void;
 }) {
   const countdown = useCountdown(order.expiresIn);
   const [dismissed, setDismissed] = useState(false);
@@ -349,13 +351,16 @@ function OrderCardTimer({
           </div>
         )}
 
-        {/* ── TRUST BLOCK ── */}
+        {/* ── TRUST BLOCK ── (tap to open the order detail popup) */}
         <div
+          onClick={onSelectOrder ? () => onSelectOrder(order) : undefined}
+          role={onSelectOrder ? "button" : undefined}
           style={{
             display: "flex",
             alignItems: "center",
             gap: 10,
             marginBottom: 10,
+            cursor: onSelectOrder ? "pointer" : undefined,
           }}
         >
           {/* 36px gradient avatar with initials */}
@@ -781,6 +786,9 @@ export interface MobileOrdersViewProps {
   // no-escrow cancel call depending on whether escrow has been locked.
   onCancelOrder?: (order: Order) => void;
   cancellingOrderId?: string | null;
+  // Open the order detail popup (OrderQuickView). Tapping a card's header
+  // opens it — mirrors the desktop New Orders panel behaviour.
+  onSelectOrder?: (order: Order) => void;
 }
 
 export function MobileOrdersView({
@@ -791,6 +799,7 @@ export function MobileOrdersView({
   setMobileView,
   onCancelOrder,
   cancellingOrderId,
+  onSelectOrder,
 }: MobileOrdersViewProps) {
   // Shared filter / search / sound state — same Zustand keys the desktop panel uses,
   // so toggling here also reflects on the desktop layout.
@@ -1185,6 +1194,7 @@ export function MobileOrdersView({
               setMobileView={setMobileView}
               onCancelOrder={onCancelOrder}
               cancellingOrderId={cancellingOrderId}
+              onSelectOrder={onSelectOrder}
             />
           ))}
         </div>

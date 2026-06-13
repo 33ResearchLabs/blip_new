@@ -28,9 +28,20 @@ export interface OpenTradeFormState {
   spreadPreference: "best" | "fastest" | "cheap";
   expiryMinutes: 15 | 90;
   boostPct?: number;
+  // BUY orders (merchant is the buyer): rails the merchant can pay with.
+  buyerPaymentTypes?: string[];
 }
 
 const BOOST_MAX_PCT = 25;
+
+// Payment rails offered on a BUY order (merchant is the buyer). Stored as
+// `buyerPaymentTypes` and sent as buyer_payment_types — mirrors the desktop
+// ConfigPanel "How you'll pay" control.
+const PAY_TYPE_OPTIONS = [
+  { key: "bank", label: "Bank", emoji: "🏦" },
+  { key: "upi", label: "UPI", emoji: "📱" },
+  { key: "cash", label: "Cash", emoji: "💵" },
+] as const;
 
 export interface TradeFormModalProps {
   isOpen: boolean;
@@ -71,12 +82,26 @@ export function TradeFormModal({
   const paymentMethodsLoaded = useMerchantStore((s) => s.paymentMethodsLoaded);
   const refreshPaymentMethods = useMerchantStore((s) => s.fetchPaymentMethods);
   const [showPmDropdown, setShowPmDropdown] = useState(false);
+  const [showPayTypesDropdown, setShowPayTypesDropdown] = useState(false);
 
   const corridorPrices = useCorridorPrices();
   const fiatCcy = corridorFiat(activeCorridor);
   const liveRate = resolveCorridorRef(corridorPrices, activeCorridor, fiatCcy);
 
   const isSell = openTradeForm.tradeType === "sell";
+  // BUY: rails the merchant can pay with (multi-select). Shown in place of the
+  // receive-account dropdown, since on a buy the merchant pays, not receives.
+  const payTypes = openTradeForm.buyerPaymentTypes ?? [];
+  const toggleBuyerPayType = (t: string) =>
+    setOpenTradeForm((p) => {
+      const cur = p.buyerPaymentTypes ?? [];
+      return {
+        ...p,
+        buyerPaymentTypes: cur.includes(t)
+          ? cur.filter((x) => x !== t)
+          : [...cur, t],
+      };
+    });
   const cryptoAmountNum = parseFloat(openTradeForm.cryptoAmount || "0");
   const overBalance =
     isSell && effectiveBalance !== null && cryptoAmountNum > effectiveBalance && cryptoAmountNum > 0;
@@ -84,6 +109,7 @@ export function TradeFormModal({
   const disabledReason: string | null = (() => {
     if (isCreatingTrade) return null;
     if (!openTradeForm.cryptoAmount || cryptoAmountNum <= 0) return "Enter a USDT amount to continue";
+    if (!isSell && payTypes.length === 0) return "Choose how you'll pay";
     if (overBalance) return `Insufficient USDT — wallet has ${formatCrypto(effectiveBalance!)} USDT`;
     return null;
   })();
@@ -119,6 +145,7 @@ export function TradeFormModal({
     onClose();
     setCreateTradeError(null);
     setShowPmDropdown(false);
+    setShowPayTypesDropdown(false);
   };
 
   const selectedPm =
@@ -320,7 +347,90 @@ export function TradeFormModal({
                   </div>
                 )}
 
-                {/* Payment Method */}
+                {/* Payment — BUY: "How you'll pay" rails (the merchant is the
+                    buyer who pays fiat); SELL: the account the merchant receives
+                    into. Shown per the Buy/Sell toggle above. */}
+                {!isSell ? (
+                  <div style={{ position: "relative" }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowPayTypesDropdown((v) => !v)}
+                      style={{
+                        width: "100%",
+                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                        padding: "11px 14px",
+                        borderRadius: 14,
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                        cursor: "pointer", boxSizing: "border-box",
+                        transition: "border-color 0.15s",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.13)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)")}
+                    >
+                      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", flexShrink: 0 }}>How you&apos;ll pay</span>
+                      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 7, justifyContent: "flex-end", minWidth: 0, overflow: "hidden" }}>
+                        {payTypes.length > 0 ? (
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {payTypes.map((t) => PAY_TYPE_OPTIONS.find((o) => o.key === t)?.label ?? t).join(", ")}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.28)" }}>Select</span>
+                        )}
+                        <CaretDown style={{ width: 13, height: 13, color: "rgba(255,255,255,0.22)", flexShrink: 0, transform: showPayTypesDropdown ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+                      </div>
+                    </button>
+
+                    <AnimatePresence>
+                      {showPayTypesDropdown && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4, scaleY: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scaleY: 1 }}
+                          exit={{ opacity: 0, y: -4, scaleY: 0.95 }}
+                          transition={{ duration: 0.14 }}
+                          style={{
+                            position: "absolute", zIndex: 30,
+                            top: "calc(100% + 5px)", left: 0, right: 0,
+                            borderRadius: 14,
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            background: "#18181b",
+                            boxShadow: "0 12px 40px rgba(0,0,0,0.55)",
+                            overflow: "hidden",
+                            transformOrigin: "top",
+                          }}
+                        >
+                          {PAY_TYPE_OPTIONS.map((opt) => {
+                            const sel = payTypes.includes(opt.key);
+                            return (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                onClick={() => toggleBuyerPayType(opt.key)}
+                                style={{
+                                  width: "100%", display: "flex", alignItems: "center", gap: 9,
+                                  padding: "10px 14px",
+                                  background: sel ? "rgba(255,255,255,0.06)" : "transparent",
+                                  border: "none", cursor: "pointer", boxSizing: "border-box", textAlign: "left",
+                                  transition: "background 0.1s",
+                                }}
+                              >
+                                <span style={{ fontSize: 14 }}>{opt.emoji}</span>
+                                <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: sel ? "#f5f5f7" : "rgba(255,255,255,0.6)" }}>
+                                  {opt.label}
+                                </div>
+                                {sel && (
+                                  <svg viewBox="0 0 14 14" width={12} height={12} fill="none" stroke={sideColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="m2.5 7 3 3 6-6"/>
+                                  </svg>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ) : (
                 <div style={{ position: "relative" }}>
                   <button
                     type="button"
@@ -448,6 +558,7 @@ export function TradeFormModal({
                     )}
                   </AnimatePresence>
                 </div>
+                )}
 
                 {/* Expiry */}
                 <div style={{

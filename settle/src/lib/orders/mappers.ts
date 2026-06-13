@@ -29,7 +29,7 @@ export const isOrderExpired = (order: Order): boolean => {
 };
 
 // Convert DB order to UI order
-export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Order => {
+export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null, merchantName?: string | null): Order => {
   const now = new Date();
   let expiresIn: number;
 
@@ -75,14 +75,18 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
   return {
     id: dbOrder.id,
     user: isM2M
-      // M2M: show counterparty name (buyer sees seller, seller sees buyer)
+      // M2M: show counterparty name (buyer sees seller, seller sees buyer).
+      // When I'm the placer and no seller has claimed yet, show my own name
+      // (merchantName) instead of the generic 'Merchant' fallback — so my own
+      // open buy order reads as mine. Once a seller claims, merchant.display_name
+      // resolves and the card switches to the real counterparty.
       ? (merchantId && dbOrder.buyer_merchant_id === merchantId
-          ? (dbOrder.merchant?.display_name || 'Merchant')   // I'm the buyer/placer → show seller
+          ? (dbOrder.merchant?.display_name || merchantName || 'Merchant')   // I'm the buyer/placer → show seller (or me while unclaimed)
           : (dbOrder.buyer_merchant?.display_name || 'Merchant'))  // I'm the seller → show buyer
       : userName,
     emoji: getUserEmoji(isM2M
       ? (merchantId && dbOrder.buyer_merchant_id === merchantId
-          ? (dbOrder.merchant?.display_name || 'M')
+          ? (dbOrder.merchant?.display_name || merchantName || 'M')
           : (dbOrder.buyer_merchant?.display_name || 'M'))
       : userName),
     // Counterparty avatar — same picking logic as `user` above so the

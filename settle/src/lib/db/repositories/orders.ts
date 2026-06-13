@@ -267,7 +267,7 @@ export async function getMerchantOrders(
              'name', CASE
                WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN
                  CASE
-                   WHEN o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != o.merchant_id THEN COALESCE(bm.display_name, m.display_name)
+                   WHEN o.buyer_merchant_id IS DISTINCT FROM o.merchant_id THEN COALESCE(bm.display_name, m.display_name)
                    ELSE m.display_name
                  END
                ELSE COALESCE(u.name, u.username)
@@ -281,7 +281,7 @@ export async function getMerchantOrders(
              'avatar_url', CASE
                WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN
                  CASE
-                   WHEN o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != o.merchant_id THEN COALESCE(bm.avatar_url, m.avatar_url)
+                   WHEN o.buyer_merchant_id IS DISTINCT FROM o.merchant_id THEN COALESCE(bm.avatar_url, m.avatar_url)
                    ELSE m.avatar_url
                  END
                ELSE u.avatar_url
@@ -405,19 +405,42 @@ export async function getAllPendingOrdersForMerchant(
              'name', CASE
                WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN
                  CASE
-                   WHEN o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != o.merchant_id THEN COALESCE(bm.display_name, m.display_name)
+                   WHEN o.buyer_merchant_id IS DISTINCT FROM o.merchant_id THEN COALESCE(bm.display_name, m.display_name)
                    ELSE m.display_name
                  END
                ELSE COALESCE(u.name, u.username)
              END,
              'username', u.username,
-             'rating', u.rating,
-             'total_trades', u.total_trades,
+             -- Buyer-trust fields. On placeholder (merchant-placed / M2M)
+             -- orders the real buyer is the buyer-merchant, not the empty
+             -- open_order_ shell — so source from bm, mirroring name/avatar
+             -- above. account_created_at → Account Age; dispute_count +
+             -- total_trades → Success Rate; is_verified → KYC.
+             'rating', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN bm.rating
+               ELSE u.rating
+             END,
+             'total_trades', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN bm.total_trades
+               ELSE u.total_trades
+             END,
+             'account_created_at', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN bm.created_at
+               ELSE u.created_at
+             END,
+             'dispute_count', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN bm.dispute_count
+               ELSE u.dispute_count
+             END,
+             'is_verified', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN COALESCE(bm.verification_level, 0) > 0
+               ELSE COALESCE(u.kyc_status, 'none') NOT IN ('none', 'pending', 'rejected')
+             END,
              'wallet_address', u.wallet_address,
              'avatar_url', CASE
                WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN
                  CASE
-                   WHEN o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != o.merchant_id THEN COALESCE(bm.avatar_url, m.avatar_url)
+                   WHEN o.buyer_merchant_id IS DISTINCT FROM o.merchant_id THEN COALESCE(bm.avatar_url, m.avatar_url)
                    ELSE m.avatar_url
                  END
                ELSE u.avatar_url
@@ -576,18 +599,37 @@ export async function getAllPendingOrdersForMerchant(
 export async function setBuyOrderMerchantPaymentMethod(
   orderId: string,
   methodId: string,
-  buyerUserId: string,
+  actorType: 'user' | 'merchant',
+  actorId: string,
 ): Promise<{ ok: boolean; reason?: string }> {
   const result = await transaction(async (client) => {
     const { rows } = await client.query(
-      `SELECT id, type, user_id, merchant_id, status, buyer_payment_types
+      `SELECT id, type, user_id, merchant_id, buyer_merchant_id, status, buyer_payment_types
          FROM orders WHERE id = $1 FOR UPDATE`,
       [orderId],
     );
     const order = rows[0];
     if (!order) return { ok: false, reason: 'not_found' };
-    if (order.type !== 'buy') return { ok: false, reason: 'not_buy' };
-    if (order.user_id !== buyerUserId) return { ok: false, reason: 'not_buyer' };
+    // Must be a buy order carrying the buyer's chosen rails. User buys are
+    // stored type='buy'; a MERCHANT buy is broadcast as type='sell' with
+    // buyer_merchant_id set — both are identified by buyer_payment_types, so we
+    // gate on that rather than `type`.
+    if (
+      !Array.isArray(order.buyer_payment_types) ||
+      order.buyer_payment_types.length === 0
+    ) {
+      return { ok: false, reason: 'not_buy' };
+    }
+    // Authorize the buyer: a merchant buyer (buyer_merchant_id) on a
+    // merchant-placed buy, or the user who placed a user buy. Only that actor
+    // may choose where they pay.
+    if (order.buyer_merchant_id) {
+      if (actorType !== 'merchant' || order.buyer_merchant_id !== actorId) {
+        return { ok: false, reason: 'not_buyer' };
+      }
+    } else if (actorType !== 'user' || order.user_id !== actorId) {
+      return { ok: false, reason: 'not_buyer' };
+    }
     if (!order.merchant_id) return { ok: false, reason: 'no_merchant' };
     if (!['accepted', 'escrowed', 'payment_pending'].includes(order.status)) {
       return { ok: false, reason: 'bad_status' };

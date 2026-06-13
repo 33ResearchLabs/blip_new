@@ -41,6 +41,9 @@ export function useOrderFetching({
   // ─── Zustand store ───
   const setOrders = useMerchantStore((s) => s.setOrders);
   const merchantId = useMerchantStore((s) => s.merchantId);
+  // My own display name — used so my unclaimed open orders show my name
+  // instead of the generic "Merchant" counterparty fallback (mapDbOrderToUI).
+  const merchantName = useMerchantStore((s) => s.merchantInfo?.display_name || s.merchantInfo?.username || null);
   const setIsLoading = useMerchantStore((s) => s.setIsLoading);
 
   // ─── Local state ───
@@ -135,7 +138,7 @@ export function useOrderFetching({
       }
       if (data.success && data.data) {
         const mappedOrders = data.data.map((o: DbOrder) =>
-          mapDbOrderToUI(o, merchantId),
+          mapDbOrderToUI(o, merchantId, merchantName),
         );
 
         const fixedOrders = mappedOrders.map((order: Order) => {
@@ -192,7 +195,7 @@ export function useOrderFetching({
         setIsLoading(false);
       }
     }
-  }, [merchantId]);
+  }, [merchantId, merchantName]);
 
   // Load more orders (next page) — appends to existing list
   const loadMoreOrders = useCallback(async () => {
@@ -210,7 +213,7 @@ export function useOrderFetching({
         setHasMoreOrders(data.pagination.has_more);
       }
       if (data.success && data.data?.length > 0) {
-        const mapped = data.data.map((o: any) => mapDbOrderToUI(o, merchantId));
+        const mapped = data.data.map((o: any) => mapDbOrderToUI(o, merchantId, merchantName));
         setOrders((prev: Order[]) => {
           const existingIds = new Set(prev.map((o: Order) => o.id));
           const newOrders = mapped.filter((o: Order) => !existingIds.has(o.id));
@@ -224,7 +227,7 @@ export function useOrderFetching({
     } finally {
       setIsLoadingMore(false);
     }
-  }, [merchantId, isLoadingMore]);
+  }, [merchantId, merchantName, isLoadingMore]);
 
   // Debounced fetch: coalesces multiple fetchOrders() calls within 150ms
   // If a fetch is already in-flight, schedules another fetch after it completes
@@ -434,7 +437,7 @@ export function useOrderFetching({
         }
         const data = await res.json();
         if (data.success && data.data) {
-          let freshOrder = mapDbOrderToUI(data.data, merchantId);
+          let freshOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
           // Apply the same minimalStatus normalization as fetchOrders
           if (freshOrder.minimalStatus === "completed") {
             freshOrder = { ...freshOrder, status: "completed" as const };
@@ -458,7 +461,7 @@ export function useOrderFetching({
         console.error("[Merchant] Error refetching single order:", error);
       }
     },
-    [merchantId],
+    [merchantId, merchantName],
   );
 
   // ─── Post-mutation reconcile (optimistic + authoritative refetch) ───

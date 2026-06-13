@@ -94,6 +94,9 @@ export function useEscrowOperations({
   setRatingModalData,
 }: UseEscrowOperationsParams) {
   const merchantId = useMerchantStore(s => s.merchantId);
+  // My own display name — so my own unclaimed open orders show my name
+  // instead of the generic "Merchant" counterparty fallback (mapDbOrderToUI).
+  const merchantName = useMerchantStore(s => s.merchantInfo?.display_name || s.merchantInfo?.username || null);
   const setOrders = useMerchantStore(s => s.setOrders);
 
   // ─── Escrow state (single reducer for all 3 operations) ───
@@ -162,7 +165,7 @@ export function useEscrowOperations({
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
         if (data?.success && data?.data) {
-          const fresh = mapDbOrderToUI(data.data, merchantId);
+          const fresh = mapDbOrderToUI(data.data, merchantId, merchantName);
           // Guard against a stale fetch resolving after the user closed
           // the modal or opened a different order — SET_ORDER unconditionally
           // would overwrite unrelated state.
@@ -174,7 +177,7 @@ export function useEscrowOperations({
       .catch(err => {
         console.error('[Escrow] Background order refresh failed:', err);
       });
-  }, [merchantId, solanaWallet.connected, addNotification, setShowWalletModal]);
+  }, [merchantId, merchantName, solanaWallet.connected, addNotification, setShowWalletModal]);
 
   const executeLockEscrow = useCallback(async () => {
     if (!merchantId || !escrowOrder) return;
@@ -426,7 +429,7 @@ export function useEscrowOperations({
 
         if (res && res.ok && data?.success && data?.data) {
           try { localStorage.removeItem(orphanKey); } catch {}
-          const newOrder = mapDbOrderToUI(data.data, merchantId);
+          const newOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
           setOrders((prev: Order[]) => [newOrder, ...prev]);
           addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDT locked in escrow`, data.data.id);
           delete (window as any).__pendingSellOrder;
@@ -546,7 +549,7 @@ export function useEscrowOperations({
       dispatch({ type: 'SET_LOADING', op: 'lock', loading: false });
       playSound('error');
     }
-  }, [merchantId, escrowOrder, effectiveBalance, inAppBalance, solanaWallet, addNotification, playSound, afterMutationReconcile, refreshBalance]);
+  }, [merchantId, merchantName, escrowOrder, effectiveBalance, inAppBalance, solanaWallet, addNotification, playSound, afterMutationReconcile, refreshBalance]);
 
   const closeEscrowModal = useCallback(() => {
     dispatch({ type: 'CLOSE', op: 'lock' });
@@ -604,7 +607,7 @@ export function useEscrowOperations({
         .then(res => (res.ok ? res.json() : null))
         .then(data => {
           if (data?.success && data?.data) {
-            const freshOrder = mapDbOrderToUI(data.data, merchantId);
+            const freshOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
             if (freshOrder.id !== targetOrderId) return;
             // Order transitioned out from under us — close the modal and
             // surface the same UX as the original blocking path.
@@ -632,7 +635,7 @@ export function useEscrowOperations({
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
-          const freshOrder = mapDbOrderToUI(data.data, merchantId);
+          const freshOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
           if (freshOrder.status === 'completed' || freshOrder.status === 'cancelled' || freshOrder.status === 'expired') {
             addNotification('system', `Order already ${freshOrder.status}. Refreshing...`, order.id);
             setOrders((prev: Order[]) => prev.map((o: Order) => o.id === order.id ? freshOrder : o));
@@ -655,7 +658,7 @@ export function useEscrowOperations({
     }
 
     dispatch({ type: 'OPEN', op: 'release', order });
-  }, [merchantId, solanaWallet.connected, addNotification, playSound, setShowWalletModal, fetchOrders, setOrders]);
+  }, [merchantId, merchantName, solanaWallet.connected, addNotification, playSound, setShowWalletModal, fetchOrders, setOrders]);
 
   const executeRelease = useCallback(async () => {
     if (!merchantId || !releaseOrder) return;
@@ -808,7 +811,7 @@ export function useEscrowOperations({
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
-          const freshOrder = mapDbOrderToUI(data.data, merchantId);
+          const freshOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
           dispatch({ type: 'OPEN', op: 'cancel', order: freshOrder });
           return;
         }
@@ -818,7 +821,7 @@ export function useEscrowOperations({
     }
 
     dispatch({ type: 'OPEN', op: 'cancel', order });
-  }, [merchantId, solanaWallet.connected, addNotification, setShowWalletModal]);
+  }, [merchantId, merchantName, solanaWallet.connected, addNotification, setShowWalletModal]);
 
   const executeCancelEscrow = useCallback(async () => {
     if (!merchantId || !cancelOrder) return;
