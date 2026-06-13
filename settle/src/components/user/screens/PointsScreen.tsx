@@ -209,7 +209,7 @@ function TaskRow({
         <div
           className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
             done
-              ? "bg-green-500/10 border-green-500/20 text-green-500"
+              ? "bg-surface-active border-border-subtle text-text-primary"
               : "bg-surface-active border-border-subtle text-text-secondary"
           }`}
         >
@@ -226,22 +226,24 @@ function TaskRow({
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-amber-500 tabular-nums">
-            <Coins className="w-3.5 h-3.5" />+{formatCount(points)}
+          <span className="inline-flex items-center justify-end gap-1 min-w-14.5 text-[13px] font-semibold text-text-primary tabular-nums">
+            <Coins className="w-3.5 h-3.5 shrink-0" />+{formatCount(points)}
           </span>
-          {done ? (
-            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/10 border border-green-500/20 text-green-500">
-              <Check className="w-3.5 h-3.5" strokeWidth={2.6} />
-            </span>
-          ) : actionable ? (
-            <span className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-text-secondary group-hover:text-text-primary">
-              Earn <ChevronRight className="w-3.5 h-3.5" />
-            </span>
-          ) : (
-            <span className="text-[11px] font-medium text-text-tertiary px-2 py-1 rounded-md bg-surface-active border border-border-subtle">
-              Pending
-            </span>
-          )}
+          <div className="flex justify-end min-w-16">
+            {done ? (
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-surface-active border border-border-subtle text-text-primary">
+                <Check className="w-3.5 h-3.5" strokeWidth={2.6} />
+              </span>
+            ) : actionable ? (
+              <span className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-text-secondary group-hover:text-text-primary">
+                Earn <ChevronRight className="w-3.5 h-3.5" />
+              </span>
+            ) : (
+              <span className="text-[11px] font-medium text-text-tertiary px-2 py-1 rounded-md bg-surface-active border border-border-subtle">
+                Pending
+              </span>
+            )}
+          </div>
         </div>
       </button>
     </motion.div>
@@ -264,7 +266,7 @@ function EarnRow({ rule, index }: { rule: EarnRule; index: number }) {
         <p className="text-[13px] font-semibold text-text-primary leading-tight">{title}</p>
         <p className="text-[11.5px] text-text-tertiary leading-snug mt-0.5">{description}</p>
       </div>
-      <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-amber-500 tabular-nums shrink-0">
+      <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-text-primary tabular-nums shrink-0">
         <Coins className="w-3.5 h-3.5" />
         {points}
       </span>
@@ -349,10 +351,10 @@ export function PointsScreen({ setScreen }: PointsScreenProps) {
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             className={`relative overflow-hidden rounded-3xl p-6 lg:p-8 ${CARD}`}
           >
-            {/* Soft gold glow behind the coin */}
+            {/* Soft neutral glow behind the coin */}
             <div
               className="pointer-events-none absolute -top-16 -right-10 w-56 h-56 rounded-full opacity-30 blur-3xl"
-              style={{ background: "radial-gradient(circle, rgba(245,200,80,0.35), transparent 70%)" }}
+              style={{ background: "radial-gradient(circle, rgba(255,255,255,0.12), transparent 70%)" }}
             />
             <div className="relative flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -376,11 +378,8 @@ export function PointsScreen({ setScreen }: PointsScreenProps) {
                   </div>
                 </div>
               </div>
-              <div
-                className="shrink-0 w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center border border-amber-400/20"
-                style={{ background: "linear-gradient(150deg, rgba(245,210,110,0.18), rgba(245,160,60,0.10))" }}
-              >
-                <Coins className="w-7 h-7 lg:w-8 lg:h-8 text-amber-400" strokeWidth={1.8} />
+              <div className="shrink-0 w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center bg-surface-active border border-border-subtle">
+                <Coins className="w-7 h-7 lg:w-8 lg:h-8 text-text-primary" strokeWidth={1.8} />
               </div>
             </div>
           </motion.section>

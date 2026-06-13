@@ -3,6 +3,7 @@
 import { memo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { BlipLogo } from "@/components/shared/BlipLogo";
 
 interface LogoProps {
   href?: string;
@@ -32,21 +33,7 @@ export const Logo = memo(function Logo({
             - flex items-baseline so the lightning bolt aligns with the
               text baseline rather than its center.
           "money" stays italic, fontWeight 600. */}
-      <svg
-        viewBox="0 0 70 60"
-        className="h-[17px] w-auto"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28"
-          className={onDark ? undefined : "stroke-foreground"}
-          stroke={onDark ? "#ffffff" : undefined}
-          strokeWidth="9"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <BlipLogo />
 
       <motion.span
         className={`${className} text-[19px] leading-none flex items-baseline`}
