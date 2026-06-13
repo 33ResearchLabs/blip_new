@@ -167,6 +167,13 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
         const meRes = await fetchWithAuth('/api/auth/me', {
           method: 'GET',
           credentials: 'include',
+          // Session-restore probe — on a fresh load the in-memory sessionToken
+          // mirror is null, so a 401 from the expired 15-min access cookie
+          // would otherwise skip the silent refresh and drop a still-valid
+          // session. The probe attempts the cookie refresh and never
+          // force-logs-out; a genuinely signed-out visitor just falls through
+          // to the login form. Same root cause + fix as the merchant dashboard.
+          sessionProbe: true,
         });
         if (cancelled || !meRes.ok) return;
         const me = await meRes.json();
