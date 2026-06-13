@@ -286,20 +286,13 @@ export function LandingPage({
           aria-label="Blip money home"
           className="flex items-center gap-1.5 no-underline"
         >
-          <svg
-            viewBox="0 0 70 60"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ height: 17, width: "auto", display: "block" }}
-          >
-            <path
-              d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28"
-              stroke="#1d1d1f"
-              strokeWidth="9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          
+                    <img
+                      src="/brand/blip-icon-bg-remove.png"
+                      alt="Blip"
+                      className="w-9 h-9 object-contain"
+                    />
+                  
           <span
             className="flex items-baseline"
             style={{ fontSize: 22, lineHeight: 1, letterSpacing: "-0.045em", fontWeight: 700, color: "#1d1d1f" }}

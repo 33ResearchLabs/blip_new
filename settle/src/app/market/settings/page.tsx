@@ -1185,10 +1185,10 @@ export default function MerchantSettingsPage({
           {/* Desktop panel header — hidden on mobile. `lg:self-start` keeps it at
               the TOP of the left column instead of stretching to full height
               (which would vertically center its text). */}
-          <div className="hidden lg:flex lg:self-start items-center gap-3 px-6 py-2 border-b border-white/[0.05] shrink-0 w-50">
+          <div className="hidden lg:flex lg:self-start items-center gap-3 px-6 pb-2 pt-8 border-b border-white/[0.05] shrink-0 w-50">
             <span className="text-[11px] font-semibold tracking-[0.15em] uppercase text-white/30">Settings</span>
             <span className="text-white/20 text-xs">›</span>
-            <span className="text-[13px] font-semibold text-white/80">
+            <span className="text-[12px] font-semibold text-white/60">
               {tabs.find(t => t.id === activeTab)?.label ?? (activeTab === "support" ? "Support" : "")}
             </span>
           </div>

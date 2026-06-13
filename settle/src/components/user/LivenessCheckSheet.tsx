@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ShieldCheck, Loader2, AlertCircle, Camera } from "lucide-react";
+import { X, ShieldCheck, Loader2, AlertCircle, Camera, Eye, CornerUpLeft, CornerUpRight, Shield, Lock, BadgeCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 
 interface Props {
@@ -43,6 +44,12 @@ const TASK_LABEL: Record<Task, string> = {
   blink:      "Blink twice",
   turn_left:  "Turn your head left",
   turn_right: "Turn your head right",
+};
+
+const TASK_ICON: Record<Task, LucideIcon> = {
+  blink:      Eye,
+  turn_left:  CornerUpLeft,
+  turn_right: CornerUpRight,
 };
 
 export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
@@ -277,7 +284,10 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
           >
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-text-primary font-semibold text-lg">Liveness Check</h2>
+                <h2 className="text-text-primary font-semibold text-lg inline-flex items-center gap-2">
+                  <ShieldCheck size={20} className="text-emerald-500" />
+                  Liveness Check
+                </h2>
                 <p className="text-text-tertiary text-sm">Quick checks to confirm you're real</p>
               </div>
               <button onClick={onClose} className="p-2 rounded-full bg-surface-active text-text-secondary hover:bg-surface-hover">
@@ -291,21 +301,42 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                   <Camera size={36} className="text-emerald-400" />
                 </div>
                 <div className="text-center">
-                  <p className="text-text-primary font-medium mb-1">Earn your Verified badge</p>
+                  <p className="text-text-primary font-medium mb-1 inline-flex items-center justify-center gap-1.5">
+                    Earn your <span className="text-emerald-500">Verified</span> badge
+                    <BadgeCheck size={16} className="text-emerald-500" />
+                  </p>
                   <p className="text-text-tertiary text-sm">We'll ask you to blink and turn your head. No data is stored.</p>
                 </div>
-                {/* Task preview pills */}
-                <div className="flex gap-2">
-                  {TASKS.map((t) => (
-                    <span key={t} className="px-3 py-1 rounded-full bg-surface-active text-text-secondary text-xs">{TASK_LABEL[t]}</span>
-                  ))}
+                {/* Task preview — numbered steps with icons & dividers */}
+                <div className="w-full flex items-stretch rounded-2xl bg-surface-active/60 border border-border-subtle p-1">
+                  {TASKS.map((t, i) => {
+                    const Icon = TASK_ICON[t];
+                    return (
+                      <div key={t} className="flex-1 flex flex-col items-center text-center gap-2 px-2 py-3 relative">
+                        {i > 0 && (
+                          <span className="absolute left-0 top-3 bottom-3 w-px bg-border-subtle" />
+                        )}
+                        <div className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                          <Icon size={18} className="text-emerald-500" />
+                        </div>
+                        <span className="text-text-secondary text-xs leading-tight">
+                          {i + 1}. {TASK_LABEL[t]}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
                 <button
                   onClick={startScan}
-                  className="w-full py-3.5 rounded-2xl bg-emerald-500 text-text-primary font-semibold text-sm active:scale-95 transition-transform"
+                  className="w-full py-3.5 rounded-2xl bg-emerald-500 text-text-primary font-semibold text-sm active:scale-95 transition-transform flex items-center justify-center gap-2"
                 >
+                  <Shield size={16} />
                   Start Liveness Check
                 </button>
+                <div className="flex items-center justify-center gap-1.5 text-text-tertiary text-xs -mt-2">
+                  <Lock size={12} className="text-emerald-500" />
+                  Secure · Private · Encrypted
+                </div>
               </div>
             )}
 

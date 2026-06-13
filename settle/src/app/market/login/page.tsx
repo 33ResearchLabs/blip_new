@@ -9,6 +9,7 @@ import { useMerchantStore } from "@/stores/merchantStore";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { useDashboardAuth } from "@/hooks/useDashboardAuth";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
+import { BlipLogo } from "@/components/shared/BlipLogo";
 
 export default function MerchantLoginPage() {
   const router = useRouter();
@@ -191,9 +192,7 @@ export default function MerchantLoginPage() {
             style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.045em", lineHeight: 1 }}
           >
             <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 16 }}>
-              <svg viewBox="0 0 70 60" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ height: 16, width: "auto", display: "block" }}>
-                <path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#ffffff" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <BlipLogo />
             </span>
             <span>
               <span style={{ fontWeight: 700 }}>Blip</span>

@@ -20,10 +20,12 @@ import * as QRCode from "qrcode";
 import { UpiPayScreen } from "@/components/user/UpiPayScreen";
 import { BottomNav } from "./BottomNav";
 import { useState as useStateHook, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ArrowDown } from "lucide-react";
 import type { Screen, Order } from "./types";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import BlipLogo from "@/components/shared/BlipLogo";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 const IS_MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
@@ -181,6 +183,7 @@ export const HomeScreen = ({
   onUpiPayConfirm,
   onRefresh,
 }: HomeScreenProps) => {
+  const router = useRouter();
   const homeRootRef = useRef<HTMLDivElement | null>(null);
   const txScrollRef = useRef<HTMLDivElement | null>(null);
   const PTR_THRESHOLD = 68;
@@ -351,11 +354,12 @@ export const HomeScreen = ({
             {/* Left: BlipMark + greeting */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{
-                width: 40, height: 40, borderRadius: 12,
+                width: 36, height: 36, borderRadius: 12,
                 background: 'rgba(255,255,255,0.14)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}>
-                <BlipMark />
+                {/* <BlipMark /> */}
+                <BlipLogo className="rounded-xl "/>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.72 }}>{greeting}</span>
@@ -636,7 +640,7 @@ export const HomeScreen = ({
               <div style={{ display: 'flex', gap: 8 }}>
                 {([
                   { label: 'Support', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg> },
-                  { label: 'Ticket', fn: () => setScreen('support'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                  { label: 'Ticket', fn: () => router.push('/user/my-issues'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> },
                   { label: 'Rewards', fn: () => setScreen('points'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="6"/><path d="M8 14v7l4-2 4 2v-7"/></svg> },
                   { label: 'Refer', fn: () => setScreen('rewards'), icon: <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> },
                 ]).map(({ label, fn, icon }) => (
