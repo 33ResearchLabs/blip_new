@@ -81,7 +81,7 @@ export default function DevLockPage() {
             // boxShadow: '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px -4px rgba(0,0,0,0.6)',
           }}>
             {/* Blip "B" wordmark */}
-            <BlipLogo size={46}/>
+            <BlipLogo size={46} priority/>
           </div>
           <h1 style={{ color: '#ffffff', fontSize: '22px', fontWeight: 600, margin: 0, letterSpacing: '-0.025em' }}>
             Blip Money
