@@ -1,0 +1,40 @@
+-- 167_drop_orphan_release_order_v1_overload.sql
+--
+-- Fix: PostgreSQL error 42725 — "function release_order_v1(unknown, unknown,
+-- unknown, unknown) is not unique" — thrown on every escrow release (500 from
+-- the release API; see apps/core-api/src/routes/orders.ts).
+--
+-- Root cause: two 4-argument overloads of release_order_v1 coexist in the DB:
+--
+--   A) release_order_v1(uuid, character varying, boolean, integer)   ← CANONICAL
+--        Installed by migration 130 (fee-aware). The application calls this
+--        with [order_id, tx_hash, MOCK_MODE, PROTOCOL_FEE_BPS]
+--        (apps/core-api/src/routes/orders.ts → SELECT release_order_v1($1,$2,$3,$4)).
+--        The reconciliation worker's 3-arg call resolves here too via the
+--        p_mock_mode / p_fee_bps DEFAULTs.
+--
+--   B) release_order_v1(uuid, text, text, uuid)                       ← ORPHAN
+--        Installed out-of-band by the un-numbered files in the repo-root
+--        migrations/ folder (secure_release_order_v1_payment_guard.sql and
+--        fix_release_order_v1_guards.sql), which are NOT part of this numbered
+--        runner. The application never calls B — its 3rd/4th args are
+--        boolean+integer, not text+uuid.
+--
+-- The node-pg driver sends bound params untyped, so Postgres sees four
+-- `unknown` arguments and cannot choose between A and B → 42725.
+--
+-- Resolution: drop the orphan B. The 4-arg call then resolves unambiguously
+-- to A. Safe + idempotent on every environment: DROP IF EXISTS is a no-op
+-- where B was never applied (e.g. production, which only ran the numbered
+-- migrations), and removes the ambiguity anywhere B leaked in (local dev).
+--
+-- NOTE (follow-up, intentionally NOT changed here): overload B carried
+-- proc-level guards (ALREADY_RELEASED, PAYMENT_NOT_SENT) that A lacks. The
+-- payment-sent transition is still enforced by the order state machine before
+-- release is invoked, so dropping B is not a regression of the live path. If
+-- we want that defense-in-depth at the proc level, fold the guards INTO A in a
+-- separate migration after auditing all callers (the reconciliation worker
+-- releases from on-chain truth and may legitimately run from non-payment_sent
+-- states) — do not simply keep B.
+
+DROP FUNCTION IF EXISTS public.release_order_v1(uuid, text, text, uuid);

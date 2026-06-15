@@ -102,7 +102,7 @@ interface ActiveCardProps {
   onSelectOrder?: (o: Order) => void;
 }
 
-function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkFiatPaymentSent, onConfirmPayment, onOpenChat, onOpenDisputeModal, onOpenCancelModal, setMobileView, onSelectOrder }: ActiveCardProps) {
+function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkFiatPaymentSent, onConfirmPayment, onOpenChat, setMobileView, onSelectOrder }: ActiveCardProps) {
   const dbStatus = order.dbOrder?.minimal_status || order.dbOrder?.status;
   const role = order.myRole || "observer";
   const hasBeenAccepted = !!order.dbOrder?.accepted_at;
@@ -283,7 +283,7 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
           </button>
         ) : (
           <button
-            onClick={() => onOpenDisputeModal(order.id)}
+            onClick={() => onSelectOrder?.(order)}
             style={{ flex: 1, padding: "11px", borderRadius: 13, border: `1px solid ${T.hair}`, background: "rgba(255,255,255,0.04)", color: T.muted2, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>
             View
           </button>
