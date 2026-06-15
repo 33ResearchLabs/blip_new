@@ -1,5 +1,6 @@
 'use client';
 
+import BlipLogo from '@/components/shared/BlipLogo';
 import { useState, useRef, useEffect, FormEvent } from 'react';
 
 export default function DevLockPage() {
@@ -72,18 +73,15 @@ export default function DevLockPage() {
             width: '52px',
             height: '52px',
             borderRadius: '16px',
-            background: '#ffffff',
+            // background: '#000',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: '16px',
-            boxShadow: '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px -4px rgba(0,0,0,0.6)',
+            // boxShadow: '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px -4px rgba(0,0,0,0.6)',
           }}>
             {/* Blip "B" wordmark */}
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" fill="#060606"/>
-              <circle cx="12" cy="12" r="4" fill="#ffffff"/>
-            </svg>
+            <BlipLogo size={46}/>
           </div>
           <h1 style={{ color: '#ffffff', fontSize: '22px', fontWeight: 600, margin: 0, letterSpacing: '-0.025em' }}>
             Blip Money
