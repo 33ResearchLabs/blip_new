@@ -174,11 +174,9 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: swScript }}
           suppressHydrationWarning
         />
-        {/* Favicon — /favicon.ico isn't shipped, so set the SVG icon
-            explicitly so the browser tab shows the Blip lightning mark
-            instead of a placeholder. */}
-        <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
-        <link rel="shortcut icon" type="image/svg+xml" href="/icons/icon.svg" />
+        {/* Favicon — served from src/app/favicon.ico via Next.js App Router,
+            which auto-injects the <link rel="icon"> tag. No manual SVG icon
+            override here, or the browser would prefer it over favicon.ico. */}
         {/* iOS does NOT support SVG for apple-touch-icon — must be PNG, or
             the Add-to-Home-Screen icon renders blank. */}
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
