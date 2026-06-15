@@ -47,7 +47,7 @@ interface BlipLogoProps {
 export function BlipLogo({
   size = 36,
   className = "",
-  alt = "Blip",
+  alt = "Blip logo",
   priority = false,
 }: BlipLogoProps) {
   return (
