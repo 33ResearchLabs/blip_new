@@ -108,7 +108,19 @@ function convertFields(fields: any[]): any[] {
 // event-fields materialisation, which breaks `new Program(idl)` under
 // anchor@0.29 with the V2.3 IDL.
 const idl = convertIdlToAnchor29(idlRaw);
-const PROGRAM_ID = new PublicKey((idlRaw as any).address || (idlRaw as any).metadata?.address || getV2ProgramId().toBase58());
+// Program ID resolution order:
+//   1. NEXT_PUBLIC_ANCHOR_PROGRAM_ID  — local override (set ONLY in a dev
+//      machine's gitignored .env.local; lets devnet point at the devnet
+//      program when idl.json carries the mainnet address). Unset in prod.
+//   2. idl.json `address`             — the committed build's program ID
+//      (currently the mainnet deploy). Unchanged for production.
+//   3. getV2ProgramId()               — network-aware config fallback.
+const PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_ANCHOR_PROGRAM_ID
+    || (idlRaw as any).address
+    || (idlRaw as any).metadata?.address
+    || getV2ProgramId().toBase58(),
+);
 // Respect the active network (NEXT_PUBLIC_SOLANA_NETWORK) — picks devnet
 // or mainnet USDT mint automatically. Critical for mainnet cutover.
 const USDT_MINT = getUsdtMint();

@@ -31,6 +31,7 @@ import {
   RotateCw,
   Star,
   Lightbulb,
+  Flag,
 } from "lucide-react";
 import {
   useState as useLocalState,
@@ -43,8 +44,9 @@ import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 // Backend-driven: action buttons read from dbOrder.primaryAction/secondaryAction
 import type { Order } from "@/types/merchant";
 import { CopyableBankDetails } from "@/components/shared/CopyableBankDetails";
-import { ReceivingAccountPicker } from "@/components/shared/trade/ReceivingAccountPicker";
+import { ReceivingAccountPicker, detailString } from "@/components/shared/trade/ReceivingAccountPicker";
 import { useMerchantReceivingMethods } from "@/components/shared/trade/useMerchantReceivingMethods";
+import { maskAccountDetail } from "@/lib/mask";
 import { SURFACES } from "@/components/shared/limits/types";
 
 /** Map fiat currency code to display symbol */
@@ -740,6 +742,7 @@ function ActiveOrderBody({
   db,
   role,
   onRecvSelectionChange,
+  onWaitingTimeout,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   order: any;
@@ -748,6 +751,9 @@ function ActiveOrderBody({
   role: "buyer" | "seller";
   /** Reports the effective receiving account up so the footer can lock with it. */
   onRecvSelectionChange?: (methodId: string | null) => void;
+  /** Reports when a seller's waiting stage (escrowed/payment_sent) has passed
+   *  its deadline, so the footer can surface Need Help / Raise Appeal. */
+  onWaitingTimeout?: (timedOut: boolean) => void;
 }) {
   const [now, setNow] = useLocalState(() => Date.now());
   const [copiedId, setCopiedId] = useLocalState(false);
@@ -769,6 +775,19 @@ function ActiveOrderBody({
     return `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(r % 60).padStart(2, "0")}`;
   };
   const expiresIn = countdown(db.expires_at);
+
+  // Seller is waiting for the buyer (escrow locked / payment marked) and the
+  // order's deadline has passed → surface Need Help / Raise Appeal in the
+  // footer. Uses the ticking `now` so it flips live without impure render math.
+  const isWaitingStage =
+    isSeller && (status === "escrowed" || status === "payment_sent");
+  const isWaitingTimedOut =
+    isWaitingStage &&
+    !!db.expires_at &&
+    new Date(db.expires_at).getTime() - now <= 0;
+  useLocalEffect(() => {
+    onWaitingTimeout?.(isWaitingTimedOut);
+  }, [isWaitingTimedOut, onWaitingTimeout]);
 
   const createdLabel = db.created_at
     ? new Date(db.created_at).toLocaleString("en-US", {
@@ -1098,6 +1117,42 @@ function ActiveOrderBody({
               stage to keep the two columns balanced. */}
           {needsLock && paymentMethodCard}
 
+          {/* Your chosen receiving account — read-only after escrow is locked, so
+              the seller can see which of their accounts the buyer was told to pay
+              into (picked at lock time, persisted as sellerPaymentMethod). */}
+          {isSeller &&
+            (status === "escrowed" || status === "payment_sent") &&
+            order.sellerPaymentMethod &&
+            (() => {
+              const m = order.sellerPaymentMethod;
+              const masked = maskAccountDetail(m.type, detailString(m.details));
+              const t = (m.type || "").toLowerCase();
+              const RecvIcon = t === "bank" ? Building2 : t === "card" ? CreditCard : Smartphone;
+              return (
+                <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
+                  <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold mb-2.5">
+                    Your Receiving Account
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-foreground/[0.04] flex items-center justify-center shrink-0">
+                      <RecvIcon className="w-4 h-4 text-foreground/60" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-foreground truncate font-mono">
+                        {masked || m.name}
+                      </p>
+                      {masked && m.name && (
+                        <p className="text-[11px] text-foreground/40 truncate">{m.name}</p>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-foreground/40 mt-2.5">
+                    The buyer was told to pay into this account.
+                  </p>
+                </div>
+              );
+            })()}
+
           {/* Important warning — at the lock stage the richer bulleted card on
               the right replaces this, so only show it for other stages. */}
           {!needsLock && (
@@ -1347,6 +1402,10 @@ export function OrderQuickView({
   // footer "Lock Escrow" button can pass it to the inline lock.
   const [lockMethodId, setLockMethodId] = useLocalState<string | null>(null);
 
+  // Whether the seller's waiting stage has passed its deadline — bubbled up
+  // from ActiveOrderBody so the footer can show Need Help / Raise Appeal.
+  const [waitingTimedOut, setWaitingTimedOut] = useLocalState(false);
+
   // After an inline lock for THIS order finishes successfully (was locking →
   // no longer locking, no error), close the popup. The popup's `selectedOrder`
   // copy is stale (still "accepted"), so leaving it open would show the Lock
@@ -1463,7 +1522,7 @@ export function OrderQuickView({
               {isAcceptableBuyOrder ? (
                 <AcceptorBuyOrderBody order={selectedOrder} db={qvDb} />
               ) : isActiveOrder ? (
-                <ActiveOrderBody order={selectedOrder} db={qvDb} role={activeRole} onRecvSelectionChange={setLockMethodId} />
+                <ActiveOrderBody order={selectedOrder} db={qvDb} role={activeRole} onRecvSelectionChange={setLockMethodId} onWaitingTimeout={setWaitingTimedOut} />
               ) : (
               <>
               {/* Escrow Status */}
@@ -2083,6 +2142,8 @@ export function OrderQuickView({
                     {secondary?.type && (() => {
                       const st = (selectedOrder.dbOrder as any)?.status || (selectedOrder.dbOrder as any)?.minimal_status;
                       if (secondary.type === "CANCEL" && (st === "accepted" || st === "escrowed")) return null;
+                      // Dispute is surfaced as the "Raise Appeal" button below — don't double up.
+                      if (secondary.type === "DISPUTE") return null;
                       return true;
                     })() && (
                       <motion.button
@@ -2110,6 +2171,41 @@ export function OrderQuickView({
                         {escrowError}
                       </p>
                     )}
+
+                    {/* Raise Appeal (first) + Need Help. Appeal shows at the
+                        verify stage (buyer marked paid), or once an escrowed
+                        order's deadline has passed (buyer late). Need Help is
+                        always available on an active order. */}
+                    {isActiveOrder && (() => {
+                      const st = (selectedOrder.dbOrder as any)?.status || (selectedOrder.dbOrder as any)?.minimal_status;
+                      const showAppeal = st === "payment_sent" || (st === "escrowed" && waitingTimedOut);
+                      return (
+                        <div className="flex gap-3">
+                          {showAppeal && (
+                            <button
+                              onClick={() => {
+                                onOpenDispute?.(selectedOrder.id);
+                                onClose();
+                              }}
+                              className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
+                            >
+                              <Flag className="w-4 h-4" />
+                              Raise Appeal
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              onOpenChat(selectedOrder);
+                              onClose();
+                            }}
+                            className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
+                          >
+                            <Headphones className="w-4 h-4" />
+                            Need Help
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </>
                 );
               })()}

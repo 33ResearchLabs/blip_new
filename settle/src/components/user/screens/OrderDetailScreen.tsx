@@ -1751,70 +1751,96 @@ export const OrderDetailScreen = ({
                                 )}
                                 {/* Show merchant's payment method if available, then locked payment method, then fall back to offer details */}
                                 {activeOrder.merchantPaymentMethod ? (
-                                  <>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-[13px] text-text-secondary">
-                                        Method
-                                      </span>
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-[13px] font-medium text-text-primary">
-                                          {
-                                            activeOrder.merchantPaymentMethod
-                                              .name
-                                          }
-                                        </span>
-                                        <button
-                                          onClick={() =>
-                                            copyField(
-                                              "method",
-                                              activeOrder.merchantPaymentMethod!
-                                                .name,
-                                            )
-                                          }
-                                          className="p-0.5 rounded hover:bg-surface-active"
-                                        >
-                                          {copiedField === "method" ? (
-                                            <Check className="w-3.5 h-3.5 text-success" />
-                                          ) : (
-                                            <Copy className="w-3.5 h-3.5 text-text-tertiary" />
-                                          )}
-                                        </button>
-                                      </div>
-                                    </div>
-                                    {activeOrder.merchantPaymentMethod
-                                      .details && (
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-[13px] text-text-secondary">
-                                          Details
-                                        </span>
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-[13px] font-mono text-text-primary">
-                                            {
-                                              activeOrder.merchantPaymentMethod
-                                                .details
-                                            }
-                                          </span>
+                                  (() => {
+                                    const m = activeOrder.merchantPaymentMethod!;
+                                    const t = (m.type || "").toLowerCase();
+                                    const isUpi =
+                                      t === "upi" ||
+                                      (typeof m.details === "string" &&
+                                        m.details.includes("@"));
+                                    const isBank = t === "bank";
+                                    const typeLabel = isUpi
+                                      ? "UPI"
+                                      : isBank
+                                        ? "Bank Transfer"
+                                        : m.name || "Payment";
+                                    const identifier = m.details || m.name;
+                                    return (
+                                      <div className="rounded-xl p-3 bg-surface-active border border-border-medium">
+                                        {/* Prominent identifier + copy */}
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0">
+                                            <p className="text-[12px] font-semibold text-accent">
+                                              {typeLabel}
+                                              {m.is_default ? " · Preferred" : ""}
+                                            </p>
+                                            <p className="text-[15px] font-semibold text-text-primary font-mono truncate mt-0.5">
+                                              {identifier}
+                                            </p>
+                                          </div>
                                           <button
                                             onClick={() =>
-                                              copyField(
-                                                "details",
-                                                activeOrder
-                                                  .merchantPaymentMethod!
-                                                  .details,
-                                              )
+                                              copyField("pm-id", identifier)
                                             }
-                                            className="p-0.5 rounded hover:bg-surface-active"
+                                            className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-card border border-border-subtle text-[12px] font-medium text-text-secondary hover:bg-surface-hover"
                                           >
-                                            {copiedField === "details" ? (
-                                              <Check className="w-3.5 h-3.5 text-success" />
+                                            {copiedField === "pm-id" ? (
+                                              <>
+                                                <Check className="w-3.5 h-3.5 text-success" />
+                                                Copied
+                                              </>
                                             ) : (
-                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                              <>
+                                                <Copy className="w-3.5 h-3.5" />
+                                                Copy
+                                              </>
                                             )}
                                           </button>
                                         </div>
+                                        {/* Labelled grid (matches the buyer mock) */}
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-3 mt-3 pt-3 border-t border-border-medium">
+                                          <div className="min-w-0">
+                                            <p className="text-[10px] uppercase tracking-wide text-text-tertiary">
+                                              {isUpi ? "UPI Name" : "Account Name"}
+                                            </p>
+                                            <p className="text-[13px] text-text-primary truncate">
+                                              {m.name || "—"}
+                                            </p>
+                                          </div>
+                                          {isUpi && (
+                                            <div className="min-w-0">
+                                              <p className="text-[10px] uppercase tracking-wide text-text-tertiary">
+                                                UPI App
+                                              </p>
+                                              <p className="text-[13px] text-text-primary">
+                                                Any UPI App
+                                              </p>
+                                            </div>
+                                          )}
+                                          <div className="min-w-0">
+                                            <p className="text-[10px] uppercase tracking-wide text-text-tertiary">
+                                              Payment Type
+                                            </p>
+                                            <p className="text-[13px] text-text-primary">
+                                              {isUpi
+                                                ? "UPI Transfer Only"
+                                                : isBank
+                                                  ? "Bank Transfer Only"
+                                                  : "Direct Transfer"}
+                                            </p>
+                                          </div>
+                                          <div className="col-span-2">
+                                            <p className="text-[10px] uppercase tracking-wide text-text-tertiary">
+                                              Note
+                                            </p>
+                                            <p className="text-[13px] text-text-primary">
+                                              Do not add any note while making payment.
+                                            </p>
+                                          </div>
+                                        </div>
                                       </div>
-                                    )}
-                                  </>
+                                    );
+                                  })()
                                 ) : activeOrder.lockedPaymentMethod ? (
                                   <>
                                     {activeOrder.lockedPaymentMethod.details

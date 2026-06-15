@@ -10,14 +10,15 @@
 
 import type { ReactNode } from "react";
 import {
-  ShieldCheck,
   BadgeCheck,
   TrendingUp,
+  Star,
   Activity,
   Clock,
   Loader2,
 } from "lucide-react";
 import { formatCount, formatPercentage } from "@/lib/format";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { SurfaceTokens } from "@/components/shared/limits/types";
 import type { ProfileData, TrustBand } from "@/components/shared/profile/types";
 
@@ -70,6 +71,12 @@ export function TradeTrustPanel({ title, profile, loading, surfaces, className =
       icon: <TrendingUp className="w-4 h-4 text-text-tertiary" />,
       label: `${formatCount(profile.stats.totalTrades)} Completed Trades`,
     },
+    ...(profile.reviews && profile.reviews.count > 0
+      ? [{
+          icon: <Star className="w-4 h-4 text-text-tertiary" />,
+          label: `${profile.reviews.average.toFixed(1)} Rating · ${formatCount(profile.reviews.count)} reviews`,
+        }]
+      : []),
     {
       icon: <Activity className="w-4 h-4 text-text-tertiary" />,
       label: `${formatPercentage(profile.stats.successRate)} Success Rate`,
@@ -82,10 +89,34 @@ export function TradeTrustPanel({ title, profile, loading, surfaces, className =
 
   return (
     <div className={`${card} p-4`}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <ShieldCheck className="w-4 h-4 text-success shrink-0" />
-          <span className="text-[14px] font-semibold text-text-primary truncate">{title}</span>
+      <p className="text-[11px] uppercase tracking-wide font-semibold text-text-tertiary mb-2.5">
+        {title}
+      </p>
+      {/* Counterparty identity — avatar, name, verified tick, online dot. */}
+      <div className="flex items-center gap-3 mb-3">
+        <UserAvatar
+          src={profile.avatarUrl}
+          seed={profile.name}
+          size={40}
+          className="rounded-xl shrink-0"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[14px] font-semibold text-text-primary truncate">
+              {profile.name}
+            </span>
+            {profile.verified && (
+              <BadgeCheck className="w-4 h-4 text-accent shrink-0" />
+            )}
+            {profile.isOnline && (
+              <span className="w-2 h-2 rounded-full bg-success shrink-0" />
+            )}
+          </div>
+          {profile.username && (
+            <span className="block text-[11px] text-text-tertiary truncate">
+              @{profile.username}
+            </span>
+          )}
         </div>
         <span
           className={`text-[12px] font-bold px-2 py-0.5 rounded-full shrink-0 ${BAND_PILL[profile.trust.band]}`}

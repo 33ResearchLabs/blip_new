@@ -83,11 +83,16 @@ import { convertIdlToAnchor29 } from '@/lib/solana/idlConverter';
 // Convert IDL to Anchor 0.29 format
 const idl = convertIdlToAnchor29(idlRaw);
 
-// Program ID from IDL. Anchor 0.30+ emits `address` at the top level;
-// older IDLs put it under `metadata.address`. Fall back to the pinned
-// constant if neither is present.
+// Program ID resolution order:
+//   1. NEXT_PUBLIC_ANCHOR_PROGRAM_ID  — local override (gitignored .env.local
+//      only) so devnet can point at the devnet program even when idl.json
+//      carries the mainnet address. Unset in production → no effect.
+//   2. idl.json `address` (Anchor 0.30+) / `metadata.address` (older IDLs) —
+//      the committed build's program ID. Unchanged for production.
+//   3. BLIP_V2_PROGRAM_ID             — network-aware config fallback.
 const PROGRAM_ID = new PublicKey(
-  (idlRaw as { address?: string; metadata?: { address?: string } }).address
+  process.env.NEXT_PUBLIC_ANCHOR_PROGRAM_ID
+    ?? (idlRaw as { address?: string; metadata?: { address?: string } }).address
     ?? (idlRaw as { metadata?: { address?: string } }).metadata?.address
     ?? BLIP_V2_PROGRAM_ID,
 );
