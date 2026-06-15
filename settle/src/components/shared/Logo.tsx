@@ -33,7 +33,7 @@ export const Logo = memo(function Logo({
             - flex items-baseline so the lightning bolt aligns with the
               text baseline rather than its center.
           "money" stays italic, fontWeight 600. */}
-      <BlipLogo />
+      <BlipLogo priority />
 
       <motion.span
         className={`${className} text-[19px] leading-none flex items-baseline`}
