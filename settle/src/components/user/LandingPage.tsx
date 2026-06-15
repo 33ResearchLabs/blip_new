@@ -288,8 +288,12 @@ export function LandingPage({
         >
           
                     <img
-                      src="/brand/blip-icon-bg-remove.png"
+                      src="/brand/blip-icon-192.png"
                       alt="Blip"
+                      width={36}
+                      height={36}
+                      decoding="async"
+                      fetchPriority="high"
                       className="w-9 h-9 object-contain"
                     />
                   

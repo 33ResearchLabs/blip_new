@@ -1,16 +1,21 @@
 "use client";
 
-import Image from "next/image";
-
 /**
  * Single source of truth for the Blip logo *icon* (the square brand mark).
  *
- * Renders the raster icon via Next.js `<Image>`, which downscales the large
- * source PNG to the displayed size and serves it as AVIF/WebP (with a PNG
- * fallback) — a few KB instead of the 1.8 MB original. This is what makes
- * the logo appear instantly and consistently across Chrome, Firefox, Edge
- * and Brave; a raw <img> on the full-size PNG could flash the `alt` text
- * on a cold load before the bytes arrived.
+ * Renders a pre-sized raster icon from `public/brand/blip-icon-192.png`
+ * (~32 KB) with a plain <img>. We deliberately do NOT use next/image here:
+ * the image optimizer (`/_next/image`) is not reliable in the production
+ * runtime, so an optimized logo would 404/500 on live and the browser would
+ * fall back to rendering the `alt` text ("Blip") next to a broken-image
+ * icon — even though it worked in dev. Serving an already-small static PNG
+ * directly works identically in dev and production and across Chrome,
+ * Firefox, Edge and Brave, with no optimizer dependency.
+ *
+ * The source artwork is 2000x2000 / 1.8 MB; that file is too large to ship
+ * raw (it flashed the alt text on cold loads), so we ship the downscaled
+ * 192px variant generated from it. The 192px size stays crisp up to a 96px
+ * display at 2x DPR — well above every call site (36-46px today).
  *
  * The leading slash is required so the path resolves from the `public` root
  * on every route (a relative `brand/...` path breaks on nested routes like
@@ -20,11 +25,10 @@ import Image from "next/image";
  * Link), use `Logo` from `@/components/shared/Logo` instead — that
  * component composes this one.
  *
- * To swap the asset (e.g. to a transparent-background star), change this
- * one constant — every call site updates automatically.
+ * To swap the asset, regenerate the downscaled PNG and change this constant
+ * — every call site updates automatically.
  */
-// const LOGO_SRC = "/brand/blip-icon.png";
-const LOGO_SRC = "/brand/blip-icon-bg-remove.png";
+const LOGO_SRC = "/brand/blip-icon-192.png";
 
 interface BlipLogoProps {
   /** Width & height in pixels. Defaults to 36 (matches the old `w-9 h-9`). */
@@ -34,8 +38,8 @@ interface BlipLogoProps {
   /** Accessible name. Pass "" for decorative use inside a labelled parent. */
   alt?: string;
   /**
-   * Preload eagerly (skip lazy-loading). Set true for above-the-fold uses
-   * like the header so the logo paints immediately on first load.
+   * Hint the browser to fetch this image at high priority. Set true for
+   * above-the-fold uses like the header so the logo paints immediately.
    */
   priority?: boolean;
 }
@@ -47,15 +51,16 @@ export function BlipLogo({
   priority = false,
 }: BlipLogoProps) {
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       src={LOGO_SRC}
       alt={alt}
       width={size}
       height={size}
-      // Render at 2x the CSS size so the downscaled raster stays crisp on
-      // HiDPI/retina displays without shipping the full 2000px source.
-      sizes={`${size * 2}px`}
-      priority={priority}
+      decoding="async"
+      loading={priority ? "eager" : "lazy"}
+      // fetchPriority is a standard HTML attribute; React passes it through.
+      fetchPriority={priority ? "high" : "auto"}
       style={{ width: size, height: size }}
       className={`object-contain ${className}`.trim()}
     />
