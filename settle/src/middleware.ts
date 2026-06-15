@@ -359,6 +359,10 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico' ||
     pathname.startsWith('/icons/') ||
+    // Brand assets (logo marks) are public static files — must bypass the
+    // dev-lock too, or the /dev-lock screen's own logo gets redirected to
+    // /dev-lock (HTML) instead of served, showing a broken image.
+    pathname.startsWith('/brand/') ||
     pathname === '/manifest.json'
   ) {
     return NextResponse.next();
