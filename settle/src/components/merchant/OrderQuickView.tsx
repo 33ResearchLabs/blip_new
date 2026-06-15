@@ -30,10 +30,12 @@ import {
   Headphones,
   RotateCw,
   Star,
+  Lightbulb,
 } from "lucide-react";
 import {
   useState as useLocalState,
   useEffect as useLocalEffect,
+  useRef as useLocalRef,
   Fragment,
 } from "react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -41,6 +43,9 @@ import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 // Backend-driven: action buttons read from dbOrder.primaryAction/secondaryAction
 import type { Order } from "@/types/merchant";
 import { CopyableBankDetails } from "@/components/shared/CopyableBankDetails";
+import { ReceivingAccountPicker } from "@/components/shared/trade/ReceivingAccountPicker";
+import { useMerchantReceivingMethods } from "@/components/shared/trade/useMerchantReceivingMethods";
+import { SURFACES } from "@/components/shared/limits/types";
 
 /** Map fiat currency code to display symbol */
 function fiatSymbol(code: string | undefined | null): string {
@@ -734,12 +739,15 @@ function ActiveOrderBody({
   order,
   db,
   role,
+  onRecvSelectionChange,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   order: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any;
   role: "buyer" | "seller";
+  /** Reports the effective receiving account up so the footer can lock with it. */
+  onRecvSelectionChange?: (methodId: string | null) => void;
 }) {
   const [now, setNow] = useLocalState(() => Date.now());
   const [copiedId, setCopiedId] = useLocalState(false);
@@ -850,6 +858,21 @@ function ActiveOrderBody({
   const cpWallet: string | null =
     cp.wallet_address || db.buyer_wallet_address || null;
 
+  // Merchant's own receiving accounts — shown at the lock stage so the seller
+  // picks where the buyer pays (mirrors the Lock Escrow modal).
+  const needsLock = isSeller && status === "accepted";
+  const recv = useMerchantReceivingMethods(needsLock);
+  const [recvPickedId, setRecvPickedId] = useLocalState<string | null>(null);
+  const recvSelectedId =
+    recvPickedId ??
+    (recv.methods.find((m) => m.is_default)?.id ?? recv.methods[0]?.id ?? null);
+
+  // Bubble the effective receiving account up to the popup footer so its
+  // "Lock Escrow" button locks into the account the seller selected here.
+  useLocalEffect(() => {
+    onRecvSelectionChange?.(recvSelectedId);
+  }, [recvSelectedId, onRecvSelectionChange]);
+
   // ---- counterparty payment rails ----
   const PM_META: Record<string, { label: string; Icon: typeof Building2 }> = {
     bank: { label: "Bank Transfer", Icon: Building2 },
@@ -863,37 +886,79 @@ function ActiveOrderBody({
   const pmHeading = isSeller ? "Buyer Payment Method" : "Seller Payment Method";
   const trustHeading = isSeller ? "Buyer Trust" : "Seller Trust";
 
+  // Buyer/seller payment-method card. Rendered in the right column normally,
+  // but moved to the left column at the lock stage to balance the layout (the
+  // right column then holds the Tips / Important / What-happens-next cards).
+  const paymentMethodCard = (
+    <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+      <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+        {pmHeading}
+      </span>
+      {payTypes.length > 0 ? (
+        <div className="space-y-2.5">
+          {payTypes.map((t) => {
+            const m = PM_META[t] ?? { label: t.toUpperCase(), Icon: CreditCard };
+            const Icon = m.Icon;
+            return (
+              <div key={t} className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[var(--accent)]/15 flex items-center justify-center shrink-0">
+                  <Icon className="w-4 h-4 text-[var(--accent)]" />
+                </div>
+                <span className="text-sm font-medium text-foreground flex-1">
+                  {m.label}
+                </span>
+                <Check className="w-4 h-4 text-emerald-400" strokeWidth={3} />
+              </div>
+            );
+          })}
+          {preferred && (
+            <div className="pt-2 border-t border-foreground/[0.04]">
+              <p className="text-[11px] text-foreground/40 mb-1">Preferred Method</p>
+              <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent)] uppercase">
+                {PM_META[preferred]?.label ?? preferred}
+              </span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-foreground/40">
+          Shared in chat once escrow is locked.
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <>
       {/* Action / status banner */}
       <div
         className={`rounded-xl border p-4 ${
           banner.urgent
-            ? "border-amber-500/25 bg-amber-500/[0.06]"
+            ? "border-foreground/[0.10] bg-foreground/[0.03]"
             : "border-foreground/[0.06] bg-foreground/[0.02]"
         }`}
       >
         <div className="flex items-start gap-3">
           <div
             className={`w-11 h-11 rounded-full border-2 flex items-center justify-center shrink-0 ${
-              banner.urgent ? "border-amber-500/40" : "border-foreground/15"
+              banner.urgent ? "border-foreground/25" : "border-foreground/15"
             }`}
           >
             <BannerIcon
-              className={`w-5 h-5 ${banner.urgent ? "text-amber-400" : "text-foreground/50"}`}
+              className={`w-5 h-5 ${banner.urgent ? "text-foreground/70" : "text-foreground/50"}`}
             />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <p
-                className={`text-sm font-bold ${banner.urgent ? "text-amber-400" : "text-foreground/70"}`}
+                className={`text-sm font-bold ${banner.urgent ? "text-foreground" : "text-foreground/70"}`}
               >
                 {banner.heading}
               </p>
               {expiresIn && (
                 <span className="flex items-center gap-1 text-[11px] text-foreground/40 shrink-0 whitespace-nowrap">
                   <Clock className="w-3 h-3" /> Expires in{" "}
-                  <span className="font-mono font-bold text-amber-400">{expiresIn}</span>
+                  <span className="font-mono font-bold text-foreground/70">{expiresIn}</span>
                 </span>
               )}
             </div>
@@ -922,7 +987,7 @@ function ActiveOrderBody({
                       done
                         ? "bg-emerald-500 text-white"
                         : current
-                          ? "bg-amber-500 text-black"
+                          ? "bg-[#f5f5f7] text-black"
                           : "bg-foreground/[0.04] text-foreground/30 border border-foreground/[0.06]"
                     }`}
                   >
@@ -933,14 +998,14 @@ function ActiveOrderBody({
                       done
                         ? "text-foreground/60"
                         : current
-                          ? "text-amber-400 font-semibold"
+                          ? "text-foreground font-semibold"
                           : "text-foreground/30"
                     }`}
                   >
                     {s.label}
                   </span>
                   {current && (
-                    <span className="text-[8px] text-amber-400/80 font-bold uppercase tracking-wide">
+                    <span className="text-[8px] text-foreground/60 font-bold uppercase tracking-wide">
                       Current
                     </span>
                   )}
@@ -1015,59 +1080,46 @@ function ActiveOrderBody({
             </div>
           </div>
 
-          {/* Important warning */}
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-amber-400">Important</p>
-              <p className="text-xs text-foreground/50 mt-0.5">
-                {isSeller
-                  ? "Do not release USDT until you have received the payment in your account."
-                  : `Only mark as paid after you've actually sent the ${ccy}.`}
-              </p>
+          {/* Select Receiving Account — seller picks where the buyer pays (lock stage) */}
+          {needsLock && (
+            <ReceivingAccountPicker
+              methods={recv.methods}
+              selectedId={recvSelectedId}
+              onSelect={setRecvPickedId}
+              onAddNew={() => {
+                window.location.href = "/market/settings";
+              }}
+              loading={recv.loading}
+              surfaces={SURFACES.merchant}
+            />
+          )}
+
+          {/* Buyer payment method — moved here from the right column at the lock
+              stage to keep the two columns balanced. */}
+          {needsLock && paymentMethodCard}
+
+          {/* Important warning — at the lock stage the richer bulleted card on
+              the right replaces this, so only show it for other stages. */}
+          {!needsLock && (
+            <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-3 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-foreground/60 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-foreground">Important</p>
+                <p className="text-xs text-foreground/50 mt-0.5">
+                  {isSeller
+                    ? "Do not release USDT until you have received the payment in your account."
+                    : `Only mark as paid after you've actually sent the ${ccy}.`}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Right column */}
         <div className="space-y-3">
-          {/* Counterparty payment method */}
-          <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
-            <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
-              {pmHeading}
-            </span>
-            {payTypes.length > 0 ? (
-              <div className="space-y-2.5">
-                {payTypes.map((t) => {
-                  const m = PM_META[t] ?? { label: t.toUpperCase(), Icon: CreditCard };
-                  const Icon = m.Icon;
-                  return (
-                    <div key={t} className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-[var(--accent)]/15 flex items-center justify-center shrink-0">
-                        <Icon className="w-4 h-4 text-[var(--accent)]" />
-                      </div>
-                      <span className="text-sm font-medium text-foreground flex-1">
-                        {m.label}
-                      </span>
-                      <Check className="w-4 h-4 text-emerald-400" strokeWidth={3} />
-                    </div>
-                  );
-                })}
-                {preferred && (
-                  <div className="pt-2 border-t border-foreground/[0.04]">
-                    <p className="text-[11px] text-foreground/40 mb-1">Preferred Method</p>
-                    <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent)] uppercase">
-                      {PM_META[preferred]?.label ?? preferred}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-foreground/40">
-                Shared in chat once escrow is locked.
-              </p>
-            )}
-          </div>
+          {/* Counterparty payment method — at the lock stage this moves to the
+              left column (below) so the two columns stay balanced. */}
+          {!needsLock && paymentMethodCard}
 
           {/* Counterparty trust */}
           <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-2">
@@ -1116,15 +1168,70 @@ function ActiveOrderBody({
               </div>
             </div>
           </div>
+
+          {/* Lock-stage right-side cards — mirror the Lock Escrow modal */}
+          {needsLock && (
+            <>
+              {/* Tips */}
+              <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lightbulb className="w-4 h-4 text-foreground/50" />
+                  <span className="text-[13px] font-semibold text-foreground">Tips</span>
+                </div>
+                <ul className="space-y-1.5 text-[12px] text-foreground/50 list-disc pl-4">
+                  <li>Choose the account where you can quickly verify payments.</li>
+                  <li>This account cannot be changed after escrow is locked.</li>
+                </ul>
+              </div>
+
+              {/* Important */}
+              <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-4 h-4 text-foreground/60" />
+                  <span className="text-[13px] font-semibold text-foreground">Important</span>
+                </div>
+                <ul className="space-y-1.5 text-[12px] text-foreground/60 list-disc pl-4">
+                  <li>Only lock escrow if you are available to complete this trade.</li>
+                  <li>Do not release USDT until funds arrive in your bank account.</li>
+                </ul>
+              </div>
+
+              {/* What Happens Next */}
+              <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
+                <p className="text-[13px] font-semibold text-foreground mb-3">
+                  What Happens Next?
+                </p>
+                <ol className="space-y-2.5">
+                  {[
+                    "Your selected account is shared with the buyer",
+                    `Escrow locks ${amount} USDT`,
+                    `Buyer sends ${ccy} payment`,
+                    "Buyer marks payment as sent",
+                    "You verify payment in your account",
+                    "Release USDT to complete trade",
+                  ].map((step, i) => (
+                    <li key={step} className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-400 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                        {i + 1}
+                      </span>
+                      <span className="text-[12px] text-foreground/60 leading-snug">
+                        {step}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* "You must lock" feature strip — only at the lock-escrow stage */}
       {isSeller && status === "accepted" && (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4 flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="flex items-center gap-3 shrink-0">
-            <div className="w-12 h-12 rounded-full border-2 border-amber-500/40 flex items-center justify-center">
-              <Lock className="w-5 h-5 text-amber-400" />
+            <div className="w-12 h-12 rounded-full border-2 border-foreground/15 flex items-center justify-center">
+              <Lock className="w-5 h-5 text-foreground/60" />
             </div>
             <div>
               <p className="text-[11px] text-foreground/50">You Must Lock</p>
@@ -1162,23 +1269,26 @@ function ActiveOrderBody({
         </div>
       )}
 
-      {/* What happens next */}
-      <div className="rounded-xl border border-foreground/[0.04] bg-foreground/[0.02] p-4">
-        <p className="text-[10px] uppercase font-bold text-foreground/35 tracking-wide">
-          What happens next?
-        </p>
-        <p className="text-xs text-foreground/50 mt-1 leading-relaxed">
-          {isSeller
-            ? status === "accepted"
-              ? `Once you lock escrow, the buyer gets your payment details and sends you ${ccy}.`
+      {/* What happens next — at the lock stage the numbered card on the right
+          replaces this; keep the short summary for all other stages. */}
+      {!needsLock && (
+        <div className="rounded-xl border border-foreground/[0.04] bg-foreground/[0.02] p-4">
+          <p className="text-[10px] uppercase font-bold text-foreground/35 tracking-wide">
+            What happens next?
+          </p>
+          <p className="text-xs text-foreground/50 mt-1 leading-relaxed">
+            {isSeller
+              ? status === "accepted"
+                ? `Once you lock escrow, the buyer gets your payment details and sends you ${ccy}.`
+                : status === "escrowed"
+                  ? "Once the buyer pays, you verify and release the USDT from escrow."
+                  : `Confirm the ${ccy} has arrived, then release the USDT to complete the trade.`
               : status === "escrowed"
-                ? "Once the buyer pays, you verify and release the USDT from escrow."
-                : `Confirm the ${ccy} has arrived, then release the USDT to complete the trade.`
-            : status === "escrowed"
-              ? `Send the ${ccy}, mark it as paid, and the seller releases your USDT.`
-              : "The seller releases your USDT once your payment is confirmed."}
-        </p>
-      </div>
+                ? `Send the ${ccy}, mark it as paid, and the seller releases your USDT.`
+                : "The seller releases your USDT once your payment is confirmed."}
+          </p>
+        </div>
+      )}
     </>
   );
 }
@@ -1195,6 +1305,12 @@ export interface OrderQuickViewProps {
   onClose: () => void;
   onAcceptOrder: (order: Order) => void;
   onOpenEscrowModal: (order: Order) => void;
+  /** Lock escrow inline from this popup (the new UI) — `methodId` is the
+   *  seller's chosen receiving account. When provided, the footer "Lock Escrow"
+   *  button locks here instead of opening the bottom-sheet modal. */
+  onLockEscrow?: (order: Order, methodId?: string) => void;
+  /** Surfaced inline at the lock stage so a failed lock shows in this popup. */
+  escrowError?: string | null;
   onMarkFiatPaymentSent: (order: Order) => void;
   onConfirmPayment: (orderId: string) => Promise<void>;
   onCancelOrderWithoutEscrow: (orderId: string) => void;
@@ -1218,6 +1334,8 @@ export function OrderQuickView({
   onClose,
   onAcceptOrder,
   onOpenEscrowModal,
+  onLockEscrow,
+  escrowError,
   onMarkFiatPaymentSent,
   onConfirmPayment,
   onCancelOrderWithoutEscrow,
@@ -1225,6 +1343,22 @@ export function OrderQuickView({
   onOpenChat,
   onOpenDispute,
 }: OrderQuickViewProps) {
+  // Receiving account the seller picked in ActiveOrderBody — bubbled up so the
+  // footer "Lock Escrow" button can pass it to the inline lock.
+  const [lockMethodId, setLockMethodId] = useLocalState<string | null>(null);
+
+  // After an inline lock for THIS order finishes successfully (was locking →
+  // no longer locking, no error), close the popup. The popup's `selectedOrder`
+  // copy is stale (still "accepted"), so leaving it open would show the Lock
+  // button again and risk a second lock; the order list reflects the escrowed
+  // state. On error we keep it open so the inline message shows.
+  const wasLockingRef = useLocalRef(false);
+  useLocalEffect(() => {
+    const isLockingThis = !!selectedOrder && lockingEscrowOrderId === selectedOrder.id;
+    const finishedOk = wasLockingRef.current && !isLockingThis && !escrowError;
+    wasLockingRef.current = isLockingThis;
+    if (finishedOk) onClose();
+  }, [lockingEscrowOrderId, selectedOrder, escrowError, onClose]);
   // Detect the merchant's OWN pending broadcast BUY order (they are the buyer,
   // no seller has accepted yet). This drives the dedicated "you'll pay using"
   // + "waiting for merchant" layout. `dbOrder` is the raw row (snake_case);
@@ -1304,7 +1438,7 @@ export function OrderQuickView({
                       <span
                         className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
                           selectedOrder.myRole === "seller"
-                            ? "bg-orange-500/15 text-orange-400 border border-orange-500/20"
+                            ? "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.09]"
                             : "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.09]"
                         }`}
                       >
@@ -1329,7 +1463,7 @@ export function OrderQuickView({
               {isAcceptableBuyOrder ? (
                 <AcceptorBuyOrderBody order={selectedOrder} db={qvDb} />
               ) : isActiveOrder ? (
-                <ActiveOrderBody order={selectedOrder} db={qvDb} role={activeRole} />
+                <ActiveOrderBody order={selectedOrder} db={qvDb} role={activeRole} onRecvSelectionChange={setLockMethodId} />
               ) : (
               <>
               {/* Escrow Status */}
@@ -1823,8 +1957,16 @@ export function OrderQuickView({
                     onClose();
                   },
                   LOCK_ESCROW: () => {
-                    onOpenEscrowModal(selectedOrder);
-                    onClose();
+                    // Lock inline in this popup (new UI) using the receiving
+                    // account picked above — keep the popup open so its loading /
+                    // error / result reflect here. Fall back to the old modal if
+                    // the inline handler isn't wired.
+                    if (onLockEscrow) {
+                      onLockEscrow(selectedOrder, lockMethodId ?? undefined);
+                    } else {
+                      onOpenEscrowModal(selectedOrder);
+                      onClose();
+                    }
                   },
                   SEND_PAYMENT: () => {
                     onMarkFiatPaymentSent(selectedOrder);
@@ -1860,7 +2002,7 @@ export function OrderQuickView({
 
                 // Action button styles
                 const PRIMARY_STYLE = isActiveOrder
-                  ? "bg-amber-500 hover:bg-amber-400 border-amber-500 text-black"
+                  ? "bg-[#f5f5f7] hover:bg-white border-[#f5f5f7] text-black"
                   : "bg-white/[0.06] hover:bg-white/[0.08] border-white/[0.12] hover:border-white/[0.12] text-[#f5f5f7]";
                 const PRIMARY_LOADING =
                   "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]/50 cursor-wait";
@@ -1884,24 +2026,45 @@ export function OrderQuickView({
 
                 return (
                   <>
-                    {/* Primary Action — from backend */}
-                    {primary.type && primary.enabled ? (
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        disabled={loading}
-                        onClick={() => ACTION_HANDLER[primary.type!]?.()}
-                        className={`w-full ${isActiveOrder ? "py-4" : "py-3"} rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
-                          loading ? PRIMARY_LOADING : PRIMARY_STYLE
-                        }`}
-                      >
-                        {loading ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Zap className="w-4 h-4" />
-                        )}
-                        {primaryLabel}
-                      </motion.button>
-                    ) : primary.label &&
+                    {/* Primary Action — from backend. At the lock stage it's
+                        paired with a Cancel button (like the lock screen). */}
+                    {primary.type && primary.enabled ? (() => {
+                      const primaryBtn = (
+                        <motion.button
+                          whileTap={{ scale: 0.98 }}
+                          disabled={loading}
+                          onClick={() => ACTION_HANDLER[primary.type!]?.()}
+                          className={`${primary.type === "LOCK_ESCROW" ? "flex-[2]" : "w-full"} ${isActiveOrder ? "py-4" : "py-3"} rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                            loading ? PRIMARY_LOADING : PRIMARY_STYLE
+                          }`}
+                        >
+                          {loading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Zap className="w-4 h-4" />
+                          )}
+                          {primaryLabel}
+                        </motion.button>
+                      );
+                      if (primary.type === "LOCK_ESCROW") {
+                        return (
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => {
+                                onCancelOrderWithoutEscrow(selectedOrder.id);
+                                onClose();
+                              }}
+                              disabled={loading}
+                              className="flex-1 py-4 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] font-semibold text-sm disabled:opacity-50 transition-all"
+                            >
+                              Cancel
+                            </button>
+                            {primaryBtn}
+                          </div>
+                        );
+                      }
+                      return primaryBtn;
+                    })() : primary.label &&
                       primary.disabledReason &&
                       !primary.disabledReason.includes(
                         "No actions available",
@@ -1939,6 +2102,13 @@ export function OrderQuickView({
                         )}
                         {secondary.label}
                       </motion.button>
+                    )}
+
+                    {/* Inline lock error (new UI locks here, so failures show here). */}
+                    {escrowError && primary.type === "LOCK_ESCROW" && (
+                      <p className="text-[11px] text-red-400 text-center">
+                        {escrowError}
+                      </p>
                     )}
                   </>
                 );

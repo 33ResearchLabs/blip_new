@@ -104,7 +104,7 @@ export function useEscrowOperations({
 
   // Derived aliases — same names the return object exposes, zero behavior change
   const showEscrowModal = es.lock.show;
-  const escrowOrder = es.lock.order;
+  const escrowOrderState = es.lock.order;
   const isLockingEscrow = es.lock.loading;
   const escrowTxHash = es.lock.txHash;
   const escrowError = es.lock.error;
@@ -179,7 +179,13 @@ export function useEscrowOperations({
       });
   }, [merchantId, merchantName, solanaWallet.connected, addNotification, setShowWalletModal]);
 
-  const executeLockEscrow = useCallback(async () => {
+  const executeLockEscrow = useCallback(async (methodId?: string, orderArg?: Order) => {
+    // `orderArg` lets a caller (e.g. the OrderQuickView "Lock Escrow" button)
+    // lock a specific order WITHOUT the bottom-sheet modal having set
+    // `es.lock.order` first. When omitted, behaviour is identical to before —
+    // it falls back to the modal's state. Everything below references this
+    // single `escrowOrder` binding, so the rest of the function is unchanged.
+    const escrowOrder = orderArg ?? escrowOrderState;
     if (!merchantId || !escrowOrder) return;
 
     if (effectiveBalance !== null && effectiveBalance < escrowOrder.amount) {
@@ -285,6 +291,8 @@ export function useEscrowOperations({
               trade_id: intentTradeId,
               expected_amount: escrowOrder.amount,
               actor_wallet: solanaWallet.walletAddress,
+              // Seller's chosen receiving account — shared with the buyer (req 9).
+              ...(methodId ? { merchant_payment_method_id: methodId } : {}),
             }),
           },
         );
@@ -549,7 +557,35 @@ export function useEscrowOperations({
       dispatch({ type: 'SET_LOADING', op: 'lock', loading: false });
       playSound('error');
     }
-  }, [merchantId, merchantName, escrowOrder, effectiveBalance, inAppBalance, solanaWallet, addNotification, playSound, afterMutationReconcile, refreshBalance]);
+  }, [merchantId, merchantName, escrowOrderState, effectiveBalance, inAppBalance, solanaWallet, addNotification, playSound, afterMutationReconcile, refreshBalance]);
+
+  // Lock escrow directly from an inline UI (the OrderQuickView popup) without
+  // opening the bottom-sheet modal. Runs the same seller/wallet pre-checks as
+  // openEscrowModal, mirrors the order into lock state so the popup's inline
+  // loading/error indicators (keyed off escrowOrder.id) update, then executes
+  // the on-chain lock via the shared executeLockEscrow.
+  const lockEscrowInline = useCallback(async (order: Order, methodId?: string) => {
+    if (!merchantId) return;
+
+    const role = order.myRole || computeMyRole(order, merchantId);
+    if (role !== 'seller') {
+      addNotification('system', 'Only the seller locks escrow in this trade.');
+      return;
+    }
+
+    if (!solanaWallet.connected) {
+      playSound('error');
+      addNotification('system', 'Please connect your wallet to lock escrow.');
+      setShowWalletModal(true);
+      return;
+    }
+
+    // SET_ORDER (not OPEN) updates the order WITHOUT setting `show`, so the
+    // bottom sheet never appears; clear any stale error from a prior attempt.
+    dispatch({ type: 'SET_ORDER', op: 'lock', order });
+    dispatch({ type: 'SET_ERROR', op: 'lock', error: null });
+    await executeLockEscrow(methodId, order);
+  }, [merchantId, solanaWallet.connected, addNotification, playSound, setShowWalletModal, executeLockEscrow]);
 
   const closeEscrowModal = useCallback(() => {
     dispatch({ type: 'CLOSE', op: 'lock' });
@@ -971,8 +1007,8 @@ export function useEscrowOperations({
 
   return {
     // Lock state
-    showEscrowModal, escrowOrder, isLockingEscrow, escrowTxHash, escrowError,
-    openEscrowModal, openEscrowModalForSell, executeLockEscrow, closeEscrowModal,
+    showEscrowModal, escrowOrder: escrowOrderState, isLockingEscrow, escrowTxHash, escrowError,
+    openEscrowModal, openEscrowModalForSell, executeLockEscrow, lockEscrowInline, closeEscrowModal,
 
     // Release state
     showReleaseModal, releaseOrder, isReleasingEscrow, releaseTxHash, releaseError,

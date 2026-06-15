@@ -413,6 +413,7 @@ export default function MerchantDashboard() {
     openEscrowModal,
     openEscrowModalForSell,
     executeLockEscrow,
+    lockEscrowInline,
     closeEscrowModal,
     showReleaseModal,
     releaseOrder,
@@ -1310,6 +1311,7 @@ export default function MerchantDashboard() {
           effectiveBalance={effectiveBalance}
           closeEscrowModal={closeEscrowModal}
           executeLockEscrow={executeLockEscrow}
+          lockEscrowInline={lockEscrowInline}
           showCancelModal={showCancelModal}
           cancelOrder={cancelOrder}
           isCancellingEscrow={isCancellingEscrow}

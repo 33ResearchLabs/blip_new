@@ -128,7 +128,13 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
     : null;
 
   const handleCta = () => {
-    if (needsLockEscrow) onOpenEscrowModal(order);
+    // Lock escrow now opens the rich order popup (the new UI), where the seller
+    // picks the receiving account and locks inline — instead of the old
+    // bottom-sheet modal. Falls back to the modal if the popup opener is absent.
+    if (needsLockEscrow) {
+      if (onSelectOrder) onSelectOrder(order);
+      else onOpenEscrowModal(order);
+    }
     else if (canMarkPaid) onMarkFiatPaymentSent(order);
     else if (canConfirmPayment || canComplete) onConfirmPayment(order);
   };

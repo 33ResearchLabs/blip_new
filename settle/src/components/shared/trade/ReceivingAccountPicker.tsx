@@ -1,0 +1,184 @@
+"use client";
+
+// Seller's receiving-account selector for the Lock Escrow flow. Presentational +
+// single-select; the chosen account is the one the buyer is told to pay into.
+// Accounts are grouped by kind (UPI / Bank / Other) with section headers. Themed
+// via shared SurfaceTokens (reads in both the Lock Escrow modal and the
+// OrderQuickView card model). Details are masked for display (maskAccountDetail).
+
+import { Smartphone, Building2, Wallet, Plus, Loader2 } from "lucide-react";
+import { maskAccountDetail } from "@/lib/mask";
+import type { SurfaceTokens } from "@/components/shared/limits/types";
+
+export interface RecvAccount {
+  id: string;
+  type: string;
+  name: string;
+  /** Freeform per merchant_payment_methods (string), or a structured object. */
+  details: string | Record<string, string>;
+  is_default?: boolean;
+}
+
+interface Props {
+  methods: RecvAccount[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onAddNew: () => void;
+  loading?: boolean;
+  surfaces: SurfaceTokens;
+  /** Inline validation error, e.g. "Please select a receiving account…". */
+  error?: string | null;
+  className?: string;
+}
+
+export function detailString(d: RecvAccount["details"]): string {
+  if (typeof d === "string") return d;
+  if (!d) return "";
+  return d.upi_id || d.vpa || d.iban || d.account_number || d.bank_name || "";
+}
+
+type GroupKey = "upi" | "bank" | "other";
+
+const GROUP_LABEL: Record<GroupKey, string> = {
+  upi: "UPI Accounts",
+  bank: "Bank Accounts",
+  other: "Other Accounts",
+};
+
+// Order sections appear in the list.
+const GROUP_ORDER: GroupKey[] = ["upi", "bank", "other"];
+
+/** Infer the account kind from its type + detail shape (data is freeform). */
+function classify(a: RecvAccount): GroupKey {
+  const t = (a.type || "").toLowerCase();
+  const d = detailString(a.details).toLowerCase();
+  if (t === "bank") return "bank";
+  if (t === "card") return "other";
+  if (d.includes("@")) return "upi";
+  if (
+    t === "upi" ||
+    t === "mobile" ||
+    t.includes("upi") ||
+    t.includes("pay") ||
+    t.includes("phonepe") ||
+    t.includes("gpay")
+  ) {
+    return "upi";
+  }
+  // Long digit string → bank account number; short → phone-style UPI.
+  const digits = d.replace(/\D/g, "");
+  if (digits.length >= 11) return "bank";
+  return "upi";
+}
+
+function AccountIcon({ group }: { group: GroupKey }) {
+  if (group === "bank") return <Building2 className="w-4 h-4" />;
+  if (group === "other") return <Wallet className="w-4 h-4" />;
+  return <Smartphone className="w-4 h-4" />;
+}
+
+export function ReceivingAccountPicker({
+  methods,
+  selectedId,
+  onSelect,
+  onAddNew,
+  loading,
+  surfaces,
+  error,
+  className = "",
+}: Props) {
+  // Group while preserving the server order within each group.
+  const groups = GROUP_ORDER.map((key) => ({
+    key,
+    items: methods.filter((m) => classify(m) === key),
+  })).filter((g) => g.items.length > 0);
+
+  return (
+    <div className={`rounded-2xl border ${error ? "border-error" : "border-border-subtle"} ${surfaces.card} p-4 ${className}`}>
+      <p className="text-sm font-semibold text-text-primary">Select Receiving Account</p>
+      <p className="text-[11px] text-text-tertiary mt-0.5 mb-3">
+        Buyer will pay to the account you select below.
+      </p>
+
+      {loading && methods.length === 0 ? (
+        <div className="flex items-center gap-2 py-2">
+          <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+          <span className="text-[12px] text-text-tertiary">Loading your accounts…</span>
+        </div>
+      ) : methods.length === 0 ? (
+        <p className="text-[12px] text-text-tertiary">
+          No saved accounts yet — add one to lock escrow.
+        </p>
+      ) : (
+        <div className="space-y-4" role="radiogroup" aria-label="Receiving account">
+          {groups.map((group) => (
+            <div key={group.key} className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+                {GROUP_LABEL[group.key]}
+              </p>
+              {group.items.map((a) => {
+                const selected = selectedId === a.id;
+                const masked = maskAccountDetail(a.type, detailString(a.details));
+                // Masked identifier headlines the row; the account name (nickname /
+                // bank) is the subtitle. Fall back to name when there's no detail.
+                const title = masked || a.name;
+                const subtitle = masked ? a.name : "";
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => onSelect(a.id)}
+                    className={`w-full flex items-center gap-3 rounded-xl p-3 border text-left transition-colors ${
+                      selected
+                        ? "border-accent bg-accent/10"
+                        : `border-border-subtle ${surfaces.inset} ${surfaces.hover}`
+                    }`}
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        selected ? "bg-accent/15 text-accent-text" : `${surfaces.chip} text-text-secondary`
+                      }`}
+                    >
+                      <AccountIcon group={group.key} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-text-primary truncate font-mono">{title}</p>
+                      {subtitle && (
+                        <p className="text-[11px] text-text-tertiary truncate">{subtitle}</p>
+                      )}
+                    </div>
+                    {a.is_default && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success-dim text-success shrink-0">
+                        Recommended
+                      </span>
+                    )}
+                    <span
+                      className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                        selected ? "border-accent" : "border-border-medium"
+                      }`}
+                    >
+                      {selected && <span className="w-2 h-2 rounded-full bg-accent" />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && <p className="text-[11px] text-error mt-2">{error}</p>}
+
+      <button
+        type="button"
+        onClick={onAddNew}
+        className={`mt-3 w-full py-2.5 rounded-xl border border-dashed border-border-medium flex items-center justify-center gap-1.5 text-[13px] font-medium text-text-secondary ${surfaces.hover} transition-colors`}
+      >
+        <Plus className="w-4 h-4" />
+        Add New Account
+      </button>
+    </div>
+  );
+}

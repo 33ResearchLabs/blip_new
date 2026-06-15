@@ -27,6 +27,14 @@ function createRedisClient(): Redis | null {
       lazyConnect: true,
       enableReadyCheck: true,
       connectTimeout: 5000,
+      // Without this, a connection that reaches "ready" then goes silently
+      // stale (common with proxied remote Redis, e.g. Railway from local dev)
+      // leaves every command blocked on a TCP timeout for tens of seconds.
+      // isAvailable() still reports "ready", so callers never fall back. A
+      // per-command timeout makes the command reject fast, so rate-limit /
+      // cache callers fall through to their in-memory / DB path instead of
+      // hanging (this is why /api/auth/me could stall indefinitely).
+      commandTimeout: 5000,
     });
 
     client.on("error", (err: any) => {

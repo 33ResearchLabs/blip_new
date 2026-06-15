@@ -30,7 +30,7 @@ import {
 } from '@/lib/middleware/auth';
 import { checkRateLimit, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { uuidSchema } from '@/lib/validation/schemas';
-import { getOrderById } from '@/lib/db/repositories/orders';
+import { getOrderById, setSellerReceivingMethod } from '@/lib/db/repositories/orders';
 import { getIdempotencyKey } from '@/lib/idempotency';
 import { query } from '@/lib/db';
 
@@ -56,6 +56,8 @@ const intentSchema = z.object({
     .max(88)
     .regex(/^[1-9A-HJ-NP-Za-km-z]+$/)
     .optional(),
+  // Seller's chosen receiving account — persisted so the buyer pays into it (req 9).
+  merchant_payment_method_id: z.string().uuid().optional(),
 });
 
 export async function POST(
@@ -100,6 +102,21 @@ export async function POST(
     order.buyer_merchant_id === auth.actorId;
   if (!isParticipant) {
     return forbiddenResponse('You are not a participant in this order');
+  }
+
+  // Persist the seller's chosen receiving account so the buyer is told to pay
+  // into it (req 9). Merchant sellers only; best-effort — never block the lock
+  // (the accept-time default-attach remains the fallback).
+  if (body.merchant_payment_method_id && auth.actorType === 'merchant') {
+    try {
+      await setSellerReceivingMethod(
+        orderId,
+        body.merchant_payment_method_id,
+        auth.actorId,
+      );
+    } catch (e) {
+      console.warn('[escrow/intent] failed to set seller receiving method', e);
+    }
   }
 
   const idemKey = getIdempotencyKey(request);
