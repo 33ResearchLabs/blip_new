@@ -23,6 +23,7 @@ import {
   Wallet,
   Paperclip,
   Receipt,
+  Flag,
 } from "lucide-react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
@@ -46,6 +47,10 @@ import { useGlobalNow } from "@/hooks/useGlobalNow";
 import { OrderProgressStepper } from "@/components/user/OrderProgressStepper";
 import { OrderMinimisedPill } from "@/components/user/OrderMinimisedPill";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
+import { EscrowFlowStepper } from "@/components/shared/trade/EscrowFlowStepper";
+import { TradeTrustPanel } from "@/components/shared/trade/TradeTrustPanel";
+import { useCounterpartyProfile } from "@/components/shared/trade/useCounterpartyProfile";
+import { SURFACES } from "@/components/shared/limits/types";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
@@ -462,6 +467,18 @@ export const OrderDetailScreen = ({
     [activeOrder.id, isLoading, setIsLoading, setOrders, refetchActiveOrder, playSound],
   );
 
+  // Surface tokens for the user app scope (drives the shared trade components).
+  const surfaces = SURFACES.user;
+  // Seller (merchant) trust shown on the buyer's "escrow locked / pay now"
+  // step. Read-only profile fetch, gated to the escrowed BUY state so we don't
+  // fetch on unrelated screens. Renders nothing if unavailable (graceful).
+  const sellerTrust = useCounterpartyProfile(
+    "merchant",
+    activeOrder.merchant?.id,
+    activeOrder.type === "buy" &&
+      (activeOrder.dbStatus === "escrowed" || activeOrder.dbStatus === "payment_pending"),
+  );
+
   const [pendingImage, setPendingImage] = useLocalState<{
     file: File;
     previewUrl: string;
@@ -755,7 +772,7 @@ export const OrderDetailScreen = ({
   }
 
   return (
-    <div className="min-h-[100dvh] bg-surface-base">
+    <div className="flex-1 min-h-[100dvh] bg-surface-base">
       {/* Header — matches SupportScreen: back + title left-aligned, action pinned right */}
       <div className="px-5 pt-4 pb-3 flex items-center gap-3">
         <button
@@ -1330,12 +1347,14 @@ export const OrderDetailScreen = ({
           );
         })()}
 
+        {/* One continuous order panel — steps + merchant + actions */}
+        <div className={`mt-4 rounded-2xl overflow-hidden divide-y divide-border-subtle ${CARD}`}>
         {/* Steps — hidden when cancelled/expired */}
         {activeOrder.status !== "cancelled" &&
           activeOrder.status !== "expired" && (
-            <div className="space-y-3">
+            <>
               {/* Step 1 */}
-              <div className={`p-4 rounded-2xl ${CARD}`}>
+              <div className="p-4">
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
@@ -1393,7 +1412,7 @@ export const OrderDetailScreen = ({
               </div>
 
               {/* Step 2 */}
-              <div className={`p-4 rounded-2xl ${CARD}`}>
+              <div className="p-4">
                 <div className="flex items-start gap-3">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
@@ -1594,6 +1613,70 @@ export const OrderDetailScreen = ({
                             </>
                           ) : (
                             <>
+                              {/* Ref-2: "Escrow locked — pay now" headline +
+                                  progress stepper. Additive; the existing
+                                  pay-into details + CTA below are unchanged. */}
+                              <div className={`rounded-2xl p-4 ${CARD}`}>
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Shield className="w-4 h-4 text-success" />
+                                  <p className="text-[14px] font-semibold text-text-primary">
+                                    Escrow locked — pay the seller
+                                  </p>
+                                </div>
+                                <EscrowFlowStepper
+                                  steps={["Accepted", "Escrow Locked", "You Pay", "Seller Verifies", "USDT Released"]}
+                                  currentIndex={1}
+                                  surfaces={surfaces}
+                                />
+                              </div>
+
+                              {/* Trade summary */}
+                              <div className={`rounded-2xl p-4 space-y-3 ${CARD}`}>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-text-secondary">You Buy</span>
+                                  <span className="text-[15px] font-semibold text-text-primary">
+                                    {formatCrypto(parseFloat(activeOrder.cryptoAmount))} USDT
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-text-secondary">Total Amount</span>
+                                  <span className="text-[15px] font-semibold text-text-primary">
+                                    {fiatSym(activeOrder.fiatCode)}{" "}
+                                    {formatCrypto(parseFloat(activeOrder.fiatAmount))}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-text-secondary">Rate (Locked)</span>
+                                  <span className="inline-flex items-center gap-1 text-[13px] font-medium text-text-primary">
+                                    <Lock className="w-3 h-3 text-success" />
+                                    {formatRate(activeOrder.merchant.rate)} {fiatSym(activeOrder.fiatCode)}/USDT
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-text-secondary">Order ID</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyField("summaryOrderId", activeOrder.id)}
+                                    className="inline-flex items-center gap-1.5 font-mono text-[13px] text-text-secondary hover:text-text-primary"
+                                  >
+                                    {activeOrder.id.slice(0, 8)}…
+                                    {copiedField === "summaryOrderId" ? (
+                                      <Check className="w-3.5 h-3.5 text-success" />
+                                    ) : (
+                                      <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Seller trust — live profile fetch */}
+                              <TradeTrustPanel
+                                title="Seller Trust"
+                                profile={sellerTrust.profile}
+                                loading={sellerTrust.loading}
+                                surfaces={surfaces}
+                              />
+
                               {/* Part 4: buyer chooses which of the merchant's
                                   matching accounts to pay into. Shown until a
                                   method is chosen; tapping one persists it. */}
@@ -1647,6 +1730,16 @@ export const OrderDetailScreen = ({
                               <div
                                 className={`rounded-xl p-3 space-y-2 ${CARD}`}
                               >
+                                {/* Payment details header — verified by Blip */}
+                                <div className="flex items-center justify-between pb-2 border-b border-border-medium">
+                                  <span className="text-[11px] uppercase tracking-wide text-text-tertiary">
+                                    Payment Details
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-success">
+                                    <Check className="w-3.5 h-3.5" />
+                                    Verified by Blip
+                                  </span>
+                                </div>
                                 {/* Locked payment method header */}
                                 {activeOrder.lockedPaymentMethod && (
                                   <div className="flex items-center gap-1.5 pb-2 border-b border-border-medium">
@@ -1970,27 +2063,71 @@ export const OrderDetailScreen = ({
                                   </div>
                                 </div>
                               </div>
+                              {/* What happens next */}
+                              <div className={`rounded-2xl p-4 ${CARD}`}>
+                                <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-3">
+                                  What happens next
+                                </p>
+                                <div className="space-y-2.5">
+                                  {[
+                                    "Pay the seller using the details above",
+                                    "Tap “I Have Made Payment”",
+                                    "Seller verifies the payment in their account",
+                                    "Seller releases USDT to you",
+                                  ].map((t, i) => (
+                                    <div key={i} className="flex items-start gap-2.5">
+                                      <span
+                                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 ${surfaces.chip} text-text-secondary`}
+                                      >
+                                        {i + 1}
+                                      </span>
+                                      <span className="text-[13px] text-text-secondary">{t}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Never cancel once paid */}
+                              <div className={`rounded-2xl p-3 ${AMBER_CARD}`}>
+                                <div className="flex items-start gap-2">
+                                  <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                                  <p className="text-[12px] text-warning">
+                                    Never cancel the payment once made. Only send to the
+                                    details above and verify with the seller before
+                                    proceeding.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Actions — help / appeal, then mark paid */}
                               <div className="flex gap-2">
                                 <button
                                   onClick={handleOpenChat}
-                                  className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
+                                  className={`flex-1 py-3 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1.5 ${SECONDARY_BTN}`}
                                 >
                                   <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
-                                  Chat
+                                  Need Help
                                 </button>
-                                <motion.button
-                                  whileTap={{ scale: 0.98 }}
-                                  onClick={markPaymentSent}
-                                  disabled={isLoading || needsPayMethodPick}
-                                  className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${PRIMARY_BTN}`}
+                                <button
+                                  onClick={() => setShowDisputeModal(true)}
+                                  className={`flex-1 py-3 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1.5 ${SECONDARY_BTN}`}
                                 >
-                                  {isLoading
-                                    ? "Processing..."
-                                    : needsPayMethodPick
-                                      ? "Choose where to pay"
-                                      : "I've sent the payment"}
-                                </motion.button>
+                                  <Flag className="w-4 h-4" />
+                                  Raise Appeal
+                                </button>
                               </div>
+                              <motion.button
+                                whileTap={{ scale: 0.98 }}
+                                onClick={markPaymentSent}
+                                disabled={isLoading || needsPayMethodPick}
+                                className={`w-full py-3.5 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${PRIMARY_BTN}`}
+                              >
+                                {isLoading
+                                  ? "Processing..."
+                                  : needsPayMethodPick
+                                    ? "Choose where to pay"
+                                    : "I Have Made Payment"}
+                              </motion.button>
                             </>
                           )}
                         </div>
@@ -2260,7 +2397,7 @@ export const OrderDetailScreen = ({
               </div>
 
               {/* Step 3 */}
-              <div className={`p-4 rounded-2xl ${CARD}`}>
+              <div className="p-4">
                 <div className="flex items-start gap-3">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
@@ -2403,7 +2540,7 @@ export const OrderDetailScreen = ({
               </div>
 
               {/* Step 4 */}
-              <div className={`p-4 rounded-2xl ${CARD}`}>
+              <div className="p-4">
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
@@ -2446,7 +2583,7 @@ export const OrderDetailScreen = ({
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`rounded-2xl p-4 text-center ${CARD}`}
+                    className="p-4 text-center"
                   >
                     <p className="text-[15px] mb-3 text-text-secondary">
                       {alreadyRated ? "Your rating" : "Rate your experience"}
@@ -2509,11 +2646,11 @@ export const OrderDetailScreen = ({
                   </motion.div>
                 );
               })()}
-            </div>
+            </>
           )}
 
-        {/* Merchant */}
-        <div className={`mt-4 rounded-2xl p-4 ${CARD}`}>
+          {/* Merchant */}
+          <div className="p-4">
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -2551,22 +2688,9 @@ export const OrderDetailScreen = ({
               <MessageCircle className="w-5 h-5 text-text-secondary" /><ChatBadge count={activeOrder?.unreadCount} />
             </button>
           </div>
-        </div>
+          </div>
 
-        {/* Counterparty profile — opened by tapping the merchant name/avatar above. */}
-        <ProfileSheet
-          open={showProfile}
-          entityType="merchant"
-          id={activeOrder.merchant.id}
-          variant="user"
-          onClose={() => setShowProfile(false)}
-          onMessage={() => {
-            setShowProfile(false);
-            handleOpenChat();
-          }}
-        />
-
-        {/* Cancel & Dispute Buttons - Show for active orders (step 2-3) */}
+          {/* Cancel & Dispute Buttons - Show for active orders (step 2-3) */}
         {activeOrder.step >= 2 &&
           activeOrder.step < 4 &&
           activeOrder.status !== "disputed" &&
@@ -2574,7 +2698,7 @@ export const OrderDetailScreen = ({
             <button
               onClick={() => requestCancelOrder()}
               disabled={isRequestingCancel}
-              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning ${AMBER_CARD}`}
+              className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning hover:bg-warning-dim transition-colors`}
             >
               {isRequestingCancel ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -2598,7 +2722,7 @@ export const OrderDetailScreen = ({
             <button
               onClick={() => requestCancelOrder("Cancelled by seller — offer withdrawn")}
               disabled={isRequestingCancel}
-              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning ${AMBER_CARD}`}
+              className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning hover:bg-warning-dim transition-colors`}
             >
               {isRequestingCancel ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -2613,12 +2737,26 @@ export const OrderDetailScreen = ({
           activeOrder.status !== "disputed" && (
             <button
               onClick={() => setShowDisputeModal(true)}
-              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 text-error ${RED_CARD}`}
+              className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 text-error hover:bg-error-dim transition-colors`}
             >
               <AlertTriangle className="w-4 h-4" />
               Report Issue
             </button>
           )}
+        </div>
+
+        {/* Counterparty profile — opened by tapping the merchant name/avatar above. */}
+        <ProfileSheet
+          open={showProfile}
+          entityType="merchant"
+          id={activeOrder.merchant.id}
+          variant="user"
+          onClose={() => setShowProfile(false)}
+          onMessage={() => {
+            setShowProfile(false);
+            handleOpenChat();
+          }}
+        />
 
         {/* Already Disputed */}
         {activeOrder.status === "disputed" && (

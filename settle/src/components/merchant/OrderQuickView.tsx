@@ -29,7 +29,7 @@ import {
   AlertTriangle,
   Headphones,
   RotateCw,
-  Eye,
+  Star,
 } from "lucide-react";
 import {
   useState as useLocalState,
@@ -338,6 +338,121 @@ function OpenMarketWaitingCard({
 // it). The mirror of the buyer-side modal: the buyer's chosen rails, the
 // buyer's trust, and the steps that follow acceptance. Accent-themed
 // (var(--accent)) — no purple; the green Accept CTA lives in the action row.
+/** Relative "last seen" label from an ISO timestamp. */
+function formatLastSeen(iso: string | null, now: number): string {
+  if (!iso) return "a while ago";
+  const diff = now - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+/** Live presence for one order participant — mirrors OrderDetailsPanel's poll
+ *  of GET /api/orders/[id]/presence. Returns {isOnline, lastSeen}; best-effort. */
+function useCounterpartyPresence(
+  orderId: string | undefined,
+  actorType: string | null,
+  actorId: string | null,
+): { isOnline: boolean; lastSeen: string | null } {
+  const [member, setMember] = useLocalState<{ isOnline: boolean; lastSeen: string | null } | null>(null);
+  useLocalEffect(() => {
+    if (!orderId || !actorType || !actorId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetchWithAuth(`/api/orders/${orderId}/presence`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !data?.success) return;
+        const found = (data.data?.members || []).find(
+          (m: { actorType: string; actorId: string }) =>
+            m.actorType === actorType && m.actorId === actorId,
+        );
+        setMember(
+          found
+            ? { isOnline: !!found.isOnline, lastSeen: found.lastSeen ?? null }
+            : { isOnline: false, lastSeen: null },
+        );
+      } catch {
+        /* best-effort presence */
+      }
+    };
+    load();
+    const interval = setInterval(load, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [orderId, actorType, actorId]);
+  return { isOnline: !!member?.isOnline, lastSeen: member?.lastSeen ?? null };
+}
+
+/** Status (online/last-seen) + rating stars + copyable wallet rows, shared by
+ *  the acceptor and active counterparty trust cards. */
+function PresenceRatingWalletRows({
+  online,
+  lastSeen,
+  now,
+  ratingNum,
+  wallet,
+}: {
+  online: boolean;
+  lastSeen: string | null;
+  now: number;
+  ratingNum: number | null;
+  wallet: string | null;
+}) {
+  const [copied, setCopied] = useLocalState(false);
+  return (
+    <>
+      <div className="flex justify-between gap-2 items-center">
+        <span className="text-foreground/45">Status</span>
+        <span className="flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${online ? "bg-emerald-400" : "bg-foreground/30"}`} />
+          <span className={`font-semibold ${online ? "text-emerald-400" : "text-foreground/60"}`}>
+            {online ? "Online" : lastSeen ? `last seen ${formatLastSeen(lastSeen, now)}` : "Offline"}
+          </span>
+        </span>
+      </div>
+      {ratingNum != null && (
+        <div className="flex justify-between gap-2 items-center">
+          <span className="text-foreground/45">Rating</span>
+          <span className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Star
+                key={i}
+                className={`w-3 h-3 ${i <= Math.round(ratingNum) ? "text-amber-400 fill-amber-400" : "text-foreground/20"}`}
+              />
+            ))}
+            <span className="font-semibold text-foreground/80 ml-1">{ratingNum.toFixed(1)}</span>
+          </span>
+        </div>
+      )}
+      {wallet && (
+        <div className="flex justify-between gap-2 items-center">
+          <span className="text-foreground/45">Wallet</span>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(wallet);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            className="flex items-center gap-1 font-mono text-foreground/70 hover:text-foreground transition-colors"
+          >
+            {wallet.slice(0, 4)}…{wallet.slice(-4)}
+            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 function AcceptorBuyOrderBody({
   order,
   db,
@@ -397,6 +512,17 @@ function AcceptorBuyOrderBody({
     const rem = months % 12;
     return rem ? `${years}y ${rem}m` : `${years} Year${years > 1 ? "s" : ""}`;
   })();
+
+  // Live presence + identity extras for the buyer (online/last-seen, rating,
+  // wallet) so the merchant has full counterparty context inline.
+  const presence = useCounterpartyPresence(
+    db.id,
+    db.buyer_merchant_id ? "merchant" : "user",
+    db.buyer_merchant_id || db.user_id || null,
+  );
+  const online = presence.isOnline || !!buyer.is_online;
+  const buyerWallet: string | null =
+    buyer.wallet_address || db.buyer_wallet_address || null;
 
   const createdLabel = db.created_at
     ? new Date(db.created_at).toLocaleString("en-US", {
@@ -526,6 +652,13 @@ function AcceptorBuyOrderBody({
             <span className="text-foreground/45">Completed Trades</span>
             <span className="font-semibold text-foreground/80">{trades}</span>
           </div>
+          <PresenceRatingWalletRows
+            online={online}
+            lastSeen={presence.lastSeen}
+            now={now}
+            ratingNum={ratingNum}
+            wallet={buyerWallet}
+          />
           {successRate != null && (
             <div className="flex justify-between gap-2">
               <span className="text-foreground/45">Success Rate</span>
@@ -709,6 +842,13 @@ function ActiveOrderBody({
     const rem = months % 12;
     return rem ? `${years}y ${rem}m` : `${years} Year${years > 1 ? "s" : ""}`;
   })();
+
+  // Live presence + identity extras for the counterparty (online/last-seen,
+  // rating, wallet) so the merchant has full context inline.
+  const presence = useCounterpartyPresence(db.id, "user", db.user_id || null);
+  const online = presence.isOnline || !!cp.is_online;
+  const cpWallet: string | null =
+    cp.wallet_address || db.buyer_wallet_address || null;
 
   // ---- counterparty payment rails ----
   const PM_META: Record<string, { label: string; Icon: typeof Building2 }> = {
@@ -947,6 +1087,13 @@ function ActiveOrderBody({
                 <span className="text-foreground/45">Completed Trades</span>
                 <span className="font-semibold text-foreground/80">{trades}</span>
               </div>
+              <PresenceRatingWalletRows
+                online={online}
+                lastSeen={presence.lastSeen}
+                now={now}
+                ratingNum={ratingNum}
+                wallet={cpWallet}
+              />
               {successRate != null && (
                 <div className="flex justify-between gap-2">
                   <span className="text-foreground/45">Success Rate</span>
@@ -1053,7 +1200,9 @@ export interface OrderQuickViewProps {
   onCancelOrderWithoutEscrow: (orderId: string) => void;
   onRespondToCancel?: (orderId: string, accept: boolean) => void;
   onOpenChat: (order: Order) => void;
-  onViewFullDetails: (orderId: string) => void;
+  /** @deprecated The new model shows full buyer context inline; the
+   *  "View Full Details" hop was removed. Kept optional so callers compile. */
+  onViewFullDetails?: (orderId: string) => void;
   onOpenDispute?: (orderId: string) => void;
 }
 
@@ -1074,7 +1223,6 @@ export function OrderQuickView({
   onCancelOrderWithoutEscrow,
   onRespondToCancel,
   onOpenChat,
-  onViewFullDetails,
   onOpenDispute,
 }: OrderQuickViewProps) {
   // Detect the merchant's OWN pending broadcast BUY order (they are the buyer,
@@ -1796,18 +1944,8 @@ export function OrderQuickView({
                 );
               })()}
 
-              {!isOwnPendingBuy && (
-                <button
-                  onClick={() => {
-                    onViewFullDetails(selectedOrder.id);
-                    onClose();
-                  }}
-                  className="w-full py-3 rounded-xl bg-foreground/[0.04] hover:bg-foreground/[0.08] text-foreground text-sm font-medium flex items-center justify-center gap-2 border border-foreground/[0.04] transition-colors"
-                >
-                  {isActiveOrder ? <Eye className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
-                  View Full Details
-                </button>
-              )}
+              {/* "View Full Details" hop removed — the model now shows full
+                  buyer context (presence, rating, trades, wallet) inline. */}
 
               {/* <button
                 onClick={() => {
