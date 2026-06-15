@@ -328,33 +328,44 @@ export function CounterpartyProfile({
         )}
       </div>
 
-      {/* Bottom actions */}
-      <div className={`shrink-0 flex items-center gap-3 px-5 py-4 border-t border-border-subtle ${surfaces.card}`}>
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={onMessage}
-          className={`flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-xl text-[13px] font-bold border border-border-subtle text-text-primary ${surfaces.chip} ${surfaces.hover} transition-colors`}
-        >
-          <MessageCircle className="w-4 h-4" />
-          Message
-        </motion.button>
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={onStartTrade}
-          className="flex-[1.4] inline-flex items-center justify-center gap-2 h-12 rounded-xl text-[13px] font-bold bg-accent text-accent-text hover:opacity-90 transition-opacity"
-        >
-          Start Trade
-          <ArrowRight className="w-4 h-4" />
-        </motion.button>
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={onReport}
-          className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-xl text-[13px] font-bold border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"
-        >
-          <Flag className="w-4 h-4" />
-          Report
-        </motion.button>
-      </div>
+      {/* Bottom actions — each button renders only when its handler is wired.
+          Contexts that pass no handlers (e.g. the merchant pending panel, where
+          the order isn't accepted yet) get no action bar at all. Message appears
+          only after a trade exists, so it's wired post-accept, not here. */}
+      {(onMessage || onStartTrade || onReport) && (
+        <div className={`shrink-0 flex items-center gap-3 px-5 py-4 border-t border-border-subtle ${surfaces.card}`}>
+          {onMessage && (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={onMessage}
+              className={`flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-xl text-[13px] font-bold border border-border-subtle text-text-primary ${surfaces.chip} ${surfaces.hover} transition-colors`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              Message
+            </motion.button>
+          )}
+          {onStartTrade && (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={onStartTrade}
+              className="flex-[1.4] inline-flex items-center justify-center gap-2 h-12 rounded-xl text-[13px] font-bold bg-accent text-accent-text hover:opacity-90 transition-opacity"
+            >
+              Start Trade
+              <ArrowRight className="w-4 h-4" />
+            </motion.button>
+          )}
+          {onReport && (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={onReport}
+              className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-xl text-[13px] font-bold border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"
+            >
+              <Flag className="w-4 h-4" />
+              Report
+            </motion.button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
