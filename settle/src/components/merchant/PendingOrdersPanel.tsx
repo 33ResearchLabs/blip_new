@@ -322,12 +322,10 @@ const OrderList = memo(function OrderList({
                   <div
                     onClick={() => onSelectMempoolOrder(mOrder)}
                     className={`relative p-2.5 rounded-xl transition-colors cursor-pointer ${
-                      isMyMempoolOrder ? "opacity-50" : ""
+                      isMyMempoolOrder ? "opacity-[0.85]" : ""
                     }`}
                     style={{
-                      background: isMyMempoolOrder
-                        ? "rgba(255,255,255,0.01)"
-                        : "#111113",
+                      background: "#111113",
                       border: isMyMempoolOrder
                         ? "1px solid rgba(255,255,255,0.03)"
                         : "1px solid rgba(249,115,22,0.22)",
@@ -610,12 +608,10 @@ const OrderList = memo(function OrderList({
                   data-testid={`order-card-${order.id}`}
                   onClick={() => onSelectOrder(order)}
                   className={`relative p-3 rounded-xl transition-all cursor-pointer overflow-hidden ${
-                    isMyOwnOrder ? "opacity-50" : ""
+                    isMyOwnOrder ? "opacity-[0.85]" : ""
                   }`}
                   style={{
-                    background: isMyOwnOrder
-                      ? "rgba(255,255,255,0.01)"
-                      : "#111113",
+                    background: "#111113",
                     border: isMineable
                       ? "1px solid rgba(249,115,22,0.25)"
                       : "1px solid rgba(255,255,255,0.07)",
@@ -853,7 +849,7 @@ const OrderList = memo(function OrderList({
                                   </span>
                                 )}
                                 {isMyOwnOrder && (
-                                  <span className="text-[10px] text-white/20 font-mono">
+                                  <span className="text-[10px] text-white/40 font-mono">
                                     · yours
                                   </span>
                                 )}
@@ -890,8 +886,8 @@ const OrderList = memo(function OrderList({
                               )}
                             </button>
                           ) : isActivelyPending && isMyOwnOrder ? (
-                            <span className="flex items-center gap-1 text-[10px] font-mono text-white/20 shrink-0">
-                              <span className="w-1.5 h-1.5 rounded-full bg-white/20 animate-pulse" />
+                            <span className="flex items-center gap-1 text-[10px] font-mono text-white/40 shrink-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
                               waiting
                             </span>
                           ) : (

@@ -104,6 +104,8 @@ export interface MerchantModalsProps {
   effectiveBalance: number | null;
   closeEscrowModal: () => void;
   executeLockEscrow: () => void;
+  /** Lock escrow directly from the OrderQuickView popup (no bottom-sheet modal). */
+  lockEscrowInline: (order: Order, methodId?: string) => void;
 
   // Escrow cancel
   showCancelModal: boolean;
@@ -229,7 +231,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
     showDisputeModal, disputeReason, setDisputeReason, disputeDescription, setDisputeDescription,
     isSubmittingDispute, closeDisputeModal, submitDispute,
     showEscrowModal, escrowOrder, isLockingEscrow, escrowTxHash, escrowError, effectiveBalance,
-    closeEscrowModal, executeLockEscrow,
+    closeEscrowModal, executeLockEscrow, lockEscrowInline,
     showCancelModal, cancelOrder, isCancellingEscrow, cancelTxHash, cancelError,
     closeCancelModal, executeCancelEscrow,
     showWalletPrompt, setShowWalletPrompt, solanaWalletConnected, showWalletModal, setShowWalletModal,
@@ -419,6 +421,8 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
         onClose={() => setSelectedOrderPopup(null)}
         onAcceptOrder={acceptOrder}
         onOpenEscrowModal={openEscrowModal}
+        onLockEscrow={lockEscrowInline}
+        escrowError={escrowError}
         onMarkFiatPaymentSent={markFiatPaymentSent}
         onConfirmPayment={confirmPayment}
         onCancelOrderWithoutEscrow={cancelOrderWithoutEscrow}

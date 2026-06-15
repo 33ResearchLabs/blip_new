@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
@@ -10,19 +10,17 @@ import {
   Loader2,
   ExternalLink,
   ShieldCheck,
-  Wallet,
-  Building2,
-  Plus,
   Lightbulb,
 } from "lucide-react";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
-import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { formatFiat, formatCrypto, formatRate } from "@/lib/format";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { SURFACES } from "@/components/shared/limits/types";
 import { EscrowFlowStepper } from "@/components/shared/trade/EscrowFlowStepper";
 import { TradeTrustPanel } from "@/components/shared/trade/TradeTrustPanel";
 import { useCounterpartyProfile } from "@/components/shared/trade/useCounterpartyProfile";
+import { ReceivingAccountPicker } from "@/components/shared/trade/ReceivingAccountPicker";
+import { useMerchantReceivingMethods } from "@/components/shared/trade/useMerchantReceivingMethods";
 import type { ProfileEntityType } from "@/components/shared/profile/types";
 import type { Order } from "@/types/merchant";
 
@@ -40,26 +38,8 @@ interface EscrowLockModalProps {
   escrowError: string | null;
   effectiveBalance: number | null;
   onClose: () => void;
-  onExecute: () => void;
-}
-
-/** Lightweight shape of a merchant saved payment account (from
- *  GET /api/merchant/[id]/payment-methods). */
-interface MerchantAcct {
-  id: string;
-  type: string;
-  name: string;
-  details: Record<string, string> | string;
-  is_default?: boolean;
-}
-
-function acctSubtitle(a: MerchantAcct): string {
-  const d = a.details;
-  if (typeof d === "string") return d;
-  if (!d) return "";
-  return (
-    d.upi_id || d.vpa || d.iban || d.account_number || d.bank_name || ""
-  );
+  /** methodId = the seller's chosen receiving account (shared with the buyer). */
+  onExecute: (methodId?: string) => void;
 }
 
 export function EscrowLockModal({
@@ -92,89 +72,22 @@ export function EscrowLockModal({
     !!(showEscrowModal && cpId),
   );
 
-  // ── Receiving-account picker (visual; persistence deferred) ─────────────
-  // Lists the merchant's saved accounts so the seller can pick which one the
-  // buyer pays into. NOTE: the lock action does not yet persist this choice —
-  // sharing the seller's pick with the buyer needs a small backend param on
-  // the lock action (pay-method endpoint is buyer-only). Tracked separately.
-  const [accounts, setAccounts] = useState<MerchantAcct[]>([]);
-  const [selectedAcctId, setSelectedAcctId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!showEscrowModal) return;
-    let cancelled = false;
-    // Use the `me` alias — the server resolves the merchant from the auth
-    // token, so this never races a not-yet-hydrated merchantId from the store.
-    fetchWithAuth(`/api/merchant/me/payment-methods`)
-      .then((r) => r.json().catch(() => null))
-      .then((j) => {
-        if (cancelled || !j?.success || !Array.isArray(j.data)) return;
-        const list: MerchantAcct[] = (j.data as MerchantAcct[]).map((m) => ({
-          id: String(m.id),
-          type: m.type,
-          name: m.name,
-          details: m.details,
-          is_default: !!m.is_default,
-        }));
-        setAccounts(list);
-        setSelectedAcctId(
-          (prev) => prev ?? (list.find((a) => a.is_default)?.id ?? list[0]?.id ?? null),
-        );
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [showEscrowModal]);
+  // ── Receiving-account picker — the seller picks which saved account the
+  // buyer pays into; the choice is shared with the buyer on lock (req 9).
+  const recv = useMerchantReceivingMethods(showEscrowModal && !escrowTxHash);
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  // Auto-select the default (or first) until the seller explicitly picks.
+  const defaultAcctId =
+    recv.methods.find((m) => m.is_default)?.id ?? recv.methods[0]?.id ?? null;
+  const selectedAcctId = pickedId ?? defaultAcctId;
 
-  const upiAccounts = accounts.filter((a) => a.type === "upi");
-  const bankAccounts = accounts.filter((a) => a.type !== "upi");
   // "Lock Escrow" is step index 1 of the 5-step flow; advance to "Buyer Pays"
   // once the on-chain lock has landed.
   const stepIndex = escrowTxHash ? 2 : 1;
 
   const insufficient = (effectiveBalance || 0) < (escrowOrder?.amount ?? 0);
-
-  const renderAccountRow = (a: MerchantAcct) => {
-    const selected = selectedAcctId === a.id;
-    return (
-      <button
-        key={a.id}
-        type="button"
-        onClick={() => setSelectedAcctId(a.id)}
-        className={`w-full flex items-center gap-3 rounded-xl p-3 border text-left transition-colors ${
-          selected
-            ? "border-accent bg-accent/10"
-            : `border-border-subtle ${S.inset} ${S.hover}`
-        }`}
-      >
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${S.chip}`}>
-          {a.type === "upi" ? (
-            <Wallet className="w-4 h-4 text-text-secondary" />
-          ) : (
-            <Building2 className="w-4 h-4 text-text-secondary" />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-medium text-text-primary truncate">{a.name}</p>
-          {acctSubtitle(a) && (
-            <p className="text-[11px] text-text-tertiary truncate font-mono">{acctSubtitle(a)}</p>
-          )}
-        </div>
-        {a.is_default && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success-dim text-success shrink-0">
-            Default
-          </span>
-        )}
-        <span
-          className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-            selected ? "border-accent" : "border-border-medium"
-          }`}
-        >
-          {selected && <span className="w-2 h-2 rounded-full bg-accent" />}
-        </span>
-      </button>
-    );
-  };
+  // Block locking until a receiving account is selected (req 8).
+  const canLock = !!selectedAcctId && !insufficient && !isLockingEscrow;
 
   return (
     <AnimatePresence>
@@ -311,41 +224,23 @@ export function EscrowLockModal({
                   surfaces={S}
                 />
 
-                {/* Select receiving account (visual — persistence deferred) */}
+                {/* Select receiving account — shared with the buyer on lock */}
                 {!escrowTxHash && (
-                  <div className={`rounded-xl p-4 border border-border-subtle ${S.card}`}>
-                    <p className="text-sm font-semibold text-text-primary">Select Receiving Account</p>
-                    <p className="text-[11px] text-text-tertiary mt-0.5 mb-3">
-                      Buyer will pay to the account you select below.
-                    </p>
-
-                    {accounts.length === 0 ? (
-                      <p className="text-[12px] text-text-tertiary">No saved accounts yet.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {upiAccounts.length > 0 && (
-                          <div className="space-y-2">
-                            <p className="text-[10px] uppercase tracking-wide text-text-tertiary">UPI Accounts</p>
-                            {upiAccounts.map(renderAccountRow)}
-                          </div>
-                        )}
-                        {bankAccounts.length > 0 && (
-                          <div className="space-y-2">
-                            <p className="text-[10px] uppercase tracking-wide text-text-tertiary">Bank Accounts</p>
-                            {bankAccounts.map(renderAccountRow)}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <a
-                      href="/market/settings"
-                      className={`mt-3 w-full py-2.5 rounded-xl border border-dashed border-border-medium flex items-center justify-center gap-1.5 text-[13px] font-medium text-text-secondary ${S.hover} transition-colors`}
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add New Account
-                    </a>
-                  </div>
+                  <ReceivingAccountPicker
+                    methods={recv.methods}
+                    selectedId={selectedAcctId}
+                    onSelect={setPickedId}
+                    onAddNew={() => {
+                      window.location.href = "/market/settings";
+                    }}
+                    loading={recv.loading}
+                    surfaces={S}
+                    error={
+                      !recv.loading && recv.methods.length === 0
+                        ? "Add a payment method to lock escrow."
+                        : null
+                    }
+                  />
                 )}
 
                 {/* Tips */}
@@ -373,6 +268,34 @@ export function EscrowLockModal({
                       <li>Only lock escrow if you are available to complete this trade.</li>
                       <li>Do not release USDT until funds arrive in your bank account.</li>
                     </ul>
+                  </div>
+                )}
+
+                {/* What Happens Next */}
+                {!escrowTxHash && !isLockingEscrow && (
+                  <div className={`rounded-xl p-4 border border-border-subtle ${S.card}`}>
+                    <p className="text-[13px] font-semibold text-text-primary mb-3">
+                      What Happens Next?
+                    </p>
+                    <ol className="space-y-2.5">
+                      {[
+                        "Your selected account is shared with the buyer",
+                        `Escrow locks ${formatCrypto(escrowOrder.amount)} USDT`,
+                        `Buyer sends ${escrowOrder.toCurrency || escrowOrder.dbOrder?.fiat_currency || "fiat"} payment`,
+                        "Buyer marks payment as sent",
+                        "You verify payment in your account",
+                        "Release USDT to complete trade",
+                      ].map((step, i) => (
+                        <li key={step} className="flex items-start gap-2.5">
+                          <span className="w-5 h-5 rounded-full bg-success-dim text-success text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                            {i + 1}
+                          </span>
+                          <span className="text-[12px] text-text-secondary leading-snug">
+                            {step}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
                   </div>
                 )}
 
@@ -482,8 +405,8 @@ export function EscrowLockModal({
                       </button>
                       <motion.button
                         whileTap={{ scale: 0.98 }}
-                        onClick={onExecute}
-                        disabled={isLockingEscrow || insufficient}
+                        onClick={() => onExecute(selectedAcctId ?? undefined)}
+                        disabled={!canLock}
                         className="flex-[2] py-3 rounded-xl text-sm font-bold bg-accent text-accent-text transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {isLockingEscrow ? (
@@ -501,6 +424,11 @@ export function EscrowLockModal({
                     </>
                   )}
                 </div>
+                {!escrowTxHash && !selectedAcctId && (
+                  <p className="text-[11px] text-center text-error">
+                    Please select a receiving account before locking escrow.
+                  </p>
+                )}
                 <p className="text-[10px] text-center text-text-tertiary inline-flex items-center justify-center gap-1 w-full">
                   <ShieldCheck className="w-3 h-3" />
                   Blip.money protects your trades with secure escrow

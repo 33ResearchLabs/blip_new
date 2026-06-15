@@ -655,6 +655,51 @@ export async function setBuyOrderMerchantPaymentMethod(
   return result;
 }
 
+/**
+ * The SELLER (merchant) of an order chooses which of their saved receiving
+ * accounts the buyer should pay into, at escrow-lock time. Sets
+ * orders.merchant_payment_method_id after validating, inside one locked txn:
+ *   - the caller is the order's seller (merchant_id — always the seller for
+ *     BUY U2M and M2M),
+ *   - the order is in a pre-release state (accepted/escrowed),
+ *   - the chosen method belongs to that merchant and is active.
+ * Best-effort from the lock flow: callers proceed with the lock even if this
+ * returns ok:false (the accept-time default-attach remains the fallback).
+ */
+export async function setSellerReceivingMethod(
+  orderId: string,
+  methodId: string,
+  merchantId: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const result = await transaction(async (client) => {
+    const { rows } = await client.query(
+      `SELECT id, merchant_id, status FROM orders WHERE id = $1 FOR UPDATE`,
+      [orderId],
+    );
+    const order = rows[0];
+    if (!order) return { ok: false, reason: 'not_found' };
+    if (order.merchant_id !== merchantId) return { ok: false, reason: 'not_seller' };
+    if (!['accepted', 'escrowed'].includes(order.status)) {
+      return { ok: false, reason: 'bad_status' };
+    }
+    const { rows: methodRows } = await client.query(
+      `SELECT id FROM merchant_payment_methods
+        WHERE id = $1 AND merchant_id = $2 AND is_active = true`,
+      [methodId, merchantId],
+    );
+    if (methodRows.length === 0) return { ok: false, reason: 'invalid_method' };
+
+    await client.query(
+      `UPDATE orders SET merchant_payment_method_id = $1, updated_at = NOW() WHERE id = $2`,
+      [methodId, orderId],
+    );
+    return { ok: true };
+  });
+
+  if (result.ok) await invalidateOrderCache(orderId);
+  return result;
+}
+
 export async function createOrder(data: {
   user_id: string;
   merchant_id: string;
