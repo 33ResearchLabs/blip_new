@@ -136,10 +136,10 @@ export function OrderOverviewScreen({
 
   return (
     <div className="bg-surface-base flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-      <div className="h-[max(env(safe-area-inset-top),1rem)]" />
+      <div className="h-[max(env(safe-area-inset-top),0.5rem)]" />
 
       {/* Header */}
-      <div className="px-5 py-4 flex items-center justify-between gap-3">
+      <div className="px-5 py-2.5 flex items-center justify-between gap-3">
         <button
           onClick={onClose}
           className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle"
@@ -154,18 +154,18 @@ export function OrderOverviewScreen({
         <div className="w-9 h-9 shrink-0" />
       </div>
 
-      <div className="px-5 pb-10 space-y-4">
+      <div className="px-5 pb-4 space-y-2.5">
         {/* Status card */}
         <motion.div
           initial={{ y: 12, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="rounded-2xl p-4 flex items-start justify-between gap-3 bg-warning-dim border border-warning-border"
+          className={`rounded-2xl p-3.5 flex items-start justify-between gap-3 ${CARD}`}
         >
           <div className="min-w-0">
-            <p className="text-[20px] font-bold text-text-primary mb-1">
+            <p className="text-[20px] font-bold text-text-primary mb-0.5">
               {typeLabel} {cryptoStr}
             </p>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1.5">
               <span className={`w-2 h-2 rounded-full ${TONE_DOT[meta.tone]}`} />
               <span className={`text-[15px] font-semibold ${TONE_TEXT[meta.tone]}`}>{meta.label}</span>
             </div>
@@ -223,8 +223,8 @@ export function OrderOverviewScreen({
         </Section>
 
         {/* Important Information */}
-        <div className="rounded-2xl p-4 bg-warning-dim border border-warning-border">
-          <p className="text-[14px] font-semibold text-text-primary mb-2">Important Information</p>
+        <div className="rounded-2xl p-3.5 bg-warning-dim border border-warning-border">
+          <p className="text-[14px] font-semibold text-text-primary mb-1.5">Important Information</p>
           <ul className="space-y-1.5">
             {[
               "Merchant details will be shown once a seller accepts the order.",
@@ -245,7 +245,7 @@ export function OrderOverviewScreen({
             whileTap={{ scale: 0.98 }}
             onClick={onCancel}
             disabled={isCancelling}
-            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
             Cancel Order
@@ -254,7 +254,7 @@ export function OrderOverviewScreen({
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={onClose}
-            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-surface-active text-text-primary border border-border-subtle"
+            className="w-full py-3.5 rounded-2xl text-[16px] font-semibold bg-surface-active text-text-primary border border-border-subtle"
           >
             Back
           </motion.button>
@@ -282,7 +282,7 @@ function Section({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left"
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
       >
         <span className="text-[15px] font-semibold text-text-primary">{title}</span>
         <ChevronDown

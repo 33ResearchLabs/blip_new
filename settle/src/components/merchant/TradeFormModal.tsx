@@ -10,6 +10,7 @@ import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import { useCorridorPrices, resolveCorridorRef } from "@/hooks/useCorridorPrices";
 import { formatCrypto, formatRate } from "@/lib/format";
 import { FEE_UI_V2 } from "@/lib/featureFlags";
+import { PayWithSheet } from "@/components/user/PayWithSheet";
 
 const CORRIDOR_OPTIONS = [
   { key: "USDT_AED", label: "🇦🇪 USDT / AED" },
@@ -83,6 +84,8 @@ export function TradeFormModal({
   const refreshPaymentMethods = useMerchantStore((s) => s.fetchPaymentMethods);
   const [showPmDropdown, setShowPmDropdown] = useState(false);
   const [showPayTypesDropdown, setShowPayTypesDropdown] = useState(false);
+  // BUY "How you'll pay" → rich PayWith bottom sheet (replaces the dropdown).
+  const [showPayWith, setShowPayWith] = useState(false);
 
   const corridorPrices = useCorridorPrices();
   const fiatCcy = corridorFiat(activeCorridor);
@@ -354,7 +357,7 @@ export function TradeFormModal({
                   <div style={{ position: "relative" }}>
                     <button
                       type="button"
-                      onClick={() => setShowPayTypesDropdown((v) => !v)}
+                      onClick={() => setShowPayWith(true)}
                       style={{
                         width: "100%",
                         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
@@ -728,6 +731,19 @@ export function TradeFormModal({
 
             </div>
           </motion.div>
+
+          {/* BUY pay-rail picker — rich PayWith bottom sheet (merchant theme),
+              opened from the "How you'll pay" row. */}
+          <PayWithSheet
+            open={showPayWith}
+            mode="sheet"
+            theme="merchant"
+            onClose={() => setShowPayWith(false)}
+            onConfirm={(cats) => {
+              setOpenTradeForm((p) => ({ ...p, buyerPaymentTypes: cats }));
+              setShowPayWith(false);
+            }}
+          />
         </>
       )}
     </AnimatePresence>
