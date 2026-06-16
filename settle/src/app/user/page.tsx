@@ -1323,6 +1323,7 @@ export default function Home() {
               matchingTimeLeft={userEffects.matchingTimeLeft}
               formatTimeLeft={userEffects.formatTimeLeft}
               currentRate={tradeCreation.currentRate}
+              currency={tradeCreation.selectedPair === "usdt_inr" ? "INR" : "AED"}
               activeOrderId={activeOrderId}
               userId={auth.userId}
               setOrders={setOrders}

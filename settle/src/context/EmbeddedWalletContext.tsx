@@ -26,6 +26,8 @@ import {
 import {
   getAssociatedTokenAddress,
   getAccount,
+  TokenAccountNotFoundError,
+  TokenInvalidAccountOwnerError,
 } from '@solana/spl-token';
 import {
   DEVNET_RPC,
@@ -266,8 +268,19 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
         const usdtAta = await getAssociatedTokenAddress(USDT_MINT, keypair.publicKey);
         const tokenAccount = await getAccount(connection, usdtAta);
         setUsdtBalance(Number(tokenAccount.amount) / 1_000_000);
-      } catch {
-        setUsdtBalance(0);
+      } catch (tokenErr) {
+        // Only a genuinely-missing token account means the balance is 0.
+        // An RPC error (429 Too Many Requests / timeout / network) must NOT
+        // clobber the last known balance to 0 — that's the "balance shows 0"
+        // bug under a throttling RPC. Leave the previous value in place.
+        if (
+          tokenErr instanceof TokenAccountNotFoundError ||
+          tokenErr instanceof TokenInvalidAccountOwnerError
+        ) {
+          setUsdtBalance(0);
+        } else {
+          console.warn('[EmbeddedWallet] USDT balance fetch failed (RPC error) — keeping last known value:', tokenErr);
+        }
       }
     } catch (error) {
       console.error('[EmbeddedWallet] Failed to fetch balances:', error);
