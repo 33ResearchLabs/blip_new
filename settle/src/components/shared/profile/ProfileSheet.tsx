@@ -79,7 +79,7 @@ export function ProfileSheet({
             exit={{ opacity: 0, y: 24, scale: 0.99 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className={`relative w-full h-full lg:h-[88vh] lg:max-w-lg lg:rounded-3xl overflow-hidden border-0 lg:border border-border-subtle ${surfaces.screen} ${variant === "merchant" ? "text-white lg:text-inherit" : ""}`}
+            className={`relative w-full h-full lg:h-[88vh] lg:max-w-2xl lg:rounded-3xl overflow-hidden border-0 lg:border border-border-subtle ${surfaces.screen} ${variant === "merchant" ? "text-white lg:text-inherit" : ""}`}
           >
             {loading ? (
               <div className="h-full flex flex-col items-center justify-center gap-3">
