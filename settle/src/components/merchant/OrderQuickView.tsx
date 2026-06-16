@@ -641,7 +641,8 @@ function AcceptorBuyOrderBody({
         </div>
       </div>
 
-      {/* Buyer Trust */}
+      {/* Buyer Trust — commented out */}
+      {false && (
       <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-2">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-emerald-400" />
@@ -686,6 +687,7 @@ function AcceptorBuyOrderBody({
           </div>
         </div>
       </div>
+      )}
 
       {/* After you accept */}
       <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
