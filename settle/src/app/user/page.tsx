@@ -915,6 +915,7 @@ export default function Home() {
               onSelectPaymentMethod={tradeCreation.setSelectedPaymentMethod}
               buyerPaymentTypes={tradeCreation.buyerPaymentTypes}
               onToggleBuyerPaymentType={tradeCreation.toggleBuyerPaymentType}
+              setBuyerPaymentTypes={tradeCreation.setBuyerPaymentTypes}
               selectedPair={tradeCreation.selectedPair}
               onPairChange={tradeCreation.setSelectedPair}
               setCurrentRate={tradeCreation.setCurrentRate}

@@ -23,6 +23,7 @@ import { MyOffers } from "@/components/merchant/MyOffers";
 import { ChevronRight, Package } from "lucide-react";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
+import { PayWithSheet } from "@/components/user/PayWithSheet";
 
 // Use the same rich modal merchant settings uses, so the form fields adapt
 // per-type (bank → IBAN/account/SWIFT, cash → location, mobile → provider/
@@ -232,6 +233,16 @@ export const ConfigPanel = memo(function ConfigPanel({
   // BUY pay-type popup: clicking BUY now opens this modal to pick the rails
   // (Bank/UPI/Cash) instead of the old inline "How you'll pay" dropdown.
   const [showBuyPayModal, setShowBuyPayModal] = useState(false);
+  // After the PayWith sheet writes the chosen rails onto the form, place the
+  // buy order on the next render (so onCreateOrder reads the fresh types).
+  const [pendingBuy, setPendingBuy] = useState(false);
+  useEffect(() => {
+    if (pendingBuy && (openTradeForm.buyerPaymentTypes?.length ?? 0) > 0) {
+      setPendingBuy(false);
+      onCreateOrder("buy", priorityFee, pair);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingBuy, openTradeForm.buyerPaymentTypes]);
 
   // The `me` alias is resolved server-side from auth.actorId. We do NOT
   // depend on the `merchantId` prop here — that prop hydrates from
@@ -894,91 +905,26 @@ export const ConfigPanel = memo(function ConfigPanel({
         )} */}
       </div>
 
-      {/* BUY pay-type popup — replaces the old inline "How you'll pay"
-          dropdown. Opens when the merchant clicks BUY; they pick the rails
-          (Bank/UPI/Cash) they can pay with, which ride along as
-          `buyer_payment_types`. Confirm requires at least one rail, then
-          creates the buy order. */}
-      {showBuyPayModal && (() => {
-        const selected = openTradeForm.buyerPaymentTypes ?? [];
-        const canConfirm = selected.length > 0 && !isCreatingTrade;
-        return (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-            onClick={() => !isCreatingTrade && setShowBuyPayModal(false)}
-          >
-            <div
-              className="w-full max-w-sm rounded-2xl border border-foreground/[0.08] bg-card-solid shadow-2xl p-5"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="text-base font-bold text-foreground">
-                  How you&apos;ll pay
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowBuyPayModal(false)}
-                  disabled={isCreatingTrade}
-                  className="text-foreground/40 hover:text-foreground transition-colors disabled:opacity-30"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <p className="text-[12px] text-foreground/50 mb-4">
-                Pick the payment methods you can pay with. Your order is shown
-                only to sellers who support one of them.
-              </p>
-
-              <div className="flex flex-col gap-2 mb-5">
-                {BUY_PAY_TYPES.map(({ key, label, Icon }) => {
-                  const on = selected.includes(key);
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => toggleBuyerPaymentType(key)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                        on
-                          ? "bg-white/[0.06] border-white/[0.15] text-foreground"
-                          : "bg-foreground/[0.02] border-foreground/[0.08] hover:border-foreground/[0.15] text-foreground/60"
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="text-sm font-bold flex-1">{label}</span>
-                      {on && <Check className="w-4 h-4 shrink-0" strokeWidth={3} />}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowBuyPayModal(false);
-                  onCreateOrder("buy", priorityFee, pair);
-                }}
-                disabled={!canConfirm}
-                className="w-full h-12 rounded-xl bg-[#f5f5f7] text-[#0b0b0c] font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex items-center justify-center gap-2"
-              >
-                {isCreatingTrade ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    Confirm Buy
-                    {cryptoAmount > 0 && (
-                      <span className="font-mono font-bold opacity-60">
-                        · {fiatSymbol}
-                        {pricing.buyAed.toFixed(2)}
-                        {fiatSuffix || ` ${fiatLabel}`}
-                      </span>
-                    )}
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        );
-      })()}
+      {/* BUY pay-rail picker — rich "Pay With" dialog. Opens when the merchant
+          clicks BUY; they pick the rails they can pay with, which collapse to
+          `buyer_payment_types`. Confirm writes them onto the form and the
+          pendingBuy effect places the order. Centered on desktop. */}
+      <PayWithSheet
+        open={showBuyPayModal}
+        mode="center"
+        theme="merchant"
+        onClose={() => setShowBuyPayModal(false)}
+        confirmLabel={
+          cryptoAmount > 0
+            ? `Confirm Buy · ${fiatSymbol}${pricing.buyAed.toFixed(2)}${fiatSuffix || ` ${fiatLabel}`}`
+            : "Confirm Buy"
+        }
+        onConfirm={(cats) => {
+          setOpenTradeForm({ ...openTradeForm, buyerPaymentTypes: cats });
+          setShowBuyPayModal(false);
+          setPendingBuy(true);
+        }}
+      />
     </div>
   );
 });

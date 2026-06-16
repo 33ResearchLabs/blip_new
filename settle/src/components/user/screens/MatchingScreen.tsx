@@ -155,7 +155,9 @@ export const MatchingScreen = ({
       </div>
 
       <div className="px-5 pb-10 space-y-4">
-        {/* Finding the best merchant — live banner */}
+        {/* Finding the best merchant — live banner. The match countdown now
+            lives inline here, stacked under the LIVE badge, instead of a
+            separate "Time remaining" card. */}
         <motion.div
           initial={{ y: 12, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -175,13 +177,19 @@ export const MatchingScreen = ({
               We&apos;re matching you with verified merchants.
             </p>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success/15 shrink-0">
-            <motion.span
-              className="w-1.5 h-1.5 rounded-full bg-success"
-              animate={{ opacity: [1, 0.3, 1] }}
-              transition={{ duration: 1.4, repeat: Infinity }}
-            />
-            <span className="text-[11px] font-semibold text-success">LIVE</span>
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <div className={`flex items-center gap-1 text-[15px] font-bold tabular-nums ${isUrgent ? "text-error" : "text-text-primary"}`}>
+              <Clock className="w-3.5 h-3.5" />
+              {formatTimeLeft(matchingTimeLeft)}
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success/15">
+              <motion.span
+                className="w-1.5 h-1.5 rounded-full bg-success"
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 1.4, repeat: Infinity }}
+              />
+              <span className="text-[11px] font-semibold text-success">LIVE</span>
+            </div>
           </div>
         </motion.div>
 
@@ -235,42 +243,16 @@ export const MatchingScreen = ({
           })}
         </motion.div>
 
-        {/* Time remaining + order overview */}
+        {/* Order Overview — opens the full order detail view */}
         <motion.div
           initial={{ y: 12, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1 }}
           className={`rounded-2xl overflow-hidden ${CARD}`}
         >
-          <div className="p-5 text-center">
-            <p className="text-[11px] uppercase tracking-wide mb-2 text-text-tertiary">Time remaining</p>
-            <div className="flex items-center justify-center gap-2">
-              <Clock className={`w-5 h-5 ${isUrgent ? "text-error" : "text-text-secondary"}`} />
-              <p
-                className={`text-[34px] font-bold tracking-tight tabular-nums ${
-                  isUrgent ? "text-error" : "text-text-primary"
-                }`}
-              >
-                {formatTimeLeft(matchingTimeLeft)}
-              </p>
-            </div>
-            <div className="w-full h-1.5 rounded-full mt-3 overflow-hidden bg-surface-active">
-              <motion.div
-                className={`h-full rounded-full ${isUrgent ? "bg-error" : "bg-accent"}`}
-                initial={{ width: "100%" }}
-                animate={{ width: `${Math.max(0, (matchingTimeLeft / MATCHING_WINDOW_SECONDS) * 100)}%` }}
-                transition={{ duration: 0.5 }}
-              />
-            </div>
-            <p className={`text-[13px] mt-3 ${isUrgent ? "text-error" : "text-text-tertiary"}`}>
-              {isUrgent ? "Order will expire soon!" : "Most orders are matched within 1 minute."}
-            </p>
-          </div>
-
-          {/* Order Overview — opens the full order detail view */}
           <button
             onClick={() => setShowOverview(true)}
-            className="w-full flex items-center gap-3 px-5 py-4 border-t border-border-subtle text-left active:bg-surface-hover"
+            className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover"
           >
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
               <FileText className="w-5 h-5 text-accent" />

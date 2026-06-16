@@ -439,6 +439,7 @@ export default function UserDesktopPage() {
 
   return (
     <div
+      id="user-scope-root"
       className={`user-scope ${isUserLight ? "user-light" : ""}`}
       style={{ display: "flex", minHeight: "100dvh", background: "#080810", fontFamily: "Manrope, sans-serif" }}
     >
@@ -550,6 +551,7 @@ export default function UserDesktopPage() {
                 onSelectPaymentMethod={tradeCreation.setSelectedPaymentMethod}
                 buyerPaymentTypes={tradeCreation.buyerPaymentTypes}
                 onToggleBuyerPaymentType={tradeCreation.toggleBuyerPaymentType}
+                setBuyerPaymentTypes={tradeCreation.setBuyerPaymentTypes}
                 selectedPair={tradeCreation.selectedPair}
                 onPairChange={tradeCreation.setSelectedPair}
                 setCurrentRate={tradeCreation.setCurrentRate}

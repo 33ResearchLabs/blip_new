@@ -25,6 +25,7 @@ import {
   type PaymentMethodItem,
 } from "../PaymentMethodSelector";
 import { BottomNav } from "./BottomNav";
+import { PayWithSheet } from "../PayWithSheet";
 import { useUserPaymentMethods } from "@/context/AppContext";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
@@ -63,6 +64,7 @@ export interface TradeCreationScreenProps {
   // BUY orders (Way-1): the payment rails the buyer can pay with (multi-select).
   buyerPaymentTypes: string[];
   onToggleBuyerPaymentType: (t: string) => void;
+  setBuyerPaymentTypes: (t: string[]) => void;
   selectedPair?: "usdt_aed" | "usdt_inr";
   onPairChange?: (pair: "usdt_aed" | "usdt_inr") => void;
   setCurrentRate?: (rate: number) => void;
@@ -196,6 +198,7 @@ export const TradeCreationScreen = ({
   onSelectPaymentMethod,
   buyerPaymentTypes,
   onToggleBuyerPaymentType,
+  setBuyerPaymentTypes,
   selectedPair,
   onPairChange,
   setCurrentRate,
@@ -211,6 +214,19 @@ export const TradeCreationScreen = ({
     ? buyerPaymentTypes.length === 0
     : !selectedPaymentMethodId;
   const canSubmit = hasAmount && !needsPaymentChoice;
+  // BUY now picks pay rails in the PayWith bottom sheet opened from the CTA, so
+  // the CTA is actionable on amount alone; SELL still needs a receive account.
+  const [showPayWith, setShowPayWith] = useState(false);
+  const [pendingStart, setPendingStart] = useState(false);
+  const ctaReady = isBuy ? hasAmount : canSubmit;
+  // After the sheet sets the chosen rails, place the order on the next render
+  // (so startTrade reads the fresh buyerPaymentTypes rather than a stale value).
+  useEffect(() => {
+    if (pendingStart && buyerPaymentTypes.length > 0) {
+      setPendingStart(false);
+      startTrade();
+    }
+  }, [pendingStart, buyerPaymentTypes, startTrade]);
   const accent = isBuy
     ? isLight ? "#059669" : "#34D399"
     : isLight ? "#DC2626" : "#F87171";
@@ -869,46 +885,9 @@ export const TradeCreationScreen = ({
                    tick more than one; the order is shown only to merchants who
                    support one of them, and the buyer pays the merchant's match.
             SELL → single receive-account picker (unchanged). */}
-        {isBuy ? (
-          <div className="mb-4">
-            <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", color: T.lo, textTransform: "uppercase", marginBottom: 6 }}>
-              How you'll pay
-            </p>
-            <div className="grid grid-cols-3" style={{ gap: 8 }}>
-              {BUY_PAY_TYPES.map(({ key, label, Icon }) => {
-                const on = buyerPaymentTypes.includes(key);
-                return (
-                  <motion.button
-                    key={key}
-                    type="button"
-                    onClick={() => onToggleBuyerPaymentType(key)}
-                    whileTap={{ scale: 0.96 }}
-                    animate={{
-                      background: on ? T.activeTileBg : T.surface1,
-                      borderColor: on ? T.activeTileBorder : T.border1,
-                    }}
-                    transition={{ duration: 0.2 }}
-                    className="relative flex flex-col items-center justify-center"
-                    style={{ padding: "13px 4px", borderRadius: 14, borderWidth: 1, borderStyle: "solid", gap: 6 }}
-                  >
-                    {on && (
-                      <span
-                        className="absolute flex items-center justify-center"
-                        style={{ top: 6, right: 6, width: 15, height: 15, borderRadius: 999, background: T.activeTileText }}
-                      >
-                        <Check size={10} strokeWidth={3.5} style={{ color: T.activeTileBg }} />
-                      </span>
-                    )}
-                    <Icon size={17} strokeWidth={2} style={{ color: on ? T.activeTileText : T.md }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: on ? T.activeTileText : T.hi }}>
-                      {label}
-                    </span>
-                  </motion.button>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
+        {/* BUY → pay rails are chosen in the PayWith bottom sheet opened by the
+            CTA below (no inline picker). SELL → receive-account picker. */}
+        {isBuy ? null : (
           <button
             onClick={() => setShowAddMethods(true)}
             className="w-full flex items-center justify-between mb-4"
@@ -1003,16 +982,18 @@ export const TradeCreationScreen = ({
           </div>
         </LayoutGroup>
 
-        {/* CTA — lives inside the sheet so it scrolls with content */}
+        {/* CTA — lives inside the sheet so it scrolls with content. For BUY it
+            opens the PayWith sheet (which then places the order on Confirm);
+            for SELL it submits directly. */}
         <motion.button
-          onClick={startTrade}
-          disabled={!canSubmit || isLoading || !userId}
-          whileTap={canSubmit ? { scale: 0.985 } : undefined}
+          onClick={() => (isBuy ? setShowPayWith(true) : startTrade())}
+          disabled={!ctaReady || isLoading || !userId}
+          whileTap={ctaReady ? { scale: 0.985 } : undefined}
           animate={{
-            background: canSubmit && !isLoading ? T.ctaActiveBg : T.ctaInactiveBg,
-            color: canSubmit && !isLoading ? T.ctaActiveText : T.md,
-            borderColor: canSubmit && !isLoading ? T.ctaActiveBorder : T.ctaInactiveBorder,
-            boxShadow: canSubmit && !isLoading ? T.ctaActiveShadow : "none",
+            background: ctaReady && !isLoading ? T.ctaActiveBg : T.ctaInactiveBg,
+            color: ctaReady && !isLoading ? T.ctaActiveText : T.md,
+            borderColor: ctaReady && !isLoading ? T.ctaActiveBorder : T.ctaInactiveBorder,
+            boxShadow: ctaReady && !isLoading ? T.ctaActiveShadow : "none",
           }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           className="w-full flex items-center justify-center mt-3"
@@ -1031,8 +1012,8 @@ export const TradeCreationScreen = ({
             <Loader2 size={18} className="animate-spin" />
           ) : !hasAmount ? (
             "Enter Amount"
-          ) : needsPaymentChoice ? (
-            isBuy ? "Select how you'll pay" : "Select where to receive"
+          ) : !isBuy && needsPaymentChoice ? (
+            "Select where to receive"
           ) : (
             <>
               {isBuy ? <ArrowDownLeft size={16} strokeWidth={2.6} /> : <ArrowUpRight size={16} strokeWidth={2.6} />}
@@ -1051,6 +1032,19 @@ export const TradeCreationScreen = ({
           maxW="max-w-[440px] mx-auto"
         />
       )}
+
+      {/* PayWith — BUY pay-rail picker (bottom sheet). Confirm sets the chosen
+          rails and places the order via the pendingStart effect above. */}
+      <PayWithSheet
+        open={showPayWith}
+        onClose={() => setShowPayWith(false)}
+        onConfirm={(cats) => {
+          setBuyerPaymentTypes(cats);
+          setShowPayWith(false);
+          setPendingStart(true);
+        }}
+        confirmLabel={hasAmount ? `Buy ${formatAmountInput(amount)} USDT` : "Confirm"}
+      />
 
       {/* Payment methods — merchant-style mobile bottom sheet, opened in place
           from "Add payment method" (no Profile redirect). Hosts the full

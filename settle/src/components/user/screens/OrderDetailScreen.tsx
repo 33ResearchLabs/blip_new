@@ -35,6 +35,7 @@ import { explorerUrl } from "@/lib/solana/networkLabel";
 import type { Screen, Order, MerchantPaymentMethod } from "./types";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import { OrderTrackingView } from "./OrderTrackingView";
+import { MatchingScreen } from "./MatchingScreen";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
 import { OrderPaymentScreen } from "./OrderPaymentScreen";
 import { OrderCompletedScreen } from "./OrderCompletedScreen";
@@ -387,6 +388,20 @@ export const OrderDetailScreen = ({
   // Order receipt sheet — opened by tapping the summary card.
   const [showReceipt, setShowReceipt] = useLocalState(false);
   const [showTracker, setShowTracker] = useLocalState(false);
+  // For a BUY order still in the matching phase, show the rich tracking view as
+  // the primary screen instead of the step-body "Order Details" screen.
+  // Keyed off the MAPPED UI step (step 1 = matching) rather than the raw status
+  // string, so it's robust to whatever exact dbStatus the order carries. It's
+  // also DERIVED each render (not stored state) so it stays correct when this
+  // panel is reused — the desktop keeps the order panel mounted across
+  // navigations, which made a one-time useState initial go stale. Once a
+  // merchant accepts (step ≥ 2) the payment screen renders and covers this.
+  // SELL orders keep the step-body (it holds their lock-escrow / confirm
+  // actions).
+  const autoTracker =
+    String(activeOrder.type).toLowerCase() === "buy" && activeOrder.step === 1;
+  // Live countdown for the matching screen rendered on the auto-tracker path.
+  const nowMs = useGlobalNow();
   // Itemised order-overview overlay (the collapsible Order/Transaction/Payment
   // details view). Opened directly by the "Order Overview" cards on the
   // payment & completed screens — one tap, no tracker hop in between.
@@ -3108,9 +3123,11 @@ export const OrderDetailScreen = ({
           </div>
         )}
 
-      {/* Rich full-screen order tracker — opened by "View full receipt". */}
+      {/* Rich full-screen order tracker. Auto-shown as the primary screen for a
+          matching BUY order (autoTracker); also opened manually via "View full
+          receipt" in other states. */}
       <AnimatePresence>
-        {showTracker && (
+        {(showTracker || autoTracker) && (
           <motion.div
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
@@ -3118,16 +3135,55 @@ export const OrderDetailScreen = ({
             transition={{ type: "spring", damping: 30, stiffness: 320, mass: 0.8 }}
             className={`fixed inset-0 z-50 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}
           >
-            <OrderTrackingView
-              order={activeOrder}
-              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
-              onClose={() => setShowTracker(false)}
-              onCancel={() => {
-                requestCancelOrder();
-                setShowTracker(false);
-              }}
-              isCancelling={isRequestingCancel}
-            />
+            {autoTracker ? (
+              // Matching BUY order → show the same MatchingScreen the user sees
+              // right after placing, fed from the order so it's identical on
+              // reopen (timer-in-banner, "Finding the best merchant", Cancel).
+              <MatchingScreen
+                setScreen={setScreen}
+                pendingTradeData={{
+                  amount: activeOrder.cryptoAmount,
+                  fiatAmount: activeOrder.fiatAmount,
+                  type: activeOrder.type,
+                  paymentMethod:
+                    activeOrder.merchant?.paymentMethod === "cash" ? "cash" : "bank",
+                }}
+                matchingTimeLeft={Math.max(
+                  0,
+                  Math.floor((new Date(activeOrder.expiresAt).getTime() - nowMs) / 1000),
+                )}
+                formatTimeLeft={(s) =>
+                  `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`
+                }
+                currentRate={
+                  Number(activeOrder.merchant?.rate) ||
+                  Number(activeOrder.fiatAmount) / Number(activeOrder.cryptoAmount) ||
+                  0
+                }
+                currency={activeOrder.fiatCode === "INR" ? "INR" : "AED"}
+                activeOrderId={activeOrder.id}
+                userId={userId}
+                setOrders={setOrders}
+                setPendingTradeData={() => {}}
+                toast={{
+                  showOrderCancelled: (m: string) =>
+                    showAlert("Order cancelled", m, "success"),
+                  showWarning: (m: string) => showAlert("Notice", m, "warning"),
+                }}
+                maxW={maxW}
+              />
+            ) : (
+              <OrderTrackingView
+                order={activeOrder}
+                displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+                onClose={() => setShowTracker(false)}
+                onCancel={() => {
+                  requestCancelOrder();
+                  setShowTracker(false);
+                }}
+                isCancelling={isRequestingCancel}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
