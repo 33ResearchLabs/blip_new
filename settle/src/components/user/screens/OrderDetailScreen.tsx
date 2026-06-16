@@ -39,6 +39,7 @@ import { MatchingScreen } from "./MatchingScreen";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
 import { OrderPaymentScreen } from "./OrderPaymentScreen";
 import { OrderCompletedScreen } from "./OrderCompletedScreen";
+import { AppealScreen } from "./AppealScreen";
 import { getDisplayOrderId } from "@/lib/displayOrderId";
 import {
   type RefObject,
@@ -264,6 +265,15 @@ export interface OrderDetailScreenProps {
   handleSendMessage: () => void;
   sendChatMessage?: (chatId: string, text: string, imageUrl?: string) => void;
   sendTypingIndicator?: (chatId: string, isTyping: boolean) => void;
+  // Appeal (lightweight chat message to the counterparty — not a dispute)
+  showAppeal: boolean;
+  setShowAppeal: (v: boolean) => void;
+  appealReason: string;
+  setAppealReason: (r: string) => void;
+  appealDescription: string;
+  setAppealDescription: (d: string) => void;
+  submitAppeal: () => void;
+  isSubmittingAppeal: boolean;
   // Dispute
   showDisputeModal: boolean;
   setShowDisputeModal: (v: boolean) => void;
@@ -284,6 +294,7 @@ export interface OrderDetailScreenProps {
   isRespondingToResolution: boolean;
   // Cancel request
   requestCancelOrder: (reason?: string) => void;
+  cancelOrderDirect: (reason?: string) => void;
   respondToCancelRequest: (accept: boolean) => void;
   isRequestingCancel: boolean;
   // Stuck on-chain refund recovery
@@ -354,6 +365,14 @@ export const OrderDetailScreen = ({
   handleSendMessage,
   sendChatMessage,
   sendTypingIndicator,
+  showAppeal,
+  setShowAppeal,
+  appealReason,
+  setAppealReason,
+  appealDescription,
+  setAppealDescription,
+  submitAppeal,
+  isSubmittingAppeal,
   showDisputeModal,
   setShowDisputeModal,
   disputeReason,
@@ -366,6 +385,7 @@ export const OrderDetailScreen = ({
   respondToResolution,
   isRespondingToResolution,
   requestCancelOrder,
+  cancelOrderDirect,
   respondToCancelRequest,
   isRequestingCancel,
   claimRefund,
@@ -2276,7 +2296,7 @@ export const OrderDetailScreen = ({
                                   Need Help
                                 </button>
                                 <button
-                                  onClick={() => setShowDisputeModal(true)}
+                                  onClick={() => setShowAppeal(true)}
                                   className={`flex-1 py-3 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1.5 ${SECONDARY_BTN}`}
                                 >
                                   <Flag className="w-4 h-4" />
@@ -2908,11 +2928,11 @@ export const OrderDetailScreen = ({
             help" button below. */}
         {["escrowed", "payment_sent"].includes(activeOrder.dbStatus || "") && (
             <button
-              onClick={() => setShowDisputeModal(true)}
-              className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 text-error hover:bg-error-dim transition-colors`}
+              onClick={() => setShowAppeal(true)}
+              className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 text-warning hover:bg-warning-dim transition-colors`}
             >
-              <AlertTriangle className="w-4 h-4" />
-              Report Issue
+              <Flag className="w-4 h-4" />
+              Raise Appeal
             </button>
           )}
 
@@ -2970,99 +2990,34 @@ export const OrderDetailScreen = ({
         )}
       </div>
 
-      {/* Dispute Modal */}
+      {/* Raise Appeal — full-screen form. An appeal is NOT a dispute: Submit
+          posts the reason + details as a message into the order chat so the
+          counterparty sees it (no escrow freeze, no status change). If the
+          appeal doesn't resolve things, a dispute is raised separately. */}
       <AnimatePresence>
-        {showDisputeModal && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 z-50"
-              onClick={() => setShowDisputeModal(false)}
+        {showAppeal && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 320, mass: 0.8 }}
+            className={`fixed inset-0 z-[55] mx-auto ${maxW} flex flex-col ${SHEET_BG}`}
+          >
+            <AppealScreen
+              order={activeOrder}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              reason={appealReason}
+              description={appealDescription}
+              onReasonChange={setAppealReason}
+              onDescriptionChange={setAppealDescription}
+              onClose={() => setShowAppeal(false)}
+              onOpenChat={handleOpenChat}
+              onViewProfile={() => setShowProfile(true)}
+              onNeedHelp={() => setScreen("support")}
+              onSubmit={submitAppeal}
+              isSubmitting={isSubmittingAppeal}
             />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 350, mass: 0.8 }}
-              className={`fixed bottom-0  left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6 ${SHEET_BG}`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-error" />
-                  <h3 className="text-[17px] font-semibold text-text-primary">
-                    Report Issue
-                  </h3>
-                </div>
-                <button onClick={() => setShowDisputeModal(false)}>
-                  <X className="w-5 h-5 text-text-tertiary" />
-                </button>
-              </div>
-
-              <p className="text-[13px] mb-4 text-text-secondary">
-                If you&apos;re having a problem with this trade, let us know and
-                our support team will help resolve it.
-              </p>
-
-              <div className="mb-4">
-                <label className="text-[12px] uppercase tracking-wide mb-2 block text-text-tertiary">
-                  Reason
-                </label>
-                <select
-                  value={disputeReason}
-                  onChange={(e) => setDisputeReason(e.target.value)}
-                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none appearance-none bg-surface-raised text-text-primary border border-border-medium"
-                >
-                  <option value="">Select a reason...</option>
-                  <option value="payment_not_received">
-                    Payment not received
-                  </option>
-                  <option value="crypto_not_received">
-                    Crypto not received
-                  </option>
-                  <option value="wrong_amount">Wrong amount sent</option>
-                  <option value="fraud">Suspected fraud</option>
-                  <option value="other">Other issue</option>
-                </select>
-              </div>
-
-              <div className="mb-6">
-                <label className="text-[12px] uppercase tracking-wide mb-2 block text-text-tertiary">
-                  Description
-                </label>
-                <textarea
-                  value={disputeDescription}
-                  onChange={(e) => setDisputeDescription(e.target.value)}
-                  placeholder="Describe the issue in detail..."
-                  rows={3}
-                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none resize-none bg-surface-raised text-text-primary border border-border-medium"
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDisputeModal(false)}
-                  className={`flex-1 py-3 rounded-xl text-[15px] font-medium ${MUTED_BTN}`}
-                >
-                  Cancel
-                </button>
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={submitDispute}
-                  disabled={!disputeReason || isSubmittingDispute}
-                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2 bg-error text-text-primary"
-                >
-                  {isSubmittingDispute ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4" />
-                  )}
-                  {isSubmittingDispute ? "Submitting..." : "Submit Dispute"}
-                </motion.button>
-              </div>
-            </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -3083,8 +3038,23 @@ export const OrderDetailScreen = ({
               onViewProfile={() => setShowProfile(true)}
               onNeedHelp={() => setScreen("support")}
               onMarkPaymentSent={markPaymentSent}
-              onCancel={() => requestCancelOrder()}
-              onAppeal={() => setShowDisputeModal(true)}
+              onCancel={() => {
+                // Pre-escrow (accepted / escrow_pending): no crypto is locked,
+                // so cancel directly via the CANCEL action. Once escrow is
+                // locked (escrowed / payment_pending), fall back to the mutual
+                // cancel-request flow so the counterparty agrees before locked
+                // funds are released.
+                const s = String(
+                  activeOrder.dbStatus || activeOrder.status || "",
+                ).toLowerCase();
+                const escrowLocked =
+                  s === "escrowed" ||
+                  s === "payment_pending" ||
+                  s === "payment_sent";
+                if (escrowLocked) requestCancelOrder();
+                else cancelOrderDirect();
+              }}
+              onAppeal={() => setShowAppeal(true)}
               onCopy={(key, value) => copyField(key, value)}
               copiedField={copiedField}
               needsPayMethodPick={needsPayMethodPick}
@@ -3182,6 +3152,7 @@ export const OrderDetailScreen = ({
                   setShowTracker(false);
                 }}
                 isCancelling={isRequestingCancel}
+                onOpenSupport={() => setScreen("support")}
               />
             )}
           </motion.div>

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Check,
   Clock,
   HelpCircle,
@@ -12,14 +13,13 @@ import {
   Lightbulb,
   Wallet,
   ArrowDownToLine,
-  Tag,
   Landmark,
 } from "lucide-react";
 import { useState } from "react";
 import type { Screen, OrderStatus, OrderStep } from "./types";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { orderActionKey } from '@/lib/api/idempotencyKeys';
-import { formatCrypto, formatFiat, formatRate } from '@/lib/format';
+import { formatCrypto, formatFiat } from '@/lib/format';
 import { getDisplayOrderId } from '@/lib/displayOrderId';
 import { OrderOverviewScreen } from './OrderOverviewScreen';
 
@@ -84,6 +84,8 @@ export const MatchingScreen = ({
   // and the BM-YYMMDD display reference.
   const [createdAt] = useState(() => new Date());
   const [showOverview, setShowOverview] = useState(false);
+  // Timeline is collapsed by default — tap the header chevron to expand.
+  const [showTimeline, setShowTimeline] = useState(false);
   const displayId = getDisplayOrderId(activeOrderId, createdAt);
   const createdTime = createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
@@ -193,13 +195,40 @@ export const MatchingScreen = ({
           </div>
         </motion.div>
 
-        {/* Status timeline — full buyer journey */}
+        {/* Status timeline — collapsible card, closed by default. The header
+            chevron toggles the full buyer journey. */}
         <motion.div
           initial={{ y: 12, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.05 }}
-          className={`rounded-2xl p-4 ${CARD}`}
+          className={`rounded-2xl overflow-hidden ${CARD}`}
         >
+          <button
+            type="button"
+            onClick={() => setShowTimeline((o) => !o)}
+            aria-expanded={showTimeline}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-semibold text-text-primary">Order progress</p>
+              <p className="text-[13px] text-text-tertiary truncate">
+                {TIMELINE[ACTIVE_STEP_INDEX].label} · In progress
+              </p>
+            </div>
+            <ChevronDown
+              className={`w-5 h-5 text-text-tertiary shrink-0 transition-transform ${showTimeline ? "rotate-180" : ""}`}
+            />
+          </button>
+          <AnimatePresence initial={false}>
+            {showTimeline && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-4 pt-1">
           {TIMELINE.map((step, i) => {
             const state: StepState =
               i < ACTIVE_STEP_INDEX ? "done" : i === ACTIVE_STEP_INDEX ? "active" : "upcoming";
@@ -241,6 +270,10 @@ export const MatchingScreen = ({
               </div>
             );
           })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         {/* Order Overview — opens the full order detail view */}
@@ -270,11 +303,10 @@ export const MatchingScreen = ({
           initial={{ y: 12, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.15 }}
-          className="grid grid-cols-4 gap-2"
+          className="grid grid-cols-3 gap-2"
         >
           <SummaryTile icon={<Wallet className="w-4 h-4" />} label="You pay" value={`${fiatSymbol}${formatFiat(pendingTradeData.fiatAmount)}`} />
           <SummaryTile icon={<ArrowDownToLine className="w-4 h-4" />} label="You get" value={`${formatCrypto(pendingTradeData.amount)}`} sub="USDT" />
-          <SummaryTile icon={<Tag className="w-4 h-4" />} label="Rate" value={`${fiatSymbol}${formatRate(currentRate)}`} />
           <SummaryTile icon={<Landmark className="w-4 h-4" />} label="Method" value={pendingTradeData.paymentMethod === "bank" ? "Bank" : "Cash"} />
         </motion.div>
 

@@ -627,6 +627,14 @@ export default function UserDesktopPage() {
                 handleSendMessage={userEffects.handleSendMessage}
                 sendChatMessage={userEffects.sendChatMessage}
                 sendTypingIndicator={userEffects.sendTypingIndicator}
+                showAppeal={orderActions.showAppeal}
+                setShowAppeal={orderActions.setShowAppeal}
+                appealReason={orderActions.appealReason}
+                setAppealReason={orderActions.setAppealReason}
+                appealDescription={orderActions.appealDescription}
+                setAppealDescription={orderActions.setAppealDescription}
+                submitAppeal={orderActions.submitAppeal}
+                isSubmittingAppeal={orderActions.isSubmittingAppeal}
                 showDisputeModal={orderActions.showDisputeModal}
                 setShowDisputeModal={orderActions.setShowDisputeModal}
                 disputeReason={orderActions.disputeReason}
@@ -639,6 +647,7 @@ export default function UserDesktopPage() {
                 respondToResolution={orderActions.respondToResolution}
                 isRespondingToResolution={orderActions.isRespondingToResolution}
                 requestCancelOrder={orderActions.requestCancelOrder}
+                cancelOrderDirect={orderActions.cancelOrderDirect}
                 respondToCancelRequest={orderActions.respondToCancelRequest}
                 isRequestingCancel={orderActions.isRequestingCancel}
                 claimRefund={orderActions.claimRefund}

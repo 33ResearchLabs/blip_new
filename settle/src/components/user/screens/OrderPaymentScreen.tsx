@@ -33,7 +33,6 @@ import {
   Lightbulb,
   Wallet,
   ArrowDownToLine,
-  Tag,
   Info,
   AlertCircle,
   MessageCircle,
@@ -42,7 +41,7 @@ import {
   Bot,
 } from "lucide-react";
 import type { Order, MerchantPaymentMethod } from "./types";
-import { formatCrypto, formatRate, formatCount } from "@/lib/format";
+import { formatCrypto, formatCount } from "@/lib/format";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -483,10 +482,9 @@ export function OrderPaymentScreen({
         </div>
 
         {/* Summary tiles */}
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <SummaryTile icon={<Wallet className="w-4 h-4" />} label="You pay" value={fiatStr} />
           <SummaryTile icon={<ArrowDownToLine className="w-4 h-4" />} label="You get" value={cryptoStr} sub="USDT" />
-          <SummaryTile icon={<Tag className="w-4 h-4" />} label="Rate" value={`${sym}${formatRate(order.merchant.rate)}`} />
           <SummaryTile icon={<Landmark className="w-4 h-4" />} label="Method" value={order.merchant.paymentMethod === "cash" ? "Cash" : "Bank"} />
         </div>
 

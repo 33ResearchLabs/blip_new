@@ -272,11 +272,27 @@ export default function Home() {
   // Keyed per userId so each new account sees it once, returning users never do.
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  const [screen, setScreenRaw] = useState<Screen>("welcome");
-  const [previousScreen, setPreviousScreen] = useState<Screen>("welcome");
+  // Navigation history stack. The last entry is the current screen.
+  // We keep a real stack (not a single previousScreen) so "back" can unwind
+  // history instead of ping-ponging between the last two screens — pressing
+  // back from a support detour used to bounce straight back into it because
+  // setScreen overwrote previousScreen with the screen you were leaving.
+  const [history, setHistory] = useState<Screen[]>(["welcome"]);
+  const screen = history[history.length - 1];
+  const previousScreen =
+    history.length > 1 ? history[history.length - 2] : history[0];
   const setScreen = (s: Screen) => {
-    setPreviousScreen(screen);
-    setScreenRaw(s);
+    setHistory((h) => {
+      const current = h[h.length - 1];
+      if (current === s) return h; // already here — no-op
+      // If the target is already somewhere in history, treat this as a "back"
+      // and unwind to it (pop) rather than pushing a duplicate. This is what
+      // makes every existing `setScreen(previousScreen)` back button pop
+      // correctly and kills the navigation loop.
+      const existingIdx = h.lastIndexOf(s);
+      if (existingIdx !== -1) return h.slice(0, existingIdx + 1);
+      return [...h, s];
+    });
   };
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [activityTab, setActivityTab] = useState<
@@ -995,6 +1011,14 @@ export default function Home() {
               handleSendMessage={userEffects.handleSendMessage}
               sendChatMessage={userEffects.sendChatMessage}
               sendTypingIndicator={userEffects.sendTypingIndicator}
+              showAppeal={orderActions.showAppeal}
+              setShowAppeal={orderActions.setShowAppeal}
+              appealReason={orderActions.appealReason}
+              setAppealReason={orderActions.setAppealReason}
+              appealDescription={orderActions.appealDescription}
+              setAppealDescription={orderActions.setAppealDescription}
+              submitAppeal={orderActions.submitAppeal}
+              isSubmittingAppeal={orderActions.isSubmittingAppeal}
               showDisputeModal={orderActions.showDisputeModal}
               setShowDisputeModal={orderActions.setShowDisputeModal}
               disputeReason={orderActions.disputeReason}
@@ -1007,6 +1031,7 @@ export default function Home() {
               respondToResolution={orderActions.respondToResolution}
               isRespondingToResolution={orderActions.isRespondingToResolution}
               requestCancelOrder={orderActions.requestCancelOrder}
+              cancelOrderDirect={orderActions.cancelOrderDirect}
               respondToCancelRequest={orderActions.respondToCancelRequest}
               isRequestingCancel={orderActions.isRequestingCancel}
               claimRefund={orderActions.claimRefund}

@@ -161,7 +161,7 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
 
         <div className="flex justify-between items-center">
           <span className={`text-xs ${t.label}`}>Fiat</span>
-          <span className="text-[15px] text-primary font-bold font-mono tabular-nums">
+          <span className={`text-[15px] ${t.value} font-bold font-mono tabular-nums`}>
             {formatAmount(data.fiat_amount)} {data.fiat_currency || ''}
           </span>
         </div>

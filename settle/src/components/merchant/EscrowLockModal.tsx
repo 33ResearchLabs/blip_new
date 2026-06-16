@@ -100,19 +100,17 @@ export function EscrowLockModal({
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
             onClick={() => !isLockingEscrow && onClose()}
           />
-          {/* Bottom sheet across phone + tablet (merchant uses the mobile
-              layout up to 1536px); centered + width-capped on large screens.
-              Slides via `y` only so the animation never fights positioning. */}
+          {/* Bottom sheet on phone/tablet; centered + width-capped from `md`
+              up, matching the other order/escrow modals on merchant desktop. */}
           <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
-            className="fixed z-50 inset-x-0 bottom-0 w-full max-w-md mx-auto"
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="fixed z-50 w-full max-w-2xl inset-x-0 bottom-0 mx-auto md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           >
-            <div className={`${S.screen} rounded-t-2xl border border-b-0 border-border-subtle shadow-2xl overflow-hidden pb-safe max-h-[90dvh] overflow-y-auto`}>
-              {/* Drag handle */}
-              <div className="flex justify-center pt-2.5 pb-1">
+            <div className={`${S.screen} rounded-t-2xl md:rounded-2xl border border-b-0 md:border-b border-border-subtle shadow-2xl overflow-hidden pb-safe md:pb-0 max-h-[90dvh] overflow-y-auto`}>
+              {/* Drag handle (mobile bottom-sheet affordance only) */}
+              <div className="flex justify-center pt-2.5 pb-1 md:hidden">
                 <span className="h-1 w-9 rounded-full bg-border-medium" />
               </div>
 
