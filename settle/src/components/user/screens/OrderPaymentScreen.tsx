@@ -500,15 +500,22 @@ export function OrderPaymentScreen({
               {needsPayMethodPick ? "Select an account first" : "I have made the payment"}
             </motion.button>
           )}
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={onCancel}
-            disabled={isCancelling}
-            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
-            Cancel Order
-          </motion.button>
+          {/* Cancel is only valid before payment is sent. Once dbStatus is
+              payment_sent the buyer has already paid and the seller's USDT is
+              escrowed, so CANCEL is no longer an allowed transition (state
+              machine: open/accepted/escrowed only). Hide it to match the
+              backend and OrderTrackingView's CANCELLABLE set. */}
+          {!paymentSent && (
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
+              Cancel Order
+            </motion.button>
+          )}
         </div>
       </div>
     </div>
