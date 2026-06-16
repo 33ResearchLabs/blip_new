@@ -856,20 +856,12 @@ function InstallHelp({
               height: 44,
               borderRadius: 12,
               flexShrink: 0,
+              overflow: "hidden",
               display: "grid",
               placeItems: "center",
-              background: T.black,
             }}
           >
-            <svg viewBox="0 0 70 60" width={24} height={20} fill="none">
-              <path
-                d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28"
-                stroke="#fff"
-                strokeWidth="9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <BlipLogo size={44} alt="Blip" />
           </span>
           <div
             style={{

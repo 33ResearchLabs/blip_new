@@ -561,8 +561,8 @@ function RecaptchaTile({
       >
         {checked && <Check className="w-3.5 h-3.5 text-emerald-500" />}
       </div>
-      <span className="text-sm text-black/80 flex-1">I&apos;m not a robot</span>
-      <div className="flex flex-col items-center pl-2 border-l border-black/10 shrink-0">
+      <span className="text-sm text-black/80 dark:text-white/80 flex-1">I&apos;m not a robot</span>
+      <div className="flex flex-col items-center pl-2 border-l border-black/10 dark:border-white/10 shrink-0">
         <svg width="24" height="24" viewBox="0 0 32 32" aria-label="reCAPTCHA">
           <circle
             cx="16"
@@ -576,8 +576,8 @@ function RecaptchaTile({
           />
           <circle cx="16" cy="16" r="3.5" fill="#4285F4" />
         </svg>
-        <span className="text-[7px] font-bold text-black/40 mt-0.5">reCAPTCHA</span>
-        <span className="text-[6px] text-black/30 leading-none">Privacy&nbsp;-&nbsp;Terms</span>
+        <span className="text-[7px] font-bold text-black/40 dark:text-white/40 mt-0.5">reCAPTCHA</span>
+        <span className="text-[6px] text-black/30 dark:text-white/30 leading-none">Privacy&nbsp;-&nbsp;Terms</span>
       </div>
     </div>
   );

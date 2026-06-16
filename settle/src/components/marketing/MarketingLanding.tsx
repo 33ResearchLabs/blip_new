@@ -57,7 +57,8 @@ export function MarketingLanding() {
       <header>
        <div className="hdr-in">
         <div className="brand">
-          <span className="bolt"><svg viewBox="0 0 70 60" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke="#ffffff" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <span className="bolt"><img src="/brand/blip-icon-192.png" alt="Blip" style={{ height: 17, width: 17, borderRadius: 4, objectFit: "contain" }} /></span>
           <span><span className="b">Blip</span><span className="i">money</span></span>
         </div>
         <div className="nav-r">

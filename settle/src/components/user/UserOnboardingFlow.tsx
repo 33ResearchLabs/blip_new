@@ -10,6 +10,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Shield, Check, AtSign, X, Loader2 } from "lucide-react";
 import { AppPinPad } from "@/components/app-lock/AppPinPad";
+import { BlipLogo } from "@/components/shared/BlipLogo";
 import { setAppPin, markSessionUnlocked, validateAppPinStrength, APP_PIN_LENGTH } from "@/lib/auth/appPin";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 
@@ -212,9 +213,7 @@ function ScreenWelcome({ onNext }: { onNext: () => void }) {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "32px 22px 30px" }}>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }}
         style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <svg viewBox="0 0 70 60" width={14} height={12} fill="none">
-          <path d="M4 36 L16 36 L25 8 L38 52 L47 28 L66 28" stroke={ACC} strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <BlipLogo size={16} alt="Blip" />
         <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: ACC }}>Blip</span>
       </motion.div>
 
