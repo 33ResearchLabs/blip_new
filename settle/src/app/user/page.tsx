@@ -739,6 +739,11 @@ export default function Home() {
 
   return (
     <div
+      // Portal target for full-screen user overlays (e.g. the order chat sheet).
+      // Overlays must portal HERE — not document.body — so they keep the
+      // `.user-scope` theme variables (bg-surface-base etc.) while still
+      // escaping the transformed Panel that breaks `position: fixed`.
+      id="user-scope-root"
       className={`user-scope ${isUserLight ? "user-light" : ""}`}
       style={
         isDesktop

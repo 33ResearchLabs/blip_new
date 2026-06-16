@@ -35,10 +35,14 @@ const TELEGRAM_DM_URL = "https://t.me/blipmoney_community";
 const TELEGRAM_COMMUNITY_URL = "https://t.me/blipmoney_community";
 
 // Only return to known-safe parents so a transient flow can't be re-entered
-// with stale state. Mirrors OrderDetailScreen.tsx.
+// with stale state. Mirrors OrderDetailScreen.tsx. "order" is included because
+// the active-order detail screen is where the "Need help" button lives, and its
+// `activeOrder` persists across a support detour (keyed by activeOrderId in the
+// parent), so returning to it is safe — back must land there, not on profile.
 const SAFE_BACK_SCREENS = new Set<Screen>([
   "home",
   "orders",
+  "order",
   "profile",
   "chats",
   "notifications",

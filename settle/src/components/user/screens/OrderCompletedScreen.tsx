@@ -20,6 +20,7 @@ import {
   Clock,
   Star,
   ChevronRight,
+  FileText,
   Lightbulb,
   Bot,
 } from "lucide-react";
@@ -51,6 +52,7 @@ export interface OrderCompletedScreenProps {
   onRate: (n: number) => void;
   onReviewTextChange: (s: string) => void;
   onViewProfile: () => void;
+  onViewOverview: () => void;
   onHelp: () => void;
   onBackHome: () => void;
 }
@@ -63,6 +65,7 @@ export function OrderCompletedScreen({
   onRate,
   onReviewTextChange,
   onViewProfile,
+  onViewOverview,
   onHelp,
   onBackHome,
 }: OrderCompletedScreenProps) {
@@ -229,6 +232,24 @@ export function OrderCompletedScreen({
               Your reputation increases when orders are completed successfully.
             </p>
           </div>
+        </div>
+
+        {/* Order Overview — opens the full order detail view. Mirrors the
+            card on the matching/tracking/payment screens. */}
+        <div className={`rounded-2xl overflow-hidden ${CARD}`}>
+          <button
+            onClick={onViewOverview}
+            className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover"
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
+              <FileText className="w-5 h-5 text-accent" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-medium text-text-primary">Order Overview</p>
+              <p className="text-[13px] text-text-tertiary">View order details</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" />
+          </button>
         </div>
 
         {/* Back to home */}

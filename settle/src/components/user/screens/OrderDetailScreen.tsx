@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -16,6 +17,7 @@ import {
   Navigation,
   ExternalLink,
   AlertTriangle,
+  HelpCircle,
   Loader2,
   ArrowUpRight,
   ArrowDownLeft,
@@ -33,6 +35,7 @@ import { explorerUrl } from "@/lib/solana/networkLabel";
 import type { Screen, Order, MerchantPaymentMethod } from "./types";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import { OrderTrackingView } from "./OrderTrackingView";
+import { OrderOverviewScreen } from "./OrderOverviewScreen";
 import { OrderPaymentScreen } from "./OrderPaymentScreen";
 import { OrderCompletedScreen } from "./OrderCompletedScreen";
 import { getDisplayOrderId } from "@/lib/displayOrderId";
@@ -57,6 +60,37 @@ import { useCounterpartyProfile } from "@/components/shared/trade/useCounterpart
 import { SURFACES } from "@/components/shared/limits/types";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
+
+// Resolve the merchant's receiving payment-method rows (account name, IBAN /
+// UPI, …) for the itemised Order Overview. Same source precedence as the
+// payment screen: merchantPaymentMethod → lockedPaymentMethod → raw merchant
+// fields. The caller only passes these once escrow is locked, since that's
+// when the buyer is allowed to see them.
+function deriveOverviewPaymentRows(
+  order: Order,
+): { label: string; value: string; mono?: boolean }[] {
+  const rows: { label: string; value: string; mono?: boolean }[] = [];
+  const mpm = order.merchantPaymentMethod;
+  const lpm = order.lockedPaymentMethod;
+  if (mpm) {
+    const isUpi =
+      (mpm.type || "").toLowerCase() === "upi" ||
+      (typeof mpm.details === "string" && mpm.details.includes("@"));
+    rows.push({ label: isUpi ? "UPI Name" : "Account Name", value: mpm.name || "—" });
+    rows.push({ label: isUpi ? "UPI ID" : "Account No. / IBAN", value: mpm.details || "—", mono: true });
+  } else if (lpm) {
+    const d = lpm.details || {};
+    if (d.bank_name) rows.push({ label: "Bank Name", value: d.bank_name });
+    if (d.account_name) rows.push({ label: "Account Name", value: d.account_name });
+    if (d.iban) rows.push({ label: "IBAN / Account No.", value: d.iban, mono: true });
+    if (d.upi_id) rows.push({ label: "UPI ID", value: d.upi_id, mono: true });
+  } else {
+    if (order.merchant.bank) rows.push({ label: "Bank Name", value: order.merchant.bank });
+    if (order.merchant.accountName) rows.push({ label: "Account Name", value: order.merchant.accountName });
+    if (order.merchant.iban) rows.push({ label: "IBAN / Account No.", value: order.merchant.iban, mono: true });
+  }
+  return rows;
+}
 
 // Reusable class strings — mirror Card / SectionLabel / CardLabel conventions
 const CARD = "bg-surface-card border border-border-subtle";
@@ -353,6 +387,10 @@ export const OrderDetailScreen = ({
   // Order receipt sheet — opened by tapping the summary card.
   const [showReceipt, setShowReceipt] = useLocalState(false);
   const [showTracker, setShowTracker] = useLocalState(false);
+  // Itemised order-overview overlay (the collapsible Order/Transaction/Payment
+  // details view). Opened directly by the "Order Overview" cards on the
+  // payment & completed screens — one tap, no tracker hop in between.
+  const [showOrderOverview, setShowOrderOverview] = useLocalState(false);
 
   // Receipt timestamps. Dates only — locale fixed to en-US for consistency
   // with the @/lib/format number rules.
@@ -795,7 +833,7 @@ export const OrderDetailScreen = ({
   }
 
   return (
-    <div className="flex-1 min-h-[100dvh] bg-surface-base">
+    <div className="flex-1 min-h-0 flex flex-col bg-surface-base">
       {/* Header — matches SupportScreen: back + title left-aligned, action pinned right */}
       <div className="px-5 pt-4 pb-3 flex items-center gap-3">
         <button
@@ -834,7 +872,7 @@ export const OrderDetailScreen = ({
         />
       )}
 
-      <div className={`flex-1 px-5 overflow-auto pb-6 ${minimised ? "hidden" : ""}`}>
+      <div className={`flex-1 min-h-0 px-5 overflow-y-auto pb-6 ${minimised ? "hidden" : ""}`}>
         {/* Consumer-style progress stepper — only for SELL/QR orders.
             Sits above the existing summary card so the technical details
             stay available for users who scroll, but the headline is the
@@ -2604,7 +2642,7 @@ export const OrderDetailScreen = ({
 
                     {activeOrder.step === 3 &&
                       activeOrder.type === "sell" &&
-                      activeOrder.dbStatus !== "disputed" && (
+                      activeOrder.dbStatus === "payment_sent" && (
                         <div className="mt-3">
                           <div className={`rounded-xl p-3 mb-3 ${CARD_STRONG}`}>
                             <p className="text-[13px] text-text-primary">
@@ -2804,9 +2842,13 @@ export const OrderDetailScreen = ({
           </div>
           </div>
 
-          {/* Cancel & Dispute Buttons - Show for active orders (step 2-3) */}
-        {activeOrder.step >= 2 &&
-          activeOrder.step < 4 &&
+          {/* Cancel & Dispute Buttons.
+              CANCEL is only valid before payment is sent (state machine:
+              open/accepted/escrowed). step===2 covers accepted / escrow_pending
+              / escrowed / payment_pending; step 3 (payment_sent /
+              payment_confirmed / releasing) is excluded so Cancel can't render
+              once the buyer has paid. */}
+        {activeOrder.step === 2 &&
           activeOrder.status !== "disputed" &&
           !activeOrder.cancelRequest && (
             <button
@@ -2846,9 +2888,10 @@ export const OrderDetailScreen = ({
               Cancel & Refund
             </button>
           )}
-        {activeOrder.step >= 2 &&
-          activeOrder.step < 4 &&
-          activeOrder.status !== "disputed" && (
+        {/* DISPUTE is only valid from escrowed / payment_sent (state machine).
+            In every other state the user instead gets the always-on "Need
+            help" button below. */}
+        {["escrowed", "payment_sent"].includes(activeOrder.dbStatus || "") && (
             <button
               onClick={() => setShowDisputeModal(true)}
               className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 text-error hover:bg-error-dim transition-colors`}
@@ -2857,6 +2900,16 @@ export const OrderDetailScreen = ({
               Report Issue
             </button>
           )}
+
+        {/* Need help — always available support path (navigation only, no
+            order-state mutation, so it needs no gate). */}
+        <button
+          onClick={() => setScreen("support")}
+          className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 text-text-secondary hover:bg-surface-hover transition-colors`}
+        >
+          <HelpCircle className="w-4 h-4" />
+          Need help
+        </button>
         </div>
 
         {/* Counterparty profile — opened by tapping the merchant name/avatar above. */}
@@ -3010,7 +3063,10 @@ export const OrderDetailScreen = ({
               displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
               onClose={() => setScreen(previousScreen || "orders")}
               onOpenOverview={() => setShowTracker(true)}
+              onViewOverview={() => setShowOrderOverview(true)}
               onOpenChat={handleOpenChat}
+              onViewProfile={() => setShowProfile(true)}
+              onNeedHelp={() => setScreen("support")}
               onMarkPaymentSent={markPaymentSent}
               onCancel={() => requestCancelOrder()}
               onAppeal={() => setShowDisputeModal(true)}
@@ -3038,6 +3094,7 @@ export const OrderDetailScreen = ({
               onRate={setRating}
               onReviewTextChange={setReviewText}
               onViewProfile={() => setShowProfile(true)}
+              onViewOverview={() => setShowOrderOverview(true)}
               onHelp={() => setScreen("support")}
               onBackHome={() => {
                 if (rating > 0 && activeOrder.userRating == null && submitReview) {
@@ -3068,6 +3125,43 @@ export const OrderDetailScreen = ({
               onCancel={() => {
                 requestCancelOrder();
                 setShowTracker(false);
+              }}
+              isCancelling={isRequestingCancel}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Itemised Order Overview — opened directly by the "Order Overview"
+          cards on the payment/completed screens (z above the z-40 screen
+          overlays and the z-50 tracker). */}
+      <AnimatePresence>
+        {showOrderOverview && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 320, mass: 0.8 }}
+            className={`fixed inset-0 z-[60] mx-auto ${maxW} flex flex-col ${SHEET_BG}`}
+          >
+            <OrderOverviewScreen
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              status={String(activeOrder.dbStatus || activeOrder.status || "")}
+              type={activeOrder.type}
+              cryptoAmount={parseFloat(activeOrder.cryptoAmount)}
+              fiatAmount={parseFloat(activeOrder.fiatAmount)}
+              rate={Number(activeOrder.merchant?.rate)}
+              fiatCode={activeOrder.fiatCode}
+              paymentMethod={activeOrder.merchant?.paymentMethod === "cash" ? "cash" : "bank"}
+              createdAt={activeOrder.createdAt ? new Date(activeOrder.createdAt) : new Date()}
+              paymentLocked={["escrowed", "payment_pending", "payment_sent", "completed"].includes(
+                String(activeOrder.dbStatus || activeOrder.status || "").toLowerCase(),
+              )}
+              paymentRows={deriveOverviewPaymentRows(activeOrder)}
+              onClose={() => setShowOrderOverview(false)}
+              onCancel={() => {
+                requestCancelOrder();
+                setShowOrderOverview(false);
               }}
               isCancelling={isRequestingCancel}
             />
@@ -3208,9 +3302,17 @@ export const OrderDetailScreen = ({
         )}
       </AnimatePresence>
 
-      {/* Chat */}
-      <AnimatePresence>
-        {showChat && (
+      {/* Chat — portaled OUT of the transformed Panel ancestor
+          (left-1/2 -translate-x-1/2 + framer slide), which would otherwise
+          contain the `fixed` overlay and make it float over the order content
+          instead of covering the screen. We target #user-scope-root (the
+          `.user-scope` wrapper) rather than document.body so the sheet keeps
+          the user-theme CSS variables (bg-surface-base etc.) — body is outside
+          .user-scope, where those vars are undefined and the sheet renders
+          transparent. */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {showChat && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
@@ -3732,8 +3834,10 @@ export const OrderDetailScreen = ({
               </div>
             </motion.div>
           </>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.getElementById("user-scope-root") ?? document.body,
+      )}
 
       {/* Scratch-card reward — auto-opens once on first land for SELL/QR
           orders with an unrevealed pending reward. After reveal the reward

@@ -20,6 +20,8 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
+  ChevronRight,
+  FileText,
   HelpCircle,
   Check,
   Copy,
@@ -120,7 +122,10 @@ export interface OrderPaymentScreenProps {
   displayId: string;
   onClose: () => void;
   onOpenOverview: () => void;
+  onViewOverview: () => void;
   onOpenChat: () => void;
+  onViewProfile: () => void;
+  onNeedHelp: () => void;
   onMarkPaymentSent: () => void;
   onCancel: () => void;
   onAppeal: () => void;
@@ -138,7 +143,10 @@ export function OrderPaymentScreen({
   displayId,
   onClose,
   onOpenOverview,
+  onViewOverview,
   onOpenChat,
+  onViewProfile,
+  onNeedHelp,
   onMarkPaymentSent,
   onCancel,
   onAppeal,
@@ -429,34 +437,42 @@ export function OrderPaymentScreen({
 
         {/* Merchant card */}
         <div className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}>
-          <div className="relative shrink-0">
-            <div className="w-12 h-12 rounded-full overflow-hidden bg-accent/15 flex items-center justify-center">
-              {order.merchant.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={order.merchant.avatarUrl} alt={order.merchant.name} className="w-full h-full object-cover" />
-              ) : (
-                <Bot className="w-6 h-6 text-accent" />
+          {/* Avatar + name open the merchant profile sheet (was inert — the
+              parent never wired a profile handler for this screen). */}
+          <button
+            onClick={() => order.merchant.name && onViewProfile()}
+            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+            aria-label="View merchant profile"
+          >
+            <div className="relative shrink-0">
+              <div className="w-12 h-12 rounded-full overflow-hidden bg-accent/15 flex items-center justify-center">
+                {order.merchant.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={order.merchant.avatarUrl} alt={order.merchant.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Bot className="w-6 h-6 text-accent" />
+                )}
+              </div>
+              {order.merchant.isOnline && (
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-surface-card" />
               )}
             </div>
-            {order.merchant.isOnline && (
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-surface-card" />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-[15px] font-semibold text-text-primary truncate">{order.merchant.name}</p>
-              {order.merchant.rating > 0 && (
-                <span className="inline-flex items-center gap-0.5 text-[12px] font-medium text-text-secondary shrink-0">
-                  <Star className="w-3.5 h-3.5 text-warning fill-warning" />
-                  {formatCrypto(order.merchant.rating, { decimals: 1 })}
-                </span>
-              )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[15px] font-semibold text-text-primary truncate">{order.merchant.name}</p>
+                {order.merchant.rating > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-[12px] font-medium text-text-secondary shrink-0">
+                    <Star className="w-3.5 h-3.5 text-warning fill-warning" />
+                    {formatCrypto(order.merchant.rating, { decimals: 1 })}
+                  </span>
+                )}
+              </div>
+              <p className="text-[12px] text-text-tertiary">
+                {order.merchant.trades > 0 ? `${formatCount(order.merchant.trades)} trades` : "New merchant"}
+                {order.merchant.isOnline ? " · Online" : ""}
+              </p>
             </div>
-            <p className="text-[12px] text-text-tertiary">
-              {order.merchant.trades > 0 ? `${formatCount(order.merchant.trades)} trades` : "New merchant"}
-              {order.merchant.isOnline ? " · Online" : ""}
-            </p>
-          </div>
+          </button>
           <button
             onClick={onOpenChat}
             className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-surface-active"
@@ -487,6 +503,25 @@ export function OrderPaymentScreen({
           </div>
         </div>
 
+        {/* Order Overview — opens the itemised order-detail view directly
+            (one tap; the header info button still opens the step tracker).
+            Mirrors the card on the matching/tracking screens. */}
+        <div className={`rounded-2xl overflow-hidden ${CARD}`}>
+          <button
+            onClick={onViewOverview}
+            className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover"
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
+              <FileText className="w-5 h-5 text-accent" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-medium text-text-primary">Order Overview</p>
+              <p className="text-[13px] text-text-tertiary">View order details</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" />
+          </button>
+        </div>
+
         {/* Actions */}
         <div className="space-y-3">
           {escrowLocked && (
@@ -500,15 +535,29 @@ export function OrderPaymentScreen({
               {needsPayMethodPick ? "Select an account first" : "I have made the payment"}
             </motion.button>
           )}
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={onCancel}
-            disabled={isCancelling}
-            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border disabled:opacity-50 flex items-center justify-center gap-2"
+          {/* Cancel is only valid before payment is sent. Once dbStatus is
+              payment_sent the buyer has already paid and the seller's USDT is
+              escrowed, so CANCEL is no longer an allowed transition (state
+              machine: open/accepted/escrowed only). Appeal is the action here. */}
+          {!paymentSent && (
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
+              Cancel Order
+            </motion.button>
+          )}
+          {/* Need help — always available support path (navigation only). */}
+          <button
+            onClick={onNeedHelp}
+            className="w-full py-3 rounded-2xl text-[14px] font-medium text-text-secondary hover:bg-surface-hover transition-colors flex items-center justify-center gap-2"
           >
-            {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
-            Cancel Order
-          </motion.button>
+            <HelpCircle className="w-4 h-4" />
+            Need help
+          </button>
         </div>
       </div>
     </div>
