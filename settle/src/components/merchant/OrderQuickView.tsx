@@ -1475,10 +1475,10 @@ export function OrderQuickView({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className={`fixed z-50 inset-x-0 bottom-0 mx-auto w-full ${isActiveOrder ? "max-w-2xl" : isAcceptableBuyOrder ? "max-w-xl" : "max-w-md"} lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[90%] max-h-[90dvh] overflow-y-auto overflow-x-hidden rounded-t-2xl lg:rounded-2xl shadow-2xl pb-safe lg:pb-0`} style={{ background: "#0e0e10", border: "1px solid rgba(255,255,255,0.08)" }}
+            className={`fixed z-50 inset-x-0 bottom-0 mx-auto w-full ${isActiveOrder ? "max-w-2xl" : isAcceptableBuyOrder ? "max-w-xl" : "max-w-md"} lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[90%] max-h-[90dvh] flex flex-col overflow-hidden rounded-t-2xl lg:rounded-2xl shadow-2xl pb-safe lg:pb-0`} style={{ background: "#0e0e10", border: "1px solid rgba(255,255,255,0.08)" }}
           >
             {/* Header */}
-            <div className="px-5 py-4 border-b border-foreground/[0.04] flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-foreground/[0.04] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl bg-foreground/5 flex items-center justify-center text-2xl border border-foreground/[0.04]">
                   {selectedOrder.emoji}
@@ -1519,6 +1519,8 @@ export function OrderQuickView({
               </button>
             </div>
 
+            {/* Scrollable middle — fills remaining height between pinned header & footer */}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
             {/* Body */}
             <div className="p-5 space-y-4">
               {isAcceptableBuyOrder ? (
@@ -1954,8 +1956,11 @@ export function OrderQuickView({
               );
             })()}
 
+            </div>
+            {/* End scrollable middle */}
+
             {/* Actions — Backend-driven: only show what enrichOrderResponse allows */}
-            <div className="px-5 pb-5 space-y-2">
+            <div className="px-5 pt-4 pb-5 space-y-2 shrink-0 border-t border-foreground/[0.04]">
               {/* Own pending broadcast buy: the only action is to cancel (no
                   escrow yet). Shown explicitly so it doesn't depend on the
                   feed enriching primary/secondary actions. */}

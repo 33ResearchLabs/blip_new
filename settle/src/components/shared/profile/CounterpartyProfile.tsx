@@ -132,11 +132,11 @@ export function CounterpartyProfile({
             {data.username && (
               <p className="text-[13px] text-text-tertiary">@{data.username}</p>
             )}
-            <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-[11px] font-bold bg-accent/10 text-accent border border-accent/20">
+            <span className="flex w-fit items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-[11px] font-bold bg-accent/10 text-accent border border-accent/20">
               <Award className="w-3.5 h-3.5" />
               {data.tierLabel}
             </span>
-            <p className="text-[11px] text-text-tertiary mt-2 inline-flex items-center gap-1.5 flex-wrap">
+            <p className="text-[11px] text-text-tertiary mt-2 flex items-center gap-1.5 flex-wrap">
               <Calendar className="w-3 h-3" />
               Member since {monthYear(data.memberSince)}
               {active && (
@@ -218,7 +218,7 @@ export function CounterpartyProfile({
               <p className="text-[12px] text-text-secondary flex-1">
                 Security: <span className="font-bold text-text-primary">{data.verifications.securityLevel}</span>
               </p>
-              <ChevronRight className="w-4 h-4 text-text-tertiary" />
+              {/* <ChevronRight className="w-4 h-4 text-text-tertiary" /> */}
             </div>
           </div>
 
@@ -230,10 +230,10 @@ export function CounterpartyProfile({
               <StatRow icon={<Gauge className="w-4 h-4" />} label="Trade Volume" value={formatFiat(data.stats.volumeUsd, "USD")} />
               <StatRow icon={<Clock className="w-4 h-4" />} label="Avg. Trade Size" value={formatFiat(data.stats.avgTradeUsd, "USD")} />
             </div>
-            <div className="mt-3 flex items-center justify-between text-[12px] text-text-secondary pt-2 border-t border-border-subtle">
+            {/* <div className="mt-3 flex items-center justify-between text-[12px] text-text-secondary pt-2 border-t border-border-subtle">
               <span>View All Stats</span>
               <ChevronRight className="w-4 h-4 text-text-tertiary" />
-            </div>
+            </div> */}
           </div>
         </div>
 
