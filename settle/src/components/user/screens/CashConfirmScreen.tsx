@@ -37,7 +37,7 @@ export const CashConfirmScreen = ({
 }: CashConfirmScreenProps) => {
   return (
     <>
-      <div className="h-12" />
+      <div className="h-[max(env(safe-area-inset-top),1rem)]" />
 
       <div className="px-5 py-4 flex items-center">
         <button onClick={() => { setScreen("home"); setSelectedOffer(null); }} className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle">
