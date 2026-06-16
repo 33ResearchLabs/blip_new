@@ -12,8 +12,9 @@
  * financial action (cancel) is delegated to the caller.
  */
 
-import { motion } from "framer-motion";
-import { ChevronLeft, FileText, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown, ChevronLeft, Loader2 } from "lucide-react";
 import { formatCrypto, formatRate } from "@/lib/format";
 
 const CARD = "bg-surface-card border border-border-subtle";
@@ -127,25 +128,22 @@ export function OrderOverviewScreen({
 
   return (
     <div className="bg-surface-base flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-      <div className="h-12" />
+      <div className="h-[max(env(safe-area-inset-top),1rem)]" />
 
       {/* Header */}
-      <div className="px-5 py-4 flex items-center gap-3">
+      <div className="px-5 py-4 flex items-center justify-between gap-3">
         <button
           onClick={onClose}
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 -ml-1"
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle"
           aria-label="Back"
         >
-          <ChevronLeft className="w-6 h-6 text-text-secondary" />
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
-        <div className="flex-1 flex flex-col items-center">
-          <div className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-accent" />
-            <h1 className="text-[18px] font-semibold text-text-primary">Order Overview</h1>
-          </div>
-          <p className="text-[12px] text-text-tertiary">Order #{displayId}</p>
+        <div className="text-center flex-1 min-w-0">
+          <h1 className="text-[17px] font-semibold text-text-primary truncate">Order Overview</h1>
+          <p className="text-[12px] text-text-tertiary truncate">Order #{displayId}</p>
         </div>
-        <div className="w-9 shrink-0" />
+        <div className="w-9 h-9 shrink-0" />
       </div>
 
       <div className="px-5 pb-10 space-y-4">
@@ -245,11 +243,44 @@ export function OrderOverviewScreen({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// Collapsible card. Closed by default so the overview opens compact; tapping
+// the header toggles the body with a height animation and rotates the chevron.
+function Section({
+  title,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={`rounded-2xl ${CARD}`}>
-      <p className="text-[15px] font-semibold text-text-primary px-4 pt-4 pb-1">{title}</p>
-      <div className="divide-y divide-border-subtle px-4">{children}</div>
+    <div className={`rounded-2xl ${CARD} overflow-hidden`}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left"
+      >
+        <span className="text-[15px] font-semibold text-text-primary">{title}</span>
+        <ChevronDown
+          className={`w-5 h-5 text-text-tertiary shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="divide-y divide-border-subtle px-4 pb-2">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

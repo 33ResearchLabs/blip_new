@@ -75,20 +75,19 @@ export function OrderCompletedScreen({
 
   return (
     <div className="bg-surface-base flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-      <div className="h-12" />
+      <div className="h-[max(env(safe-area-inset-top),1rem)]" />
 
       {/* Header */}
       <div className="px-5 py-4 flex items-center justify-between gap-3">
-        <button onClick={onBackHome} className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 -ml-1" aria-label="Back">
-          <ChevronLeft className="w-6 h-6 text-text-secondary" />
+        <button onClick={onBackHome} className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle" aria-label="Back">
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
         <div className="text-center flex-1 min-w-0">
-          <h1 className="text-[18px] font-semibold text-text-primary truncate">Order Completed</h1>
+          <h1 className="text-[17px] font-semibold text-text-primary truncate">Order Completed</h1>
           <p className="text-[12px] text-text-tertiary truncate">Order #{displayId}</p>
         </div>
-        <button onClick={onHelp} className="flex items-center gap-1 shrink-0 text-text-secondary" aria-label="Help">
-          <HelpCircle className="w-5 h-5" />
-          <span className="text-[13px]">Help</span>
+        <button onClick={onHelp} className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle" aria-label="Help">
+          <HelpCircle className="w-5 h-5 text-text-secondary" />
         </button>
       </div>
 

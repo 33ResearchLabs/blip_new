@@ -192,7 +192,7 @@ export function OrderTrackingView({
   return (
     <div className="relative flex-1 min-h-0 flex flex-col bg-surface-base">
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-      <div className="h-12" />
+      <div className="h-[max(env(safe-area-inset-top),1rem)]" />
 
       {/* Header */}
       <div className="px-5 py-4 flex items-center justify-between gap-3">
