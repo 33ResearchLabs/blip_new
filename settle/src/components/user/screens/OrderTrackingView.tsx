@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Check,
   Clock,
   HelpCircle,
@@ -146,6 +147,8 @@ export interface OrderTrackingViewProps {
   /** Reuses the parent's cancel handler — no state-machine logic lives here. */
   onCancel: () => void;
   isCancelling: boolean;
+  /** Opens the support/help flow — wired to the header help (?) button. */
+  onOpenSupport: () => void;
 }
 
 export function OrderTrackingView({
@@ -154,8 +157,11 @@ export function OrderTrackingView({
   onClose,
   onCancel,
   isCancelling,
+  onOpenSupport,
 }: OrderTrackingViewProps) {
   const [showOverview, setShowOverview] = useState(false);
+  // Timeline is collapsed by default — tap the header chevron to expand.
+  const [showTimeline, setShowTimeline] = useState(false);
   const dbStatus = String(order.dbStatus || order.status || "").toLowerCase();
   const isTerminal = TERMINAL.has(dbStatus);
   const isComplete = dbStatus === "completed";
@@ -210,9 +216,9 @@ export function OrderTrackingView({
           <p className="text-[12px] text-text-tertiary truncate">Order #{displayId}</p>
         </div>
         <button
-          onClick={() => setShowOverview(true)}
+          onClick={onOpenSupport}
           className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle"
-          aria-label="Order info"
+          aria-label="Help & support"
         >
           <HelpCircle className="w-5 h-5 text-text-secondary" />
         </button>
@@ -282,13 +288,39 @@ export function OrderTrackingView({
           </motion.div>
         )}
 
-        {/* Timeline */}
+        {/* Timeline — collapsible card, closed by default. */}
         <motion.div
           initial={{ y: 12, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.05 }}
-          className={`rounded-2xl p-4 ${CARD}`}
+          className={`rounded-2xl overflow-hidden ${CARD}`}
         >
+          <button
+            type="button"
+            onClick={() => setShowTimeline((o) => !o)}
+            aria-expanded={showTimeline}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-semibold text-text-primary">Order progress</p>
+              <p className="text-[13px] text-text-tertiary truncate">
+                {activeIdx >= 0 && TIMELINE[activeIdx] ? TIMELINE[activeIdx].label : banner.title}
+              </p>
+            </div>
+            <ChevronDown
+              className={`w-5 h-5 text-text-tertiary shrink-0 transition-transform ${showTimeline ? "rotate-180" : ""}`}
+            />
+          </button>
+          <AnimatePresence initial={false}>
+            {showTimeline && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-4 pt-1">
           {TIMELINE.map((step, i) => {
             const state: StepState =
               isComplete || i < activeIdx || i === 0
@@ -326,6 +358,10 @@ export function OrderTrackingView({
               </div>
             );
           })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         {/* Summary tiles */}

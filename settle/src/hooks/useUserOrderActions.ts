@@ -75,6 +75,15 @@ export function useUserOrderActions({
     [setOrders],
   );
 
+  // Appeal state — an appeal is a LIGHTWEIGHT message posted into the order
+  // chat so the counterparty sees the issue. It is NOT a dispute: no escrow
+  // freeze, no status change. If the appeal doesn't resolve the problem, a
+  // formal dispute is raised separately (added later).
+  const [showAppeal, setShowAppeal] = useState(false);
+  const [appealReason, setAppealReason] = useState("");
+  const [appealDescription, setAppealDescription] = useState("");
+  const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false);
+
   // Dispute state
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
@@ -610,6 +619,55 @@ export function useUserOrderActions({
     }
   };
 
+  // Raise an appeal — posts the reason + details as a message into the order
+  // chat (reaches the counterparty in the order chat + their DM inbox). This is
+  // NOT a dispute: it never touches escrow or the order status.
+  const submitAppeal = async () => {
+    if (!activeOrder || !userId || !appealReason) return;
+
+    const APPEAL_REASON_LABELS: Record<string, string> = {
+      merchant_not_responding: "Merchant is not responding",
+      payment_issue: "Payment issue",
+      extra_payment_request: "Merchant requested extra payment",
+      other: "Other issue",
+    };
+
+    setIsSubmittingAppeal(true);
+    try {
+      const label = APPEAL_REASON_LABELS[appealReason] || appealReason;
+      const content = `🙋 Appeal raised — ${label}${appealDescription ? `\n${appealDescription}` : ""}`;
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sender_type: "user",
+          sender_id: userId,
+          content,
+          message_type: "text",
+        }),
+      });
+      if (res.ok) {
+        setShowAppeal(false);
+        setAppealReason("");
+        setAppealDescription("");
+        playSound("send");
+        showAlert(
+          "Appeal sent",
+          "Your appeal has been posted to the order chat. The merchant will be notified.",
+          "success",
+        );
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.showWarning(data.error || "Failed to send appeal. Please try again.");
+      }
+    } catch (err) {
+      console.error("Failed to submit appeal:", err);
+      toast.showWarning("Failed to send appeal");
+    } finally {
+      setIsSubmittingAppeal(false);
+    }
+  };
+
   const submitDispute = async () => {
     if (!activeOrder || !userId || !disputeReason) return;
 
@@ -880,6 +938,53 @@ export function useUserOrderActions({
     }
   };
 
+  // Direct, unilateral cancel via the state-machine action endpoint. Used
+  // PRE-escrow (status accepted / escrow_pending), where no crypto is locked
+  // so the buyer can cancel without the counterparty's approval. Mirrors
+  // MatchingScreen's open-order cancel. The mutual cancel-request flow
+  // (requestCancelOrder) stays reserved for POST-escrow, where locked funds
+  // mean the other party must agree. Routing pre-escrow cancels here fixes the
+  // "Cancel Order does nothing" bug on the waiting-for-escrow screen, where
+  // cancel-request either 400s (escrow_pending) or silently records a
+  // merchant-approval request that never resolves (accepted).
+  const cancelOrderDirect = async (reason?: string) => {
+    if (!activeOrder || !userId) return;
+    setIsRequestingCancel(true);
+    try {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/action`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": orderActionKey(activeOrder.id, "CANCEL"),
+        },
+        body: JSON.stringify({
+          action: "CANCEL",
+          actor_type: "user",
+          actor_id: userId,
+          reason: reason || "User cancelled order",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        playSound("click");
+        optimisticOrderUpdate(activeOrder.id, {
+          status: "cancelled" as OrderStatus,
+          dbStatus: "cancelled",
+        });
+        fetchOrders(userId);
+      } else {
+        playSound("error");
+        showAlert("Error", data.error || "Failed to cancel order", "error");
+      }
+    } catch (err) {
+      console.error("Failed to cancel order:", err);
+      playSound("error");
+      showAlert("Error", "Failed to cancel order", "error");
+    } finally {
+      setIsRequestingCancel(false);
+    }
+  };
+
   const claimRefund = async () => {
     if (!activeOrder || !userId || isClaimingRefund) return;
     setIsClaimingRefund(true);
@@ -1066,6 +1171,15 @@ export function useUserOrderActions({
   );
 
   return {
+    // Appeal (lightweight chat message to the counterparty)
+    showAppeal,
+    setShowAppeal,
+    appealReason,
+    setAppealReason,
+    appealDescription,
+    setAppealDescription,
+    isSubmittingAppeal,
+    submitAppeal,
     // Dispute
     showDisputeModal,
     setShowDisputeModal,
@@ -1087,6 +1201,7 @@ export function useUserOrderActions({
     // Cancel
     isRequestingCancel,
     requestCancelOrder,
+    cancelOrderDirect,
     respondToCancelRequest,
     // Refund recovery (user-triggered retry for stuck on-chain refunds)
     isClaimingRefund,
