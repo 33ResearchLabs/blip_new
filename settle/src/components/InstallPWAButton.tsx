@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, X, Share2, Plus, MoreVertical } from "lucide-react";
 
@@ -30,6 +31,10 @@ export function InstallPWAButton({ app = "user" }: Props) {
   const [installed, setInstalled] = useState(false);
   const [showSheet, setShowSheet] = useState(false);
   const [platform, setPlatform] = useState<"ios" | "android" | "desktop">("desktop");
+  // Only portal after mount so SSR and first client render agree (document is
+  // unavailable on the server).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const appName = app === "merchant" ? "Blip Market Merchant" : "Blip Market";
 
@@ -98,9 +103,11 @@ export function InstallPWAButton({ app = "user" }: Props) {
         Download
       </button>
 
-      <AnimatePresence>
-        {showSheet && (
-          <>
+      {mounted &&
+        createPortal(
+          <AnimatePresence>
+            {showSheet && (
+              <>
             <motion.div
               className="fixed inset-0 z-[150] bg-black/70"
               initial={{ opacity: 0 }}
@@ -192,9 +199,11 @@ export function InstallPWAButton({ app = "user" }: Props) {
                 </button>
               </div>
             </motion.div>
-          </>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body,
         )}
-      </AnimatePresence>
     </>
   );
 }

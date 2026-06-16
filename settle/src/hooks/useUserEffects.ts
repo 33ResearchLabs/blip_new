@@ -86,8 +86,8 @@ export function useUserEffects({
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       const notification = new Notification(title, {
         body,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: '/brand/blip-icon-192.png',
+        badge: '/brand/blip-icon-192.png',
         tag: orderId || 'chat-message',
       });
       notification.onclick = () => {
