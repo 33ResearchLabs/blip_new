@@ -36,6 +36,8 @@ import { PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
   getAccount,
+  TokenAccountNotFoundError,
+  TokenInvalidAccountOwnerError,
 } from '@solana/spl-token';
 import * as anchor from '@coral-xyz/anchor';
 import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
@@ -567,9 +569,21 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         const tokenAccount = await getAccount(connection, usdtAta);
         // USDT has 6 decimals
         setUsdtBalance(Number(tokenAccount.amount) / 1_000_000);
-      } catch {
-        // Token account doesn't exist yet
-        setUsdtBalance(0);
+      } catch (tokenErr) {
+        // Only a genuinely-missing token account means the balance is 0.
+        // An RPC error (429 Too Many Requests / timeout / network) must NOT
+        // clobber the last known balance to 0 — that's the "balance shows 0"
+        // bug under a throttling RPC. Leave the previous value in place.
+        if (
+          tokenErr instanceof TokenAccountNotFoundError ||
+          tokenErr instanceof TokenInvalidAccountOwnerError
+        ) {
+          setUsdtBalance(0);
+        } else {
+          logger.warn('[SolanaWallet] USDT balance fetch failed (RPC error) — keeping last known value', {
+            error: tokenErr instanceof Error ? tokenErr.message : String(tokenErr),
+          });
+        }
       }
     } catch (error) {
       logger.warn('[SolanaWallet] Failed to fetch balances (RPC may be temporarily unavailable)', {

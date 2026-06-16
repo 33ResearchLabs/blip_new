@@ -32,6 +32,10 @@ import { compressImage } from "@/lib/utils/compressImage";
 import { explorerUrl } from "@/lib/solana/networkLabel";
 import type { Screen, Order, MerchantPaymentMethod } from "./types";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
+import { OrderTrackingView } from "./OrderTrackingView";
+import { OrderPaymentScreen } from "./OrderPaymentScreen";
+import { OrderCompletedScreen } from "./OrderCompletedScreen";
+import { getDisplayOrderId } from "@/lib/displayOrderId";
 import {
   type RefObject,
   useState as useLocalState,
@@ -88,6 +92,24 @@ function ReceiptRow({ label, children }: { label: string; children: React.ReactN
       <span className="text-[13px] font-medium text-text-primary text-right">
         {children}
       </span>
+    </div>
+  );
+}
+
+/** Compact label/value fact for the inline order breakdown on the summary card. */
+function SummaryFact({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-0.5">{label}</p>
+      <p className="text-[14px] font-semibold text-text-primary truncate">{value}</p>
     </div>
   );
 }
@@ -330,6 +352,7 @@ export const OrderDetailScreen = ({
   const [reviewText, setReviewText] = useLocalState("");
   // Order receipt sheet — opened by tapping the summary card.
   const [showReceipt, setShowReceipt] = useLocalState(false);
+  const [showTracker, setShowTracker] = useLocalState(false);
 
   // Receipt timestamps. Dates only — locale fixed to en-US for consistency
   // with the @/lib/format number rules.
@@ -824,13 +847,8 @@ export const OrderDetailScreen = ({
           </div>
         )}
 
-        {/* Order Summary — tap to open the full receipt sheet */}
-        <button
-          type="button"
-          onClick={() => setShowReceipt(true)}
-          aria-label="View order receipt"
-          className={`block w-full text-left rounded-2xl p-4 mb-4 ${CARD} hover:bg-surface-hover transition-colors`}
-        >
+        {/* Order Summary — key facts inline, full receipt one tap away */}
+        <div className={`rounded-2xl p-4 mb-4 ${CARD}`}>
           <div className="flex items-center gap-3 mb-4">
             <div
               className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -908,7 +926,52 @@ export const OrderDetailScreen = ({
               createdAt={activeOrder.createdAt}
             />
           )}
-        </button>
+
+          {/* Inline breakdown — key facts visible without opening the receipt */}
+          <div className="mt-4 pt-4 border-t border-border-subtle grid grid-cols-2 gap-x-4 gap-y-3">
+            <SummaryFact
+              label={activeOrder.type === "buy" ? "You pay" : "You sell"}
+              value={
+                activeOrder.type === "buy"
+                  ? `${fiatSym(activeOrder.fiatCode)} ${formatCrypto(parseFloat(activeOrder.fiatAmount))}`
+                  : `${formatCrypto(parseFloat(activeOrder.cryptoAmount))} USDT`
+              }
+            />
+            <SummaryFact
+              label="You get"
+              value={
+                activeOrder.type === "buy"
+                  ? `${formatCrypto(parseFloat(activeOrder.cryptoAmount))} USDT`
+                  : `${fiatSym(activeOrder.fiatCode)} ${formatCrypto(parseFloat(activeOrder.fiatAmount))}`
+              }
+            />
+            <SummaryFact
+              label="Rate"
+              value={`${fiatSym(activeOrder.fiatCode)} ${formatRate(activeOrder.merchant.rate)}`}
+            />
+            <SummaryFact
+              label="Method"
+              value={activeOrder.merchant.paymentMethod === "cash" ? "Cash" : "Bank"}
+            />
+            {activeOrder.merchant.name && (
+              <SummaryFact
+                className="col-span-2"
+                label={activeOrder.type === "buy" ? "Seller" : "Payer"}
+                value={activeOrder.merchant.name}
+              />
+            )}
+          </div>
+
+          {/* Full receipt — opens the rich, full-screen order tracker. */}
+          <button
+            type="button"
+            onClick={() => setShowTracker(true)}
+            className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-medium bg-surface-active text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <Receipt className="w-4 h-4" />
+            View full receipt
+          </button>
+        </div>
 
         {/* "Payment secured" card — consumer-friendly version of the old
             Escrow Locked panel. Trade ID and on-chain tx are tucked behind
@@ -1404,6 +1467,31 @@ export const OrderDetailScreen = ({
                             A payer will accept your request and send the money
                             straight to your account. You don&apos;t need to do
                             anything yet.
+                          </p>
+                        </div>
+                      )}
+                    {/* For buy orders: merchant paired, waiting for them to
+                        lock escrow before payment details unlock at step 2. */}
+                    {activeOrder.step === 1 &&
+                      activeOrder.type === "buy" &&
+                      activeOrder.dbStatus !== "pending" && (
+                        <div className={`mt-3 rounded-xl p-4 ${CARD_STRONG}`}>
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-active">
+                              <Loader2 className="w-4 h-4 animate-spin text-text-secondary" />
+                            </div>
+                            <div>
+                              <p className="text-[14px] font-medium text-text-primary">
+                                Waiting for merchant to secure funds
+                              </p>
+                              <p className="text-[12px] text-text-secondary">
+                                {activeOrder.merchant.name} is locking the USDT in escrow
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-[12px] text-text-tertiary">
+                            Payment details will appear here once the funds are
+                            secured. You don&apos;t need to do anything yet.
                           </p>
                         </div>
                       )}
@@ -2907,6 +2995,83 @@ export const OrderDetailScreen = ({
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Buyer payment view — replaces the step layout for an accepted/escrowed
+          BUY order. Bank details + pay action are gated on escrow lock inside. */}
+      {activeOrder.type === "buy" &&
+        ["accepted", "escrow_pending", "escrowed", "payment_pending", "payment_sent"].includes(
+          String(activeOrder.dbStatus || "").toLowerCase(),
+        ) && (
+          <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
+            <OrderPaymentScreen
+              order={activeOrder}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              onClose={() => setScreen(previousScreen || "orders")}
+              onOpenOverview={() => setShowTracker(true)}
+              onOpenChat={handleOpenChat}
+              onMarkPaymentSent={markPaymentSent}
+              onCancel={() => requestCancelOrder()}
+              onAppeal={() => setShowDisputeModal(true)}
+              onCopy={(key, value) => copyField(key, value)}
+              copiedField={copiedField}
+              needsPayMethodPick={needsPayMethodPick}
+              matchingPayMethods={matchingPayMethods}
+              onChoosePayMethod={handleChoosePayMethod}
+              isSubmitting={isLoading}
+              isCancelling={isRequestingCancel}
+            />
+          </div>
+        )}
+
+      {/* Completion + rating view — replaces the step layout for a completed
+          BUY order. */}
+      {activeOrder.type === "buy" &&
+        String(activeOrder.dbStatus || "").toLowerCase() === "completed" && (
+          <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
+            <OrderCompletedScreen
+              order={activeOrder}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              rating={rating}
+              reviewText={reviewText}
+              onRate={setRating}
+              onReviewTextChange={setReviewText}
+              onViewProfile={() => setShowProfile(true)}
+              onHelp={() => setScreen("support")}
+              onBackHome={() => {
+                if (rating > 0 && activeOrder.userRating == null && submitReview) {
+                  submitReview(activeOrder.id, rating, reviewText || undefined);
+                  setReviewText("");
+                  setRating(0);
+                }
+                setScreen("home");
+              }}
+            />
+          </div>
+        )}
+
+      {/* Rich full-screen order tracker — opened by "View full receipt". */}
+      <AnimatePresence>
+        {showTracker && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 320, mass: 0.8 }}
+            className={`fixed inset-0 z-50 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}
+          >
+            <OrderTrackingView
+              order={activeOrder}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              onClose={() => setShowTracker(false)}
+              onCancel={() => {
+                requestCancelOrder();
+                setShowTracker(false);
+              }}
+              isCancelling={isRequestingCancel}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
 

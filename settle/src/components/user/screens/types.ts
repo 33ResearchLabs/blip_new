@@ -59,6 +59,9 @@ export interface DbOrder {
   status: string;
   payment_details: Record<string, unknown> | null;
   created_at: string;
+  accepted_at?: string | null;
+  payment_sent_at?: string | null;
+  completed_at?: string | null;
   expires_at: string;
   merchant: Merchant;
   offer: Offer;
@@ -136,6 +139,12 @@ export interface Order {
   status: OrderStatus;
   step: OrderStep;
   createdAt: Date;
+  /** When a merchant accepted — best-available proxy for escrow-lock time. */
+  acceptedAt?: Date | null;
+  /** When the buyer marked payment sent. */
+  paymentSentAt?: Date | null;
+  /** When the order completed (seller confirmed + crypto released). */
+  completedAt?: Date | null;
   expiresAt: Date;
   dbStatus?: string; // Original DB status
   unreadCount?: number;
