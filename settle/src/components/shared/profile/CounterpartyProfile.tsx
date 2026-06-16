@@ -168,9 +168,10 @@ export function CounterpartyProfile({
             <p className="text-[13px] font-bold text-text-primary inline-flex items-center gap-1.5">
               Trust Score <Info className="w-3.5 h-3.5 text-text-tertiary" />
             </p>
-            <span className="text-[12px] text-text-tertiary inline-flex items-center gap-1">
+            {/* "What is this?" link — commented out */}
+            {/* <span className="text-[12px] text-text-tertiary inline-flex items-center gap-1">
               What is this? <ChevronRight className="w-3.5 h-3.5" />
-            </span>
+            </span> */}
           </div>
           {/* Numeric score (e.g. 40 / 100) intentionally hidden — show only the band. */}
           <div className="text-center mt-3">
@@ -283,7 +284,7 @@ export function CounterpartyProfile({
                 <span className="text-text-tertiary font-normal text-[11px]"> · safe to trade with</span>
               </p>
             </div>
-            <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" />
+            {/* <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" /> */}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
             <RiskStat icon={<ShieldCheck className="w-4 h-4" />} label={data.risk.activeDisputes === 0 ? "No active disputes" : `${data.risk.activeDisputes} active disputes`} />
@@ -295,9 +296,9 @@ export function CounterpartyProfile({
 
         {/* Limits & Tier */}
         <div className={`${card} p-5`}>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center  mb-3">
             <h3 className="text-[14px] font-bold text-text-primary">Limits &amp; Tier</h3>
-            <span className="text-[12px] text-accent font-semibold">View Limits</span>
+            {/* <span className="text-[12px] text-accent font-semibold">View Limits</span> */}
           </div>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-accent/10 text-accent border border-accent/20">
             <Award className="w-3.5 h-3.5" />
@@ -385,13 +386,13 @@ function VerifRow({ icon, label, ok }: { icon: React.ReactNode; label: string; o
       <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${ok ? "bg-accent/10 text-accent" : "bg-text-primary/[0.05] text-text-tertiary"}`}>
         {icon}
       </span>
-      <span className="text-[13px] text-text-secondary flex-1">{label}</span>
+      <span className="text-[13px] text-text-secondary flex-1 whitespace-nowrap">{label}</span>
       {ok ? (
-        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-accent/10 text-accent inline-flex items-center gap-1">
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-accent/10 text-accent inline-flex items-center gap-1 shrink-0">
           <Check className="w-3 h-3" /> Verified
         </span>
       ) : (
-        <span className="text-[11px] font-medium text-text-tertiary">Not verified</span>
+        <span className="text-[11px] font-medium text-text-tertiary shrink-0">Not verified</span>
       )}
     </div>
   );
