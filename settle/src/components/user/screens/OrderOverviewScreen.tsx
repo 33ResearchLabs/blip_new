@@ -98,6 +98,12 @@ export interface OrderOverviewScreenProps {
   createdAt: Date;
   /** Actual receiving account once assigned; null → "shown after assignment". */
   bankAccount?: string | null;
+  /** Whether the merchant's escrow is locked. Only once locked may the
+      counterparty (buyer) see the merchant's payment-method details. */
+  paymentLocked?: boolean;
+  /** Resolved payment-method rows (account name, IBAN / UPI ID, …). Rendered
+      only when `paymentLocked` is true. */
+  paymentRows?: { label: string; value: string; mono?: boolean }[];
   onClose: () => void;
   onCancel: () => void;
   isCancelling?: boolean;
@@ -114,6 +120,8 @@ export function OrderOverviewScreen({
   paymentMethod,
   createdAt,
   bankAccount,
+  paymentLocked,
+  paymentRows,
   onClose,
   onCancel,
   isCancelling,
@@ -191,14 +199,27 @@ export function OrderOverviewScreen({
           <Row label={type === "buy" ? "Total Payable" : "Total Receivable"} value={fiatStr} valueClassName="font-bold" />
         </Section>
 
-        {/* Payment Details */}
+        {/* Payment Details — the merchant's receiving details are only
+            disclosed to the buyer once the escrow is locked. Before that we
+            show a waiting line instead of the account. */}
         <Section title="Payment Details">
           <Row label="Payment Method" value={paymentMethod === "cash" ? "Cash" : "Bank Transfer"} />
-          <Row
-            label={paymentMethod === "cash" ? "Meeting details" : "Bank Account"}
-            value={bankAccount || "Will be shown after merchant assignment"}
-            valueClassName={bankAccount ? undefined : "text-text-tertiary"}
-          />
+          {paymentLocked && paymentRows && paymentRows.length > 0 ? (
+            paymentRows.map((r) => (
+              <Row key={r.label} label={r.label} value={r.value} mono={r.mono} />
+            ))
+          ) : (
+            <Row
+              label={paymentMethod === "cash" ? "Meeting details" : "Account details"}
+              value={
+                bankAccount ||
+                (paymentMethod === "cash"
+                  ? "Shared once the merchant locks the escrow"
+                  : "Shown once the merchant locks the escrow")
+              }
+              valueClassName={bankAccount ? undefined : "text-text-tertiary"}
+            />
+          )}
         </Section>
 
         {/* Important Information */}

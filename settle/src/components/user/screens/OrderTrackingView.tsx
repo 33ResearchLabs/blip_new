@@ -251,6 +251,37 @@ export function OrderTrackingView({
           )}
         </motion.div>
 
+        {/* Time remaining — moved above the step tracker (was bundled with the
+            Order Overview row lower down). */}
+        {showTimer && (
+          <motion.div
+            initial={{ y: 12, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.03 }}
+            className={`rounded-2xl p-5 text-center ${CARD}`}
+          >
+            <p className="text-[11px] uppercase tracking-wide mb-2 text-text-tertiary">Time remaining</p>
+            <div className="flex items-center justify-center gap-2">
+              <Clock className={`w-4 h-4 ${isUrgent ? "text-error" : "text-text-secondary"}`} />
+              <p className={`text-[24px] font-bold tracking-tight tabular-nums ${isUrgent ? "text-error" : "text-text-primary"}`}>
+                {fmtCountdown(remainingSec)}
+              </p>
+            </div>
+            <div className="w-full h-1.5 rounded-full mt-3 overflow-hidden bg-surface-active">
+              <motion.div
+                className={`h-full rounded-full ${isUrgent ? "bg-error" : "bg-accent"}`}
+                animate={{ width: `${fraction * 100}%` }}
+                transition={{ duration: 0.5 }}
+              />
+            </div>
+            <p className={`text-[13px] mt-3 ${isUrgent ? "text-error" : "text-text-tertiary"}`}>
+              {dbStatus === "pending"
+                ? isUrgent ? "Order will expire soon!" : "Most orders are matched within 1 minute."
+                : isUrgent ? "Complete this step soon!" : "Keep this order moving to avoid timeout."}
+            </p>
+          </motion.div>
+        )}
+
         {/* Timeline */}
         <motion.div
           initial={{ y: 12, opacity: 0 }}
@@ -297,52 +328,6 @@ export function OrderTrackingView({
           })}
         </motion.div>
 
-        {/* Time remaining + order overview */}
-        <motion.div
-          initial={{ y: 12, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className={`rounded-2xl overflow-hidden ${CARD}`}
-        >
-          {showTimer && (
-            <div className="p-5 text-center">
-              <p className="text-[11px] uppercase tracking-wide mb-2 text-text-tertiary">Time remaining</p>
-              <div className="flex items-center justify-center gap-2">
-                <Clock className={`w-5 h-5 ${isUrgent ? "text-error" : "text-text-secondary"}`} />
-                <p className={`text-[34px] font-bold tracking-tight tabular-nums ${isUrgent ? "text-error" : "text-text-primary"}`}>
-                  {fmtCountdown(remainingSec)}
-                </p>
-              </div>
-              <div className="w-full h-1.5 rounded-full mt-3 overflow-hidden bg-surface-active">
-                <motion.div
-                  className={`h-full rounded-full ${isUrgent ? "bg-error" : "bg-accent"}`}
-                  animate={{ width: `${fraction * 100}%` }}
-                  transition={{ duration: 0.5 }}
-                />
-              </div>
-              <p className={`text-[13px] mt-3 ${isUrgent ? "text-error" : "text-text-tertiary"}`}>
-                {dbStatus === "pending"
-                  ? isUrgent ? "Order will expire soon!" : "Most orders are matched within 1 minute."
-                  : isUrgent ? "Complete this step soon!" : "Keep this order moving to avoid timeout."}
-              </p>
-            </div>
-          )}
-
-          <button
-            onClick={() => setShowOverview(true)}
-            className={`w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover ${showTimer ? "border-t border-border-subtle" : ""}`}
-          >
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
-              <FileText className="w-5 h-5 text-accent" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-medium text-text-primary">Order Overview</p>
-              <p className="text-[13px] text-text-tertiary">View order details</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" />
-          </button>
-        </motion.div>
-
         {/* Summary tiles */}
         <motion.div
           initial={{ y: 12, opacity: 0 }}
@@ -368,6 +353,28 @@ export function OrderTrackingView({
             </p>
           </div>
         </div>
+
+        {/* Order Overview — moved to the bottom, just above the action button. */}
+        <motion.div
+          initial={{ y: 12, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className={`rounded-2xl overflow-hidden ${CARD}`}
+        >
+          <button
+            onClick={() => setShowOverview(true)}
+            className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover"
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
+              <FileText className="w-5 h-5 text-accent" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-medium text-text-primary">Order Overview</p>
+              <p className="text-[13px] text-text-tertiary">View order details</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" />
+          </button>
+        </motion.div>
 
         {/* Bottom action */}
         {canCancel ? (
