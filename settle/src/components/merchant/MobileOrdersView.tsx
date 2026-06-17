@@ -476,26 +476,26 @@ function OrderCardTimer({
               order is accepted (there's a counterparty to message). */}
           <div style={{ display: "flex", gap: 7, flexShrink: 0 }}>
             {canChat && (
-            <button
-              onClick={() => {
-                onOpenChat(order);
-                setMobileView("chat");
-              }}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 999,
-                background: "rgba(255,255,255,0.055)",
-                border: "1px solid rgba(255,255,255,0.09)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#aeaeb2",
-                cursor: "pointer",
-              }}
-            >
-              <MessageCircle style={{ width: 15, height: 15 }} />
-            </button>
+              <button
+                onClick={() => {
+                  onOpenChat(order);
+                  setMobileView("chat");
+                }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.055)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#aeaeb2",
+                  cursor: "pointer",
+                }}
+              >
+                <MessageCircle style={{ width: 15, height: 15 }} />
+              </button>
             )}
             <button
               style={{
@@ -916,8 +916,16 @@ export function MobileOrdersView({
       const expiresAt = (o as any)?.dbOrder?.expires_at;
       const lapsed =
         (expiresAt ? new Date(expiresAt).getTime() <= nowTick : false) ||
-        (typeof (o as any)?.expiresIn === "number" && (o as any).expiresIn <= 0);
-      const ACCEPTED = ["accepted", "escrow", "escrowed", "payment_sent", "completed", "disputed"];
+        (typeof (o as any)?.expiresIn === "number" &&
+          (o as any).expiresIn <= 0);
+      const ACCEPTED = [
+        "accepted",
+        "escrow",
+        "escrowed",
+        "payment_sent",
+        "completed",
+        "disputed",
+      ];
       const everAccepted =
         !!(o as any)?.dbOrder?.accepted_at ||
         ACCEPTED.includes(uiStatus) ||

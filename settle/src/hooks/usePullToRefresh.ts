@@ -69,6 +69,12 @@ export function usePullToRefresh({
   const activeRef = useRef(false);
   const refreshingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
+  // Last-resort recovery timer. iOS/iPadOS occasionally drops the terminating
+  // touchend/touchcancel for a preventDefault-driven gesture (notably at the
+  // top edge), which would otherwise strand the indicator in the "ready" /
+  // "Release to refresh" state forever. If no further movement and no end
+  // event arrive within this window, we force-reset.
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep the latest callbacks in refs so re-renders don't re-attach listeners
   // — the consumer almost always passes inline arrow functions for both.
@@ -105,7 +111,27 @@ export function usePullToRefresh({
       });
     };
 
+    const clearWatchdog = () => {
+      if (watchdogRef.current != null) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
+    };
+
+    // Arm (or re-arm) the recovery timer. Called on every active touchmove so a
+    // genuine hold-at-ready keeps it alive; it only fires once movement AND end
+    // events have both gone silent — i.e. the end event was actually dropped.
+    const armWatchdog = () => {
+      clearWatchdog();
+      watchdogRef.current = setTimeout(() => {
+        watchdogRef.current = null;
+        if (refreshingRef.current) return;
+        if (activeRef.current || pullRef.current > 0) reset(true);
+      }, 1500);
+    };
+
     const reset = (toIdle: boolean) => {
+      clearWatchdog();
       activeRef.current = false;
       startYRef.current = null;
       if (toIdle) {
@@ -116,6 +142,10 @@ export function usePullToRefresh({
 
     const onTouchStart = (e: TouchEvent) => {
       if (refreshingRef.current) return;
+      clearWatchdog();
+      // Self-heal: if a previous gesture got stranded (its end event was never
+      // delivered), a fresh touch clears the leftover indicator immediately.
+      if (pullRef.current > 0 || activeRef.current) reset(true);
       if (e.touches.length !== 1) return;
       if (!atTop()) return;
       startYRef.current = e.touches[0].clientY;
@@ -157,10 +187,14 @@ export function usePullToRefresh({
 
       scheduleSetPull(clamped);
       setStatus(clamped >= threshold ? "ready" : "pulling");
+      // Re-arm recovery on every move so a real hold-at-ready never triggers it,
+      // but a dropped touchend (no more moves, no end event) eventually does.
+      armWatchdog();
     };
 
     const onTouchEnd = async () => {
       if (refreshingRef.current) return;
+      clearWatchdog();
       const wasActive = activeRef.current;
       const finalPull = pullRef.current;
       activeRef.current = false;
@@ -194,22 +228,48 @@ export function usePullToRefresh({
       reset(true);
     };
 
+    // Fired when the tab is backgrounded or the window loses focus mid-pull —
+    // the OS frequently swallows the touchend in that case, so reset proactively.
+    const onInterrupt = () => {
+      if (refreshingRef.current) return;
+      if (activeRef.current || pullRef.current > 0) reset(true);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") onInterrupt();
+    };
+
     // touchstart/touchmove MUST be {passive: false} because we conditionally
-    // call preventDefault during the pull. touchend/touchcancel can stay
-    // passive (no preventDefault inside).
+    // call preventDefault during the pull. The terminating events carry no
+    // preventDefault, so they stay passive.
     const moveOpts: AddEventListenerOptions = { passive: false };
     const endOpts: AddEventListenerOptions = { passive: true };
 
     target.addEventListener("touchstart", onTouchStart as EventListener, moveOpts);
     target.addEventListener("touchmove", onTouchMove as EventListener, moveOpts);
-    target.addEventListener("touchend", onTouchEnd as EventListener, endOpts);
-    target.addEventListener("touchcancel", onTouchCancel as EventListener, endOpts);
+
+    // End/cancel listeners live on `window`, not the gesture target. A touch
+    // sequence's terminating events always bubble to window even when the
+    // target-level event is dropped (the bug that stranded the indicator at
+    // "Release to refresh"). `pointerup`/`pointercancel` are an independent
+    // backstop: the pointer-event stream commonly survives when the touch
+    // stream does not, so between them a lifted finger is virtually never missed.
+    window.addEventListener("touchend", onTouchEnd as EventListener, endOpts);
+    window.addEventListener("touchcancel", onTouchCancel as EventListener, endOpts);
+    window.addEventListener("pointerup", onTouchEnd as EventListener, endOpts);
+    window.addEventListener("pointercancel", onTouchCancel as EventListener, endOpts);
+    window.addEventListener("blur", onInterrupt, endOpts);
+    document.addEventListener("visibilitychange", onVisibility, endOpts);
 
     return () => {
       target.removeEventListener("touchstart", onTouchStart as EventListener);
       target.removeEventListener("touchmove", onTouchMove as EventListener);
-      target.removeEventListener("touchend", onTouchEnd as EventListener);
-      target.removeEventListener("touchcancel", onTouchCancel as EventListener);
+      window.removeEventListener("touchend", onTouchEnd as EventListener);
+      window.removeEventListener("touchcancel", onTouchCancel as EventListener);
+      window.removeEventListener("pointerup", onTouchEnd as EventListener);
+      window.removeEventListener("pointercancel", onTouchCancel as EventListener);
+      window.removeEventListener("blur", onInterrupt);
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearWatchdog();
       if (rafRef.current != null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;

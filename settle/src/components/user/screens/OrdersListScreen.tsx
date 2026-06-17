@@ -189,14 +189,26 @@ export const OrdersListScreen = ({
 
               const amountSign = isCompleted ? (isBuy ? "+" : "-") : isCancelled || isDisputed ? "" : (isBuy ? "+" : "-");
 
+              // Role-aware status badge. On the user side the user is the SELLER
+              // on sell orders (locks crypto, then confirms the buyer's payment) and
+              // the BUYER on buy orders (sends fiat). The same DB status implies a
+              // different actor/action per role, so the label differs. Derive from
+              // dbStatus (the true DB state) — order.status alone is too lossy and was
+              // mislabelling merely-accepted orders as "Payment Sent". Convention:
+              // when it's the user's turn to act → action label; when waiting on the
+              // counterparty → passive status label.
+              const isSeller = order.type === "sell";
+              const db = order.dbStatus;
               const statusLabel =
                 order.status === "complete"  ? "Done" :
                 order.status === "cancelled" ? "Cancelled" :
                 order.status === "expired"   ? "Expired" :
                 order.status === "disputed"  ? "Disputed" :
-                order.status === "pending"   ? "Pending" :
-                order.status === "waiting"   ? "Escrow" :
-                order.status === "payment"   ? "Payment Sent" :
+                order.status === "pending"   ? "Matching" :
+                db === "accepted" || db === "escrow_pending"     ? (isSeller ? "Lock Escrow"  : "Accepted") :
+                db === "escrowed" || db === "payment_pending"    ? (isSeller ? "Awaiting Pay" : "Pay Now") :
+                db === "payment_sent"                            ? (isSeller ? "Confirm Pay"  : "Payment Sent") :
+                db === "payment_confirmed" || db === "releasing" ? "Releasing" :
                 "Active";
 
               const statusBadgeClass =
