@@ -1115,10 +1115,6 @@ function ActiveOrderBody({
             />
           )}
 
-          {/* Buyer payment method — moved here from the right column at the lock
-              stage to keep the two columns balanced. */}
-          {needsLock && paymentMethodCard}
-
           {/* Your chosen receiving account — read-only after escrow is locked, so
               the seller can see which of their accounts the buyer was told to pay
               into (picked at lock time, persisted as sellerPaymentMethod). */}
@@ -1178,57 +1174,16 @@ function ActiveOrderBody({
               left column (below) so the two columns stay balanced. */}
           {!needsLock && paymentMethodCard}
 
-          {/* Counterparty trust */}
-          <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-emerald-400" />
-              <span className="text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
-                {trustHeading}
-              </span>
-              {trustScore != null && (
-                <span className="ml-auto text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
-                  {trustScore}/100
-                </span>
-              )}
-            </div>
-            <div className="space-y-1.5 text-[12px]">
-              <div className="flex justify-between gap-2">
-                <span className="text-foreground/45">Completed Trades</span>
-                <span className="font-semibold text-foreground/80">{trades}</span>
-              </div>
-              <PresenceRatingWalletRows
-                online={online}
-                lastSeen={presence.lastSeen}
-                now={now}
-                ratingNum={ratingNum}
-                wallet={cpWallet}
-              />
-              {successRate != null && (
-                <div className="flex justify-between gap-2">
-                  <span className="text-foreground/45">Success Rate</span>
-                  <span className="font-semibold text-emerald-400">{successRate}%</span>
-                </div>
-              )}
-              {ageLabel && (
-                <div className="flex justify-between gap-2">
-                  <span className="text-foreground/45">Account Age</span>
-                  <span className="font-semibold text-foreground/80">{ageLabel}</span>
-                </div>
-              )}
-              <div className="flex justify-between gap-2">
-                <span className="text-foreground/45">KYC Status</span>
-                <span
-                  className={`font-semibold ${verified ? "text-emerald-400" : "text-foreground/50"}`}
-                >
-                  {verified ? "Verified" : "Unverified"}
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* Lock-stage right-side cards — mirror the Lock Escrow modal */}
           {needsLock && (
             <>
+              {/* Buyer payment method — informational at the lock stage, so it
+                  lives in the right column with the guidance cards. This keeps
+                  the two columns balanced (left = summary + account picker) and
+                  removes the empty space that appeared when the right column
+                  only held Tips + Important. */}
+              {paymentMethodCard}
+
               {/* Tips */}
               <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -1251,32 +1206,6 @@ function ActiveOrderBody({
                   <li>Only lock escrow if you are available to complete this trade.</li>
                   <li>Do not release USDT until funds arrive in your bank account.</li>
                 </ul>
-              </div>
-
-              {/* What Happens Next */}
-              <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
-                <p className="text-[13px] font-semibold text-foreground mb-3">
-                  What Happens Next?
-                </p>
-                <ol className="space-y-2.5">
-                  {[
-                    "Your selected account is shared with the buyer",
-                    `Escrow locks ${amount} USDT`,
-                    `Buyer sends ${ccy} payment`,
-                    "Buyer marks payment as sent",
-                    "You verify payment in your account",
-                    "Release USDT to complete trade",
-                  ].map((step, i) => (
-                    <li key={step} className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-400 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                        {i + 1}
-                      </span>
-                      <span className="text-[12px] text-foreground/60 leading-snug">
-                        {step}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
               </div>
             </>
           )}
@@ -2202,8 +2131,11 @@ export function OrderQuickView({
                           )}
                           <button
                             onClick={() => {
-                              onOpenChat(selectedOrder);
+                              // Open the merchant Support panel (help/ticketing),
+                              // which lives in settings under the `support` tab —
+                              // same navigation pattern as "Add New Account".
                               onClose();
+                              window.location.href = "/market/settings?tab=support";
                             }}
                             className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
                           >

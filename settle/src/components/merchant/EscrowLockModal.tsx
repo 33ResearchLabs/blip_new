@@ -17,11 +17,8 @@ import { formatFiat, formatCrypto, formatRate } from "@/lib/format";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { SURFACES } from "@/components/shared/limits/types";
 import { EscrowFlowStepper } from "@/components/shared/trade/EscrowFlowStepper";
-import { TradeTrustPanel } from "@/components/shared/trade/TradeTrustPanel";
-import { useCounterpartyProfile } from "@/components/shared/trade/useCounterpartyProfile";
 import { ReceivingAccountPicker } from "@/components/shared/trade/ReceivingAccountPicker";
 import { useMerchantReceivingMethods } from "@/components/shared/trade/useMerchantReceivingMethods";
-import type { ProfileEntityType } from "@/components/shared/profile/types";
 import type { Order } from "@/types/merchant";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
@@ -52,26 +49,6 @@ export function EscrowLockModal({
   onClose,
   onExecute,
 }: EscrowLockModalProps) {
-  // ── Buyer (counterparty) trust — read-only profile fetch ────────────────
-  // The party locking escrow is always the seller; the counterparty is the
-  // buyer. Derive its entity from the order (M2M buyer is a merchant, else the
-  // order's user).
-  const cpType: ProfileEntityType | null = escrowOrder
-    ? escrowOrder.isM2M || escrowOrder.buyerMerchantId
-      ? "merchant"
-      : "user"
-    : null;
-  const cpId: string | null = escrowOrder
-    ? (escrowOrder.isM2M || escrowOrder.buyerMerchantId
-        ? escrowOrder.buyerMerchantId
-        : escrowOrder.dbOrder?.user_id) ?? null
-    : null;
-  const buyerTrust = useCounterpartyProfile(
-    cpType,
-    cpId,
-    !!(showEscrowModal && cpId),
-  );
-
   // ── Receiving-account picker — the seller picks which saved account the
   // buyer pays into; the choice is shared with the buyer on lock (req 9).
   const recv = useMerchantReceivingMethods(showEscrowModal && !escrowTxHash);
@@ -214,14 +191,6 @@ export function EscrowLockModal({
                   )}
                 </div>
 
-                {/* Buyer trust */}
-                <TradeTrustPanel
-                  title="Buyer Trust"
-                  profile={buyerTrust.profile}
-                  loading={buyerTrust.loading}
-                  surfaces={S}
-                />
-
                 {/* Select receiving account — shared with the buyer on lock */}
                 {!escrowTxHash && (
                   <ReceivingAccountPicker
@@ -266,34 +235,6 @@ export function EscrowLockModal({
                       <li>Only lock escrow if you are available to complete this trade.</li>
                       <li>Do not release USDT until funds arrive in your bank account.</li>
                     </ul>
-                  </div>
-                )}
-
-                {/* What Happens Next */}
-                {!escrowTxHash && !isLockingEscrow && (
-                  <div className={`rounded-xl p-4 border border-border-subtle ${S.card}`}>
-                    <p className="text-[13px] font-semibold text-text-primary mb-3">
-                      What Happens Next?
-                    </p>
-                    <ol className="space-y-2.5">
-                      {[
-                        "Your selected account is shared with the buyer",
-                        `Escrow locks ${formatCrypto(escrowOrder.amount)} USDT`,
-                        `Buyer sends ${escrowOrder.toCurrency || escrowOrder.dbOrder?.fiat_currency || "fiat"} payment`,
-                        "Buyer marks payment as sent",
-                        "You verify payment in your account",
-                        "Release USDT to complete trade",
-                      ].map((step, i) => (
-                        <li key={step} className="flex items-start gap-2.5">
-                          <span className="w-5 h-5 rounded-full bg-success-dim text-success text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                            {i + 1}
-                          </span>
-                          <span className="text-[12px] text-text-secondary leading-snug">
-                            {step}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
                   </div>
                 )}
 
