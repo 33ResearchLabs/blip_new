@@ -60,8 +60,12 @@ export interface MatchingScreenProps {
   /** Fiat currency for the active corridor — drives the ₹ / AED symbols. */
   currency: "INR" | "AED";
   activeOrderId: string | null;
+  /** Live status of the active order — drives the Order Overview badge so it
+   *  reflects cancelled/accepted/etc. instead of being frozen at "pending". */
+  orderStatus?: string;
   userId: string | null;
   setOrders: React.Dispatch<React.SetStateAction<any[]>>;
+  setActiveOrderId: (id: string | null) => void;
   setPendingTradeData: (d: any) => void;
   toast: any;
   maxW: string;
@@ -75,8 +79,10 @@ export const MatchingScreen = ({
   currentRate,
   currency,
   activeOrderId,
+  orderStatus,
   userId,
   setOrders,
+  setActiveOrderId,
   setPendingTradeData,
   toast,
 }: MatchingScreenProps) => {
@@ -113,7 +119,15 @@ export const MatchingScreen = ({
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          setOrders((prev: any[]) => prev.filter((o: any) => o.id !== activeOrderId));
+          // Mark the order cancelled (not just filter it out) so a poll/refetch
+          // can't re-add it looking active.
+          setOrders((prev: any[]) =>
+            prev.map((o: any) =>
+              o.id === activeOrderId
+                ? { ...o, status: "cancelled", dbStatus: "cancelled" }
+                : o,
+            ),
+          );
           toast.showOrderCancelled('You cancelled the order');
         } else {
           console.error('Failed to cancel order:', data.error);
@@ -124,6 +138,11 @@ export const MatchingScreen = ({
         toast.showWarning('Failed to cancel order');
       }
     }
+    // Clear the active order BEFORE leaving so the realtime watcher stops
+    // tracking it and can't fire a conflicting navigation (it would otherwise
+    // route the just-cancelled order back to the order/tracking screen, which
+    // reuses this same "Finding the best merchant" layout).
+    setActiveOrderId(null);
     setPendingTradeData(null);
     setScreen("home");
   }
@@ -361,7 +380,7 @@ export const MatchingScreen = ({
           >
             <OrderOverviewScreen
               displayId={displayId}
-              status="pending"
+              status={orderStatus || "pending"}
               type={pendingTradeData.type}
               cryptoAmount={parseFloat(pendingTradeData.amount)}
               fiatAmount={parseFloat(pendingTradeData.fiatAmount)}

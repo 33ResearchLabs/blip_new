@@ -350,6 +350,10 @@ export function useUserEffects({
       if (newStatus === 'cancelled') {
         playSound('error');
         toast.showOrderCancelled();
+        // Keep the user on the order tracker so the SAME screen updates in
+        // place to the cancelled state (OrderTrackingView's cancelled banner)
+        // — the autoTracker/isMatching fix means 'order' no longer reopens as
+        // "Finding the best merchant" for a cancelled order.
         if (screen === 'escrow' || screen === 'matching') {
           setScreen('order');
         }

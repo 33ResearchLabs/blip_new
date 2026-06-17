@@ -1356,8 +1356,10 @@ export default function Home() {
               currentRate={tradeCreation.currentRate}
               currency={tradeCreation.selectedPair === "usdt_inr" ? "INR" : "AED"}
               activeOrderId={activeOrderId}
+              orderStatus={orders.find((o) => o.id === activeOrderId)?.dbStatus ?? "pending"}
               userId={auth.userId}
               setOrders={setOrders}
+              setActiveOrderId={setActiveOrderId}
               setPendingTradeData={setPendingTradeData}
               toast={toast}
               maxW={maxW}

@@ -418,6 +418,17 @@ export const OrderDetailScreen = ({
   // merchant accepts (step ≥ 2) the payment screen renders and covers this.
   // SELL orders keep the step-body (it holds their lock-escrow / confirm
   // actions).
+  // A buy order that's genuinely still matching shows the live MatchingScreen.
+  // `cancelled` / `expired` also map to step 1 (see helpers mapDbStatusToUI),
+  // so the status guard keeps them OFF the "Finding the best merchant" flow.
+  const isMatching =
+    String(activeOrder.type).toLowerCase() === "buy" &&
+    activeOrder.step === 1 &&
+    activeOrder.status === "pending";
+  // Auto-open the full tracker for ANY buy order that began in the matching
+  // flow — including a now-cancelled/expired one — so the SAME tracker screen
+  // stays up and just updates its content (OrderTrackingView renders the
+  // cancelled/expired banner) instead of jumping the user to a different layout.
   const autoTracker =
     String(activeOrder.type).toLowerCase() === "buy" && activeOrder.step === 1;
   // Live countdown for the matching screen rendered on the auto-tracker path.
@@ -3105,7 +3116,7 @@ export const OrderDetailScreen = ({
             transition={{ type: "spring", damping: 30, stiffness: 320, mass: 0.8 }}
             className={`fixed inset-0 z-50 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}
           >
-            {autoTracker ? (
+            {isMatching ? (
               // Matching BUY order → show the same MatchingScreen the user sees
               // right after placing, fed from the order so it's identical on
               // reopen (timer-in-banner, "Finding the best merchant", Cancel).
@@ -3132,8 +3143,13 @@ export const OrderDetailScreen = ({
                 }
                 currency={activeOrder.fiatCode === "INR" ? "INR" : "AED"}
                 activeOrderId={activeOrder.id}
+                orderStatus={activeOrder.dbStatus || activeOrder.status}
                 userId={userId}
                 setOrders={setOrders}
+                // No-op: this embedded matching view runs under screen==='order',
+                // where the realtime watcher doesn't redirect, so there's no
+                // navigation conflict to defuse by clearing the active order.
+                setActiveOrderId={() => {}}
                 setPendingTradeData={() => {}}
                 toast={{
                   showOrderCancelled: (m: string) =>
@@ -3146,7 +3162,14 @@ export const OrderDetailScreen = ({
               <OrderTrackingView
                 order={activeOrder}
                 displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
-                onClose={() => setShowTracker(false)}
+                onClose={() => {
+                  // When the tracker is the auto/primary screen (e.g. a
+                  // cancelled order reopened from Activity), Back should leave
+                  // the order screen; when opened manually over the detail
+                  // view ("View full receipt"), just close the overlay.
+                  if (autoTracker) setScreen(previousScreen || "orders");
+                  else setShowTracker(false);
+                }}
                 onCancel={() => {
                   requestCancelOrder();
                   setShowTracker(false);
