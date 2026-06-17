@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, type PanInfo } from "framer-motion";
+import { motion, AnimatePresence, type PanInfo } from "framer-motion";
+import {
+  authCardEnter,
+  authLayoutTransition,
+  authTransition,
+  authViewVariants,
+  authViewKey,
+} from "@/lib/motion/authMotion";
 import { useRouter } from "next/navigation";
 import { Loader2, Eye, EyeOff, ChevronLeft, User, Store, ArrowRight, Check, X, Mail, CheckCircle2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
@@ -248,6 +255,9 @@ export function LandingPage({
       dragDirectionLock
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={{ left: 0.35, right: 0 }}
+      // Critically-damped snap-back: a sub-threshold swipe toward Merchant
+      // returns to x:0 without the springy overshoot that read as a "shake".
+      dragTransition={{ bounceStiffness: 500, bounceDamping: 45 }}
       onPanEnd={onSwipeEnd}
     >
       {/* Fraunces — React 19 hoists <link> elements into <head> automatically.
@@ -339,15 +349,43 @@ export function LandingPage({
         </div>
       </header>
 
-      {/* Center stage with the sign-in card */}
-      <main className="flex-1 flex items-center justify-center px-5 py-6 sm:px-6 sm:py-8 relative z-10">
+      {/* Center stage with the sign-in card.
+          Anchored to the TOP (items-start) rather than vertically centered:
+          the form's height differs between Sign In and Create Account (extra
+          email field, availability hints, etc.). When the card was centered,
+          a height change moved BOTH edges and the whole card visibly jumped /
+          "shook" as it re-centered. Anchoring the top means only the bottom
+          edge grows — and the `layout` prop below eases even that. */}
+      <main className="flex-1 flex items-start justify-center px-5 py-6 sm:px-6 sm:py-8 sm:pt-14 relative z-10">
         <motion.div
-          initial={{ opacity: 0, y: 12, filter: "blur(8px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          layout
+          initial={authCardEnter.initial}
+          animate={authCardEnter.animate}
+          transition={{
+            ...authCardEnter.transition,
+            // Height/position changes (mode switch, field reveal) ease smoothly
+            // instead of snapping in a single frame.
+            layout: authLayoutTransition,
+          }}
           className="w-full max-w-[440px] bg-white border border-[#ece6dc] rounded-[22px] pt-9 px-[26px] pb-7 sm:pt-11 sm:px-10 sm:pb-9"
           style={{ boxShadow: "0 30px 80px -40px rgba(60,40,30,0.14)" }}
         >
+          {/* All mode-dependent content cross-fades as one unit on every
+              Sign In ↔ Create Account toggle (and when the verification gate
+              opens). The card's `layout` eases the height delta underneath. */}
+          <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={authViewKey({
+              mode: authMode,
+              pendingVerification: !!pendingVerificationEmail,
+              verified: pendingVerificationVerified,
+            })}
+            variants={authViewVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={authTransition}
+          >
           {/* Eyebrow */}
           <span className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.20em] text-[#cc785c] bg-[#f4e3d9] px-3 py-1.5 rounded-full font-medium mb-[22px]">
             {authMode === 'login' ? 'app.blip.money' : 'Create account'}
@@ -812,6 +850,8 @@ export function LandingPage({
               )}
             </>
           )}
+          </motion.div>
+          </AnimatePresence>
         </motion.div>
       </main>
 

@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ReceiptText,
   MessageCircle,
   X,
   Check,
@@ -47,6 +49,7 @@ import {
   useRef as useLocalRef,
   useCallback as useLocalCallback,
   useEffect as useLocalEffect,
+  useMemo as useLocalMemo,
 } from "react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import dynamic from "next/dynamic";
@@ -408,6 +411,28 @@ export const OrderDetailScreen = ({
   // Order receipt sheet — opened by tapping the summary card.
   const [showReceipt, setShowReceipt] = useLocalState(false);
   const [showTracker, setShowTracker] = useLocalState(false);
+  // Chat popup: collapse the order-details (receipt) card by default so the
+  // message area gets the full height. Toggled from the chat header.
+  const [showOrderDetails, setShowOrderDetails] = useLocalState(false);
+
+  // Pull the order receipt out of the chat stream so the header toggle can
+  // render it on demand. Mirrors the inline receipt-message parsing below.
+  const receiptForHeader = useLocalMemo<Record<string, unknown> | null>(() => {
+    const msgs = activeChat?.messages;
+    if (!msgs) return null;
+    for (const msg of msgs) {
+      if (msg.messageType === "receipt" && msg.receiptData) return msg.receiptData;
+      if (msg.text?.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(msg.text);
+          if (parsed.type === "order_receipt" && parsed.data) return parsed.data;
+        } catch {
+          /* not JSON */
+        }
+      }
+    }
+    return null;
+  }, [activeChat?.messages]);
   // For a BUY order still in the matching phase, show the rich tracking view as
   // the primary screen instead of the step-body "Order Details" screen.
   // Keyed off the MAPPED UI step (step 1 = matching) rather than the raw status
@@ -3405,10 +3430,47 @@ export const OrderDetailScreen = ({
                     </div>
                   </div>
                 </div>
-                <button onClick={() => setShowChat(false)} className="p-2">
-                  <X className="w-5 h-5 text-text-tertiary" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setShowOrderDetails((v) => !v)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-surface-card text-text-secondary"
+                    aria-expanded={showOrderDetails}
+                    aria-label={showOrderDetails ? "Hide order details" : "Show order details"}
+                  >
+                    <ReceiptText className="w-4 h-4" />
+                    <span className="text-[12px] font-medium hidden sm:inline">Details</span>
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform duration-300 ${showOrderDetails ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  <button onClick={() => setShowChat(false)} className="p-2">
+                    <X className="w-5 h-5 text-text-tertiary" />
+                  </button>
+                </div>
               </div>
+
+              {/* Collapsible order-details (receipt) card — hidden by default,
+                  toggled from the header. Animates height so the message list
+                  reflows smoothly. */}
+              <AnimatePresence initial={false}>
+                {showOrderDetails && receiptForHeader && (
+                  <motion.div
+                    key="chat-order-details"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    className="overflow-hidden border-b border-border-medium shrink-0"
+                  >
+                    <div className="p-4">
+                      <ReceiptCard
+                        data={receiptForHeader as any}
+                        currentStatus={activeOrder?.dbStatus || activeOrder?.status}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <div
                 ref={chatMessagesRef}
                 className="flex-1 overflow-y-auto p-4 space-y-3"
@@ -3594,23 +3656,11 @@ export const OrderDetailScreen = ({
                           /* not JSON */
                         }
                       }
+                      // The order receipt is no longer shown inline — it's
+                      // surfaced on demand via the collapsible "Details" toggle
+                      // in the chat header. Skip rendering it as a message.
                       if (receiptPayload) {
-                        return (
-                          <div key={msg.id} className="max-w-[90%] mx-auto">
-                            <ReceiptCard
-                              data={receiptPayload as any}
-                              currentStatus={
-                                activeOrder?.dbStatus || activeOrder?.status
-                              }
-                            />
-                            <p className="text-[10px] mt-1 text-center text-text-tertiary">
-                              {msg.timestamp.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          </div>
-                        );
+                        return null;
                       }
                     }
 

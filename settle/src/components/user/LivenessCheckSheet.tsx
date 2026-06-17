@@ -285,7 +285,7 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-text-primary font-semibold text-lg inline-flex items-center gap-2">
-                  <ShieldCheck size={20} className="text-emerald-500" />
+                  <ShieldCheck size={20} className="text-text-primary" />
                   Liveness Check
                 </h2>
                 <p className="text-text-tertiary text-sm">Quick checks to confirm you're real</p>
@@ -302,8 +302,8 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                 </div>
                 <div className="text-center">
                   <p className="text-text-primary font-medium mb-1 inline-flex items-center justify-center gap-1.5">
-                    Earn your <span className="text-emerald-500">Verified</span> badge
-                    <BadgeCheck size={16} className="text-emerald-500" />
+                    Earn your <span className="text-text-primary">Verified</span> badge
+                    <BadgeCheck size={16} className="text-text-secondary" />
                   </p>
                   <p className="text-text-tertiary text-sm">We'll ask you to blink and turn your head. No data is stored.</p>
                 </div>
@@ -316,8 +316,8 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                         {i > 0 && (
                           <span className="absolute left-0 top-3 bottom-3 w-px bg-border-subtle" />
                         )}
-                        <div className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                          <Icon size={18} className="text-emerald-500" />
+                        <div className="w-9 h-9 rounded-full bg-white/6 flex items-center justify-center">
+                          <Icon size={18} className="text-text-secondary" />
                         </div>
                         <span className="text-text-secondary text-xs leading-tight">
                           {i + 1}. {TASK_LABEL[t]}
@@ -334,7 +334,7 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                   Start Liveness Check
                 </button>
                 <div className="flex items-center justify-center gap-1.5 text-text-tertiary text-xs -mt-2">
-                  <Lock size={12} className="text-emerald-500" />
+                  <Lock size={12} className="text-text-tertiary" />
                   Secure · Private · Encrypted
                 </div>
               </div>

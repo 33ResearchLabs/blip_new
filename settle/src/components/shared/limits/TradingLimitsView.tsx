@@ -173,6 +173,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
   return (
     <div className="w-full space-y-3">
       {/* Subtitle + Secure & Verified badge */}
+      <h2 className="text-lg font-bold mb-1">Limits</h2>
       <div className="flex items-start justify-between gap-3 pb-1">
         <p className="text-[13px] text-text-tertiary leading-snug max-w-[60ch]">
           Complete the steps below to unlock higher trading limits and trade

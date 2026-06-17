@@ -33,7 +33,7 @@ import {
   Lightbulb,
   Wallet,
   ArrowDownToLine,
-  Info,
+  // Info,
   AlertCircle,
   MessageCircle,
   Star,
@@ -257,7 +257,7 @@ export function OrderPaymentScreen({
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[15px] font-semibold text-text-primary">Escrow status</p>
-                <Info className="w-4 h-4 text-text-tertiary shrink-0" />
+                {/* <Info className="w-4 h-4 text-text-tertiary shrink-0" /> */}
               </div>
               <p className={`text-[13px] font-medium ${fundsLocked ? "text-success" : "text-warning"}`}>
                 {fundsLocked ? "Escrow is locked by seller" : "Escrow is not locked yet"}
