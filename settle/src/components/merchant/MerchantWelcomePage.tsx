@@ -768,9 +768,9 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
             </span>
           </div>
           <div className="flex gap-6 text-[11px] text-[var(--mw-text-muted)]">
-            <a href="#" className="hover:text-[var(--mw-text-secondary)] transition-colors">Privacy</a>
-            <a href="#" className="hover:text-[var(--mw-text-secondary)] transition-colors">Terms</a>
-            <a href="#" className="hover:text-[var(--mw-text-secondary)] transition-colors">Risk Warning</a>
+            <a href="https://blip.money/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--mw-text-secondary)] transition-colors">Privacy</a>
+            <a href="https://blip.money/terms" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--mw-text-secondary)] transition-colors">Terms</a>
+            <a href="https://blip.money/risk" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--mw-text-secondary)] transition-colors">Risk Warning</a>
           </div>
           <p className="text-[11px] text-[var(--mw-text-muted)] font-mono">
             Blip Market v1.0

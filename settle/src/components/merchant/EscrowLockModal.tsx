@@ -20,6 +20,8 @@ import { SURFACES } from "@/components/shared/limits/types";
 import { EscrowFlowStepper } from "@/components/shared/trade/EscrowFlowStepper";
 import { ReceivingAccountPicker } from "@/components/shared/trade/ReceivingAccountPicker";
 import { useMerchantReceivingMethods } from "@/components/shared/trade/useMerchantReceivingMethods";
+import { PaymentMethodModal } from "@/components/merchant/PaymentMethodModal";
+import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order } from "@/types/merchant";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
@@ -51,6 +53,8 @@ export function EscrowLockModal({
   onExecute,
 }: EscrowLockModalProps) {
   const router = useRouter();
+  const merchantId = useMerchantStore((s) => s.merchantId);
+  const [showAddPayment, setShowAddPayment] = useState(false);
   // ── Receiving-account picker — the seller picks which saved account the
   // buyer pays into; the choice is shared with the buyer on lock (req 9).
   const recv = useMerchantReceivingMethods(showEscrowModal && !escrowTxHash);
@@ -200,10 +204,12 @@ export function EscrowLockModal({
                     selectedId={selectedAcctId}
                     onSelect={setPickedId}
                     onAddNew={() => {
-                      // Client-side nav (not window.location) so the in-memory
-                      // merchant auth store survives — a hard reload bounces to
-                      // /market/login before the async /api/auth/me restore runs.
-                      router.push("/market/settings");
+                      // Open the Add Payment Method modal inline instead of
+                      // leaving the lock flow; the new account appears in this
+                      // picker on close (recv.refetch). Fall back to settings
+                      // nav only if the merchant id isn't hydrated yet.
+                      if (merchantId) setShowAddPayment(true);
+                      else router.push("/market/settings");
                     }}
                     loading={recv.loading}
                     surfaces={S}
@@ -212,6 +218,19 @@ export function EscrowLockModal({
                         ? "Add a payment method to lock escrow."
                         : null
                     }
+                  />
+                )}
+
+                {/* Add Payment Method — inline over the lock sheet; refetch on
+                    close so a new account shows up in the picker immediately. */}
+                {merchantId && (
+                  <PaymentMethodModal
+                    isOpen={showAddPayment}
+                    merchantId={merchantId}
+                    onClose={() => {
+                      setShowAddPayment(false);
+                      recv.refetch();
+                    }}
                   />
                 )}
 

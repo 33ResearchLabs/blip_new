@@ -1309,9 +1309,37 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       displayOrders = [...mempoolAsOrders, ...displayOrders];
     }
   } else {
-    // ─── ALL: every order, regardless of status. Market feed +
-    // merchant's own orders (including terminal: completed/cancelled/expired).
-    const marketOrders = [...orders];
+    // ─── ALL: LIVE / active orders only — pending + in-progress
+    // (accepted/escrowed/payment_sent) + disputed. TERMINAL orders
+    // (completed / cancelled / expired) are excluded; they belong in History /
+    // the "Mine" tab, not the New feed. Mirrors MobileOrdersView's "All".
+    const TERMINAL = ["completed", "cancelled", "expired"];
+    const isLive = (o: any): boolean => {
+      if (o?.isMempoolOrder) return true; // live broadcast
+      const ui = String(o?.status || "").toLowerCase();
+      const raw = String(o?.dbOrder?.status || "").toLowerCase();
+      const min = String(
+        o?.minimalStatus || o?.dbOrder?.minimal_status || "",
+      ).toLowerCase();
+      if (TERMINAL.includes(ui) || TERMINAL.includes(raw) || TERMINAL.includes(min)) {
+        return false;
+      }
+      // A never-accepted order whose matching window lapsed is effectively
+      // expired even if its status hasn't flipped yet.
+      const expMs = o?.dbOrder?.expires_at
+        ? new Date(o.dbOrder.expires_at).getTime()
+        : NaN;
+      const lapsed =
+        (Number.isFinite(expMs) && expMs <= Date.now()) ||
+        (typeof o?.expiresIn === "number" && o.expiresIn <= 0);
+      const everAccepted =
+        !!o?.dbOrder?.accepted_at ||
+        ["accepted", "escrow", "escrowed", "payment_sent", "disputed"].includes(ui) ||
+        ["accepted", "escrow", "escrowed", "payment_sent", "disputed"].includes(raw) ||
+        ["accepted", "escrow", "escrowed", "payment_sent", "disputed"].includes(min);
+      return !(lapsed && !everAccepted);
+    };
+    const marketOrders = [...orders].filter(isLive);
 
     let allOrders = [...marketOrders];
     if (mempoolOrders.length > 0) {
@@ -1329,7 +1357,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
 
     const allIds = new Set(allOrders.map((o: any) => o.id));
     const uniqueMyOrders = wrappedMyOrders.filter(
-      (o: any) => !allIds.has(o.id) && isCreatedByMe(o),
+      (o: any) => !allIds.has(o.id) && isCreatedByMe(o) && isLive(o),
     );
     displayOrders = [...allOrders, ...uniqueMyOrders];
   }

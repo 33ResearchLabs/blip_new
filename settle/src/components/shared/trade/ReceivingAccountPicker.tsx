@@ -29,6 +29,14 @@ interface Props {
   /** Inline validation error, e.g. "Please select a receiving account…". */
   error?: string | null;
   className?: string;
+  /** Header/CTA copy overrides (default to the Lock Escrow wording). The
+   *  merchant-mobile full-screen Lock Escrow uses "Receive Payment In" etc. */
+  title?: string;
+  subtitle?: string;
+  addLabel?: string;
+  /** Compact rows (tighter padding + smaller tiles) for the merchant-mobile
+   *  full-screen Lock Escrow. Defaults to the roomier modal sizing. */
+  dense?: boolean;
 }
 
 export function detailString(d: RecvAccount["details"]): string {
@@ -86,6 +94,10 @@ export function ReceivingAccountPicker({
   surfaces,
   error,
   className = "",
+  title = "Select Receiving Account",
+  subtitle = "Buyer will pay to the account you select below.",
+  addLabel = "Add New Account",
+  dense = false,
 }: Props) {
   // Group while preserving the server order within each group.
   const groups = GROUP_ORDER.map((key) => ({
@@ -94,10 +106,10 @@ export function ReceivingAccountPicker({
   })).filter((g) => g.items.length > 0);
 
   return (
-    <div className={`rounded-2xl border ${error ? "border-error" : "border-border-subtle"} ${surfaces.card} p-4 ${className}`}>
-      <p className="text-sm font-semibold text-text-primary">Select Receiving Account</p>
-      <p className="text-[11px] text-text-tertiary mt-0.5 mb-3">
-        Buyer will pay to the account you select below.
+    <div className={`rounded-2xl border ${error ? "border-error" : "border-border-subtle"} ${surfaces.card} ${dense ? "p-3" : "p-4"} ${className}`}>
+      <p className="text-sm font-semibold text-text-primary">{title}</p>
+      <p className={`text-[11px] text-text-tertiary mt-0.5 ${dense ? "mb-2" : "mb-3"}`}>
+        {subtitle}
       </p>
 
       {loading && methods.length === 0 ? (
@@ -110,9 +122,9 @@ export function ReceivingAccountPicker({
           No saved accounts yet — add one to lock escrow.
         </p>
       ) : (
-        <div className="space-y-4" role="radiogroup" aria-label="Receiving account">
+        <div className={dense ? "space-y-3" : "space-y-4"} role="radiogroup" aria-label="Receiving account">
           {groups.map((group) => (
-            <div key={group.key} className="space-y-2">
+            <div key={group.key} className={dense ? "space-y-1.5" : "space-y-2"}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
                 {GROUP_LABEL[group.key]}
               </p>
@@ -130,14 +142,14 @@ export function ReceivingAccountPicker({
                     role="radio"
                     aria-checked={selected}
                     onClick={() => onSelect(a.id)}
-                    className={`w-full flex items-center gap-3 rounded-xl p-3 border text-left transition-colors ${
+                    className={`w-full flex items-center ${dense ? "gap-2.5 p-2" : "gap-3 p-3"} rounded-xl border text-left transition-colors ${
                       selected
                         ? "border-accent bg-accent/10"
                         : `border-border-subtle ${surfaces.inset} ${surfaces.hover}`
                     }`}
                   >
                     <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      className={`${dense ? "w-8 h-8" : "w-9 h-9"} rounded-lg flex items-center justify-center shrink-0 ${
                         selected ? "bg-accent/15 text-accent-text" : `${surfaces.chip} text-text-secondary`
                       }`}
                     >
@@ -174,10 +186,10 @@ export function ReceivingAccountPicker({
       <button
         type="button"
         onClick={onAddNew}
-        className={`mt-3 w-full py-2.5 rounded-xl border border-dashed border-border-medium flex items-center justify-center gap-1.5 text-[13px] font-medium text-text-secondary ${surfaces.hover} transition-colors`}
+        className={`${dense ? "mt-2 py-2" : "mt-3 py-2.5"} w-full rounded-xl border border-dashed border-border-medium flex items-center justify-center gap-1.5 text-[13px] font-medium text-text-secondary ${surfaces.hover} transition-colors`}
       >
         <Plus className="w-4 h-4" />
-        Add New Account
+        {addLabel}
       </button>
     </div>
   );

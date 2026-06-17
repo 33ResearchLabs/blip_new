@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
   X,
+  ArrowLeft,
   Shield,
+  Rocket,
   Lock,
   Clock,
   MessageCircle,
@@ -32,6 +34,8 @@ import {
   Star,
   Lightbulb,
   Flag,
+  Sparkles,
+  HelpCircle,
 } from "lucide-react";
 import {
   useState as useLocalState,
@@ -41,22 +45,32 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { formatCrypto, formatCount } from "@/lib/format";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 // Backend-driven: action buttons read from dbOrder.primaryAction/secondaryAction
 import type { Order } from "@/types/merchant";
 import { CopyableBankDetails } from "@/components/shared/CopyableBankDetails";
-import { ReceivingAccountPicker, detailString } from "@/components/shared/trade/ReceivingAccountPicker";
+import {
+  ReceivingAccountPicker,
+  detailString,
+} from "@/components/shared/trade/ReceivingAccountPicker";
 import { useMerchantReceivingMethods } from "@/components/shared/trade/useMerchantReceivingMethods";
+import { PaymentMethodModal } from "@/components/merchant/PaymentMethodModal";
+import { useMerchantStore } from "@/stores/merchantStore";
 import { maskAccountDetail } from "@/lib/mask";
 import { SURFACES } from "@/components/shared/limits/types";
 
 /** Map fiat currency code to display symbol */
 function fiatSymbol(code: string | undefined | null): string {
   switch ((code || "").toUpperCase()) {
-    case "INR": return "₹";
-    case "USD": return "$";
-    case "AED": return "د.إ";
-    default: return (code || "AED").toUpperCase();
+    case "INR":
+      return "₹";
+    case "USD":
+      return "$";
+    case "AED":
+      return "د.إ";
+    default:
+      return (code || "AED").toUpperCase();
   }
 }
 
@@ -145,7 +159,7 @@ function LockedPaymentMethodCard({
       <div className="flex items-center gap-2">
         <Lock className="w-3.5 h-3.5 text-[#f5f5f7]" />
         <span className="text-[11px] text-[#f5f5f7] uppercase tracking-wide font-bold">
-          Send {currency || 'AED'} Here
+          Send {currency || "AED"} Here
         </span>
       </div>
       <div className="flex items-center gap-2">
@@ -282,8 +296,8 @@ function OpenMarketWaitingCard({
             </span>
           </div>
           <p className="text-xs text-foreground/45 mt-1 leading-relaxed">
-            Your order is visible to all merchants. Once a merchant accepts, they
-            will lock USDT in escrow and provide payment details.
+            Your order is visible to all merchants. Once a merchant accepts,
+            they will lock USDT in escrow and provide payment details.
           </p>
         </div>
       </div>
@@ -366,7 +380,10 @@ function useCounterpartyPresence(
   actorType: string | null,
   actorId: string | null,
 ): { isOnline: boolean; lastSeen: string | null } {
-  const [member, setMember] = useLocalState<{ isOnline: boolean; lastSeen: string | null } | null>(null);
+  const [member, setMember] = useLocalState<{
+    isOnline: boolean;
+    lastSeen: string | null;
+  } | null>(null);
   useLocalEffect(() => {
     if (!orderId || !actorType || !actorId) return;
     let cancelled = false;
@@ -420,9 +437,21 @@ function PresenceRatingWalletRows({
       <div className="flex justify-between gap-2 items-center">
         <span className="text-foreground/45">Status</span>
         <span className="flex items-center gap-1.5">
-          <span className={`w-1.5 h-1.5 rounded-full ${online ? "bg-emerald-400" : "bg-foreground/30"}`} />
-          <span className={`font-semibold ${online ? "text-emerald-400" : "text-foreground/60"}`}>
-            {online ? "Online" : lastSeen ? `last seen ${formatLastSeen(lastSeen, now)}` : "Offline"}
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              online ? "bg-emerald-400" : "bg-foreground/30"
+            }`}
+          />
+          <span
+            className={`font-semibold ${
+              online ? "text-emerald-400" : "text-foreground/60"
+            }`}
+          >
+            {online
+              ? "Online"
+              : lastSeen
+              ? `last seen ${formatLastSeen(lastSeen, now)}`
+              : "Offline"}
           </span>
         </span>
       </div>
@@ -433,10 +462,16 @@ function PresenceRatingWalletRows({
             {[1, 2, 3, 4, 5].map((i) => (
               <Star
                 key={i}
-                className={`w-3 h-3 ${i <= Math.round(ratingNum) ? "text-amber-400 fill-amber-400" : "text-foreground/20"}`}
+                className={`w-3 h-3 ${
+                  i <= Math.round(ratingNum)
+                    ? "text-amber-400 fill-amber-400"
+                    : "text-foreground/20"
+                }`}
               />
             ))}
-            <span className="font-semibold text-foreground/80 ml-1">{ratingNum.toFixed(1)}</span>
+            <span className="font-semibold text-foreground/80 ml-1">
+              {ratingNum.toFixed(1)}
+            </span>
           </span>
         </div>
       )}
@@ -453,7 +488,11 @@ function PresenceRatingWalletRows({
             className="flex items-center gap-1 font-mono text-foreground/70 hover:text-foreground transition-colors"
           >
             {wallet.slice(0, 4)}…{wallet.slice(-4)}
-            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            {copied ? (
+              <Check className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <Copy className="w-3 h-3" />
+            )}
           </button>
         </div>
       )}
@@ -477,8 +516,13 @@ function AcceptorBuyOrderBody({
   }, []);
   const countdown = (target: string | undefined) => {
     if (!target) return null;
-    const r = Math.max(0, Math.floor((new Date(target).getTime() - now) / 1000));
-    return `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(r % 60).padStart(2, "0")}`;
+    const r = Math.max(
+      0,
+      Math.floor((new Date(target).getTime() - now) / 1000),
+    );
+    return `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(
+      r % 60,
+    ).padStart(2, "0")}`;
   };
 
   const PM_META: Record<string, { label: string; Icon: typeof Building2 }> = {
@@ -503,7 +547,9 @@ function AcceptorBuyOrderBody({
   const ratingNum = typeof buyer.rating === "number" ? buyer.rating : null;
   // Rating is 0-5; surface as an x/100 trust score when present.
   const trustScore =
-    ratingNum != null && ratingNum > 0 ? Math.round((ratingNum / 5) * 100) : null;
+    ratingNum != null && ratingNum > 0
+      ? Math.round((ratingNum / 5) * 100)
+      : null;
   // Success rate from completed vs disputed trades; null (→ hidden) when none.
   const successRate =
     trades > 0 ? Math.round(((trades - disputes) / trades) * 100) : null;
@@ -577,12 +623,18 @@ function AcceptorBuyOrderBody({
             Order Summary
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-foreground">{order.amount}</span>
-            <span className="text-sm font-semibold text-foreground/60">USDT</span>
+            <span className="text-2xl font-bold text-foreground">
+              {order.amount}
+            </span>
+            <span className="text-sm font-semibold text-foreground/60">
+              USDT
+            </span>
           </div>
           <div className="text-lg font-bold text-foreground">
             {sym} {total.toLocaleString()}{" "}
-            <span className="text-xs font-medium text-foreground/40">{ccy}</span>
+            <span className="text-xs font-medium text-foreground/40">
+              {ccy}
+            </span>
           </div>
           <div className="pt-2 border-t border-foreground/[0.04] space-y-1.5 text-[12px]">
             <div className="flex justify-between gap-2">
@@ -594,12 +646,16 @@ function AcceptorBuyOrderBody({
             {expiresIn && (
               <div className="flex justify-between gap-2">
                 <span className="text-foreground/40">Order Expires In</span>
-                <span className="font-mono text-amber-400 font-bold">{expiresIn}</span>
+                <span className="font-mono text-amber-400 font-bold">
+                  {expiresIn}
+                </span>
               </div>
             )}
             <div className="flex justify-between gap-2">
               <span className="text-foreground/40">Order ID</span>
-              <span className="font-mono text-foreground/60 truncate">{orderIdShort}</span>
+              <span className="font-mono text-foreground/60 truncate">
+                {orderIdShort}
+              </span>
             </div>
             {createdLabel && (
               <div className="flex justify-between gap-2">
@@ -616,7 +672,10 @@ function AcceptorBuyOrderBody({
           </span>
           <div className="space-y-2.5">
             {types.map((t) => {
-              const m = PM_META[t] ?? { label: t.toUpperCase(), Icon: CreditCard };
+              const m = PM_META[t] ?? {
+                label: t.toUpperCase(),
+                Icon: CreditCard,
+              };
               const Icon = m.Icon;
               return (
                 <div key={t} className="flex items-center gap-2.5">
@@ -633,7 +692,9 @@ function AcceptorBuyOrderBody({
           </div>
           {preferred && (
             <div className="pt-2 border-t border-foreground/[0.04]">
-              <p className="text-[11px] text-foreground/40 mb-1">Preferred Method</p>
+              <p className="text-[11px] text-foreground/40 mb-1">
+                Preferred Method
+              </p>
               <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent)] uppercase">
                 {PM_META[preferred]?.label ?? preferred}
               </span>
@@ -644,50 +705,58 @@ function AcceptorBuyOrderBody({
 
       {/* Buyer Trust — commented out */}
       {false && (
-      <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-2">
-        <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-emerald-400" />
-          <span className="text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
-            Buyer Trust
-          </span>
-          {trustScore != null && (
-            <span className="ml-auto text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
-              {trustScore}/100
+        <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-emerald-400" />
+            <span className="text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+              Buyer Trust
             </span>
-          )}
-        </div>
-        <div className="space-y-1.5 text-[12px]">
-          <div className="flex justify-between gap-2">
-            <span className="text-foreground/45">Completed Trades</span>
-            <span className="font-semibold text-foreground/80">{trades}</span>
+            {trustScore != null && (
+              <span className="ml-auto text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
+                {trustScore}/100
+              </span>
+            )}
           </div>
-          <PresenceRatingWalletRows
-            online={online}
-            lastSeen={presence.lastSeen}
-            now={now}
-            ratingNum={ratingNum}
-            wallet={buyerWallet}
-          />
-          {successRate != null && (
+          <div className="space-y-1.5 text-[12px]">
             <div className="flex justify-between gap-2">
-              <span className="text-foreground/45">Success Rate</span>
-              <span className="font-semibold text-emerald-400">{successRate}%</span>
+              <span className="text-foreground/45">Completed Trades</span>
+              <span className="font-semibold text-foreground/80">{trades}</span>
             </div>
-          )}
-          {ageLabel && (
+            <PresenceRatingWalletRows
+              online={online}
+              lastSeen={presence.lastSeen}
+              now={now}
+              ratingNum={ratingNum}
+              wallet={buyerWallet}
+            />
+            {successRate != null && (
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/45">Success Rate</span>
+                <span className="font-semibold text-emerald-400">
+                  {successRate}%
+                </span>
+              </div>
+            )}
+            {ageLabel && (
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/45">Account Age</span>
+                <span className="font-semibold text-foreground/80">
+                  {ageLabel}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between gap-2">
-              <span className="text-foreground/45">Account Age</span>
-              <span className="font-semibold text-foreground/80">{ageLabel}</span>
+              <span className="text-foreground/45">KYC Status</span>
+              <span
+                className={`font-semibold ${
+                  verified ? "text-emerald-400" : "text-foreground/50"
+                }`}
+              >
+                {verified ? "Verified" : "Unverified"}
+              </span>
             </div>
-          )}
-          <div className="flex justify-between gap-2">
-            <span className="text-foreground/45">KYC Status</span>
-            <span className={`font-semibold ${verified ? "text-emerald-400" : "text-foreground/50"}`}>
-              {verified ? "Verified" : "Unverified"}
-            </span>
           </div>
         </div>
-      </div>
       )}
 
       {/* After you accept */}
@@ -723,7 +792,9 @@ function AcceptorBuyOrderBody({
           <Shield className="w-4 h-4 text-[var(--accent)]" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">Escrow Protection</p>
+          <p className="text-sm font-semibold text-foreground">
+            Escrow Protection
+          </p>
           <p className="text-xs text-foreground/45 mt-0.5">
             Your USDT will be securely locked in escrow. Release happens only
             after you confirm you have received the payment.
@@ -746,6 +817,7 @@ function ActiveOrderBody({
   role,
   onRecvSelectionChange,
   onWaitingTimeout,
+  fullScreen = false,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   order: any;
@@ -757,10 +829,26 @@ function ActiveOrderBody({
   /** Reports when a seller's waiting stage (escrowed/payment_sent) has passed
    *  its deadline, so the footer can surface Need Help / Raise Appeal. */
   onWaitingTimeout?: (timedOut: boolean) => void;
+  /** Merchant-mobile full-screen variant. At the lock stage it renders the
+   *  dedicated pixel-spec layout (Payment Method + Expected Completion row,
+   *  "Receive Payment In" picker, green "Escrow protects both parties" banner,
+   *  4-up assurance footer). Desktop/modal (false) keeps the 2-column layout. */
+  fullScreen?: boolean;
 }) {
   const router = useRouter();
+  const merchantId = useMerchantStore((s) => s.merchantId);
+  const [showAddPayment, setShowAddPayment] = useLocalState(false);
   const [now, setNow] = useLocalState(() => Date.now());
   const [copiedId, setCopiedId] = useLocalState(false);
+  // Completed-order rating widget (full-screen merchant view) — posts to
+  // /api/ratings, which auto-routes the rating to the counterparty.
+  const [rating, setRating] = useLocalState(0);
+  const [reviewText, setReviewText] = useLocalState("");
+  const [ratingBusy, setRatingBusy] = useLocalState(false);
+  const [ratingDone, setRatingDone] = useLocalState(false);
+  const [ratingErr, setRatingErr] = useLocalState<string | null>(null);
+  // Buyer payment-method list: show up to 3, expand to reveal any extras.
+  const [pmExpanded, setPmExpanded] = useLocalState(false);
   useLocalEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
@@ -775,8 +863,13 @@ function ActiveOrderBody({
 
   const countdown = (target: string | undefined) => {
     if (!target) return null;
-    const r = Math.max(0, Math.floor((new Date(target).getTime() - now) / 1000));
-    return `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(r % 60).padStart(2, "0")}`;
+    const r = Math.max(
+      0,
+      Math.floor((new Date(target).getTime() - now) / 1000),
+    );
+    return `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(
+      r % 60,
+    ).padStart(2, "0")}`;
   };
   const expiresIn = countdown(db.expires_at);
 
@@ -834,20 +927,62 @@ function ActiveOrderBody({
   const banner = (() => {
     if (isSeller) {
       if (status === "accepted")
-        return { heading: "Action Required", title: `Lock ${amount} USDT in escrow to start the trade.`, sub: "Buyer cannot send payment until escrow is locked.", Icon: Hourglass, urgent: true };
+        return {
+          heading: "Action Required",
+          title: `Lock ${amount} USDT in escrow to start the trade.`,
+          sub: "Buyer cannot send payment until escrow is locked.",
+          Icon: Hourglass,
+          urgent: true,
+        };
       if (status === "escrowed")
-        return { heading: "Escrow Locked", title: "Waiting for the buyer to send payment.", sub: "You'll be notified the moment they mark it as paid.", Icon: Clock, urgent: false };
+        return {
+          heading: "Escrow Locked",
+          title: "Waiting for the buyer to send payment.",
+          sub: "You'll be notified the moment they mark it as paid.",
+          Icon: Clock,
+          urgent: false,
+        };
       if (status === "payment_sent")
-        return { heading: "Action Required", title: `Buyer marked the ${ccy} payment as sent.`, sub: "Verify it landed in your account, then release the USDT.", Icon: ShieldCheck, urgent: true };
+        return {
+          heading: "Action Required",
+          title: `Buyer marked the ${ccy} payment as sent.`,
+          sub: "Verify it landed in your account, then release the USDT.",
+          Icon: ShieldCheck,
+          urgent: true,
+        };
     } else {
       if (status === "accepted")
-        return { heading: "Please Wait", title: "Seller is locking USDT in escrow.", sub: `You can send ${ccy} once escrow is locked.`, Icon: Clock, urgent: false };
+        return {
+          heading: "Please Wait",
+          title: "Seller is locking USDT in escrow.",
+          sub: `You can send ${ccy} once escrow is locked.`,
+          Icon: Clock,
+          urgent: false,
+        };
       if (status === "escrowed")
-        return { heading: "Action Required", title: `Send ${sym}${total.toLocaleString()} to the seller.`, sub: "Mark the payment as sent once you've paid.", Icon: Banknote, urgent: true };
+        return {
+          heading: "Action Required",
+          title: `Send ${sym}${total.toLocaleString()} to the seller.`,
+          sub: "Mark the payment as sent once you've paid.",
+          Icon: Banknote,
+          urgent: true,
+        };
       if (status === "payment_sent")
-        return { heading: "Please Wait", title: "Seller is verifying your payment.", sub: "USDT will be released to you once confirmed.", Icon: Clock, urgent: false };
+        return {
+          heading: "Please Wait",
+          title: "Seller is verifying your payment.",
+          sub: "USDT will be released to you once confirmed.",
+          Icon: Clock,
+          urgent: false,
+        };
     }
-    return { heading: "In Progress", title: "Trade in progress.", sub: "", Icon: Clock, urgent: false };
+    return {
+      heading: "In Progress",
+      title: "Trade in progress.",
+      sub: "",
+      Icon: Clock,
+      urgent: false,
+    };
   })();
   const BannerIcon = banner.Icon;
 
@@ -858,7 +993,9 @@ function ActiveOrderBody({
   const verified = !!cp.is_verified;
   const ratingNum = typeof cp.rating === "number" ? cp.rating : null;
   const trustScore =
-    ratingNum != null && ratingNum > 0 ? Math.round((ratingNum / 5) * 100) : null;
+    ratingNum != null && ratingNum > 0
+      ? Math.round((ratingNum / 5) * 100)
+      : null;
   const successRate =
     trades > 0 ? Math.round(((trades - disputes) / trades) * 100) : null;
   const ageLabel = (() => {
@@ -888,7 +1025,9 @@ function ActiveOrderBody({
   const [recvPickedId, setRecvPickedId] = useLocalState<string | null>(null);
   const recvSelectedId =
     recvPickedId ??
-    (recv.methods.find((m) => m.is_default)?.id ?? recv.methods[0]?.id ?? null);
+    recv.methods.find((m) => m.is_default)?.id ??
+    recv.methods[0]?.id ??
+    null;
 
   // Bubble the effective receiving account up to the popup footer so its
   // "Lock Escrow" button locks into the account the seller selected here.
@@ -920,7 +1059,10 @@ function ActiveOrderBody({
       {payTypes.length > 0 ? (
         <div className="space-y-2.5">
           {payTypes.map((t) => {
-            const m = PM_META[t] ?? { label: t.toUpperCase(), Icon: CreditCard };
+            const m = PM_META[t] ?? {
+              label: t.toUpperCase(),
+              Icon: CreditCard,
+            };
             const Icon = m.Icon;
             return (
               <div key={t} className="flex items-center gap-2.5">
@@ -936,7 +1078,9 @@ function ActiveOrderBody({
           })}
           {preferred && (
             <div className="pt-2 border-t border-foreground/[0.04]">
-              <p className="text-[11px] text-foreground/40 mb-1">Preferred Method</p>
+              <p className="text-[11px] text-foreground/40 mb-1">
+                Preferred Method
+              </p>
               <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent)] uppercase">
                 {PM_META[preferred]?.label ?? preferred}
               </span>
@@ -950,6 +1094,920 @@ function ActiveOrderBody({
       )}
     </div>
   );
+
+  // Relative "created … ago" for the full-screen summary (mock: "2 min ago").
+  const createdAgo = (() => {
+    if (!db.created_at) return "";
+    const diff = Math.max(0, now - new Date(db.created_at).getTime());
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return `${m} min ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} hr${h > 1 ? "s" : ""} ago`;
+    const d = Math.floor(h / 24);
+    return `${d} day${d > 1 ? "s" : ""} ago`;
+  })();
+
+  // ── Merchant-mobile FULL-SCREEN "Order Completed" layout (pixel spec) ─────
+  // Shown once the trade is done (status `completed`): success hero, order
+  // details, counterparty card, a star-rating widget (posts to /api/ratings),
+  // and a tip. The app-bar title/Order-ID/Help and the "Back to Home" CTA are
+  // rendered by the wrapper. Desktop/modal keep their own completed layout.
+  if (fullScreen && status === "completed") {
+    const completedAt = db.completed_at || db.updated_at || null;
+    const fmtDT = (iso: string) => {
+      const d = new Date(iso);
+      const t = d.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      const dt = d.toLocaleDateString("en-US", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      return { t, dt, full: `${t}, ${dt}` };
+    };
+    const comp = completedAt ? fmtDT(completedAt) : null;
+    const cryptoStr = `${formatCrypto(Number(amount) || 0)} USDT`;
+    const fiatStr = `${sym}${formatCrypto(Number(order.total) || 0)} ${ccy}`;
+    const pmText = PM_META[preferred ?? "bank"]?.label ?? "Bank Transfer";
+    const releasedWord = isSeller ? "Released" : "Received";
+    const heroSub = isSeller
+      ? "You have confirmed the payment. The crypto has been released to the buyer."
+      : "The seller confirmed your payment and released the crypto to you.";
+    const cpName = (order.user as string) || (cp.name as string) || "Trader";
+    const initials =
+      cpName
+        .split(/\s+/)
+        .map((w: string) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase() || "U";
+
+    const submitRating = async () => {
+      if (ratingBusy || ratingDone || rating < 1 || !merchantId) return;
+      setRatingBusy(true);
+      setRatingErr(null);
+      try {
+        const res = await fetchWithAuth("/api/ratings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: db.id,
+            rater_type: "merchant",
+            rater_id: merchantId,
+            rating,
+            review_text: reviewText.trim() || undefined,
+          }),
+        });
+        const json = await res.json().catch(() => null);
+        const msg = String(
+          json?.error || json?.errors?.[0] || "",
+        ).toLowerCase();
+        // Treat "already rated" as success so a re-tap doesn't dead-end.
+        if (res.ok || msg.includes("already")) {
+          setRatingDone(true);
+        } else {
+          setRatingErr(
+            json?.error ||
+              json?.errors?.[0] ||
+              "Couldn't submit rating. Please retry.",
+          );
+        }
+      } catch {
+        setRatingErr(
+          "Couldn't submit rating. Check your connection and retry.",
+        );
+      } finally {
+        setRatingBusy(false);
+      }
+    };
+
+    return (
+      <>
+        {/* Success hero */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-center">
+          <div className="relative inline-flex items-center justify-center mb-4">
+            <Sparkles className="w-4 h-4 text-emerald-400 absolute -left-6 -top-1" />
+            <Sparkles className="w-3 h-3 text-emerald-400/80 absolute -right-6 top-0" />
+            <Sparkles className="w-2.5 h-2.5 text-emerald-400/60 absolute -right-7 bottom-0" />
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{
+                type: "spring",
+                damping: 12,
+                stiffness: 200,
+                delay: 0.05,
+              }}
+              className="w-16 h-16 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20 flex items-center justify-center"
+            >
+              <Check className="w-8 h-8 text-white" strokeWidth={3} />
+            </motion.div>
+          </div>
+          <p className="text-2xl font-bold text-foreground mb-1.5">
+            {cryptoStr} {releasedWord}
+          </p>
+          <p className="text-[13px] text-foreground/55 leading-snug px-2">
+            {heroSub}
+          </p>
+          {comp && (
+            <div className="mt-4 pt-4 border-t border-white/[0.06] flex items-center justify-center gap-2 text-[12px] text-foreground/55">
+              <Clock className="w-4 h-4 text-emerald-400" />
+              Completed at {comp.t} • {comp.dt}
+            </div>
+          )}
+        </div>
+
+        {/* Order Details */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-1.5">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+              <FileText className="w-4 h-4 text-emerald-400" />
+            </div>
+            <p className="text-[15px] font-semibold text-foreground">
+              Order Details
+            </p>
+          </div>
+          <div className="divide-y divide-white/[0.06] px-4">
+            {[
+              { label: isSeller ? "You Received" : "You Paid", value: fiatStr },
+              {
+                label: isSeller ? "You Released" : "You Received",
+                value: cryptoStr,
+              },
+              {
+                label: "Rate",
+                value: `${sym}${formatCrypto(Number(order.rate) || 0)}`,
+              },
+              { label: "Payment Method", value: pmText },
+              { label: "Completed", value: comp?.full ?? "—" },
+            ].map((r) => (
+              <div
+                key={r.label}
+                className="flex items-center justify-between gap-4 py-3"
+              >
+                <span className="text-[13px] text-foreground/55 shrink-0">
+                  {r.label}
+                </span>
+                <span className="text-[13px] font-semibold text-foreground text-right">
+                  {r.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Counterparty */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 flex items-center gap-3">
+          <div className="relative shrink-0">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
+              {initials}
+            </div>
+            {online && (
+              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#0e0e10]" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="text-[15px] font-semibold text-foreground truncate">
+                {cpName}
+              </p>
+              {verified && (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              )}
+            </div>
+            <div className="flex items-center gap-1 text-[12px] text-foreground/55 mt-0.5">
+              {ratingNum != null && ratingNum > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                  {formatCrypto(ratingNum, { decimals: 1 })}
+                </span>
+              )}
+              {trades > 0 && <span>({formatCount(trades)} trades)</span>}
+              {successRate != null && <span>· {successRate}% completion</span>}
+            </div>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              {verified && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/15">
+                  <ShieldCheck className="w-3 h-3" /> Verified
+                </span>
+              )}
+              {online && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-foreground/[0.06] text-foreground/55">
+                  <MessageCircle className="w-3 h-3" /> Online now
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              // No counterparty-profile route is wired into this view yet; the
+              // button matches the mock and is a no-op until one is provided.
+            }}
+            className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[13px] font-semibold bg-foreground/[0.06] text-foreground border border-white/[0.08] hover:bg-foreground/[0.1] transition-colors"
+          >
+            View Profile
+            <ChevronRight className="w-4 h-4 text-foreground/40" />
+          </button>
+        </div>
+
+        {/* Rating */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-400/15 flex items-center justify-center shrink-0">
+              <Star className="w-5 h-5 text-amber-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold text-foreground">
+                How was your trading experience?
+              </p>
+              <p className="text-[12px] text-foreground/45">
+                Your feedback helps us improve Blip P2P
+              </p>
+            </div>
+          </div>
+
+          {ratingDone ? (
+            <p className="mt-4 flex items-center justify-center gap-1.5 text-[12px] text-emerald-400">
+              <Check className="w-4 h-4" /> Thanks! You rated this trade{" "}
+              {rating} star
+              {rating === 1 ? "" : "s"}.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-1 mt-4 px-1">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    disabled={ratingBusy}
+                    onClick={() => setRating(s)}
+                    aria-label={`Rate ${s} star${s === 1 ? "" : "s"}`}
+                    className="disabled:cursor-default"
+                  >
+                    <Star
+                      className={`w-9 h-9 ${
+                        s <= rating
+                          ? "text-amber-400 fill-amber-400"
+                          : "text-foreground/20"
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-between px-1 mt-1.5">
+                <span className="text-[10px] text-foreground/40">
+                  Very Poor
+                </span>
+                <span className="text-[10px] text-foreground/40">
+                  Excellent
+                </span>
+              </div>
+              <div className="relative mt-3">
+                <textarea
+                  placeholder="Leave optional feedback…"
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
+                  maxLength={300}
+                  rows={2}
+                  className="w-full p-3 pr-12 rounded-xl text-[13px] text-foreground bg-foreground/[0.04] border border-foreground/[0.08] resize-none outline-none placeholder:text-foreground/30 focus:border-foreground/20"
+                />
+                <span className="absolute bottom-2 right-3 text-[10px] text-foreground/30">
+                  {reviewText.length}/300
+                </span>
+              </div>
+              {ratingErr && (
+                <p className="text-[11px] text-red-400 mt-2">{ratingErr}</p>
+              )}
+              {rating > 0 && (
+                <button
+                  type="button"
+                  onClick={submitRating}
+                  disabled={ratingBusy}
+                  className="mt-3 w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-[13px] flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"
+                >
+                  {ratingBusy ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Star className="w-4 h-4" />
+                  )}
+                  Submit Rating
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Tip */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 flex gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+            <Lightbulb className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-foreground mb-0.5">
+              Tip
+            </p>
+            <p className="text-[12px] text-foreground/55 leading-snug">
+              Your positive feedback and ratings help build trust in the
+              community.
+            </p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Merchant-mobile FULL-SCREEN "Verify Payment" layout (pixel spec) ──────
+  // Seller's payment_sent stage: buyer marked fiat as sent, seller verifies it
+  // landed and releases. Polished single-column stack: green Action-Required
+  // banner, stepper (Verify Payment = CURRENT), counterparty + You Locked /
+  // Buyer Will Pay, details grid, verify guidance, escrow + warning. Footer
+  // (Confirm & Release / Raise Appeal / Need Help) is rendered by the wrapper.
+  if (fullScreen && isSeller && status === "payment_sent") {
+    const cpName = (order.user as string) || (cp.name as string) || "Trader";
+    const initials =
+      cpName
+        .split(/\s+/)
+        .map((w: string) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase() || "U";
+    const pmText = PM_META[preferred ?? "bank"]?.label ?? "Bank Transfer";
+    const recvM = order.sellerPaymentMethod;
+    const recvMasked = recvM ? maskAccountDetail(recvM.type, detailString(recvM.details)) : "";
+    const recvT = (recvM?.type || "").toLowerCase();
+    const RecvIcon = recvT === "bank" ? Building2 : recvT === "card" ? CreditCard : Smartphone;
+    const VERIFY_STEPS: { label: string; Icon: typeof Lock }[] = [
+      { label: "Accepted", Icon: Check },
+      { label: "Escrow Locked", Icon: Lock },
+      { label: "Buyer Pays", Icon: Banknote },
+      { label: "Verify Payment", Icon: ShieldCheck },
+      { label: "Release USDT", Icon: Rocket },
+    ];
+    return (
+      <>
+        {/* Action Required banner */}
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[13px] font-bold text-emerald-400">{banner.heading}</p>
+                {expiresIn && (
+                  <span className="flex items-center gap-1 text-[10px] text-foreground/40 shrink-0 whitespace-nowrap">
+                    <Clock className="w-3 h-3" /> Expires in{" "}
+                    <span className="font-mono font-bold text-emerald-400">{expiresIn}</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[13px] font-semibold text-foreground mt-1 leading-snug">{banner.title}</p>
+              <p className="text-[11px] text-foreground/45 mt-0.5">{banner.sub}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Stepper — Verify Payment current */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="flex items-start justify-between">
+            {VERIFY_STEPS.map((s, i) => {
+              const done = i < currentStep;
+              const current = i === currentStep;
+              const Icon = s.Icon;
+              return (
+                <Fragment key={i}>
+                  <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                    <div
+                      className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                        done || current
+                          ? "bg-emerald-500 text-white"
+                          : "bg-white/[0.04] text-foreground/30 border border-white/[0.06]"
+                      }`}
+                    >
+                      {done ? <Check className="w-4 h-4" strokeWidth={3} /> : <Icon className="w-4 h-4" />}
+                    </div>
+                    <span
+                      className={`text-[9px] text-center leading-tight ${
+                        done ? "text-foreground/60" : current ? "text-emerald-400 font-semibold" : "text-foreground/30"
+                      }`}
+                    >
+                      {s.label}
+                    </span>
+                    {current && (
+                      <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wide">Current</span>
+                    )}
+                  </div>
+                  {i < VERIFY_STEPS.length - 1 && (
+                    <ChevronRight
+                      className={`w-3 h-3 mt-3 shrink-0 ${i < currentStep ? "text-emerald-500/50" : "text-foreground/15"}`}
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Counterparty + amounts */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="flex items-center gap-3">
+            <div className="relative shrink-0">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
+                {initials}
+              </div>
+              {online && (
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#0e0e10]" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[15px] font-semibold text-foreground truncate">{cpName}</p>
+                {verified && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+              </div>
+              <div className="flex items-center gap-1 text-[12px] text-foreground/55 mt-0.5">
+                {ratingNum != null && ratingNum > 0 && (
+                  <span className="inline-flex items-center gap-0.5">
+                    <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                    {formatCrypto(ratingNum, { decimals: 1 })}
+                  </span>
+                )}
+                {trades > 0 && <span>({formatCount(trades)} trades)</span>}
+                {successRate != null && <span>· {successRate}% completion</span>}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                {verified && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/15">
+                    <ShieldCheck className="w-3 h-3" /> Verified Merchant
+                  </span>
+                )}
+                {online && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-foreground/[0.06] text-foreground/55">
+                    <MessageCircle className="w-3 h-3" /> Online
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/[0.06]">
+            <div className="space-y-0.5 border-r border-white/[0.06] pr-4">
+              <p className="text-[10px] text-foreground/40">You Locked</p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-2xl font-bold text-foreground leading-none">{formatCrypto(Number(amount) || 0)}</span>
+                <span className="text-sm font-semibold text-foreground/60">USDT</span>
+                <Coins className="w-3.5 h-3.5 text-emerald-400/70" />
+              </div>
+              <p className="text-[12px] text-foreground/70">
+                ≈ {sym}{formatCrypto(Number(order.total) || 0)} {ccy}
+              </p>
+              <p className="text-[10px] text-foreground/40">@ {formatCrypto(Number(order.rate) || 0)} {ccy}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-[10px] text-foreground/40 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Buyer Will Pay
+              </p>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-foreground leading-none">
+                  {sym}{formatCrypto(Number(order.total) || 0)}
+                </span>
+                <span className="text-sm font-semibold text-foreground/60">{ccy}</span>
+              </div>
+              <p className="text-[10px] text-foreground/40">@ {formatCrypto(Number(order.rate) || 0)} {ccy}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Details grid */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
+            <div className="flex items-start gap-2 border-r border-white/[0.06] pr-4">
+              <FileText className="w-3.5 h-3.5 text-foreground/40 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] text-foreground/40">Order ID</p>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(orderIdShort);
+                    setCopiedId(true);
+                    setTimeout(() => setCopiedId(false), 2000);
+                  }}
+                  className="flex items-center gap-1 font-mono text-[12px] text-foreground/70 hover:text-foreground"
+                >
+                  <span className="truncate">{orderIdShort}</span>
+                  {copiedId ? (
+                    <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                  ) : (
+                    <Copy className="w-3 h-3 text-foreground/30 shrink-0" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Lock className="w-3.5 h-3.5 text-foreground/40 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] text-foreground/40">Rate (Locked)</p>
+                <p className="text-[12px] font-mono text-foreground/70">1 USDT = {formatCrypto(Number(order.rate) || 0)} {ccy}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 border-r border-white/[0.06] pr-4">
+              <Building2 className="w-3.5 h-3.5 text-foreground/40 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] text-foreground/40">Payment Method</p>
+                <p className="text-[12px] text-foreground/70">{pmText}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Clock className="w-3.5 h-3.5 text-foreground/40 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] text-foreground/40">Created</p>
+                <p className="text-[12px] text-foreground/70">{createdAgo || "—"}</p>
+              </div>
+            </div>
+            {recvM && (
+              <div className="flex items-start gap-2 border-r border-white/[0.06] pr-4">
+                <RecvIcon className="w-3.5 h-3.5 text-foreground/40 mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-foreground/40">Receive Payment In</p>
+                  <p className="text-[12px] font-mono text-foreground/70 truncate">{recvMasked || recvM.name}</p>
+                  {recvMasked && recvM.name && (
+                    <p className="text-[10px] text-foreground/40 truncate">{recvM.name}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="flex items-start gap-2">
+              <Clock className="w-3.5 h-3.5 text-emerald-400/70 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] text-foreground/40">Expected Completion</p>
+                <p className="text-[12px] text-foreground/70">~ 10 min</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Verify guidance */}
+        <div className="rounded-2xl border border-blue-500/15 bg-blue-500/[0.05] p-4 flex items-start gap-3">
+          <div className="w-9 h-9 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+            <Hourglass className="w-4 h-4 text-blue-300" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-blue-300">Verify the buyer&apos;s payment</p>
+            <p className="text-[12px] text-foreground/55 mt-0.5 leading-snug">
+              The buyer marked the payment as sent. Confirm it landed in your account before you release the USDT.
+            </p>
+          </div>
+        </div>
+
+        {/* Escrow protects */}
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-emerald-400">Escrow protects both parties</p>
+            <p className="text-[12px] text-foreground/50 mt-0.5 leading-snug">
+              Your funds are secured in escrow. They are released to the buyer only once you confirm payment.
+            </p>
+          </div>
+        </div>
+
+        {/* Do-not-release warning */}
+        <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-3 flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-foreground/50 mt-0.5 shrink-0" />
+          <p className="text-[12px] text-foreground/55 leading-snug">
+            <span className="text-foreground/80 font-medium">
+              Do not release USDT until you have received the payment in your account.
+            </span>{" "}
+            Releasing before payment may result in loss of funds.
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  // ── Merchant-mobile FULL-SCREEN lock layout (pixel spec) ──────────────────
+  // Bespoke single-column stack matching the Lock Escrow mock: green Action
+  // Required banner, green-accented stepper, 2-col Order Summary, Payment
+  // Method + Expected Completion row, "Receive Payment In" picker, green
+  // "Escrow protects both parties" banner, and the 4-up assurance footer. Only
+  // the lock stage (seller, accepted) uses this; other stages + desktop fall
+  // through to the standard layout below, so nothing else changes.
+  if (fullScreen && needsLock) {
+    return (
+      <>
+        {/* Action Required banner */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-7 h-7 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[13px] font-bold text-emerald-400">
+                  Action Required
+                </p>
+                {expiresIn && (
+                  <span className="flex items-center gap-1 text-[10px] text-foreground/40 shrink-0 whitespace-nowrap">
+                    <Clock className="w-3 h-3" /> Expires in{" "}
+                    <span className="font-mono font-bold text-emerald-400">
+                      {expiresIn}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[13px] font-semibold text-foreground mt-1 leading-snug">
+                Lock {amount} USDT in escrow to start the trade.
+              </p>
+              <p className="text-[11px] text-foreground/45 mt-0.5">
+                Buyer cannot send payment until escrow is locked.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress stepper (green current) */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="flex items-start justify-between">
+            {STEPS.map((s, i) => {
+              const done = i < currentStep;
+              const current = i === currentStep;
+              // Final step renders a rocket and "Buyer Pays" (index 2) a card,
+              // per the mock; others use the stage icon. Full-screen only.
+              const Icon =
+                i === STEPS.length - 1 ? Rocket : i === 2 ? CreditCard : s.Icon;
+              return (
+                <Fragment key={i}>
+                  <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                    <div
+                      className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                        done || current
+                          ? "bg-emerald-500 text-white"
+                          : "bg-white/[0.04] text-foreground/30 border border-white/[0.06]"
+                      }`}
+                    >
+                      {done ? (
+                        <Check className="w-4 h-4" strokeWidth={3} />
+                      ) : (
+                        <Icon className="w-4 h-4" />
+                      )}
+                    </div>
+                    <span
+                      className={`text-[9px] text-center leading-tight ${
+                        done
+                          ? "text-foreground/60"
+                          : current
+                          ? "text-emerald-400 font-semibold"
+                          : "text-foreground/30"
+                      }`}
+                    >
+                      {s.label}
+                    </span>
+                    {current && (
+                      <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wide">
+                        Current
+                      </span>
+                    )}
+                  </div>
+                  {i < STEPS.length - 1 && (
+                    <ChevronRight
+                      className={`w-3 h-3 mt-3 shrink-0 ${
+                        i < currentStep
+                          ? "text-emerald-500/50"
+                          : "text-foreground/15"
+                      }`}
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Order Summary — 2 columns (amount | rate/id/created) */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <span className="block text-[10px] text-foreground/40 uppercase tracking-wide font-bold mb-3">
+            Order Summary
+          </span>
+          <div className="grid grid-cols-[4fr_6fr] gap-4">
+            <div className="space-y-1 border-r border-white/[0.06] pr-4">
+              <p className="text-[10px] text-foreground/40">You Lock</p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-2xl font-bold text-foreground leading-none">
+                  {amount}
+                </span>
+                <span className="text-sm font-semibold text-foreground/60">
+                  USDT
+                </span>
+                <Coins className="w-3.5 h-3.5 text-emerald-400/70" />
+              </div>
+              <p className="text-[12px] text-foreground/70">
+                ≈ {sym}
+                {total.toLocaleString()} {ccy}
+              </p>
+              <p className="text-[10px] text-foreground/40">
+                @ {order.rate} {ccy}
+              </p>
+            </div>
+            <div className="space-y-2 text-[11px]">
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/40 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Rate (Locked)
+                </span>
+                <span className="font-mono text-foreground/70 text-right">
+                  1 USDT = {order.rate} {ccy}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/40">Order ID</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(orderIdShort);
+                    setCopiedId(true);
+                    setTimeout(() => setCopiedId(false), 2000);
+                  }}
+                  className="flex items-center gap-1 font-mono text-foreground/60 hover:text-foreground/80 transition-colors max-w-[60%]"
+                >
+                  <span className="truncate">{orderIdShort}</span>
+                  {copiedId ? (
+                    <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                  ) : (
+                    <Copy className="w-3 h-3 text-foreground/30 shrink-0" />
+                  )}
+                </button>
+              </div>
+              {createdAgo && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-foreground/40">Created</span>
+                  <span className="text-foreground/60">{createdAgo}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Payment Method + Expected Completion */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Payment Method — mock spec: tile + method + check + descriptor +
+              "Preferred Method" pill. Bespoke here (the shared card lists all
+              rails) so desktop is untouched. */}
+          {(() => {
+            // Show up to 3 of the buyer's selected pay methods; if they picked
+            // more, "+N more" expands the rest. Compact half-width list.
+            const visible = pmExpanded ? payTypes : payTypes.slice(0, 3);
+            const extra = payTypes.length - 3;
+            return (
+              <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
+                <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold mb-2.5">
+                  Buyer Payment Method
+                </span>
+                {payTypes.length > 0 ? (
+                  <div className="space-y-2">
+                    {visible.map((t) => {
+                      const m = PM_META[t] ?? { label: t.toUpperCase(), Icon: CreditCard };
+                      const Icon = m.Icon;
+                      return (
+                        <div key={t} className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-foreground/[0.06] border border-foreground/[0.06] flex items-center justify-center shrink-0">
+                            <Icon className="w-3 h-3 text-foreground/70" />
+                          </div>
+                          <span className="text-xs font-semibold text-foreground flex-1 min-w-0 truncate">
+                            {m.label}
+                          </span>
+                          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={3} />
+                        </div>
+                      );
+                    })}
+                    {extra > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPmExpanded((v) => !v)}
+                        className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                      >
+                        {pmExpanded ? "Show less" : `+${extra} more`}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-foreground/40">
+                    Shared in chat once escrow is locked.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+          <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
+            <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold mb-2">
+              Expected Completion
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-foreground/50" />
+              <span className="text-base font-bold text-foreground">
+                ~ 10 min
+              </span>
+            </div>
+            <p className="text-[12px] text-foreground/45 mt-1 leading-snug">
+              Usually completed in 5–10 min
+            </p>
+          </div>
+        </div>
+
+        {/* Receive Payment In — seller's receiving-account picker */}
+        <ReceivingAccountPicker
+          methods={recv.methods}
+          selectedId={recvSelectedId}
+          onSelect={setRecvPickedId}
+          onAddNew={() => {
+            if (merchantId) setShowAddPayment(true);
+            else router.push("/market/settings");
+          }}
+          loading={recv.loading}
+          surfaces={SURFACES.merchant}
+          title="Receive Payment In"
+          subtitle="Choose account where you want to receive payment"
+          addLabel="Add Another Account / UPI"
+          dense
+        />
+        {merchantId && (
+          <PaymentMethodModal
+            isOpen={showAddPayment}
+            merchantId={merchantId}
+            onClose={() => {
+              setShowAddPayment(false);
+              recv.refetch();
+            }}
+          />
+        )}
+
+        {/* Escrow protects both parties */}
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-emerald-400">
+                Escrow protects both parties
+              </p>
+              <p className="text-[12px] text-foreground/50 mt-0.5 leading-snug">
+                Your funds are secured in escrow until payment is confirmed.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Assurance footer: You Must Lock (top) + 3 guarantees (full-width row
+            below). Stacked so the guarantees fit on a phone instead of being
+            pushed off the right edge. */}
+        <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-3 space-y-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full border border-foreground/15 flex items-center justify-center shrink-0">
+              <Lock className="w-4 h-4 text-foreground/60" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-foreground/50">You Must Lock</p>
+              <p className="text-[15px] font-bold text-foreground leading-tight">
+                {amount} USDT
+              </p>
+              <p className="text-[10px] text-foreground/40 leading-tight">
+                This amount will be secured in escrow.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start justify-between gap-2 pt-2.5 border-t border-white/[0.06]">
+            {[
+              {
+                Icon: Shield,
+                title: "Escrow Protection",
+                sub: "Your funds are 100% secure",
+              },
+              {
+                Icon: RotateCw,
+                title: "Auto Release",
+                sub: "Funds released after confirmation",
+              },
+              {
+                Icon: Headphones,
+                title: "24/7 Support",
+                sub: "We're here to help you",
+              },
+            ].map((f) => {
+              const Icon = f.Icon;
+              return (
+                <div
+                  key={f.title}
+                  className="flex flex-col items-center text-center gap-0.5 flex-1 min-w-0"
+                >
+                  <Icon className="w-3.5 h-3.5 text-foreground/50" />
+                  <span className="text-[9px] font-semibold text-foreground/70 leading-tight">
+                    {f.title}
+                  </span>
+                  <span className="text-[8px] text-foreground/35 leading-tight">
+                    {f.sub}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -968,20 +2026,26 @@ function ActiveOrderBody({
             }`}
           >
             <BannerIcon
-              className={`w-5 h-5 ${banner.urgent ? "text-foreground/70" : "text-foreground/50"}`}
+              className={`w-5 h-5 ${
+                banner.urgent ? "text-foreground/70" : "text-foreground/50"
+              }`}
             />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <p
-                className={`text-sm font-bold ${banner.urgent ? "text-foreground" : "text-foreground/70"}`}
+                className={`text-sm font-bold ${
+                  banner.urgent ? "text-foreground" : "text-foreground/70"
+                }`}
               >
                 {banner.heading}
               </p>
               {expiresIn && (
                 <span className="flex items-center gap-1 text-[11px] text-foreground/40 shrink-0 whitespace-nowrap">
                   <Clock className="w-3 h-3" /> Expires in{" "}
-                  <span className="font-mono font-bold text-foreground/70">{expiresIn}</span>
+                  <span className="font-mono font-bold text-foreground/70">
+                    {expiresIn}
+                  </span>
                 </span>
               )}
             </div>
@@ -1010,19 +2074,23 @@ function ActiveOrderBody({
                       done
                         ? "bg-emerald-500 text-white"
                         : current
-                          ? "bg-[#f5f5f7] text-black"
-                          : "bg-foreground/[0.04] text-foreground/30 border border-foreground/[0.06]"
+                        ? "bg-[#f5f5f7] text-black"
+                        : "bg-foreground/[0.04] text-foreground/30 border border-foreground/[0.06]"
                     }`}
                   >
-                    {done ? <Check className="w-4 h-4" strokeWidth={3} /> : <Icon className="w-4 h-4" />}
+                    {done ? (
+                      <Check className="w-4 h-4" strokeWidth={3} />
+                    ) : (
+                      <Icon className="w-4 h-4" />
+                    )}
                   </div>
                   <span
                     className={`text-[9px] text-center leading-tight ${
                       done
                         ? "text-foreground/60"
                         : current
-                          ? "text-foreground font-semibold"
-                          : "text-foreground/30"
+                        ? "text-foreground font-semibold"
+                        : "text-foreground/30"
                     }`}
                   >
                     {s.label}
@@ -1035,7 +2103,11 @@ function ActiveOrderBody({
                 </div>
                 {i < STEPS.length - 1 && (
                   <ChevronRight
-                    className={`w-3 h-3 mt-3 shrink-0 ${i < currentStep ? "text-emerald-500/50" : "text-foreground/15"}`}
+                    className={`w-3 h-3 mt-3 shrink-0 ${
+                      i < currentStep
+                        ? "text-emerald-500/50"
+                        : "text-foreground/15"
+                    }`}
                   />
                 )}
               </Fragment>
@@ -1053,13 +2125,19 @@ function ActiveOrderBody({
               Order Summary
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-foreground">{amount}</span>
-              <span className="text-sm font-semibold text-foreground/60">USDT</span>
+              <span className="text-2xl font-bold text-foreground">
+                {amount}
+              </span>
+              <span className="text-sm font-semibold text-foreground/60">
+                USDT
+              </span>
               <Coins className="w-4 h-4 text-emerald-400/70" />
             </div>
             <div className="text-lg font-bold text-foreground">
               {sym} {total.toLocaleString()}{" "}
-              <span className="text-xs font-medium text-foreground/40">{ccy}</span>
+              <span className="text-xs font-medium text-foreground/40">
+                {ccy}
+              </span>
             </div>
             <div className="pt-2 border-t border-foreground/[0.04] space-y-1.5 text-[12px]">
               <div className="flex justify-between gap-2">
@@ -1073,7 +2151,9 @@ function ActiveOrderBody({
               {expiresIn && (
                 <div className="flex justify-between gap-2">
                   <span className="text-foreground/40">Rate Locked For</span>
-                  <span className="font-mono text-emerald-400 font-bold">{expiresIn}</span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    {expiresIn}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between gap-2">
@@ -1110,13 +2190,28 @@ function ActiveOrderBody({
               selectedId={recvSelectedId}
               onSelect={setRecvPickedId}
               onAddNew={() => {
-                // Client-side nav (not window.location) so the in-memory
-                // merchant auth store survives — a hard reload bounces to
-                // /market/login before the async /api/auth/me restore runs.
-                router.push("/market/settings");
+                // Open the Add Payment Method modal inline instead of leaving
+                // the lock flow — the new account shows up in this picker on
+                // close (recv.refetch). Falls back to settings nav only if the
+                // merchant id isn't hydrated yet.
+                if (merchantId) setShowAddPayment(true);
+                else router.push("/market/settings");
               }}
               loading={recv.loading}
               surfaces={SURFACES.merchant}
+            />
+          )}
+
+          {/* Add Payment Method — opens inline over the lock flow; refetch on
+              close so a newly added account appears in the picker immediately. */}
+          {merchantId && (
+            <PaymentMethodModal
+              isOpen={showAddPayment}
+              merchantId={merchantId}
+              onClose={() => {
+                setShowAddPayment(false);
+                recv.refetch();
+              }}
             />
           )}
 
@@ -1130,7 +2225,12 @@ function ActiveOrderBody({
               const m = order.sellerPaymentMethod;
               const masked = maskAccountDetail(m.type, detailString(m.details));
               const t = (m.type || "").toLowerCase();
-              const RecvIcon = t === "bank" ? Building2 : t === "card" ? CreditCard : Smartphone;
+              const RecvIcon =
+                t === "bank"
+                  ? Building2
+                  : t === "card"
+                  ? CreditCard
+                  : Smartphone;
               return (
                 <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
                   <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold mb-2.5">
@@ -1145,7 +2245,9 @@ function ActiveOrderBody({
                         {masked || m.name}
                       </p>
                       {masked && m.name && (
-                        <p className="text-[11px] text-foreground/40 truncate">{m.name}</p>
+                        <p className="text-[11px] text-foreground/40 truncate">
+                          {m.name}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1193,11 +2295,17 @@ function ActiveOrderBody({
               <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Lightbulb className="w-4 h-4 text-foreground/50" />
-                  <span className="text-[13px] font-semibold text-foreground">Tips</span>
+                  <span className="text-[13px] font-semibold text-foreground">
+                    Tips
+                  </span>
                 </div>
                 <ul className="space-y-1.5 text-[12px] text-foreground/50 list-disc pl-4">
-                  <li>Choose the account where you can quickly verify payments.</li>
-                  <li>This account cannot be changed after escrow is locked.</li>
+                  <li>
+                    Choose the account where you can quickly verify payments.
+                  </li>
+                  <li>
+                    This account cannot be changed after escrow is locked.
+                  </li>
                 </ul>
               </div>
 
@@ -1205,11 +2313,18 @@ function ActiveOrderBody({
               <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertTriangle className="w-4 h-4 text-foreground/60" />
-                  <span className="text-[13px] font-semibold text-foreground">Important</span>
+                  <span className="text-[13px] font-semibold text-foreground">
+                    Important
+                  </span>
                 </div>
                 <ul className="space-y-1.5 text-[12px] text-foreground/60 list-disc pl-4">
-                  <li>Only lock escrow if you are available to complete this trade.</li>
-                  <li>Do not release USDT until funds arrive in your bank account.</li>
+                  <li>
+                    Only lock escrow if you are available to complete this
+                    trade.
+                  </li>
+                  <li>
+                    Do not release USDT until funds arrive in your bank account.
+                  </li>
                 </ul>
               </div>
             </>
@@ -1236,9 +2351,21 @@ function ActiveOrderBody({
           </div>
           <div className="flex items-start gap-5 sm:ml-auto">
             {[
-              { Icon: Shield, title: "Escrow Protection", sub: "Your funds are 100% secure" },
-              { Icon: RotateCw, title: "Auto Release", sub: "Funds released after confirmation" },
-              { Icon: Headphones, title: "24/7 Support", sub: "We're here to help you" },
+              {
+                Icon: Shield,
+                title: "Escrow Protection",
+                sub: "Your funds are 100% secure",
+              },
+              {
+                Icon: RotateCw,
+                title: "Auto Release",
+                sub: "Funds released after confirmation",
+              },
+              {
+                Icon: Headphones,
+                title: "24/7 Support",
+                sub: "We're here to help you",
+              },
             ].map((f) => {
               const Icon = f.Icon;
               return (
@@ -1272,11 +2399,11 @@ function ActiveOrderBody({
               ? status === "accepted"
                 ? `Once you lock escrow, the buyer gets your payment details and sends you ${ccy}.`
                 : status === "escrowed"
-                  ? "Once the buyer pays, you verify and release the USDT from escrow."
-                  : `Confirm the ${ccy} has arrived, then release the USDT to complete the trade.`
+                ? "Once the buyer pays, you verify and release the USDT from escrow."
+                : `Confirm the ${ccy} has arrived, then release the USDT to complete the trade.`
               : status === "escrowed"
-                ? `Send the ${ccy}, mark it as paid, and the seller releases your USDT.`
-                : "The seller releases your USDT once your payment is confirmed."}
+              ? `Send the ${ccy}, mark it as paid, and the seller releases your USDT.`
+              : "The seller releases your USDT once your payment is confirmed."}
           </p>
         </div>
       )}
@@ -1311,6 +2438,12 @@ export interface OrderQuickViewProps {
    *  "View Full Details" hop was removed. Kept optional so callers compile. */
   onViewFullDetails?: (orderId: string) => void;
   onOpenDispute?: (orderId: string) => void;
+  /** Presentation mode. `"modal"` (default) = centered/bottom-sheet popup used
+   *  everywhere (desktop + the existing mobile flows). `"fullscreen"` = a full
+   *  in-app screen with a back-arrow app-bar header — used ONLY for active /
+   *  in-progress orders on merchant mobile (see MerchantModals mobileOrderDetail).
+   *  Body, footer and all handlers are identical; only the wrapper/header differ. */
+  presentation?: "modal" | "fullscreen";
 }
 
 export function OrderQuickView({
@@ -1333,6 +2466,7 @@ export function OrderQuickView({
   onRespondToCancel,
   onOpenChat,
   onOpenDispute,
+  presentation = "modal",
 }: OrderQuickViewProps) {
   const router = useRouter();
   // Receiving account the seller picked in ActiveOrderBody — bubbled up so the
@@ -1343,6 +2477,9 @@ export function OrderQuickView({
   // from ActiveOrderBody so the footer can show Need Help / Raise Appeal.
   const [waitingTimedOut, setWaitingTimedOut] = useLocalState(false);
 
+  // Copy feedback for the Order ID shown in the completed-order app-bar.
+  const [hdrCopied, setHdrCopied] = useLocalState(false);
+
   // After an inline lock for THIS order finishes successfully (was locking →
   // no longer locking, no error), close the popup. The popup's `selectedOrder`
   // copy is stale (still "accepted"), so leaving it open would show the Lock
@@ -1350,7 +2487,8 @@ export function OrderQuickView({
   // state. On error we keep it open so the inline message shows.
   const wasLockingRef = useLocalRef(false);
   useLocalEffect(() => {
-    const isLockingThis = !!selectedOrder && lockingEscrowOrderId === selectedOrder.id;
+    const isLockingThis =
+      !!selectedOrder && lockingEscrowOrderId === selectedOrder.id;
     const finishedOk = wasLockingRef.current && !isLockingThis && !escrowError;
     wasLockingRef.current = isLockingThis;
     if (finishedOk) onClose();
@@ -1375,13 +2513,23 @@ export function OrderQuickView({
   // Seller's view: a NEW pending buy order (declared pay types) that I can
   // accept — placed by someone else, not yet taken. Buy orders are the only
   // ones carrying buyer_payment_types, so sell orders never match here.
-  const qvStatus = String(qvDb.status || qvDb.minimal_status || "").toLowerCase();
+  const qvStatus = String(
+    qvDb.status || qvDb.minimal_status || "",
+  ).toLowerCase();
   const isAcceptableBuyOrder =
     !!selectedOrder &&
     !isOwnPendingBuy &&
     qvDb.buyer_merchant_id !== merchantId &&
     !qvDb.accepted_at &&
-    !["accepted", "escrowed", "payment_sent", "completed", "cancelled", "expired", "disputed"].includes(qvStatus) &&
+    ![
+      "accepted",
+      "escrowed",
+      "payment_sent",
+      "completed",
+      "cancelled",
+      "expired",
+      "disputed",
+    ].includes(qvStatus) &&
     Array.isArray(qvDb.buyer_payment_types) &&
     qvDb.buyer_payment_types.length > 0;
   // In-progress order the merchant is party to (seller or buyer): drives the
@@ -1392,510 +2540,700 @@ export function OrderQuickView({
     !isOwnPendingBuy &&
     !isAcceptableBuyOrder &&
     (selectedOrder.myRole === "seller" || selectedOrder.myRole === "buyer") &&
-    ["accepted", "escrowed", "payment_sent"].includes(qvStatus);
+    (["accepted", "escrowed", "payment_sent"].includes(qvStatus) ||
+      // Completed orders get the rich body too, but only on the full-screen
+      // mobile view (its "Order Completed" layout). Desktop/modal completed
+      // orders keep their existing standard layout — no regression.
+      (presentation === "fullscreen" && qvStatus === "completed"));
   const activeRole: "buyer" | "seller" =
     selectedOrder?.myRole === "buyer" ? "buyer" : "seller";
+  // Full-screen presentation (merchant mobile, active orders) — see prop doc.
+  const isFull = presentation === "fullscreen";
+  // Stage-aware app-bar title for the full-screen header. Mirrors the active
+  // stage shown in ActiveOrderBody so the title stays accurate as the order
+  // moves accepted → escrowed → payment_sent.
+  const fullScreenTitle = (() => {
+    if (!selectedOrder) return "Order";
+    if (qvStatus === "completed") return "Order Completed";
+    if (isActiveOrder) {
+      if (qvStatus === "accepted") return "Lock Escrow";
+      if (qvStatus === "escrowed") return "Buyer Pays";
+      if (qvStatus === "payment_sent") return "Verify Payment";
+    }
+    return "Order Details";
+  })();
+  const fullScreenOrderId =
+    typeof qvDb.id === "string"
+      ? `BLP-${qvDb.id.slice(0, 8).toUpperCase()}`
+      : "—";
   return (
     <AnimatePresence>
       {selectedOrder && (
         <>
+          {/* Dim click-to-close overlay — modal only. Full screen fills the
+              viewport with its own opaque background, so no overlay. */}
+          {!isFull && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+              onClick={onClose}
+            />
+          )}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className={`fixed z-50 inset-x-0 bottom-0 mx-auto w-full ${isActiveOrder ? "max-w-2xl" : isAcceptableBuyOrder ? "max-w-xl" : "max-w-md"} lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[90%] max-h-[90dvh] flex flex-col overflow-hidden rounded-t-2xl lg:rounded-2xl shadow-2xl pb-safe lg:pb-0`} style={{ background: "#0e0e10", border: "1px solid rgba(255,255,255,0.08)" }}
+            initial={
+              isFull
+                ? { opacity: 0, x: 24 }
+                : { opacity: 0, scale: 0.95, y: 20 }
+            }
+            animate={
+              isFull ? { opacity: 1, x: 0 } : { opacity: 1, scale: 1, y: 0 }
+            }
+            exit={
+              isFull
+                ? { opacity: 0, x: 24 }
+                : { opacity: 0, scale: 0.95, y: 20 }
+            }
+            className={
+              isFull
+                ? "fixed inset-0 z-50 w-full h-dvh max-h-dvh flex flex-col overflow-hidden pb-safe"
+                : `fixed z-50 inset-x-0 bottom-0 mx-auto w-full ${
+                    isActiveOrder
+                      ? "max-w-2xl"
+                      : isAcceptableBuyOrder
+                      ? "max-w-xl"
+                      : "max-w-md"
+                  } lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[90%] max-h-[90dvh] flex flex-col overflow-hidden rounded-t-2xl lg:rounded-2xl shadow-2xl pb-safe lg:pb-0`
+            }
+            style={{
+              background: "#0e0e10",
+              border: isFull ? "none" : "1px solid rgba(255,255,255,0.08)",
+            }}
           >
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-foreground/[0.04] flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-foreground/5 flex items-center justify-center text-2xl border border-foreground/[0.04]">
-                  {selectedOrder.emoji}
-                </div>
-                <div>
-                  <p className="text-base font-semibold text-foreground">
-                    {selectedOrder.user}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[11px] text-foreground/40">
-                      {selectedOrder.myRole === "seller"
-                        ? "Selling USDT"
-                        : selectedOrder.myRole === "buyer"
-                          ? "Buying USDT"
-                          : "USDT Trade"}
+            {/* Header — full-screen app-bar (back arrow + stage title + shield)
+                on merchant mobile; the rich avatar/name header otherwise. */}
+            {isFull ? (
+              <div className="px-4 py-3 border-b border-foreground/[0.06] flex items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <button
+                    onClick={onClose}
+                    aria-label="Back"
+                    className="p-1.5 -ml-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors shrink-0"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-foreground" />
+                  </button>
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold text-foreground truncate leading-tight">
+                      {fullScreenTitle}
                     </p>
-                    {selectedOrder.myRole && selectedOrder.myRole !== "observer" && (
-                      <span
-                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
-                          selectedOrder.myRole === "seller"
-                            ? "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.09]"
-                            : "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.09]"
-                        }`}
+                    {qvStatus === "completed" && (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(fullScreenOrderId);
+                          setHdrCopied(true);
+                          setTimeout(() => setHdrCopied(false), 2000);
+                        }}
+                        className="flex items-center gap-1 text-[11px] text-foreground/45 hover:text-foreground/70 transition-colors"
                       >
-                        {selectedOrder.myRole === "seller"
-                          ? "YOU SEND"
-                          : "YOU PAY"}
-                      </span>
+                        Order ID:{" "}
+                        <span className="font-mono">{fullScreenOrderId}</span>
+                        {hdrCopied ? (
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3 text-foreground/30" />
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>
+                {qvStatus === "completed" ? (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      router.push("/market/settings?tab=support");
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-foreground/5 border border-foreground/[0.06] text-foreground/70 hover:text-foreground transition-colors shrink-0"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                    <span className="text-[13px] font-medium">Help</span>
+                  </button>
+                ) : (
+                  <div className="w-9 h-9 rounded-lg bg-foreground/5 border border-foreground/[0.06] flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  </div>
+                )}
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-foreground/[0.04] rounded-lg transition-colors"
-              >
-                <X className="w-4 h-4 text-foreground/40" />
-              </button>
-            </div>
+            ) : (
+              <>
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-foreground/[0.04] flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-foreground/5 flex items-center justify-center text-2xl border border-foreground/[0.04]">
+                      {selectedOrder.emoji}
+                    </div>
+                    <div>
+                      <p className="text-base font-semibold text-foreground">
+                        {selectedOrder.user}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[11px] text-foreground/40">
+                          {selectedOrder.myRole === "seller"
+                            ? "Selling USDT"
+                            : selectedOrder.myRole === "buyer"
+                            ? "Buying USDT"
+                            : "USDT Trade"}
+                        </p>
+                        {selectedOrder.myRole &&
+                          selectedOrder.myRole !== "observer" && (
+                            <span
+                              className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
+                                selectedOrder.myRole === "seller"
+                                  ? "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.09]"
+                                  : "bg-white/[0.06] text-[#f5f5f7] border border-white/[0.09]"
+                              }`}
+                            >
+                              {selectedOrder.myRole === "seller"
+                                ? "YOU SEND"
+                                : "YOU PAY"}
+                            </span>
+                          )}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={onClose}
+                    className="p-2 hover:bg-foreground/[0.04] rounded-lg transition-colors"
+                  >
+                    <X className="w-4 h-4 text-foreground/40" />
+                  </button>
+                </div>
+              </>
+            )}
 
             {/* Scrollable middle — fills remaining height between pinned header & footer */}
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-            {/* Body */}
-            <div className="p-5 space-y-4">
-              {isAcceptableBuyOrder ? (
-                <AcceptorBuyOrderBody order={selectedOrder} db={qvDb} />
-              ) : isActiveOrder ? (
-                <ActiveOrderBody order={selectedOrder} db={qvDb} role={activeRole} onRecvSelectionChange={setLockMethodId} onWaitingTimeout={setWaitingTimedOut} />
-              ) : (
-              <>
-              {/* Escrow Status */}
-              {selectedOrder.escrowTxHash && (
-                <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-foreground/5 flex items-center justify-center">
-                      <Shield className="w-4 h-4 text-foreground" />
-                    </div>
-                    <span className="text-sm font-medium text-foreground">
-                      Escrow Secured
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <a
-                      href={getSolscanTxUrl(selectedOrder.escrowTxHash)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs text-foreground/60 hover:text-foreground/80 transition-colors"
-                    >
-                      View TX <ExternalLink className="w-3 h-3" />
-                    </a>
-                    {selectedOrder.escrowPda && (
-                      <a
-                        href={getBlipscanTradeUrl(selectedOrder.escrowPda)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-xs text-[#f5f5f7]/70 hover:text-white transition-colors"
-                      >
-                        BlipScan <ExternalLink className="w-3 h-3" />
-                      </a>
+              {/* Body — tighter gutters on the full-screen mobile view (less
+                space under the app-bar and at the screen edges). */}
+              <div
+                className={
+                  isFull ? "px-4 pt-3 pb-4 space-y-4" : "p-5 space-y-4"
+                }
+              >
+                {isAcceptableBuyOrder ? (
+                  <AcceptorBuyOrderBody order={selectedOrder} db={qvDb} />
+                ) : isActiveOrder ? (
+                  <ActiveOrderBody
+                    order={selectedOrder}
+                    db={qvDb}
+                    role={activeRole}
+                    onRecvSelectionChange={setLockMethodId}
+                    onWaitingTimeout={setWaitingTimedOut}
+                    fullScreen={isFull}
+                  />
+                ) : (
+                  <>
+                    {/* Escrow Status */}
+                    {selectedOrder.escrowTxHash && (
+                      <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-8 h-8 rounded-lg bg-foreground/5 flex items-center justify-center">
+                            <Shield className="w-4 h-4 text-foreground" />
+                          </div>
+                          <span className="text-sm font-medium text-foreground">
+                            Escrow Secured
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <a
+                            href={getSolscanTxUrl(selectedOrder.escrowTxHash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-foreground/60 hover:text-foreground/80 transition-colors"
+                          >
+                            View TX <ExternalLink className="w-3 h-3" />
+                          </a>
+                          {selectedOrder.escrowPda && (
+                            <a
+                              href={getBlipscanTradeUrl(
+                                selectedOrder.escrowPda,
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs text-[#f5f5f7]/70 hover:text-white transition-colors"
+                            >
+                              BlipScan <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </div>
-              )}
 
-              {/* Order Details */}
-              <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-foreground/40 uppercase tracking-wide">
-                    Amount
-                  </span>
-                  <span className="text-sm font-semibold text-foreground">
-                    ${selectedOrder.amount.toLocaleString()} USDT
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-foreground/40 uppercase tracking-wide">
-                    Total Fiat
-                  </span>
-                  <span className="text-sm font-semibold text-foreground">
-                    {fiatSymbol(selectedOrder.toCurrency)}{" "}
-                    {Math.round(selectedOrder.total).toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pt-2 border-t border-foreground/[0.04]">
-                  <span className="text-xs text-foreground/40 flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    Rate (Locked)
-                  </span>
-                  <span className="text-xs font-mono text-foreground/50">
-                    1 USDT = {selectedOrder.rate} {selectedOrder.toCurrency || 'AED'}
-                  </span>
-                </div>
-                {selectedOrder.dbOrder?.accepted_at && (
-                  <p className="text-[10px] text-foreground/25 text-right -mb-1">
-                    Locked at{" "}
-                    {new Date(
-                      selectedOrder.dbOrder.accepted_at,
-                    ).toLocaleString()}
-                  </p>
+                    {/* Order Details */}
+                    <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-foreground/40 uppercase tracking-wide">
+                          Amount
+                        </span>
+                        <span className="text-sm font-semibold text-foreground">
+                          ${selectedOrder.amount.toLocaleString()} USDT
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-foreground/40 uppercase tracking-wide">
+                          Total Fiat
+                        </span>
+                        <span className="text-sm font-semibold text-foreground">
+                          {fiatSymbol(selectedOrder.toCurrency)}{" "}
+                          {Math.round(selectedOrder.total).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-foreground/[0.04]">
+                        <span className="text-xs text-foreground/40 flex items-center gap-1">
+                          <Lock className="w-3 h-3" />
+                          Rate (Locked)
+                        </span>
+                        <span className="text-xs font-mono text-foreground/50">
+                          1 USDT = {selectedOrder.rate}{" "}
+                          {selectedOrder.toCurrency || "AED"}
+                        </span>
+                      </div>
+                      {selectedOrder.dbOrder?.accepted_at && (
+                        <p className="text-[10px] text-foreground/25 text-right -mb-1">
+                          Locked at{" "}
+                          {new Date(
+                            selectedOrder.dbOrder.accepted_at,
+                          ).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Payment Method - Show to BUYER (fiat sender) only */}
+                    {(() => {
+                      const popupBankRole = selectedOrder.myRole || "observer";
+                      const iAmBuyerInPopup = popupBankRole === "buyer";
+                      if (!iAmBuyerInPopup) return null;
+
+                      // Merchant's OWN pending broadcast buy — no seller account
+                      // exists yet, so show the rails they chose at order time.
+                      if (isOwnPendingBuy) {
+                        return (
+                          <BuyerPayTypesCard types={qvDb.buyer_payment_types} />
+                        );
+                      }
+
+                      // Priority 1: Seller's merchant payment method (explicitly added by seller)
+                      if (selectedOrder.sellerPaymentMethod) {
+                        const spm = selectedOrder.sellerPaymentMethod;
+                        const typeIcon =
+                          spm.type === "upi" ? (
+                            <Smartphone className="w-4 h-4 text-[#f5f5f7]" />
+                          ) : spm.type === "bank" ? (
+                            <Building2 className="w-4 h-4 text-white/60" />
+                          ) : (
+                            <CreditCard className="w-4 h-4 text-white/60" />
+                          );
+
+                        if (
+                          spm.type === "bank" &&
+                          spm.details &&
+                          typeof spm.details === "object"
+                        ) {
+                          return (
+                            <CopyableBankDetails
+                              title={`Send ${
+                                selectedOrder.toCurrency || "AED"
+                              } to this account`}
+                              currencySymbol={fiatSymbol(
+                                selectedOrder.toCurrency,
+                              )}
+                              bankName={spm.details.bank_name}
+                              accountName={spm.details.account_name}
+                              iban={spm.details.iban}
+                              amount={Math.round(selectedOrder.total)}
+                            />
+                          );
+                        }
+
+                        // Card / UPI / Cash / Other
+                        const detailStr =
+                          typeof spm.details === "string"
+                            ? spm.details
+                            : JSON.stringify(spm.details);
+                        return (
+                          <div className="bg-white/[0.06] border border-white/[0.09] rounded-xl p-3 space-y-2">
+                            <div className="flex items-center gap-2 text-xs text-white/60 uppercase tracking-wide">
+                              {typeIcon}
+                              <span>Seller&apos;s Payment Method</span>
+                            </div>
+                            <div className="text-sm text-foreground font-medium">
+                              {spm.name}
+                            </div>
+                            <div className="text-xs text-white/60">
+                              {detailStr}
+                            </div>
+                            <div className="text-right text-sm font-semibold text-[#f5f5f7]">
+                              {Math.round(selectedOrder.total)}{" "}
+                              {selectedOrder.toCurrency || "AED"}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Priority 2: Locked payment method (user payment method system)
+                      if (selectedOrder.lockedPaymentMethod) {
+                        const lpm = selectedOrder.lockedPaymentMethod;
+                        const typeIcon =
+                          lpm.type === "upi" ? (
+                            <Smartphone className="w-4 h-4 text-[#f5f5f7]" />
+                          ) : lpm.type === "bank" ? (
+                            <Building2 className="w-4 h-4 text-white/60" />
+                          ) : (
+                            <CreditCard className="w-4 h-4 text-white/60" />
+                          );
+
+                        if (lpm.type === "bank") {
+                          return (
+                            <CopyableBankDetails
+                              title={`Send ${
+                                selectedOrder.toCurrency || "AED"
+                              } to this account`}
+                              currencySymbol={fiatSymbol(
+                                selectedOrder.toCurrency,
+                              )}
+                              bankName={lpm.details.bank_name}
+                              accountName={lpm.details.account_name}
+                              iban={lpm.details.iban}
+                              amount={Math.round(selectedOrder.total)}
+                            />
+                          );
+                        }
+
+                        // UPI / Cash / Other — custom display
+                        return (
+                          <LockedPaymentMethodCard
+                            lpm={lpm}
+                            amount={Math.round(selectedOrder.total)}
+                            typeIcon={typeIcon}
+                            currency={selectedOrder.toCurrency}
+                          />
+                        );
+                      }
+
+                      // Priority 3: Seller bank details from offer (legacy)
+                      if (selectedOrder.sellerBankDetails) {
+                        return (
+                          <CopyableBankDetails
+                            title={`Send ${
+                              selectedOrder.toCurrency || "AED"
+                            } to this account`}
+                            currencySymbol={fiatSymbol(
+                              selectedOrder.toCurrency,
+                            )}
+                            bankName={selectedOrder.sellerBankDetails.bank_name}
+                            accountName={
+                              selectedOrder.sellerBankDetails.account_name
+                            }
+                            iban={selectedOrder.sellerBankDetails.iban}
+                            amount={Math.round(selectedOrder.total)}
+                          />
+                        );
+                      }
+
+                      // Priority 3: User bank details from payment_details (legacy)
+                      if (
+                        selectedOrder.userBankDetails ||
+                        selectedOrder.userBankAccount
+                      ) {
+                        const details = selectedOrder.userBankDetails;
+                        return (
+                          <CopyableBankDetails
+                            title={`Send ${
+                              selectedOrder.toCurrency || "AED"
+                            } to this account`}
+                            currencySymbol={fiatSymbol(
+                              selectedOrder.toCurrency,
+                            )}
+                            bankName={details?.bank_name}
+                            accountName={details?.account_name}
+                            iban={details?.iban}
+                            fallbackText={
+                              !details
+                                ? selectedOrder.userBankAccount
+                                : undefined
+                            }
+                            amount={Math.round(selectedOrder.total)}
+                          />
+                        );
+                      }
+
+                      return (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                          <p className="text-xs text-red-400">
+                            No payment details provided. Chat to get bank
+                            details.
+                          </p>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Status message for SELLER waiting for buyer */}
+                    {(() => {
+                      const popupSellerRole =
+                        selectedOrder.myRole || "observer";
+                      const popupStatus = selectedOrder.dbOrder?.status;
+                      const popupAccepted =
+                        !!selectedOrder.dbOrder?.accepted_at;
+
+                      if (
+                        popupSellerRole === "seller" &&
+                        (popupStatus === "escrowed" ||
+                          popupStatus === "accepted")
+                      ) {
+                        return (
+                          <div className="bg-foreground/[0.04] border border-foreground/[0.06] rounded-xl p-3 flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-foreground/[0.04] flex items-center justify-center shrink-0">
+                              <span className="text-xs">{"\u231B"}</span>
+                            </div>
+                            <p className="text-xs text-foreground/50">
+                              {popupAccepted
+                                ? "Waiting for buyer to mark payment as sent..."
+                                : "Escrow locked by user. Waiting for a merchant to accept..."}
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return null;
+                    })()}
+
+                    {/* Merchant's OWN pending broadcast buy — status + what's next. */}
+                    {isOwnPendingBuy && (
+                      <OpenMarketWaitingCard
+                        createdAt={qvDb.created_at}
+                        expiresAt={qvDb.expires_at}
+                      />
+                    )}
+                  </>
                 )}
               </div>
 
-              {/* Payment Method - Show to BUYER (fiat sender) only */}
+              {/* Cancel Request Banner — shown when counterparty requested cancellation */}
               {(() => {
-                const popupBankRole = selectedOrder.myRole || "observer";
-                const iAmBuyerInPopup = popupBankRole === "buyer";
-                if (!iAmBuyerInPopup) return null;
+                if (
+                  !selectedOrder.cancelRequestedBy &&
+                  !selectedOrder.dbOrder?.cancel_requested_by
+                )
+                  return null;
 
-                // Merchant's OWN pending broadcast buy — no seller account
-                // exists yet, so show the rails they chose at order time.
-                if (isOwnPendingBuy) {
-                  return <BuyerPayTypesCard types={qvDb.buyer_payment_types} />;
-                }
+                const cancelBy =
+                  selectedOrder.cancelRequestedBy ||
+                  selectedOrder.dbOrder?.cancel_requested_by;
+                const cancelReason =
+                  selectedOrder.cancelRequestReason ||
+                  selectedOrder.dbOrder?.cancel_request_reason;
 
-                // Priority 1: Seller's merchant payment method (explicitly added by seller)
-                if (selectedOrder.sellerPaymentMethod) {
-                  const spm = selectedOrder.sellerPaymentMethod;
-                  const typeIcon =
-                    spm.type === "upi" ? (
-                      <Smartphone className="w-4 h-4 text-[#f5f5f7]" />
-                    ) : spm.type === "bank" ? (
-                      <Building2 className="w-4 h-4 text-white/60" />
-                    ) : (
-                      <CreditCard className="w-4 h-4 text-white/60" />
-                    );
+                // Determine if counterparty requested (I need to respond) or I requested (waiting)
+                const dbUsername = selectedOrder.dbOrder?.user?.username || "";
+                const isPlaceholderUser =
+                  dbUsername.startsWith("open_order_") ||
+                  dbUsername.startsWith("m2m_");
+                const iRequestedIt = isPlaceholderUser
+                  ? cancelBy === "merchant" &&
+                    selectedOrder.orderMerchantId === merchantId
+                  : cancelBy === "merchant";
+                const counterpartyRequested = !iRequestedIt;
 
-                  if (
-                    spm.type === "bank" &&
-                    spm.details &&
-                    typeof spm.details === "object"
-                  ) {
-                    return (
-                      <CopyableBankDetails
-                        title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
-                        currencySymbol={fiatSymbol(selectedOrder.toCurrency)}
-                        bankName={spm.details.bank_name}
-                        accountName={spm.details.account_name}
-                        iban={spm.details.iban}
-                        amount={Math.round(selectedOrder.total)}
-                      />
-                    );
-                  }
-
-                  // Card / UPI / Cash / Other
-                  const detailStr =
-                    typeof spm.details === "string"
-                      ? spm.details
-                      : JSON.stringify(spm.details);
+                if (counterpartyRequested) {
                   return (
-                    <div className="bg-white/[0.06] border border-white/[0.09] rounded-xl p-3 space-y-2">
-                      <div className="flex items-center gap-2 text-xs text-white/60 uppercase tracking-wide">
-                        {typeIcon}
-                        <span>Seller&apos;s Payment Method</span>
+                    <div className="mx-5 mb-2 rounded-xl border border-white/[0.12] bg-white/[0.06] p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <X className="w-4 h-4 text-[#f5f5f7]" />
+                        <span className="text-sm font-semibold text-[#f5f5f7]">
+                          Cancel Requested by{" "}
+                          {cancelBy === "user" ? "User" : "Merchant"}
+                        </span>
                       </div>
-                      <div className="text-sm text-foreground font-medium">
-                        {spm.name}
-                      </div>
-                      <div className="text-xs text-white/60">{detailStr}</div>
-                      <div className="text-right text-sm font-semibold text-[#f5f5f7]">
-                        {Math.round(selectedOrder.total)} {selectedOrder.toCurrency || 'AED'}
+                      {cancelReason && (
+                        <p className="text-xs text-foreground/50 mb-3">
+                          {cancelReason}
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <motion.button
+                          whileTap={{ scale: 0.98 }}
+                          disabled={isRequestingCancel}
+                          onClick={() => {
+                            onRespondToCancel?.(selectedOrder.id, true);
+                            onClose();
+                          }}
+                          className="flex-1 py-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.08] border border-white/[0.12] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                        >
+                          {isRequestingCancel ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          Agree to Cancel
+                        </motion.button>
+                        <motion.button
+                          whileTap={{ scale: 0.98 }}
+                          disabled={isRequestingCancel}
+                          onClick={() => {
+                            onRespondToCancel?.(selectedOrder.id, false);
+                            onClose();
+                          }}
+                          className="flex-1 py-2.5 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.08] text-foreground/70 text-sm font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                        >
+                          Continue Order
+                        </motion.button>
                       </div>
                     </div>
                   );
                 }
 
-                // Priority 2: Locked payment method (user payment method system)
-                if (selectedOrder.lockedPaymentMethod) {
-                  const lpm = selectedOrder.lockedPaymentMethod;
-                  const typeIcon =
-                    lpm.type === "upi" ? (
-                      <Smartphone className="w-4 h-4 text-[#f5f5f7]" />
-                    ) : lpm.type === "bank" ? (
-                      <Building2 className="w-4 h-4 text-white/60" />
-                    ) : (
-                      <CreditCard className="w-4 h-4 text-white/60" />
-                    );
-
-                  if (lpm.type === "bank") {
-                    return (
-                      <CopyableBankDetails
-                        title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
-                        currencySymbol={fiatSymbol(selectedOrder.toCurrency)}
-                        bankName={lpm.details.bank_name}
-                        accountName={lpm.details.account_name}
-                        iban={lpm.details.iban}
-                        amount={Math.round(selectedOrder.total)}
-                      />
-                    );
-                  }
-
-                  // UPI / Cash / Other — custom display
-                  return (
-                    <LockedPaymentMethodCard
-                      lpm={lpm}
-                      amount={Math.round(selectedOrder.total)}
-                      typeIcon={typeIcon}
-                      currency={selectedOrder.toCurrency}
-                    />
-                  );
-                }
-
-                // Priority 3: Seller bank details from offer (legacy)
-                if (selectedOrder.sellerBankDetails) {
-                  return (
-                    <CopyableBankDetails
-                      title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
-                      currencySymbol={fiatSymbol(selectedOrder.toCurrency)}
-                      bankName={selectedOrder.sellerBankDetails.bank_name}
-                      accountName={selectedOrder.sellerBankDetails.account_name}
-                      iban={selectedOrder.sellerBankDetails.iban}
-                      amount={Math.round(selectedOrder.total)}
-                    />
-                  );
-                }
-
-                // Priority 3: User bank details from payment_details (legacy)
-                if (
-                  selectedOrder.userBankDetails ||
-                  selectedOrder.userBankAccount
-                ) {
-                  const details = selectedOrder.userBankDetails;
-                  return (
-                    <CopyableBankDetails
-                      title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
-                      currencySymbol={fiatSymbol(selectedOrder.toCurrency)}
-                      bankName={details?.bank_name}
-                      accountName={details?.account_name}
-                      iban={details?.iban}
-                      fallbackText={
-                        !details ? selectedOrder.userBankAccount : undefined
-                      }
-                      amount={Math.round(selectedOrder.total)}
-                    />
-                  );
-                }
-
+                // I requested — show waiting status
                 return (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                    <p className="text-xs text-red-400">
-                      No payment details provided. Chat to get bank details.
-                    </p>
+                  <div className="mx-5 mb-2 rounded-xl border border-white/[0.12] bg-white/[0.06] p-3 flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 text-[#f5f5f7] animate-spin" />
+                    <div>
+                      <p className="text-sm font-medium text-[#f5f5f7]">
+                        Cancel Request Sent
+                      </p>
+                      <p className="text-xs text-foreground/40">
+                        Waiting for counterparty to approve
+                      </p>
+                    </div>
                   </div>
                 );
               })()}
 
-              {/* Status message for SELLER waiting for buyer */}
+              {/* Extension Request Banner — shown when counterparty requested time extension */}
               {(() => {
-                const popupSellerRole = selectedOrder.myRole || "observer";
-                const popupStatus = selectedOrder.dbOrder?.status;
-                const popupAccepted = !!selectedOrder.dbOrder?.accepted_at;
+                const dbOrder = selectedOrder.dbOrder as any;
+                const extBy = dbOrder?.extension_requested_by as
+                  | string
+                  | null
+                  | undefined;
+                const extMin = dbOrder?.extension_minutes as
+                  | number
+                  | null
+                  | undefined;
+                if (!extBy) return null;
 
-                if (
-                  popupSellerRole === "seller" &&
-                  (popupStatus === "escrowed" || popupStatus === "accepted")
-                ) {
+                // Did I request it, or did the counterparty?
+                const iAmMerchant = !!merchantId;
+                const iRequested =
+                  (extBy === "merchant" && iAmMerchant) ||
+                  (extBy === "user" && !iAmMerchant);
+
+                if (!iRequested) {
+                  // Counterparty requested — I need to respond
+                  const durationLabel =
+                    extMin && extMin >= 60
+                      ? `${Math.round(extMin / 60)} hour${
+                          Math.round(extMin / 60) !== 1 ? "s" : ""
+                        }`
+                      : `${extMin || 15} minutes`;
                   return (
-                    <div className="bg-foreground/[0.04] border border-foreground/[0.06] rounded-xl p-3 flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-foreground/[0.04] flex items-center justify-center shrink-0">
-                        <span className="text-xs">{"\u231B"}</span>
+                    <div className="mx-5 mb-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="w-4 h-4 text-amber-400" />
+                        <span className="text-sm font-semibold text-amber-400">
+                          {extBy === "user" ? "Buyer" : "Merchant"} requested +
+                          {durationLabel} extension
+                        </span>
                       </div>
-                      <p className="text-xs text-foreground/50">
-                        {popupAccepted
-                          ? "Waiting for buyer to mark payment as sent..."
-                          : "Escrow locked by user. Waiting for a merchant to accept..."}
-                      </p>
-                    </div>
-                  );
-                }
-
-                return null;
-              })()}
-
-              {/* Merchant's OWN pending broadcast buy — status + what's next. */}
-              {isOwnPendingBuy && (
-                <OpenMarketWaitingCard
-                  createdAt={qvDb.created_at}
-                  expiresAt={qvDb.expires_at}
-                />
-              )}
-              </>
-              )}
-            </div>
-
-            {/* Cancel Request Banner — shown when counterparty requested cancellation */}
-            {(() => {
-              if (
-                !selectedOrder.cancelRequestedBy &&
-                !selectedOrder.dbOrder?.cancel_requested_by
-              )
-                return null;
-
-              const cancelBy =
-                selectedOrder.cancelRequestedBy ||
-                selectedOrder.dbOrder?.cancel_requested_by;
-              const cancelReason =
-                selectedOrder.cancelRequestReason ||
-                selectedOrder.dbOrder?.cancel_request_reason;
-
-              // Determine if counterparty requested (I need to respond) or I requested (waiting)
-              const dbUsername = selectedOrder.dbOrder?.user?.username || "";
-              const isPlaceholderUser =
-                dbUsername.startsWith("open_order_") ||
-                dbUsername.startsWith("m2m_");
-              const iRequestedIt = isPlaceholderUser
-                ? cancelBy === "merchant" &&
-                  selectedOrder.orderMerchantId === merchantId
-                : cancelBy === "merchant";
-              const counterpartyRequested = !iRequestedIt;
-
-              if (counterpartyRequested) {
-                return (
-                  <div className="mx-5 mb-2 rounded-xl border border-white/[0.12] bg-white/[0.06] p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <X className="w-4 h-4 text-[#f5f5f7]" />
-                      <span className="text-sm font-semibold text-[#f5f5f7]">
-                        Cancel Requested by{" "}
-                        {cancelBy === "user" ? "User" : "Merchant"}
-                      </span>
-                    </div>
-                    {cancelReason && (
-                      <p className="text-xs text-foreground/50 mb-3">
-                        {cancelReason}
-                      </p>
-                    )}
-                    <div className="flex gap-2">
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        disabled={isRequestingCancel}
-                        onClick={() => {
-                          onRespondToCancel?.(selectedOrder.id, true);
-                          onClose();
-                        }}
-                        className="flex-1 py-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.08] border border-white/[0.12] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
-                      >
-                        {isRequestingCancel ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
+                      <div className="flex gap-2">
+                        <motion.button
+                          whileTap={{ scale: 0.98 }}
+                          onClick={async () => {
+                            try {
+                              const res = await fetchWithAuth(
+                                `/api/orders/${selectedOrder.id}/extension`,
+                                {
+                                  method: "PUT",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    actor_type: iAmMerchant
+                                      ? "merchant"
+                                      : "user",
+                                    actor_id:
+                                      merchantId ||
+                                      selectedOrder.dbOrder?.user_id,
+                                    accept: true,
+                                  }),
+                                },
+                              );
+                              if (res.ok) onClose();
+                            } catch {}
+                          }}
+                          className="flex-1 py-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
+                        >
                           <Check className="w-3.5 h-3.5" />
-                        )}
-                        Agree to Cancel
-                      </motion.button>
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        disabled={isRequestingCancel}
-                        onClick={() => {
-                          onRespondToCancel?.(selectedOrder.id, false);
-                          onClose();
-                        }}
-                        className="flex-1 py-2.5 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.08] text-foreground/70 text-sm font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
-                      >
-                        Continue Order
-                      </motion.button>
+                          Accept Extension
+                        </motion.button>
+                        <motion.button
+                          whileTap={{ scale: 0.98 }}
+                          onClick={async () => {
+                            try {
+                              const res = await fetchWithAuth(
+                                `/api/orders/${selectedOrder.id}/extension`,
+                                {
+                                  method: "PUT",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    actor_type: iAmMerchant
+                                      ? "merchant"
+                                      : "user",
+                                    actor_id:
+                                      merchantId ||
+                                      selectedOrder.dbOrder?.user_id,
+                                    accept: false,
+                                  }),
+                                },
+                              );
+                              if (res.ok) onClose();
+                            } catch {}
+                          }}
+                          className="flex-1 py-2.5 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.08] text-foreground/60 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          Decline
+                        </motion.button>
+                      </div>
                     </div>
-                  </div>
-                );
-              }
+                  );
+                }
 
-              // I requested — show waiting status
-              return (
-                <div className="mx-5 mb-2 rounded-xl border border-white/[0.12] bg-white/[0.06] p-3 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 text-[#f5f5f7] animate-spin" />
-                  <div>
-                    <p className="text-sm font-medium text-[#f5f5f7]">
-                      Cancel Request Sent
-                    </p>
-                    <p className="text-xs text-foreground/40">
-                      Waiting for counterparty to approve
-                    </p>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Extension Request Banner — shown when counterparty requested time extension */}
-            {(() => {
-              const dbOrder = selectedOrder.dbOrder as any;
-              const extBy = dbOrder?.extension_requested_by as string | null | undefined;
-              const extMin = dbOrder?.extension_minutes as number | null | undefined;
-              if (!extBy) return null;
-
-              // Did I request it, or did the counterparty?
-              const iAmMerchant = !!merchantId;
-              const iRequested = (extBy === 'merchant' && iAmMerchant) || (extBy === 'user' && !iAmMerchant);
-
-              if (!iRequested) {
-                // Counterparty requested — I need to respond
-                const durationLabel = extMin && extMin >= 60
-                  ? `${Math.round(extMin / 60)} hour${Math.round(extMin / 60) !== 1 ? 's' : ''}`
-                  : `${extMin || 15} minutes`;
+                // I requested — show waiting
                 return (
-                  <div className="mx-5 mb-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock className="w-4 h-4 text-amber-400" />
-                      <span className="text-sm font-semibold text-amber-400">
-                        {extBy === 'user' ? 'Buyer' : 'Merchant'} requested +{durationLabel} extension
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        onClick={async () => {
-                          try {
-                            const res = await fetchWithAuth(`/api/orders/${selectedOrder.id}/extension`, {
-                              method: 'PUT',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                actor_type: iAmMerchant ? 'merchant' : 'user',
-                                actor_id: merchantId || selectedOrder.dbOrder?.user_id,
-                                accept: true,
-                              }),
-                            });
-                            if (res.ok) onClose();
-                          } catch {}
-                        }}
-                        className="flex-1 py-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        Accept Extension
-                      </motion.button>
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        onClick={async () => {
-                          try {
-                            const res = await fetchWithAuth(`/api/orders/${selectedOrder.id}/extension`, {
-                              method: 'PUT',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                actor_type: iAmMerchant ? 'merchant' : 'user',
-                                actor_id: merchantId || selectedOrder.dbOrder?.user_id,
-                                accept: false,
-                              }),
-                            });
-                            if (res.ok) onClose();
-                          } catch {}
-                        }}
-                        className="flex-1 py-2.5 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.08] text-foreground/60 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                        Decline
-                      </motion.button>
+                  <div className="mx-5 mb-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3 flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-400">
+                        Extension Request Sent
+                      </p>
+                      <p className="text-xs text-foreground/40">
+                        Waiting for counterparty to respond
+                      </p>
                     </div>
                   </div>
                 );
-              }
-
-              // I requested — show waiting
-              return (
-                <div className="mx-5 mb-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
-                  <div>
-                    <p className="text-sm font-medium text-amber-400">Extension Request Sent</p>
-                    <p className="text-xs text-foreground/40">Waiting for counterparty to respond</p>
-                  </div>
-                </div>
-              );
-            })()}
-
+              })()}
             </div>
             {/* End scrollable middle */}
 
             {/* Actions — Backend-driven: only show what enrichOrderResponse allows */}
-            <div className="px-5 pt-4 pb-5 space-y-2 shrink-0 border-t border-foreground/[0.04]">
+            <div
+              className={`${
+                isFull ? "px-4 pt-3 pb-4" : "px-5 pt-4 pb-5"
+              } space-y-2 shrink-0 border-t border-foreground/[0.04]`}
+            >
               {/* Own pending broadcast buy: the only action is to cancel (no
                   escrow yet). Shown explicitly so it doesn't depend on the
                   feed enriching primary/secondary actions. */}
@@ -1937,226 +3275,268 @@ export function OrderQuickView({
                   Accept Order
                 </motion.button>
               )}
-              {!isOwnPendingBuy && !isAcceptableBuyOrder && (() => {
-                // Read backend-computed actions (source of truth)
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const enriched = selectedOrder.dbOrder as any;
-                const primary = enriched?.primaryAction;
-                const secondary = enriched?.secondaryAction;
-
-                // Guard: don't render action buttons until backend data is loaded
-                if (!primary) return null;
-
-                // Map backend action type → frontend handler
-                const ACTION_HANDLER: Record<string, () => void> = {
-                  ACCEPT: () => {
-                    onAcceptOrder(selectedOrder);
-                    onClose();
-                  },
-                  CLAIM: () => {
-                    onAcceptOrder(selectedOrder);
-                    onClose();
-                  },
-                  LOCK_ESCROW: () => {
-                    // Lock inline in this popup (new UI) using the receiving
-                    // account picked above — keep the popup open so its loading /
-                    // error / result reflect here. Fall back to the old modal if
-                    // the inline handler isn't wired.
-                    if (onLockEscrow) {
-                      onLockEscrow(selectedOrder, lockMethodId ?? undefined);
-                    } else {
-                      onOpenEscrowModal(selectedOrder);
-                      onClose();
-                    }
-                  },
-                  SEND_PAYMENT: () => {
-                    onMarkFiatPaymentSent(selectedOrder);
-                    onClose();
-                  },
-                  CONFIRM_PAYMENT: () => {
-                    onConfirmPayment(selectedOrder.id).then(onClose);
-                  },
-                  CANCEL: () => {
-                    onCancelOrderWithoutEscrow(selectedOrder.id);
-                    onClose();
-                  },
-                  DISPUTE: () => {
-                    onOpenDispute?.(selectedOrder.id);
-                    onClose();
-                  },
-                };
-
-                // Loading state per action type
-                const isActionLoading = (type: string | null) => {
-                  if (!type) return false;
-                  if (type === "ACCEPT" || type === "CLAIM")
-                    return acceptingOrderId === selectedOrder.id;
-                  if (type === "CONFIRM_PAYMENT")
-                    return confirmingOrderId === selectedOrder.id;
-                  if (type === "CANCEL")
-                    return cancellingOrderId === selectedOrder.id;
-                  if (type === "LOCK_ESCROW")
-                    return lockingEscrowOrderId === selectedOrder.id;
-                  if (type === "SEND_PAYMENT") return markingDone;
-                  return false;
-                };
-
-                // Action button styles
-                const PRIMARY_STYLE = isActiveOrder
-                  ? "bg-[#f5f5f7] hover:bg-white border-[#f5f5f7] text-black"
-                  : "bg-white/[0.06] hover:bg-white/[0.08] border-white/[0.12] hover:border-white/[0.12] text-[#f5f5f7]";
-                const PRIMARY_LOADING =
-                  "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]/50 cursor-wait";
-                const SECONDARY_STYLE =
-                  "bg-red-500/10 hover:bg-[var(--color-error)]/20 border-red-500/30 hover:border-[var(--color-error)]/40 text-red-400";
-                const DISABLED_STYLE =
-                  "bg-foreground/[0.04] border-foreground/[0.06] text-foreground/40 cursor-not-allowed";
-
-                const loading = isActionLoading(primary.type);
-                // Active orders get a descriptive, amount-aware CTA matching
-                // the rich body; other states keep the backend label verbatim.
-                const primaryLabel = isActiveOrder
-                  ? primary.type === "LOCK_ESCROW"
-                    ? `Lock ${selectedOrder.amount} USDT in Escrow`
-                    : primary.type === "CONFIRM_PAYMENT"
-                      ? "Confirm Payment & Release USDT"
-                      : primary.type === "SEND_PAYMENT"
-                        ? "I've Sent the Payment"
-                        : primary.label
-                  : primary.label;
-
-                return (
-                  <>
-                    {/* Primary Action — from backend. At the lock stage it's
-                        paired with a Cancel button (like the lock screen). */}
-                    {primary.type && primary.enabled ? (() => {
-                      const primaryBtn = (
-                        <motion.button
-                          whileTap={{ scale: 0.98 }}
-                          disabled={loading}
-                          onClick={() => ACTION_HANDLER[primary.type!]?.()}
-                          className={`${primary.type === "LOCK_ESCROW" ? "flex-[2]" : "w-full"} ${isActiveOrder ? "py-4" : "py-3"} rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
-                            loading ? PRIMARY_LOADING : PRIMARY_STYLE
-                          }`}
-                        >
-                          {loading ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Zap className="w-4 h-4" />
-                          )}
-                          {primaryLabel}
-                        </motion.button>
-                      );
-                      if (primary.type === "LOCK_ESCROW") {
-                        return (
-                          <div className="flex gap-3">
-                            <button
-                              onClick={() => {
-                                onCancelOrderWithoutEscrow(selectedOrder.id);
-                                onClose();
-                              }}
-                              disabled={loading}
-                              className="flex-1 py-4 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] font-semibold text-sm disabled:opacity-50 transition-all"
-                            >
-                              Cancel
-                            </button>
-                            {primaryBtn}
-                          </div>
-                        );
-                      }
-                      return primaryBtn;
-                    })() : primary.label &&
-                      primary.disabledReason &&
-                      !primary.disabledReason.includes(
-                        "No actions available",
-                      ) ? (
-                      /* Disabled informational button (e.g., "Waiting for Payment") — hidden for terminal states */
-                      <div
-                        className={`w-full py-3 rounded-xl border font-medium flex items-center justify-center gap-2 text-sm ${DISABLED_STYLE}`}
-                        title={primary.disabledReason}
-                      >
-                        <Loader2 className="w-4 h-4 animate-spin opacity-40" />
-                        {primary.label}
-                      </div>
-                    ) : null}
-
-                    {/* Secondary Action — hidden for accepted/escrowed (cancel not surfaced at this stage) */}
-                    {secondary?.type && (() => {
-                      const st = (selectedOrder.dbOrder as any)?.status || (selectedOrder.dbOrder as any)?.minimal_status;
-                      if (secondary.type === "CANCEL" && (st === "accepted" || st === "escrowed")) return null;
-                      // Dispute is surfaced as the "Raise Appeal" button below — don't double up.
-                      if (secondary.type === "DISPUTE") return null;
-                      return true;
-                    })() && (
+              {!isOwnPendingBuy &&
+                !isAcceptableBuyOrder &&
+                (() => {
+                  // Completed order on the full-screen mobile view → a single
+                  // "Back to Home" CTA (the trade is done; nothing left to act on).
+                  if (isFull && qvStatus === "completed") {
+                    return (
                       <motion.button
                         whileTap={{ scale: 0.98 }}
-                        disabled={isActionLoading(secondary.type)}
-                        onClick={() => ACTION_HANDLER[secondary.type!]?.()}
-                        className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
-                          isActionLoading(secondary.type)
-                            ? PRIMARY_LOADING
-                            : SECONDARY_STYLE
-                        }`}
+                        onClick={() => {
+                          onClose();
+                          router.push("/market");
+                        }}
+                        className="w-full py-3 rounded-xl bg-[#f5f5f7] hover:bg-white text-black font-semibold text-sm transition-all"
                       >
-                        {isActionLoading(secondary.type) ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <X className="w-4 h-4" />
-                        )}
-                        {secondary.label}
+                        Back to Home
                       </motion.button>
-                    )}
+                    );
+                  }
+                  // Read backend-computed actions (source of truth)
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const enriched = selectedOrder.dbOrder as any;
+                  const primary = enriched?.primaryAction;
+                  const secondary = enriched?.secondaryAction;
 
-                    {/* Inline lock error (new UI locks here, so failures show here). */}
-                    {escrowError && primary.type === "LOCK_ESCROW" && (
-                      <p className="text-[11px] text-red-400 text-center">
-                        {escrowError}
-                      </p>
-                    )}
+                  // Guard: don't render action buttons until backend data is loaded
+                  if (!primary) return null;
 
-                    {/* Raise Appeal (first) + Need Help. Appeal shows at the
+                  // Map backend action type → frontend handler
+                  const ACTION_HANDLER: Record<string, () => void> = {
+                    ACCEPT: () => {
+                      onAcceptOrder(selectedOrder);
+                      onClose();
+                    },
+                    CLAIM: () => {
+                      onAcceptOrder(selectedOrder);
+                      onClose();
+                    },
+                    LOCK_ESCROW: () => {
+                      // Lock inline in this popup (new UI) using the receiving
+                      // account picked above — keep the popup open so its loading /
+                      // error / result reflect here. Fall back to the old modal if
+                      // the inline handler isn't wired.
+                      if (onLockEscrow) {
+                        onLockEscrow(selectedOrder, lockMethodId ?? undefined);
+                      } else {
+                        onOpenEscrowModal(selectedOrder);
+                        onClose();
+                      }
+                    },
+                    SEND_PAYMENT: () => {
+                      onMarkFiatPaymentSent(selectedOrder);
+                      onClose();
+                    },
+                    CONFIRM_PAYMENT: () => {
+                      onConfirmPayment(selectedOrder.id).then(onClose);
+                    },
+                    CANCEL: () => {
+                      onCancelOrderWithoutEscrow(selectedOrder.id);
+                      onClose();
+                    },
+                    DISPUTE: () => {
+                      onOpenDispute?.(selectedOrder.id);
+                      onClose();
+                    },
+                  };
+
+                  // Loading state per action type
+                  const isActionLoading = (type: string | null) => {
+                    if (!type) return false;
+                    if (type === "ACCEPT" || type === "CLAIM")
+                      return acceptingOrderId === selectedOrder.id;
+                    if (type === "CONFIRM_PAYMENT")
+                      return confirmingOrderId === selectedOrder.id;
+                    if (type === "CANCEL")
+                      return cancellingOrderId === selectedOrder.id;
+                    if (type === "LOCK_ESCROW")
+                      return lockingEscrowOrderId === selectedOrder.id;
+                    if (type === "SEND_PAYMENT") return markingDone;
+                    return false;
+                  };
+
+                  // Action button styles
+                  const PRIMARY_STYLE = isActiveOrder
+                    ? "bg-[#f5f5f7] hover:bg-white border-[#f5f5f7] text-black"
+                    : "bg-white/[0.06] hover:bg-white/[0.08] border-white/[0.12] hover:border-white/[0.12] text-[#f5f5f7]";
+                  const PRIMARY_LOADING =
+                    "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]/50 cursor-wait";
+                  const SECONDARY_STYLE =
+                    "bg-red-500/10 hover:bg-[var(--color-error)]/20 border-red-500/30 hover:border-[var(--color-error)]/40 text-red-400";
+                  const DISABLED_STYLE =
+                    "bg-foreground/[0.04] border-foreground/[0.06] text-foreground/40 cursor-not-allowed";
+
+                  const loading = isActionLoading(primary.type);
+                  // Active orders get a descriptive, amount-aware CTA matching
+                  // the rich body; other states keep the backend label verbatim.
+                  const primaryLabel = isActiveOrder
+                    ? primary.type === "LOCK_ESCROW"
+                      ? `Lock ${selectedOrder.amount} USDT in Escrow`
+                      : primary.type === "CONFIRM_PAYMENT"
+                      ? "Confirm Payment & Release USDT"
+                      : primary.type === "SEND_PAYMENT"
+                      ? "I've Sent the Payment"
+                      : primary.label
+                    : primary.label;
+
+                  return (
+                    <>
+                      {/* Primary Action — from backend. At the lock stage it's
+                        paired with a Cancel button (like the lock screen). */}
+                      {primary.type && primary.enabled ? (
+                        (() => {
+                          const primaryBtn = (
+                            <motion.button
+                              whileTap={{ scale: 0.98 }}
+                              disabled={loading}
+                              onClick={() => ACTION_HANDLER[primary.type!]?.()}
+                              className={`${
+                                primary.type === "LOCK_ESCROW"
+                                  ? "flex-[2]"
+                                  : "w-full"
+                              } ${
+                                isActiveOrder ? "py-3 text-sm" : "py-3"
+                              } rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                                loading ? PRIMARY_LOADING : PRIMARY_STYLE
+                              }`}
+                            >
+                              {loading ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : primary.type === "LOCK_ESCROW" ? (
+                                <Lock className="w-3.5 h-3.5" />
+                              ) : (
+                                <Zap className="w-4 h-4" />
+                              )}
+                              {primaryLabel}
+                            </motion.button>
+                          );
+                          if (primary.type === "LOCK_ESCROW") {
+                            return (
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => {
+                                    onCancelOrderWithoutEscrow(
+                                      selectedOrder.id,
+                                    );
+                                    onClose();
+                                  }}
+                                  disabled={loading}
+                                  className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] font-semibold text-sm disabled:opacity-50 transition-all"
+                                >
+                                  Cancel
+                                </button>
+                                {primaryBtn}
+                              </div>
+                            );
+                          }
+                          return primaryBtn;
+                        })()
+                      ) : primary.label &&
+                        primary.disabledReason &&
+                        !primary.disabledReason.includes(
+                          "No actions available",
+                        ) ? (
+                        /* Disabled informational button (e.g., "Waiting for Payment") — hidden for terminal states */
+                        <div
+                          className={`w-full py-3 rounded-xl border font-medium flex items-center justify-center gap-2 text-sm ${DISABLED_STYLE}`}
+                          title={primary.disabledReason}
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin opacity-40" />
+                          {primary.label}
+                        </div>
+                      ) : null}
+
+                      {/* Secondary Action — hidden for accepted/escrowed (cancel not surfaced at this stage) */}
+                      {secondary?.type &&
+                        (() => {
+                          const st =
+                            (selectedOrder.dbOrder as any)?.status ||
+                            (selectedOrder.dbOrder as any)?.minimal_status;
+                          if (
+                            secondary.type === "CANCEL" &&
+                            (st === "accepted" || st === "escrowed")
+                          )
+                            return null;
+                          // Dispute is surfaced as the "Raise Appeal" button below — don't double up.
+                          if (secondary.type === "DISPUTE") return null;
+                          return true;
+                        })() && (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            disabled={isActionLoading(secondary.type)}
+                            onClick={() => ACTION_HANDLER[secondary.type!]?.()}
+                            className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                              isActionLoading(secondary.type)
+                                ? PRIMARY_LOADING
+                                : SECONDARY_STYLE
+                            }`}
+                          >
+                            {isActionLoading(secondary.type) ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <X className="w-4 h-4" />
+                            )}
+                            {secondary.label}
+                          </motion.button>
+                        )}
+
+                      {/* Inline lock error (new UI locks here, so failures show here). */}
+                      {escrowError && primary.type === "LOCK_ESCROW" && (
+                        <p className="text-[11px] text-red-400 text-center">
+                          {escrowError}
+                        </p>
+                      )}
+
+                      {/* Raise Appeal (first) + Need Help. Appeal shows at the
                         verify stage (buyer marked paid), or once an escrowed
                         order's deadline has passed (buyer late). Need Help is
                         always available on an active order. */}
-                    {isActiveOrder && (() => {
-                      const st = (selectedOrder.dbOrder as any)?.status || (selectedOrder.dbOrder as any)?.minimal_status;
-                      const showAppeal = st === "payment_sent" || (st === "escrowed" && waitingTimedOut);
-                      return (
-                        <div className="flex gap-3">
-                          {showAppeal && (
-                            <button
-                              onClick={() => {
-                                onOpenDispute?.(selectedOrder.id);
-                                onClose();
-                              }}
-                              className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
-                            >
-                              <Flag className="w-4 h-4" />
-                              Raise Appeal
-                            </button>
-                          )}
-                          <button
-                            onClick={() => {
-                              // Open the merchant Support panel (help/ticketing),
-                              // which lives in settings under the `support` tab.
-                              // Use client-side nav (not window.location) so the
-                              // in-memory merchant auth store survives — a hard
-                              // reload bounces to /market/login before the async
-                              // /api/auth/me restore repopulates the store.
-                              onClose();
-                              router.push("/market/settings?tab=support");
-                            }}
-                            className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
-                          >
-                            <Headphones className="w-4 h-4" />
-                            Need Help
-                          </button>
-                        </div>
-                      );
-                    })()}
-                  </>
-                );
-              })()}
+                      {isActiveOrder &&
+                        (() => {
+                          const st =
+                            (selectedOrder.dbOrder as any)?.status ||
+                            (selectedOrder.dbOrder as any)?.minimal_status;
+                          const showAppeal =
+                            st === "payment_sent" ||
+                            (st === "escrowed" && waitingTimedOut);
+                          return (
+                            <div className="flex gap-3">
+                              {showAppeal && (
+                                <button
+                                  onClick={() => {
+                                    onOpenDispute?.(selectedOrder.id);
+                                    onClose();
+                                  }}
+                                  className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
+                                >
+                                  <Flag className="w-4 h-4" />
+                                  Raise Appeal
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  // Open the merchant Support panel (help/ticketing),
+                                  // which lives in settings under the `support` tab.
+                                  // Use client-side nav (not window.location) so the
+                                  // in-memory merchant auth store survives — a hard
+                                  // reload bounces to /market/login before the async
+                                  // /api/auth/me restore repopulates the store.
+                                  onClose();
+                                  router.push("/market/settings?tab=support");
+                                }}
+                                className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
+                              >
+                                <Headphones className="w-4 h-4" />
+                                Need Help
+                              </button>
+                            </div>
+                          );
+                        })()}
+                    </>
+                  );
+                })()}
 
               {/* "View Full Details" hop removed — the model now shows full
                   buyer context (presence, rating, trades, wallet) inline. */}
