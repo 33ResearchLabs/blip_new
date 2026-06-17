@@ -473,9 +473,8 @@ export function MerchantSupportPanel({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <QuickAction label="Raise a ticket" Icon={Ticket} onClick={startCreate} />
-          <QuickAction label="Telegram" Icon={Send} onClick={openTelegram} />
         </div>
 
         <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${FIELD}`}>

@@ -9,7 +9,6 @@ import {
   Search,
   Mic,
   MessageCircle,
-  Send,
   BookOpen,
   Wallet,
   IndianRupee,
@@ -252,9 +251,8 @@ export const SupportScreen = ({ setScreen, previousScreen }: SupportScreenProps)
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
             className="mb-5"
           >
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 gap-2.5">
               <QuickAction label="Raise a ticket" Icon={Ticket} onClick={raiseTicket} />
-              <QuickAction label="Telegram"       Icon={Send}   onClick={openTelegramDm} />
             </div>
           </motion.section>
 
