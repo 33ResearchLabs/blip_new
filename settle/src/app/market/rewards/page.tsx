@@ -231,25 +231,28 @@ function TaskRow({ task, index }: { task: OneOffTask; index: number }) {
         </p>
       </div>
 
-      {/* Points + status */}
+      {/* Points + status — fixed-width columns so values and badges align
+          across every row regardless of digit count or status type. */}
       <div className="flex items-center gap-3 shrink-0">
-        <span className="inline-flex items-center gap-1 text-[13px] font-mono font-semibold text-white/90 tabular-nums">
-          <Coins className="w-3.5 h-3.5 text-white/60" />+
+        <span className="inline-flex items-center justify-end gap-1 w-14 text-[13px] font-mono font-semibold text-white/90 tabular-nums">
+          <Coins className="w-3.5 h-3.5 text-white/60 shrink-0" />+
           {formatCount(points)}
         </span>
-        {done ? (
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/12 border border-white/25 text-white">
-            <Check className="w-3.5 h-3.5" strokeWidth={2.6} />
-          </span>
-        ) : href ? (
-          <span className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-white/70 group-hover:text-white">
-            Earn <ChevronRight className="w-3.5 h-3.5" />
-          </span>
-        ) : (
-          <span className="text-[11px] font-medium text-white/30 px-2 py-1 rounded-md bg-white/[0.03] border border-white/[0.06]">
-            Pending
-          </span>
-        )}
+        <span className="flex items-center justify-end w-18">
+          {done ? (
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/12 border border-white/25 text-white">
+              <Check className="w-3.5 h-3.5" strokeWidth={2.6} />
+            </span>
+          ) : href ? (
+            <span className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-white/70 group-hover:text-white">
+              Earn <ChevronRight className="w-3.5 h-3.5" />
+            </span>
+          ) : (
+            <span className="text-[11px] font-medium text-white/30 px-2 py-1 rounded-md bg-white/[0.03] border border-white/[0.06]">
+              Pending
+            </span>
+          )}
+        </span>
       </div>
     </div>
   );

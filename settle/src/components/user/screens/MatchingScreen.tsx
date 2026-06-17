@@ -351,7 +351,7 @@ export const MatchingScreen = ({
         </motion.button>
 
         {/* Dev convenience — simulate a merchant accepting (kept from prior flow). */}
-        {activeOrderId && (
+        {/* {activeOrderId && (
           <button
             onClick={() => {
               setOrders((prev: any[]) => prev.map((o: any) =>
@@ -364,7 +364,7 @@ export const MatchingScreen = ({
           >
             Demo: simulate merchant accept
           </button>
-        )}
+        )} */}
       </div>
       </div>
 

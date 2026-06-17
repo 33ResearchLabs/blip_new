@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  authCardEnter,
+  authTransition,
+  authViewVariants,
+  authViewKey,
+} from "@/lib/motion/authMotion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Eye, EyeOff, Loader2, Mail, ShieldCheck } from "lucide-react";
 import { useMerchantStore } from "@/stores/merchantStore";
@@ -538,7 +544,28 @@ export default function MerchantLoginPage() {
             style={{ width: 1, background: "linear-gradient(180deg, transparent, rgba(0,0,0,0.06), transparent)" }}
           />
 
-          <div className="w-full max-w-[420px] relative lg:mt-11">
+          <motion.div
+            className="w-full max-w-[420px] relative lg:mt-11"
+            initial={authCardEnter.initial}
+            animate={authCardEnter.animate}
+            transition={authCardEnter.transition}
+          >
+          {/* Mode-dependent content cross-fades as one unit on every
+              Sign In ↔ Create Account toggle (and when the verification gate
+              opens) — identical motion to the user login card. */}
+          <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={authViewKey({
+              mode: auth.authTab,
+              pendingVerification: !!auth.pendingVerificationEmail,
+              verified: auth.pendingVerificationVerified,
+            })}
+            variants={authViewVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={authTransition}
+          >
             <span
               className="inline-flex items-center gap-2 text-[10.5px] uppercase font-semibold mb-[22px]"
               style={{
@@ -995,7 +1022,9 @@ export default function MerchantLoginPage() {
                 </div>
               </>
             )}
-          </div>
+          </motion.div>
+          </AnimatePresence>
+          </motion.div>
         </aside>
       </main>
     </div>
