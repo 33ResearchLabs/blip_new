@@ -1427,14 +1427,6 @@ function ActiveOrderBody({
   // Buyer Will Pay, details grid, verify guidance, escrow + warning. Footer
   // (Confirm & Release / Raise Appeal / Need Help) is rendered by the wrapper.
   if (fullScreen && isSeller && status === "payment_sent") {
-    const cpName = (order.user as string) || (cp.name as string) || "Trader";
-    const initials =
-      cpName
-        .split(/\s+/)
-        .map((w: string) => w[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase() || "U";
     const pmText = PM_META[preferred ?? "bank"]?.label ?? "Bank Transfer";
     const recvM = order.sellerPaymentMethod;
     const recvMasked = recvM ? maskAccountDetail(recvM.type, detailString(recvM.details)) : "";
@@ -1452,21 +1444,33 @@ function ActiveOrderBody({
         {/* Action Required banner */}
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            <div className="w-14 h-14 rounded-full border-2 border-emerald-500/40 flex items-center justify-center shrink-0">
+              <Lock className="w-6 h-6 text-emerald-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-[13px] font-bold text-emerald-400">{banner.heading}</p>
-                {expiresIn && (
-                  <span className="flex items-center gap-1 text-[10px] text-foreground/40 shrink-0 whitespace-nowrap">
-                    <Clock className="w-3 h-3" /> Expires in{" "}
-                    <span className="font-mono font-bold text-emerald-400">{expiresIn}</span>
-                  </span>
-                )}
-              </div>
-              <p className="text-[13px] font-semibold text-foreground mt-1 leading-snug">{banner.title}</p>
-              <p className="text-[11px] text-foreground/45 mt-0.5">{banner.sub}</p>
+              <p className="text-[14px] font-bold text-emerald-400">Escrow Locked Successfully</p>
+              <p className="text-[13px] text-foreground/80 mt-1 leading-snug">
+                You have locked {formatCrypto(Number(amount) || 0)} USDT in escrow.
+              </p>
+              <p className="text-[13px] text-foreground/80 leading-snug">Waiting for buyer to make payment.</p>
+            </div>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              {expiresIn && (
+                <span className="flex items-center gap-1 text-[10px] text-foreground/40 whitespace-nowrap">
+                  <Clock className="w-3 h-3" /> Expires in{" "}
+                  <span className="font-mono font-bold text-emerald-400">{expiresIn}</span>
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  // No order-timeline view is wired into this screen yet; the
+                  // button matches the mock and is a no-op until one exists.
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-foreground/[0.06] border border-white/[0.08] text-[11px] font-medium text-foreground/80 hover:bg-foreground/[0.1] transition-colors"
+              >
+                Order Timeline <ChevronRight className="w-3 h-3" />
+              </button>
             </div>
           </div>
         </div>
@@ -1512,47 +1516,9 @@ function ActiveOrderBody({
           </div>
         </div>
 
-        {/* Counterparty + amounts */}
+        {/* Amounts — You Locked / Buyer Will Pay (merchant-profile card skipped per request) */}
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <div className="flex items-center gap-3">
-            <div className="relative shrink-0">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
-                {initials}
-              </div>
-              {online && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#0e0e10]" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-[15px] font-semibold text-foreground truncate">{cpName}</p>
-                {verified && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
-              </div>
-              <div className="flex items-center gap-1 text-[12px] text-foreground/55 mt-0.5">
-                {ratingNum != null && ratingNum > 0 && (
-                  <span className="inline-flex items-center gap-0.5">
-                    <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                    {formatCrypto(ratingNum, { decimals: 1 })}
-                  </span>
-                )}
-                {trades > 0 && <span>({formatCount(trades)} trades)</span>}
-                {successRate != null && <span>· {successRate}% completion</span>}
-              </div>
-              <div className="flex items-center gap-1.5 mt-1.5">
-                {verified && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/15">
-                    <ShieldCheck className="w-3 h-3" /> Verified Merchant
-                  </span>
-                )}
-                {online && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-foreground/[0.06] text-foreground/55">
-                    <MessageCircle className="w-3 h-3" /> Online
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/[0.06]">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-0.5 border-r border-white/[0.06] pr-4">
               <p className="text-[10px] text-foreground/40">You Locked</p>
               <div className="flex items-center gap-1.5">
@@ -1653,9 +1619,9 @@ function ActiveOrderBody({
             <Hourglass className="w-4 h-4 text-blue-300" />
           </div>
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-blue-300">Verify the buyer&apos;s payment</p>
+            <p className="text-[13px] font-semibold text-blue-300">Waiting for buyer to pay you</p>
             <p className="text-[12px] text-foreground/55 mt-0.5 leading-snug">
-              The buyer marked the payment as sent. Confirm it landed in your account before you release the USDT.
+              The buyer has been notified to make the payment. Please wait until you receive the payment in your account.
             </p>
           </div>
         </div>
@@ -1666,7 +1632,7 @@ function ActiveOrderBody({
           <div className="min-w-0">
             <p className="text-sm font-semibold text-emerald-400">Escrow protects both parties</p>
             <p className="text-[12px] text-foreground/50 mt-0.5 leading-snug">
-              Your funds are secured in escrow. They are released to the buyer only once you confirm payment.
+              Your funds are secured in escrow. They will be released to buyer once you confirm payment.
             </p>
           </div>
         </div>
@@ -3375,7 +3341,7 @@ export function OrderQuickView({
                     ? primary.type === "LOCK_ESCROW"
                       ? `Lock ${selectedOrder.amount} USDT in Escrow`
                       : primary.type === "CONFIRM_PAYMENT"
-                      ? "Confirm Payment & Release USDT"
+                      ? "Confirm Payment and Release"
                       : primary.type === "SEND_PAYMENT"
                       ? "I've Sent the Payment"
                       : primary.label
