@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
@@ -49,6 +50,7 @@ export function EscrowLockModal({
   onClose,
   onExecute,
 }: EscrowLockModalProps) {
+  const router = useRouter();
   // ── Receiving-account picker — the seller picks which saved account the
   // buyer pays into; the choice is shared with the buyer on lock (req 9).
   const recv = useMerchantReceivingMethods(showEscrowModal && !escrowTxHash);
@@ -198,7 +200,10 @@ export function EscrowLockModal({
                     selectedId={selectedAcctId}
                     onSelect={setPickedId}
                     onAddNew={() => {
-                      window.location.href = "/market/settings";
+                      // Client-side nav (not window.location) so the in-memory
+                      // merchant auth store survives — a hard reload bounces to
+                      // /market/login before the async /api/auth/me restore runs.
+                      router.push("/market/settings");
                     }}
                     loading={recv.loading}
                     surfaces={S}
