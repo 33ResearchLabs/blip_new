@@ -695,15 +695,38 @@ const OrderList = memo(function OrderList({
                             : "New trader",
                       },
                     ];
-                    const pmType =
-                      order.lockedPaymentMethod?.type ||
-                      order.dbOrder?.payment_method ||
-                      (order.userBankDetails ? "bank" : null);
                     const pmLabel: Record<string, string> = {
                       bank: "Bank",
                       cash: "Cash",
                       upi: "UPI",
                     };
+                    // Payment-rail badge. On a broadcast BUY order the single
+                    // `payment_method` column defaults to 'bank' at creation
+                    // and does NOT reflect the buyer's choice — their actual
+                    // selected rails live in `buyer_payment_types` (an array).
+                    // Reading `payment_method` made every pending card show
+                    // "Bank" regardless of what the buyer picked, so prefer the
+                    // buyer's rails here. Fall back to a locked method / legacy
+                    // single method for sell / offer / legacy orders.
+                    const buyerPayTypes: string[] = Array.isArray(
+                      (order.dbOrder as { buyer_payment_types?: string[] })
+                        ?.buyer_payment_types,
+                    )
+                      ? (order.dbOrder as { buyer_payment_types?: string[] })
+                          .buyer_payment_types!
+                      : [];
+                    const pmDisplay: string | null = order.lockedPaymentMethod
+                      ?.type
+                      ? pmLabel[order.lockedPaymentMethod.type] ||
+                        order.lockedPaymentMethod.type
+                      : buyerPayTypes.length > 0
+                      ? buyerPayTypes.map((t) => pmLabel[t] || t).join(", ")
+                      : order.dbOrder?.payment_method
+                      ? pmLabel[order.dbOrder.payment_method] ||
+                        order.dbOrder.payment_method
+                      : order.userBankDetails
+                      ? "Bank"
+                      : null;
                     const effStatus: string =
                       order.status || order.dbOrder?.status || "pending";
                     const isActivelyPending =
@@ -771,7 +794,7 @@ const OrderList = memo(function OrderList({
                       { label: "Total", value: `${fiatAmt} ${secondaryCcy}` },
                       {
                         label: "Payment Method",
-                        value: pmType ? pmLabel[pmType] || pmType : "—",
+                        value: pmDisplay || "—",
                       },
                       ...(createdDate
                         ? [
@@ -843,9 +866,9 @@ const OrderList = memo(function OrderList({
                                 >
                                   {order.type?.toUpperCase() || "TRADE"}
                                 </span>
-                                {pmType && (
+                                {pmDisplay && (
                                   <span className="text-[10px] text-white/20 font-mono">
-                                    · {pmLabel[pmType] || pmType}
+                                    · {pmDisplay}
                                   </span>
                                 )}
                                 {isMyOwnOrder && (

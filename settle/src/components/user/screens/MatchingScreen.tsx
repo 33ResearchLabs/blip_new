@@ -167,9 +167,9 @@ export const MatchingScreen = ({
           <p className="text-[12px] text-text-tertiary truncate">Order #{displayId}</p>
         </div>
         <button
-          onClick={() => setScreen("home")}
+          onClick={() => setScreen("support")}
           className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle"
-          aria-label="Help"
+          aria-label="Help & support"
         >
           <HelpCircle className="w-5 h-5 text-text-secondary" />
         </button>

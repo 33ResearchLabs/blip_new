@@ -14,7 +14,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, Loader2, Copy, Check } from "lucide-react";
 import { formatCrypto, formatRate } from "@/lib/format";
 
 const CARD = "bg-surface-card border border-border-subtle";
@@ -129,7 +129,22 @@ export function OrderOverviewScreen({
   const s = (status || "").toLowerCase();
   const meta = statusMeta(s);
   const canCancel = CANCELLABLE.has(s);
+  // Once an order is cancelled/expired there's no live progress — hide the
+  // "In progress"-style progress badge (the pill + the right-hand status block).
+  const isCancelledState = s === "cancelled" || s === "expired";
   const sym = fiatSymbol(fiatCode);
+
+  // Tap-to-copy for the Order ID.
+  const [copied, setCopied] = useState(false);
+  const copyOrderId = async () => {
+    try {
+      await navigator.clipboard.writeText(displayId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable — no-op */
+    }
+  };
   const typeLabel = type === "buy" ? "Buy" : "Sell";
   const cryptoStr = `${formatCrypto(cryptoAmount)} USDT`;
   const fiatStr = `${sym}${formatCrypto(fiatAmount)}`;
@@ -165,23 +180,27 @@ export function OrderOverviewScreen({
             <p className="text-[20px] font-bold text-text-primary mb-0.5">
               {typeLabel} {cryptoStr}
             </p>
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className={`flex items-center gap-2 ${isCancelledState ? "" : "mb-1.5"}`}>
               <span className={`w-2 h-2 rounded-full ${TONE_DOT[meta.tone]}`} />
               <span className={`text-[15px] font-semibold ${TONE_TEXT[meta.tone]}`}>{meta.label}</span>
             </div>
-            <span className={`inline-flex px-2.5 py-1 rounded-full text-[12px] font-medium ${TONE_PILL[meta.tone]}`}>
-              {meta.progressText}
-            </span>
+            {!isCancelledState && (
+              <span className={`inline-flex px-2.5 py-1 rounded-full text-[12px] font-medium ${TONE_PILL[meta.tone]}`}>
+                {meta.progressText}
+              </span>
+            )}
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-[12px] text-text-tertiary mb-1">Order Status</p>
-            <p className={`text-[14px] font-semibold ${TONE_TEXT[meta.tone]}`}>{meta.progressText}</p>
-          </div>
+          {!isCancelledState && (
+            <div className="text-right shrink-0">
+              <p className="text-[12px] text-text-tertiary mb-1">Order Status</p>
+              <p className={`text-[14px] font-semibold ${TONE_TEXT[meta.tone]}`}>{meta.progressText}</p>
+            </div>
+          )}
         </motion.div>
 
         {/* Order Details */}
         <Section title="Order Details">
-          <Row label="Order ID" value={displayId} mono />
+          <CopyRow label="Order ID" value={displayId} copied={copied} onCopy={copyOrderId} />
           <Row label="Created At" value={fmtCreatedAt(createdAt)} />
           <Row label="Order Type" value={`${typeLabel} USDT`} />
           <Row label="Status" value={meta.label} valueClassName={TONE_TEXT[meta.tone]} />
@@ -302,6 +321,37 @@ function Section({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// Order ID row with a tap-to-copy affordance.
+function CopyRow({
+  label,
+  value,
+  copied,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-3">
+      <span className="text-[14px] text-text-secondary shrink-0">{label}</span>
+      <button
+        onClick={onCopy}
+        className="flex items-center gap-1.5 min-w-0 text-right"
+        aria-label={`Copy ${label}`}
+      >
+        <span className="text-[14px] font-medium text-text-primary font-mono truncate">{value}</span>
+        {copied ? (
+          <Check className="w-3.5 h-3.5 text-success shrink-0" />
+        ) : (
+          <Copy className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+        )}
+      </button>
     </div>
   );
 }

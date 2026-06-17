@@ -29,7 +29,6 @@ import {
   Lightbulb,
   Wallet,
   ArrowDownToLine,
-  Tag,
   Landmark,
   ShieldCheck,
   CheckCircle2,
@@ -38,7 +37,7 @@ import {
   Loader2,
 } from "lucide-react";
 import type { Order } from "./types";
-import { formatCrypto, formatRate } from "@/lib/format";
+import { formatCrypto } from "@/lib/format";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
 
 const CARD = "bg-surface-card border border-border-subtle";
@@ -369,11 +368,10 @@ export function OrderTrackingView({
           initial={{ y: 12, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.15 }}
-          className="grid grid-cols-4 gap-2"
+          className="grid grid-cols-3 gap-2"
         >
           <SummaryTile icon={<Wallet className="w-4 h-4" />} label={order.type === "buy" ? "You pay" : "You sell"} value={order.type === "buy" ? fiatStr : `${cryptoStr}`} sub={order.type === "buy" ? undefined : "USDT"} />
           <SummaryTile icon={<ArrowDownToLine className="w-4 h-4" />} label="You get" value={order.type === "buy" ? `${cryptoStr}` : fiatStr} sub={order.type === "buy" ? "USDT" : undefined} />
-          <SummaryTile icon={<Tag className="w-4 h-4" />} label="Rate" value={`${sym}${formatRate(order.merchant?.rate)}`} />
           <SummaryTile icon={<Landmark className="w-4 h-4" />} label="Method" value={order.merchant?.paymentMethod === "cash" ? "Cash" : "Bank"} />
         </motion.div>
 
