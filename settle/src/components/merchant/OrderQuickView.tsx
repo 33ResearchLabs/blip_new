@@ -39,6 +39,7 @@ import {
   useRef as useLocalRef,
   Fragment,
 } from "react";
+import { useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 // Backend-driven: action buttons read from dbOrder.primaryAction/secondaryAction
@@ -757,6 +758,7 @@ function ActiveOrderBody({
    *  its deadline, so the footer can surface Need Help / Raise Appeal. */
   onWaitingTimeout?: (timedOut: boolean) => void;
 }) {
+  const router = useRouter();
   const [now, setNow] = useLocalState(() => Date.now());
   const [copiedId, setCopiedId] = useLocalState(false);
   useLocalEffect(() => {
@@ -1108,7 +1110,10 @@ function ActiveOrderBody({
               selectedId={recvSelectedId}
               onSelect={setRecvPickedId}
               onAddNew={() => {
-                window.location.href = "/market/settings";
+                // Client-side nav (not window.location) so the in-memory
+                // merchant auth store survives — a hard reload bounces to
+                // /market/login before the async /api/auth/me restore runs.
+                router.push("/market/settings");
               }}
               loading={recv.loading}
               surfaces={SURFACES.merchant}
@@ -1329,6 +1334,7 @@ export function OrderQuickView({
   onOpenChat,
   onOpenDispute,
 }: OrderQuickViewProps) {
+  const router = useRouter();
   // Receiving account the seller picked in ActiveOrderBody — bubbled up so the
   // footer "Lock Escrow" button can pass it to the inline lock.
   const [lockMethodId, setLockMethodId] = useLocalState<string | null>(null);
@@ -2132,10 +2138,13 @@ export function OrderQuickView({
                           <button
                             onClick={() => {
                               // Open the merchant Support panel (help/ticketing),
-                              // which lives in settings under the `support` tab —
-                              // same navigation pattern as "Add New Account".
+                              // which lives in settings under the `support` tab.
+                              // Use client-side nav (not window.location) so the
+                              // in-memory merchant auth store survives — a hard
+                              // reload bounces to /market/login before the async
+                              // /api/auth/me restore repopulates the store.
                               onClose();
-                              window.location.href = "/market/settings?tab=support";
+                              router.push("/market/settings?tab=support");
                             }}
                             className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
                           >
