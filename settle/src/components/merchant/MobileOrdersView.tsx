@@ -140,6 +140,10 @@ function OrderCardTimer({
   const isCompleted = effStatus === "completed";
   const isBad = ["disputed", "cancelled", "expired"].includes(effStatus);
   const isOngoing = !isCompleted && !isBad;
+  // Chat only makes sense once the order is accepted — a pending/open broadcast
+  // or an expired order has no counterparty to message yet, so hide the chat
+  // button until there's someone on the other side.
+  const canChat = effStatus !== "pending" && !isExpired;
   const isMine = isCreatedByMe(order);
   const expiringSoon = !isExpired && countdown <= 120;
 
@@ -468,8 +472,10 @@ function OrderCardTimer({
             )}
           </div>
 
-          {/* Right: chat + user icon buttons 32×32 */}
+          {/* Right: chat + user icon buttons 32×32. Chat only shows once the
+              order is accepted (there's a counterparty to message). */}
           <div style={{ display: "flex", gap: 7, flexShrink: 0 }}>
+            {canChat && (
             <button
               onClick={() => {
                 onOpenChat(order);
@@ -490,6 +496,7 @@ function OrderCardTimer({
             >
               <MessageCircle style={{ width: 15, height: 15 }} />
             </button>
+            )}
             <button
               style={{
                 width: 32,
@@ -801,6 +808,15 @@ export function MobileOrdersView({
   cancellingOrderId,
   onSelectOrder,
 }: MobileOrdersViewProps) {
+  // Periodic clock tick (30s) so the expired-order filter re-evaluates while the
+  // page stays open — orders that lapse client-side don't mutate the store, so
+  // without this the allOrders memo (keyed on the orders array) would never
+  // re-run and a just-lapsed card would survive the filter until the next fetch.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
   // Shared filter / search / sound state — same Zustand keys the desktop panel uses,
   // so toggling here also reflects on the desktop layout.
   const searchQuery = useMerchantStore((s) => s.searchQuery);
@@ -857,17 +873,14 @@ export function MobileOrdersView({
   // Client-side filter off the same pendingOrders array; uses the order.isMyOrder
   // flag populated at mapping time.
   type ViewTab = "all" | "pending" | "mine";
-  // Pending tab hidden on mobile — the "All" tab already shows every order.
-  // Kept (commented, not removed) so it can be re-enabled later.
-  // const [view, setView] = useState<ViewTab>("pending");
-  const [view, setView] = useState<ViewTab>("all");
-  // 3-tab index: const tabIndex = view === "all" ? 0 : view === "pending" ? 1 : 2;
-  const tabIndex = view === "all" ? 0 : 1; // 2 tabs now: all=0, mine=1
+  // All / Pending / Mine — mirrors the desktop PendingOrdersPanel, which
+  // defaults to "Pending" (the actionable incoming-orders list).
+  const [view, setView] = useState<ViewTab>("pending");
+  // 3 tabs: all=0, pending=1, mine=2
+  const tabIndex = view === "all" ? 0 : view === "pending" ? 1 : 2;
 
   // "All" view = full orders feed from the store, every status (pending /
-  //   accepted / escrowed / payment_sent / completed / cancelled / …),
-  //   matching the desktop pending bar's "All" branch in PendingOrdersPanel.
-  //   Deduped by id as a safety net.
+  //   accepted / escrowed / payment_sent), but NOT terminal ones.
   // "Pending" view stays scoped to pending-only (excluding mine — that's the
   //   actionable market list).
   // "Mine" view stays scoped to pending-only mine (same as before; the
@@ -877,11 +890,49 @@ export function MobileOrdersView({
     const merged: Order[] = [];
     for (const o of allMerchantOrders) {
       if (o?.id && seen.has(o.id)) continue;
+      // ── "All" = LIVE / active orders only ────────────────────────────────
+      // Show pending (acceptable), accepted/escrowed/payment_sent (mapped to
+      // ui "escrow"), and disputed. Hide TERMINAL orders — completed,
+      // cancelled, and expired — they belong in History, not the New feed.
+      // Detection is defensive across status fields because the realtime patch
+      // only updates minimalStatus (leaving status/dbOrder stale), and the UI
+      // mapper remaps minimal "expired" → ui "cancelled".
+      const uiStatus = String((o as any)?.status || "").toLowerCase();
+      const rawStatus = String((o as any)?.dbOrder?.status || "").toLowerCase();
+      const minStatus = String(
+        (o as any)?.minimalStatus || (o as any)?.dbOrder?.minimal_status || "",
+      ).toLowerCase();
+      const TERMINAL = ["completed", "cancelled", "expired"];
+      const isTerminal =
+        TERMINAL.includes(uiStatus) ||
+        TERMINAL.includes(rawStatus) ||
+        TERMINAL.includes(minStatus);
+
+      // A pending/open order whose matching window has lapsed is effectively
+      // expired (the card paints it EXPIRED purely from the countdown), even
+      // if its status hasn't flipped yet — treat it as terminal too. Gate on
+      // "never accepted" so a live in-flight order whose accept-window
+      // timestamp passed (escrow/payment_sent) is NOT removed.
+      const expiresAt = (o as any)?.dbOrder?.expires_at;
+      const lapsed =
+        (expiresAt ? new Date(expiresAt).getTime() <= nowTick : false) ||
+        (typeof (o as any)?.expiresIn === "number" && (o as any).expiresIn <= 0);
+      const ACCEPTED = ["accepted", "escrow", "escrowed", "payment_sent", "completed", "disputed"];
+      const everAccepted =
+        !!(o as any)?.dbOrder?.accepted_at ||
+        ACCEPTED.includes(uiStatus) ||
+        ACCEPTED.includes(rawStatus) ||
+        ACCEPTED.includes(minStatus);
+
+      if (isTerminal || (lapsed && !everAccepted)) {
+        continue;
+      }
       if (o?.id) seen.add(o.id);
       merged.push(o);
     }
     return merged;
-  }, [allMerchantOrders]);
+    // nowTick re-runs the lapsed check on a timer (see nowTick declaration).
+  }, [allMerchantOrders, nowTick]);
 
   const myCount = useMemo(
     () => pendingOrders.filter((o) => o.isMyOrder).length,
@@ -938,9 +989,8 @@ export function MobileOrdersView({
 
   const tabs = [
     { id: "all" as ViewTab, label: "All", count: allCount },
-    // Pending tab hidden — "All" already shows every order (commented, not removed).
-    // { id: "pending" as ViewTab, label: "Pending", count: pendingTabCount },
-    { id: "mine" as ViewTab, label: "My Orders", count: myCount },
+    { id: "pending" as ViewTab, label: "Pending", count: pendingTabCount },
+    { id: "mine" as ViewTab, label: "Mine", count: myCount },
   ];
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -988,8 +1038,8 @@ export function MobileOrdersView({
               background: "rgba(255,255,255,0.10)",
               border: "1px solid rgba(255,255,255,0.14)",
               transition: "left 0.22s cubic-bezier(0.22,1,0.36,1), width 0.22s",
-              left: `calc(${tabIndex} * (100% - 6px) / 2 + 3px)`,
-              width: "calc((100% - 6px) / 2)",
+              left: `calc(${tabIndex} * (100% - 6px) / ${tabs.length} + 2px)`,
+              width: `calc((100% - 6px) / ${tabs.length})`,
               pointerEvents: "none",
             }}
           />

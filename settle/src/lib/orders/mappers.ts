@@ -23,8 +23,15 @@ export const getEffectiveStatus = (order: Order): Order['status'] => {
   return order.status;
 };
 
-// Check if an order is expired based on expiresIn countdown
+// Check if an order is expired. Prefer the absolute `expires_at` timestamp
+// (compared to now) over the cached `expiresIn` snapshot — `expiresIn` is
+// computed once at fetch time and goes stale, so an order that lapsed AFTER
+// load would otherwise still read as "not expired".
 export const isOrderExpired = (order: Order): boolean => {
+  const expiresAt = order.dbOrder?.expires_at;
+  if (expiresAt) {
+    return new Date(expiresAt).getTime() <= Date.now();
+  }
   return order.expiresIn <= 0;
 };
 

@@ -123,6 +123,37 @@ export default function MerchantDashboard() {
   const [selectedOrderPopup, setSelectedOrderPopup] = useState<Order | null>(
     null,
   );
+  // Merchant MOBILE only: active / in-progress orders open as a full screen
+  // (OrderQuickView presentation="fullscreen") instead of the bottom-sheet
+  // popup. Routed by `handleMobileSelectOrder` below; desktop never sets this.
+  const [mobileOrderDetail, setMobileOrderDetail] = useState<Order | null>(
+    null,
+  );
+  // Routes a mobile order tap to the right presentation. Mirrors OrderQuickView's
+  // `isActiveOrder` gate: merchant is a party (seller/buyer) AND status is past
+  // accept → full screen; otherwise (pending broadcasts, acceptable buys,
+  // terminal rows) the existing bottom-sheet popup. Only wired into the mobile
+  // shell, so desktop is unaffected. Setters are stable → empty deps.
+  const handleMobileSelectOrder = useCallback((order: Order | null) => {
+    if (!order) {
+      setMobileOrderDetail(null);
+      setSelectedOrderPopup(null);
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = (order.dbOrder ?? {}) as any;
+    const status = String(
+      db.status || (order as any).status || db.minimal_status || "",
+    ).toLowerCase();
+    const role = order.myRole;
+    const isActive =
+      (role === "seller" || role === "buyer") &&
+      // `completed` included so a finished trade opens the full-screen
+      // "Order Completed" view (success + rating) rather than the popup.
+      ["accepted", "escrowed", "payment_sent", "completed"].includes(status);
+    if (isActive) setMobileOrderDetail(order);
+    else setSelectedOrderPopup(order);
+  }, []);
   const [selectedMempoolOrder, setSelectedMempoolOrder] = useState<any | null>(
     null,
   );
@@ -858,6 +889,7 @@ export default function MerchantDashboard() {
       const status = getEffectiveStatus(o);
       return (
         status === "cancelled" ||
+        status === "expired" ||
         ((status === "active" || status === "pending") && isOrderExpired(o)) ||
         (status === "escrow" && isOrderExpired(o) && !hasMyEscrow(o))
       );
@@ -1178,7 +1210,7 @@ export default function MerchantDashboard() {
           dismissBigOrder={dismissBigOrder}
           handleCancelOrder={handleCancelOrder}
           cancellingOrderId={cancellingOrderId}
-          setSelectedOrderPopup={setSelectedOrderPopup}
+          setSelectedOrderPopup={handleMobileSelectOrder}
           markingDone={markingDone}
           openEscrowModal={openEscrowModal}
           markFiatPaymentSent={markFiatPaymentSent}
@@ -1355,6 +1387,8 @@ export default function MerchantDashboard() {
           onCorridorChange={setActiveCorridor}
           selectedOrderPopup={selectedOrderPopup}
           setSelectedOrderPopup={setSelectedOrderPopup}
+          mobileOrderDetail={mobileOrderDetail}
+          setMobileOrderDetail={setMobileOrderDetail}
           markingDone={markingDone}
           acceptingOrderId={acceptingOrderId}
           confirmingOrderId={confirmingOrderId}

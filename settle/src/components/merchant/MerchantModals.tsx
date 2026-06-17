@@ -185,6 +185,12 @@ export interface MerchantModalsProps {
   // Order quick view
   selectedOrderPopup: Order | null;
   setSelectedOrderPopup: (v: Order | null) => void;
+  // Full-screen active-order detail — merchant MOBILE only. When set, renders a
+  // second OrderQuickView in `presentation="fullscreen"` mode (back-arrow app-bar,
+  // fills the viewport) instead of the bottom-sheet popup. Fed only by the mobile
+  // active-order tap path; desktop continues to use `selectedOrderPopup`.
+  mobileOrderDetail?: Order | null;
+  setMobileOrderDetail?: (v: Order | null) => void;
   markingDone: any;
   acceptingOrderId: string | null;
   confirmingOrderId: string | null;
@@ -250,6 +256,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
     isCreatingTrade, createTradeError, setCreateTradeError, handleCreateTrade,
     activeCorridor, onCorridorChange,
     selectedOrderPopup, setSelectedOrderPopup, markingDone, acceptingOrderId,
+    mobileOrderDetail, setMobileOrderDetail,
     confirmingOrderId, cancellingOrderId, isRequestingCancel,
     acceptOrder, openEscrowModal, markFiatPaymentSent, confirmPayment,
     cancelOrderWithoutEscrow, respondToCancelRequest, handleOpenChat,
@@ -419,6 +426,34 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
         lockingEscrowOrderId={isLockingEscrow ? escrowOrder?.id ?? null : null}
         isRequestingCancel={isRequestingCancel}
         onClose={() => setSelectedOrderPopup(null)}
+        onAcceptOrder={acceptOrder}
+        onOpenEscrowModal={openEscrowModal}
+        onLockEscrow={lockEscrowInline}
+        escrowError={escrowError}
+        onMarkFiatPaymentSent={markFiatPaymentSent}
+        onConfirmPayment={confirmPayment}
+        onCancelOrderWithoutEscrow={cancelOrderWithoutEscrow}
+        onRespondToCancel={respondToCancelRequest}
+        onOpenChat={handleOpenChat}
+        onViewFullDetails={(orderId) => setSelectedOrderId(orderId)}
+        onOpenDispute={openDisputeModal}
+      />
+
+      {/* Full-screen active-order detail — merchant MOBILE only. Same component,
+          same handlers as the popup above, just rendered as a full in-app screen
+          (back-arrow app-bar). Driven by `mobileOrderDetail`; desktop never sets
+          it, so this stays inert outside the mobile active-order tap path. */}
+      <OrderQuickView
+        presentation="fullscreen"
+        selectedOrder={mobileOrderDetail ?? null}
+        merchantId={merchantId}
+        markingDone={markingDone}
+        acceptingOrderId={acceptingOrderId}
+        confirmingOrderId={confirmingOrderId}
+        cancellingOrderId={cancellingOrderId}
+        lockingEscrowOrderId={isLockingEscrow ? escrowOrder?.id ?? null : null}
+        isRequestingCancel={isRequestingCancel}
+        onClose={() => setMobileOrderDetail?.(null)}
         onAcceptOrder={acceptOrder}
         onOpenEscrowModal={openEscrowModal}
         onLockEscrow={lockEscrowInline}

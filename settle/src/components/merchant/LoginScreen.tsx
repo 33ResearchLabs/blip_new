@@ -611,14 +611,18 @@ export function LoginScreen({
                     <span className="text-[12px] text-white/60 leading-snug">
                       I agree to the{" "}
                       <a
-                        href="#"
+                        href="https://blip.money/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="text-white/70 hover:text-white"
                       >
                         Terms of Service
                       </a>{" "}
                       and{" "}
                       <a
-                        href="#"
+                        href="https://blip.money/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="text-white/70 hover:text-white"
                       >
                         Privacy Policy
