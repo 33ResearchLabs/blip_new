@@ -217,6 +217,8 @@ function OrderCardTimer({
   const fiatCur = order.toCurrency || "AED";
   const viewerSide = getViewerSide(order.dbOrder, merchantId);
   const fiatLabel = viewerSide === "seller" ? "YOU RECEIVE" : "YOU PAY OUT";
+  // Mirror label for the USDT (right) side of the payout hero.
+  const usdtLabel = viewerSide === "seller" ? "YOU GIVE" : "YOU GET";
 
   // Hero fiat: integer only — strip all decimals (e.g. "₹2,561" not "₹2,561.25")
   const heroFiat = formatFiat(Math.round(order.total), fiatCur).replace(
@@ -530,7 +532,7 @@ function OrderCardTimer({
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-end",
+            alignItems: "flex-start",
             marginTop: 11,
             marginBottom: 14,
           }}
@@ -592,18 +594,32 @@ function OrderCardTimer({
               )}
             </div>
           </div>
-          {/* Right: USDT amount + rate */}
+          {/* Right: USDT label + amount + rate */}
           <div style={{ textAlign: "right", flexShrink: 0 }}>
             <div
               style={{
-                fontSize: 14.5,
+                color: "#86868b",
+                fontWeight: 700,
+                fontSize: 9.5,
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                marginBottom: 2,
+              }}
+            >
+              {usdtLabel}
+            </div>
+            <div
+              style={{
+                fontSize: 22,
                 fontWeight: 800,
+                lineHeight: 0.95,
                 fontVariantNumeric: "tabular-nums",
+                letterSpacing: "-0.02em",
                 color: "#f5f5f7",
               }}
             >
               {Math.round(order.amount)}{" "}
-              <span style={{ fontSize: 10.5, color: "#86868b" }}>USDT</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#86868b" }}>USDT</span>
             </div>
             <div
               style={{

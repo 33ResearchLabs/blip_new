@@ -202,9 +202,11 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
             </div>
           )}
         </div>
-        {/* Chat icon button */}
+        {/* Chat icon button. stopPropagation so the tap doesn't also fire the
+            parent trust-block onClick (onSelectOrder), which would open the
+            order-detail screen on top of chat. */}
         <button
-          onClick={() => { onOpenChat(order); setMobileView("chat"); }}
+          onClick={(e) => { e.stopPropagation(); onOpenChat(order); setMobileView("chat"); }}
           style={{ position: "relative", width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: T.glass, border: `1px solid ${T.hair}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.muted2, cursor: "pointer" }}>
           <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-6.1A8.4 8.4 0 1 1 21 11.5Z"/></svg>
           {unread > 0 && (

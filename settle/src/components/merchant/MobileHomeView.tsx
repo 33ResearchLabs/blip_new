@@ -1061,7 +1061,6 @@ export function MobileHomeView({
                     onChange={(e) => setRateInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") handleSaveRate(); if (e.key === "Escape") setShowRatePanel(false); }}
                     maxLength={10}
-                    autoFocus
                     style={{ flex: 1, minWidth: 0, background: "none", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "#f5f5f7", fontVariantNumeric: "tabular-nums" }}
                   />
                   <span style={{ color: "#86868b", fontWeight: 700, fontSize: 15, flexShrink: 0, marginLeft: 8 }}>{fiatCur}/USDT</span>
