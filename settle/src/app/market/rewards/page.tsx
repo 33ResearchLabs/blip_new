@@ -232,8 +232,10 @@ function TaskRow({ task, index }: { task: OneOffTask; index: number }) {
       </div>
 
       {/* Points + status — fixed-width columns so values and badges align
-          across every row regardless of digit count or status type. */}
-      <div className="flex items-center gap-3 shrink-0">
+          across every row regardless of digit count or status type.
+          Mobile: stack vertically (coin/points on top, status badge
+          below), right-aligned. Desktop (lg+): original single row. */}
+      <div className="flex flex-col items-end gap-1.5 lg:flex-row lg:items-center lg:gap-3 shrink-0">
         <span className="inline-flex items-center justify-end gap-1 w-14 text-[13px] font-mono font-semibold text-white/90 tabular-nums">
           <Coins className="w-3.5 h-3.5 text-white/60 shrink-0" />+
           {formatCount(points)}
