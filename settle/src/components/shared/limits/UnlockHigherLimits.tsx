@@ -67,7 +67,7 @@ function Row({
           </p>
           {badge}
         </div>
-        <p className="text-[11.5px] text-text-tertiary leading-snug mt-0.5">
+        <p className="text-[11.5px] text-text-primary leading-snug mt-0.5">
           {desc}
         </p>
       </div>
