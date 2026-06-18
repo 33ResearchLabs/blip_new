@@ -4,23 +4,27 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import {
   ChevronLeft,
-  Shield,
   AlertTriangle,
   Loader2,
   Lock,
-  Clock,
-  ExternalLink,
   Building2,
   Smartphone,
   ChevronsRight,
   Wallet,
   Store,
+  UserSearch,
+  ArrowDownToLine,
+  Landmark,
 } from "lucide-react";
-import type { Screen } from "./types";
+import type { Order, Screen } from "./types";
 import { BankAccountSelector, type SelectedBankDetails } from "@/components/user/BankAccountSelector";
 import type { PaymentMethodItem } from "@/components/user/PaymentMethodSelector";
 import { networkLabel, explorerUrl } from "@/lib/solana/networkLabel";
+import { formatCrypto } from "@/lib/format";
+import { getDisplayOrderId } from "@/lib/displayOrderId";
 import { BottomNav } from "./BottomNav";
+import { WaitingTracker, type TrackerBanner } from "./WaitingTracker";
+import { OrderOverviewScreen } from "./OrderOverviewScreen";
 
 const T = {
   hi: "var(--color-text-primary)",
@@ -52,6 +56,13 @@ export interface EscrowLockScreenProps {
   onConnectWallet?: () => void;
   fiatCurrency?: string;
   hideBottomNav?: boolean;
+  /** The order created once escrow is locked — drives the post-lock
+   *  "Waiting for a merchant" tracker (countdown, display id, created time). */
+  activeOrder?: Order | null;
+  /** Unilateral cancel + refund for the just-locked, unmatched sell order.
+   *  Mirrors OrderDetailScreen's "Cancel & Refund" (requestCancelOrder). */
+  onCancelOrder?: () => void;
+  isCancellingOrder?: boolean;
   solanaWallet: {
     connected: boolean;
     walletAddress: string | null;
@@ -83,6 +94,9 @@ export const EscrowLockScreen = ({
   onConnectWallet,
   fiatCurrency = 'AED',
   hideBottomNav = false,
+  activeOrder,
+  onCancelOrder,
+  isCancellingOrder = false,
   solanaWallet,
 }: EscrowLockScreenProps) => {
   const fiatSymbol = fiatCurrency === 'INR' ? '₹' : fiatCurrency === 'USD' ? '$' : 'د.إ';
@@ -121,6 +135,125 @@ export const EscrowLockScreen = ({
       });
     } catch { /* sessionStorage blocked / bad JSON — non-fatal */ }
   }, []);
+
+  // Itemised order-overview overlay for the post-lock tracker. Opened IN PLACE
+  // (like MatchingScreen / OrderTrackingView) rather than navigating to the
+  // 'order' screen — the cross-screen escrow↔order hop tangled the nav-history
+  // stack into a back-button loop.
+  const [showOverview, setShowOverview] = useState(false);
+  // Live ticker for the post-lock "Waiting for a merchant" countdown. Only
+  // runs once escrow is locked (success) and the created order has an expiry.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (escrowTxStatus !== "success") return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [escrowTxStatus]);
+
+  // ── Post-lock state — render the shared "Waiting for a merchant" tracker ──
+  // (replaces the old inline "Escrow Locked / Waiting for merchant" confirmation
+  // block). The sell order is now escrowed on-chain but unmatched.
+  if (escrowTxStatus === "success") {
+    const cryptoStr = formatCrypto(parseFloat(amount || "0"));
+    const fiatStr = `${fiatSymbol}${formatCrypto(parseFloat(fiatAmount || "0"))}`;
+    const methodLabel =
+      scannedUpi || selectedPaymentMethod?.type === "upi"
+        ? "UPI"
+        : selectedPaymentMethod?.type === "cash"
+          ? "Cash"
+          : "Bank Transfer";
+
+    const createdAtDate = activeOrder?.createdAt ? new Date(activeOrder.createdAt) : new Date();
+    const displayId = getDisplayOrderId(activeOrder?.id ?? null, createdAtDate);
+    const createdTime = createdAtDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+    const expMs = activeOrder?.expiresAt ? new Date(activeOrder.expiresAt).getTime() : null;
+    const crMs = activeOrder?.createdAt ? new Date(activeOrder.createdAt).getTime() : null;
+    const remainingSec = expMs ? Math.max(0, Math.floor((expMs - nowMs) / 1000)) : 0;
+    const totalSec = expMs && crMs ? Math.max(1, (expMs - crMs) / 1000) : 1;
+
+    const successBanner: TrackerBanner = {
+      title: "Waiting for a merchant",
+      sub: "We're matching you with verified merchants.",
+      icon: UserSearch,
+      tone: "accent",
+      live: true,
+    };
+
+    const tiles = [
+      { icon: <Wallet className="w-4 h-4" />, label: "You will get", value: fiatStr, sub: fiatCurrency },
+      { icon: <ArrowDownToLine className="w-4 h-4" />, label: "You are selling", value: cryptoStr, sub: "USDT" },
+      { icon: <Landmark className="w-4 h-4" />, label: "Method", value: methodLabel },
+    ];
+
+    return (
+      <div className="relative flex-1 min-h-0 flex flex-col bg-surface-base">
+        <WaitingTracker
+          title={`Sell ${cryptoStr} USDT`}
+          orderRef={`Order #${displayId}`}
+          onBack={() => {
+            setEscrowTxStatus("idle");
+            setEscrowError(null);
+            setScreen("home");
+          }}
+          onOpenSupport={() => setScreen("support")}
+          banner={successBanner}
+          countdown={expMs ? { remainingSec, totalSec } : null}
+          escrow={{
+            sub: `Your ${cryptoStr} USDT is locked securely in escrow. You'll be notified once a merchant is matched.`,
+            txHref: escrowTxHash ? explorerUrl("tx", escrowTxHash) : null,
+          }}
+          activeStepIndex={1}
+          createdTime={createdTime}
+          progressSubtitle="Matching merchant · In progress"
+          tiles={tiles}
+          onOpenOverview={() => setShowOverview(true)}
+          onCancel={onCancelOrder}
+          isCancelling={isCancellingOrder}
+          secondaryAction={
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setScreen("order")}
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-surface-active text-text-primary border border-border-subtle"
+            >
+              View Order Details
+            </motion.button>
+          }
+        />
+
+        {/* Itemised overview — slides in over the tracker (in place, no nav). */}
+        <AnimatePresence>
+          {showOverview && (
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 320, mass: 0.8 }}
+              className="absolute inset-0 z-10 flex flex-col bg-surface-base"
+            >
+              <OrderOverviewScreen
+                displayId={displayId}
+                status={activeOrder?.dbStatus || "escrowed"}
+                type="sell"
+                cryptoAmount={parseFloat(amount || "0")}
+                fiatAmount={parseFloat(fiatAmount || "0")}
+                rate={currentRate}
+                fiatCode={fiatCurrency}
+                paymentMethod={selectedPaymentMethod?.type === "cash" ? "cash" : "bank"}
+                createdAt={createdAtDate}
+                onClose={() => setShowOverview(false)}
+                onCancel={() => {
+                  setShowOverview(false);
+                  onCancelOrder?.();
+                }}
+                isCancelling={isCancellingOrder}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -531,109 +664,8 @@ export const EscrowLockScreen = ({
           )}
         </AnimatePresence>
 
-        {/* Success state OR Confirm CTA */}
-        {escrowTxStatus === 'success' ? (
-          <div className="flex flex-col" style={{ gap: 12 }}>
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 18,
-                background: "rgba(16,185,129,0.10)",
-                border: "1px solid rgba(16,185,129,0.30)",
-                boxShadow: "0 16px 32px -16px rgba(16,185,129,0.40)",
-              }}
-            >
-              <div className="flex items-center" style={{ gap: 11, marginBottom: 10 }}>
-                <div
-                  className="flex items-center justify-center"
-                  style={{
-                    width: 36, height: 36, borderRadius: 12,
-                    background: "rgba(16,185,129,0.18)",
-                    border: "1px solid rgba(16,185,129,0.32)",
-                  }}
-                >
-                  <Lock size={16} strokeWidth={2.4} style={{ color: "var(--color-success)" }} />
-                </div>
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 800, color: "var(--color-success)" }}>Escrow Locked</p>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: T.md, marginTop: 1 }}>Your USDT is secured on-chain</p>
-                </div>
-              </div>
-              {escrowTxHash && (
-                <a
-                  href={explorerUrl('tx', escrowTxHash)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center"
-                  style={{
-                    gap: 5,
-                    fontSize: 12, fontWeight: 700,
-                    color: "var(--color-success)",
-                  }}
-                >
-                  View Transaction <ExternalLink size={11} strokeWidth={2.4} />
-                </a>
-              )}
-            </div>
-
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 18,
-                background: "var(--color-surface-card)",
-                border: "1px solid var(--color-border-subtle)",
-              }}
-            >
-              <div className="flex items-center" style={{ gap: 11 }}>
-                <div
-                  className="flex items-center justify-center"
-                  style={{
-                    width: 36, height: 36, borderRadius: 12,
-                    background: "var(--color-surface-hover)",
-                  }}
-                >
-                  <Clock size={16} strokeWidth={2.4} style={{ color: T.md }} />
-                </div>
-                <div className="flex-1">
-                  <p style={{ fontSize: 13, fontWeight: 800, color: T.hi }}>Waiting for merchant</p>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: T.lo, marginTop: 1 }}>
-                    Merchant will accept and send fiat to your bank
-                  </p>
-                </div>
-              </div>
-              <div
-                style={{
-                  marginTop: 10, height: 3, borderRadius: 999,
-                  background: "var(--color-surface-hover)", overflow: "hidden",
-                }}
-              >
-                <motion.div
-                  style={{ height: "100%", width: "30%", background: "rgba(255,176,46,0.55)" }}
-                  animate={{ x: ["-100%", "300%"] }}
-                  transition={{ duration: 1.6, repeat: Infinity, ease: "linear" }}
-                />
-              </div>
-            </div>
-
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setScreen("order")}
-              className="w-full flex items-center justify-center"
-              style={{
-                minHeight: 54,
-                borderRadius: 16,
-                background: "#ffb02e",
-                color: "#0b0b0d",
-                fontSize: 15, fontWeight: 800, letterSpacing: "-0.005em",
-                border: "1px solid rgba(20,21,26,0.18)",
-                boxShadow:
-                  "0 14px 28px -10px rgba(255,176,46,0.40), inset 0 1px 0 rgba(255,255,255,0.85)",
-              }}
-            >
-              View Order Details
-            </motion.button>
-          </div>
-        ) : isProcessing ? (
+        {/* Confirm CTA — the success state is handled by the early return above. */}
+        {isProcessing ? (
           // While signing / confirming / recording — show a static processing pill
           <div
             className="w-full flex items-center justify-center"

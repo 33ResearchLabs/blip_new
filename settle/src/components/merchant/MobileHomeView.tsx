@@ -394,7 +394,7 @@ export function MobileHomeView({
   const liveRate = resolveCorridorRef(corridorPrices, activeCorridor, activeCorridorMeta.fiat);
 
   // ── Balance count-up on mount ─────────────────────────────────────────
-  const [displayBalance, setDisplayBalance] = useState(effectiveBalance ?? 0);
+  const [displayBalance, setDisplayBalance] = useState(Number(effectiveBalance) || 0);
   // External FAB trigger — opens the full trade modal when parent sets
   // openSheetSide. The old in-home "Open Trade" sheet was a redundant second
   // step before TradeFormModal; we now go straight to the modal.
@@ -405,9 +405,9 @@ export function MobileHomeView({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openSheetSide]);
-  const countUpTarget = useRef(effectiveBalance ?? 0);
+  const countUpTarget = useRef(Number(effectiveBalance) || 0);
   useEffect(() => {
-    const target = effectiveBalance ?? 0;
+    const target = Number(effectiveBalance) || 0;
     countUpTarget.current = target;
     const dur = 1150, t0 = performance.now();
     let raf: number;

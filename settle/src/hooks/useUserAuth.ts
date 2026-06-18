@@ -218,7 +218,7 @@ export function useUserAuth({
         setUserWallet(user.wallet_address);
         setUserName(user.username || user.name || 'User');
         setUserAvatar(user.avatar_url || null);
-        setUserBalance(user.balance || 0);
+        setUserBalance(Number(user.balance) || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
         fetchOrders(user.id);
@@ -268,7 +268,7 @@ export function useUserAuth({
         setUserWallet(user.wallet_address);
         setUserName(user.username || user.name || 'User');
         setUserAvatar(user.avatar_url || null);
-        setUserBalance(user.balance || 0);
+        setUserBalance(Number(user.balance) || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
         fetchOrders(user.id);
@@ -412,7 +412,7 @@ export function useUserAuth({
         setUserWallet(user.wallet_address);
         setUserName(user.username || user.name || 'User');
         setUserAvatar(user.avatar_url || null);
-        setUserBalance(user.balance || 0);
+        setUserBalance(Number(user.balance) || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
         fetchOrders(user.id);
@@ -543,7 +543,7 @@ export function useUserAuth({
               setUserId(user.id);
               setUserName(user.username || user.name || 'User');
               setUserAvatar(user.avatar_url || null);
-              setUserBalance(user.balance || 0);
+              setUserBalance(Number(user.balance) || 0);
               if (checkData.data.token) useMerchantStore.getState().setSessionToken(checkData.data.token);
               if (savedWallet) {
                 setUserWallet(savedWallet);
@@ -557,7 +557,7 @@ export function useUserAuth({
                   .then(r => r.ok ? r.json() : null)
                   .then(data => {
                     if (data?.success && data.balance !== undefined) {
-                      setUserBalance(data.balance);
+                      setUserBalance(Number(data.balance) || 0);
                     }
                   })
                   .catch(() => {});

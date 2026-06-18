@@ -9,6 +9,25 @@ import { showAlert } from '@/context/ModalContext';
 import type { SelectedBankDetails } from '@/components/user/BankAccountSelector';
 import type { PaymentMethodItem } from '@/components/user/PaymentMethodSelector';
 
+/**
+ * A 403 "You can only create orders for yourself" is NOT a genuine ownership
+ * violation — it means the live `blip_access_token` cookie belongs to a
+ * different actor than the user identity this app is rendering. Every actor
+ * type (user / merchant) shares ONE cookie pair per origin, so another login
+ * on the same browser (the merchant dashboard, a second account, another tab)
+ * silently overwrites the cookie while this app still holds its stale
+ * `blip_user`. Posting `user_id = <stale user>` against that cookie trips the
+ * backend ownership guard at POST /api/orders.
+ *
+ * Recover like a session change rather than showing the dead-end "Order
+ * Failed" modal in the screenshot: wipe the stale local identity and send the
+ * user back to sign in — reconnecting re-mints a matching `user` cookie via
+ * /api/auth/wallet and the collision resolves.
+ */
+function isSessionActorMismatch(status: number, error: unknown): boolean {
+  return status === 403 && /create orders for yourself/i.test(String(error ?? ''));
+}
+
 interface UseUserTradeCreationParams {
   userId: string | null;
   setScreen: (s: Screen) => void;
@@ -143,6 +162,14 @@ export function useUserTradeCreation({
       // later via acceptTrade.
       if (tradeType === "sell") {
         setSelectedOffer(null);
+        // Detach from any PREVIOUS order before opening the fresh escrow screen.
+        // Otherwise activeOrderId still points at the last order, and if that
+        // order is terminal (completed/cancelled/expired) the escrow-screen
+        // terminal guard (user/page.tsx) instantly bounces the user back into
+        // it — "click Sell → shows my previous order". The new order's id is set
+        // later in confirmEscrow once it's created.
+        setActiveOrderId(null);
+        setPendingTradeData(null);
         setEscrowTxStatus('idle');
         setEscrowTxHash(null);
         setEscrowError(null);
@@ -203,6 +230,17 @@ export function useUserTradeCreation({
         const errorDetails = orderData.details ? `\n${orderData.details.join('\n')}` : '';
         const errorMsg = (orderData.error || 'Failed to create order') + errorDetails;
         console.error('Failed to create order:', errorMsg, orderData);
+
+        if (isSessionActorMismatch(orderRes.status, orderData.error)) {
+          showAlert('Session Changed', 'You are signed in as a different account on this device. Please sign in again to place this order.', 'error');
+          localStorage.removeItem('blip_user');
+          localStorage.removeItem('blip_wallet');
+          setUserId(null);
+          setScreen('welcome');
+          playSound('error');
+          setIsLoading(false);
+          return;
+        }
 
         if (orderData.details?.includes('User not found')) {
           showAlert('Session Expired', 'Your session has expired. Please reconnect your wallet.', 'error');
@@ -317,6 +355,16 @@ export function useUserTradeCreation({
         const errorDetails = orderData.details ? `\n${orderData.details.join('\n')}` : '';
         const errorMsg = (orderData.error || 'Failed to create order') + errorDetails;
         console.error('Failed to create cash order:', errorMsg, orderData);
+
+        if (isSessionActorMismatch(orderRes.status, orderData.error)) {
+          showAlert('Session Changed', 'You are signed in as a different account on this device. Please sign in again to place this order.', 'error');
+          localStorage.removeItem('blip_user');
+          localStorage.removeItem('blip_wallet');
+          setUserId(null);
+          setScreen('welcome');
+          setIsLoading(false);
+          return;
+        }
 
         if (orderData.details?.includes('User not found')) {
           showAlert('Session Expired', 'Your session has expired. Please reconnect your wallet.', 'error');
@@ -622,6 +670,19 @@ export function useUserTradeCreation({
       }
 
       if (!orderRes || !orderRes.ok || !orderData?.success) {
+        if (isSessionActorMismatch(orderRes?.status ?? 0, orderData?.error)) {
+          // Escrow is already locked on-chain; the orphan record is left in
+          // localStorage so the recovery hook retries the POST automatically
+          // once the user re-signs in as the correct account (matching cookie).
+          setEscrowError(`You are signed in as a different account on this device. Your funds are safe on-chain (TX: ${escrowResult.txHash.slice(0, 8)}…). Sign in again as the correct account; the order will be created automatically.`);
+          setEscrowTxStatus('error');
+          localStorage.removeItem('blip_user');
+          localStorage.removeItem('blip_wallet');
+          setUserId(null);
+          setIsLoading(false);
+          return;
+        }
+
         if (orderData?.details?.includes('User not found')) {
           setEscrowError(`Session expired. Your funds are safe — TX: ${escrowResult.txHash}. Reconnect wallet; the order will be created automatically.`);
           setEscrowTxStatus('error');

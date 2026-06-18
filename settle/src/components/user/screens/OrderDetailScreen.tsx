@@ -40,6 +40,8 @@ import { OrderTrackingView } from "./OrderTrackingView";
 import { MatchingScreen } from "./MatchingScreen";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
 import { OrderPaymentScreen } from "./OrderPaymentScreen";
+import { SellPaymentTracker } from "./SellPaymentTracker";
+import { SellCompletedScreen } from "./SellCompletedScreen";
 import { OrderCompletedScreen } from "./OrderCompletedScreen";
 import { AppealScreen } from "./AppealScreen";
 import { getDisplayOrderId } from "@/lib/displayOrderId";
@@ -454,8 +456,17 @@ export const OrderDetailScreen = ({
   // flow — including a now-cancelled/expired one — so the SAME tracker screen
   // stays up and just updates its content (OrderTrackingView renders the
   // cancelled/expired banner) instead of jumping the user to a different layout.
+  //
+  // Also auto-open it for a SELL order locked in escrow but not yet matched to
+  // a merchant (step 1 + dbStatus 'escrowed'): reopening from Activity should
+  // land on the SAME "Waiting for a merchant" tracker the user saw right after
+  // locking escrow — not the step-body. Once a merchant claims it (→ step 2),
+  // this turns off and the actionable step-body takes over.
   const autoTracker =
-    String(activeOrder.type).toLowerCase() === "buy" && activeOrder.step === 1;
+    (String(activeOrder.type).toLowerCase() === "buy" && activeOrder.step === 1) ||
+    (String(activeOrder.type).toLowerCase() === "sell" &&
+      activeOrder.step === 1 &&
+      String(activeOrder.dbStatus || "").toLowerCase() === "escrowed");
   // Live countdown for the matching screen rendered on the auto-tracker path.
   const nowMs = useGlobalNow();
   // Itemised order-overview overlay (the collapsible Order/Transaction/Payment
@@ -1184,7 +1195,9 @@ export const OrderDetailScreen = ({
         {activeOrder.cancelRequest &&
           activeOrder.cancelRequest.requestedBy === "merchant" &&
           activeOrder.status !== "cancelled" &&
-          activeOrder.status !== "expired" && (
+          activeOrder.status !== "expired" &&
+          activeOrder.status !== "complete" &&
+          activeOrder.status !== "disputed" && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1232,7 +1245,9 @@ export const OrderDetailScreen = ({
         {activeOrder.cancelRequest &&
           activeOrder.cancelRequest.requestedBy === "user" &&
           activeOrder.status !== "cancelled" &&
-          activeOrder.status !== "expired" && (
+          activeOrder.status !== "expired" &&
+          activeOrder.status !== "complete" &&
+          activeOrder.status !== "disputed" && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -3102,6 +3117,32 @@ export const OrderDetailScreen = ({
           </div>
         )}
 
+      {/* Seller's matched-state view — once a merchant has claimed a SELL order
+          (escrowed+merchant / payment_pending / payment_sent), replace the
+          step-body with the "Merchant accepted" tracker. The release action is
+          gated INSIDE to payment_sent. step >= 2 excludes the unmatched
+          escrowed order, which autoTracker renders as the WaitingTracker
+          "Waiting for a merchant" screen. */}
+      {activeOrder.type === "sell" &&
+        activeOrder.step >= 2 &&
+        ["escrowed", "payment_pending", "payment_sent"].includes(
+          String(activeOrder.dbStatus || "").toLowerCase(),
+        ) && (
+          <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
+            <SellPaymentTracker
+              order={activeOrder}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              onBack={() => setScreen(previousScreen || "orders")}
+              onOpenSupport={() => setScreen("support")}
+              onOpenChat={handleOpenChat}
+              onViewProfile={() => setShowProfile(true)}
+              onConfirmReceived={confirmFiatReceived}
+              onRaiseAppeal={() => setShowAppeal(true)}
+              isConfirming={isLoading}
+            />
+          </div>
+        )}
+
       {/* Completion + rating view — replaces the step layout for a completed
           BUY order. */}
       {activeOrder.type === "buy" &&
@@ -3125,6 +3166,20 @@ export const OrderDetailScreen = ({
                 }
                 setScreen("home");
               }}
+            />
+          </div>
+        )}
+
+      {/* Completion / receipt view for a completed SELL order — seller's
+          "Payment verified!" screen (buy keeps OrderCompletedScreen + rating). */}
+      {activeOrder.type === "sell" &&
+        String(activeOrder.dbStatus || "").toLowerCase() === "completed" && (
+          <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
+            <SellCompletedScreen
+              order={activeOrder}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              onBack={() => setScreen(previousScreen || "orders")}
+              onHelp={() => setScreen("support")}
             />
           </div>
         )}

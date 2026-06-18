@@ -522,6 +522,12 @@ export default function UserDesktopPage() {
                   try {
                     sessionStorage.setItem("blip_pending_upi_payment", JSON.stringify({ vpa: data.vpa, payeeName: data.payeeName, fiatInr: data.fiatInr, cryptoUsdt: data.cryptoUsdt, qrAmount: data.qrAmount, note: data.note, at: Date.now() }));
                   } catch { /* ignore */ }
+                  // Detach from any previous (possibly terminal) order + clear
+                  // stale escrow tx state so the escrow screen opens fresh.
+                  setActiveOrderId(null);
+                  setPendingTradeData(null);
+                  tradeCreation.setEscrowTxStatus("idle");
+                  tradeCreation.setEscrowError(null);
                   setScreen("escrow");
                 }}
               />
@@ -591,6 +597,12 @@ export default function UserDesktopPage() {
                 }}
                 fiatCurrency={tradeCreation.selectedPair === "usdt_inr" ? "INR" : "AED"}
                 hideBottomNav
+                activeOrder={activeOrder}
+                onCancelOrder={() => {
+                  orderActions.requestCancelOrder("Cancelled by seller — offer withdrawn");
+                  setScreen("order");
+                }}
+                isCancellingOrder={orderActions.isRequestingCancel}
                 solanaWallet={solanaWallet}
               />
             </CenterPanel>
