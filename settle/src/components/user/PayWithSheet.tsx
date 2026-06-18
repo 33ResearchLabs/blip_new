@@ -44,19 +44,19 @@ const METHODS: Method[] = [
   { key: "phonepe", label: "PhonePe", cat: "upi" },
   { key: "paytm", label: "Paytm", cat: "upi" },
   { key: "express_upi", label: "Express UPI", cat: "upi" },
-  { key: "upi_pan", label: "UPI-PAN", cat: "upi" },
+  // { key: "upi_pan", label: "UPI-PAN", cat: "upi" },
   { key: "imps", label: "IMPS", cat: "bank" },
-  { key: "imps_pan", label: "IMPS - PAN", cat: "bank" },
+  // { key: "imps_pan", label: "IMPS - PAN", cat: "bank" },
   { key: "bank_transfer", label: "Bank Transfer", cat: "bank" },
-  { key: "bank_transfer_in", label: "Bank Transfer (India)", cat: "bank" },
-  { key: "cih_bank", label: "CIH Bank", cat: "bank" },
+  // { key: "bank_transfer_in", label: "Bank Transfer (India)", cat: "bank" },
+  // { key: "cih_bank", label: "CIH Bank", cat: "bank" },
   { key: "intl_wire", label: "International Wire (SWIFT)", cat: "bank" },
   { key: "digital_erupee", label: "Digital eRupee", cat: "bank" },
-  { key: "skrill", label: "Skrill (Moneybookers)", cat: "bank" },
+  // { key: "skrill", label: "Skrill (Moneybookers)", cat: "bank" },
   { key: "cash", label: "Cash", cat: "cash" },
 ];
 
-const ALL_KEYS = METHODS.map((m) => m.key);
+// const ALL_KEYS = METHODS.map((m) => m.key);
 
 // Token classes per theme so the same markup renders in either app scope.
 const TONE: Record<Theme, Record<string, string>> = {
@@ -118,7 +118,7 @@ export function PayWithSheet({
   const [query, setQuery] = useState("");
   const t = TONE[theme];
 
-  const allOn = selected.size === METHODS.length;
+  // const allOn = selected.size === METHODS.length;
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -133,7 +133,7 @@ export function PayWithSheet({
       return next;
     });
 
-  const toggleAll = () => setSelected(allOn ? new Set() : new Set(ALL_KEYS));
+  // const toggleAll = () => setSelected(allOn ? new Set() : new Set(ALL_KEYS));
 
   const reset = () => {
     setSelected(new Set());
@@ -217,7 +217,7 @@ export function PayWithSheet({
             {/* Method grid */}
             <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-5 py-3">
               <div className="grid grid-cols-2 gap-2.5">
-                {!query.trim() && (
+                {/* {!query.trim() && (
                   <button
                     type="button"
                     onClick={toggleAll}
@@ -227,7 +227,7 @@ export function PayWithSheet({
                   >
                     All
                   </button>
-                )}
+                )} */}
                 {visible.map((m) => {
                   const on = selected.has(m.key);
                   return (

@@ -14,7 +14,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Check } from 'lucide-react';
 import { useWaitlistTokens } from '@/context/WaitlistThemeContext';
 import WaitlistAuthNavbar from '@/components/waitlist/WaitlistAuthNavbar';
@@ -223,18 +223,37 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
       <WaitlistAuthNavbar current={navCurrent} />
 
       <main className="relative z-10 max-w-[1200px] mx-auto px-4 sm:px-6 pt-8 md:pt-20 pb-12 md:pb-20">
-        <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_475px] gap-10 lg:gap-14 items-center min-h-[80vh]">
+        {/* items-start (not items-center): the two surfaces differ in
+            height between signup/signin (bonus card, cross-sell, terms
+            line, taller RegisterForm). With items-center, every toggle
+            recomputed the row's centre and yanked BOTH columns vertically
+            — that was the layout-shift half of the "shake". Pinning to the
+            top keeps the card fixed in place; only the content below it
+            grows/shrinks. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_475px] gap-10 lg:gap-14 items-start lg:pt-[6vh] min-h-[80vh]">
           {/* ── LEFT — editorial copy. Hidden on mobile (<lg) where the
                 user has a tiny viewport: the form alone reads cleaner
                 than form + chunky hero copy stacked above it. The
                 desktop / tablet hero is unchanged. */}
           <motion.div
-            key={`${role}-${mode}-left`}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: EASE }}
+            transition={{ duration: 0.8, ease: EASE }}
             className="hidden lg:block text-center lg:text-left"
           >
+            {/* The outer wrapper plays the y-translate entrance ONCE on
+                mount (no role/mode key, so toggling never remounts it).
+                Inside, AnimatePresence crossfades the copy on toggle with
+                opacity only — no transform, no layout movement, so the
+                column never slides. */}
+            <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={`${role}-${mode}-copy`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+            >
             <div className="inline-flex items-center gap-3 mb-7">
               <span className="w-5 h-px" style={{ background: dividerColor }} />
               <span
@@ -345,14 +364,19 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
                 />
               </div>
             )}
+            </motion.div>
+            </AnimatePresence>
           </motion.div>
 
           {/* ── RIGHT — auth card ─────────────────────────────────── */}
+          {/* No role/mode key: the card mounts (and plays its y entrance)
+              once. Toggling role/mode mutates the controls in place and
+              crossfades only the form body below — the card itself stays
+              pinned, so it never slides or jumps. */}
           <motion.div
-            key={`${role}-${mode}-right`}
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: EASE, delay: 0.1 }}
+            transition={{ duration: 0.8, ease: EASE, delay: 0.1 }}
             className="w-full max-w-[440px] mx-auto lg:max-w-none lg:mx-0"
           >
             <div
@@ -510,15 +534,25 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
               </div>
 
               {/* Form body — picked from mode so toggling Sign up/Sign in
-                  swaps in-place. Keying on role+mode resets internal form
-                  state when the user flips role. */}
-              <div>
-                {mode === 'signup' ? (
-                  <RegisterForm key={`reg-${role}`} role={role} />
-                ) : (
-                  <LoginForm key={`login-${role}`} role={role} />
-                )}
-              </div>
+                  swaps in-place. Crossfaded with opacity only (no
+                  transform) so the swap reads as a soft dissolve rather
+                  than a jump. The inner key={`reg-${role}`}/`login-${role}`
+                  still resets form state when the user flips role. */}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={`form-${role}-${mode}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18, ease: 'easeInOut' }}
+                >
+                  {mode === 'signup' ? (
+                    <RegisterForm key={`reg-${role}`} role={role} />
+                  ) : (
+                    <LoginForm key={`login-${role}`} role={role} />
+                  )}
+                </motion.div>
+              </AnimatePresence>
 
               {/* Footer — altMode link + (signup-only) Terms / Privacy
                   copy. */}

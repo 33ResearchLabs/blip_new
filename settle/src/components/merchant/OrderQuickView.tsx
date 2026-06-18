@@ -551,9 +551,11 @@ function OpenMarketWaitingCard({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-1 text-[11px]">
-        <span className="flex items-center gap-1 text-foreground/40">
-          <Clock className="w-3 h-3" /> Order expires in{" "}
+      {/* Mobile: stack the two meta lines so neither phrase wraps
+          mid-text; sm+: keep them on one justified row. */}
+      <div className="flex flex-col gap-1 pt-1 text-[11px] sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+        <span className="flex items-center gap-1 text-foreground/40 whitespace-nowrap">
+          <Clock className="w-3 h-3 shrink-0" /> Order expires in{" "}
           {expiryMs > 0 && (
             <span className="text-[var(--accent)] font-mono font-bold">
               {mm}:{ss}
@@ -561,7 +563,7 @@ function OpenMarketWaitingCard({
           )}
         </span>
         {createdLabel && (
-          <span className="text-foreground/30">Created on {createdLabel}</span>
+          <span className="text-foreground/30 whitespace-nowrap">Created on {createdLabel}</span>
         )}
       </div>
 

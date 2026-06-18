@@ -225,7 +225,7 @@ function TaskRow({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-col items-end gap-1.5 lg:flex-row lg:items-center lg:gap-3 shrink-0">
           <span className="inline-flex items-center justify-end gap-1 min-w-14.5 text-[13px] font-semibold text-text-primary tabular-nums">
             <Coins className="w-3.5 h-3.5 shrink-0" />+{formatCount(points)}
           </span>

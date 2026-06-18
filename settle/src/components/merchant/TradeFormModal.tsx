@@ -164,10 +164,11 @@ export function TradeFormModal({
       ? isSell ? baseFiat - boostFiat : baseFiat + boostFiat
       : baseFiat;
 
-  // Accent by trade side
-  const sideColor = isSell ? "#b8e9d4" : "#7da0ff";
-  const sideDim   = isSell ? "rgba(184,233,212,0.12)" : "rgba(125,160,255,0.12)";
-  const sideBorder= isSell ? "rgba(184,233,212,0.25)" : "rgba(125,160,255,0.25)";
+  // Accent by trade side. Buy uses a neutral white accent (no blue);
+  // sell keeps its mint tone.
+  const sideColor = isSell ? "#b8e9d4" : "#f5f5f7";
+  const sideDim   = isSell ? "rgba(184,233,212,0.12)" : "rgba(255,255,255,0.10)";
+  const sideBorder= isSell ? "rgba(184,233,212,0.25)" : "rgba(255,255,255,0.22)";
 
   return (
     <AnimatePresence>
@@ -259,9 +260,9 @@ export function TradeFormModal({
                 }}>
                   {(["sell", "buy"] as const).map((side) => {
                     const active = openTradeForm.tradeType === side;
-                    const color  = side === "sell" ? "#b8e9d4" : "#7da0ff";
-                    const bg     = side === "sell" ? "rgba(184,233,212,0.1)" : "rgba(125,160,255,0.1)";
-                    const border = side === "sell" ? "rgba(184,233,212,0.22)" : "rgba(125,160,255,0.22)";
+                    const color  = side === "sell" ? "#b8e9d4" : "#f5f5f7";
+                    const bg     = side === "sell" ? "rgba(184,233,212,0.1)" : "rgba(255,255,255,0.1)";
+                    const border = side === "sell" ? "rgba(184,233,212,0.22)" : "rgba(255,255,255,0.22)";
                     return (
                       <motion.button
                         key={side}
