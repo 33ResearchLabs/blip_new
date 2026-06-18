@@ -519,7 +519,7 @@ export function MobileHomeView({
       `}</style>
 
       {/* ── HEADER ── */}
-      <div className="z2rise" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1, paddingBottom: designV2 ? 2 : 4, animationDelay: "40ms" }}>
+      <div className="z2rise" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, position: "relative", zIndex: 1, paddingBottom: designV2 ? 2 : 4, animationDelay: "40ms" }}>
         {/* Left: profile avatar + greeting */}
         <div style={{ display: "flex", alignItems: "center", gap: designV2 ? 9 : 10, minWidth: 0 }}>
           <div
@@ -532,9 +532,14 @@ export function MobileHomeView({
           <div style={{ minWidth: 0 }}>
             {designV2 ? (
               <>
-                <div style={{ fontFamily: "var(--font-serif, Georgia, serif)", fontStyle: "italic", fontWeight: 400, fontSize: 16, lineHeight: 1.05, color: "#FBFBFA", whiteSpace: "nowrap", letterSpacing: 0 }}>
-                  {timeGreeting}{firstName ? `, ${firstName}` : ""}
+                <div style={{ fontFamily: "var(--font-serif, Georgia, serif)", fontStyle: "italic", fontWeight: 400, fontSize: 14.5, lineHeight: 1.15, color: "#86868b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: 0 }}>
+                  {timeGreeting}{firstName ? "," : ""}
                 </div>
+                {firstName && (
+                  <div style={{ fontFamily: "var(--font-serif, Georgia, serif)", fontStyle: "italic", fontWeight: 400, fontSize: 16.5, lineHeight: 1.15, color: "#FBFBFA", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: 0, marginTop: 3 }}>
+                    {firstName}
+                  </div>
+                )}
               </>
             ) : (
               <>

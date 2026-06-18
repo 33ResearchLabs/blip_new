@@ -193,7 +193,10 @@ export default function MerchantSettingsPage({
   const [activeTab, setActiveTab] = useState<SettingsTab>(
     (searchParams.get("tab") as SettingsTab) || "profile"
   );
-  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  // Deep-linking to a specific tab (e.g. "Need Help" → ?tab=support) must also
+  // open the mobile bottom-sheet — otherwise the tab is selected but the sheet
+  // stays closed and the user only sees the settings list, not the panel.
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(!!searchParams.get("tab"));
   // The content panel renders inline on desktop (lg ≥ 1024px) but slides up as a
   // bottom-sheet on mobile. Framer Motion writes that slide as an inline transform that
   // overrides Tailwind's lg:translate-y-0, so the panel must only be pushed off-screen

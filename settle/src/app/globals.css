@@ -117,9 +117,9 @@
   --color-bg-secondary: #EEE8D5;
   --color-bg-tertiary: #E0DAC8;
   --color-text-primary: rgba(7, 54, 66, 0.92);
-  --color-text-secondary: rgba(7, 54, 66, 0.60);
-  --color-text-tertiary: rgba(7, 54, 66, 0.35);
-  --color-text-quaternary: rgba(7, 54, 66, 0.15);
+  --color-text-secondary: rgba(7, 54, 66, 0.68);
+  --color-text-tertiary: rgba(7, 54, 66, 0.55);
+  --color-text-quaternary: rgba(7, 54, 66, 0.40);
   --card: rgba(0, 0, 0, 0.025);
   --card-solid: #EEE8D5;
   --border: rgba(0, 0, 0, 0.07);
@@ -158,9 +158,9 @@
   --color-bg-secondary: #F9FAFB;
   --color-bg-tertiary: #F3F4F6;
   --color-text-primary: rgba(17, 24, 39, 0.92);
-  --color-text-secondary: rgba(17, 24, 39, 0.60);
-  --color-text-tertiary: rgba(17, 24, 39, 0.40);
-  --color-text-quaternary: rgba(17, 24, 39, 0.18);
+  --color-text-secondary: rgba(17, 24, 39, 0.68);
+  --color-text-tertiary: rgba(17, 24, 39, 0.55);
+  --color-text-quaternary: rgba(17, 24, 39, 0.42);
   --card: rgba(0, 0, 0, 0.02);
   --card-solid: #F9FAFB;
   --border: rgba(0, 0, 0, 0.08);

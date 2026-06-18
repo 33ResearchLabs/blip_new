@@ -2215,17 +2215,17 @@ function ActiveOrderBody({
                 @ {order.rate} {ccy}
               </p>
             </div>
-            <div className="space-y-2 text-[11px]">
-              <div className="flex justify-between gap-2">
-                <span className="text-foreground/40 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Rate (Locked)
+            <div className="space-y-2 text-[11px] min-w-0">
+              <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-0.5">
+                <span className="text-foreground/40 flex items-center gap-1 whitespace-nowrap shrink-0">
+                  <Lock className="w-3 h-3 shrink-0" /> Rate (Locked)
                 </span>
-                <span className="font-mono text-foreground/70 text-right">
+                <span className="font-mono text-foreground/70 text-right whitespace-nowrap">
                   1 USDT = {order.rate} {ccy}
                 </span>
               </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-foreground/40">Order ID</span>
+              <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-0.5">
+                <span className="text-foreground/40 whitespace-nowrap shrink-0">Order ID</span>
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(orderIdShort);
@@ -2243,9 +2243,9 @@ function ActiveOrderBody({
                 </button>
               </div>
               {createdAgo && (
-                <div className="flex justify-between gap-2">
-                  <span className="text-foreground/40">Created</span>
-                  <span className="text-foreground/60">{createdAgo}</span>
+                <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-0.5">
+                  <span className="text-foreground/40 whitespace-nowrap shrink-0">Created</span>
+                  <span className="text-foreground/60 whitespace-nowrap">{createdAgo}</span>
                 </div>
               )}
             </div>
