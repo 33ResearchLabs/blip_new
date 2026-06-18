@@ -169,6 +169,20 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     return depositToEscrow({ amount: params.amount, tradeId: params.tradeId });
   }, [depositToEscrow]);
 
+  // Mock create-and-lock (counterparty known at lock time). On real wallets this
+  // differs from depositToEscrowOpen on-chain, but in mock mode there is no chain
+  // — both just record escrow server-side — so it delegates the same way. Without
+  // this the merchant lock flow (useEscrowOperations) throws
+  // "createAndLockEscrow is not a function" in mock mode.
+  const createAndLockEscrow = useCallback(async (params: {
+    amount: number;
+    counterparty?: string;
+    side?: 'buy' | 'sell';
+    tradeId?: number;
+  }) => {
+    return depositToEscrow({ amount: params.amount, tradeId: params.tradeId });
+  }, [depositToEscrow]);
+
   // No-op mock operations that return success
   const mockTradeOp = useCallback(async (_params: Record<string, unknown>) => ({
     txHash: `demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -229,6 +243,7 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     acceptTrade: mockTradeOp,
     depositToEscrow,
     depositToEscrowOpen,
+    createAndLockEscrow,
 
     // V2.3: Payment confirmation & disputes (no-ops)
     confirmPayment: mockTradeOp,

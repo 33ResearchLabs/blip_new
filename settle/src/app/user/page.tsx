@@ -306,6 +306,8 @@ export default function Home() {
     fiatAmount: string;
     type: "buy" | "sell";
     paymentMethod: "bank" | "cash";
+    /** BUY (Way-1): the buyer's chosen payment-method types for display. */
+    paymentTypes?: string[];
   } | null>(null);
   const extensionRequestSetterRef = useRef<(req: any) => void>(() => {});
 

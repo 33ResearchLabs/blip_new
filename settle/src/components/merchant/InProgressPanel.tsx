@@ -416,7 +416,10 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     getViewerSide(order.dbOrder, order, merchantId) ===
                     "seller";
                   const crypto = `${Math.round(order.amount).toLocaleString()} ${order.fromCurrency}`;
-                  const fiat = `${Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} ${order.toCurrency || "INR"}`;
+                  // Use the order's REAL fiat total + currency (from the mapper),
+                  // never a hardcoded fallback rate — recomputing with 3.67 (the
+                  // AED peg) labeled "INR" produced a ~20× wrong amount.
+                  const fiat = `${Math.round(order.total).toLocaleString()} ${order.toCurrency}`;
 
                   return (
                     <div className="mb-1.5">
@@ -455,7 +458,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 {/* Row 3: Rate + premium + earnings + status badge */}
                 <div className="flex items-center gap-1.5 mb-2">
                   <span className="text-[10px] text-foreground/40 font-mono">
-                    @ {(order.rate || 3.67).toFixed(2)}
+                    @ {order.rate ? order.rate.toFixed(2) : "—"}
                   </span>
                   {(() => {
                     // Premium = how much this order's rate is above/below the

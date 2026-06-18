@@ -270,7 +270,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
                         {conv.order_type === 'buy' ? 'Send' : 'Receive'}
                       </span>
                       <span className="text-xs text-white/50">
-                        {conv.fiat_amount.toLocaleString()} {conv.fiat_currency}
+                        {Number(conv.fiat_amount).toLocaleString('en-US')} {conv.fiat_currency}
                       </span>
                     </div>
 

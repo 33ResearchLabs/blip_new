@@ -102,6 +102,9 @@ export interface DbOrder {
   merchant_payment_method?: MerchantPaymentMethod | null;
   // BUY (Way-1): merchant's accounts matching the buyer's chosen rails
   merchant_matching_payment_methods?: MerchantPaymentMethod[] | null;
+  // BUY (Way-1): the payment-method types the buyer is willing to pay with
+  // (one or more of 'bank' | 'upi' | 'cash'). Used to filter the merchant feed.
+  buyer_payment_types?: string[] | null;
   // Per-order rating fields
   user_rating?: number | null;
   user_rated_at?: string | null;
@@ -110,6 +113,8 @@ export interface DbOrder {
 // UI Order type (maps DB order to UI)
 export interface Order {
   id: string;
+  /** Canonical DB order reference (BM-YYMMDD-XXXX) — shown across all surfaces. */
+  order_number?: string;
   type: TradeType;
   cryptoAmount: string;
   cryptoCode: string;
@@ -187,6 +192,9 @@ export interface Order {
   // the buyer's chosen rails. The buyer picks one to pay into. Empty until a
   // merchant accepts; once the buyer picks, merchantPaymentMethod is set.
   merchantMatchingPaymentMethods?: MerchantPaymentMethod[];
+  // BUY (Way-1): the payment-method types the buyer chose to pay with
+  // ('bank' | 'upi' | 'cash'). Shown on the overview/matching screen.
+  buyerPaymentTypes?: string[];
 }
 
 export interface BankAccount {

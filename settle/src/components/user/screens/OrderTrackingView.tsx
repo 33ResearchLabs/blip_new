@@ -160,7 +160,13 @@ export function OrderTrackingView({
   const fiatStr = `${sym}${formatCrypto(parseFloat(order.fiatAmount))}`;
   const cryptoStr = `${formatCrypto(parseFloat(order.cryptoAmount))}`;
   const fiatCode = (order.fiatCode || "").toUpperCase();
-  const methodLabel = order.merchant?.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
+  // BUY (Way-1): the buyer may accept several rails. Show them all (short
+  // labels for the compact tile); fall back to the merchant's coarse method.
+  const buyerPayTypes = order.type === "buy" ? (order.buyerPaymentTypes || []) : [];
+  const methodLabel =
+    buyerPayTypes.length > 0
+      ? buyerPayTypes.map((t) => (t === "cash" ? "Cash" : t === "upi" ? "UPI" : "Bank")).join(" · ")
+      : order.merchant?.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
   const canCancel = CANCELLABLE.has(dbStatus) && !order.cancelRequest;
 
   // Escrow card only when the USER's own funds are locked (sell orders).
@@ -239,6 +245,7 @@ export function OrderTrackingView({
               rate={Number(order.merchant?.rate)}
               fiatCode={order.fiatCode}
               paymentMethod={order.merchant?.paymentMethod === "cash" ? "cash" : "bank"}
+              paymentMethods={buyerPayTypes}
               createdAt={order.createdAt ? new Date(order.createdAt) : new Date()}
               onClose={() => setShowOverview(false)}
               onCancel={onCancel}

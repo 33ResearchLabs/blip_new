@@ -65,6 +65,10 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
 
   return {
     id: dbOrder.id,
+    // Canonical, DB-persisted order reference. Surfaced so getDisplayOrderId()
+    // shows the real BM-… id (matches lists, chat, ledger, support) instead of
+    // the derived fallback.
+    order_number: dbOrder.order_number,
     type: dbOrder.type as TradeType,
     cryptoAmount: (dbOrder.crypto_amount ?? 0).toString(),
     cryptoCode: dbOrder.crypto_currency || 'USDT',
@@ -134,6 +138,8 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     // BUY (Way-1): merchant's accounts matching the buyer's chosen rails — the
     // buyer picks one to pay into. Empty array until a merchant accepts.
     merchantMatchingPaymentMethods: dbOrder.merchant_matching_payment_methods || [],
+    // BUY (Way-1): the payment-method types the buyer chose to pay with.
+    buyerPaymentTypes: dbOrder.buyer_payment_types || [],
     // Per-order rating
     userRating: dbOrder.user_rating || null,
   };

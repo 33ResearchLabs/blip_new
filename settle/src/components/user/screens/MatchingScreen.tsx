@@ -16,7 +16,7 @@ const MATCHING_WINDOW_SECONDS = 15 * 60;
 
 export interface MatchingScreenProps {
   setScreen: (s: Screen) => void;
-  pendingTradeData: { amount: string; fiatAmount: string; type: "buy" | "sell"; paymentMethod: "bank" | "cash" };
+  pendingTradeData: { amount: string; fiatAmount: string; type: "buy" | "sell"; paymentMethod: "bank" | "cash"; paymentTypes?: string[] };
   matchingTimeLeft: number;
   formatTimeLeft: (s: number) => string;
   currentRate: number;
@@ -61,7 +61,13 @@ export const MatchingScreen = ({
   const isBuy = pendingTradeData.type === "buy";
   const fiatStr = `${fiatSymbol}${formatCrypto(parseFloat(pendingTradeData.fiatAmount))}`;
   const cryptoStr = `${formatCrypto(parseFloat(pendingTradeData.amount))}`;
-  const methodLabel = pendingTradeData.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
+  // BUY (Way-1): the buyer may accept several rails. Show them all (short
+  // labels for the compact tile); fall back to the single coarse method.
+  const payTypes = isBuy ? (pendingTradeData.paymentTypes || []) : [];
+  const methodLabel =
+    payTypes.length > 0
+      ? payTypes.map((t) => (t === "cash" ? "Cash" : t === "upi" ? "UPI" : "Bank")).join(" · ")
+      : pendingTradeData.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
 
   async function handleCancel() {
     if (activeOrderId && userId) {
@@ -176,6 +182,7 @@ export const MatchingScreen = ({
               rate={currentRate}
               fiatCode={currency}
               paymentMethod={pendingTradeData.paymentMethod}
+              paymentMethods={payTypes}
               createdAt={createdAt}
               onClose={() => setShowOverview(false)}
               onCancel={handleCancel}

@@ -49,6 +49,7 @@ import { formatCrypto, formatCount } from "@/lib/format";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 // Backend-driven: action buttons read from dbOrder.primaryAction/secondaryAction
 import type { Order } from "@/types/merchant";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { CopyableBankDetails } from "@/components/shared/CopyableBankDetails";
 import {
   ReceivingAccountPicker,
@@ -751,6 +752,121 @@ function PresenceRatingWalletRows({
   );
 }
 
+// Order-creator profile + trust card for the open-market accept views. Shows
+// WHO placed the order (avatar, name, username, KYC badge) plus their trust
+// stats (completed trades, rating, success rate, account age, online status,
+// wallet). All values come from `db.user`, which the merchant feed populates
+// for both buy and sell broadcasts (and sources from the buyer-merchant on
+// merchant-placed orders). `heading` flips "Buyer Trust" / "Seller Trust".
+function CounterpartyTrustCard({
+  db,
+  now,
+  heading,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any;
+  now: number;
+  heading: string;
+}) {
+  const u = db.user || {};
+  const trades = u.total_trades ?? 0;
+  const disputes = u.dispute_count ?? 0;
+  const verified = !!u.is_verified;
+  const ratingNum = typeof u.rating === "number" ? u.rating : null;
+  // Rating is 0-5; surface as an x/100 trust score when present.
+  const trustScore =
+    ratingNum != null && ratingNum > 0 ? Math.round((ratingNum / 5) * 100) : null;
+  // Success rate from completed vs disputed trades; null (→ hidden) when none.
+  const successRate =
+    trades > 0 ? Math.round(((trades - disputes) / trades) * 100) : null;
+  // Account age from the creator's join date.
+  const ageLabel = (() => {
+    const iso = u.account_created_at;
+    if (!iso) return null;
+    const months = Math.floor(
+      (now - new Date(iso).getTime()) / (1000 * 60 * 60 * 24 * 30.44),
+    );
+    if (months < 1) return "New";
+    if (months < 12) return `${months} Month${months > 1 ? "s" : ""}`;
+    const years = Math.floor(months / 12);
+    const rem = months % 12;
+    return rem ? `${years}y ${rem}m` : `${years} Year${years > 1 ? "s" : ""}`;
+  })();
+  const presence = useCounterpartyPresence(
+    db.id,
+    db.buyer_merchant_id ? "merchant" : "user",
+    db.buyer_merchant_id || db.user_id || null,
+  );
+  const online = presence.isOnline || !!u.is_online;
+  const wallet: string | null = u.wallet_address || db.buyer_wallet_address || null;
+  const name = u.name || u.display_name || u.username || "User";
+  const username =
+    u.username && u.username !== name ? `@${u.username}` : null;
+
+  return (
+    <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+      {/* Identity header — who placed this order */}
+      <div className="flex items-center gap-3">
+        <UserAvatar src={u.avatar_url || null} seed={name} size={40} style={{ borderRadius: 12 }} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground truncate">{name}</p>
+          {username && (
+            <p className="text-[11px] text-foreground/45 truncate">{username}</p>
+          )}
+        </div>
+        {trustScore != null && (
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 shrink-0">
+            {trustScore}/100
+          </span>
+        )}
+      </div>
+
+      {/* Trust stats */}
+      <div className="pt-1 flex items-center gap-2">
+        <Shield className="w-4 h-4 text-emerald-400" />
+        <span className="text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+          {heading}
+        </span>
+      </div>
+      <div className="space-y-1.5 text-[12px]">
+        <div className="flex justify-between gap-2">
+          <span className="text-foreground/45">Completed Trades</span>
+          <span className="font-semibold text-foreground/80">{trades}</span>
+        </div>
+        <PresenceRatingWalletRows
+          online={online}
+          lastSeen={presence.lastSeen}
+          now={now}
+          ratingNum={ratingNum}
+          wallet={wallet}
+        />
+        {successRate != null && (
+          <div className="flex justify-between gap-2">
+            <span className="text-foreground/45">Success Rate</span>
+            <span className="font-semibold text-emerald-400">{successRate}%</span>
+          </div>
+        )}
+        {ageLabel && (
+          <div className="flex justify-between gap-2">
+            <span className="text-foreground/45">Account Age</span>
+            <span className="font-semibold text-foreground/80">{ageLabel}</span>
+          </div>
+        )}
+        <div className="flex justify-between gap-2">
+          <span className="text-foreground/45">KYC Status</span>
+          <span
+            className={`font-semibold ${
+              verified ? "text-emerald-400" : "text-foreground/50"
+            }`}
+          >
+            {verified ? "Verified" : "Unverified"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AcceptorBuyOrderBody({
   order,
   db,
@@ -791,44 +907,6 @@ function AcceptorBuyOrderBody({
   const sym = fiatSymbol(ccy);
   const total = Math.round(order.total || 0);
 
-  const buyer = db.user || {};
-  const trades = buyer.total_trades ?? 0;
-  const disputes = buyer.dispute_count ?? 0;
-  const verified = !!buyer.is_verified;
-  const ratingNum = typeof buyer.rating === "number" ? buyer.rating : null;
-  // Rating is 0-5; surface as an x/100 trust score when present.
-  const trustScore =
-    ratingNum != null && ratingNum > 0
-      ? Math.round((ratingNum / 5) * 100)
-      : null;
-  // Success rate from completed vs disputed trades; null (→ hidden) when none.
-  const successRate =
-    trades > 0 ? Math.round(((trades - disputes) / trades) * 100) : null;
-  // Account age from the buyer's join date.
-  const ageLabel = (() => {
-    const iso = buyer.account_created_at;
-    if (!iso) return null;
-    const months = Math.floor(
-      (now - new Date(iso).getTime()) / (1000 * 60 * 60 * 24 * 30.44),
-    );
-    if (months < 1) return "New";
-    if (months < 12) return `${months} Month${months > 1 ? "s" : ""}`;
-    const years = Math.floor(months / 12);
-    const rem = months % 12;
-    return rem ? `${years}y ${rem}m` : `${years} Year${years > 1 ? "s" : ""}`;
-  })();
-
-  // Live presence + identity extras for the buyer (online/last-seen, rating,
-  // wallet) so the merchant has full counterparty context inline.
-  const presence = useCounterpartyPresence(
-    db.id,
-    db.buyer_merchant_id ? "merchant" : "user",
-    db.buyer_merchant_id || db.user_id || null,
-  );
-  const online = presence.isOnline || !!buyer.is_online;
-  const buyerWallet: string | null =
-    buyer.wallet_address || db.buyer_wallet_address || null;
-
   const createdLabel = db.created_at
     ? new Date(db.created_at).toLocaleString("en-US", {
         day: "numeric",
@@ -838,7 +916,11 @@ function AcceptorBuyOrderBody({
       })
     : "";
   const orderIdShort =
-    typeof db.id === "string" ? `BLP-${db.id.slice(0, 8).toUpperCase()}` : "—";
+    // Show the canonical DB order_number (matches lists, chat, ledger, the user
+    // app, and support lookups). Fall back to a derived ref only if it's absent.
+    typeof db.order_number === "string" && db.order_number
+      ? db.order_number
+      : typeof db.id === "string" ? `BLP-${db.id.slice(0, 8).toUpperCase()}` : "—";
 
   const expiresIn = countdown(db.expires_at);
 
@@ -954,61 +1036,8 @@ function AcceptorBuyOrderBody({
         </div>
       </div>
 
-      {/* Buyer Trust — commented out */}
-      {false && (
-        <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-emerald-400" />
-            <span className="text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
-              Buyer Trust
-            </span>
-            {trustScore != null && (
-              <span className="ml-auto text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
-                {trustScore}/100
-              </span>
-            )}
-          </div>
-          <div className="space-y-1.5 text-[12px]">
-            <div className="flex justify-between gap-2">
-              <span className="text-foreground/45">Completed Trades</span>
-              <span className="font-semibold text-foreground/80">{trades}</span>
-            </div>
-            <PresenceRatingWalletRows
-              online={online}
-              lastSeen={presence.lastSeen}
-              now={now}
-              ratingNum={ratingNum}
-              wallet={buyerWallet}
-            />
-            {successRate != null && (
-              <div className="flex justify-between gap-2">
-                <span className="text-foreground/45">Success Rate</span>
-                <span className="font-semibold text-emerald-400">
-                  {successRate}%
-                </span>
-              </div>
-            )}
-            {ageLabel && (
-              <div className="flex justify-between gap-2">
-                <span className="text-foreground/45">Account Age</span>
-                <span className="font-semibold text-foreground/80">
-                  {ageLabel}
-                </span>
-              </div>
-            )}
-            <div className="flex justify-between gap-2">
-              <span className="text-foreground/45">KYC Status</span>
-              <span
-                className={`font-semibold ${
-                  verified ? "text-emerald-400" : "text-foreground/50"
-                }`}
-              >
-                {verified ? "Verified" : "Unverified"}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Who placed this order — profile + trust */}
+      <CounterpartyTrustCard db={db} now={now} heading="Buyer Trust" />
 
       {/* After you accept */}
       <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
@@ -1107,7 +1136,11 @@ function AcceptorSellOrderBody({
       })
     : "";
   const orderIdShort =
-    typeof db.id === "string" ? `BLP-${db.id.slice(0, 8).toUpperCase()}` : "—";
+    // Show the canonical DB order_number (matches lists, chat, ledger, the user
+    // app, and support lookups). Fall back to a derived ref only if it's absent.
+    typeof db.order_number === "string" && db.order_number
+      ? db.order_number
+      : typeof db.id === "string" ? `BLP-${db.id.slice(0, 8).toUpperCase()}` : "—";
   const expiresIn = countdown(db.expires_at);
 
   const STEPS: { label: string; Icon: typeof Wallet }[] = [
@@ -1200,6 +1233,9 @@ function AcceptorSellOrderBody({
           </div>
         </div>
       </div>
+
+      {/* Who placed this order — profile + trust */}
+      <CounterpartyTrustCard db={db} now={now} heading="Seller Trust" />
 
       {/* After you accept */}
       <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
@@ -1336,7 +1372,11 @@ function ActiveOrderBody({
       })
     : "";
   const orderIdShort =
-    typeof db.id === "string" ? `BLP-${db.id.slice(0, 8).toUpperCase()}` : "—";
+    // Show the canonical DB order_number (matches lists, chat, ledger, the user
+    // app, and support lookups). Fall back to a derived ref only if it's absent.
+    typeof db.order_number === "string" && db.order_number
+      ? db.order_number
+      : typeof db.id === "string" ? `BLP-${db.id.slice(0, 8).toUpperCase()}` : "—";
 
   // ---- progress stepper ----
   const STEPS: { label: string; Icon: typeof Lock }[] = isSeller
@@ -2995,7 +3035,11 @@ export function OrderQuickView({
     return "Order Details";
   })();
   const fullScreenOrderId =
-    typeof qvDb.id === "string"
+    // Canonical DB order_number (consistent with every other surface); derived
+    // ref only as a fallback when order_number is missing.
+    typeof qvDb.order_number === "string" && qvDb.order_number
+      ? qvDb.order_number
+      : typeof qvDb.id === "string"
       ? `BLP-${qvDb.id.slice(0, 8).toUpperCase()}`
       : "—";
   return (

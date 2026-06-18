@@ -58,11 +58,11 @@ const SOLANA_NETWORK: "devnet" | "mainnet-beta" =
 // strict on-chain-signature guards below unchanged.
 const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 
-// Defense-in-depth: only relax the tx_hash signature guard for simulated mock
-// releases when we are ALSO off mainnet. This removes the single-point dependency
-// on MOCK_MODE being false in prod — the fund-custody guard can NEVER be disabled
+// Defense-in-depth: simulate escrow (lock + release) only when in mock mode AND
+// off mainnet. This removes the single-point dependency on MOCK_MODE being false
+// in prod — the on-chain verification + fund-custody guards can NEVER be bypassed
 // on mainnet, even if MOCK_MODE were somehow misconfigured there.
-const RELAX_TX_HASH = MOCK_MODE && SOLANA_NETWORK !== "mainnet-beta";
+const MOCK_ESCROW = MOCK_MODE && SOLANA_NETWORK !== "mainnet-beta";
 
 // Schema for escrow release. Same base58-signature shape guard as the
 // lock route above. Without this, an earlier bug in the UI fabricated
@@ -77,9 +77,9 @@ const escrowReleaseSchema = z.object({
   // In real mode the strict base58 guard above is a fund-custody control and
   // MUST stay. In MOCK mode (off-mainnet only) there is no on-chain release —
   // the UI sends a simulated placeholder (e.g. `demo-…`, `already-released`) —
-  // so accept any non-empty string. Gated on RELAX_TX_HASH (mock AND not
+  // so accept any non-empty string. Gated on MOCK_ESCROW (mock AND not
   // mainnet), so mainnet always enforces the strict signature guard.
-  tx_hash: RELAX_TX_HASH
+  tx_hash: MOCK_ESCROW
     ? z.string().min(1, "Transaction hash required").max(120)
     : z
         .string()
@@ -181,6 +181,62 @@ export async function POST(
     if (auth instanceof NextResponse) return auth;
     const scopeErrPost = requireApiKeyScope(auth, 'orders:write');
     if (scopeErrPost) return scopeErrPost;
+
+    // MOCK ESCROW (off-mainnet only): there is no on-chain transaction to
+    // verify, and the wallet sends simulated tx_hash/PDA placeholders (e.g.
+    // `demo-…`, `mock-trade-…`) that the strict schema + PDA-binding +
+    // verifyEscrowTx below would (correctly) reject. Record the lock via
+    // mockEscrowLock instead — it deducts the seller's mock balance and flips
+    // status -> escrowed, and carries its own production fail-closed guard.
+    // Real mode (mainnet / mock off) falls straight through to the verified path.
+    if (MOCK_ESCROW) {
+      const { actor_type, actor_id, tx_hash } = body ?? {};
+      if (actor_type !== "user" && actor_type !== "merchant") {
+        return validationErrorResponse(["actor_type must be 'user' or 'merchant'"]);
+      }
+      if (typeof actor_id !== "string" || !actor_id) {
+        return validationErrorResponse(["actor_id is required"]);
+      }
+      if (typeof tx_hash !== "string" || !tx_hash) {
+        return validationErrorResponse(["tx_hash is required"]);
+      }
+      // Same identity guards as the real path below.
+      if (actor_id !== auth.actorId) {
+        return forbiddenResponse("actor_id does not match authenticated identity");
+      }
+      if (actor_type === "merchant" && auth.actorType !== "merchant") {
+        return forbiddenResponse("actor_type='merchant' requires a merchant token");
+      }
+      const canAccessMock = await canAccessOrder(auth, id);
+      if (!canAccessMock) {
+        return forbiddenResponse("You do not have access to this order");
+      }
+      const { invalidateOrderCache } = await import("@/lib/cache");
+      invalidateOrderCache(id);
+      const mockResult = await mockEscrowLock(id, actor_type, actor_id, tx_hash, {
+        escrow_trade_id: typeof body.escrow_trade_id === "number" ? body.escrow_trade_id : undefined,
+        escrow_trade_pda: typeof body.escrow_trade_pda === "string" ? body.escrow_trade_pda : undefined,
+        escrow_pda: typeof body.escrow_pda === "string" ? body.escrow_pda : undefined,
+        escrow_creator_wallet: typeof body.escrow_creator_wallet === "string" ? body.escrow_creator_wallet : undefined,
+      });
+      if (!mockResult.success || !mockResult.order) {
+        logger.warn("[Escrow:Deposit] Mock escrow lock failed", {
+          orderId: id,
+          error: mockResult.error,
+        });
+        return NextResponse.json(
+          { success: false, error: mockResult.error || "Mock escrow lock failed" },
+          { status: mockResult.error === "ALREADY_ESCROWED" ? 409 : 400 },
+        );
+      }
+      invalidateOrderCache(id);
+      auditLog("escrow.locked", actor_id, actor_type, id, {
+        txHash: tx_hash,
+        cryptoAmount: mockResult.order.crypto_amount,
+        mock: true,
+      });
+      return successResponse(serializeOrder(mockResult.order));
+    }
 
     // Validate request body
     const parseResult = escrowDepositSchema.safeParse(body);

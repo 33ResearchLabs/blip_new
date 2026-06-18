@@ -226,9 +226,11 @@ function OrderCardTimer({
     "",
   );
   // Earnings chip fiat amount (e.g. "+₹12.5")
+  // Only compute earnings from the REAL fee % and rate; never fabricate them.
   const earningFiat =
-    ((order.amount * (order.protocolFeePercent ?? 0.5)) / 100) *
-    (order.rate || 1);
+    order.protocolFeePercent != null && (order.rate || 0) > 0
+      ? ((order.amount * order.protocolFeePercent) / 100) * order.rate
+      : 0;
   const heroEarning =
     earningFiat > 0
       ? formatFiat(earningFiat, fiatCur).replace(/\.?0+$/, "")

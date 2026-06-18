@@ -795,7 +795,11 @@ export function MobileHomeView({
           const fiatCur = (o as any).toCurrency || activeCorridorMeta.fiat;
           const fiatTotal = formatFiat(Math.round((o as any).total ?? 0), fiatCur).replace(/\.00$/, '');
           const cryptoAmt = Math.round((o as any).amount ?? 0);
-          const earningFiat = ((o as any).amount ?? 0) * ((o as any).protocolFeePercent ?? 0.5) / 100 * ((o as any).rate || 1);
+          // Only show earnings when BOTH the real protocol fee % and rate are
+          // known — never fabricate them (0.5% / rate=1) or the figure is wrong.
+          const earningFiat = ((o as any).protocolFeePercent != null && ((o as any).rate || 0) > 0)
+            ? ((o as any).amount ?? 0) * (o as any).protocolFeePercent / 100 * (o as any).rate
+            : 0;
           const earnLabel = earningFiat > 0 ? `+${formatFiat(earningFiat, fiatCur).replace(/\.?0+$/, '')}` : null;
           return (
             <button

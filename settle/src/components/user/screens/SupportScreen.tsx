@@ -38,10 +38,15 @@ const TELEGRAM_COMMUNITY_URL = "https://t.me/blipmoney_community";
 // the active-order detail screen is where the "Need help" button lives, and its
 // `activeOrder` persists across a support detour (keyed by activeOrderId in the
 // parent), so returning to it is safe — back must land there, not on profile.
+// "matching" and "escrow" are the waiting/tracker screens whose `?` button also
+// opens support; their backing state (pendingTradeData / activeOrderId) likewise
+// survives the detour, so back must return there rather than dropping to profile.
 const SAFE_BACK_SCREENS = new Set<Screen>([
   "home",
   "orders",
   "order",
+  "matching",
+  "escrow",
   "profile",
   "chats",
   "notifications",
