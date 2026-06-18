@@ -657,7 +657,7 @@ export const ProfileScreen = ({
                         </span>
                       </div>
                       <p className="text-[11px] text-text-tertiary">
-                        {new Date(dispute.resolvedAt).toLocaleDateString('en-GB')}
+                        {new Date(dispute.resolvedAt).toLocaleDateString('en-US')}
                       </p>
                     </div>
                     <div className="flex items-center justify-between">

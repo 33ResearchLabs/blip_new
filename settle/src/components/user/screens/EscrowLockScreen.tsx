@@ -20,7 +20,7 @@ import type { Order, Screen } from "./types";
 import { BankAccountSelector, type SelectedBankDetails } from "@/components/user/BankAccountSelector";
 import type { PaymentMethodItem } from "@/components/user/PaymentMethodSelector";
 import { networkLabel, explorerUrl } from "@/lib/solana/networkLabel";
-import { formatCrypto } from "@/lib/format";
+import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
 import { getDisplayOrderId } from "@/lib/displayOrderId";
 import { BottomNav } from "./BottomNav";
 import { WaitingTracker, type TrackerBanner } from "./WaitingTracker";
@@ -164,7 +164,7 @@ export const EscrowLockScreen = ({
           : "Bank Transfer";
 
     const createdAtDate = activeOrder?.createdAt ? new Date(activeOrder.createdAt) : new Date();
-    const displayId = getDisplayOrderId(activeOrder?.id ?? null, createdAtDate);
+    const displayId = getDisplayOrderId(activeOrder?.id ?? null, createdAtDate, activeOrder?.order_number);
     const createdTime = createdAtDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
     const expMs = activeOrder?.expiresAt ? new Date(activeOrder.expiresAt).getTime() : null;
@@ -420,8 +420,8 @@ export const EscrowLockScreen = ({
         >
           {[
             { label: "Escrow secured", value: `${parseFloat(amount).toFixed(2)} USDT`, primary: true },
-            { label: "You'll receive", value: `${fiatSymbol} ${parseFloat(fiatAmount).toLocaleString()}`, primary: true },
-            { label: "Merchant rate", value: `1 USDT = ${currentRate} ${fiatCurrency}` },
+            { label: "You'll receive", value: formatFiat(parseFloat(fiatAmount), fiatCurrency), primary: true },
+            { label: "Merchant rate", value: `1 USDT = ${formatRate(currentRate)} ${fiatCurrency}` },
             { label: "Network", value: networkLabel() },
           ].map((row, i, arr) => (
             <div

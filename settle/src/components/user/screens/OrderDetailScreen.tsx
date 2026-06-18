@@ -1120,7 +1120,7 @@ export const OrderDetailScreen = ({
               <div className="mt-3 pt-3 border-t border-border-subtle flex items-center justify-between">
                 <span className="text-[11px] text-text-tertiary">
                   {activeOrder.escrowTradeId
-                    ? `Order #${activeOrder.escrowTradeId}`
+                    ? `Escrow trade #${activeOrder.escrowTradeId}`
                     : "Order receipt"}
                 </span>
                 <a
@@ -3056,7 +3056,7 @@ export const OrderDetailScreen = ({
           >
             <AppealScreen
               order={activeOrder}
-              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
               reason={appealReason}
               description={appealDescription}
               onReasonChange={setAppealReason}
@@ -3081,7 +3081,7 @@ export const OrderDetailScreen = ({
           <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
             <OrderPaymentScreen
               order={activeOrder}
-              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
               onClose={() => setScreen(previousScreen || "orders")}
               onOpenOverview={() => setShowTracker(true)}
               onViewOverview={() => setShowOrderOverview(true)}
@@ -3131,7 +3131,7 @@ export const OrderDetailScreen = ({
           <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
             <SellPaymentTracker
               order={activeOrder}
-              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
               onBack={() => setScreen(previousScreen || "orders")}
               onOpenSupport={() => setScreen("support")}
               onOpenChat={handleOpenChat}
@@ -3150,7 +3150,7 @@ export const OrderDetailScreen = ({
           <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
             <OrderCompletedScreen
               order={activeOrder}
-              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
               rating={rating}
               reviewText={reviewText}
               onRate={setRating}
@@ -3177,7 +3177,7 @@ export const OrderDetailScreen = ({
           <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
             <SellCompletedScreen
               order={activeOrder}
-              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
               onBack={() => setScreen(previousScreen || "orders")}
               onHelp={() => setScreen("support")}
             />
@@ -3241,7 +3241,7 @@ export const OrderDetailScreen = ({
             ) : (
               <OrderTrackingView
                 order={activeOrder}
-                displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+                displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
                 onClose={() => {
                   // When the tracker is the auto/primary screen (e.g. a
                   // cancelled order reopened from Activity), Back should leave
@@ -3275,7 +3275,7 @@ export const OrderDetailScreen = ({
             className={`fixed inset-0 z-[60] mx-auto ${maxW} flex flex-col ${SHEET_BG}`}
           >
             <OrderOverviewScreen
-              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt))}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
               status={String(activeOrder.dbStatus || activeOrder.status || "")}
               type={activeOrder.type}
               cryptoAmount={parseFloat(activeOrder.cryptoAmount)}
@@ -3762,7 +3762,7 @@ export const OrderDetailScreen = ({
                             {/* Timestamp + delivery status ticks */}
                             <div className={`flex items-center gap-1 mt-1 ${msg.from === "me" ? "justify-end" : ""}`}>
                               <span className={`text-[10px] ${msg.from === "me" ? "text-accent-text/60" : "text-text-tertiary"}`}>
-                                {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                {msg.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                               </span>
                               {msg.from === "me" && (
                                 msg.status === "sending" ? (

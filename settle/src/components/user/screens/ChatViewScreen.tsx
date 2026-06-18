@@ -5,6 +5,7 @@ import { useChatStatus } from "@/hooks/useChatStatus";
 import { ImagePreviewModal } from "@/components/chat/ImagePreviewModal";
 import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
 import { compressImage } from "@/lib/utils/compressImage";
+import { formatFiat } from "@/lib/format";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -623,7 +624,7 @@ export const ChatViewScreen = ({
             </span>
           </div>
           <span className="text-[12px] text-text-tertiary">
-            {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()}
+            {formatFiat(parseFloat(activeOrder.fiatAmount), activeOrder.fiatCode)}
           </span>
         </div>
       </div>
@@ -717,7 +718,7 @@ export const ChatViewScreen = ({
                   <div key={msg.id} className="max-w-[90%] mx-auto">
                     <ReceiptCard data={receiptPayload as any} currentStatus={(orderNum ? receiptStatuses[orderNum] : undefined) || activeOrder?.dbStatus || activeOrder?.status} />
                     <p className="text-[10px] mt-1 text-center text-text-tertiary">
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 );
@@ -730,7 +731,7 @@ export const ChatViewScreen = ({
                   <div className="w-full max-w-[90%] rounded-2xl px-4 py-3 bg-surface-hover border border-border-strong">
                     <p className="text-[13px] whitespace-pre-line leading-relaxed text-text-secondary">{msg.text}</p>
                     <p className="text-[10px] mt-1.5 text-text-tertiary">
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
@@ -762,7 +763,7 @@ export const ChatViewScreen = ({
                   )}
                   <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
                     <span className={`text-[10px] ${isMe ? 'text-accent-text/60' : 'text-text-tertiary'}`}>
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {isMe && (
                       msg.status === 'sending' ? (

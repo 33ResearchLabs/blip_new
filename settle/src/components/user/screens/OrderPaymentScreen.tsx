@@ -17,10 +17,11 @@
  */
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   FileText,
   HelpCircle,
   Check,
@@ -35,6 +36,7 @@ import {
   ArrowDownToLine,
   // Info,
   AlertCircle,
+  ExternalLink,
   MessageCircle,
   Star,
   Loader2,
@@ -42,6 +44,7 @@ import {
 } from "lucide-react";
 import type { Order, MerchantPaymentMethod } from "./types";
 import { formatCrypto, formatCount } from "@/lib/format";
+import { explorerUrl } from "@/lib/solana/networkLabel";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -169,6 +172,8 @@ export function OrderPaymentScreen({
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+  // On-chain escrow proof — collapsed by default.
+  const [escrowExpanded, setEscrowExpanded] = useState(false);
   const expiresMs = order.expiresAt ? new Date(order.expiresAt).getTime() : null;
   const remainingSec = expiresMs ? Math.max(0, Math.floor((expiresMs - now) / 1000)) : 0;
   const isUrgent = remainingSec < 60;
@@ -294,6 +299,79 @@ export function OrderPaymentScreen({
                   </p>
                 </div>
               </div>
+
+              {/* On-chain escrow proof — collapsible. Lets the buyer verify the
+                  seller's USDT is genuinely locked on Solana. Mirrors the
+                  merchant's EscrowInfoCard, themed for the user app. */}
+              {order.escrowTxHash && (
+                <div className="mt-3 rounded-xl border border-border-subtle overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setEscrowExpanded((o) => !o)}
+                    aria-expanded={escrowExpanded}
+                    className="w-full flex items-center gap-2.5 p-3 text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-success/15">
+                      <Shield className="w-4 h-4 text-success" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold text-text-primary">Escrow details</p>
+                      <p className="text-[11px] text-text-tertiary">Verify the lock on-chain</p>
+                    </div>
+                    <span className="flex items-center gap-1 text-[12px] font-medium text-success shrink-0">
+                      {escrowExpanded ? "Hide" : "Details"}
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform ${escrowExpanded ? "rotate-180" : ""}`}
+                      />
+                    </span>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {escrowExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-3 pb-3 pt-3 space-y-2.5 border-t border-border-subtle">
+                          <EscrowDetailRow
+                            label="Transaction ID"
+                            value={order.escrowTxHash}
+                            copyKey="escrowTx"
+                            href={explorerUrl("tx", order.escrowTxHash)}
+                            copiedField={copiedField}
+                            onCopy={onCopy}
+                          />
+                          {order.escrowTradePda && (
+                            <EscrowDetailRow
+                              label="Trade Account"
+                              value={order.escrowTradePda}
+                              copyKey="escrowTradePda"
+                              copiedField={copiedField}
+                              onCopy={onCopy}
+                            />
+                          )}
+                          {order.escrowTradeId != null && (
+                            <EscrowDetailRow
+                              label="Trade ID"
+                              value={String(order.escrowTradeId)}
+                              copyKey="escrowTradeId"
+                              copiedField={copiedField}
+                              onCopy={onCopy}
+                            />
+                          )}
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[12px] text-text-tertiary shrink-0">Network</span>
+                            <span className="text-[12px] font-medium text-text-secondary">Solana</span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
 
               {/* Confirmation progress — only after the buyer has paid */}
               {paymentSent && (
@@ -557,6 +635,58 @@ export function OrderPaymentScreen({
             Need help
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** One copyable on-chain reference row inside the collapsible Escrow details.
+ *  Long values are shortened (6…6); copy state is driven by the shared
+ *  copiedField/onCopy pair so it matches the payment-detail rows above. */
+function EscrowDetailRow({
+  label,
+  value,
+  copyKey,
+  href,
+  copiedField,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  copyKey: string;
+  href?: string;
+  copiedField: string | null;
+  onCopy: (key: string, value: string) => void;
+}) {
+  const short = value.length > 14 ? `${value.slice(0, 6)}…${value.slice(-6)}` : value;
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[12px] text-text-tertiary shrink-0">{label}</span>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <button
+          type="button"
+          onClick={() => onCopy(copyKey, value)}
+          className="flex items-center gap-1 font-mono text-[12px] text-text-secondary hover:text-text-primary transition-colors min-w-0"
+          title="Copy"
+        >
+          <span className="truncate">{short}</span>
+          {copiedField === copyKey ? (
+            <Check className="w-3 h-3 text-success shrink-0" strokeWidth={3} />
+          ) : (
+            <Copy className="w-3 h-3 text-text-tertiary shrink-0" />
+          )}
+        </button>
+        {href && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-success hover:opacity-80 transition-opacity shrink-0"
+            title="View on explorer"
+          >
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
       </div>
     </div>
   );

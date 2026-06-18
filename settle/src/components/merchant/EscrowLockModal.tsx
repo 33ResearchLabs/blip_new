@@ -105,7 +105,7 @@ export function EscrowLockModal({
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold text-text-primary">Lock Escrow</h2>
-                    <p className="text-[11px] text-text-tertiary">Step 2 of 5 · Secure USDT for this trade</p>
+                    <p className="text-[11px] text-text-tertiary">Step {stepIndex + 1} of 5 · {["Order accepted", "Secure USDT for this trade", "Buyer sends payment", "Verify payment", "Release USDT"][stepIndex] ?? "Secure USDT for this trade"}</p>
                   </div>
                 </div>
                 {!isLockingEscrow && (
@@ -151,9 +151,9 @@ export function EscrowLockModal({
                   {(() => {
                     const currency = escrowOrder.toCurrency || escrowOrder.dbOrder?.fiat_currency || "";
                     const isInr = currency === "INR";
-                    const isBuy = escrowOrder.orderType === "buy";
-                    const INR_RATE = isBuy ? 101.33 : 103.53;
-                    const promoDiscountFiat = isInr ? 5 * INR_RATE : 0;
+                    // Value the 5-USDT testing reward at the order's ACTUAL locked
+                    // rate, not a hardcoded magic rate that diverges from the order.
+                    const promoDiscountFiat = isInr ? 5 * escrowOrder.rate : 0;
                     const discountedTotal = Math.max(0, escrowOrder.total - promoDiscountFiat);
                     return (
                       <div className="grid grid-cols-2 gap-3">

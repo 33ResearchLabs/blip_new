@@ -264,7 +264,7 @@ export const OrdersListScreen = ({
                       )}
                       {!isActive && order.createdAt && (
                         <span className="text-[10px] font-medium text-text-tertiary">
-                          {order.createdAt.toLocaleDateString('en-GB')}
+                          {order.createdAt.toLocaleDateString('en-US')}
                         </span>
                       )}
                     </div>

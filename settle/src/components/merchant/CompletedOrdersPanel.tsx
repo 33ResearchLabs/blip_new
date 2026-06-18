@@ -62,7 +62,7 @@ function dayBucket(date: Date, now: Date): string {
   if (dayStart === today - dayMs) return "Yesterday";
   const sameYear = date.getFullYear() === now.getFullYear();
   return date.toLocaleDateString(
-    undefined,
+    "en-US",
     sameYear
       ? { month: "short", day: "numeric" }
       : { month: "short", day: "numeric", year: "numeric" },
@@ -77,7 +77,7 @@ function formatRelative(date: Date, now: Date): string {
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",

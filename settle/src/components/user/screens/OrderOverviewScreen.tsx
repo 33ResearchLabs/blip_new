@@ -24,6 +24,9 @@ type Tone = "accent" | "success" | "error" | "warning";
 const CANCELLABLE = new Set(["pending", "accepted", "escrowed"]);
 
 const STATUS_LABELS: Record<string, string> = {
+  // 'open' is the minimal-status form of a pending/unmatched order — without it
+  // the order falls through to the generic "In progress" instead of "Matching".
+  open: "Matching Merchant",
   pending: "Matching Merchant",
   accepted: "Merchant Accepted",
   escrow_pending: "Merchant Accepted",
@@ -78,6 +81,16 @@ function fiatSymbol(code: string | undefined | null): string {
   }
 }
 
+// Human label for a buyer payment-type code ('bank' | 'upi' | 'cash').
+function payTypeLabel(t: string): string {
+  switch ((t || "").toLowerCase()) {
+    case "bank": return "Bank Transfer";
+    case "upi": return "UPI";
+    case "cash": return "Cash";
+    default: return t ? t.toUpperCase() : "";
+  }
+}
+
 function fmtCreatedAt(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   const mon = d.toLocaleString("en-US", { month: "short" });
@@ -95,6 +108,10 @@ export interface OrderOverviewScreenProps {
   rate: number;
   fiatCode: string;
   paymentMethod: "bank" | "cash";
+  /** BUY (Way-1): the buyer's chosen payment-method types ('bank' | 'upi' |
+      'cash'). When present, the Payment Method row lists all of them instead of
+      the single coarse `paymentMethod`. */
+  paymentMethods?: string[];
   createdAt: Date;
   /** Actual receiving account once assigned; null → "shown after assignment". */
   bankAccount?: string | null;
@@ -118,6 +135,7 @@ export function OrderOverviewScreen({
   rate,
   fiatCode,
   paymentMethod,
+  paymentMethods,
   createdAt,
   bankAccount,
   paymentLocked,
@@ -222,7 +240,14 @@ export function OrderOverviewScreen({
             disclosed to the buyer once the escrow is locked. Before that we
             show a waiting line instead of the account. */}
         <Section title="Payment Details">
-          <Row label="Payment Method" value={paymentMethod === "cash" ? "Cash" : "Bank Transfer"} />
+          <Row
+            label={paymentMethods && paymentMethods.length > 1 ? "Payment Methods" : "Payment Method"}
+            value={
+              paymentMethods && paymentMethods.length > 0
+                ? paymentMethods.map(payTypeLabel).filter(Boolean).join(", ")
+                : paymentMethod === "cash" ? "Cash" : "Bank Transfer"
+            }
+          />
           {paymentLocked && paymentRows && paymentRows.length > 0 ? (
             paymentRows.map((r) => (
               <Row key={r.label} label={r.label} value={r.value} mono={r.mono} />

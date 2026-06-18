@@ -33,7 +33,7 @@ interface UseUserTradeCreationParams {
   setScreen: (s: Screen) => void;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   setActiveOrderId: (id: string | null) => void;
-  setPendingTradeData: (data: { amount: string; fiatAmount: string; type: TradeType; paymentMethod: PaymentMethod } | null) => void;
+  setPendingTradeData: (data: { amount: string; fiatAmount: string; type: TradeType; paymentMethod: PaymentMethod; paymentTypes?: string[] } | null) => void;
   solanaWallet: any;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   toast: any;
@@ -276,7 +276,7 @@ export function useUserTradeCreation({
         startSubmitIdRef.current = null;
         setOrders(prev => [...prev, newOrder]);
         setActiveOrderId(newOrder.id);
-        setPendingTradeData({ amount, fiatAmount: (parseFloat(amount) * liveRate).toFixed(2), type: tradeType, paymentMethod });
+        setPendingTradeData({ amount, fiatAmount: (parseFloat(amount) * liveRate).toFixed(2), type: tradeType, paymentMethod, paymentTypes: buyerPaymentTypes });
         setScreen("matching");
         setAmount("");
         playSound('trade_start');

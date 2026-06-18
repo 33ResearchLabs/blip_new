@@ -12,6 +12,47 @@ import { getUserChannel } from "@/lib/pusher/channels";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
 import { emitChatToast } from "@/lib/chat/chatToastBus";
 
+// ── Auto-refund "already handled" persistence ──────────────────────────────
+// The client-side auto-refund scan (below) records every order whose on-chain
+// outcome is TERMINAL (refunded / already-closed / program-incompatible) so it
+// is never re-attempted. We persist that set per-user in localStorage so the
+// scan doesn't re-fire those PATCHes on every page reload — important when the
+// bookkeeping PATCH can't persist (e.g. a 403 from a shared-cookie actor
+// mismatch), which would otherwise repaint the console with the same failures
+// on each load. Only terminal orders are stored; genuine transient on-chain
+// failures are never added, so real retries are unaffected. In normal usage
+// these orders are already excluded by the DB (refund_tx_hash set), so the
+// stored set changes nothing — it is purely a no-op-on-the-happy-path guard.
+const REFUND_HANDLED_KEY_PREFIX = "blip_user_refund_handled:";
+
+function loadRefundHandled(userId: string | null): Set<string> {
+  if (typeof window === "undefined" || !userId) return new Set();
+  try {
+    const raw = window.localStorage.getItem(REFUND_HANDLED_KEY_PREFIX + userId);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr)
+      ? new Set(arr.filter((x): x is string => typeof x === "string"))
+      : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function persistRefundHandled(userId: string | null, set: Set<string>): void {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    // Cap to the most recent 200 ids so the key can't grow unbounded.
+    const arr = Array.from(set).slice(-200);
+    window.localStorage.setItem(
+      REFUND_HANDLED_KEY_PREFIX + userId,
+      JSON.stringify(arr),
+    );
+  } catch {
+    /* storage disabled / quota — best-effort only */
+  }
+}
+
 interface UseUserEffectsParams {
   userId: string | null;
   screen: Screen;
@@ -693,7 +734,22 @@ export function useUserEffects({
   // wallet that owns the trade — backend signer is rejected (error 6003).
   const lastUserRefundScanRef = useRef(0);
   const userRefundInFlightRef = useRef<Set<string>>(new Set());
+  // Orders we've already terminally handled this page load (refunded on-chain,
+  // already-closed, or program-incompatible). We skip them on later 30s scans
+  // so a bookkeeping PATCH that fails to persist — e.g. a 403 when the active
+  // session's actor isn't this user (shared-cookie collision) — can't make the
+  // scan retry the same orders forever and flood the console. Resets on reload,
+  // so a fresh load with correct auth still records the refund. Genuine
+  // transient on-chain refund errors are NOT added here, so they keep retrying.
+  const userRefundHandledRef = useRef<Set<string>>(new Set());
+  const userRefundSeededRef = useRef(false);
   useEffect(() => {
+    // Seed the in-memory handled set from localStorage once per page load so
+    // orders we already terminally resolved aren't re-attempted on reload.
+    if (!userRefundSeededRef.current) {
+      userRefundSeededRef.current = true;
+      loadRefundHandled(userId).forEach((id) => userRefundHandledRef.current.add(id));
+    }
     if (!solanaWallet?.connected || !solanaWallet?.walletAddress) return;
     if (!solanaWallet?.refundEscrow) return; // wallet adapter not ready
     if (orders.length === 0) return;
@@ -713,6 +769,7 @@ export function useUserEffects({
     if (stuck.length === 0) return;
 
     for (const order of stuck) {
+      if (userRefundHandledRef.current.has(order.id)) continue;
       if (userRefundInFlightRef.current.has(order.id)) continue;
       userRefundInFlightRef.current.add(order.id);
 
@@ -723,6 +780,13 @@ export function useUserEffects({
         // hammering Solana RPC and producing the 429 + repeated console
         // warnings that prompted this fix.
         const markResolvedInDb = async (sentinel: string, reason: string) => {
+          // The on-chain outcome here is terminal (refunded / already-closed /
+          // program-incompatible). Mark the order handled up front — and persist
+          // it — so that even if the PATCH below fails to persist (e.g. a 403
+          // when the active session's actor isn't this user), neither the next
+          // 30s scan nor a future page reload re-runs the refund + PATCH.
+          userRefundHandledRef.current.add(order.id);
+          persistRefundHandled(userId, userRefundHandledRef.current);
           try {
             await fetchWithAuth(`/api/orders/${order.id}`, {
               method: 'PATCH',

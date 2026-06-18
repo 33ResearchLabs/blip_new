@@ -58,7 +58,7 @@ export interface HomeScreenProps {
     qrAmount: number | null;
   }) => void;
   setActiveOrderId: (id: string) => void;
-  setPendingTradeData: (data: { amount: string; fiatAmount: string; type: "buy" | "sell"; paymentMethod: "bank" | "cash" } | null) => void;
+  setPendingTradeData: (data: { amount: string; fiatAmount: string; type: "buy" | "sell"; paymentMethod: "bank" | "cash"; paymentTypes?: string[] } | null) => void;
   setShowWalletModal: (v: boolean) => void;
   setShowWalletSetup: (v: boolean) => void;
   setShowWalletUnlock: (v: boolean) => void;
@@ -85,14 +85,33 @@ export interface HomeScreenProps {
 }
 
 function formatDate(d: Date) {
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// UI statuses where the order is no longer live. Drives the "active" pulse dot
+// so terminal orders (expired/cancelled/completed/disputed) don't look active.
+const INACTIVE_STATUSES = new Set(['complete', 'cancelled', 'expired', 'disputed']);
+
+// Small status pill for a Recent row — gives every order a readable state
+// (e.g. "Expired") instead of an unlabelled row that looks identical to a live
+// one. Inline hex to match this screen's palette.
+function statusChip(status: string): { label: string; bg: string; fg: string } {
+  switch (status) {
+    case 'complete':  return { label: 'Completed',   bg: 'rgba(5,150,105,0.12)',  fg: '#059669' };
+    case 'cancelled': return { label: 'Cancelled',   bg: 'rgba(20,21,26,0.06)',   fg: '#80828c' };
+    case 'expired':   return { label: 'Expired',     bg: 'rgba(20,21,26,0.06)',   fg: '#80828c' };
+    case 'disputed':  return { label: 'Disputed',    bg: 'rgba(220,38,38,0.10)',  fg: '#DC2626' };
+    case 'pending':   return { label: 'Pending',     bg: 'rgba(255,176,46,0.16)', fg: '#b45309' };
+    default:          return { label: 'In progress', bg: 'rgba(255,176,46,0.16)', fg: '#b45309' };
+  }
 }
 
 // ─── Single transaction row ────────────────────────────────────────────────
 function TxRow({ order, onPress }: { order: Order; index: number; onPress: () => void; avatarUrl?: string }) {
   const isBuy = order.type === 'buy';
   const amount = parseFloat(order.fiatAmount);
-  const isActive = order.status !== 'complete';
+  const isActive = !INACTIVE_STATUSES.has(order.status);
+  const chip = statusChip(order.status);
 
   return (
     <motion.button
@@ -124,9 +143,18 @@ function TxRow({ order, onPress }: { order: Order; index: number; onPress: () =>
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: '#14151a', letterSpacing: '-0.005em', marginBottom: 1 }}>
-          {isBuy ? 'Buy USDT' : 'Sell USDT'}
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#14151a', letterSpacing: '-0.005em' }}>
+            {isBuy ? 'Buy USDT' : 'Sell USDT'}
+          </p>
+          <span style={{
+            fontSize: 9.5, fontWeight: 700, letterSpacing: '0.02em', lineHeight: 1.4,
+            padding: '1.5px 6px', borderRadius: 999, whiteSpace: 'nowrap',
+            background: chip.bg, color: chip.fg,
+          }}>
+            {chip.label}
+          </span>
+        </div>
         <p style={{ fontSize: 10, fontWeight: 500, color: '#80828c' }}>
           {order.merchant.name} · {formatDate(order.createdAt)}
         </p>

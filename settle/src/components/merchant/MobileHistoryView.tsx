@@ -134,7 +134,10 @@ function TxnRow({ order, merchantId, onSelectOrder, showBorder }: {
   const fiatCur = (order as any).toCurrency || "INR";
   const fiatAmt = (order as any).total ?? order.amount;
   const fiatLabel = formatFiat(Math.round(fiatAmt), fiatCur).replace(/\.00$/, "");
-  const earningFiat = order.amount * ((order as any).protocolFeePercent ?? 0.5) / 100 * ((order as any).rate || 1);
+  // Only compute earnings from the REAL fee % and rate; never fabricate them.
+  const earningFiat = ((order as any).protocolFeePercent != null && ((order as any).rate || 0) > 0)
+    ? order.amount * (order as any).protocolFeePercent / 100 * (order as any).rate
+    : 0;
   const earnLabel = earningFiat > 0
     ? `+${formatFiat(earningFiat, fiatCur).replace(/\.?0+$/, "")}`
     : null;

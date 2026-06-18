@@ -10,7 +10,6 @@
 import { transaction } from '@/lib/db';
 import { Order, ActorType } from '@/lib/types/database';
 import { validateTransition } from '@/lib/orders/stateMachineMinimal';
-import { createTransactionInTx } from '@/lib/db/repositories/transactions';
 import { logger } from '@/lib/logger';
 
 export interface EscrowLockResult {
@@ -233,16 +232,15 @@ export async function mockEscrowLock(
         ]
       );
 
-      // 8. Insert merchant_transactions entry
-      await createTransactionInTx(client, {
-        ...(payer.entityType === 'merchant'
-          ? { merchant_id: payer.entityId }
-          : { user_id: payer.entityId }),
-        order_id: orderId,
-        type: 'escrow_lock',
-        amount: -amount,
-        description: `Escrow locked for order #${updatedOrder.order_number}`,
-      });
+      // 8. The merchant_transactions row is created AUTOMATICALLY by the
+      // mirror_ledger_to_audit_tables trigger (migration 115), which fires when
+      // the ESCROW_LOCK ledger_entries row is written (by the
+      // auto_log_order_ledger trigger on the orders UPDATE above). Inserting it
+      // manually here duplicated that row and violated
+      // uq_merchant_tx_order_type_merchant — the trigger mirrors idempotently
+      // (ON CONFLICT DO NOTHING) but the old createTransactionInTx insert did
+      // not. The real escrow_order_v1 proc relies on the same trigger, so this
+      // keeps mock + real behaviour aligned.
 
       // 9. Insert order_events record
       await client.query(
