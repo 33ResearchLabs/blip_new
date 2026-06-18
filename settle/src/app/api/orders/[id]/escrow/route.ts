@@ -53,6 +53,17 @@ const SOLANA_NETWORK: "devnet" | "mainnet-beta" =
     ? "mainnet-beta"
     : "devnet";
 
+// Mock mode = no real on-chain transactions (escrow lock/release are simulated).
+// Never enabled in production (mainnet runs with it off), so production keeps the
+// strict on-chain-signature guards below unchanged.
+const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
+
+// Defense-in-depth: only relax the tx_hash signature guard for simulated mock
+// releases when we are ALSO off mainnet. This removes the single-point dependency
+// on MOCK_MODE being false in prod — the fund-custody guard can NEVER be disabled
+// on mainnet, even if MOCK_MODE were somehow misconfigured there.
+const RELAX_TX_HASH = MOCK_MODE && SOLANA_NETWORK !== "mainnet-beta";
+
 // Schema for escrow release. Same base58-signature shape guard as the
 // lock route above. Without this, an earlier bug in the UI fabricated
 // `server-release-fallback-<timestamp>` strings here, which the backend
@@ -63,14 +74,21 @@ const SOLANA_NETWORK: "devnet" | "mainnet-beta" =
 // what callers (current UI, old UIs, future UIs, direct API hits) try
 // to submit.
 const escrowReleaseSchema = z.object({
-  tx_hash: z
-    .string()
-    .min(87, "Transaction hash too short — must be a base58 Solana signature")
-    .max(88, "Transaction hash too long — must be a base58 Solana signature")
-    .regex(
-      /^[1-9A-HJ-NP-Za-km-z]+$/,
-      "Transaction hash must be base58 — fabricated placeholders (e.g. 'server-release-fallback-*') are rejected",
-    ),
+  // In real mode the strict base58 guard above is a fund-custody control and
+  // MUST stay. In MOCK mode (off-mainnet only) there is no on-chain release —
+  // the UI sends a simulated placeholder (e.g. `demo-…`, `already-released`) —
+  // so accept any non-empty string. Gated on RELAX_TX_HASH (mock AND not
+  // mainnet), so mainnet always enforces the strict signature guard.
+  tx_hash: RELAX_TX_HASH
+    ? z.string().min(1, "Transaction hash required").max(120)
+    : z
+        .string()
+        .min(87, "Transaction hash too short — must be a base58 Solana signature")
+        .max(88, "Transaction hash too long — must be a base58 Solana signature")
+        .regex(
+          /^[1-9A-HJ-NP-Za-km-z]+$/,
+          "Transaction hash must be base58 — fabricated placeholders (e.g. 'server-release-fallback-*') are rejected",
+        ),
   actor_type: z.enum(["user", "merchant"]),
   actor_id: z.string().uuid(),
 });

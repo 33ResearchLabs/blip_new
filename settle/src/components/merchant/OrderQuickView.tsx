@@ -197,6 +197,255 @@ function LockedPaymentMethodCard({
   );
 }
 
+// "Where to send the fiat" card for the BUYER side (the merchant paying a sell
+// order): the seller's locked receiving account, shown with copy buttons so the
+// merchant knows exactly where to pay. Priority chain mirrors the popup body's
+// resolution (explicit merchant method → locked user method → legacy bank/account)
+// and falls back to a neutral line when no account is attached yet.
+function SellerPayToCard({
+  order,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  order: any;
+}) {
+  const ccy = order.toCurrency || "AED";
+  const amt = Math.round(order.total || 0);
+  const sym = fiatSymbol(ccy);
+  const iconFor = (t: string) =>
+    t === "upi" ? (
+      <Smartphone className="w-4 h-4 text-[#f5f5f7]" />
+    ) : t === "bank" ? (
+      <Building2 className="w-4 h-4 text-white/60" />
+    ) : (
+      <CreditCard className="w-4 h-4 text-white/60" />
+    );
+
+  // Priority 1: seller's explicitly-added merchant payment method.
+  if (order.sellerPaymentMethod) {
+    const spm = order.sellerPaymentMethod;
+    if (spm.type === "bank" && spm.details && typeof spm.details === "object") {
+      return (
+        <CopyableBankDetails
+          title={`Send ${ccy} to this account`}
+          currencySymbol={sym}
+          bankName={spm.details.bank_name}
+          accountName={spm.details.account_name}
+          iban={spm.details.iban}
+          amount={amt}
+        />
+      );
+    }
+    const detailStr =
+      typeof spm.details === "string" ? spm.details : JSON.stringify(spm.details);
+    return (
+      <div className="bg-white/[0.06] border border-white/[0.09] rounded-xl p-3 space-y-2">
+        <div className="flex items-center gap-2 text-xs text-white/60 uppercase tracking-wide">
+          {iconFor(spm.type)}
+          <span>Seller&apos;s Payment Method</span>
+        </div>
+        <div className="text-sm text-foreground font-medium">{spm.name}</div>
+        <div className="text-xs text-white/60">{detailStr}</div>
+        <div className="text-right text-sm font-semibold text-[#f5f5f7]">
+          {amt} {ccy}
+        </div>
+      </div>
+    );
+  }
+
+  // Priority 2: locked payment method (user payment-method system).
+  if (order.lockedPaymentMethod) {
+    const lpm = order.lockedPaymentMethod;
+    if (lpm.type === "bank") {
+      return (
+        <CopyableBankDetails
+          title={`Send ${ccy} to this account`}
+          currencySymbol={sym}
+          bankName={lpm.details.bank_name}
+          accountName={lpm.details.account_name}
+          iban={lpm.details.iban}
+          amount={amt}
+        />
+      );
+    }
+    return (
+      <LockedPaymentMethodCard
+        lpm={lpm}
+        amount={amt}
+        typeIcon={iconFor(lpm.type)}
+        currency={ccy}
+      />
+    );
+  }
+
+  // Priority 3: legacy seller bank details from the offer.
+  if (order.sellerBankDetails) {
+    return (
+      <CopyableBankDetails
+        title={`Send ${ccy} to this account`}
+        currencySymbol={sym}
+        bankName={order.sellerBankDetails.bank_name}
+        accountName={order.sellerBankDetails.account_name}
+        iban={order.sellerBankDetails.iban}
+        amount={amt}
+      />
+    );
+  }
+
+  // Priority 4: legacy user bank details / freeform account string.
+  if (order.userBankDetails || order.userBankAccount) {
+    const details = order.userBankDetails;
+    return (
+      <CopyableBankDetails
+        title={`Send ${ccy} to this account`}
+        currencySymbol={sym}
+        bankName={details?.bank_name}
+        accountName={details?.account_name}
+        iban={details?.iban}
+        fallbackText={!details ? order.userBankAccount : undefined}
+        amount={amt}
+      />
+    );
+  }
+
+  // Neutral fallback — no destination account attached yet.
+  return (
+    <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-2">
+      <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+        Seller Payment Method
+      </span>
+      <p className="text-xs text-foreground/40 leading-snug">
+        Payment details will appear here once the seller shares them — check chat if they&apos;re delayed.
+      </p>
+    </div>
+  );
+}
+
+// On-chain escrow proof — shown to the merchant on the sell-order claim and the
+// buyer-pays / payment-sent screens so they can verify the seller's USDT is
+// genuinely locked. Lists the on-chain identifiers (tx signature, escrow/trade
+// PDAs, trade id) as COPYABLE rows + explorer links so anyone can independently
+// verify on Solana. Renders nothing until an escrow tx exists. Emerald = the
+// merchant theme's "secured/positive" tone.
+function EscrowInfoCard({
+  order,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  order: any;
+}) {
+  const [expanded, setExpanded] = useLocalState(false);
+  const [copiedKey, setCopiedKey] = useLocalState<string | null>(null);
+  if (!order.escrowTxHash) return null;
+
+  const copy = (value: string, key: string) => {
+    navigator.clipboard.writeText(value);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+  const short = (s: string) => (s.length > 14 ? `${s.slice(0, 6)}…${s.slice(-6)}` : s);
+
+  const amountLabel =
+    order.amount != null && order.amount !== ""
+      ? `${order.amount} USDT locked in escrow`
+      : "USDT locked securely in escrow";
+
+  const rows: { label: string; value: string; key: string; href?: string }[] = [
+    {
+      label: "Transaction ID",
+      value: order.escrowTxHash,
+      key: "tx",
+      href: getSolscanTxUrl(order.escrowTxHash),
+    },
+  ];
+  if (order.escrowPda)
+    rows.push({
+      label: "Escrow Account",
+      value: order.escrowPda,
+      key: "pda",
+      href: getBlipscanTradeUrl(order.escrowPda),
+    });
+  if (order.escrowTradePda)
+    rows.push({ label: "Trade Account", value: order.escrowTradePda, key: "trade" });
+  if (order.escrowTradeId != null && order.escrowTradeId !== "")
+    rows.push({ label: "Trade ID", value: String(order.escrowTradeId), key: "tid" });
+
+  return (
+    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] overflow-hidden">
+      {/* Header — tap to reveal the on-chain details. */}
+      <button
+        type="button"
+        onClick={() => setExpanded((o) => !o)}
+        aria-expanded={expanded}
+        className="w-full flex items-center gap-2.5 p-4 text-left"
+      >
+        <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+          <Shield className="w-4 h-4 text-emerald-400" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground">Escrow Secured</p>
+          <p className="text-[11px] text-foreground/45">{amountLabel}</p>
+        </div>
+        <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 shrink-0">
+          Details
+          <ChevronRight
+            className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-90" : ""}`}
+          />
+        </span>
+      </button>
+
+      {/* On-chain details — copyable so anyone can verify the lock on Solana. */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 pt-3 border-t border-emerald-500/15 space-y-2">
+              {rows.map((r) => (
+          <div key={r.key} className="flex items-center justify-between gap-3">
+            <span className="text-[11px] text-foreground/45 shrink-0">{r.label}</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <button
+                type="button"
+                onClick={() => copy(r.value, r.key)}
+                className="flex items-center gap-1 font-mono text-[11px] text-foreground/70 hover:text-foreground transition-colors min-w-0"
+                title="Copy"
+              >
+                <span className="truncate">{short(r.value)}</span>
+                {copiedKey === r.key ? (
+                  <Check className="w-3 h-3 text-emerald-400 shrink-0" strokeWidth={3} />
+                ) : (
+                  <Copy className="w-3 h-3 text-foreground/30 shrink-0" />
+                )}
+              </button>
+              {r.href && (
+                <a
+                  href={r.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-400 hover:text-emerald-300 transition-colors shrink-0"
+                  title="View on explorer"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] text-foreground/45 shrink-0">Network</span>
+                <span className="text-[11px] text-foreground/70">Solana</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // Shown to a merchant viewing their OWN pending BUY order (broadcast). Before a
 // seller accepts there is no destination account yet, so we surface the payment
 // rails the merchant chose at order time (buyer_payment_types). Accent-themed
@@ -805,6 +1054,194 @@ function AcceptorBuyOrderBody({
   );
 }
 
+// Merchant's view of a CLAIMABLE sell order in the open market (the user is
+// the seller, USDT already locked in escrow; the merchant claims it as the
+// BUYER). Mirrors AcceptorBuyOrderBody's rich layout, but the role flips:
+// the merchant pays fiat and the steps/protection copy reflect the buyer side.
+function AcceptorSellOrderBody({
+  order,
+  db,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  order: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any;
+}) {
+  const [now, setNow] = useLocalState(() => Date.now());
+  useLocalEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const countdown = (target: string | undefined) => {
+    if (!target) return null;
+    const r = Math.max(0, Math.floor((new Date(target).getTime() - now) / 1000));
+    return `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(r % 60).padStart(2, "0")}`;
+  };
+
+  const PM_META: Record<string, { label: string; Icon: typeof Building2 }> = {
+    bank: { label: "Bank Transfer", Icon: Building2 },
+    upi: { label: "UPI", Icon: Smartphone },
+    cash: { label: "Cash", Icon: Banknote },
+  };
+
+  const ccy = order.toCurrency || "AED";
+  const sym = fiatSymbol(ccy);
+  const total = Math.round(order.total || 0);
+
+  // The seller (fiat receiver) picked this rail when creating the order — it's
+  // where YOU send the fiat. Full account details reveal after you claim.
+  const recv = order.lockedPaymentMethod || order.sellerPaymentMethod || null;
+  const recvType = String(recv?.type || "").toLowerCase();
+  const recvMeta = recvType
+    ? PM_META[recvType] ?? { label: recvType.toUpperCase(), Icon: CreditCard }
+    : null;
+
+  const createdLabel = db.created_at
+    ? new Date(db.created_at).toLocaleString("en-US", {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
+  const orderIdShort =
+    typeof db.id === "string" ? `BLP-${db.id.slice(0, 8).toUpperCase()}` : "—";
+  const expiresIn = countdown(db.expires_at);
+
+  const STEPS: { label: string; Icon: typeof Wallet }[] = [
+    { label: "Accept\nOrder", Icon: Check },
+    { label: `Pay Seller\nin ${ccy}`, Icon: Banknote },
+    { label: "Mark Payment\nas Sent", Icon: FileText },
+    { label: "Seller Confirms\nReceipt", Icon: Clock },
+    { label: "USDT Released\nto You", Icon: CheckCircle2 },
+  ];
+
+  return (
+    <>
+      {/* Banner */}
+      <div className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)]/[0.06] p-3 flex items-start gap-3">
+        <div className="w-8 h-8 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center shrink-0">
+          <Users className="w-4 h-4 text-[var(--accent)]" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[var(--accent)]">
+            A user has placed a sell order in the open market.
+          </p>
+          <p className="text-xs text-foreground/45 mt-0.5">
+            Their USDT is already locked in escrow — accept to send them payment and receive the USDT.
+          </p>
+        </div>
+      </div>
+
+      {/* On-chain escrow proof */}
+      <EscrowInfoCard order={order} />
+
+      {/* Order Summary + Seller's Receiving Method */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+          <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+            Order Summary
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-foreground">{order.amount}</span>
+            <span className="text-sm font-semibold text-foreground/60">USDT</span>
+          </div>
+          <div className="text-lg font-bold text-foreground">
+            {sym} {total.toLocaleString()}{" "}
+            <span className="text-xs font-medium text-foreground/40">{ccy}</span>
+          </div>
+          <div className="pt-2 border-t border-foreground/[0.04] space-y-1.5 text-[12px]">
+            <div className="flex justify-between gap-2">
+              <span className="text-foreground/40">Rate (Locked)</span>
+              <span className="font-mono text-foreground/70">
+                1 USDT = {order.rate} {ccy}
+              </span>
+            </div>
+            {expiresIn && (
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/40">Order Expires In</span>
+                <span className="font-mono text-amber-400 font-bold">{expiresIn}</span>
+              </div>
+            )}
+            <div className="flex justify-between gap-2">
+              <span className="text-foreground/40">Order ID</span>
+              <span className="font-mono text-foreground/60 truncate">{orderIdShort}</span>
+            </div>
+            {createdLabel && (
+              <div className="flex justify-between gap-2">
+                <span className="text-foreground/40">Created</span>
+                <span className="text-foreground/60">{createdLabel}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
+          <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
+            You Pay The Seller Via
+          </span>
+          {recvMeta ? (
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-[var(--accent)]/15 flex items-center justify-center shrink-0">
+                <recvMeta.Icon className="w-4 h-4 text-[var(--accent)]" />
+              </div>
+              <span className="text-sm font-medium text-foreground flex-1">{recvMeta.label}</span>
+              <Check className="w-4 h-4 text-emerald-400" strokeWidth={3} />
+            </div>
+          ) : (
+            <p className="text-sm text-foreground/50">The seller&apos;s chosen receiving method.</p>
+          )}
+          <div className="pt-2 border-t border-foreground/[0.04]">
+            <p className="text-[11px] text-foreground/40 leading-snug">
+              Full account details are revealed after you claim the order.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* After you accept */}
+      <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4">
+        <p className="text-[10px] text-foreground/35 uppercase tracking-wide font-bold mb-3">
+          After you accept this order
+        </p>
+        <div className="flex items-start justify-between">
+          {STEPS.map((s, i) => {
+            const Icon = s.Icon;
+            return (
+              <Fragment key={i}>
+                <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-[var(--accent)]/15 flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-[var(--accent)]" />
+                  </div>
+                  <span className="text-[9px] text-center leading-tight whitespace-pre-line text-foreground/45">
+                    {`${i + 1}. ${s.label}`}
+                  </span>
+                </div>
+                {i < STEPS.length - 1 && (
+                  <ChevronRight className="w-3 h-3 text-foreground/15 mt-3 shrink-0" />
+                )}
+              </Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Escrow Protection */}
+      <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-3 flex items-start gap-3">
+        <div className="w-8 h-8 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center shrink-0">
+          <Shield className="w-4 h-4 text-[var(--accent)]" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">Escrow Protection</p>
+          <p className="text-xs text-foreground/45 mt-0.5">
+            The seller&apos;s USDT is already locked in escrow. It&apos;s released to you only after the seller confirms your payment.
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // Merchant's view of an IN-PROGRESS order they're party to (accepted →
 // escrowed → payment_sent). Mirrors AcceptorBuyOrderBody's rich layout but is
 // driven by a per-status STAGE map so every active stage reuses ONE design:
@@ -1051,7 +1488,11 @@ function ActiveOrderBody({
   // Buyer/seller payment-method card. Rendered in the right column normally,
   // but moved to the left column at the lock stage to balance the layout (the
   // right column then holds the Tips / Important / What-happens-next cards).
-  const paymentMethodCard = (
+  const paymentMethodCard = !isSeller ? (
+    // BUYER side (sell order): the merchant pays the seller, so show the
+    // seller's locked receiving account with copy buttons — not a rails list.
+    <SellerPayToCard order={order} />
+  ) : (
     <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
       <span className="block text-[11px] text-foreground/40 uppercase tracking-wide font-bold">
         {pmHeading}
@@ -2234,6 +2675,8 @@ function ActiveOrderBody({
                 <p className="text-xs text-foreground/50 mt-0.5">
                   {isSeller
                     ? "Do not release USDT until you have received the payment in your account."
+                    : status === "payment_sent"
+                    ? "Payment marked as sent. Your USDT is released automatically once the seller confirms it — no further action needed."
                     : `Only mark as paid after you've actually sent the ${ccy}.`}
                 </p>
               </div>
@@ -2246,6 +2689,10 @@ function ActiveOrderBody({
           {/* Counterparty payment method — at the lock stage this moves to the
               left column (below) so the two columns stay balanced. */}
           {!needsLock && paymentMethodCard}
+
+          {/* On-chain escrow proof — buyer side (paying a sell order): show the
+              seller's USDT is genuinely locked while you pay / wait for release. */}
+          {!isSeller && !needsLock && <EscrowInfoCard order={order} />}
 
           {/* Lock-stage right-side cards — mirror the Lock Escrow modal */}
           {needsLock && (
@@ -2498,6 +2945,20 @@ export function OrderQuickView({
     ].includes(qvStatus) &&
     Array.isArray(qvDb.buyer_payment_types) &&
     qvDb.buyer_payment_types.length > 0;
+  // A SELL order sitting in the open market that this merchant can CLAIM as the
+  // buyer: the user already funded escrow (status 'escrowed') and no buyer
+  // merchant has taken it yet. Drives the rich AcceptorSellOrderBody (mirrors
+  // the buy-claim layout) instead of the bare fallback body.
+  const isClaimableSellOrder =
+    !!selectedOrder &&
+    !isOwnPendingBuy &&
+    !isAcceptableBuyOrder &&
+    String(qvDb.type || "").toLowerCase() === "sell" &&
+    qvStatus === "escrowed" &&
+    !qvDb.buyer_merchant_id &&
+    qvDb.merchant_id !== merchantId &&
+    selectedOrder.myRole !== "seller" &&
+    selectedOrder.myRole !== "buyer";
   // In-progress order the merchant is party to (seller or buyer): drives the
   // rich, stage-aware ActiveOrderBody. Excludes the pending/acceptable cases
   // above and observer-claimable orders (those keep their own flows).
@@ -2505,6 +2966,7 @@ export function OrderQuickView({
     !!selectedOrder &&
     !isOwnPendingBuy &&
     !isAcceptableBuyOrder &&
+    !isClaimableSellOrder &&
     (selectedOrder.myRole === "seller" || selectedOrder.myRole === "buyer") &&
     (["accepted", "escrowed", "payment_sent"].includes(qvStatus) ||
       // Completed orders get the rich body too, but only on the full-screen
@@ -2524,7 +2986,9 @@ export function OrderQuickView({
     if (isActiveOrder) {
       if (qvStatus === "accepted") return "Lock Escrow";
       if (qvStatus === "escrowed") return "Buyer Pays";
-      if (qvStatus === "payment_sent") return "Verify Payment";
+      // payment_sent: the SELLER verifies; the BUYER is just waiting for release.
+      if (qvStatus === "payment_sent")
+        return activeRole === "buyer" ? "Payment Sent" : "Verify Payment";
     }
     return "Order Details";
   })();
@@ -2688,6 +3152,8 @@ export function OrderQuickView({
               >
                 {isAcceptableBuyOrder ? (
                   <AcceptorBuyOrderBody order={selectedOrder} db={qvDb} />
+                ) : isClaimableSellOrder ? (
+                  <AcceptorSellOrderBody order={selectedOrder} db={qvDb} />
                 ) : isActiveOrder ? (
                   <ActiveOrderBody
                     order={selectedOrder}

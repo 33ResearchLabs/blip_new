@@ -231,7 +231,7 @@ export const HomeScreen = ({
   const fiatLabel = selectedPair === 'usdt_aed' ? 'AED' : 'INR';
   const fiatSymbol = selectedPair === 'usdt_aed' ? 'د.إ' : '₹';
 
-  const balanceNum = displayBalance ?? 0;
+  const balanceNum = Number(displayBalance) || 0;
   const balWhole = Math.floor(balanceNum).toLocaleString('en-US');
   const balDec = (balanceNum % 1).toFixed(2).slice(1);
   const balFiat = (balanceNum * currentRate).toLocaleString('en-US', { maximumFractionDigits: 2 });
@@ -443,7 +443,7 @@ export const HomeScreen = ({
                 </button>
               </div>
               <div style={{ fontSize: 12.5, fontWeight: 700, opacity: 0.7, marginTop: 6 }}>
-                {displayBalance?.toFixed(2)} USDT · ≈ {fiatLabel} {balFiat}
+                {balanceNum.toFixed(2)} USDT · ≈ {fiatLabel} {balFiat}
               </div>
             </div>
           ) : isWalletLocked ? (

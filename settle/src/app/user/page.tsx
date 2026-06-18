@@ -890,6 +890,13 @@ export default function Home() {
                     }),
                   );
                 } catch { /* sessionStorage may be blocked — non-fatal */ }
+                // Detach from any previous (possibly terminal) order and clear
+                // stale escrow tx state so the escrow screen opens fresh — not
+                // bounced to the last order, not showing a stale success view.
+                setActiveOrderId(null);
+                setPendingTradeData(null);
+                tradeCreation.setEscrowTxStatus('idle');
+                tradeCreation.setEscrowError(null);
                 setScreen('escrow');
               }}
             />
@@ -975,6 +982,15 @@ export default function Home() {
                 tradeCreation.selectedPair === "usdt_inr" ? "INR" : "AED"
               }
               hideBottomNav={!!isDesktop}
+              activeOrder={activeOrder}
+              onCancelOrder={() => {
+                // Unilateral cancel + refund of the just-locked, unmatched sell
+                // order (no merchant to agree). Then drop into the order detail,
+                // which renders the cancelled/refund state.
+                orderActions.requestCancelOrder("Cancelled by seller — offer withdrawn");
+                setScreen("order");
+              }}
+              isCancellingOrder={orderActions.isRequestingCancel}
               solanaWallet={solanaWallet}
             />
           </Panel>

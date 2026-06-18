@@ -1,55 +1,18 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Check,
-  Clock,
-  HelpCircle,
-  UserSearch,
-  FileText,
-  Lightbulb,
-  Wallet,
-  ArrowDownToLine,
-  Landmark,
-} from "lucide-react";
+import { UserSearch, Wallet, ArrowDownToLine, Landmark } from "lucide-react";
 import { useState } from "react";
-import type { Screen, OrderStatus, OrderStep } from "./types";
+import type { Screen } from "./types";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { orderActionKey } from '@/lib/api/idempotencyKeys';
-import { formatCrypto, formatFiat } from '@/lib/format';
+import { formatCrypto } from '@/lib/format';
 import { getDisplayOrderId } from '@/lib/displayOrderId';
 import { OrderOverviewScreen } from './OrderOverviewScreen';
-
-const CARD = "bg-surface-card border border-border-subtle";
+import { WaitingTracker, type TrackerBanner } from './WaitingTracker';
 
 // Total matching window (mirrors the 15-min default expiry on order creation).
 const MATCHING_WINDOW_SECONDS = 15 * 60;
-
-type StepState = "done" | "active" | "upcoming";
-
-interface TimelineStep {
-  label: string;
-  sub?: string;
-}
-
-// The full buyer journey. During matching the screen sits at step 2 ("Matching
-// merchant"); later steps render as upcoming. This is the VISUAL timeline only —
-// once a merchant accepts, the parent hands off to OrderDetailScreen which owns
-// the live payment flow.
-const TIMELINE: TimelineStep[] = [
-  { label: "Order created" },
-  { label: "Matching merchant", sub: "Searching for the best match" },
-  { label: "Merchant accepted" },
-  { label: "Ready to pay" },
-  { label: "Payment confirmed" },
-  { label: "USDT released" },
-];
-
-// The matching screen is always at the "Matching merchant" step.
-const ACTIVE_STEP_INDEX = 1;
 
 export interface MatchingScreenProps {
   setScreen: (s: Screen) => void;
@@ -75,7 +38,6 @@ export const MatchingScreen = ({
   setScreen,
   pendingTradeData,
   matchingTimeLeft,
-  formatTimeLeft,
   currentRate,
   currency,
   activeOrderId,
@@ -90,17 +52,20 @@ export const MatchingScreen = ({
   // and the BM-YYMMDD display reference.
   const [createdAt] = useState(() => new Date());
   const [showOverview, setShowOverview] = useState(false);
-  // Timeline is collapsed by default — tap the header chevron to expand.
-  const [showTimeline, setShowTimeline] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const displayId = getDisplayOrderId(activeOrderId, createdAt);
   const createdTime = createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-  const isUrgent = matchingTimeLeft < 60;
   const fiatSymbol = currency === "INR" ? "₹" : "AED ";
   const typeLabel = pendingTradeData.type === "buy" ? "Buy" : "Sell";
+  const isBuy = pendingTradeData.type === "buy";
+  const fiatStr = `${fiatSymbol}${formatCrypto(parseFloat(pendingTradeData.fiatAmount))}`;
+  const cryptoStr = `${formatCrypto(parseFloat(pendingTradeData.amount))}`;
+  const methodLabel = pendingTradeData.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
 
   async function handleCancel() {
     if (activeOrderId && userId) {
+      setIsCancelling(true);
       try {
         // CANCEL action — backend resolves the target status. Financial
         // transitions require an Idempotency-Key per CLAUDE.md.
@@ -136,237 +101,61 @@ export const MatchingScreen = ({
       } catch (err) {
         console.error('Failed to cancel order:', err);
         toast.showWarning('Failed to cancel order');
+      } finally {
+        setIsCancelling(false);
       }
     }
     // Clear the active order BEFORE leaving so the realtime watcher stops
     // tracking it and can't fire a conflicting navigation (it would otherwise
     // route the just-cancelled order back to the order/tracking screen, which
-    // reuses this same "Finding the best merchant" layout).
+    // reuses this same waiting-for-merchant layout).
     setActiveOrderId(null);
     setPendingTradeData(null);
     setScreen("home");
   }
 
+  const banner: TrackerBanner = {
+    title: "Waiting for a merchant",
+    sub: "We're matching you with verified merchants.",
+    icon: UserSearch,
+    tone: "accent",
+    live: true,
+  };
+
+  const tiles = isBuy
+    ? [
+        { icon: <Wallet className="w-4 h-4" />, label: "You will pay", value: fiatStr, sub: currency },
+        { icon: <ArrowDownToLine className="w-4 h-4" />, label: "You will get", value: cryptoStr, sub: "USDT" },
+        { icon: <Landmark className="w-4 h-4" />, label: "Method", value: methodLabel },
+      ]
+    : [
+        { icon: <Wallet className="w-4 h-4" />, label: "You will get", value: fiatStr, sub: currency },
+        { icon: <ArrowDownToLine className="w-4 h-4" />, label: "You are selling", value: cryptoStr, sub: "USDT" },
+        { icon: <Landmark className="w-4 h-4" />, label: "Method", value: methodLabel },
+      ];
+
   return (
     <div className="relative flex-1 min-h-0 flex flex-col bg-surface-base">
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-      <div className="h-[max(env(safe-area-inset-top),1rem)]" />
-
-      {/* Header — title + branded order reference */}
-      <div className="px-5 py-4 flex items-center justify-between gap-3">
-        <button
-          onClick={() => setScreen("home")}
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle"
-        >
-          <ChevronLeft className="w-5 h-5 text-text-secondary" />
-        </button>
-        <div className="text-center flex-1 min-w-0">
-          <h1 className="text-[17px] font-semibold text-text-primary truncate">
-            {typeLabel} {formatCrypto(pendingTradeData.amount)} USDT
-          </h1>
-          <p className="text-[12px] text-text-tertiary truncate">Order #{displayId}</p>
-        </div>
-        <button
-          onClick={() => setScreen("support")}
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle"
-          aria-label="Help & support"
-        >
-          <HelpCircle className="w-5 h-5 text-text-secondary" />
-        </button>
-      </div>
-
-      <div className="px-5 pb-10 space-y-4">
-        {/* Finding the best merchant — live banner. The match countdown now
-            lives inline here, stacked under the LIVE badge, instead of a
-            separate "Time remaining" card. */}
-        <motion.div
-          initial={{ y: 12, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
-        >
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-accent/15 relative">
-            <motion.div
-              className="absolute inset-0 rounded-2xl border-2 border-accent/40"
-              animate={{ scale: [1, 1.18, 1], opacity: [0.6, 0, 0.6] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
-            <UserSearch className="w-6 h-6 text-accent" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[15px] font-semibold text-text-primary">Finding the best merchant</p>
-            <p className="text-[13px] text-text-secondary leading-snug">
-              We&apos;re matching you with verified merchants.
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            <div className={`flex items-center gap-1 text-[15px] font-bold tabular-nums ${isUrgent ? "text-error" : "text-text-primary"}`}>
-              <Clock className="w-3.5 h-3.5" />
-              {formatTimeLeft(matchingTimeLeft)}
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success/15">
-              <motion.span
-                className="w-1.5 h-1.5 rounded-full bg-success"
-                animate={{ opacity: [1, 0.3, 1] }}
-                transition={{ duration: 1.4, repeat: Infinity }}
-              />
-              <span className="text-[11px] font-semibold text-success">LIVE</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Status timeline — collapsible card, closed by default. The header
-            chevron toggles the full buyer journey. */}
-        <motion.div
-          initial={{ y: 12, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.05 }}
-          className={`rounded-2xl overflow-hidden ${CARD}`}
-        >
-          <button
-            type="button"
-            onClick={() => setShowTimeline((o) => !o)}
-            aria-expanded={showTimeline}
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
-          >
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-text-primary">Order progress</p>
-              <p className="text-[13px] text-text-tertiary truncate">
-                {TIMELINE[ACTIVE_STEP_INDEX].label} · In progress
-              </p>
-            </div>
-            <ChevronDown
-              className={`w-5 h-5 text-text-tertiary shrink-0 transition-transform ${showTimeline ? "rotate-180" : ""}`}
-            />
-          </button>
-          <AnimatePresence initial={false}>
-            {showTimeline && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: "easeInOut" }}
-                className="overflow-hidden"
-              >
-                <div className="px-4 pb-4 pt-1">
-          {TIMELINE.map((step, i) => {
-            const state: StepState =
-              i < ACTIVE_STEP_INDEX ? "done" : i === ACTIVE_STEP_INDEX ? "active" : "upcoming";
-            const isLast = i === TIMELINE.length - 1;
-            return (
-              <div key={step.label} className="flex gap-3">
-                {/* Left rail: dot + connector */}
-                <div className="flex flex-col items-center">
-                  <StepDot state={state} />
-                  {!isLast && (
-                    <div
-                      className={`w-0.5 flex-1 min-h-[18px] ${
-                        state === "done" ? "bg-accent" : "bg-border-medium"
-                      }`}
-                    />
-                  )}
-                </div>
-                {/* Content */}
-                <div className={`flex-1 flex items-start justify-between gap-2 ${isLast ? "" : "pb-4"}`}>
-                  <div className="min-w-0">
-                    <p
-                      className={`text-[15px] font-medium ${
-                        state === "upcoming" ? "text-text-tertiary" : "text-text-primary"
-                      }`}
-                    >
-                      {step.label}
-                    </p>
-                    {step.sub && state === "active" && (
-                      <p className="text-[13px] text-text-tertiary leading-snug">{step.sub}</p>
-                    )}
-                  </div>
-                  {state === "done" && i === 0 && (
-                    <span className="text-[13px] text-text-tertiary shrink-0">{createdTime}</span>
-                  )}
-                  {state === "active" && (
-                    <span className="text-[13px] font-medium text-accent shrink-0">In progress</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        {/* Order Overview — opens the full order detail view */}
-        <motion.div
-          initial={{ y: 12, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className={`rounded-2xl overflow-hidden ${CARD}`}
-        >
-          <button
-            onClick={() => setShowOverview(true)}
-            className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover"
-          >
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
-              <FileText className="w-5 h-5 text-accent" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-medium text-text-primary">Order Overview</p>
-              <p className="text-[13px] text-text-tertiary">View order details</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" />
-          </button>
-        </motion.div>
-
-        {/* Summary tiles */}
-        <motion.div
-          initial={{ y: 12, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.15 }}
-          className="grid grid-cols-3 gap-2"
-        >
-          <SummaryTile icon={<Wallet className="w-4 h-4" />} label="You pay" value={`${fiatSymbol}${formatFiat(pendingTradeData.fiatAmount)}`} />
-          <SummaryTile icon={<ArrowDownToLine className="w-4 h-4" />} label="You get" value={`${formatCrypto(pendingTradeData.amount)}`} sub="USDT" />
-          <SummaryTile icon={<Landmark className="w-4 h-4" />} label="Method" value={pendingTradeData.paymentMethod === "bank" ? "Bank" : "Cash"} />
-        </motion.div>
-
-        {/* Order tip */}
-        <div className="rounded-2xl p-4 flex gap-3 bg-warning-dim border border-warning-border">
-          <Lightbulb className="w-5 h-5 text-warning shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <p className="text-[14px] font-semibold text-text-primary mb-0.5">Order tip</p>
-            <p className="text-[13px] text-text-secondary leading-snug">
-              A verified merchant will be assigned automatically. You&apos;ll receive an instant
-              notification once a merchant accepts your order.
-            </p>
-          </div>
-        </div>
-
-        {/* Cancel */}
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={handleCancel}
-          className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border"
-        >
-          Cancel Order
-        </motion.button>
-
-        {/* Dev convenience — simulate a merchant accepting (kept from prior flow). */}
-        {activeOrderId && (
-          <button
-            onClick={() => {
-              setOrders((prev: any[]) => prev.map((o: any) =>
-                o.id === activeOrderId ? { ...o, status: "payment" as OrderStatus, step: 2 as OrderStep } : o
-              ));
-              setPendingTradeData(null);
-              setScreen("order");
-            }}
-            className="w-full py-2 text-[12px] font-medium text-text-tertiary"
-          >
-            Demo: simulate merchant accept
-          </button>
-        )}
-      </div>
-      </div>
+      <WaitingTracker
+        title={`${typeLabel} ${cryptoStr} USDT`}
+        orderRef={`Order #${displayId}`}
+        onBack={() => setScreen("home")}
+        onOpenSupport={() => setScreen("support")}
+        banner={banner}
+        countdown={{ remainingSec: Math.max(0, matchingTimeLeft), totalSec: MATCHING_WINDOW_SECONDS }}
+        // Buyer hasn't escrowed anything yet — no escrow card on the buy flow.
+        escrow={isBuy ? null : {
+          sub: `Your ${cryptoStr} USDT is locked securely in escrow. You'll be notified once a merchant is matched.`,
+          txHref: null,
+        }}
+        activeStepIndex={1}
+        createdTime={createdTime}
+        progressSubtitle="Matching merchant · In progress"
+        tiles={tiles}
+        onOpenOverview={() => setShowOverview(true)}
+        onCancel={handleCancel}
+        isCancelling={isCancelling}
+      />
 
       {/* Itemised order overview — slides in over the matching screen */}
       <AnimatePresence>
@@ -397,44 +186,3 @@ export const MatchingScreen = ({
     </div>
   );
 };
-
-function StepDot({ state }: { state: StepState }) {
-  if (state === "done") {
-    return (
-      <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center shrink-0">
-        <Check className="w-3.5 h-3.5 text-accent-text" strokeWidth={3} />
-      </div>
-    );
-  }
-  if (state === "active") {
-    return (
-      <motion.div
-        className="w-6 h-6 rounded-full bg-accent shrink-0"
-        animate={{ scale: [1, 1.15, 1], opacity: [1, 0.8, 1] }}
-        transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-      />
-    );
-  }
-  return <div className="w-6 h-6 rounded-full border-2 border-border-medium bg-transparent shrink-0" />;
-}
-
-function SummaryTile({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className={`rounded-xl p-2.5 text-center ${CARD}`}>
-      <div className="flex items-center justify-center text-text-tertiary mb-1">{icon}</div>
-      <p className="text-[10px] uppercase tracking-wide text-text-tertiary mb-0.5">{label}</p>
-      <p className="text-[13px] font-semibold text-text-primary leading-tight truncate">{value}</p>
-      {sub && <p className="text-[10px] text-text-tertiary leading-tight">{sub}</p>}
-    </div>
-  );
-}

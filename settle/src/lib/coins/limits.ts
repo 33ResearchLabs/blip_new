@@ -45,6 +45,20 @@ import { computeLimitReduction } from '@/lib/trust/reductions';
 const TRUST_LIMITS_ENABLED = process.env.TRUST_LIMITS_ENABLED === 'true';
 
 /**
+ * Testnet / development bypass for the trade-limit guard. On Solana devnet
+ * ("testnet") or in mock mode, the per-trade/daily caps block routine local
+ * testing (a fresh or 'risky' account is capped at only a few dollars/trade),
+ * so checkTradeAgainstLimits short-circuits to "allowed" — while STILL returning
+ * the computed limits so the UI is unaffected. Hard-gated to non-production:
+ * production runs on mainnet with mock off AND NODE_ENV=production, so all three
+ * conditions make this false there and the real guard runs unchanged.
+ */
+const SKIP_TRADE_LIMITS =
+  process.env.NODE_ENV !== 'production' &&
+  (process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet' ||
+    process.env.NEXT_PUBLIC_MOCK_MODE === 'true');
+
+/**
  * Two KYC states only (full KYC not available yet):
  *   0 = no KYC  — phone number not verified
  *   1 = light   — phone/email verified (all we check for now)
@@ -609,6 +623,12 @@ export async function checkTradeAgainstLimits(args: {
   trailing24hUsd: number;
 }> {
   const limits = await getEffectiveLimits(args.actorId, args.actorType);
+
+  // Testnet/dev (devnet or mock mode): never block trades on limits — return the
+  // computed limits for display but allow the trade. No-op in production.
+  if (SKIP_TRADE_LIMITS) {
+    return { allowed: true, limits, trailing24hUsd: 0 };
+  }
 
   if (args.fiatAmountUsd > limits.perTradeUsd) {
     return {

@@ -68,8 +68,19 @@ export function DesktopRightPanel({
       {hasActiveOrder && (
         <section style={{ marginBottom: 20 }}>
           <div style={sectionLabel}>Active Order</div>
-          <button
+          {/* Card is a div (not a button) because it contains a nested Chat
+              button — a <button> cannot legally contain another <button>. */}
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => { setActiveOrderId(activeOrder.id); setScreen("order"); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setActiveOrderId(activeOrder.id);
+                setScreen("order");
+              }
+            }}
             style={orderCard}
           >
             {/* Type icon + status */}
@@ -122,7 +133,7 @@ export function DesktopRightPanel({
                 Chat
               </button>
             </div>
-          </button>
+          </div>
         </section>
       )}
 
@@ -281,6 +292,7 @@ const sectionLabel: React.CSSProperties = {
 
 const orderCard: React.CSSProperties = {
   width: "100%",
+  boxSizing: "border-box",
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
   borderRadius: 12,
