@@ -185,7 +185,14 @@ function OrderCardTimer({
     e.stopPropagation();
     onOpenProfile(cpEntityType, cpEntityId);
   };
-  const isVerified = (order.dbOrder as any)?.user?.is_verified ?? false;
+  // For the merchant's OWN broadcast there is no counterparty yet, so any
+  // "counterparty" identity/stats (verified shield, rating, trades, completion)
+  // are placeholder/self data — suppress them so own cards don't imply a trader
+  // on the other side. The order's own attributes (name, payment method,
+  // countdown, "yours" badge) still render.
+  const isVerified = isMine
+    ? false
+    : ((order.dbOrder as any)?.user?.is_verified ?? false);
   const initials = displayName
     .split(" ")
     .map((w: string) => w[0])
@@ -194,16 +201,20 @@ function OrderCardTimer({
     .join("")
     .toUpperCase();
 
-  // Stats
-  const rating =
-    (order.dbOrder as any)?.user?.rating ??
-    (order.dbOrder as any)?.merchant?.rating ??
-    null;
-  const totalTrades =
-    (order.dbOrder as any)?.user?.total_trades ??
-    (order.dbOrder as any)?.merchant?.total_trades ??
-    null;
-  const completionRate = (order.dbOrder as any)?.user?.completion_rate ?? null;
+  // Stats — null on own orders (no counterparty yet; see isVerified note above).
+  const rating = isMine
+    ? null
+    : ((order.dbOrder as any)?.user?.rating ??
+      (order.dbOrder as any)?.merchant?.rating ??
+      null);
+  const totalTrades = isMine
+    ? null
+    : ((order.dbOrder as any)?.user?.total_trades ??
+      (order.dbOrder as any)?.merchant?.total_trades ??
+      null);
+  const completionRate = isMine
+    ? null
+    : ((order.dbOrder as any)?.user?.completion_rate ?? null);
 
   // Payment method
   const pmType =
@@ -377,18 +388,15 @@ function OrderCardTimer({
           </div>
         )}
 
-        {/* ── TRUST BLOCK / HEADER ── (tap avatar, name or the header row to
-            open the counterparty profile — the order detail popup now lives on
-            the payout body below, so the two tap zones don't collide). */}
+        {/* ── TRUST BLOCK / HEADER ── Only the avatar and the name/text column
+            open the counterparty profile — NOT the whole row. The order detail
+            popup lives on the payout body below. */}
         <div
-          onClick={handleOpenProfile}
-          role={cpEntityId && onOpenProfile ? "button" : undefined}
           style={{
             display: "flex",
             alignItems: "center",
             gap: 10,
             marginBottom: 10,
-            cursor: cpEntityId && onOpenProfile ? "pointer" : undefined,
           }}
         >
           {/* 36px gradient avatar with initials — tap opens counterparty profile */}

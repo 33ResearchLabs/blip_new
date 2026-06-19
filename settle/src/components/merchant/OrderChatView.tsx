@@ -85,6 +85,11 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
   // Track order status to gate chat input on terminal statuses
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [orderLabel, setOrderLabel] = useState<string | null>(null);
+  // The viewing merchant's authoritative role for this order (buyer/seller).
+  // Resolved server-side via resolveTradeRole and returned as `my_role` — the
+  // header badge is driven by this so it reflects WHO is viewing (incl. M2M),
+  // not the order's type.
+  const [viewerRole, setViewerRole] = useState<'buyer' | 'seller' | null>(null);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -95,6 +100,9 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
         const order = data?.data || data;
         if (!cancelled) {
           setOrderStatus(order?.status || null);
+          if (order?.my_role === 'buyer' || order?.my_role === 'seller') {
+            setViewerRole(order.my_role);
+          }
           if (order?.fiat_amount && order?.fiat_currency) {
             const symbol = order.fiat_currency === 'INR' ? '₹' : order.fiat_currency === 'AED' ? 'د.إ' : order.fiat_currency;
             const amount = Number(order.fiat_amount).toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -119,9 +127,14 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
     : null;
   const chatWindow = chatWindows.find(w => w.orderId === orderId);
 
-  const TypeIcon = orderType === 'buy' ? ArrowDownLeft : ArrowUpRight;
-  const typeLabel = orderType === 'buy' ? 'BUY' : 'SELL';
-  const typeColor = orderType === 'buy' ? 'text-[#f5f5f7] bg-white/[0.06] border-white/[0.09]' : 'text-orange-400 bg-orange-500/15 border-orange-500/20';
+  // Badge reflects the VIEWER's role, not the order's type. The merchant here
+  // is the seller on a buy order and the buyer on a sell order (and either role
+  // in M2M) — `my_role` is authoritative; fall back to the orderType mapping
+  // (buy → seller, sell → buyer) until the order fetch resolves it.
+  const viewerIsSeller = (viewerRole ?? (orderType === 'sell' ? 'buyer' : 'seller')) === 'seller';
+  const TypeIcon = viewerIsSeller ? ArrowUpRight : ArrowDownLeft;
+  const typeLabel = viewerIsSeller ? 'SELL' : 'BUY';
+  const typeColor = viewerIsSeller ? 'text-orange-400 bg-orange-500/15 border-orange-500/20' : 'text-[#f5f5f7] bg-white/[0.06] border-white/[0.09]';
 
   // Counterparty presence for the header. In U2M the counterparty is the
   // user; in M2M it's the other merchant — so match "anyone online who isn't

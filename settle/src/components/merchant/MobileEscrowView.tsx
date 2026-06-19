@@ -35,8 +35,12 @@ function getViewerSide(db: any, order: any, myId: string | null | undefined): "s
   if (myId && db.buyer_merchant_id === myId) return "buyer";
   if (db.merchant_id && !db.buyer_merchant_id) return "buyer";
   if (!db.merchant_id && db.buyer_merchant_id) return "seller";
+  // Deepest fallback (both slots null, no resolved role) — for an M2M
+  // placeholder the open slot is the buyer when type='buy' (the placer is the
+  // buyer), matching the other two getViewerSide copies. Previously returned
+  // "seller" here, diverging from MobileOrdersView / PendingOrdersPanel.
   const orderType = String(db.type || "").toLowerCase();
-  return orderType === "buy" ? "seller" : "buyer";
+  return orderType === "buy" ? "buyer" : "seller";
 }
 
 // ── Stage index ───────────────────────────────────────────────────────────────
@@ -194,15 +198,21 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
 
       {/* Header / trust block — tap avatar, name or the row to open the
           counterparty profile (the order detail moved to the payout body). */}
+      {/* Header — only the avatar and the name/text column open the counterparty
+          profile (NOT the whole row). */}
       <div
-        onClick={handleOpenProfile}
-        role={cpEntityId && onOpenProfile ? "button" : undefined}
-        style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10, cursor: cpEntityId && onOpenProfile ? "pointer" : undefined }}
+        style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}
       >
-        <span style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: "linear-gradient(150deg,#ff8a3d,#ff5d73)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13 }}>
+        <span
+          onClick={handleOpenProfile}
+          style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0, cursor: cpEntityId && onOpenProfile ? "pointer" : undefined, background: "linear-gradient(150deg,#ff8a3d,#ff5d73)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13 }}
+        >
           {initials}
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          onClick={handleOpenProfile}
+          style={{ flex: 1, minWidth: 0, cursor: cpEntityId && onOpenProfile ? "pointer" : undefined }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <b style={{ fontSize: 13.5, whiteSpace: "nowrap", color: T.text }}>{displayName}</b>
           </div>
@@ -248,19 +258,27 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
           <div style={{ color: T.muted, fontWeight: 700, fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
             {viewerSide === "seller" ? "You receive" : "You pay out"}
           </div>
+          {/* Primary (big) is always FIAT — the seller RECEIVES fiat and the
+              buyer PAYS OUT fiat (both correctly paired with the label above).
+              The seller gives / buyer gets the USDT, shown as the secondary
+              figure on the right. (Previously the seller hero paired "You
+              receive" with the USDT amount — inverted.) */}
           <div style={{ display: "flex", alignItems: "flex-end", gap: 7 }}>
             <span style={{ fontSize: 25, fontWeight: 800, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", color: T.text }}>
-              {viewerSide === "seller" ? cryptoAmt : fiatAmt}
+              {fiatAmt}
             </span>
             <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, marginBottom: 2 }}>
-              {viewerSide === "seller" ? cryptoCur : fiatCur}
+              {fiatCur}
             </span>
           </div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ color: T.muted, fontWeight: 700, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 1 }}>
+            {viewerSide === "seller" ? "You give" : "You get"}
+          </div>
           <div style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: T.text }}>
-            {viewerSide === "seller" ? fiatAmt : cryptoAmt}{" "}
-            <span style={{ fontSize: 10.5, color: T.muted }}>{viewerSide === "seller" ? fiatCur : cryptoCur}</span>
+            {cryptoAmt}{" "}
+            <span style={{ fontSize: 10.5, color: T.muted }}>{cryptoCur}</span>
           </div>
           <div style={{ color: T.muted, fontSize: 11, fontWeight: 600, marginTop: 1, whiteSpace: "nowrap" }}>
             @ <span style={{ color: T.text }}>{formatRate(order.rate)}</span>

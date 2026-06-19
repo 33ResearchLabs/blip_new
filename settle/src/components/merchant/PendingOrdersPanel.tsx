@@ -841,14 +841,31 @@ const OrderList = memo(function OrderList({
                                 <InfoTooltip
                                   side="bottom"
                                   title={tooltipTitle}
-                                  description="Counterparty stats."
-                                  sections={[
-                                    { items: tooltipItems },
-                                    {
-                                      heading: "Order details",
-                                      items: orderDetailItems,
-                                    },
-                                  ]}
+                                  // Own broadcasts have no counterparty yet, so
+                                  // the Rating/Trades/Trust rows would be empty
+                                  // placeholder data — drop that section and keep
+                                  // only the order details for my own orders.
+                                  description={
+                                    isMyOwnOrder
+                                      ? "Your order — waiting for a counterparty."
+                                      : "Counterparty stats."
+                                  }
+                                  sections={
+                                    isMyOwnOrder
+                                      ? [
+                                          {
+                                            heading: "Order details",
+                                            items: orderDetailItems,
+                                          },
+                                        ]
+                                      : [
+                                          { items: tooltipItems },
+                                          {
+                                            heading: "Order details",
+                                            items: orderDetailItems,
+                                          },
+                                        ]
+                                  }
                                 />
                               </div>
                               <div className="flex items-center gap-1 mt-0.5">

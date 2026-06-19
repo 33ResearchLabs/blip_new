@@ -104,7 +104,7 @@ export function CounterpartyProfile({
         <div className="w-9 h-9" />
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-4 space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-5 pb-4 space-y-3">
         {/* Identity */}
         <div className="flex items-start gap-4 pt-1">
           <div className="relative shrink-0">

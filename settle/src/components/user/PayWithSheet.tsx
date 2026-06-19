@@ -141,9 +141,18 @@ export function PayWithSheet({
   };
 
   const confirm = () => {
+    // Emit categories in the order the buyer tapped them (selected is a Set,
+    // which preserves insertion order) — not the fixed METHODS list order. The
+    // first rail the buyer picks becomes buyer_payment_types[0], which the
+    // merchant shows as the "Preferred Method". Dedupe keeps first occurrence.
+    const catByKey = new Map(METHODS.map((m) => [m.key, m.cat]));
     const cats = Array.from(
-      new Set(METHODS.filter((m) => selected.has(m.key)).map((m) => m.cat)),
-    ) as Category[];
+      new Set(
+        Array.from(selected)
+          .map((key) => catByKey.get(key))
+          .filter((c): c is Category => c !== undefined),
+      ),
+    );
     onConfirm(cats);
   };
 

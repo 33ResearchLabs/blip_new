@@ -327,6 +327,20 @@ export default function MerchantDashboard() {
     router.replace(`/market/login${qs ? `?${qs}` : ""}`);
   }, [isLoading, isLoggedIn, searchParams, router]);
 
+  // Reopen an order's full-screen detail when returning via `/market?order=<id>`
+  // — e.g. the merchant tapped Help on an active order, landed on the support
+  // screen, then pressed back. Waits for the store `orders` to load, reopens the
+  // same order, then strips the param so it doesn't re-fire on later navigation.
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const reopenId = searchParams.get("order");
+    if (!reopenId) return;
+    const target = orders.find((o) => o.id === reopenId);
+    if (!target) return; // orders not loaded yet — re-runs when `orders` changes
+    handleMobileSelectOrder(target);
+    router.replace("/market");
+  }, [isLoggedIn, searchParams, orders, handleMobileSelectOrder, router]);
+
   // Session guard while the embedded wallet is locked (merchant twin of the
   // user-app guard in src/app/user/page.tsx).
   //
@@ -984,12 +998,14 @@ export default function MerchantDashboard() {
         data-testid="merchant-dashboard"
         className="h-screen bg-background text-white flex flex-col overflow-hidden"
       >
-        {/* Offset clears the sticky MerchantNavbar (up to 68px on per-tab mobile
-          screens / h-[50px] desktop) so warning toasts don't overlap the
-          bug-icon and avatar dropdown. */}
+        {/* Offset clears the sticky MerchantNavbar AND the per-tab filter row
+          below it on mobile (navbar ~68px + status-filter pills ~50px), so the
+          warning toast floats over the list instead of colliding with the
+          interactive tabs / first order card. Desktop keeps the tighter offset
+          since its filters live in a side panel, not under the navbar. */}
         <NotificationToastContainer
           position="top-right"
-          topOffsetClass="top-[76px] lg:top-[58px]"
+          topOffsetClass="top-[124px] lg:top-[58px]"
         />
         {tour.enabled && (
           <MerchantTour run={tour.isRunning} onComplete={tour.completeTour} />

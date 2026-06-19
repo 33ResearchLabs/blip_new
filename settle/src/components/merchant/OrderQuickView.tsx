@@ -988,11 +988,21 @@ function AcceptorBuyOrderBody({
             <span className="text-sm font-semibold text-foreground/60">
               USDT
             </span>
+            {/* Accepting a BUY order makes the merchant the SELLER: they lock/
+                give USDT and receive the fiat. */}
+            <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-foreground/35">
+              You pay
+            </span>
           </div>
-          <div className="text-lg font-bold text-foreground">
-            {sym} {total.toLocaleString()}{" "}
-            <span className="text-xs font-medium text-foreground/40">
-              {ccy}
+          <div className="flex items-baseline gap-2 text-lg font-bold text-foreground">
+            <span>
+              {sym} {total.toLocaleString()}{" "}
+              <span className="text-xs font-medium text-foreground/40">
+                {ccy}
+              </span>
+            </span>
+            <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-foreground/35">
+              You get
             </span>
           </div>
           <div className="pt-2 border-t border-foreground/[0.04] space-y-1.5 text-[12px]">
@@ -1206,10 +1216,20 @@ function AcceptorSellOrderBody({
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-bold text-foreground">{order.amount}</span>
             <span className="text-sm font-semibold text-foreground/60">USDT</span>
+            {/* Claiming a SELL order makes the merchant the BUYER: they pay fiat
+                and receive the USDT. */}
+            <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-foreground/35">
+              You get
+            </span>
           </div>
-          <div className="text-lg font-bold text-foreground">
-            {sym} {total.toLocaleString()}{" "}
-            <span className="text-xs font-medium text-foreground/40">{ccy}</span>
+          <div className="flex items-baseline gap-2 text-lg font-bold text-foreground">
+            <span>
+              {sym} {total.toLocaleString()}{" "}
+              <span className="text-xs font-medium text-foreground/40">{ccy}</span>
+            </span>
+            <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-foreground/35">
+              You pay
+            </span>
           </div>
           <div className="pt-2 border-t border-foreground/[0.04] space-y-1.5 text-[12px]">
             <div className="flex justify-between gap-2">
@@ -1338,6 +1358,9 @@ function ActiveOrderBody({
 }) {
   const router = useRouter();
   const merchantId = useMerchantStore((s) => s.merchantId);
+  // Merchant's own identity — used to label the "You" side of the completed
+  // order's Trade Parties card (seller/buyer breakdown).
+  const merchantInfo = useMerchantStore((s) => s.merchantInfo);
   // Counterparty profile opener (provided by the root OrderQuickView) + the
   // resolved target for THIS order's "View Profile" button.
   const openProfile = useContext(ProfileOpenContext);
@@ -1608,6 +1631,49 @@ function ActiveOrderBody({
     </div>
   );
 
+  // Important + What-happens-next guidance cards, extracted so they can be
+  // rendered either in the normal spots (buyer / full-width) or parked in the
+  // right column for the seller's escrowed/verify stages — where the right
+  // column would otherwise sit empty beside the taller left column.
+  const importantCard = (
+    <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-3 flex items-start gap-2.5">
+      <AlertTriangle className="w-4 h-4 text-foreground/60 mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-foreground">Important</p>
+        <p className="text-xs text-foreground/50 mt-0.5">
+          {isSeller
+            ? "Do not release USDT until you have received the payment in your account."
+            : status === "payment_sent"
+            ? "Payment marked as sent. Your USDT is released automatically once the seller confirms it — no further action needed."
+            : `Only mark as paid after you've actually sent the ${ccy}.`}
+        </p>
+      </div>
+    </div>
+  );
+
+  const whatHappensNextCard = (
+    <div className="rounded-xl border border-foreground/[0.04] bg-foreground/[0.02] p-4">
+      <p className="text-[10px] uppercase font-bold text-foreground/35 tracking-wide">
+        What happens next?
+      </p>
+      <p className="text-xs text-foreground/50 mt-1 leading-relaxed">
+        {isSeller
+          ? status === "accepted"
+            ? `Once you lock escrow, the buyer gets your payment details and sends you ${ccy}.`
+            : status === "escrowed"
+            ? "Once the buyer pays, you verify and release the USDT from escrow."
+            : `Confirm the ${ccy} has arrived, then release the USDT to complete the trade.`
+          : status === "escrowed"
+          ? `Send the ${ccy}, mark it as paid, and the seller releases your USDT.`
+          : "The seller releases your USDT once your payment is confirmed."}
+      </p>
+    </div>
+  );
+
+  // Seller's escrowed/verify stages (everything except the lock stage): park
+  // the guidance cards in the right column so it isn't left mostly empty.
+  const guidanceInRight = isSeller && !needsLock;
+
   // Relative "created … ago" for the full-screen summary (mock: "2 min ago").
   const createdAgo = (() => {
     if (!db.created_at) return "";
@@ -1650,13 +1716,33 @@ function ActiveOrderBody({
       ? "You have confirmed the payment. The crypto has been released to the buyer."
       : "The seller confirmed your payment and released the crypto to you.";
     const cpName = (order.user as string) || (cp.name as string) || "Trader";
-    const initials =
-      cpName
-        .split(/\s+/)
-        .map((w: string) => w[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase() || "U";
+    // My own display name for the "You" row of the Trade Parties card.
+    const meName =
+      merchantInfo?.username ||
+      merchantInfo?.display_name ||
+      merchantInfo?.business_name ||
+      "You";
+    const meSeed =
+      merchantInfo?.username || merchantInfo?.display_name || merchantId || "merchant";
+    // Seller always funds escrow, buyer always pays fiat. Order the card
+    // Seller-first so it reads top-to-bottom in trade order. `isYou` flags the
+    // merchant's side; the counterparty side carries trust stats + View Profile.
+    const parties: {
+      role: "Seller" | "Buyer";
+      name: string;
+      seed: string;
+      src?: string | null;
+      isYou: boolean;
+    }[] = [
+      isSeller
+        ? { role: "Seller", name: meName, seed: meSeed, isYou: true }
+        : { role: "Seller", name: cpName, seed: cpName, src: order.user_avatar, isYou: false },
+      isSeller
+        ? { role: "Buyer", name: cpName, seed: cpName, src: order.user_avatar, isYou: false }
+        : { role: "Buyer", name: meName, seed: meSeed, isYou: true },
+    ];
+    const cpHasStats =
+      (ratingNum != null && ratingNum > 0) || trades > 0 || successRate != null;
 
     const submitRating = async () => {
       if (ratingBusy || ratingDone || rating < 1 || !merchantId) return;
@@ -1772,64 +1858,83 @@ function ActiveOrderBody({
           </div>
         </div>
 
-        {/* Counterparty */}
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 flex items-center gap-3">
-          <div className="relative shrink-0">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
-              {initials}
+        {/* Trade Parties — seller (funded escrow) + buyer (paid fiat). Both
+            sides are labeled so the completed record is self-explanatory; the
+            counterparty row keeps trust stats + View Profile, my row gets a
+            "You" badge. */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.06]">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+              <Users className="w-4 h-4 text-emerald-400" />
             </div>
-            {online && (
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#0e0e10]" />
-            )}
+            <p className="text-[15px] font-semibold text-foreground">
+              Trade Parties
+            </p>
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-[15px] font-semibold text-foreground truncate">
-                {cpName}
-              </p>
-              {verified && (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          {parties.map((p) => (
+            <div key={p.role} className="p-4 flex items-center gap-3">
+              <div className="relative shrink-0">
+                <UserAvatar seed={p.seed} src={p.src} size={44} />
+                {!p.isYou && online && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#0e0e10]" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground/40">
+                    {p.role}
+                  </span>
+                  {p.isYou && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                      YOU
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="text-[15px] font-semibold text-foreground truncate">
+                    {p.name}
+                  </p>
+                  {!p.isYou && verified && (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  )}
+                </div>
+                {!p.isYou && cpHasStats && (
+                  <div className="flex items-center gap-1 text-[12px] text-foreground/55 mt-0.5">
+                    {ratingNum != null && ratingNum > 0 && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                        {formatCrypto(ratingNum, { decimals: 1 })}
+                      </span>
+                    )}
+                    {trades > 0 && <span>({formatCount(trades)} trades)</span>}
+                    {successRate != null && (
+                      <span>· {successRate}% completion</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              {!p.isYou && activeCounterparty && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    openProfile(
+                      activeCounterparty.entityType,
+                      activeCounterparty.id,
+                    )
+                  }
+                  className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[13px] font-semibold bg-foreground/[0.06] text-foreground border border-white/[0.08] hover:bg-foreground/[0.1] transition-colors"
+                >
+                  View Profile
+                  <ChevronRight className="w-4 h-4 text-foreground/40" />
+                </button>
               )}
             </div>
-            <div className="flex items-center gap-1 text-[12px] text-foreground/55 mt-0.5">
-              {ratingNum != null && ratingNum > 0 && (
-                <span className="inline-flex items-center gap-0.5">
-                  <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                  {formatCrypto(ratingNum, { decimals: 1 })}
-                </span>
-              )}
-              {trades > 0 && <span>({formatCount(trades)} trades)</span>}
-              {successRate != null && <span>· {successRate}% completion</span>}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1.5">
-              {verified && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/15">
-                  <ShieldCheck className="w-3 h-3" /> Verified
-                </span>
-              )}
-              {online && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-foreground/[0.06] text-foreground/55">
-                  <MessageCircle className="w-3 h-3" /> Online now
-                </span>
-              )}
-            </div>
-          </div>
-          {activeCounterparty && (
-            <button
-              type="button"
-              onClick={() =>
-                openProfile(
-                  activeCounterparty.entityType,
-                  activeCounterparty.id,
-                )
-              }
-              className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[13px] font-semibold bg-foreground/[0.06] text-foreground border border-white/[0.08] hover:bg-foreground/[0.1] transition-colors"
-            >
-              View Profile
-              <ChevronRight className="w-4 h-4 text-foreground/40" />
-            </button>
-          )}
+          ))}
         </div>
+
+        {/* On-chain escrow proof — Tx ID, escrow/trade accounts, trade id with
+            explorer links. Renders nothing when no escrow tx exists. */}
+        <EscrowInfoCard order={order} />
 
         {/* Rating */}
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
@@ -2117,19 +2222,6 @@ function ActiveOrderBody({
                 <p className="text-[12px] text-foreground/70">~ 10 min</p>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Verify guidance */}
-        <div className="rounded-2xl border border-blue-500/15 bg-blue-500/[0.05] p-4 flex items-start gap-3">
-          <div className="w-9 h-9 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-            <Hourglass className="w-4 h-4 text-blue-300" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-blue-300">Waiting for buyer to pay you</p>
-            <p className="text-[12px] text-foreground/55 mt-0.5 leading-snug">
-              The buyer has been notified to make the payment. Please wait until you receive the payment in your account.
-            </p>
           </div>
         </div>
 
@@ -2605,11 +2697,20 @@ function ActiveOrderBody({
                 USDT
               </span>
               <Coins className="w-4 h-4 text-emerald-400/70" />
+              {/* Seller gives USDT / receives fiat; buyer gets USDT / pays fiat. */}
+              <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-foreground/35">
+                {isSeller ? "You pay" : "You get"}
+              </span>
             </div>
-            <div className="text-lg font-bold text-foreground">
-              {sym} {total.toLocaleString()}{" "}
-              <span className="text-xs font-medium text-foreground/40">
-                {ccy}
+            <div className="flex items-baseline gap-2 text-lg font-bold text-foreground">
+              <span>
+                {sym} {total.toLocaleString()}{" "}
+                <span className="text-xs font-medium text-foreground/40">
+                  {ccy}
+                </span>
+              </span>
+              <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-foreground/35">
+                {isSeller ? "You get" : "You pay"}
               </span>
             </div>
             <div className="pt-2 border-t border-foreground/[0.04] space-y-1.5 text-[12px]">
@@ -2732,22 +2833,9 @@ function ActiveOrderBody({
             })()}
 
           {/* Important warning — at the lock stage the richer bulleted card on
-              the right replaces this, so only show it for other stages. */}
-          {!needsLock && (
-            <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-3 flex items-start gap-2.5">
-              <AlertTriangle className="w-4 h-4 text-foreground/60 mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-foreground">Important</p>
-                <p className="text-xs text-foreground/50 mt-0.5">
-                  {isSeller
-                    ? "Do not release USDT until you have received the payment in your account."
-                    : status === "payment_sent"
-                    ? "Payment marked as sent. Your USDT is released automatically once the seller confirms it — no further action needed."
-                    : `Only mark as paid after you've actually sent the ${ccy}.`}
-                </p>
-              </div>
-            </div>
-          )}
+              the right replaces this. For the seller's escrowed/verify stages it
+              moves to the right column (guidanceInRight); the buyer keeps it here. */}
+          {!needsLock && !guidanceInRight && importantCard}
         </div>
 
         {/* Right column */}
@@ -2759,6 +2847,11 @@ function ActiveOrderBody({
           {/* On-chain escrow proof — buyer side (paying a sell order): show the
               seller's USDT is genuinely locked while you pay / wait for release. */}
           {!isSeller && !needsLock && <EscrowInfoCard order={order} />}
+
+          {/* Seller's escrowed/verify stages: guidance cards live here so the
+              right column isn't left empty beside the taller left column. */}
+          {guidanceInRight && importantCard}
+          {guidanceInRight && whatHappensNextCard}
 
           {/* Lock-stage right-side cards — mirror the Lock Escrow modal */}
           {needsLock && (
@@ -2866,26 +2959,9 @@ function ActiveOrderBody({
         </div>
       )}
 
-      {/* What happens next — at the lock stage the numbered card on the right
-          replaces this; keep the short summary for all other stages. */}
-      {!needsLock && (
-        <div className="rounded-xl border border-foreground/[0.04] bg-foreground/[0.02] p-4">
-          <p className="text-[10px] uppercase font-bold text-foreground/35 tracking-wide">
-            What happens next?
-          </p>
-          <p className="text-xs text-foreground/50 mt-1 leading-relaxed">
-            {isSeller
-              ? status === "accepted"
-                ? `Once you lock escrow, the buyer gets your payment details and sends you ${ccy}.`
-                : status === "escrowed"
-                ? "Once the buyer pays, you verify and release the USDT from escrow."
-                : `Confirm the ${ccy} has arrived, then release the USDT to complete the trade.`
-              : status === "escrowed"
-              ? `Send the ${ccy}, mark it as paid, and the seller releases your USDT.`
-              : "The seller releases your USDT once your payment is confirmed."}
-          </p>
-        </div>
-      )}
+      {/* What happens next — full width for the buyer; the seller's copy lives
+          in the right column (guidanceInRight). The lock stage has its own. */}
+      {!needsLock && !guidanceInRight && whatHappensNextCard}
     </>
   );
 }
@@ -3173,8 +3249,16 @@ export function OrderQuickView({
                 {qvStatus === "completed" ? (
                   <button
                     onClick={() => {
+                      // Carry the order id so "back" from the support screen
+                      // reopens this exact order (see /market reopen effect)
+                      // instead of dropping the merchant on the settings list.
+                      const returnOrderId = isFull ? selectedOrder?.id : null;
                       onClose();
-                      router.push("/market/settings?tab=support");
+                      router.push(
+                        returnOrderId
+                          ? `/market/settings?tab=support&returnOrder=${returnOrderId}`
+                          : "/market/settings?tab=support",
+                      );
                     }}
                     className="flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-foreground/5 border border-foreground/[0.06] text-foreground/70 hover:text-foreground transition-colors shrink-0"
                   >
@@ -4062,8 +4146,15 @@ export function OrderQuickView({
                                   // in-memory merchant auth store survives — a hard
                                   // reload bounces to /market/login before the async
                                   // /api/auth/me restore repopulates the store.
+                                  // Carry the order id so "back" from support reopens
+                                  // this exact order instead of the settings list.
+                                  const returnOrderId = isFull ? selectedOrder?.id : null;
                                   onClose();
-                                  router.push("/market/settings?tab=support");
+                                  router.push(
+                                    returnOrderId
+                                      ? `/market/settings?tab=support&returnOrder=${returnOrderId}`
+                                      : "/market/settings?tab=support",
+                                  );
                                 }}
                                 className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
                               >
