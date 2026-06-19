@@ -3741,7 +3741,7 @@ export const OrderDetailScreen = ({
                               </span>
                             )}
                           <div
-                            className={`px-4 py-2 rounded-2xl ${
+                            className={`px-4 py-2 rounded-2xl break-words ${
                               msg.from === "me"
                                 ? "bg-accent text-accent-text text-[15px]"
                                 : msg.from === "system"
@@ -3763,7 +3763,9 @@ export const OrderDetailScreen = ({
                                 />
                               </a>
                             )}
-                            {msg.text !== "Photo" && <span>{msg.text}</span>}
+                            {msg.text !== "Photo" && (
+                              <span className="whitespace-pre-wrap break-words">{msg.text}</span>
+                            )}
                             {/* Timestamp + delivery status ticks */}
                             <div className={`flex items-center gap-1 mt-1 ${msg.from === "me" ? "justify-end" : ""}`}>
                               <span className={`text-[10px] ${msg.from === "me" ? "text-accent-text/60" : "text-text-tertiary"}`}>
