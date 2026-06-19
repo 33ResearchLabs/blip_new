@@ -110,7 +110,6 @@ export const StatusCard = memo(function StatusCard({
   onOpenReceive,
 }: StatusCardProps) {
   const [corridor, setCorridor] = useState<CorridorData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [customRefPrice, setCustomRefPrice] = useState<number | null>(null);
   const [showRefPriceInput, setShowRefPriceInput] = useState(false);
   const [refPriceInputValue, setRefPriceInputValue] = useState("");
@@ -279,8 +278,6 @@ export const StatusCard = memo(function StatusCard({
       } else {
         console.error("Failed to fetch corridor data:", error);
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -417,13 +414,12 @@ export const StatusCard = memo(function StatusCard({
     (isInrCorridor ? 99 : 3.67);
   const fiatEquivalent = balance * fiatRate;
 
-  if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-5 h-5 text-foreground/20 animate-spin" />
-      </div>
-    );
-  }
+  // Render the balance immediately (matching the mobile MobileHomeView hero) —
+  // do NOT gate the whole card on the corridor fetch. Previously this card
+  // showed a full-card spinner until /api/corridor/dynamic-rate resolved, so if
+  // that fetch hung / fetchAll early-returned (tab hidden at mount) / auth churn
+  // stalled it, the balance never appeared on desktop (mobile was unaffected).
+  // The corridor rate has a fallback (fiatRate above) and fills in when ready.
 
   return (
     <div className="flex flex-col h-full" data-tour="status-card">

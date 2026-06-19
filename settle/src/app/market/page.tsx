@@ -983,7 +983,12 @@ export default function MerchantDashboard() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-white/[0.01] rounded-full blur-[200px]" />
         </div>
 
-        <div className={mobileView === "home" ? "hidden lg:block" : ""}>
+        {/* Hide the top navbar on MOBILE while inside an active order chat —
+            OrderChatView renders its own full header (back · counterparty ·
+            BUY/SELL · presence · order #), so the navbar's chat header was a
+            duplicate ("double header"). Mobile-only: `hidden lg:block` keeps the
+            navbar on desktop untouched, matching the existing `home` pattern. */}
+        <div className={mobileView === "home" || (mobileView === "chat" && activeOrderChat) ? "hidden lg:block" : ""}>
         <MerchantNavbar
           activePage="dashboard"
           mobileTitle={

@@ -21,6 +21,8 @@ import { useMerchantStore, type PendingFilter } from "@/stores/merchantStore";
 import { useSounds } from "@/hooks/useSounds";
 import { FilterDropdown } from "@/components/user/screens/ui/FilterDropdown";
 import type { Order } from "@/types/merchant";
+import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
+import type { ProfileEntityType } from "@/components/shared/profile/types";
 
 const PENDING_FILTER_OPTIONS: ReadonlyArray<{
   key: PendingFilter;
@@ -116,6 +118,7 @@ function OrderCardTimer({
   onCancelOrder,
   cancellingOrderId,
   onSelectOrder,
+  onOpenProfile,
 }: {
   order: Order;
   merchantId: string | null;
@@ -129,6 +132,7 @@ function OrderCardTimer({
   onCancelOrder?: (o: Order) => void;
   cancellingOrderId?: string | null;
   onSelectOrder?: (o: Order) => void;
+  onOpenProfile?: (entityType: ProfileEntityType, id: string) => void;
 }) {
   const countdown = useCountdown(order.expiresIn);
   const [dismissed, setDismissed] = useState(false);
@@ -167,6 +171,25 @@ function OrderCardTimer({
     rawAvatarUrl && /^https?:\/\/|^\//.test(rawAvatarUrl)
       ? rawAvatarUrl
       : undefined;
+
+  // Counterparty for the profile sheet (mirrors PendingOrdersPanel): a normal
+  // U2M order's counterparty is the user who placed it; an M2M/open order's is
+  // the buyer merchant. Tapping the avatar/name opens this profile.
+  const _cpDb = order.dbOrder as any;
+  const _cpUserPlaceholder =
+    typeof _cpDb?.user?.username === "string" &&
+    (_cpDb.user.username.startsWith("open_order_") ||
+      _cpDb.user.username.startsWith("m2m_"));
+  const cpIsM2M = _cpUserPlaceholder || !!_cpDb?.buyer_merchant_id;
+  const cpEntityType: ProfileEntityType = cpIsM2M ? "merchant" : "user";
+  const cpEntityId: string | null = cpIsM2M
+    ? _cpDb?.buyer_merchant_id || _cpDb?.buyer_merchant?.id || null
+    : _cpDb?.user?.id || _cpDb?.user_id || null;
+  const handleOpenProfile = (e: { stopPropagation: () => void }) => {
+    if (!cpEntityId || !onOpenProfile) return;
+    e.stopPropagation();
+    onOpenProfile(cpEntityType, cpEntityId);
+  };
   const isVerified = (order.dbOrder as any)?.user?.is_verified ?? false;
   const initials = displayName
     .split(" ")
@@ -359,25 +382,29 @@ function OrderCardTimer({
           </div>
         )}
 
-        {/* ── TRUST BLOCK ── (tap to open the order detail popup) */}
+        {/* ── TRUST BLOCK / HEADER ── (tap avatar, name or the header row to
+            open the counterparty profile — the order detail popup now lives on
+            the payout body below, so the two tap zones don't collide). */}
         <div
-          onClick={onSelectOrder ? () => onSelectOrder(order) : undefined}
-          role={onSelectOrder ? "button" : undefined}
+          onClick={handleOpenProfile}
+          role={cpEntityId && onOpenProfile ? "button" : undefined}
           style={{
             display: "flex",
             alignItems: "center",
             gap: 10,
             marginBottom: 10,
-            cursor: onSelectOrder ? "pointer" : undefined,
+            cursor: cpEntityId && onOpenProfile ? "pointer" : undefined,
           }}
         >
-          {/* 36px gradient avatar with initials */}
+          {/* 36px gradient avatar with initials — tap opens counterparty profile */}
           <span
+            onClick={handleOpenProfile}
             style={{
               width: 36,
               height: 36,
               borderRadius: 999,
               flexShrink: 0,
+              cursor: cpEntityId ? "pointer" : undefined,
               background: avatarUrl
                 ? "transparent"
                 : "linear-gradient(150deg,#ff8a3d,#ff5d73)",
@@ -401,8 +428,11 @@ function OrderCardTimer({
             )}
           </span>
 
-          {/* Text column */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Text column — tap name/info to open counterparty profile */}
+          <div
+            onClick={handleOpenProfile}
+            style={{ flex: 1, minWidth: 0, cursor: cpEntityId ? "pointer" : undefined }}
+          >
             {/* Row 1: name + verified shield */}
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <b
@@ -481,7 +511,10 @@ function OrderCardTimer({
           <div style={{ display: "flex", gap: 7, flexShrink: 0 }}>
             {canChat && (
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  // Stop the tap bubbling to the header row (which now opens
+                  // the counterparty profile) — chat is its own action.
+                  e.stopPropagation();
                   onOpenChat(order);
                   setMobileView("chat");
                 }}
@@ -501,7 +534,11 @@ function OrderCardTimer({
                 <MessageCircle style={{ width: 15, height: 15 }} />
               </button>
             )}
+            {/* Explicit "view profile" affordance — same target as tapping the
+                header row. handleOpenProfile stops propagation itself. */}
             <button
+              onClick={handleOpenProfile}
+              aria-label="View profile"
               style={{
                 width: 32,
                 height: 32,
@@ -512,7 +549,7 @@ function OrderCardTimer({
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#aeaeb2",
-                cursor: "pointer",
+                cursor: cpEntityId && onOpenProfile ? "pointer" : "default",
               }}
             >
               <User style={{ width: 15, height: 15 }} />
@@ -529,14 +566,18 @@ function OrderCardTimer({
           }}
         />
 
-        {/* ── PAYOUT HERO ── */}
+        {/* ── PAYOUT HERO ── (tap the order body to open the order detail
+            popup; the header above opens the counterparty profile). */}
         <div
+          onClick={onSelectOrder ? () => onSelectOrder(order) : undefined}
+          role={onSelectOrder ? "button" : undefined}
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
             marginTop: 11,
             marginBottom: 14,
+            cursor: onSelectOrder ? "pointer" : undefined,
           }}
         >
           {/* Left: fiat label + big number + earnings chip */}
@@ -831,6 +872,11 @@ export function MobileOrdersView({
   // without this the allOrders memo (keyed on the orders array) would never
   // re-run and a just-lapsed card would survive the filter until the next fetch.
   const [nowTick, setNowTick] = useState(() => Date.now());
+  // Counterparty profile sheet — opened by tapping a card's avatar/name.
+  const [profileTarget, setProfileTarget] = useState<{
+    entityType: ProfileEntityType;
+    id: string;
+  } | null>(null);
   useEffect(() => {
     const id = setInterval(() => setNowTick(Date.now()), 30_000);
     return () => clearInterval(id);
@@ -1271,6 +1317,9 @@ export function MobileOrdersView({
               onCancelOrder={onCancelOrder}
               cancellingOrderId={cancellingOrderId}
               onSelectOrder={onSelectOrder}
+              onOpenProfile={(entityType, id) =>
+                setProfileTarget({ entityType, id })
+              }
             />
           ))}
         </div>
@@ -1352,6 +1401,15 @@ export function MobileOrdersView({
           );
         })()
       )}
+
+      {/* Counterparty profile — opened by tapping a card's avatar/name. */}
+      <ProfileSheet
+        open={!!profileTarget}
+        entityType={profileTarget?.entityType ?? null}
+        id={profileTarget?.id ?? null}
+        variant="merchant"
+        onClose={() => setProfileTarget(null)}
+      />
     </div>
   );
 }

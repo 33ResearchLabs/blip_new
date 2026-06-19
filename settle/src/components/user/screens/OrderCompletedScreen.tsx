@@ -51,6 +51,7 @@ export interface OrderCompletedScreenProps {
   reviewText: string;
   onRate: (n: number) => void;
   onReviewTextChange: (s: string) => void;
+  onSubmitReview: () => void;
   onViewProfile: () => void;
   onViewOverview: () => void;
   onHelp: () => void;
@@ -64,6 +65,7 @@ export function OrderCompletedScreen({
   reviewText,
   onRate,
   onReviewTextChange,
+  onSubmitReview,
   onViewProfile,
   onViewOverview,
   onHelp,
@@ -212,14 +214,27 @@ export function OrderCompletedScreen({
               You rated this trade {order.userRating} star{order.userRating === 1 ? "" : "s"}.
             </p>
           ) : (
-            <textarea
-              placeholder="Leave optional feedback…"
-              value={reviewText}
-              onChange={(e) => onReviewTextChange(e.target.value)}
-              maxLength={200}
-              rows={2}
-              className="w-full mt-4 p-3 rounded-xl text-[13px] text-text-primary bg-surface-active border border-border-medium resize-none outline-none placeholder:text-text-quaternary"
-            />
+            <>
+              <textarea
+                placeholder="Leave optional feedback…"
+                value={reviewText}
+                onChange={(e) => onReviewTextChange(e.target.value)}
+                maxLength={200}
+                rows={2}
+                className="w-full mt-4 p-3 rounded-xl text-[13px] text-text-primary bg-surface-active border border-border-medium resize-none outline-none placeholder:text-text-quaternary"
+              />
+              {/* Explicit submit so the rating + feedback are sent on tap (with a
+                  success toast), not silently on "Back to Home". */}
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                type="button"
+                disabled={displayRating < 1}
+                onClick={onSubmitReview}
+                className="w-full mt-3 py-3 rounded-xl text-[14px] font-semibold bg-accent text-accent-text disabled:opacity-40 disabled:cursor-default"
+              >
+                Submit Rating
+              </motion.button>
+            </>
           )}
         </div>
 

@@ -592,9 +592,18 @@ export async function checkMerchantSideLimit(args: {
   limitUsd: number;
   usedUsd: number;
 }> {
-  const { buyUsd, sellUsd } = await getMerchant24hSideVolumeUsd(args.merchantId);
   const limitUsd =
     args.side === 'buy' ? MERCHANT_SIDE_LIMITS.buyUsd : MERCHANT_SIDE_LIMITS.sellUsd;
+
+  // Testnet/dev (devnet or mock): never block merchant order creation on
+  // trade limits — mirrors checkTradeAgainstLimits. Gated on SKIP_TRADE_LIMITS
+  // (NODE_ENV !== 'production' AND devnet/mock), so it is a no-op in production
+  // and the real per-side cap below applies unchanged on mainnet.
+  if (SKIP_TRADE_LIMITS) {
+    return { allowed: true, limitUsd, usedUsd: 0 };
+  }
+
+  const { buyUsd, sellUsd } = await getMerchant24hSideVolumeUsd(args.merchantId);
   const usedUsd = args.side === 'buy' ? buyUsd : sellUsd;
 
   if (usedUsd + args.orderAmountUsd > limitUsd) {

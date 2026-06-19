@@ -195,6 +195,12 @@ export function useMerchantEffects({
   const walletLinkAttemptedRef = useRef<string | null>(null);
   useEffect(() => {
     const updateMerchantWallet = async () => {
+      // Mock mode produces a FAKE wallet signature that the server (correctly)
+      // rejects with 401 "Invalid wallet signature". Skip the auto-link entirely
+      // on mock/devnet so it doesn't error every render and churn fetchWithAuth's
+      // token refresh (which can stall the balance/corridor fetch behind it).
+      // No-op in production (isMockMode is false → real link runs as before).
+      if (isMockMode) return;
       if (!merchantId || !solanaWallet.walletAddress) return;
       if (merchantInfo?.wallet_address === solanaWallet.walletAddress) return;
       const attemptKey = `${merchantId}:${solanaWallet.walletAddress}`;
