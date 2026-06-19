@@ -1068,7 +1068,7 @@ export function PaymentMethodModal({
                     <button
                       onClick={handleSaveMethod}
                       disabled={isLoading}
-                      className="flex-1 px-4 py-2.5 bg-[#f5f5f7] hover:bg-white rounded-xl text-[12px] text-[#0b0b0c] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="flex-1 px-4 py-2.5 bg-[#f5f5f7] hover:bg-white rounded-xl text-[12px] text-[#0b0b0c] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                       {isLoading ? (
                         <>
@@ -1081,7 +1081,7 @@ export function PaymentMethodModal({
                         </>
                       ) : (
                         <>
-                          <Check className="w-3.5 h-3.5" /> Add Method
+                          <Check className="w-3.5 h-3.5 " /> Add Method
                         </>
                       )}
                     </button>
@@ -1591,7 +1591,7 @@ export function PaymentMethodInlineForm({
         <button
           onClick={handleSave}
           disabled={isLoading}
-          className="flex-1 px-4 py-3 bg-[#f5f5f7] hover:bg-white rounded-xl text-[13px] text-[#0b0b0c] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="flex-1 px-4 py-3 bg-[#f5f5f7] hover:bg-white rounded-xl text-[13px] text-[#0b0b0c] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap"
         >
           {isLoading ? (
             <>

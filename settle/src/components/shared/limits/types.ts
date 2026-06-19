@@ -102,10 +102,10 @@ export const SURFACES: Record<LimitsVariant, SurfaceTokens> = {
  */
 export const ACTION_BTN: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-accent/15 text-accent-text hover:bg-accent/25",
-    violet: "bg-accent/15 text-accent-text hover:bg-accent/25",
-    amber: "bg-accent/15 text-accent-text hover:bg-accent/25",
-    blue: "bg-accent/15 text-accent-text hover:bg-accent/25",
+    green: "bg-accent/15 text-text-primary hover:bg-accent/25",
+    violet: "bg-accent/15 text-text-primary hover:bg-accent/25",
+    amber: "bg-accent/15 text-text-primary hover:bg-accent/25",
+    blue: "bg-accent/15 text-text-primary hover:bg-accent/25",
   };
 
 /** Unlock-row icon circles — minimalistic soft yellow background (`bg-accent/15`)
@@ -113,8 +113,8 @@ export const ACTION_BTN: Record<"green" | "violet" | "amber" | "blue", string> =
  *  never yellow itself. */
 export const ACTION_ICON: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-accent/15 text-accent-text",
-    violet: "bg-accent/15 text-accent-text",
-    amber: "bg-accent/15 text-accent-text",
-    blue: "bg-accent/15 text-accent-text",
+    green: "bg-accent/15 text-text-primary",
+    violet: "bg-accent/15 text-text-primary",
+    amber: "bg-accent/15 text-text-primary",
+    blue: "bg-accent/15 text-text-primary",
   };

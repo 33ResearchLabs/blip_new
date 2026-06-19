@@ -91,7 +91,7 @@ export function RequestIncreaseModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-md"
           onClick={() => !submitting && onClose()}
         >
           <motion.div
@@ -99,7 +99,7 @@ export function RequestIncreaseModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             onClick={(e) => e.stopPropagation()}
-            className={`w-full max-w-md rounded-2xl p-6 border border-border-subtle ${surfaces.card}`}
+            className="w-full max-w-md rounded-2xl p-6 border border-border-subtle bg-background"
           >
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-text-primary">
@@ -128,7 +128,7 @@ export function RequestIncreaseModal({
                   className={`px-3 py-2.5 rounded-xl text-[13px] font-medium border transition-colors ${
                     kind === opt.k
                       ? `${surfaces.chip} border-border-medium text-text-primary`
-                      : `${surfaces.inset} border-border-subtle text-text-tertiary hover:text-text-secondary`
+                      : `bg-transparent border-border-subtle text-text-tertiary hover:text-text-secondary`
                   }`}
                 >
                   {opt.label}
@@ -137,7 +137,7 @@ export function RequestIncreaseModal({
             </div>
 
             <div
-              className={`flex items-center justify-between mb-4 px-3.5 py-3 rounded-xl border border-border-subtle ${surfaces.inset}`}
+              className={`flex items-center justify-between mb-4 px-3.5 py-3 rounded-xl border border-border-subtle ${surfaces.chip}`}
             >
               <span className="text-[12px] text-text-tertiary">
                 Current {kind === "daily" ? "daily" : "per-transaction"} limit
@@ -157,7 +157,7 @@ export function RequestIncreaseModal({
               onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
               maxLength={14}
               placeholder="e.g. 500"
-              className={`w-full px-3.5 py-3 rounded-xl border border-border-subtle text-text-primary text-sm placeholder:text-text-quaternary focus:outline-none focus:border-border-medium mb-4 ${surfaces.inset}`}
+              className={`w-full px-3.5 py-3 rounded-xl border border-border-subtle text-text-primary text-sm placeholder:text-text-quaternary focus:outline-none focus:border-border-medium mb-4 ${surfaces.chip}`}
             />
 
             <label className="block text-[12px] text-text-tertiary mb-2">
@@ -169,7 +169,7 @@ export function RequestIncreaseModal({
               maxLength={500}
               rows={3}
               placeholder="Tell us why you need a higher limit…"
-              className={`w-full px-3.5 py-3 rounded-xl border border-border-subtle text-text-primary text-sm placeholder:text-text-quaternary focus:outline-none focus:border-border-medium resize-none mb-2 ${surfaces.inset}`}
+              className={`w-full px-3.5 py-3 rounded-xl border border-border-subtle text-text-primary text-sm placeholder:text-text-quaternary focus:outline-none focus:border-border-medium resize-none mb-2 ${surfaces.chip}`}
             />
 
             {error && <p className="text-[12px] text-red-400 mb-2">{error}</p>}

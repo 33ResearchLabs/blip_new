@@ -471,7 +471,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <OverviewStat
                 icon={<span className="text-[12px] font-extrabold">$</span>}
                 tone="emerald"
@@ -620,7 +620,7 @@ function OverviewStat({
   sub: string;
 }) {
   return (
-    <div>
+    <div className="flex flex-col items-center text-center sm:items-start sm:text-left">
       <div className="flex items-center gap-2 mb-1.5">
         <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${TONE[tone]}`}>
           {icon}
