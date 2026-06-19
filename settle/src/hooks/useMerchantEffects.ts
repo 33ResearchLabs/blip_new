@@ -442,6 +442,16 @@ export function useMerchantEffects({
     const checkNow = () => {
       const now = Date.now();
       const liveOrderIds = new Set<string>();
+      // Collect each order's single most-urgent newly-crossed threshold this
+      // pass; the actual toast(s) are dispatched once after the loop so a burst
+      // of stale thresholds (one order) or many expiring orders can't stack the
+      // screen with simultaneous cards.
+      const pending: Array<{
+        orderId: string;
+        mins: number;
+        amt: string;
+        urgent: boolean;
+      }> = [];
       for (const order of orders) {
         const dbStatus = (order.dbOrder?.status || order.status) as string;
         if (!ACTIVE.has(dbStatus)) continue;
@@ -475,53 +485,88 @@ export function useMerchantEffects({
         if (remainingSec <= 0) continue;
 
         let warned = warnedRef.current.get(order.id);
-        for (const thresholdSec of WARNING_THRESHOLDS_SEC) {
-          if (remainingSec > thresholdSec) continue;
-          if (warned?.has(thresholdSec)) continue;
-          if (!warned) {
-            warned = new Set();
-            warnedRef.current.set(order.id, warned);
-          }
-          warned.add(thresholdSec);
-          const mins = Math.max(1, Math.round(remainingSec / 60));
-          const amt = order.amount ? `${order.amount} USDT` : 'Order';
-          const urgent = thresholdSec <= 2 * 60;
-          const msg = urgent
-            ? `${amt} expires in ~${mins} min — act now to avoid auto-cancel.`
-            : `${amt} expires in ~${mins} min. Take action soon.`;
-          try {
-            // Urgent warnings stick until the merchant clicks them so a
-            // brief look-away can't lose the warning. Non-urgent keep the
-            // existing 7s auto-dismiss to avoid pile-up.
-            if (urgent && toast?.showUrgentWarning) {
-              toast.showUrgentWarning(msg, { title: 'Order Expiring', orderId: order.id });
-            } else {
-              toast?.showWarning?.(msg);
-            }
-          } catch {}
-          try { playSound(urgent ? 'error' : 'notification'); } catch {}
-          addNotification('system', msg, order.id);
+        // Thresholds this order has already passed on this tick.
+        const crossed = WARNING_THRESHOLDS_SEC.filter((t) => remainingSec <= t);
+        const newlyCrossed = crossed.filter((t) => !warned?.has(t));
+        if (newlyCrossed.length === 0) continue;
+        if (!warned) {
+          warned = new Set();
+          warnedRef.current.set(order.id, warned);
+        }
+        // Mark EVERY crossed threshold as warned — including the stale higher
+        // ones we're about to skip — so the backfill can't re-fire them as
+        // separate toasts on later ticks. Then surface ONLY the most urgent
+        // (smallest) newly-crossed threshold for this order.
+        for (const t of crossed) warned.add(t);
+        const fireThreshold = Math.min(...newlyCrossed);
+        pending.push({
+          orderId: order.id,
+          mins: Math.max(1, Math.round(remainingSec / 60)),
+          amt: order.amount ? `${order.amount} USDT` : 'Order',
+          urgent: fireThreshold <= 2 * 60,
+        });
+      }
 
-          // Tab-title flash + OS notification only for urgent. These layers
-          // grab attention when the in-app toast can't (tab in background,
-          // browser minimized). All side effects are guarded inside the
-          // helpers — failures don't propagate to the in-app path.
-          if (urgent) {
-            urgentUnreadRef.current += 1;
-            try {
-              flashTabTitle(urgentUnreadRef.current, `${amt} expiring`);
-            } catch {}
-            try {
-              // Lazy permission ask — only when there's an actual need.
-              if (notificationPermission() === 'default') {
-                void requestNotificationPermission();
-              }
-              showOSNotification('Blip — Action Required', {
-                body: msg,
-                tag: `urgent-${order.id}`,
-              });
-            } catch {}
+      // ── Dispatch ────────────────────────────────────────────────────────
+      // One order → its own toast. Multiple orders crossing on the same pass →
+      // a single coalesced summary so a wall of cards never appears at once.
+      // Urgent warnings stick until clicked (duration 0); non-urgent keep the
+      // 7s auto-dismiss. The tab-title flash + OS notification fire once.
+      const fmtMsg = (p: { amt: string; mins: number; urgent: boolean }) =>
+        p.urgent
+          ? `${p.amt} expires in ~${p.mins} min — act now to avoid auto-cancel.`
+          : `${p.amt} expires in ~${p.mins} min. Take action soon.`;
+
+      if (pending.length === 1) {
+        const p = pending[0];
+        const msg = fmtMsg(p);
+        try {
+          if (p.urgent && toast?.showUrgentWarning) {
+            toast.showUrgentWarning(msg, { title: 'Order Expiring', orderId: p.orderId });
+          } else {
+            toast?.showWarning?.(msg);
           }
+        } catch {}
+        try { playSound(p.urgent ? 'error' : 'notification'); } catch {}
+        addNotification('system', msg, p.orderId);
+        if (p.urgent) {
+          urgentUnreadRef.current += 1;
+          try { flashTabTitle(urgentUnreadRef.current, `${p.amt} expiring`); } catch {}
+          try {
+            if (notificationPermission() === 'default') void requestNotificationPermission();
+            showOSNotification('Blip — Action Required', {
+              body: msg,
+              tag: `urgent-${p.orderId}`,
+            });
+          } catch {}
+        }
+      } else if (pending.length > 1) {
+        const count = pending.length;
+        const anyUrgent = pending.some((p) => p.urgent);
+        const summary = anyUrgent
+          ? `${count} orders are expiring — act now to avoid auto-cancel.`
+          : `${count} orders need action soon. Tap an order to continue.`;
+        try {
+          if (anyUrgent && toast?.showUrgentWarning) {
+            toast.showUrgentWarning(summary, { title: `${count} Orders Expiring` });
+          } else {
+            toast?.showWarning?.(summary);
+          }
+        } catch {}
+        try { playSound(anyUrgent ? 'error' : 'notification'); } catch {}
+        // The persistent notifications panel is a log, not the on-screen
+        // pile-up — keep a per-order entry there so nothing is lost.
+        for (const p of pending) addNotification('system', fmtMsg(p), p.orderId);
+        if (anyUrgent) {
+          urgentUnreadRef.current += pending.filter((p) => p.urgent).length;
+          try { flashTabTitle(urgentUnreadRef.current, `${count} orders expiring`); } catch {}
+          try {
+            if (notificationPermission() === 'default') void requestNotificationPermission();
+            showOSNotification('Blip — Action Required', {
+              body: summary,
+              tag: 'urgent-multi',
+            });
+          } catch {}
         }
       }
 

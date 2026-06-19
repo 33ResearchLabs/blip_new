@@ -81,30 +81,50 @@ export function ScratchRewardModal({ open, reward: rewardProp, onClose, onDone }
     return () => { cancelled = true; };
   }, [open, rewardProp]);
 
-  // Paint the scratch cover on canvas.
+  // Paint the scratch cover on canvas. Re-measures on resize so the scratch
+  // layer always matches the rendered card width (orientation change, font
+  // load, slide-in settle) — otherwise pointer coords drift off the cover and
+  // it feels unscratchable. Includes `loading` so the cover still paints when a
+  // `reward` prop was supplied up-front (canvas only mounts after loading ends).
   useEffect(() => {
-    if (!open || revealed) return;
+    if (!open || revealed || loading || !reward) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
-    // Gradient cover
-    const grad = ctx.createLinearGradient(0, 0, rect.width, rect.height);
-    grad.addColorStop(0, "#6b7280");
-    grad.addColorStop(1, "#374151");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, rect.width, rect.height);
-    // Hint text
-    ctx.fillStyle = "rgba(255,255,255,0.65)";
-    ctx.font = "600 14px ui-sans-serif, system-ui";
-    ctx.textAlign = "center";
-    ctx.fillText("SCRATCH TO REVEAL", rect.width / 2, rect.height / 2);
-  }, [open, revealed, reward]);
+
+    let lastW = 0, lastH = 0;
+    const paint = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const w = Math.round(rect.width * dpr);
+      const h = Math.round(rect.height * dpr);
+      // Skip no-op fires so an in-progress scratch isn't wiped by the observer.
+      if (w === lastW && h === lastH) return;
+      lastW = w; lastH = h;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // canvas.width reset clears the transform
+      // Gradient cover
+      const grad = ctx.createLinearGradient(0, 0, rect.width, rect.height);
+      grad.addColorStop(0, "#6b7280");
+      grad.addColorStop(1, "#374151");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      // Hint text
+      ctx.fillStyle = "rgba(255,255,255,0.65)";
+      ctx.font = "600 14px ui-sans-serif, system-ui";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("SCRATCH TO REVEAL", rect.width / 2, rect.height / 2);
+    };
+
+    paint();
+    const ro = new ResizeObserver(paint);
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [open, revealed, loading, reward]);
 
   const scratchAt = (x: number, y: number) => {
     const canvas = canvasRef.current;
@@ -143,14 +163,16 @@ export function ScratchRewardModal({ open, reward: rewardProp, onClose, onDone }
     }
   };
 
-  const onPointerDown = (e: React.PointerEvent) => {
+  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     drawingRef.current = true;
-    const r = (e.target as HTMLCanvasElement).getBoundingClientRect();
+    // Capture so the stroke keeps tracking even if the finger drifts off the card.
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* unsupported */ }
+    const r = e.currentTarget.getBoundingClientRect();
     scratchAt(e.clientX - r.left, e.clientY - r.top);
   };
-  const onPointerMove = (e: React.PointerEvent) => {
+  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!drawingRef.current) return;
-    const r = (e.target as HTMLCanvasElement).getBoundingClientRect();
+    const r = e.currentTarget.getBoundingClientRect();
     scratchAt(e.clientX - r.left, e.clientY - r.top);
   };
   const onPointerUp = () => { drawingRef.current = false; };
@@ -214,7 +236,7 @@ export function ScratchRewardModal({ open, reward: rewardProp, onClose, onDone }
                   {!revealed && !loading && reward && (
                     <canvas
                       ref={canvasRef}
-                      className="absolute inset-0 w-full h-full rounded-3xl cursor-grab"
+                      className="absolute inset-0 w-full h-full rounded-3xl cursor-grab touch-none select-none"
                       onPointerDown={onPointerDown}
                       onPointerMove={onPointerMove}
                       onPointerUp={onPointerUp}

@@ -327,6 +327,20 @@ export default function MerchantDashboard() {
     router.replace(`/market/login${qs ? `?${qs}` : ""}`);
   }, [isLoading, isLoggedIn, searchParams, router]);
 
+  // Reopen an order's full-screen detail when returning via `/market?order=<id>`
+  // — e.g. the merchant tapped Help on an active order, landed on the support
+  // screen, then pressed back. Waits for the store `orders` to load, reopens the
+  // same order, then strips the param so it doesn't re-fire on later navigation.
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const reopenId = searchParams.get("order");
+    if (!reopenId) return;
+    const target = orders.find((o) => o.id === reopenId);
+    if (!target) return; // orders not loaded yet — re-runs when `orders` changes
+    handleMobileSelectOrder(target);
+    router.replace("/market");
+  }, [isLoggedIn, searchParams, orders, handleMobileSelectOrder, router]);
+
   // Session guard while the embedded wallet is locked (merchant twin of the
   // user-app guard in src/app/user/page.tsx).
   //
@@ -525,6 +539,17 @@ export default function MerchantDashboard() {
     userAvatarUrl?: string | null;
   } | null>(null);
 
+  // Tab the merchant was on when they opened an order chat from a card's
+  // chat button — "back" returns here instead of the chat inbox. Null when
+  // the chat was opened from the inbox itself (back → inbox, the default).
+  const chatReturnViewRef = useRef<
+    "home" | "orders" | "escrow" | "history" | "marketplace" | null
+  >(null);
+  // Mirror of mobileView so handleOpenChat can read the current tab without
+  // taking mobileView as a dependency (keeps the callback chain stable).
+  const mobileViewRef = useRef(mobileView);
+  mobileViewRef.current = mobileView;
+
   const onOpenOrderChat = useCallback(
     (
       orderId: string,
@@ -541,6 +566,13 @@ export default function MerchantDashboard() {
 
   const onCloseOrderChat = useCallback(() => {
     setActiveOrderChat(null);
+    // If the chat was opened from an order card, return to that tab instead
+    // of dropping the merchant on the chat inbox.
+    const returnView = chatReturnViewRef.current;
+    if (returnView) {
+      setMobileView(returnView);
+      chatReturnViewRef.current = null;
+    }
     scheduleConversationsFetch();
   }, [scheduleConversationsFetch]);
 
@@ -589,6 +621,10 @@ export default function MerchantDashboard() {
   const handleOpenChat = useCallback(
     (order: Order) => {
       if (!merchantId) return;
+      // Remember the tab we came from so back-from-chat returns here (the
+      // order card switches mobileView to "chat" right after this call).
+      const origin = mobileViewRef.current;
+      chatReturnViewRef.current = origin === "chat" ? null : origin;
       const userName = order.user || "User";
       const orderNumber = order.dbOrder?.order_number || "";
       const orderType = order.dbOrder?.type;
@@ -962,12 +998,14 @@ export default function MerchantDashboard() {
         data-testid="merchant-dashboard"
         className="h-screen bg-background text-white flex flex-col overflow-hidden"
       >
-        {/* Offset clears the sticky MerchantNavbar (up to 68px on per-tab mobile
-          screens / h-[50px] desktop) so warning toasts don't overlap the
-          bug-icon and avatar dropdown. */}
+        {/* Offset clears the sticky MerchantNavbar AND the per-tab filter row
+          below it on mobile (navbar ~68px + status-filter pills ~50px), so the
+          warning toast floats over the list instead of colliding with the
+          interactive tabs / first order card. Desktop keeps the tighter offset
+          since its filters live in a side panel, not under the navbar. */}
         <NotificationToastContainer
           position="top-right"
-          topOffsetClass="top-[76px] lg:top-[58px]"
+          topOffsetClass="top-[124px] lg:top-[58px]"
         />
         {tour.enabled && (
           <MerchantTour run={tour.isRunning} onComplete={tour.completeTour} />

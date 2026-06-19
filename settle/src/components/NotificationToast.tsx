@@ -42,15 +42,15 @@ const TOAST_ICONS: Record<ToastType, typeof Bell> = {
 };
 
 const TOAST_COLORS: Record<ToastType, { bg: string; border: string; icon: string; accent: string }> = {
-  order: { bg: 'bg-card-solid/95', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
-  escrow: { bg: 'bg-card-solid/95', border: 'border-blue-500/30', icon: 'text-blue-400', accent: 'bg-blue-500/10' },
-  payment: { bg: 'bg-card-solid/95', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
-  dispute: { bg: 'bg-card-solid/95', border: 'border-red-500/30', icon: 'text-red-400', accent: 'bg-red-500/10' },
-  complete: { bg: 'bg-card-solid/95', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
-  system: { bg: 'bg-card-solid/95', border: 'border-foreground/10', icon: 'text-foreground/50', accent: 'bg-foreground/5' },
-  message: { bg: 'bg-card-solid/95', border: 'border-purple-500/30', icon: 'text-purple-400', accent: 'bg-purple-500/10' },
-  warning: { bg: 'bg-card-solid/95', border: 'border-amber-500/30', icon: 'text-amber-400', accent: 'bg-amber-500/10' },
-  action: { bg: 'bg-card-solid/95', border: 'border-primary/40', icon: 'text-primary', accent: 'bg-primary/15' },
+  order: { bg: 'bg-card-solid', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
+  escrow: { bg: 'bg-card-solid', border: 'border-blue-500/30', icon: 'text-blue-400', accent: 'bg-blue-500/10' },
+  payment: { bg: 'bg-card-solid', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
+  dispute: { bg: 'bg-card-solid', border: 'border-red-500/30', icon: 'text-red-400', accent: 'bg-red-500/10' },
+  complete: { bg: 'bg-card-solid', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
+  system: { bg: 'bg-card-solid', border: 'border-foreground/10', icon: 'text-foreground/50', accent: 'bg-foreground/5' },
+  message: { bg: 'bg-card-solid', border: 'border-purple-500/30', icon: 'text-purple-400', accent: 'bg-purple-500/10' },
+  warning: { bg: 'bg-card-solid', border: 'border-amber-500/30', icon: 'text-amber-400', accent: 'bg-amber-500/10' },
+  action: { bg: 'bg-card-solid', border: 'border-primary/40', icon: 'text-primary', accent: 'bg-primary/15' },
 };
 
 const DEFAULT_DURATION = 5000;

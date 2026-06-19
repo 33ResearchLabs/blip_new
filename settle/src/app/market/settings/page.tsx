@@ -197,6 +197,17 @@ export default function MerchantSettingsPage({
   // open the mobile bottom-sheet — otherwise the tab is selected but the sheet
   // stays closed and the user only sees the settings list, not the panel.
   const [mobileSheetOpen, setMobileSheetOpen] = useState(!!searchParams.get("tab"));
+  // When the support sheet was deep-linked from a merchant's active order, this
+  // holds that order id so closing the sheet returns to the order (via
+  // /market?order=<id>) instead of revealing the settings list underneath.
+  const returnOrderId = searchParams.get("returnOrder");
+  const closeMobileSheet = () => {
+    if (returnOrderId) {
+      router.push(`/market?order=${returnOrderId}`);
+      return;
+    }
+    setMobileSheetOpen(false);
+  };
   // The content panel renders inline on desktop (lg ≥ 1024px) but slides up as a
   // bottom-sheet on mobile. Framer Motion writes that slide as an inline transform that
   // overrides Tailwind's lg:translate-y-0, so the panel must only be pushed off-screen
@@ -1156,7 +1167,7 @@ export default function MerchantSettingsPage({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setMobileSheetOpen(false)}
+              onClick={closeMobileSheet}
             />
           )}
         </AnimatePresence>
@@ -1181,7 +1192,7 @@ export default function MerchantSettingsPage({
             <p className="text-[12px] font-semibold text-white flex-1 text-center">
               {tabs.find(t => t.id === activeTab)?.label ?? (activeTab === "support" ? "Support" : "")}
             </p>
-            <button onClick={() => setMobileSheetOpen(false)} className="w-7 shrink-0 flex items-center justify-center p-1.5 rounded-lg text-white/40 hover:text-white/70">
+            <button onClick={closeMobileSheet} className="w-7 shrink-0 flex items-center justify-center p-1.5 rounded-lg text-white/40 hover:text-white/70">
               <X className="w-4 h-4" />
             </button>
           </div>

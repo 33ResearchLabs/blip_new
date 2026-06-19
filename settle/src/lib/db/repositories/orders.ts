@@ -273,8 +273,18 @@ export async function getMerchantOrders(
                ELSE COALESCE(u.name, u.username)
              END,
              'username', u.username,
-             'rating', u.rating,
-             'total_trades', u.total_trades,
+             -- Trust stats follow the same placeholder-user logic as name/avatar:
+             -- a synthetic M2M shell has no real rating, so source from the
+             -- counterparty merchant (bm, or m when the buyer slot is still open)
+             -- instead of the empty open_order_ row.
+             'rating', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN COALESCE(bm.rating, m.rating)
+               ELSE u.rating
+             END,
+             'total_trades', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN COALESCE(bm.total_trades, m.total_trades)
+               ELSE u.total_trades
+             END,
              -- Avatar follows the same placeholder-user logic: if the
              -- "user" row is a synthetic M2M shell, surface the actual
              -- counterparty merchant's picture instead.
@@ -411,29 +421,31 @@ export async function getAllPendingOrdersForMerchant(
                ELSE COALESCE(u.name, u.username)
              END,
              'username', u.username,
-             -- Buyer-trust fields. On placeholder (merchant-placed / M2M)
-             -- orders the real buyer is the buyer-merchant, not the empty
+             -- Counterparty-trust fields. On placeholder (merchant-placed / M2M)
+             -- orders the real counterparty is a merchant, not the empty
              -- open_order_ shell — so source from bm, mirroring name/avatar
-             -- above. account_created_at → Account Age; dispute_count +
-             -- total_trades → Success Rate; is_verified → KYC.
+             -- above. When the buyer slot is still open (bm IS NULL, a seller-slot
+             -- broadcast) fall back to m (the seller) so the trust card matches the
+             -- name shown above instead of rendering empty. account_created_at →
+             -- Account Age; dispute_count + total_trades → Success Rate; is_verified → KYC.
              'rating', CASE
-               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN bm.rating
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN COALESCE(bm.rating, m.rating)
                ELSE u.rating
              END,
              'total_trades', CASE
-               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN bm.total_trades
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN COALESCE(bm.total_trades, m.total_trades)
                ELSE u.total_trades
              END,
              'account_created_at', CASE
-               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN bm.created_at
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN COALESCE(bm.created_at, m.created_at)
                ELSE u.created_at
              END,
              'dispute_count', CASE
-               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN bm.dispute_count
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN COALESCE(bm.dispute_count, m.dispute_count)
                ELSE u.dispute_count
              END,
              'is_verified', CASE
-               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN COALESCE(bm.verification_level, 0) > 0
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN COALESCE(bm.verification_level, m.verification_level, 0) > 0
                ELSE COALESCE(u.kyc_status, 'none') NOT IN ('none', 'pending', 'rejected')
              END,
              'wallet_address', u.wallet_address,

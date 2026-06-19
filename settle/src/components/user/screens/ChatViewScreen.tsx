@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   MessageCircle,
   ArrowUpRight,
+  ArrowDownLeft,
   AlertTriangle,
   Paperclip,
   Loader2,
@@ -586,9 +587,17 @@ export const ChatViewScreen = ({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[15px] font-semibold text-text-primary truncate">
-              {activeOrder.merchant.username ? `@${activeOrder.merchant.username}` : activeOrder.merchant.name}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[15px] font-semibold text-text-primary truncate">
+                {activeOrder.merchant.username ? `@${activeOrder.merchant.username}` : activeOrder.merchant.name}
+              </p>
+              {/* Badge reflects THIS user's role: on a buy order they're the
+                  buyer (BUY), on a sell order they're the seller (SELL). */}
+              <span className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded border font-mono ${activeOrder.type === 'sell' ? 'text-orange-600 bg-orange-500/10 border-orange-500/20' : 'text-text-secondary bg-surface-card border-border-subtle'}`}>
+                {activeOrder.type === 'sell' ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownLeft className="w-2.5 h-2.5" />}
+                {activeOrder.type === 'sell' ? 'SELL' : 'BUY'}
+              </span>
+            </div>
             <div className="flex items-center gap-1.5">
               {isCounterpartyTyping && chatEnabled ? (
                 // Typing replaces online/lastSeen — exactly like WhatsApp
