@@ -7,6 +7,7 @@ import { useMerchantStore } from "@/stores/merchantStore";
 import { formatCrypto, formatRate } from "@/lib/format";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { ProfileEntityType } from "@/components/shared/profile/types";
+import { deriveCounterparty } from "@/components/shared/profile/counterparty";
 
 // ── Design tokens (Zoop 2026) ────────────────────────────────────────────────
 const T = {
@@ -149,19 +150,13 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
   const displayName = order.user || "Counterparty";
   const initials = displayName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
 
-  // Counterparty for the profile sheet (mirrors MobileOrdersView): a normal
-  // U2M order's counterparty is the user who placed it; an M2M/open order's is
-  // the buyer merchant. Tapping the header avatar/name opens this profile.
-  const _cpDb = order.dbOrder as any;
-  const _cpUserPlaceholder =
-    typeof _cpDb?.user?.username === "string" &&
-    (_cpDb.user.username.startsWith("open_order_") ||
-      _cpDb.user.username.startsWith("m2m_"));
-  const cpIsM2M = _cpUserPlaceholder || !!_cpDb?.buyer_merchant_id;
-  const cpEntityType: ProfileEntityType = cpIsM2M ? "merchant" : "user";
-  const cpEntityId: string | null = cpIsM2M
-    ? _cpDb?.buyer_merchant_id || _cpDb?.buyer_merchant?.id || null
-    : _cpDb?.user?.id || _cpDb?.user_id || null;
+  // Counterparty for the profile sheet (shared with MobileOrdersView + the
+  // order-info popup): a U2M order's counterparty is the user who placed it; an
+  // M2M order's is the OTHER merchant slot — resolved role-aware so an active
+  // order viewed from the buyer slot opens the seller, not the viewer themselves.
+  const cp = deriveCounterparty(order.dbOrder, merchantId);
+  const cpEntityType: ProfileEntityType = cp?.entityType ?? "user";
+  const cpEntityId: string | null = cp?.id ?? null;
   const handleOpenProfile = (e: { stopPropagation: () => void }) => {
     if (!cpEntityId || !onOpenProfile) return;
     e.stopPropagation();

@@ -120,6 +120,10 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null, mer
     escrowTradePda: dbOrder.escrow_trade_pda,
     escrowCreatorWallet: dbOrder.escrow_creator_wallet,
     escrowTxHash: dbOrder.escrow_tx_hash,
+    // Escrow on-chain account — drives EscrowInfoCard's "Escrow Account" row.
+    // Previously unmapped, so the row silently dropped; fall back to the trade
+    // PDA when the dedicated escrow_pda column is absent.
+    escrowPda: dbOrder.escrow_pda || dbOrder.escrow_trade_pda,
     refundTxHash: dbOrder.refund_tx_hash,
     userWallet: isM2M
       ? (dbOrder.buyer_merchant?.wallet_address || dbOrder.acceptor_wallet_address)

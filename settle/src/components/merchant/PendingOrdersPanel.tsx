@@ -37,6 +37,7 @@ import {
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { ProfileEntityType } from "@/components/shared/profile/types";
+import { deriveCounterparty } from "@/components/shared/profile/counterparty";
 import {
   useCorridorPrices,
   resolveCorridorRef,
@@ -635,24 +636,18 @@ const OrderList = memo(function OrderList({
                     // ── Resolve all display data up-front ──────────────────
                     const { seller, buyer } = getPartyNames(order.dbOrder);
                     const soloName = seller || buyer || order.user || null;
-                    // Counterparty for the profile sheet. For a normal U2M order
-                    // the counterparty is the user who placed it; for an M2M order
-                    // it's the buyer merchant. Mirrors getPartyNames' M2M rule.
-                    const _db = order.dbOrder;
-                    const _userIsPlaceholder =
-                      typeof _db?.user?.username === "string" &&
-                      (_db.user.username.startsWith("open_order_") ||
-                        _db.user.username.startsWith("m2m_"));
-                    const cpIsM2M =
-                      _userIsPlaceholder || !!_db?.buyer_merchant_id;
-                    const cpEntityType: ProfileEntityType = cpIsM2M
-                      ? "merchant"
-                      : "user";
-                    const cpEntityId: string | null = cpIsM2M
-                      ? _db?.buyer_merchant_id ||
-                        _db?.buyer_merchant?.id ||
-                        null
-                      : _db?.user?.id || _db?.user_id || null;
+                    // Counterparty for the profile sheet (shared helper, also
+                    // used by the mobile cards + the order-info popup). For a
+                    // U2M order the counterparty is the user who placed it; for
+                    // M2M it's the OTHER merchant slot — resolved role-aware so a
+                    // claimed order viewed from the buyer slot opens the seller.
+                    const _cp = deriveCounterparty(
+                      order.dbOrder,
+                      merchantInfo?.id,
+                    );
+                    const cpEntityType: ProfileEntityType =
+                      _cp?.entityType ?? "user";
+                    const cpEntityId: string | null = _cp?.id ?? null;
                     const username =
                       order.dbOrder?.user?.username || order.user;
                     // For open/market (M2M) orders the counterparty "username"

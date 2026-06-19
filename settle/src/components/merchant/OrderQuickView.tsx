@@ -64,6 +64,7 @@ import { maskAccountDetail } from "@/lib/mask";
 import { SURFACES } from "@/components/shared/limits/types";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { ProfileEntityType } from "@/components/shared/profile/types";
+import { deriveCounterparty } from "@/components/shared/profile/counterparty";
 
 // ── Counterparty profile wiring ──────────────────────────────────────────────
 // The popup is one big tree of sub-component bodies (CounterpartyTrustCard,
@@ -74,27 +75,10 @@ const ProfileOpenContext = createContext<
   (entityType: ProfileEntityType, id: string) => void
 >(() => {});
 
-// Derive the order's counterparty (whose profile the merchant wants to open)
-// from the raw DB row. Mirrors the card-level logic in MobileOrdersView /
-// MobileEscrowView: an M2M / open-broadcast order's counterparty is the buyer
-// merchant; a normal U2M order's is the user who placed it. Returns null when no
-// real profile target exists (e.g. an open_order_ placeholder with no id).
-function deriveCounterparty(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
-): { entityType: ProfileEntityType; id: string } | null {
-  if (!db) return null;
-  const userPlaceholder =
-    typeof db?.user?.username === "string" &&
-    (db.user.username.startsWith("open_order_") ||
-      db.user.username.startsWith("m2m_"));
-  const isM2M = userPlaceholder || !!db?.buyer_merchant_id;
-  const id: string | null = isM2M
-    ? db?.buyer_merchant_id || db?.buyer_merchant?.id || null
-    : db?.user?.id || db?.user_id || null;
-  if (!id) return null;
-  return { entityType: isM2M ? "merchant" : "user", id };
-}
+// `deriveCounterparty(db, merchantId)` (shared with the mobile cards + the
+// desktop pending panel) resolves whose profile the merchant wants to open from
+// the raw DB row. Pass merchantId so an M2M order viewed from the buyer slot
+// opens the seller, not the viewer themselves.
 
 /** Map fiat currency code to display symbol */
 function fiatSymbol(code: string | undefined | null): string {
@@ -804,7 +788,8 @@ function CounterpartyTrustCard({
   heading: string;
 }) {
   const openProfile = useContext(ProfileOpenContext);
-  const cp = deriveCounterparty(db);
+  const merchantId = useMerchantStore((s) => s.merchantId);
+  const cp = deriveCounterparty(db, merchantId);
   const u = db.user || {};
   const trades = u.total_trades ?? 0;
   const disputes = u.dispute_count ?? 0;
@@ -1356,7 +1341,7 @@ function ActiveOrderBody({
   // Counterparty profile opener (provided by the root OrderQuickView) + the
   // resolved target for THIS order's "View Profile" button.
   const openProfile = useContext(ProfileOpenContext);
-  const activeCounterparty = deriveCounterparty(db);
+  const activeCounterparty = deriveCounterparty(db, merchantId);
   const [showAddPayment, setShowAddPayment] = useLocalState(false);
   const [now, setNow] = useLocalState(() => Date.now());
   const [copiedId, setCopiedId] = useLocalState(false);
@@ -3036,14 +3021,25 @@ export function OrderQuickView({
     Array.isArray(qvDb.buyer_payment_types) &&
     qvDb.buyer_payment_types.length > 0;
   // A SELL order sitting in the open market that this merchant can CLAIM as the
-  // buyer: the user already funded escrow (status 'escrowed') and no buyer
+  // buyer: the seller already funded escrow (status 'escrowed') and no buyer
   // merchant has taken it yet. Drives the rich AcceptorSellOrderBody (mirrors
   // the buy-claim layout) instead of the bare fallback body.
+  //
+  // The `type` column is reliable only for U2M. For M2M the role is by slot —
+  // merchant_id is ALWAYS the seller, buyer_merchant_id ALWAYS the buyer — so an
+  // M2M sell-side open slot legitimately carries type='buy' and the bare
+  // type==='sell' literal would drop it into the old fallback body. Detect M2M
+  // by the placeholder user and accept it regardless of the type string; the
+  // remaining conditions (escrowed + buyer slot still open + viewer is a
+  // non-party observer) already pin it to a claimable seller-funded order.
+  const qvUsername = String((qvDb as { user?: { username?: string } }).user?.username || "");
+  const qvIsM2MPlaceholder =
+    qvUsername.startsWith("open_order_") || qvUsername.startsWith("m2m_");
   const isClaimableSellOrder =
     !!selectedOrder &&
     !isOwnPendingBuy &&
     !isAcceptableBuyOrder &&
-    String(qvDb.type || "").toLowerCase() === "sell" &&
+    (String(qvDb.type || "").toLowerCase() === "sell" || qvIsM2MPlaceholder) &&
     qvStatus === "escrowed" &&
     !qvDb.buyer_merchant_id &&
     qvDb.merchant_id !== merchantId &&
@@ -3091,7 +3087,7 @@ export function OrderQuickView({
       ? `BLP-${qvDb.id.slice(0, 8).toUpperCase()}`
       : "—";
   // Profile target for the popup header avatar/name (null → not tappable).
-  const qvCounterparty = deriveCounterparty(qvDb);
+  const qvCounterparty = deriveCounterparty(qvDb, merchantId);
   return (
     <ProfileOpenContext.Provider value={openProfile}>
     <AnimatePresence>
