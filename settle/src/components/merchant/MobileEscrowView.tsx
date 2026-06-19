@@ -5,6 +5,8 @@ import { Loader2 } from "lucide-react";
 import type { Order } from "@/types/merchant";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { formatCrypto, formatRate } from "@/lib/format";
+import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
+import type { ProfileEntityType } from "@/components/shared/profile/types";
 
 // ── Design tokens (Zoop 2026) ────────────────────────────────────────────────
 const T = {
@@ -100,9 +102,10 @@ interface ActiveCardProps {
   onOpenCancelModal: (o: Order) => void;
   setMobileView: (v: any) => void;
   onSelectOrder?: (o: Order) => void;
+  onOpenProfile?: (entityType: ProfileEntityType, id: string) => void;
 }
 
-function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkFiatPaymentSent, onConfirmPayment, onOpenChat, setMobileView, onSelectOrder }: ActiveCardProps) {
+function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkFiatPaymentSent, onConfirmPayment, onOpenChat, setMobileView, onSelectOrder, onOpenProfile }: ActiveCardProps) {
   const dbStatus = order.dbOrder?.minimal_status || order.dbOrder?.status;
   const role = order.myRole || "observer";
   const hasBeenAccepted = !!order.dbOrder?.accepted_at;
@@ -146,6 +149,25 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
   const displayName = order.user || "Counterparty";
   const initials = displayName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
 
+  // Counterparty for the profile sheet (mirrors MobileOrdersView): a normal
+  // U2M order's counterparty is the user who placed it; an M2M/open order's is
+  // the buyer merchant. Tapping the header avatar/name opens this profile.
+  const _cpDb = order.dbOrder as any;
+  const _cpUserPlaceholder =
+    typeof _cpDb?.user?.username === "string" &&
+    (_cpDb.user.username.startsWith("open_order_") ||
+      _cpDb.user.username.startsWith("m2m_"));
+  const cpIsM2M = _cpUserPlaceholder || !!_cpDb?.buyer_merchant_id;
+  const cpEntityType: ProfileEntityType = cpIsM2M ? "merchant" : "user";
+  const cpEntityId: string | null = cpIsM2M
+    ? _cpDb?.buyer_merchant_id || _cpDb?.buyer_merchant?.id || null
+    : _cpDb?.user?.id || _cpDb?.user_id || null;
+  const handleOpenProfile = (e: { stopPropagation: () => void }) => {
+    if (!cpEntityId || !onOpenProfile) return;
+    e.stopPropagation();
+    onOpenProfile(cpEntityType, cpEntityId);
+  };
+
   const unread = order.unreadCount || 0;
 
   return (
@@ -175,11 +197,12 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
         </span>
       </div>
 
-      {/* Trust block — tap to open the full order detail (OrderQuickView). */}
+      {/* Header / trust block — tap avatar, name or the row to open the
+          counterparty profile (the order detail moved to the payout body). */}
       <div
-        onClick={onSelectOrder ? () => onSelectOrder(order) : undefined}
-        role={onSelectOrder ? "button" : undefined}
-        style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10, cursor: onSelectOrder ? "pointer" : undefined }}
+        onClick={handleOpenProfile}
+        role={cpEntityId && onOpenProfile ? "button" : undefined}
+        style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10, cursor: cpEntityId && onOpenProfile ? "pointer" : undefined }}
       >
         <span style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: "linear-gradient(150deg,#ff8a3d,#ff5d73)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13 }}>
           {initials}
@@ -220,8 +243,12 @@ function ActiveCard({ order, merchantId, markingDone, onOpenEscrowModal, onMarkF
       {/* Divider */}
       <div style={{ height: 1, background: T.hair, margin: "11px -15px" }} />
 
-      {/* Payout hero */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 13 }}>
+      {/* Payout hero — tap to open the full order detail (OrderQuickView). */}
+      <div
+        onClick={onSelectOrder ? () => onSelectOrder(order) : undefined}
+        role={onSelectOrder ? "button" : undefined}
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 13, cursor: onSelectOrder ? "pointer" : undefined }}
+      >
         <div>
           <div style={{ color: T.muted, fontWeight: 700, fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
             {viewerSide === "seller" ? "You receive" : "You pay out"}
@@ -326,6 +353,11 @@ export function MobileEscrowView({
 }: MobileEscrowViewProps) {
   const [filter, setFilter] = useState<EscrowStatusFilter>("all");
   const merchantId = useMerchantStore((s) => s.merchantId);
+  // Counterparty profile sheet — opened by tapping a card's avatar/name.
+  const [profileTarget, setProfileTarget] = useState<{
+    entityType: ProfileEntityType;
+    id: string;
+  } | null>(null);
 
   // Sliding-thumb position is MEASURED from the active tab button rather than
   // assuming equal 1/N widths — the labels differ in length ("All" vs
@@ -406,6 +438,9 @@ export function MobileEscrowView({
           onOpenCancelModal={onOpenCancelModal}
           setMobileView={setMobileView}
           onSelectOrder={onSelectOrder}
+          onOpenProfile={(entityType, id) =>
+            setProfileTarget({ entityType, id })
+          }
         />
       )) : (
         <div style={{ textAlign: "center", paddingTop: 100 }}>
@@ -420,6 +455,15 @@ export function MobileEscrowView({
           </div>
         </div>
       )}
+
+      {/* Counterparty profile — opened by tapping a card's avatar/name. */}
+      <ProfileSheet
+        open={!!profileTarget}
+        entityType={profileTarget?.entityType ?? null}
+        id={profileTarget?.id ?? null}
+        variant="merchant"
+        onClose={() => setProfileTarget(null)}
+      />
     </div>
   );
 }

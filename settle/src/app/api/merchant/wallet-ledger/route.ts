@@ -118,14 +118,14 @@ export async function GET(request: NextRequest) {
           CASE
             WHEN le.amount <= 0 THEN 0
             WHEN le.entry_type = 'ESCROW_REFUND' THEN 0
-            WHEN le.entry_type = 'ESCROW_RELEASE' AND COALESCE(o.status, '') <> 'completed' THEN 0
+            WHEN le.entry_type = 'ESCROW_RELEASE' AND COALESCE(o.status::text, '') <> 'completed' THEN 0
             ELSE le.amount
           END
         ), 0) as total_credits,
         COALESCE(SUM(
           CASE
             WHEN le.amount >= 0 THEN 0
-            WHEN le.entry_type = 'ESCROW_LOCK' AND COALESCE(o.status, '') <> 'completed' THEN 0
+            WHEN le.entry_type = 'ESCROW_LOCK' AND COALESCE(o.status::text, '') <> 'completed' THEN 0
             ELSE ABS(le.amount)
           END
         ), 0) as total_debits,

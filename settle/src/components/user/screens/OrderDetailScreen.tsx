@@ -3155,6 +3155,11 @@ export const OrderDetailScreen = ({
               reviewText={reviewText}
               onRate={setRating}
               onReviewTextChange={setReviewText}
+              onSubmitReview={() => {
+                if (rating > 0 && activeOrder.userRating == null && submitReview) {
+                  submitReview(activeOrder.id, rating, reviewText || undefined);
+                }
+              }}
               onViewProfile={() => setShowProfile(true)}
               onViewOverview={() => setShowOrderOverview(true)}
               onHelp={() => setScreen("support")}

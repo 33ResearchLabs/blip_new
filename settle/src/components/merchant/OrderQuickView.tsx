@@ -41,6 +41,8 @@ import {
   useState as useLocalState,
   useEffect as useLocalEffect,
   useRef as useLocalRef,
+  createContext,
+  useContext,
   Fragment,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -60,6 +62,39 @@ import { PaymentMethodModal } from "@/components/merchant/PaymentMethodModal";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { maskAccountDetail } from "@/lib/mask";
 import { SURFACES } from "@/components/shared/limits/types";
+import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
+import type { ProfileEntityType } from "@/components/shared/profile/types";
+
+// ── Counterparty profile wiring ──────────────────────────────────────────────
+// The popup is one big tree of sub-component bodies (CounterpartyTrustCard,
+// ActiveOrderBody, …). Rather than thread an onOpenProfile callback through every
+// one, the root provides openProfile() via context and renders a single
+// <ProfileSheet>. Any descendant calls useContext(ProfileOpenContext)(et, id).
+const ProfileOpenContext = createContext<
+  (entityType: ProfileEntityType, id: string) => void
+>(() => {});
+
+// Derive the order's counterparty (whose profile the merchant wants to open)
+// from the raw DB row. Mirrors the card-level logic in MobileOrdersView /
+// MobileEscrowView: an M2M / open-broadcast order's counterparty is the buyer
+// merchant; a normal U2M order's is the user who placed it. Returns null when no
+// real profile target exists (e.g. an open_order_ placeholder with no id).
+function deriveCounterparty(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+): { entityType: ProfileEntityType; id: string } | null {
+  if (!db) return null;
+  const userPlaceholder =
+    typeof db?.user?.username === "string" &&
+    (db.user.username.startsWith("open_order_") ||
+      db.user.username.startsWith("m2m_"));
+  const isM2M = userPlaceholder || !!db?.buyer_merchant_id;
+  const id: string | null = isM2M
+    ? db?.buyer_merchant_id || db?.buyer_merchant?.id || null
+    : db?.user?.id || db?.user_id || null;
+  if (!id) return null;
+  return { entityType: isM2M ? "merchant" : "user", id };
+}
 
 /** Map fiat currency code to display symbol */
 function fiatSymbol(code: string | undefined | null): string {
@@ -768,6 +803,8 @@ function CounterpartyTrustCard({
   now: number;
   heading: string;
 }) {
+  const openProfile = useContext(ProfileOpenContext);
+  const cp = deriveCounterparty(db);
   const u = db.user || {};
   const trades = u.total_trades ?? 0;
   const disputes = u.dispute_count ?? 0;
@@ -805,8 +842,12 @@ function CounterpartyTrustCard({
 
   return (
     <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
-      {/* Identity header — who placed this order */}
-      <div className="flex items-center gap-3">
+      {/* Identity header — tap avatar/name to open the creator's profile */}
+      <div
+        className={`flex items-center gap-3 ${cp ? "cursor-pointer" : ""}`}
+        onClick={cp ? () => openProfile(cp.entityType, cp.id) : undefined}
+        role={cp ? "button" : undefined}
+      >
         <UserAvatar src={u.avatar_url || null} seed={name} size={40} style={{ borderRadius: 12 }} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground truncate">{name}</p>
@@ -1312,6 +1353,10 @@ function ActiveOrderBody({
 }) {
   const router = useRouter();
   const merchantId = useMerchantStore((s) => s.merchantId);
+  // Counterparty profile opener (provided by the root OrderQuickView) + the
+  // resolved target for THIS order's "View Profile" button.
+  const openProfile = useContext(ProfileOpenContext);
+  const activeCounterparty = deriveCounterparty(db);
   const [showAddPayment, setShowAddPayment] = useLocalState(false);
   const [now, setNow] = useLocalState(() => Date.now());
   const [copiedId, setCopiedId] = useLocalState(false);
@@ -1784,17 +1829,21 @@ function ActiveOrderBody({
               )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              // No counterparty-profile route is wired into this view yet; the
-              // button matches the mock and is a no-op until one is provided.
-            }}
-            className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[13px] font-semibold bg-foreground/[0.06] text-foreground border border-white/[0.08] hover:bg-foreground/[0.1] transition-colors"
-          >
-            View Profile
-            <ChevronRight className="w-4 h-4 text-foreground/40" />
-          </button>
+          {activeCounterparty && (
+            <button
+              type="button"
+              onClick={() =>
+                openProfile(
+                  activeCounterparty.entityType,
+                  activeCounterparty.id,
+                )
+              }
+              className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[13px] font-semibold bg-foreground/[0.06] text-foreground border border-white/[0.08] hover:bg-foreground/[0.1] transition-colors"
+            >
+              View Profile
+              <ChevronRight className="w-4 h-4 text-foreground/40" />
+            </button>
+          )}
         </div>
 
         {/* Rating */}
@@ -1944,16 +1993,6 @@ function ActiveOrderBody({
                   <span className="font-mono font-bold text-emerald-400">{expiresIn}</span>
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  // No order-timeline view is wired into this screen yet; the
-                  // button matches the mock and is a no-op until one exists.
-                }}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-foreground/[0.06] border border-white/[0.08] text-[11px] font-medium text-foreground/80 hover:bg-foreground/[0.1] transition-colors"
-              >
-                Order Timeline <ChevronRight className="w-3 h-3" />
-              </button>
             </div>
           </div>
         </div>
@@ -2935,6 +2974,15 @@ export function OrderQuickView({
   // Copy feedback for the Order ID shown in the completed-order app-bar.
   const [hdrCopied, setHdrCopied] = useLocalState(false);
 
+  // Counterparty profile sheet — opened from the header avatar/name, the
+  // CounterpartyTrustCard, or the "View Profile" button (all via context).
+  const [profileTarget, setProfileTarget] = useLocalState<{
+    entityType: ProfileEntityType;
+    id: string;
+  } | null>(null);
+  const openProfile = (entityType: ProfileEntityType, id: string) =>
+    setProfileTarget({ entityType, id });
+
   // After an inline lock for THIS order finishes successfully (was locking →
   // no longer locking, no error), close the popup. The popup's `selectedOrder`
   // copy is stale (still "accepted"), so leaving it open would show the Lock
@@ -3042,7 +3090,10 @@ export function OrderQuickView({
       : typeof qvDb.id === "string"
       ? `BLP-${qvDb.id.slice(0, 8).toUpperCase()}`
       : "—";
+  // Profile target for the popup header avatar/name (null → not tappable).
+  const qvCounterparty = deriveCounterparty(qvDb);
   return (
+    <ProfileOpenContext.Provider value={openProfile}>
     <AnimatePresence>
       {selectedOrder && (
         <>
@@ -3142,9 +3193,23 @@ export function OrderQuickView({
               </div>
             ) : (
               <>
-                {/* Header */}
+                {/* Header — avatar + name tap to open the counterparty profile */}
                 <div className="px-5 py-4 border-b border-foreground/[0.04] flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-3">
+                  <div
+                    className={`flex items-center gap-3 ${
+                      qvCounterparty ? "cursor-pointer" : ""
+                    }`}
+                    onClick={
+                      qvCounterparty
+                        ? () =>
+                            openProfile(
+                              qvCounterparty.entityType,
+                              qvCounterparty.id,
+                            )
+                        : undefined
+                    }
+                    role={qvCounterparty ? "button" : undefined}
+                  >
                     <div className="w-12 h-12 rounded-xl bg-foreground/5 flex items-center justify-center text-2xl border border-foreground/[0.04]">
                       {selectedOrder.emoji}
                     </div>
@@ -4034,5 +4099,14 @@ export function OrderQuickView({
         </>
       )}
     </AnimatePresence>
+    {/* Counterparty profile — layered above the popup (z-[140] > z-50). */}
+    <ProfileSheet
+      open={!!profileTarget}
+      entityType={profileTarget?.entityType ?? null}
+      id={profileTarget?.id ?? null}
+      variant="merchant"
+      onClose={() => setProfileTarget(null)}
+    />
+    </ProfileOpenContext.Provider>
   );
 }
