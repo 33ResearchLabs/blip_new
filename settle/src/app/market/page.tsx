@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Plus, Loader2, History } from "lucide-react";
+import { Plus, Loader2, ReceiptText } from "lucide-react";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { getNotifPrefs } from "@/hooks/useNotifPrefs";
@@ -1039,7 +1039,7 @@ export default function MerchantDashboard() {
                 className="p-2 rounded-lg transition-all bg-white/[0.03] hover:bg-card border border-white/[0.05]"
                 title="Transaction History"
               >
-                <History className="w-[18px] h-[18px] text-white/40" />
+                <ReceiptText className="w-[18px] h-[18px] text-white/40" />
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.95 }}

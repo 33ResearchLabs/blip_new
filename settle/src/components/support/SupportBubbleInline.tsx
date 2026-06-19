@@ -62,8 +62,8 @@ export function SupportBubbleInline({ actorType, actorId }: SupportBubbleInlineP
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-bg-secondary)]">
-      <div className="px-5 py-4 border-b border-border flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+      <div className="shrink-0 px-5 py-4 border-b border-border flex items-center gap-3">
+        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
           <MessageCircle className="w-4 h-4 text-primary" />
         </div>
         <div>
@@ -73,7 +73,7 @@ export function SupportBubbleInline({ actorType, actorId }: SupportBubbleInlineP
           </p>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 scrollbar-hide">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 scrollbar-hide">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <MessageCircle className="w-10 h-10 text-muted/30 mb-3" />
@@ -97,7 +97,7 @@ export function SupportBubbleInline({ actorType, actorId }: SupportBubbleInlineP
         ))}
         <div ref={bottomRef} />
       </div>
-      <div className="px-4 py-3 border-t border-border">
+      <div className="shrink-0 px-4 py-3 border-t border-border">
         <div className="flex items-center gap-2 bg-[var(--color-bg-tertiary)] rounded-2xl px-4 py-2">
           <input
             value={input}
