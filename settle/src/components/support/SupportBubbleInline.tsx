@@ -73,30 +73,31 @@ export function SupportBubbleInline({ actorType, actorId }: SupportBubbleInlineP
           </p>
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 scrollbar-hide">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <MessageCircle className="w-10 h-10 text-muted/30 mb-3" />
-            <p className="text-sm text-muted">No messages yet</p>
-            <p className="text-xs text-muted/60 mt-1">Send a message to start</p>
-          </div>
-        )}
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
-              msg.sender === 'user'
-                ? 'bg-primary text-white rounded-br-sm'
-                : 'bg-[var(--color-bg-tertiary)] text-foreground rounded-bl-sm'
-            }`}>
-              <p>{msg.content}</p>
-              <p className={`text-[10px] mt-1 ${msg.sender === 'user' ? 'text-white/60' : 'text-muted'}`}>
-                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
+      {messages.length === 0 ? (
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-4 text-center">
+          <MessageCircle className="w-8 h-8 text-muted/30 mb-3" />
+          <p className="text-sm text-muted">No messages yet</p>
+          <p className="text-xs text-muted/60 mt-1">Send a message to start</p>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 scrollbar-hide">
+          {messages.map((msg) => (
+            <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
+                msg.sender === 'user'
+                  ? 'bg-primary text-white rounded-br-sm'
+                  : 'bg-[var(--color-bg-tertiary)] text-foreground rounded-bl-sm'
+              }`}>
+                <p>{msg.content}</p>
+                <p className={`text-[10px] mt-1 ${msg.sender === 'user' ? 'text-white/60' : 'text-muted'}`}>
+                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      )}
       <div className="shrink-0 px-4 py-3 border-t border-border">
         <div className="flex items-center gap-2 bg-[var(--color-bg-tertiary)] rounded-2xl px-4 py-2">
           <input
