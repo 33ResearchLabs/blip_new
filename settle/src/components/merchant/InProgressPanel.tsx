@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useRef, useState, useMemo } from "react";
+import { memo, useRef, useMemo } from "react";
 import {
   Shield,
   Zap,
@@ -654,16 +654,15 @@ const InProgressOrderList = memo(function InProgressOrderList({
   );
 });
 
-type FilterValue = MinimalStatus | "all" | "cancel_requested";
-
-const STATUS_FILTERS: { value: FilterValue; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "accepted", label: "Accepted" },
-  { value: "escrowed", label: "Escrowed" },
-  { value: "payment_sent", label: "Paid" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "disputed", label: "Disputed" },
-  { value: "cancel_requested", label: "Cancel Req" },
+// "Active Trades" means trades currently in flight — accepted, escrowed, or
+// paid (awaiting confirmation). Terminal/non-active states (disputed,
+// cancelled, expired, completed) are intentionally excluded here; they live in
+// their own buckets/views. This is the single source of truth for what counts
+// as an active trade in this panel.
+const ACTIVE_STATUSES: MinimalStatus[] = [
+  "accepted",
+  "escrowed",
+  "payment_sent",
 ];
 
 export const InProgressPanel = memo(function InProgressPanel({
@@ -680,16 +679,16 @@ export const InProgressPanel = memo(function InProgressPanel({
   acceptingOrderId,
   cancellingOrderId,
 }: InProgressPanelProps) {
-  const [statusFilter, setStatusFilter] = useState<FilterValue>("all");
-
-  const filteredOrders = useMemo(() => {
-    if (statusFilter === "all") return orders;
-    if (statusFilter === "cancel_requested")
-      return orders.filter((order) => !!order.cancelRequestedBy);
-    return orders.filter(
-      (order) => getAuthoritativeStatus(order) === statusFilter,
-    );
-  }, [orders, statusFilter]);
+  // Only genuinely active trades belong in this panel. Anything terminal
+  // (disputed/cancelled/expired/completed) is dropped so the panel shows
+  // active trades and nothing else. No status filtering UI.
+  const filteredOrders = useMemo(
+    () =>
+      orders.filter((order) =>
+        ACTIVE_STATUSES.includes(getAuthoritativeStatus(order)),
+      ),
+    [orders],
+  );
 
   const formatTimeRemaining = (seconds: number): string => {
     if (seconds <= 0) return "Expired";
@@ -738,44 +737,8 @@ export const InProgressPanel = memo(function InProgressPanel({
           </div>
           <span className="text-[10px] border border-foreground/[0.08] text-foreground/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
             {filteredOrders.length}
-            {statusFilter !== "all" ? `/${orders.length}` : ""}
           </span>
         </div>
-        {/* Status Filter Pills */}
-        {!collapsed && (
-          <div
-            className="flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] w-full overflow-x-auto scrollbar-hide"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {STATUS_FILTERS.map((f) => {
-              const isActive = statusFilter === f.value;
-              const count =
-                f.value === "all"
-                  ? orders.length
-                  : f.value === "cancel_requested"
-                    ? orders.filter((o) => !!o.cancelRequestedBy).length
-                    : orders.filter(
-                        (o) => getAuthoritativeStatus(o) === f.value,
-                      ).length;
-              return (
-                <button
-                  key={f.value}
-                  onClick={() => setStatusFilter(f.value)}
-                  className={`shrink-0 h-full px-2 xl:px-2 [@media(min-height:900px)]:px-2 inline-flex items-center justify-center rounded-md text-[9px] xl:text-[10px] [@media(min-height:900px)]:text-[10px] font-bold whitespace-nowrap transition-all ${
-                    isActive
-                      ? "bg-foreground text-background shadow"
-                      : "text-foreground/40 hover:text-foreground/60"
-                  }`}
-                >
-                  <span className="whitespace-nowrap">
-                    {f.label}
-                    {count > 0 ? ` ${count}` : ""}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* Orders List — Virtualized */}
