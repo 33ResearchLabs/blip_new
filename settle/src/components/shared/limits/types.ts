@@ -95,26 +95,24 @@ export const SURFACES: Record<LimitsVariant, SurfaceTokens> = {
 };
 
 /**
- * Unlock-row CTA buttons — minimalistic soft yellow background (`bg-accent/15`)
- * with `--accent-text` for the label, i.e. black in light mode / white in dark
- * mode. Icon and label never use yellow themselves. Tone keys kept so callers
- * don't change.
+ * Unlock-row CTA buttons — solid inverted fill (`bg-text-primary` = black in
+ * light mode / white in dark mode) with `text-surface-base` for the label. No
+ * accent/yellow tint. Tone keys kept so callers don't change.
  */
 export const ACTION_BTN: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-accent/15 text-text-primary hover:bg-accent/25",
-    violet: "bg-accent/15 text-text-primary hover:bg-accent/25",
-    amber: "bg-accent/15 text-text-primary hover:bg-accent/25",
-    blue: "bg-accent/15 text-text-primary hover:bg-accent/25",
+    green: "bg-text-primary text-surface-base hover:opacity-90",
+    violet: "bg-text-primary text-surface-base hover:opacity-90",
+    amber: "bg-text-primary text-surface-base hover:opacity-90",
+    blue: "bg-text-primary text-surface-base hover:opacity-90",
   };
 
-/** Unlock-row icon circles — minimalistic soft yellow background (`bg-accent/15`)
- *  with `--accent-text` for the glyph (black in light mode / white in dark mode),
- *  never yellow itself. */
+/** Unlock-row icon circles — white background (`bg-white/80`) with
+ *  `text-text-primary` for the glyph. No accent/yellow tint. */
 export const ACTION_ICON: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-accent/15 text-text-primary",
-    violet: "bg-accent/15 text-text-primary",
-    amber: "bg-accent/15 text-text-primary",
-    blue: "bg-accent/15 text-text-primary",
+    green: "bg-white/80 text-text-primary",
+    violet: "bg-white/80 text-text-primary",
+    amber: "bg-white/80 text-text-primary",
+    blue: "bg-white/80 text-text-primary",
   };

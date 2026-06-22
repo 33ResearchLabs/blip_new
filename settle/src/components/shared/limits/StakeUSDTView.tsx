@@ -230,7 +230,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
             <div className="min-w-0">
               <p className="text-[12px] text-text-tertiary">Your Staked Balance</p>
               <div className="flex items-center gap-2 mt-1.5">
-                <div className="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-border-subtle text-text-secondary flex items-center justify-center shrink-0">
                   <span className="text-[13px] font-extrabold">$</span>
                 </div>
                 <p className="text-[22px] font-extrabold text-text-primary leading-none tracking-[-0.02em]">
@@ -246,7 +246,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
               whileTap={{ scale: 0.92 }}
               onClick={scrollToForm}
               aria-label="Stake"
-              className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-xl bg-accent text-accent-text hover:opacity-90 transition-opacity"
+              className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-xl bg-border-subtle text-text-primary hover:bg-border-subtle/70 transition-colors"
             >
               <Plus className="w-3 h-3" />
             </motion.button>
@@ -307,27 +307,27 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
                   <div
                     key={t.stake}
                     className={`grid grid-cols-3 gap-2 items-center px-3 py-2.5 rounded-xl ${
-                      rec ? "bg-accent/10 border border-accent/30" : ""
+                      rec ? "bg-border-subtle border border-border-subtle" : ""
                     }`}
                   >
                     <span className="text-[12px] font-semibold text-text-primary inline-flex items-center gap-1.5 flex-wrap">
                       {t.stake}
                       {rec && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-accent/15 text-accent">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-border-subtle text-text-secondary">
                           Recommended
                         </span>
                       )}
                     </span>
                     <span
                       className={`text-[12px] text-center ${
-                        rec ? "font-bold text-accent" : "text-text-secondary"
+                        rec ? "font-bold text-text-primary" : "text-text-secondary"
                       }`}
                     >
                       {t.mult}
                     </span>
                     <span
                       className={`text-[12px] text-right font-semibold ${
-                        rec ? "text-accent" : "text-text-primary"
+                        rec ? "text-text-primary" : "text-text-primary"
                       }`}
                     >
                       {t.daily}
@@ -337,8 +337,8 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
               })}
             </div>
 
-            <div className="flex items-start gap-3 mt-4 p-3.5 rounded-xl border border-accent/20 bg-accent/[0.07]">
-              <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
+            <div className={`flex items-start gap-3 mt-4 p-3.5 rounded-xl border border-border-subtle ${surfaces.inset}`}>
+              <div className="w-8 h-8 rounded-full bg-border-subtle text-text-secondary flex items-center justify-center shrink-0">
                 <Zap className="w-4 h-4" />
               </div>
               <div className="min-w-0">
@@ -373,7 +373,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
                       setError(null);
                     }}
                     className={`px-3 py-1.5 rounded-lg text-[12px] font-bold capitalize transition-colors ${
-                      mode === m ? "bg-accent text-accent-text" : "text-text-tertiary"
+                      mode === m ? "bg-border-subtle text-text-primary" : "text-text-tertiary"
                     }`}
                   >
                     {m}
@@ -385,7 +385,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
             <div className={`rounded-2xl p-4 border border-border-subtle ${surfaces.inset}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[12px] text-text-tertiary inline-flex items-center gap-1.5">
-                  <span className="w-4 h-4 rounded-full bg-accent/10 text-accent inline-flex items-center justify-center text-[10px] font-extrabold">
+                  <span className="w-4 h-4 rounded-full bg-border-subtle text-text-secondary inline-flex items-center justify-center text-[10px] font-extrabold">
                     $
                   </span>
                   Amount
@@ -429,13 +429,13 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
             </div>
 
             {error && <p className="text-[12px] text-red-500 mt-3">{error}</p>}
-            {notice && <p className="text-[12px] text-accent mt-3">{notice}</p>}
+            {notice && <p className="text-[12px] text-text-secondary mt-3">{notice}</p>}
 
             <motion.button
               whileTap={{ scale: 0.99 }}
               onClick={submit}
               disabled={submitting}
-              className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-accent text-accent-text text-[14px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-border-subtle text-text-primary text-[14px] font-bold hover:bg-border-subtle/70 transition-colors disabled:opacity-50"
             >
               {submitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -447,8 +447,8 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
               )}
             </motion.button>
 
-            <div className="flex items-center gap-2 mt-3 px-3.5 py-3 rounded-xl border border-accent/20 bg-accent/[0.07]">
-              <Lock className="w-3.5 h-3.5 text-accent shrink-0" />
+            <div className={`flex items-center gap-2 mt-3 px-3.5 py-3 rounded-xl border border-border-subtle ${surfaces.inset}`}>
+              <Lock className="w-3.5 h-3.5 text-text-secondary shrink-0" />
               <p className="text-[12px] text-text-tertiary">
                 Your USDT will be locked securely and you can unstake anytime.
               </p>
@@ -464,7 +464,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
               <h3 className="text-[15px] font-bold text-text-primary">Your Staking Overview</h3>
               <button
                 onClick={toggleHistory}
-                className="text-[12px] text-accent font-semibold inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
+                className="text-[12px] text-text-secondary font-semibold inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
               >
                 <History className="w-3.5 h-3.5" />
                 {showHistory ? "Hide History" : "View History"}
@@ -513,7 +513,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
                         <div key={e.id} className="flex items-center gap-3 py-3">
                           <div
                             className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                              isOut ? "bg-amber-500/10 text-amber-500" : "bg-accent/10 text-accent"
+                              isOut ? "bg-border-subtle text-text-secondary" : "bg-border-subtle text-text-secondary"
                             }`}
                           >
                             {isOut ? (
@@ -575,13 +575,13 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
   );
 }
 
-// All icon tints follow the theme accent (yellow on user, merchant-theme on
-// merchant) — the tone keys are kept so callers don't change.
+// Neutral icon tints (no accent/yellow) — the tone keys are kept so callers
+// don't change.
 const TONE: Record<string, string> = {
-  emerald: "bg-accent/10 text-accent",
-  blue: "bg-accent/10 text-accent",
-  violet: "bg-accent/10 text-accent",
-  amber: "bg-accent/10 text-accent",
+  emerald: "bg-border-subtle text-text-secondary",
+  blue: "bg-border-subtle text-text-secondary",
+  violet: "bg-border-subtle text-text-secondary",
+  amber: "bg-border-subtle text-text-secondary",
 };
 
 function Benefit({
