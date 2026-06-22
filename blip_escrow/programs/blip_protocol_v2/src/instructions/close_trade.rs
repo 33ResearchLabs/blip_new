@@ -56,7 +56,7 @@ pub struct CloseTrade<'info> {
         close = rent_recipient,
         constraint = trade.is_terminal() @ ErrorCode::TradeNotTerminal,
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     /// Recipient of the reclaimed rent. MUST equal `trade.creator`. Pinning
     /// it inside the account constraint (not just the handler) means even a

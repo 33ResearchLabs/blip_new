@@ -19,7 +19,7 @@ const fs = require('fs');
 const path = require('path');
 
 // ── Config ───────────────────────────────────────────────────────────
-const PROGRAM_ID = new PublicKey('6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87');
+const PROGRAM_ID = new PublicKey('AzhunmkEJEBa7RBjhgwvax8WdKZGMfmF8EHbMG1a4ez8');
 const USDT_MINT = new PublicKey('FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z');
 const TREASURY = new PublicKey('8G55Mg2QmeR5LTz1Ckp8fH2cYh4H3HpLHz2VmFMFKvtB');
 const DEVNET_RPC = process.env.SOLANA_RPC || 'https://api.devnet.solana.com';

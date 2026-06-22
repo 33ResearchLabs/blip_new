@@ -14,7 +14,7 @@ pub struct ReleaseEscrow<'info> {
         seeds = [ProtocolConfig::SEED_PREFIX],
         bump
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     #[account(
         mut,
@@ -26,7 +26,7 @@ pub struct ReleaseEscrow<'info> {
         ],
         bump = trade.bump
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     #[account(
         mut,
@@ -35,7 +35,7 @@ pub struct ReleaseEscrow<'info> {
         bump = escrow.bump,
         has_one = trade
     )]
-    pub escrow: Account<'info, Escrow>,
+    pub escrow: Box<Account<'info, Escrow>>,
 
     /// CHECK: PDA signer for vault
     #[account(
@@ -49,14 +49,14 @@ pub struct ReleaseEscrow<'info> {
         constraint = vault_ata.key() == escrow.vault_ata,
         constraint = vault_ata.mint == mint.key() @ ErrorCode::InvalidMint
     )]
-    pub vault_ata: Account<'info, TokenAccount>,
+    pub vault_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = counterparty_ata.mint == mint.key() @ ErrorCode::InvalidMint,
         constraint = counterparty_ata.owner == trade.counterparty
     )]
-    pub counterparty_ata: Account<'info, TokenAccount>,
+    pub counterparty_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -65,7 +65,7 @@ pub struct ReleaseEscrow<'info> {
         // admin can't redirect this trade's fee post-creation.
         constraint = treasury_ata.owner == trade.treasury @ ErrorCode::InvalidTreasury
     )]
-    pub treasury_ata: Account<'info, TokenAccount>,
+    pub treasury_ata: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: Rent refund recipient — must equal escrow.depositor (the
     /// party who funded the trade and paid the escrow + vault rent).
@@ -73,7 +73,7 @@ pub struct ReleaseEscrow<'info> {
     pub depositor: UncheckedAccount<'info>,
 
     #[account(constraint = mint.key() == trade.mint @ ErrorCode::InvalidMint)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     pub token_program: Program<'info, Token>,
 }

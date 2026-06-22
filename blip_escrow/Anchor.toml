@@ -7,7 +7,7 @@ skip-lint = false
 
 [programs.devnet]
 blip_escrow = "5ggyzySMndginf1msqRXNz9ZmKP8pNLtAQVnVo8PiAX"
-blip_protocol_v2 = "6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87"
+blip_protocol_v2 = "AzhunmkEJEBa7RBjhgwvax8WdKZGMfmF8EHbMG1a4ez8"
 
 [programs.mainnet]
 blip_protocol_v2 = "gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS"

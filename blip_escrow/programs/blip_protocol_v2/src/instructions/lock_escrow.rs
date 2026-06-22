@@ -16,7 +16,7 @@ pub struct LockEscrow<'info> {
         seeds = [ProtocolConfig::SEED_PREFIX],
         bump = protocol_config.bump
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     #[account(
         mut,
@@ -27,7 +27,7 @@ pub struct LockEscrow<'info> {
         ],
         bump
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     #[account(
         init,
@@ -36,7 +36,7 @@ pub struct LockEscrow<'info> {
         seeds = [Escrow::SEED_PREFIX, trade.key().as_ref()],
         bump
     )]
-    pub escrow: Account<'info, Escrow>,
+    pub escrow: Box<Account<'info, Escrow>>,
 
     /// CHECK: PDA signer for vault
     #[account(
@@ -51,17 +51,17 @@ pub struct LockEscrow<'info> {
         associated_token::mint = mint,
         associated_token::authority = vault_authority
     )]
-    pub vault_ata: Account<'info, TokenAccount>,
+    pub vault_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = depositor_ata.mint == mint.key() @ ErrorCode::InvalidMint,
         constraint = depositor_ata.owner == depositor.key()
     )]
-    pub depositor_ata: Account<'info, TokenAccount>,
+    pub depositor_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(constraint = mint.key() == trade.mint @ ErrorCode::InvalidMint)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,

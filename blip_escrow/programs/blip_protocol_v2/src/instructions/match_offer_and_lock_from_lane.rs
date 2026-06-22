@@ -39,7 +39,7 @@ pub struct MatchOfferAndLockFromLane<'info> {
         seeds = [ProtocolConfig::SEED_PREFIX],
         bump
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     #[account(
         mut,
@@ -65,7 +65,7 @@ pub struct MatchOfferAndLockFromLane<'info> {
         constraint = lane_vault_ata.key() == lane.vault_ata,
         constraint = lane_vault_ata.mint == mint.key() @ ErrorCode::InvalidMint
     )]
-    pub lane_vault_ata: Account<'info, TokenAccount>,
+    pub lane_vault_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -102,7 +102,7 @@ pub struct MatchOfferAndLockFromLane<'info> {
         associated_token::mint = mint,
         associated_token::authority = trade_vault_authority
     )]
-    pub trade_vault_ata: Account<'info, TokenAccount>,
+    pub trade_vault_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -114,7 +114,7 @@ pub struct MatchOfferAndLockFromLane<'info> {
     pub offer_fill: Box<Account<'info, OfferFill>>,
 
     /// Mint must match lane's mint (verified in handler)
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     /// CHECK: Instructions sysvar — used to read the preceding Ed25519 ix
     #[account(address = IX_SYSVAR_ID)]

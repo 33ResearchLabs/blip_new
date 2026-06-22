@@ -21,7 +21,7 @@ pub struct ResolveDispute<'info> {
         bump = protocol_config.bump,
         constraint = protocol_config.authority == arbiter.key() @ ErrorCode::NotArbiter
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     #[account(
         mut,
@@ -34,7 +34,7 @@ pub struct ResolveDispute<'info> {
         bump = trade.bump,
         constraint = trade.status == TradeStatus::Disputed @ ErrorCode::NotDisputed
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     #[account(
         mut,
@@ -43,7 +43,7 @@ pub struct ResolveDispute<'info> {
         bump = escrow.bump,
         has_one = trade
     )]
-    pub escrow: Account<'info, Escrow>,
+    pub escrow: Box<Account<'info, Escrow>>,
 
     /// CHECK: PDA signer for vault
     #[account(
@@ -57,14 +57,14 @@ pub struct ResolveDispute<'info> {
         constraint = vault_ata.key() == escrow.vault_ata,
         constraint = vault_ata.mint == mint.key() @ ErrorCode::InvalidMint
     )]
-    pub vault_ata: Account<'info, TokenAccount>,
+    pub vault_ata: Box<Account<'info, TokenAccount>>,
 
     /// Recipient ATA - will be either buyer or seller depending on resolution
     #[account(
         mut,
         constraint = recipient_ata.mint == mint.key() @ ErrorCode::InvalidMint
     )]
-    pub recipient_ata: Account<'info, TokenAccount>,
+    pub recipient_ata: Box<Account<'info, TokenAccount>>,
 
     /// Treasury ATA for fees (only used if releasing to buyer).
     /// V2.3: validate against `trade.treasury` snapshot so a post-creation
@@ -74,14 +74,14 @@ pub struct ResolveDispute<'info> {
         constraint = treasury_ata.mint == mint.key() @ ErrorCode::InvalidMint,
         constraint = treasury_ata.owner == trade.treasury @ ErrorCode::InvalidTreasury
     )]
-    pub treasury_ata: Account<'info, TokenAccount>,
+    pub treasury_ata: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: Rent refund recipient — must equal escrow.depositor.
     #[account(mut, constraint = depositor.key() == escrow.depositor @ ErrorCode::InvalidDepositor)]
     pub depositor: UncheckedAccount<'info>,
 
     #[account(constraint = mint.key() == trade.mint @ ErrorCode::InvalidMint)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     pub token_program: Program<'info, Token>,
 }

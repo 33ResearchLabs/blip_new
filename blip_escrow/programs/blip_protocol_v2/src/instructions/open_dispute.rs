@@ -22,14 +22,14 @@ pub struct OpenDispute<'info> {
         ],
         bump = trade.bump
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     #[account(
         seeds = [Escrow::SEED_PREFIX, trade.key().as_ref()],
         bump = escrow.bump,
         has_one = trade
     )]
-    pub escrow: Account<'info, Escrow>,
+    pub escrow: Box<Account<'info, Escrow>>,
 }
 
 pub fn handler(ctx: Context<OpenDispute>) -> Result<()> {

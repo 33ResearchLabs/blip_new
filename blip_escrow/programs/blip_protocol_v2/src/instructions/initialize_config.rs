@@ -14,7 +14,7 @@ pub struct InitializeConfig<'info> {
         seeds = [ProtocolConfig::SEED_PREFIX],
         bump
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     /// CHECK: Treasury can be any account
     pub treasury: AccountInfo<'info>,

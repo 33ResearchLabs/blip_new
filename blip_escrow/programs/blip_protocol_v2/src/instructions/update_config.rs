@@ -14,7 +14,7 @@ pub struct UpdateConfig<'info> {
         bump,
         has_one = authority @ ErrorCode::Unauthorized
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     /// CHECK: New treasury can be any account
     pub new_treasury: Option<AccountInfo<'info>>,

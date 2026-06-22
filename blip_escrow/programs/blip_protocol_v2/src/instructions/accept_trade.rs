@@ -21,7 +21,7 @@ pub struct AcceptTrade<'info> {
         seeds = [ProtocolConfig::SEED_PREFIX],
         bump = protocol_config.bump
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     #[account(
         mut,
@@ -32,14 +32,14 @@ pub struct AcceptTrade<'info> {
         ],
         bump
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     #[account(
         seeds = [Escrow::SEED_PREFIX, trade.key().as_ref()],
         bump,
         constraint = escrow.trade == trade.key()
     )]
-    pub escrow: Account<'info, Escrow>,
+    pub escrow: Box<Account<'info, Escrow>>,
 
     pub system_program: Program<'info, System>,
 }

@@ -18,7 +18,7 @@ pub struct WithdrawLane<'info> {
         bump = lane.bump,
         has_one = merchant @ ErrorCode::Unauthorized
     )]
-    pub lane: Account<'info, Lane>,
+    pub lane: Box<Account<'info, Lane>>,
 
     /// CHECK: Lane vault authority PDA
     #[account(
@@ -32,17 +32,17 @@ pub struct WithdrawLane<'info> {
         constraint = vault_ata.key() == lane.vault_ata,
         constraint = vault_ata.mint == mint.key() @ ErrorCode::InvalidMint
     )]
-    pub vault_ata: Account<'info, TokenAccount>,
+    pub vault_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = merchant_ata.mint == mint.key() @ ErrorCode::InvalidMint,
         constraint = merchant_ata.owner == merchant.key()
     )]
-    pub merchant_ata: Account<'info, TokenAccount>,
+    pub merchant_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(constraint = mint.key() == lane.mint @ ErrorCode::InvalidMint)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     pub token_program: Program<'info, Token>,
 }

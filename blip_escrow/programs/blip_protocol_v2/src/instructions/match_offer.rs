@@ -30,7 +30,7 @@ pub struct MatchOffer<'info> {
         seeds = [ProtocolConfig::SEED_PREFIX],
         bump
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     #[account(
         init,
@@ -43,7 +43,7 @@ pub struct MatchOffer<'info> {
         ],
         bump
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     #[account(
         init,
@@ -52,7 +52,7 @@ pub struct MatchOffer<'info> {
         seeds = [OfferFill::SEED_PREFIX, params.offer_hash.as_ref()],
         bump
     )]
-    pub offer_fill: Account<'info, OfferFill>,
+    pub offer_fill: Box<Account<'info, OfferFill>>,
 
     /// CHECK: Instructions sysvar — used to read the preceding Ed25519 ix
     #[account(address = IX_SYSVAR_ID)]

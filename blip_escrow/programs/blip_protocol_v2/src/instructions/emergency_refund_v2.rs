@@ -40,7 +40,7 @@ pub struct EmergencyRefundV2<'info> {
         bump = protocol_config.bump,
         constraint = protocol_config.authority == signer.key() @ ErrorCode::Unauthorized
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     /// V2.2 Trade account - NOT deserialized, read raw bytes
     /// CHECK: We manually parse this account's data
@@ -56,7 +56,7 @@ pub struct EmergencyRefundV2<'info> {
         seeds = [Escrow::SEED_PREFIX, trade.key().as_ref()],
         bump = escrow.bump,
     )]
-    pub escrow: Account<'info, Escrow>,
+    pub escrow: Box<Account<'info, Escrow>>,
 
     /// Vault authority PDA
     /// CHECK: Verified by seeds
@@ -71,14 +71,14 @@ pub struct EmergencyRefundV2<'info> {
         mut,
         constraint = vault_ata.key() == escrow.vault_ata @ ErrorCode::InvalidVault
     )]
-    pub vault_ata: Account<'info, TokenAccount>,
+    pub vault_ata: Box<Account<'info, TokenAccount>>,
 
     /// Depositor's token account to receive refund
     #[account(
         mut,
         constraint = depositor_ata.owner == escrow.depositor @ ErrorCode::InvalidDepositor
     )]
-    pub depositor_ata: Account<'info, TokenAccount>,
+    pub depositor_ata: Box<Account<'info, TokenAccount>>,
 
     /// Trade creator account
     /// CHECK: Verified against parsed trade data — used only for cross-

@@ -36,7 +36,7 @@ pub struct RefundEscrow<'info> {
         ],
         bump = trade.bump
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     #[account(
         mut,
@@ -45,7 +45,7 @@ pub struct RefundEscrow<'info> {
         bump = escrow.bump,
         has_one = trade
     )]
-    pub escrow: Account<'info, Escrow>,
+    pub escrow: Box<Account<'info, Escrow>>,
 
     /// CHECK: PDA signer for vault
     #[account(
@@ -59,21 +59,21 @@ pub struct RefundEscrow<'info> {
         constraint = vault_ata.key() == escrow.vault_ata,
         constraint = vault_ata.mint == mint.key() @ ErrorCode::InvalidMint
     )]
-    pub vault_ata: Account<'info, TokenAccount>,
+    pub vault_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = depositor_ata.mint == mint.key() @ ErrorCode::InvalidMint,
         constraint = depositor_ata.owner == escrow.depositor @ ErrorCode::InvalidDepositor
     )]
-    pub depositor_ata: Account<'info, TokenAccount>,
+    pub depositor_ata: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: Rent refund recipient — must equal escrow.depositor.
     #[account(mut, constraint = depositor.key() == escrow.depositor @ ErrorCode::InvalidDepositor)]
     pub depositor: UncheckedAccount<'info>,
 
     #[account(constraint = mint.key() == trade.mint @ ErrorCode::InvalidMint)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     pub token_program: Program<'info, Token>,
 }

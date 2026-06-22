@@ -13,7 +13,7 @@ pub struct CreateTrade<'info> {
         seeds = [ProtocolConfig::SEED_PREFIX],
         bump
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
 
     #[account(
         init,
@@ -26,7 +26,7 @@ pub struct CreateTrade<'info> {
         ],
         bump
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     pub mint: Account<'info, anchor_spl::token::Mint>,
 

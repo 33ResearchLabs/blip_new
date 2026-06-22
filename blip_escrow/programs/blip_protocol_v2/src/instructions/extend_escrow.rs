@@ -28,7 +28,7 @@ pub struct ExtendEscrow<'info> {
         ],
         bump = trade.bump
     )]
-    pub trade: Account<'info, Trade>,
+    pub trade: Box<Account<'info, Trade>>,
 
     #[account(
         seeds = [Escrow::SEED_PREFIX, trade.key().as_ref()],
@@ -36,7 +36,7 @@ pub struct ExtendEscrow<'info> {
         has_one = trade,
         constraint = escrow.depositor == depositor.key() @ ErrorCode::NotDepositor
     )]
-    pub escrow: Account<'info, Escrow>,
+    pub escrow: Box<Account<'info, Escrow>>,
 }
 
 pub fn handler(ctx: Context<ExtendEscrow>, params: ExtendEscrowParams) -> Result<()> {

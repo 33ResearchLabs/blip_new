@@ -9,7 +9,7 @@ pub mod utils;
 use instructions::*;
 use state::*;
 
-declare_id!("gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS");
+declare_id!("AzhunmkEJEBa7RBjhgwvax8WdKZGMfmF8EHbMG1a4ez8");
 
 #[program]
 pub mod blip_protocol_v2 {

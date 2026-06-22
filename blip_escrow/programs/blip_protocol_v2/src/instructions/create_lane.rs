@@ -20,7 +20,7 @@ pub struct CreateLane<'info> {
         ],
         bump
     )]
-    pub lane: Account<'info, Lane>,
+    pub lane: Box<Account<'info, Lane>>,
 
     /// CHECK: PDA signer for lane vault
     #[account(
@@ -35,9 +35,9 @@ pub struct CreateLane<'info> {
         associated_token::mint = mint,
         associated_token::authority = vault_authority
     )]
-    pub vault_ata: Account<'info, TokenAccount>,
+    pub vault_ata: Box<Account<'info, TokenAccount>>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,

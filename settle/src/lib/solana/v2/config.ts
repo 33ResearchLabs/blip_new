@@ -15,8 +15,9 @@
 import { PublicKey } from '@solana/web3.js';
 
 // Devnet defaults — used when env vars unset (e.g. local dev without .env.local).
-const DEVNET_PROGRAM_ID = '6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87';
-const DEVNET_TREASURY = '8G55Mg2QmeR5LTz1Ckp8fH2cYh4H3HpLHz2VmFMFKvtB';
+// v3 deploy (2026-06-14): boxed-accounts build, full lifecycle verified.
+const DEVNET_PROGRAM_ID = 'AzhunmkEJEBa7RBjhgwvax8WdKZGMfmF8EHbMG1a4ez8';
+const DEVNET_TREASURY = 'K2WFxzYizWadkTeVqPGZ8Hx64pco7CeMbaP2CPy2pFp';
 
 // Mainnet v1.0 deploy (2026-04-27) — used when NEXT_PUBLIC_SOLANA_NETWORK=mainnet-beta
 // and the corresponding NEXT_PUBLIC_* vars are unset. Hard-coded as a safety net.

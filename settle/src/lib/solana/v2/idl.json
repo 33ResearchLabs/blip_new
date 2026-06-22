@@ -1,5 +1,5 @@
 {
-  "address": "gfFC2pjvRCALNehRWJb2ce81eDXJMwJdg9W7yeLyBqS",
+  "address": "AzhunmkEJEBa7RBjhgwvax8WdKZGMfmF8EHbMG1a4ez8",
   "metadata": {
     "name": "blip_protocol_v2",
     "version": "2.0.0",
@@ -269,6 +269,88 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_trade",
+      "docs": [
+        "Close a terminal Trade PDA and return its rent to the creator.",
+        "",
+        "Permissionless: any caller can pay the network fee, but the rent",
+        "always flows back to `trade.creator` (enforced by the",
+        "`rent_recipient` address constraint inside CloseTrade). Lets a",
+        "reaper bot — or the user themselves — reclaim ~$0.22 of rent that",
+        "would otherwise stay locked forever on every released/refunded",
+        "trade."
+      ],
+      "discriminator": [
+        161,
+        199,
+        69,
+        82,
+        9,
+        63,
+        203,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Whoever pays the network fee. Can be the creator, a reaper bot, or",
+            "any helpful third party — they get nothing back beyond fee burn."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "trade",
+          "docs": [
+            "Trade PDA to close. The constraint enforces a terminal state — any",
+            "non-terminal status (Open/Funded/Locked/PaymentSent/Disputed) is",
+            "rejected so we can never strand the vault."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.creator",
+                "account": "Trade"
+              },
+              {
+                "kind": "account",
+                "path": "trade.trade_id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_recipient",
+          "docs": [
+            "Recipient of the reclaimed rent. MUST equal `trade.creator`. Pinning",
+            "it inside the account constraint (not just the handler) means even a",
+            "malicious reaper signed by `caller` can't redirect lamports — they",
+            "can only burn 5000 lamports of fee on the user's behalf.",
+            "is needed because we only credit lamports to this account."
+          ],
+          "writable": true
         }
       ],
       "args": []
@@ -2692,6 +2774,16 @@
       "code": 6048,
       "name": "CounterpartyMismatch",
       "msg": "Counterparty does not match the value bound to the signed offer"
+    },
+    {
+      "code": 6049,
+      "name": "TradeNotTerminal",
+      "msg": "Trade must be in a terminal state (Released or Refunded) before it can be closed"
+    },
+    {
+      "code": 6050,
+      "name": "WrongRentRecipient",
+      "msg": "Rent recipient must be the original trade creator"
     }
   ],
   "types": [
@@ -3772,6 +3864,30 @@
             "name": "is_frozen",
             "type": {
               "option": "bool"
+            }
+          },
+          {
+            "name": "new_min_fee_bps",
+            "docs": [
+              "Lower bound on per-trade fee in basis points.",
+              "",
+              "Set to 0 to enable promotional 0%-fee trades. The authority can",
+              "raise this back later to re-enable mandatory minimum fees. Bounded",
+              "by the immutable hard cap (10% / 1000 bps) and must stay",
+              "`<= max_fee_bps`."
+            ],
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "new_max_fee_bps",
+            "docs": [
+              "Upper bound on per-trade fee in basis points. Bounded by the",
+              "immutable hard cap (10% / 1000 bps) and must stay `>= min_fee_bps`."
+            ],
+            "type": {
+              "option": "u16"
             }
           }
         ]
