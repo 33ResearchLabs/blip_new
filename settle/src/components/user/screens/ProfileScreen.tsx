@@ -144,8 +144,8 @@ function AccountCard({
             aria-label={walletConnected ? 'Online' : 'Offline'}
           />
           {/* Edit affordance — tap to open the avatar picker. */}
-          <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-accent border-2 border-surface-card flex items-center justify-center">
-            <Camera size={10} className="text-accent-text" />
+          <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-text-primary border-2 border-surface-card flex items-center justify-center">
+            <Camera size={10} className="text-surface-base" />
           </span>
         </button>
         <div className="min-w-0 flex-1">
@@ -714,7 +714,7 @@ export const ProfileScreen = ({
                 role="switch"
                 aria-checked={theme === 'light'}
                 aria-label="Toggle light mode"
-                className="w-11 h-6 rounded-full p-0.5 flex items-center transition-colors duration-200 bg-accent shrink-0"
+                className="w-11 h-6 rounded-full p-0.5 flex items-center transition-colors duration-200 bg-text-primary shrink-0"
               >
                 <span
                   className={`w-5 h-5 rounded-full bg-surface-base transition-transform duration-200 ${

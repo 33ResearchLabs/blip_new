@@ -179,7 +179,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
           Complete the steps below to unlock higher trading limits and trade
           more.
         </p>
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold bg-text-primary text-surface-base shrink-0">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold bg-border-subtle text-text-primary border border-border-subtle shrink-0">
           <ShieldCheck className="w-3.5 h-3.5" />
           Secure &amp; Verified
         </span>
@@ -276,7 +276,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
               <h3 className="text-[15px] font-bold text-text-primary">
                 Your Current Limits
               </h3>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-text-primary text-surface-base">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-border-subtle text-text-primary border border-border-subtle">
                 Active
               </span>
             </div>
@@ -344,7 +344,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => openRequest("daily")}
-              className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-text-primary text-surface-base text-[13px] font-bold hover:opacity-90 transition-opacity"
+              className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-text-primary text-background text-[13px] font-bold hover:opacity-90 transition-opacity"
             >
               Request Increase
               <ArrowRight className="w-4 h-4" />
@@ -380,7 +380,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
                   const created = new Date(r.created_at);
                   const statusStyle =
                     r.status === "approved"
-                      ? "bg-text-primary text-surface-base border-text-primary"
+                      ? "bg-border-subtle text-text-primary border-border-subtle"
                       : r.status === "rejected"
                         ? "bg-red-500/10 text-red-400 border-red-500/20"
                         : "bg-border-subtle text-text-secondary border-border-subtle";

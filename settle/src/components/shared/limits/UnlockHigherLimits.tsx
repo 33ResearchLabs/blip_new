@@ -78,7 +78,7 @@ function Row({
 
 function VerifiedBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold bg-text-primary text-surface-base">
+    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold bg-border-subtle text-text-primary border border-border-subtle">
       <Check className="w-3.5 h-3.5" />
       Verified
     </span>
