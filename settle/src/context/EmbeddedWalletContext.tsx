@@ -296,6 +296,29 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [walletState, keypair, refreshBalances]);
 
+  // Gasless: pre-fund a freshly unlocked wallet in the background so a new
+  // user's very first on-chain action doesn't have to wait for a top-up. Runs
+  // once per unlock; the server only sends SOL when the wallet is below the
+  // floor and within its caps, so this is a no-op for already-funded wallets.
+  useEffect(() => {
+    if (walletState !== 'unlocked' || !keypair) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const solBal = await connection.getBalance(keypair.publicKey);
+        if (cancelled || solBal >= 10_000_000) return;
+        const { ensureGas } = await import('@/lib/wallet/ensureGas');
+        const r = await ensureGas(keypair.publicKey.toBase58());
+        if (!cancelled && r.funded) refreshBalances();
+      } catch {
+        /* best-effort pre-funding — signAndSend tops up on demand anyway */
+      }
+    })();
+    return () => { cancelled = true; };
+    // Re-run only when the wallet identity changes, not on every balance tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletState, keypair]);
+
   // Sync wallet address to whichever actor (merchant OR user) is currently
   // authenticated. Identity is derived from the cookie-authed /api/auth/me
   // probe — never from localStorage (which we no longer write). Proves
@@ -554,10 +577,32 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     if (!keypair) throw new Error('Wallet locked');
     touchActivity();
 
-    // Check SOL balance for fees
-    const solBal = await connection.getBalance(keypair.publicKey);
+    // Gasless: new users have 0 SOL, and escrow ops need ~0.0065 SOL of
+    // (refundable) rent on top of the per-tx fee. If the wallet is below a
+    // working floor, ask the platform gas station to top it up BEFORE we even
+    // try — so the user never sees an "insufficient SOL" failure. The sponsor
+    // is best-effort + capped server-side; if it's unavailable we still fall
+    // through to the hard check below and only fail if there's genuinely
+    // nothing to pay the fee with.
+    const WORKING_FLOOR = 10_000_000; // 0.01 SOL — covers rent + fee + buffer
+    let solBal = await connection.getBalance(keypair.publicKey);
+    if (solBal < WORKING_FLOOR) {
+      try {
+        const { ensureGas } = await import('@/lib/wallet/ensureGas');
+        const r = await ensureGas(keypair.publicKey.toBase58());
+        if (r.funded) {
+          // Poll briefly for the lamports to confirm into the balance.
+          for (let i = 0; i < 6 && solBal < WORKING_FLOOR; i++) {
+            await new Promise((res) => setTimeout(res, 700));
+            solBal = await connection.getBalance(keypair.publicKey);
+          }
+        }
+      } catch {
+        /* sponsor unavailable — fall through to the hard fee check */
+      }
+    }
     if (solBal < 10_000) {
-      throw new Error('Insufficient SOL for transaction fees. Airdrop SOL first from the Wallet page.');
+      throw new Error('Could not cover the network fee for this transaction and the gas sponsor is unavailable. Please add a little SOL from the Wallet page and try again.');
     }
 
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();

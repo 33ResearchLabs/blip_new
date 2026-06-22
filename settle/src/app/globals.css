@@ -1482,3 +1482,9 @@ input[type="number"] { -moz-appearance: textfield; }
 @media (min-width: 1800px) {
   .merchant-welcome { --mw-mockup-scale: 1; }
 }
+
+/* ── Trade Chat (Pulse theme) — burnt-orange scrollbar for the chat panes ── */
+.pulse-scroll::-webkit-scrollbar { width: 6px; }
+.pulse-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+.pulse-scroll::-webkit-scrollbar-thumb:hover { background: #ff6b35; }
+.pulse-scroll { scrollbar-width: thin; scrollbar-color: #333 transparent; }
