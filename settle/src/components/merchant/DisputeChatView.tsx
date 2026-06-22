@@ -148,7 +148,7 @@ export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendS
                 <button
                   onClick={() => handleMutualCancel('request')}
                   disabled={mutualCancelLoading}
-                  className="flex-1 py-1.5 rounded-lg text-[12px] font-medium bg-red-500/80 text-white disabled:opacity-50"
+                  className="flex-1 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black disabled:opacity-50"
                 >
                   {mutualCancelLoading ? 'Processing…' : 'Cancel Dispute'}
                 </button>
