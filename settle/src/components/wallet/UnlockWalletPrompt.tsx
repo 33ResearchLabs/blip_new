@@ -154,8 +154,8 @@ export function UnlockWalletPrompt({
         }}
       >
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: colors.accent.subtle }}>
-            <Lock className="w-4 h-4" style={{ color: colors.accent.primary }} />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(20,21,26,0.06)' }}>
+            <Lock className="w-4 h-4" style={{ color: colors.text.secondary }} />
           </div>
           <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>
             {mode === 'setPinEnter' || mode === 'setPinConfirm' ? 'Set your PIN' : 'Unlock Wallet'}

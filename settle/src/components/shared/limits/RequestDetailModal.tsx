@@ -63,7 +63,7 @@ export function RequestDetailModal({ request, onClose, surfaces }: Props) {
                 pending: {
                   Icon: Clock,
                   label: "Pending review",
-                  style: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+                  style: "bg-border-subtle text-text-secondary border-border-subtle",
                   message:
                     "We typically respond to limit requests within 24–48 hours.",
                 },

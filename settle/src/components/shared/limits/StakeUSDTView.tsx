@@ -373,7 +373,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
                       setError(null);
                     }}
                     className={`px-3 py-1.5 rounded-lg text-[12px] font-bold capitalize transition-colors ${
-                      mode === m ? "bg-border-subtle text-text-primary" : "text-text-tertiary"
+                      mode === m ? "bg-text-primary text-surface-base" : "text-text-tertiary"
                     }`}
                   >
                     {m}
@@ -435,7 +435,7 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
               whileTap={{ scale: 0.99 }}
               onClick={submit}
               disabled={submitting}
-              className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-border-subtle text-text-primary text-[14px] font-bold hover:bg-border-subtle/70 transition-colors disabled:opacity-50"
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-text-primary text-surface-base text-[14px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {submitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

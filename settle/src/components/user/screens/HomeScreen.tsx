@@ -581,12 +581,12 @@ export const HomeScreen = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
                     <div style={{
                       width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-                      background: 'rgba(255,176,46,0.16)',
+                      background: 'rgba(20,21,26,0.06)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                       {/* PIcon.coin from source */}
                       <svg viewBox="0 0 24 24" width={21} height={21} fill="none"
-                        stroke="#ffb02e" strokeWidth="1.8" strokeLinecap="round">
+                        stroke="#14151a" strokeWidth="1.8" strokeLinecap="round">
                         <circle cx="12" cy="12" r="8.5"/>
                         <path d="M12 7.5v9M9.3 10h3.4a1.8 1.8 0 0 1 0 3.6H9.5"/>
                       </svg>

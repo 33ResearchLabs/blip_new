@@ -1132,10 +1132,10 @@ export default function UserWalletPage() {
                   const balancesReady =
                     solanaWallet.usdtBalance !== null || solanaWallet.solBalance !== null;
                   const status = !hasAddress
-                    ? { dot: 'bg-amber-500', text: 'text-amber-500', label: 'Locked' }
+                    ? { dot: 'bg-text-tertiary', text: 'text-text-tertiary', label: 'Locked' }
                     : balancesReady
-                      ? { dot: 'bg-green-500', text: 'text-green-500', label: 'Connected' }
-                      : { dot: 'bg-yellow-500', text: 'text-yellow-600', label: 'Connected · balances loading' };
+                      ? { dot: 'bg-text-primary', text: 'text-text-secondary', label: 'Connected' }
+                      : { dot: 'bg-text-tertiary', text: 'text-text-tertiary', label: 'Connected · balances loading' };
                   return (
                     <div className="flex items-center justify-center gap-1.5 mb-4">
                       <div className={`w-2 h-2 ${status.dot} rounded-full`} />
@@ -1177,7 +1177,7 @@ export default function UserWalletPage() {
                     <div className="text-[9px] text-text-tertiary font-mono uppercase">
                       Network
                     </div>
-                    <div className={`text-sm font-medium font-mono ${isMainnet() ? 'text-emerald-500' : 'text-accent'}`}>
+                    <div className="text-sm font-medium font-mono text-text-secondary">
                       {isMainnet() ? 'Mainnet' : 'Devnet'}
                     </div>
                   </div>
@@ -1227,11 +1227,11 @@ export default function UserWalletPage() {
                     setSendSuccess("");
                     setShowSendModal(true);
                   }}
-                  className="py-3 rounded-xl bg-accent-subtle border border-accent/30 hover:bg-accent-subtle transition-colors
+                  className="py-3 rounded-xl bg-surface-active border border-border-subtle hover:bg-surface-hover transition-colors
                              flex flex-col items-center gap-1.5"
                 >
-                  <Send className="w-5 h-5 text-accent" />
-                  <span className="text-[10px] text-accent/80 font-mono font-medium">
+                  <Send className="w-5 h-5 text-text-primary" />
+                  <span className="text-[10px] text-text-secondary font-mono font-medium">
                     Send
                   </span>
                 </button>
@@ -1242,7 +1242,7 @@ export default function UserWalletPage() {
                              flex flex-col items-center gap-1.5 disabled:opacity-50"
                 >
                   <RefreshCw
-                    className={`w-5 h-5 text-accent ${isRefreshing ? "animate-spin" : ""}`}
+                    className={`w-5 h-5 text-text-primary ${isRefreshing ? "animate-spin" : ""}`}
                   />
                   <span className="text-[10px] text-text-secondary font-mono">
                     Refresh
@@ -1254,7 +1254,7 @@ export default function UserWalletPage() {
                     className="py-3 rounded-xl bg-surface-card border border-border-subtle hover:bg-card transition-colors
                                flex flex-col items-center gap-1.5"
                   >
-                    <Download className="w-5 h-5 text-accent" />
+                    <Download className="w-5 h-5 text-text-primary" />
                     <span className="text-[10px] text-text-secondary font-mono">
                       Export Key
                     </span>
@@ -1272,8 +1272,8 @@ export default function UserWalletPage() {
 
                 <div className="px-4 py-3 flex items-center justify-between border-b border-border-subtle">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/30 flex items-center justify-center border border-purple-500/20">
-                      <span className="text-xs font-bold text-purple-600">S</span>
+                    <div className="w-8 h-8 rounded-full bg-surface-active flex items-center justify-center border border-border-subtle">
+                      <span className="text-xs font-bold text-text-secondary">S</span>
                     </div>
                     <div>
                       <div className="text-sm font-medium text-text-primary font-mono">SOL</div>
@@ -1291,8 +1291,8 @@ export default function UserWalletPage() {
 
                 <div className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500/30 to-emerald-500/30 flex items-center justify-center border border-green-500/20">
-                      <span className="text-xs font-bold text-green-600">$</span>
+                    <div className="w-8 h-8 rounded-full bg-surface-active flex items-center justify-center border border-border-subtle">
+                      <span className="text-xs font-bold text-text-secondary">$</span>
                     </div>
                     <div>
                       <div className="text-sm font-medium text-text-primary font-mono">USDT</div>
@@ -1300,7 +1300,7 @@ export default function UserWalletPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-bold text-accent font-mono tabular-nums">
+                    <div className="text-sm font-bold text-text-primary font-mono tabular-nums">
                       {solanaWallet.usdtBalance !== null
                         ? solanaWallet.usdtBalance.toFixed(2)
                         : "0.00"}

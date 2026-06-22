@@ -185,7 +185,7 @@ export function RequestIncreaseModal({
               <button
                 onClick={submit}
                 disabled={submitting}
-                className="flex-1 px-4 py-3 rounded-xl bg-accent text-accent-text text-[13px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-3 rounded-xl bg-text-primary text-surface-base text-[13px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center justify-center gap-2"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {submitting ? "Submitting…" : "Submit Request"}
