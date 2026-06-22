@@ -205,7 +205,7 @@ export function PayWithSheet({
                 </button>
               </div>
               <div className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 ${t.chip}`}>
-                <Zap className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                <Zap className={`w-4 h-4 ${t.muted} shrink-0 mt-0.5`} />
                 <p className={`text-[12px] leading-snug ${t.sub}`}>
                   Release the crypto automatically upon payment completion.
                 </p>
@@ -250,11 +250,11 @@ export function PayWithSheet({
                     >
                       <span className="block truncate">{m.label}</span>
                       {m.fast && (
-                        <Zap className="absolute top-1.5 right-1.5 w-3 h-3 text-warning fill-warning" />
+                        <Zap className={`absolute top-1.5 right-1.5 w-3 h-3 ${t.muted} fill-current`} />
                       )}
                       {on && (
-                        <span className="absolute top-1.5 left-1.5 w-3.5 h-3.5 rounded-full bg-accent flex items-center justify-center">
-                          <Check className="w-2.5 h-2.5 text-accent-text" strokeWidth={3.5} />
+                        <span className="absolute top-1.5 left-1.5 w-3.5 h-3.5 rounded-full bg-text-primary flex items-center justify-center">
+                          <Check className="w-2.5 h-2.5 text-background" strokeWidth={3.5} />
                         </span>
                       )}
                     </button>

@@ -380,10 +380,10 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
                   const created = new Date(r.created_at);
                   const statusStyle =
                     r.status === "approved"
-                      ? "bg-accent/10 text-accent border-accent/20"
+                      ? "bg-text-primary text-surface-base border-text-primary"
                       : r.status === "rejected"
                         ? "bg-red-500/10 text-red-400 border-red-500/20"
-                        : "bg-amber-500/10 text-amber-500 border-amber-500/20";
+                        : "bg-border-subtle text-text-secondary border-border-subtle";
                   const RowIcon = r.kind === "daily" ? Calendar : CreditCard;
                   return (
                     <button

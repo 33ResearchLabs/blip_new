@@ -347,7 +347,7 @@ export function PhoneVerificationSheet({
 
                 <motion.button whileTap={{ scale: 0.97 }} onClick={handleSendOtp}
                   disabled={busy || phone.replace(/\D/g, "").length < 7}
-                  className="w-full h-12 rounded-[14px] bg-accent text-accent-text text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
+                  className="w-full h-12 rounded-[14px] bg-text-primary text-surface-base text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
                   {busy ? <Loader2 size={16} className="animate-spin" /> : "Send OTP"}
                 </motion.button>
               </div>
@@ -394,7 +394,7 @@ export function PhoneVerificationSheet({
 
                 <motion.button whileTap={{ scale: 0.97 }} onClick={handleVerifyOtp}
                   disabled={busy || otp.length !== 6}
-                  className="w-full h-12 rounded-[14px] bg-accent text-accent-text text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
+                  className="w-full h-12 rounded-[14px] bg-text-primary text-surface-base text-[14px] font-bold tracking-[-0.01em] flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity">
                   {busy ? <Loader2 size={16} className="animate-spin" /> : "Verify"}
                 </motion.button>
 

@@ -297,8 +297,8 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
 
             {step === "intro" && (
               <div className="flex flex-col items-center gap-6 py-4">
-                <div className="w-24 h-24 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-                  <Camera size={36} className="text-emerald-400" />
+                <div className="w-24 h-24 rounded-full bg-border-subtle border border-border-subtle flex items-center justify-center">
+                  <Camera size={36} className="text-text-secondary" />
                 </div>
                 <div className="text-center">
                   <p className="text-text-primary font-medium mb-1 inline-flex items-center justify-center gap-1.5">
@@ -328,7 +328,7 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
                 </div>
                 <button
                   onClick={startScan}
-                  className="w-full py-3.5 rounded-2xl bg-emerald-500 text-text-primary font-semibold text-sm active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  className="w-full py-3.5 rounded-2xl bg-text-primary text-surface-base font-semibold text-sm active:scale-95 transition-transform flex items-center justify-center gap-2"
                 >
                   <Shield size={16} />
                   Start Liveness Check
