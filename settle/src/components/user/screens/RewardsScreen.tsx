@@ -491,7 +491,7 @@ export const RewardsScreen = ({
                   onClick={handleCopyLink}
                   disabled={!hasCode}
                   aria-label={copied ? 'Copied' : 'Copy invite link'}
-                  className="shrink-0 flex items-center justify-center gap-1.5 px-3 sm:px-4 py-3 rounded-[14px] bg-accent text-accent-text border border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="shrink-0 flex items-center justify-center gap-1.5 px-3 sm:px-4 py-3 rounded-[14px] bg-border-subtle text-text-primary border border-border-subtle hover:bg-border-subtle/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <AnimatePresence mode="wait" initial={false}>
                     {copied ? (
