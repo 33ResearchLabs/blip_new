@@ -40,7 +40,7 @@ import { AnimatePresence, motion } from "framer-motion";
 const PIN_LENGTH = 6;
 import { copyToClipboard } from "@/lib/clipboard";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { DEVNET_RPC, DEVNET_WS_ENDPOINT } from "@/lib/solana/v2/config";
+import { DEVNET_RPC, DEVNET_WS_ENDPOINT, getUsdtMint } from "@/lib/solana/v2/config";
 import { confirmHttp } from "@/lib/solana/confirmHttp";
 import {
   generateMnemonicWallet,
@@ -633,9 +633,7 @@ export default function WalletPage({
         } = await import("@solana/spl-token");
         const { Transaction } = await import("@solana/web3.js");
 
-        const USDT_MINT = new PublicKey(
-          "FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z",
-        ); // Devnet USDT
+        const USDT_MINT = getUsdtMint(); // Devnet USDT
 
         const fromAta = await getAssociatedTokenAddress(
           USDT_MINT,

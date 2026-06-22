@@ -39,9 +39,18 @@ export const BLIP_V2_PROGRAM_ID = new PublicKey(
 // V1 Program ID (legacy, devnet-only)
 export const BLIP_V1_PROGRAM_ID = new PublicKey('5ggyzySMndginf1msqRXNz9ZmKP8pNLtAQVnVo8PiAX');
 
-// USDT mints
-export const USDT_DEVNET_MINT = new PublicKey('FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z');
-export const USDT_MAINNET_MINT = new PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
+// USDT mints — env-overridable so the CA can be swapped without a code change.
+//   NEXT_PUBLIC_USDT_DEVNET_MINT  / NEXT_PUBLIC_USDT_MAINNET_MINT
+// Devnet default (2026-06-14): our own mint, authority = K2WFxz…, so we can
+// mint test USDT to team wallets on demand.
+export const USDT_DEVNET_MINT = new PublicKey(
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_USDT_DEVNET_MINT)
+    || '5AzTK6KUfGT5yim4hwfbwcyf2wB5Aw72dxgKdBtCjdzn'
+);
+export const USDT_MAINNET_MINT = new PublicKey(
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_USDT_MAINNET_MINT)
+    || 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
+);
 
 // Treasury wallet (env override > network default)
 export const TREASURY_WALLET = new PublicKey(
