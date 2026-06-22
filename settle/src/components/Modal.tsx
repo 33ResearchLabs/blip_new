@@ -58,17 +58,16 @@ const VARIANT_CONFIG: Record<ModalVariant, {
     buttonShadow: 'shadow-[0_2px_12px_rgba(0,0,0,0.25)]',
   },
   info: {
-    // Info-variant button uses the brand primary so the modal CTA reads as
-    // the app's standard "OK / continue" affordance instead of a generic
-    // blue alert. Icon + iconBg keep the blue accent so the variant is still
-    // visually distinct from success/warning/error.
+    // Neutral white styling — no blue icon, no orange CTA. Matches the
+    // `warning` variant so info alerts (e.g. "Coming Soon") read as a calm,
+    // neutral dialog rather than a colored alert.
     icon: Info,
-    iconColor: 'text-blue-400',
-    iconBg: 'bg-blue-500/10',
-    border: 'border-blue-500/20',
-    buttonBg: 'bg-primary',
-    buttonHover: 'hover:bg-primary/90',
-    buttonShadow: 'shadow-[0_2px_12px_rgba(249,115,22,0.20)]',
+    iconColor: 'text-white',
+    iconBg: 'bg-white/10',
+    border: 'border-white/15',
+    buttonBg: 'bg-white text-black',
+    buttonHover: 'hover:bg-white/90',
+    buttonShadow: 'shadow-[0_2px_12px_rgba(0,0,0,0.25)]',
   },
 };
 

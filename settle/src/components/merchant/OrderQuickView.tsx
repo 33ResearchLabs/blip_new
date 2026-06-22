@@ -3878,7 +3878,7 @@ export function OrderQuickView({
                   Cancel Order
                 </motion.button>
               )}
-              {/* Seller accepting a new pending buy order — prominent green CTA,
+              {/* Seller accepting a new pending buy order — prominent accent CTA,
                   shown explicitly (not dependent on feed action enrichment). */}
               {isAcceptableBuyOrder && (
                 <motion.button
@@ -3888,7 +3888,7 @@ export function OrderQuickView({
                     onAcceptOrder(selectedOrder);
                     onClose();
                   }}
-                  className="w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
+                  className="w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all bg-accent hover:bg-accent-bright text-accent-text disabled:opacity-50"
                 >
                   {acceptingOrderId === selectedOrder.id ? (
                     <Loader2 className="w-5 h-5 animate-spin" />

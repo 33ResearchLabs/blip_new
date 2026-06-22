@@ -329,20 +329,20 @@ const OrderList = memo(function OrderList({
                       background: "#111113",
                       border: isMyMempoolOrder
                         ? "1px solid rgba(255,255,255,0.03)"
-                        : "1px solid rgba(249,115,22,0.22)",
+                        : "1px solid rgba(245,245,247,0.22)",
                       borderLeft: isMyMempoolOrder
                         ? undefined
-                        : "2px solid rgba(249,115,22,0.45)",
+                        : "2px solid rgba(245,245,247,0.45)",
                     }}
                     onMouseEnter={(e) =>
                       !isMyMempoolOrder &&
                       (e.currentTarget.style.borderColor =
-                        "rgba(249,115,22,0.38)")
+                        "rgba(245,245,247,0.38)")
                     }
                     onMouseLeave={(e) =>
                       !isMyMempoolOrder &&
                       (e.currentTarget.style.borderColor =
-                        "rgba(249,115,22,0.22)")
+                        "rgba(245,245,247,0.22)")
                     }
                   >
                     {/* Live pulse dot */}
@@ -393,7 +393,7 @@ const OrderList = memo(function OrderList({
                       {/* Timer */}
                       <div
                         className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
-                          liveExpiry <= 120 ? "text-red-400" : "text-[#f5f5f7]"
+                          liveExpiry <= 120 ? "text-foreground/50" : "text-[#f5f5f7]"
                         }`}
                       >
                         {liveExpiry <= 0
@@ -413,7 +413,7 @@ const OrderList = memo(function OrderList({
                             filter:
                               liveExpiry <= 120
                                 ? "drop-shadow(0 0 6px #ef4444)"
-                                : "drop-shadow(0 0 4px #f97316)",
+                                : "drop-shadow(0 0 4px #f5f5f7)",
                           }}
                         >
                           🔥
@@ -426,7 +426,7 @@ const OrderList = memo(function OrderList({
                       <div
                         className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-1 ${
                           liveExpiry <= 120
-                            ? "bg-red-500/10 border border-red-500/20"
+                            ? "bg-white/[0.06] border border-white/[0.12]"
                             : "bg-white/[0.06] border border-white/[0.12]"
                         }`}
                       >
@@ -434,7 +434,7 @@ const OrderList = memo(function OrderList({
                         <span
                           className={`text-[10px] font-bold ${
                             liveExpiry <= 120
-                              ? "text-red-400"
+                              ? "text-foreground/50"
                               : "text-[#f5f5f7]"
                           }`}
                         >
@@ -526,7 +526,7 @@ const OrderList = memo(function OrderList({
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04] rounded-b-lg overflow-hidden">
                           <div
                             className={`h-full transition-[width] duration-1000 ease-linear ${
-                              liveExpiry <= 120 ? "bg-red-400" : "bg-[#f5f5f7]"
+                              liveExpiry <= 120 ? "bg-[#f5f5f7]" : "bg-[#f5f5f7]"
                             }`}
                             style={{ width: `${pct}%` }}
                           />
@@ -614,10 +614,10 @@ const OrderList = memo(function OrderList({
                   style={{
                     background: "#111113",
                     border: isMineable
-                      ? "1px solid rgba(249,115,22,0.25)"
+                      ? "1px solid rgba(245,245,247,0.25)"
                       : "1px solid rgba(255,255,255,0.07)",
                     borderLeft: isMineable
-                      ? "2px solid rgba(249,115,22,0.5)"
+                      ? "2px solid rgba(245,245,247,0.5)"
                       : undefined,
                   }}
                   onMouseEnter={(e) =>
@@ -628,7 +628,7 @@ const OrderList = memo(function OrderList({
                   onMouseLeave={(e) =>
                     !isMyOwnOrder &&
                     (e.currentTarget.style.borderColor = isMineable
-                      ? "rgba(249,115,22,0.25)"
+                      ? "rgba(245,245,247,0.25)"
                       : "rgba(255,255,255,0.07)")
                   }
                 >
@@ -873,7 +873,7 @@ const OrderList = memo(function OrderList({
                                   className={`text-[10px] font-mono font-semibold ${
                                     order.type === "buy"
                                       ? "text-[#f5f5f7]"
-                                      : "text-red-400"
+                                      : "text-foreground/50"
                                   }`}
                                 >
                                   {order.type?.toUpperCase() || "TRADE"}
@@ -982,14 +982,14 @@ const OrderList = memo(function OrderList({
                                   e.stopPropagation();
                                   onCancelOrder(order);
                                 }}
-                                className="text-[10px] text-red-400/50 hover:text-red-400 transition-colors font-mono"
+                                className="text-[10px] text-foreground/30 hover:text-foreground/70 transition-colors font-mono"
                               >
                                 cancel
                               </button>
                             )}
                           </div>
                           {isActivelyPending ? (
-                            <div className="flex items-center gap-1 text-[11px] font-mono tabular-nums text-red-400">
+                            <div className="flex items-center gap-1 text-[11px] font-mono tabular-nums text-foreground/50">
                               <Clock className="w-3 h-3" />
                               {order.expiresIn >= 3600
                                 ? `${Math.floor(
@@ -1048,7 +1048,7 @@ const OrderList = memo(function OrderList({
                         <div
                           className={`h-full transition-[width] duration-1000 ease-linear ${
                             order.expiresIn <= 120
-                              ? "bg-red-400"
+                              ? "bg-[#f5f5f7]"
                               : "bg-[#f5f5f7]"
                           }`}
                           style={{ width: `${pct}%` }}
@@ -1518,8 +1518,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               className="relative flex shrink-0 h-2 w-2 ml-0.5"
               title="Live feed"
             >
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-60" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.9)]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white/50 opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-white/50 shadow-[0_0_6px_rgba(251,146,60,0.9)]" />
             </span>
           </div>
 
@@ -2010,7 +2010,7 @@ const MY_STATUS_BADGE: Record<
   },
   cancelled: {
     label: "Cancelled",
-    cls: "bg-red-500/10 text-red-400 border-red-500/20",
+    cls: "bg-white/[0.06] text-foreground/50 border-white/[0.12]",
     Icon: XCircle,
   },
   expired: {
@@ -2020,7 +2020,7 @@ const MY_STATUS_BADGE: Record<
   },
   disputed: {
     label: "Disputed",
-    cls: "bg-red-500/10 text-red-400 border-red-500/20",
+    cls: "bg-white/[0.06] text-foreground/50 border-white/[0.12]",
     Icon: AlertCircle,
   },
 };
@@ -2283,7 +2283,7 @@ const MyOrdersList = memo(function MyOrdersList({
             </div>
 
             {cancelReason && (
-              <div className="mt-1.5 px-2 py-1 rounded bg-red-500/[0.06] border border-red-500/15 text-[10px] text-red-300/80 font-mono">
+              <div className="mt-1.5 px-2 py-1 rounded bg-white/[0.06] border border-white/[0.1] text-[10px] text-foreground/50 font-mono">
                 Reason: {cancelReason}
               </div>
             )}

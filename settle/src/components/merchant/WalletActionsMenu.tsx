@@ -463,7 +463,7 @@ export function WalletActionsMenu({
               </button>
               <button
                 onClick={handleDeleteWallet}
-                className="flex-1 py-2.5 rounded-lg bg-rose-500/90 hover:bg-rose-500 text-white text-[12px] font-bold"
+                className="flex-1 py-2.5 rounded-lg bg-white hover:bg-white/90 text-black text-[12px] font-bold"
               >
                 Delete Forever
               </button>
