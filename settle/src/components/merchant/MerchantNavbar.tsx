@@ -19,6 +19,7 @@ import {
   ChartBar,
   Bug,
   Coins,
+  ChatCircle,
 } from "@phosphor-icons/react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { openIssueReporter } from "@/plugins/issue-reporter/IssueReporter";
@@ -30,7 +31,7 @@ import { Logo } from "@/components/shared/Logo";
 
 const CORRIDOR_OPTIONS = [{ key: "USDT_INR", label: "🇮🇳 USDT / INR" }] as const;
 
-export type NavPage = "dashboard" | "wallet" | "settings" | "rewards" | "ops";
+export type NavPage = "dashboard" | "chat" | "wallet" | "settings" | "rewards" | "ops";
 
 interface MerchantNavbarProps {
   activePage: NavPage;
@@ -277,6 +278,13 @@ export function MerchantNavbar({
                 onClick={onNavLinkClick}
               >
                 Dashboard
+              </Link>
+              <Link
+                href="/market/chat"
+                className={pill(activePage === "chat")}
+                onClick={onNavLinkClick}
+              >
+                Chat
               </Link>
               {onOpenWallet ? (
                 <button
@@ -611,6 +619,16 @@ export function MerchantNavbar({
                   className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
                 >
                   <Lightning className="w-5 h-5" /> Dashboard
+                </Link>
+                <Link
+                  href="/market/chat"
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    onNavLinkClick?.();
+                  }}
+                  className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
+                >
+                  <ChatCircle className="w-5 h-5" /> Chat
                 </Link>
                 {onOpenWallet ? (
                   <button

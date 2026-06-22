@@ -209,12 +209,30 @@ export function useEscrowOperations({
     // All rent is returned at release via `close = depositor`.
     // Require 0.007 SOL as a buffer above the true minimum.
     const MIN_SOL_FOR_LOCK = 0.007;
+
+    // Gasless: if the seller's wallet is low/unknown on SOL, ask the platform
+    // gas station to top it up first so a new merchant never gets blocked here
+    // on the ~0.0065 SOL of (refundable) escrow rent. Best-effort + capped
+    // server-side; signAndSend self-funds as a final net. When the sponsor
+    // actually sends SOL we trust it and skip the premature local guard — the
+    // captured `solanaWallet.solBalance` prop can't update mid-callback, and
+    // the on-chain lock re-checks the real balance anyway.
+    let gasSponsored = false;
+    if (solanaWallet.walletAddress && (solanaWallet.solBalance === null || solanaWallet.solBalance < MIN_SOL_FOR_LOCK)) {
+      try {
+        const { ensureGas } = await import('@/lib/wallet/ensureGas');
+        const r = await ensureGas(solanaWallet.walletAddress);
+        gasSponsored = r.funded;
+        if (r.funded) refreshBalance();
+      } catch { /* sponsor unavailable — fall through to the balance guard */ }
+    }
+
     const merchantSolBal = solanaWallet.solBalance;
-    if (merchantSolBal !== null && merchantSolBal < MIN_SOL_FOR_LOCK) {
+    if (!gasSponsored && merchantSolBal !== null && merchantSolBal < MIN_SOL_FOR_LOCK) {
       dispatch({ type: 'SET_ERROR', op: 'lock', error: `Insufficient SOL. You need at least ${MIN_SOL_FOR_LOCK} SOL but have ${merchantSolBal.toFixed(4)} SOL. Locking escrow deposits ~0.0065 SOL into on-chain accounts — this is returned to you when the trade completes.` });
       return;
     }
-    if (merchantSolBal === null) {
+    if (!gasSponsored && merchantSolBal === null) {
       await refreshBalance();
       await new Promise(r => setTimeout(r, 500));
       const solAfterRefresh = solanaWallet.solBalance;
