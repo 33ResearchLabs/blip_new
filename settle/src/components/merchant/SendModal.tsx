@@ -42,6 +42,7 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
 } from "@solana/spl-token";
+import { getUsdtMint } from "@/lib/solana/v2/config";
 
 // ── Token catalogue ─────────────────────────────────────────────────
 interface TokenMeta {
@@ -52,7 +53,10 @@ interface TokenMeta {
 const SOL: TokenMeta = { symbol: "SOL", mint: null, decimals: 9 };
 const USDT: TokenMeta = {
   symbol: "USDT",
-  mint: new PublicKey("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"),
+  // Network-aware: devnet -> our test mint (5AzTK6…), mainnet -> real USDT.
+  // Hardcoding the mainnet mint broke devnet sends (that address is a plain
+  // System account on devnet → ATA create fails with IncorrectProgramId).
+  mint: getUsdtMint(),
   decimals: 6,
 };
 const USDC: TokenMeta = {
