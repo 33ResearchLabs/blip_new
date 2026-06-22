@@ -25,9 +25,9 @@ interface PaymentMethodsManagerProps {
 }
 
 const TYPE_CONFIG = {
-  bank:  { Icon: Building2,  label: 'Bank',  color: 'var(--color-info)' },
-  upi:   { Icon: Smartphone, label: 'UPI',   color: 'var(--color-success)' },
-  cash:  { Icon: Banknote,   label: 'Cash',  color: 'var(--color-warning)' },
+  bank:  { Icon: Building2,  label: 'Bank',  color: 'var(--color-text-secondary)' },
+  upi:   { Icon: Smartphone, label: 'UPI',   color: 'var(--color-text-secondary)' },
+  cash:  { Icon: Banknote,   label: 'Cash',  color: 'var(--color-text-secondary)' },
   other: { Icon: CreditCard, label: 'Other', color: 'var(--color-text-secondary)' },
 } as const;
 

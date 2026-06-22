@@ -95,24 +95,28 @@ export const SURFACES: Record<LimitsVariant, SurfaceTokens> = {
 };
 
 /**
- * Unlock-row CTA buttons — solid inverted fill (`bg-text-primary` = black in
- * light mode / white in dark mode) with `text-surface-base` for the label. No
- * accent/yellow tint. Tone keys kept so callers don't change.
+ * Unlock-row CTA buttons — secondary style: subtle neutral tint
+ * (`bg-border-subtle`, defined in both user + merchant scopes) with
+ * `text-text-primary`. Reads as a button in both modes without stacking solid
+ * white blocks in dark mode; the page keeps a single solid primary CTA
+ * (Request Increase) for hierarchy. No accent/yellow tint. Tone keys kept so
+ * callers don't change.
  */
 export const ACTION_BTN: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-text-primary text-surface-base hover:opacity-90",
-    violet: "bg-text-primary text-surface-base hover:opacity-90",
-    amber: "bg-text-primary text-surface-base hover:opacity-90",
-    blue: "bg-text-primary text-surface-base hover:opacity-90",
+    green: "bg-border-subtle text-text-primary border border-border-subtle hover:bg-border-subtle/70",
+    violet: "bg-border-subtle text-text-primary border border-border-subtle hover:bg-border-subtle/70",
+    amber: "bg-border-subtle text-text-primary border border-border-subtle hover:bg-border-subtle/70",
+    blue: "bg-border-subtle text-text-primary border border-border-subtle hover:bg-border-subtle/70",
   };
 
-/** Unlock-row icon circles — white background (`bg-white/80`) with
- *  `text-text-primary` for the glyph. No accent/yellow tint. */
+/** Unlock-row icon circles — subtle neutral tint (`bg-border-subtle`, defined in
+ *  BOTH user and merchant scopes) with `text-text-primary` for the glyph. No
+ *  accent/yellow tint, and no harsh pure-white disc in dark mode. */
 export const ACTION_ICON: Record<"green" | "violet" | "amber" | "blue", string> =
   {
-    green: "bg-white/80 text-text-primary",
-    violet: "bg-white/80 text-text-primary",
-    amber: "bg-white/80 text-text-primary",
-    blue: "bg-white/80 text-text-primary",
+    green: "bg-border-subtle text-text-primary",
+    violet: "bg-border-subtle text-text-primary",
+    amber: "bg-border-subtle text-text-primary",
+    blue: "bg-border-subtle text-text-primary",
   };
