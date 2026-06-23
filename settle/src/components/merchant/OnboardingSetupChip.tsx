@@ -33,10 +33,10 @@ export function OnboardingSetupChip({ compact = false }: OnboardingSetupChipProp
   if (!enabled || !status) return null;
   if (status.completed_at) return null;
 
+  // INR rate is optional (no setup UI), so it's excluded from the required count.
   const doneCount = [
     status.conditions.usernameSet,
     status.conditions.walletConnected,
-    status.conditions.inrRateSet,
   ].filter(Boolean).length;
 
   // Clicking calls resume() unconditionally: when skipped, this clears
@@ -47,7 +47,7 @@ export function OnboardingSetupChip({ compact = false }: OnboardingSetupChipProp
     void resume();
   };
 
-  const totalRequired = 3;
+  const totalRequired = 2;
 
   return (
     <button

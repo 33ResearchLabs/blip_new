@@ -34,13 +34,11 @@ export function OnboardingSetupCard({
   const allConditionsMet =
     conditions.usernameSet &&
     conditions.walletConnected &&
-    conditions.inrRateSet &&
     conditions.hasTrade;
   if (allConditionsMet) return null;
 
   const requiredDone =
-    conditions.walletConnected &&
-    conditions.inrRateSet;
+    conditions.walletConnected;
 
   const steps: StepView[] = [
     {
@@ -61,9 +59,10 @@ export function OnboardingSetupCard({
       icon: TrendingUp,
       done: conditions.inrRateSet,
       doneLabel: 'Set',
-      cta: conditions.inrRateSet
-        ? null
-        : { label: 'Set Rate', onClick: () => router.push('/market/settings?tab=rates') },
+      // Optional — no blocking gate and no CTA (the rates tab UI was removed;
+      // wiring it back is tracked separately). Stays visible as an advisory row.
+      optional: true,
+      cta: null,
     },
     {
       key: 'trade',
