@@ -291,11 +291,11 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
                   <p className="text-[22px] font-extrabold text-text-primary leading-none tracking-[-0.02em] inline-flex items-center gap-1">
                     {formatFiat(b.value, "USD")}
                     {isDailyDecrease && (
-                      <ArrowDown className="w-4 h-4 text-red-500" />
+                      <ArrowDown className="w-4 h-4 text-text-secondary" />
                     )}
                   </p>
                   {isDailyDecrease ? (
-                    <p className="text-[11px] text-red-500 mt-1">
+                    <p className="text-[11px] text-text-secondary mt-1">
                       Due to {unsuccessful} unsuccessful trade
                     </p>
                   ) : (
@@ -453,7 +453,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
                     r.status === "approved"
                       ? "bg-border-subtle text-text-primary border-border-subtle"
                       : r.status === "rejected"
-                        ? "bg-red-500/10 text-red-400 border-red-500/20"
+                        ? "bg-border-subtle text-text-tertiary border-border-subtle"
                         : "bg-border-subtle text-text-secondary border-border-subtle";
                   const RowIcon = r.kind === "daily" ? Calendar : CreditCard;
                   return (
@@ -553,7 +553,9 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
               className={`w-full max-w-sm rounded-2xl p-6 border border-border-subtle ${surfaces.card}`}
             >
               <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center">
+                <div
+                  className={`w-10 h-10 rounded-full border border-border-subtle ${surfaces.chip} text-text-secondary flex items-center justify-center`}
+                >
                   <ArrowDown className="w-5 h-5" />
                 </div>
                 <button
@@ -666,26 +668,28 @@ function DailyResetCard({
     Math.max(0, ((WINDOW_MS - remainingMs) / WINDOW_MS) * 100),
   );
 
-  // Urgency by time remaining: < 1h urgent, < 3h warning, else neutral.
+  // Urgency by time remaining: < 1h urgent, < 3h soon, else neutral. Kept
+  // strictly black/white — urgency is conveyed by the badge label and the bar
+  // fill intensity (primary → secondary → tertiary), NOT colour.
   const hrs = remainingMs / 3_600_000;
   const tone =
     hrs < 1
       ? {
-          accent: "text-error",
-          bar: "bg-error",
-          chip: "bg-error-dim border border-error-border",
+          accent: "text-text-primary",
+          bar: "bg-text-primary",
+          chip: `border border-border-subtle ${surfaces.chip}`,
           badge: "Almost there",
         }
       : hrs < 3
         ? {
-            accent: "text-warning",
-            bar: "bg-warning",
-            chip: "bg-warning-dim border border-warning-border",
+            accent: "text-text-primary",
+            bar: "bg-text-secondary",
+            chip: `border border-border-subtle ${surfaces.chip}`,
             badge: "Resetting soon",
           }
         : {
             accent: "text-text-primary",
-            bar: "bg-text-secondary",
+            bar: "bg-text-tertiary",
             chip: `border border-border-subtle ${surfaces.chip}`,
             badge: null as string | null,
           };
