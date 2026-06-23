@@ -17,7 +17,7 @@ interface DesktopRightPanelProps {
 
 function statusDot(status: string) {
   if (["complete", "completed"].includes(status)) return "#22c55e";
-  if (["cancelled", "expired"].includes(status)) return "#ef4444";
+  if (["cancelled", "expired"].includes(status)) return "var(--muted)";
   if (status === "disputed") return "#f97316";
   if (status === "payment_sent") return "#3b82f6";
   if (status === "escrowed") return "#a855f7";

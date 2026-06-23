@@ -405,7 +405,7 @@ export function UserWelcomePage({ onGetStarted, onSignIn }: UserWelcomePageProps
                     <div className="grid grid-cols-2 gap-2">
                       {([
                         { type: "buy" as const, label: "Buy", sub: "Get USDT", Icon: ArrowDownLeft, color: "var(--color-success)" },
-                        { type: "sell" as const, label: "Sell", sub: "Send USDT", Icon: ArrowUpRight, color: "var(--color-error)" },
+                        { type: "sell" as const, label: "Sell", sub: "Send USDT", Icon: ArrowUpRight, color: "#ef4444" },
                       ]).map(({ type, label, sub, Icon, color }) => {
                         const on = demoType === type;
                         return (

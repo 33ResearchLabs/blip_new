@@ -610,11 +610,13 @@ export function OrderPaymentScreen({
               {needsPayMethodPick ? "Select an account first" : "I have made the payment"}
             </motion.button>
           )}
-          {/* Cancel is only valid before payment is sent. Once dbStatus is
-              payment_sent the buyer has already paid and the seller's USDT is
-              escrowed, so CANCEL is no longer an allowed transition (state
-              machine: open/accepted/escrowed only). Appeal is the action here. */}
-          {!paymentSent && (
+          {/* Cancel is offered ONLY before escrow is locked (accepted /
+              escrow_pending — nothing is at stake, so the buyer can back out
+              instantly and unilaterally). Once the seller has locked USDT
+              (escrowed / payment_pending / payment_sent) there is no cancel
+              button: the buyer raises an Appeal instead (rendered above when
+              fundsLocked), and any mutual cancellation is resolved there. */}
+          {!fundsLocked && (
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={onCancel}

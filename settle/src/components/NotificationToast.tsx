@@ -41,15 +41,20 @@ const TOAST_ICONS: Record<ToastType, typeof Bell> = {
   action: Shield,
 };
 
+// Toast accents follow the active theme — they use only the theme tokens
+// `primary` (brand accent) and `foreground` (neutral), never fixed palette
+// colors. So mono renders black/white, Amoled renders orange, Navy renders
+// sky-blue, etc. Toast type is conveyed by its icon (see TOAST_ICONS), not a
+// per-type hue. `system` stays on the neutral foreground tone.
 const TOAST_COLORS: Record<ToastType, { bg: string; border: string; icon: string; accent: string }> = {
   order: { bg: 'bg-card-solid', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
-  escrow: { bg: 'bg-card-solid', border: 'border-blue-500/30', icon: 'text-blue-400', accent: 'bg-blue-500/10' },
-  payment: { bg: 'bg-card-solid', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
-  dispute: { bg: 'bg-card-solid', border: 'border-red-500/30', icon: 'text-red-400', accent: 'bg-red-500/10' },
-  complete: { bg: 'bg-card-solid', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
+  escrow: { bg: 'bg-card-solid', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
+  payment: { bg: 'bg-card-solid', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
+  dispute: { bg: 'bg-card-solid', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
+  complete: { bg: 'bg-card-solid', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
   system: { bg: 'bg-card-solid', border: 'border-foreground/10', icon: 'text-foreground/50', accent: 'bg-foreground/5' },
-  message: { bg: 'bg-card-solid', border: 'border-purple-500/30', icon: 'text-purple-400', accent: 'bg-purple-500/10' },
-  warning: { bg: 'bg-card-solid', border: 'border-amber-500/30', icon: 'text-amber-400', accent: 'bg-amber-500/10' },
+  message: { bg: 'bg-card-solid', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
+  warning: { bg: 'bg-card-solid', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
   action: { bg: 'bg-card-solid', border: 'border-primary/40', icon: 'text-primary', accent: 'bg-primary/15' },
 };
 
@@ -164,7 +169,7 @@ export function NotificationToastContainer({ position = 'top-right', topOffsetCl
   const slideDirection = position.includes('right') ? 100 : -100;
 
   return (
-    <div className={`fixed ${positionClasses[position]} z-[100] flex flex-col gap-2 pointer-events-none max-w-[380px] w-full`}>
+    <div className={`fixed ${positionClasses[position]} z-[100] flex flex-col gap-2 pointer-events-none w-[calc(100vw-1.5rem)] max-w-[380px]`}>
       <AnimatePresence mode="popLayout">
         {toasts.slice(0, MAX_VISIBLE).map((toast) => {
           const Icon = TOAST_ICONS[toast.type];

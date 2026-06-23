@@ -44,7 +44,9 @@ export const CreateOfferScreen = ({
           <div className="flex gap-2">
             {(["buy", "sell"] as const).map((type) => {
               const on = tradeType === type;
-              const accentClass = type === "buy" ? "text-success border-success" : "text-error border-error";
+              // Sell keeps its red (buy/sell convention preserved) — pinned to
+              // an explicit red since the shared error token is now neutral.
+              const accentClass = type === "buy" ? "text-success border-success" : "text-[#ef4444] border-[#ef4444]";
               return (
                 <button key={type} onClick={() => setTradeType(type)}
                   className={`flex-1 py-3 rounded-xl bg-surface-card text-[14px] font-bold ${

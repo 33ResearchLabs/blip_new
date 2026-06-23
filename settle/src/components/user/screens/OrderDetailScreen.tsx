@@ -30,6 +30,7 @@ import {
   Flag,
 } from "lucide-react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
 import { compressImage } from "@/lib/utils/compressImage";
@@ -2896,16 +2897,13 @@ export const OrderDetailScreen = ({
               disabled={!activeOrder.merchant.name}
               className="flex items-center gap-3 text-left disabled:cursor-default"
             >
-              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center font-semibold bg-accent text-accent-text shrink-0">
-                {activeOrder.merchant.avatarUrl ? (
-                  <img
-                    src={activeOrder.merchant.avatarUrl}
-                    alt={activeOrder.merchant.name || ''}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  (activeOrder.merchant.name || 'M').charAt(0)
-                )}
+              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shrink-0">
+                <UserAvatar
+                  src={activeOrder.merchant.avatarUrl}
+                  seed={activeOrder.merchant.name || activeOrder.merchant.username}
+                  size={40}
+                  alt={activeOrder.merchant.name || ''}
+                />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -2936,17 +2934,21 @@ export const OrderDetailScreen = ({
           </div>
           </div>
 
-          {/* Cancel & Dispute Buttons.
-              CANCEL is only valid before payment is sent (state machine:
-              open/accepted/escrowed). step===2 covers accepted / escrow_pending
-              / escrowed / payment_pending; step 3 (payment_sent /
-              payment_confirmed / releasing) is excluded so Cancel can't render
-              once the buyer has paid. */}
-        {activeOrder.step === 2 &&
+          {/* Cancel button — ONLY pre-escrow (accepted / escrow_pending).
+              Nothing is locked yet, so this is a unilateral, instant cancel
+              via cancelOrderDirect (the /action CANCEL endpoint). Once escrow
+              is locked there is intentionally NO cancel button here — the
+              user raises an Appeal instead, and mutual cancellation is
+              resolved through that flow. Routing pre-escrow cancels through
+              the mutual cancel-request endpoint used to silently create a
+              merchant-approval request that never resolved. */}
+        {["accepted", "escrow_pending"].includes(
+          (activeOrder.dbStatus || activeOrder.status || "").toLowerCase(),
+        ) &&
           activeOrder.status !== "disputed" &&
           !activeOrder.cancelRequest && (
             <button
-              onClick={() => requestCancelOrder()}
+              onClick={() => cancelOrderDirect()}
               disabled={isRequestingCancel}
               className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning hover:bg-warning-dim transition-colors`}
             >
@@ -2955,7 +2957,7 @@ export const OrderDetailScreen = ({
               ) : (
                 <X className="w-4 h-4" />
               )}
-              Request Cancellation
+              Cancel Order
             </button>
           )}
 
@@ -2982,10 +2984,15 @@ export const OrderDetailScreen = ({
               Cancel & Refund
             </button>
           )}
-        {/* DISPUTE is only valid from escrowed / payment_sent (state machine).
-            In every other state the user instead gets the always-on "Need
-            help" button below. */}
-        {["escrowed", "payment_sent"].includes(activeOrder.dbStatus || "") && (
+        {/* APPEAL is available once the order is accepted — through every active
+            stage up to payment_sent, including the transitional escrow_pending /
+            payment_pending states. Escalation to a dispute still requires locked
+            escrow, but the peer appeal + mutual cancel are available from
+            acceptance on. Falls back to `status` when dbStatus isn't populated
+            (the merchant side reads the raw status, so keep parity here). */}
+        {["accepted", "escrow_pending", "escrowed", "payment_pending", "payment_sent"].includes(
+          (activeOrder.dbStatus || activeOrder.status || "").toLowerCase(),
+        ) && (
             <button
               onClick={() => setShowAppeal(true)}
               className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 text-warning hover:bg-warning-dim transition-colors`}
@@ -3049,10 +3056,12 @@ export const OrderDetailScreen = ({
         )}
       </div>
 
-      {/* Raise Appeal — full-screen form. An appeal is NOT a dispute: Submit
-          posts the reason + details as a message into the order chat so the
-          counterparty sees it (no escrow freeze, no status change). If the
-          appeal doesn't resolve things, a dispute is raised separately. */}
+      {/* Raise Appeal — full-screen form. An appeal is the peer-resolution
+          stage before a dispute: Submit opens the appeal on the order
+          (POST /api/orders/[id]/appeal), notifies the counterparty, posts a
+          system message into the chat, and pauses the auto-cancel/expiry timers
+          (no status change). If it isn't resolved, it can be escalated to a
+          dispute. */}
       <AnimatePresence>
         {showAppeal && (
           <motion.div
@@ -3065,6 +3074,7 @@ export const OrderDetailScreen = ({
             <AppealScreen
               order={activeOrder}
               displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
+              orderStatus={activeOrder.dbStatus || activeOrder.status || ""}
               reason={appealReason}
               description={appealDescription}
               onReasonChange={setAppealReason}
@@ -3075,6 +3085,11 @@ export const OrderDetailScreen = ({
               onNeedHelp={() => setScreen("support")}
               onSubmit={submitAppeal}
               isSubmitting={isSubmittingAppeal}
+              onRequestCancel={() => {
+                setShowAppeal(false);
+                requestCancelOrder("Cancel & refund requested via appeal");
+              }}
+              isRequestingCancel={isRequestingCancel}
             />
           </motion.div>
         )}
@@ -3098,20 +3113,12 @@ export const OrderDetailScreen = ({
               onNeedHelp={() => setScreen("support")}
               onMarkPaymentSent={markPaymentSent}
               onCancel={() => {
-                // Pre-escrow (accepted / escrow_pending): no crypto is locked,
-                // so cancel directly via the CANCEL action. Once escrow is
-                // locked (escrowed / payment_pending), fall back to the mutual
-                // cancel-request flow so the counterparty agrees before locked
-                // funds are released.
-                const s = String(
-                  activeOrder.dbStatus || activeOrder.status || "",
-                ).toLowerCase();
-                const escrowLocked =
-                  s === "escrowed" ||
-                  s === "payment_pending" ||
-                  s === "payment_sent";
-                if (escrowLocked) requestCancelOrder();
-                else cancelOrderDirect();
+                // The Cancel button on OrderPaymentScreen now renders ONLY
+                // pre-escrow (gated on !fundsLocked there), so this is always a
+                // unilateral, instant cancel — no crypto is locked yet. Once
+                // escrow is locked the screen shows Appeal instead, and mutual
+                // cancellation is resolved through the appeal flow.
+                cancelOrderDirect();
               }}
               onAppeal={() => setShowAppeal(true)}
               onCopy={(key, value) => copyField(key, value)}
@@ -3264,7 +3271,22 @@ export const OrderDetailScreen = ({
                   else setShowTracker(false);
                 }}
                 onCancel={() => {
-                  requestCancelOrder();
+                  // Pre-escrow → unilateral instant cancel. The only locked
+                  // state the tracker still offers cancel for is an UNMATCHED
+                  // sell offer (escrowed, no merchant claimed yet) — the seller
+                  // is alone, so they pull their own offer + refund via the
+                  // existing cancel-request path. A matched, escrowed order no
+                  // longer renders a cancel button (canCancel gates it out) —
+                  // the exit there is Appeal.
+                  const s = String(
+                    activeOrder.dbStatus || activeOrder.status || "",
+                  ).toLowerCase();
+                  const escrowLocked =
+                    s === "escrowed" ||
+                    s === "payment_pending" ||
+                    s === "payment_sent";
+                  if (escrowLocked) requestCancelOrder();
+                  else cancelOrderDirect();
                   setShowTracker(false);
                 }}
                 isCancelling={isRequestingCancel}
@@ -3303,7 +3325,9 @@ export const OrderDetailScreen = ({
               paymentRows={deriveOverviewPaymentRows(activeOrder)}
               onClose={() => setShowOrderOverview(false)}
               onCancel={() => {
-                requestCancelOrder();
+                // Overview only exposes Cancel pre-escrow now (canCancel gates
+                // out any locked state), so this is always a unilateral cancel.
+                cancelOrderDirect();
                 setShowOrderOverview(false);
               }}
               isCancelling={isRequestingCancel}

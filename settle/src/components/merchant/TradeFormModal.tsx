@@ -266,7 +266,12 @@ export function TradeFormModal({
                     return (
                       <motion.button
                         key={side}
-                        onClick={() => setOpenTradeForm((p) => ({ ...p, tradeType: side }))}
+                        onClick={() => {
+                          // Clear any prior submit error — a sell-flow match
+                          // failure must not leak onto the buy tab (and vice versa).
+                          setCreateTradeError(null);
+                          setOpenTradeForm((p) => ({ ...p, tradeType: side }));
+                        }}
                         whileTap={{ scale: 0.97 }}
                         style={{
                           padding: "9px 0",
@@ -310,6 +315,8 @@ export function TradeFormModal({
                     value={openTradeForm.cryptoAmount}
                     onChange={(e) => {
                       const v = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
+                      // Editing the amount invalidates a prior match-failure error.
+                      if (createTradeError) setCreateTradeError(null);
                       setOpenTradeForm((p) => ({ ...p, cryptoAmount: v }));
                     }}
                     style={{

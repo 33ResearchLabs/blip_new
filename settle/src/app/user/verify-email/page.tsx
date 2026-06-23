@@ -131,8 +131,8 @@ function VerifyEmailBody({ nextHref }: { nextHref: string }) {
     >
       <div className="text-center space-y-2">
         <div className="flex justify-center mb-3">
-          <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
-            <AlertCircle className="w-6 h-6 text-red-600" />
+          <div className="w-12 h-12 rounded-full bg-neutral-500/10 flex items-center justify-center">
+            <AlertCircle className="w-6 h-6 text-neutral-600" />
           </div>
         </div>
         <p className="text-[15.5px] font-semibold text-[#1d1d1f]">Verification failed</p>

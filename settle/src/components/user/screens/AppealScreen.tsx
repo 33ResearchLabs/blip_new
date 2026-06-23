@@ -3,19 +3,21 @@
 /**
  * AppealScreen
  * ────────────
- * Full-screen "Raise Appeal" form for a BUY order. The buyer picks a reason,
- * adds detail and (optionally) screenshots, then submits — which opens a dispute
- * on the order (escrow is frozen for compliance review).
+ * Full-screen "Raise Appeal" form. The user picks an issue from the shared
+ * catalog (grouped into "Resolve together" peer-fixable cases vs "Needs a
+ * dispute" moderator cases), adds detail and (optionally) screenshots, then
+ * submits — which opens the peer-to-peer appeal on the order
+ * (`POST /api/orders/[id]/appeal`). Opening an appeal pauses the auto-cancel /
+ * expiry timers; it does NOT change the order status.
  *
- * Pure presentation: the reason + description are lifted to the parent
- * (OrderDetailScreen via useUserOrderActions) so the dispute submit logic lives
+ * Pure presentation: the selected issue_key + description are lifted to the
+ * parent (OrderDetailScreen via useUserOrderActions) so the submit logic lives
  * in exactly one place. Mirrors the layout language of the other order screens
  * (py-4 / 1rem header, surface-card tokens, warning-dim info banners).
  *
- * NOTE: the evidence upload is currently client-side only — the dispute API
- * (`POST /api/orders/[id]/dispute`) accepts JSON (reason + description) and has
- * no attachment endpoint yet. Files are validated + previewed here so the UI is
- * complete, but they are NOT transmitted until an attachments endpoint exists.
+ * NOTE: evidence upload is still client-side only here — wiring it to real
+ * storage is a follow-up phase. Files are validated + previewed so the UI is
+ * complete, but they are not transmitted yet.
  */
 
 import { useState } from "react";
@@ -26,7 +28,6 @@ import {
   ShieldAlert,
   Star,
   MessageCircle,
-  Bot,
   Upload,
   Lock,
   Loader2,
@@ -34,7 +35,9 @@ import {
   X,
 } from "lucide-react";
 import type { Order } from "./types";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { formatCrypto, formatRate, formatCount } from "@/lib/format";
+import { getAppealIssuesForStage, getAppealIssue } from "@/lib/appeals/issues";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -47,37 +50,6 @@ function fiatSymbol(code: string | undefined | null): string {
   }
 }
 
-interface ReasonOption {
-  key: string;
-  label: string;
-  desc: string;
-}
-
-// Reasons mirror the screenshot. Values are free-text — the dispute API stores
-// `reason` as a string, so no backend enum change is needed.
-const REASONS: ReasonOption[] = [
-  {
-    key: "merchant_not_responding",
-    label: "Merchant is not responding",
-    desc: "The merchant is not responding or taking too long to confirm.",
-  },
-  {
-    key: "payment_issue",
-    label: "Payment issue",
-    desc: "There was an issue with my payment or payment details.",
-  },
-  {
-    key: "extra_payment_request",
-    label: "Merchant requested extra payment",
-    desc: "The merchant asked for extra payment or terms.",
-  },
-  {
-    key: "other",
-    label: "Other issue",
-    desc: "I have another issue with this order.",
-  },
-];
-
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 const ACCEPTED = ["image/png", "image/jpeg", "image/jpg"];
@@ -85,6 +57,8 @@ const ACCEPTED = ["image/png", "image/jpeg", "image/jpg"];
 export interface AppealScreenProps {
   order: Order;
   displayId: string;
+  /** Current order status — drives which issues are offered (stage-aware). */
+  orderStatus: string;
   reason: string;
   description: string;
   onReasonChange: (r: string) => void;
@@ -95,11 +69,15 @@ export interface AppealScreenProps {
   onNeedHelp: () => void;
   onSubmit: () => void;
   isSubmitting: boolean;
+  /** Fires the mutual cancel-request flow when "Cancel & refund" is selected. */
+  onRequestCancel?: () => void;
+  isRequestingCancel?: boolean;
 }
 
 export function AppealScreen({
   order,
   displayId,
+  orderStatus,
   reason,
   description,
   onReasonChange,
@@ -110,6 +88,8 @@ export function AppealScreen({
   onNeedHelp,
   onSubmit,
   isSubmitting,
+  onRequestCancel,
+  isRequestingCancel,
 }: AppealScreenProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -141,7 +121,16 @@ export function AppealScreen({
     setFiles(next);
   }
 
-  const canSubmit = !!reason && !isSubmitting;
+  const stageIssues = getAppealIssuesForStage(orderStatus);
+  const selectedIssue = getAppealIssue(reason);
+  const isDisputeIssue = selectedIssue?.group === "dispute";
+  const isMutualCancel = selectedIssue?.key === "mutual_cancel" && !!onRequestCancel;
+  const needsDescription = !!selectedIssue?.requiresDescription;
+  const canSubmit =
+    !!reason &&
+    (!needsDescription || description.trim().length > 0) &&
+    !isSubmitting &&
+    !isRequestingCancel;
 
   return (
     <div className="bg-surface-base flex-1 min-h-0 overflow-y-auto scrollbar-hide">
@@ -204,12 +193,12 @@ export function AppealScreen({
           >
             <div className="relative shrink-0">
               <div className="w-12 h-12 rounded-full overflow-hidden bg-border-subtle flex items-center justify-center">
-                {order.merchant.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={order.merchant.avatarUrl} alt={order.merchant.name} className="w-full h-full object-cover" />
-                ) : (
-                  <Bot className="w-6 h-6 text-text-secondary" />
-                )}
+                <UserAvatar
+                  src={order.merchant.avatarUrl}
+                  seed={order.merchant.name || order.merchant.username}
+                  size={48}
+                  alt={order.merchant.name}
+                />
               </div>
               {order.merchant.isOnline && (
                 <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-surface-card" />
@@ -241,12 +230,12 @@ export function AppealScreen({
           </button>
         </div>
 
-        {/* Appeal reason */}
+        {/* What's the issue? — reduced, stage-aware list */}
         <div className={`rounded-2xl p-4 ${CARD}`}>
-          <p className="text-[15px] font-semibold text-text-primary">Appeal reason</p>
-          <p className="text-[13px] text-text-tertiary mb-3">Please select the reason for raising this appeal.</p>
+          <p className="text-[15px] font-semibold text-text-primary">What&apos;s the issue?</p>
+          <p className="text-[13px] text-text-tertiary mb-3">Pick the option that best matches your situation.</p>
           <div className="space-y-2.5">
-            {REASONS.map((r) => {
+            {stageIssues.map((r) => {
               const on = reason === r.key;
               return (
                 <button
@@ -258,7 +247,14 @@ export function AppealScreen({
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-semibold text-text-primary">{r.label}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[14px] font-semibold text-text-primary">{r.label}</p>
+                      {r.escalates && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-warning-dim text-warning shrink-0">
+                          Moderator review
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[13px] text-text-secondary leading-snug">{r.desc}</p>
                   </div>
                   <span
@@ -274,10 +270,19 @@ export function AppealScreen({
           </div>
         </div>
 
-        {/* Details */}
+        {/* Details — required when "Other" is selected */}
         <div className={`rounded-2xl p-4 ${CARD}`}>
-          <p className="text-[15px] font-semibold text-text-primary">Details</p>
-          <p className="text-[13px] text-text-tertiary mb-3">Please provide more details about the issue.</p>
+          <p className="text-[15px] font-semibold text-text-primary">
+            Details{" "}
+            <span className="text-text-tertiary font-normal">
+              {needsDescription ? "(Required)" : "(Optional)"}
+            </span>
+          </p>
+          <p className="text-[13px] text-text-tertiary mb-3">
+            {needsDescription
+              ? "Describe your issue so the other party can understand and help."
+              : "Add any extra detail about the issue."}
+          </p>
           <div className="relative">
             <textarea
               value={description}
@@ -341,7 +346,7 @@ export function AppealScreen({
           )}
         </div>
 
-        {/* What happens next? */}
+        {/* What happens next? — copy adapts to the selected issue group */}
         <div className="rounded-2xl p-4 flex gap-3 bg-warning-dim border border-warning-border">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-warning/15">
             <Lock className="w-5 h-5 text-warning" />
@@ -349,22 +354,38 @@ export function AppealScreen({
           <div className="min-w-0">
             <p className="text-[14px] font-semibold text-text-primary mb-0.5">What happens next?</p>
             <p className="text-[13px] text-text-secondary leading-snug">
-              Our support team will review your appeal and take action. You&apos;ll be notified once we
-              have an update.
+              {isMutualCancel
+                ? "Requesting a cancellation needs the other party to accept. If they agree, the order is cancelled and the escrow is refunded. (Only available before the buyer has paid.)"
+                : isDisputeIssue
+                ? "This type of issue is reviewed by a moderator. Your appeal can be escalated to a formal dispute, and the escrow stays locked until it's resolved."
+                : "Your appeal opens a private resolution with the other party. The escrow stays locked and auto-timeouts are paused while you sort it out — if it isn't resolved, it can be escalated to a moderator."}
             </p>
           </div>
         </div>
 
-        {/* Submit */}
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={onSubmit}
-          disabled={!canSubmit}
-          className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-error text-text-primary disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-          Submit Appeal
-        </motion.button>
+        {/* Primary action — becomes "Request Cancellation" when the user picks
+            Cancel & refund, firing the existing mutual cancel-request flow. */}
+        {isMutualCancel ? (
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={onRequestCancel}
+            disabled={!!isRequestingCancel || isSubmitting}
+            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isRequestingCancel && <Loader2 className="w-4 h-4 animate-spin" />}
+            Request Cancellation
+          </motion.button>
+        ) : (
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={onSubmit}
+            disabled={!canSubmit}
+            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            Submit Appeal
+          </motion.button>
+        )}
       </div>
     </div>
   );

@@ -43,8 +43,8 @@ function ResetPasswordForm() {
       <div className="space-y-5">
         <div className="text-center space-y-2">
           <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
-              <AlertCircle className="w-6 h-6 text-red-600" />
+            <div className="w-12 h-12 rounded-full bg-neutral-500/10 flex items-center justify-center">
+              <AlertCircle className="w-6 h-6 text-neutral-600" />
             </div>
           </div>
           <p className="text-[15.5px] font-semibold text-[#1d1d1f]">Invalid reset link</p>
@@ -127,7 +127,7 @@ function ResetPasswordForm() {
       </p>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-[12.5px] text-red-700">
+        <div className="bg-neutral-500/10 border border-neutral-500/20 rounded-xl p-3 text-[12.5px] text-neutral-700">
           {error}
         </div>
       )}
@@ -155,7 +155,7 @@ function ResetPasswordForm() {
           </button>
         </div>
         {password && password.length < 6 && (
-          <p className="text-[11px] text-red-600 mt-1">Must be at least 6 characters</p>
+          <p className="text-[11px] text-neutral-600 mt-1">Must be at least 6 characters</p>
         )}
       </div>
 
@@ -183,7 +183,7 @@ function ResetPasswordForm() {
           </button>
         </div>
         {confirmPassword && password !== confirmPassword && (
-          <p className="text-[11px] text-red-600 mt-1">Passwords don't match</p>
+          <p className="text-[11px] text-neutral-600 mt-1">Passwords don't match</p>
         )}
       </div>
 

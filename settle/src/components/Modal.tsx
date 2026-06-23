@@ -31,13 +31,16 @@ const VARIANT_CONFIG: Record<ModalVariant, {
   buttonShadow: string;
 }> = {
   success: {
+    // Green ✓ icon is kept so the dialog still reads as a success, but the
+    // CTA is a neutral white-on-black button (matching `warning`/`info`)
+    // rather than a green one — per the monochrome button direction.
     icon: CheckCircle2,
     iconColor: 'text-emerald-400',
     iconBg: 'bg-emerald-500/10',
     border: 'border-emerald-500/20',
-    buttonBg: 'bg-gradient-to-b from-emerald-500 to-emerald-600',
-    buttonHover: 'hover:from-emerald-400 hover:to-emerald-500',
-    buttonShadow: 'shadow-[0_2px_12px_rgba(16,185,129,0.15)]',
+    buttonBg: 'bg-white text-black',
+    buttonHover: 'hover:bg-white/90',
+    buttonShadow: 'shadow-[0_2px_12px_rgba(0,0,0,0.25)]',
   },
   error: {
     icon: XCircle,
@@ -222,11 +225,11 @@ export function Modal({
                 disabled={loading}
                 className={`flex-1 px-3 py-2.5 rounded-xl ${config.buttonBg} ${
                   // Info variant uses solid primary (orange) so the label
-                  // needs to be dark for AA contrast. Warning now renders
-                  // as a white button, so it also needs dark text. Other
-                  // variants keep their light-on-saturated-color combo.
+                  // needs to be dark for AA contrast. Warning and success now
+                  // render as white buttons, so they also need dark text.
+                  // Remaining variants keep their light-on-saturated-color combo.
                   variant === 'info' ? 'text-background'
-                    : variant === 'warning' ? 'text-black'
+                    : variant === 'warning' || variant === 'success' ? 'text-black'
                     : 'text-white'
                 } text-[12px] font-bold
                            ${config.buttonHover} transition-all disabled:opacity-50 disabled:cursor-not-allowed

@@ -31,7 +31,10 @@ import { OrderOverviewScreen } from "./OrderOverviewScreen";
 import { WaitingTracker, TIMELINE, type TrackerBanner, type Tone } from "./WaitingTracker";
 
 const TERMINAL = new Set(["cancelled", "expired", "disputed"]);
-const CANCELLABLE = new Set(["pending", "accepted", "escrowed"]);
+// Pre-escrow states: nothing is locked, so the user can cancel unilaterally
+// and instantly. Once escrow is locked against a matched counterparty there is
+// no cancel button — the exit is Appeal (see canCancel below).
+const CANCELLABLE = new Set(["pending", "accepted", "escrow_pending"]);
 /** Sell-order states where the USER's own USDT is sitting in escrow. */
 const USER_ESCROWED = new Set(["escrowed", "payment_pending", "payment_sent", "payment_confirmed", "releasing"]);
 
@@ -167,7 +170,13 @@ export function OrderTrackingView({
     buyerPayTypes.length > 0
       ? buyerPayTypes.map((t) => (t === "cash" ? "Cash" : t === "upi" ? "UPI" : "Bank")).join(" · ")
       : order.merchant?.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
-  const canCancel = CANCELLABLE.has(dbStatus) && !order.cancelRequest;
+  // Cancel is offered while funds are NOT locked (pre-escrow), OR for an
+  // UNMATCHED sell offer whose escrow is locked but no merchant has claimed it
+  // yet (the seller is alone, so they can withdraw + self-refund). A matched,
+  // escrowed order does NOT get a cancel button — the user raises an Appeal.
+  const canCancel =
+    !order.cancelRequest &&
+    (CANCELLABLE.has(dbStatus) || (dbStatus === "escrowed" && !matched));
 
   // Escrow card only when the USER's own funds are locked (sell orders).
   const showEscrow = order.type === "sell" && USER_ESCROWED.has(dbStatus);

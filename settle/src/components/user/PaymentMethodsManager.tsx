@@ -267,8 +267,8 @@ export function PaymentMethodsManager({ userId }: PaymentMethodsManagerProps) {
                   aria-label={isArmed ? 'Confirm delete' : 'Delete payment method'}
                   className={`h-8 px-2 rounded-[10px] flex items-center justify-center gap-1 transition text-[11px] font-semibold ${
                     isArmed
-                      ? 'bg-red-500/[0.10] text-red-300 border border-red-500/20'
-                      : 'text-white/40 hover:text-red-300 hover:bg-red-500/[0.08]'
+                      ? 'bg-error-dim text-error border border-error-border'
+                      : 'text-white/40 hover:text-error hover:bg-error-dim'
                   }`}
                 >
                   {isDeleting ? (

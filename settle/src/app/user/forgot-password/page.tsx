@@ -104,7 +104,7 @@ export default function UserForgotPasswordPage() {
             </p>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-[12.5px] text-red-700">
+              <div className="bg-neutral-500/10 border border-neutral-500/20 rounded-xl p-3 text-[12.5px] text-neutral-700">
                 {error}
               </div>
             )}

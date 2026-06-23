@@ -65,6 +65,7 @@ import { SURFACES } from "@/components/shared/limits/types";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { ProfileEntityType } from "@/components/shared/profile/types";
 import { deriveCounterparty } from "@/components/shared/profile/counterparty";
+import { MerchantAppealSheet } from "@/components/merchant/MerchantAppealSheet";
 
 // ── Counterparty profile wiring ──────────────────────────────────────────────
 // The popup is one big tree of sub-component bodies (CounterpartyTrustCard,
@@ -3035,6 +3036,10 @@ export function OrderQuickView({
   // Copy feedback for the Order ID shown in the completed-order app-bar.
   const [hdrCopied, setHdrCopied] = useLocalState(false);
 
+  // Merchant "Raise Appeal" sheet — opens the issue picker over the popup.
+  // Captures the order status so the picker can show stage-appropriate issues.
+  const [appealSheet, setAppealSheet] = useLocalState<{ orderId: string; status: string } | null>(null);
+
   // Counterparty profile sheet — opened from the header avatar/name, the
   // CounterpartyTrustCard, or the "View Profile" button (all via context).
   const [profileTarget, setProfileTarget] = useLocalState<{
@@ -4112,26 +4117,26 @@ export function OrderQuickView({
                         </p>
                       )}
 
-                      {/* Raise Appeal (first) + Need Help. Appeal shows at the
-                        verify stage (buyer marked paid), or once an escrowed
-                        order's deadline has passed (buyer late). Need Help is
-                        always available on an active order. */}
+                      {/* Raise Appeal (first) + Need Help. Appeal is available
+                        once the order is accepted (accepted / escrowed /
+                        payment_sent) — opening it pauses the auto-cancel timers
+                        and starts the peer-resolution flow. Need Help is always
+                        available on an active order. */}
                       {isActiveOrder &&
                         (() => {
                           const st =
                             (selectedOrder.dbOrder as any)?.status ||
                             (selectedOrder.dbOrder as any)?.minimal_status;
-                          const showAppeal =
-                            st === "payment_sent" ||
-                            (st === "escrowed" && waitingTimedOut);
+                          const showAppeal = [
+                            "accepted",
+                            "escrowed",
+                            "payment_sent",
+                          ].includes(st);
                           return (
                             <div className="flex gap-3">
                               {showAppeal && (
                                 <button
-                                  onClick={() => {
-                                    onOpenDispute?.(selectedOrder.id);
-                                    onClose();
-                                  }}
+                                  onClick={() => setAppealSheet({ orderId: selectedOrder.id, status: st })}
                                   className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
                                 >
                                   <Flag className="w-4 h-4" />
@@ -4194,6 +4199,15 @@ export function OrderQuickView({
       variant="merchant"
       onClose={() => setProfileTarget(null)}
     />
+    {/* Merchant Raise-Appeal sheet — layered above the popup (z-[150]). */}
+    {appealSheet && (
+      <MerchantAppealSheet
+        orderId={appealSheet.orderId}
+        orderStatus={appealSheet.status}
+        onClose={() => setAppealSheet(null)}
+        onSubmitted={onClose}
+      />
+    )}
     </ProfileOpenContext.Provider>
   );
 }

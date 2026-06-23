@@ -177,7 +177,7 @@ export default function UserMyIssueDetailPage({
         </button>
 
         {error ? (
-          <div className="flex items-start gap-2 px-4 py-3 rounded-xl border border-rose-500/25 bg-rose-500/10 text-rose-600 text-[13px]">
+          <div className="flex items-start gap-2 px-4 py-3 rounded-xl border border-error-border bg-error-dim text-error text-[13px]">
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
             <div>
               <div className="font-medium">{error}</div>
@@ -325,7 +325,7 @@ export default function UserMyIssueDetailPage({
                             entry.status === "resolved"
                               ? "bg-emerald-500 border-emerald-500"
                               : entry.status === "rejected"
-                                ? "bg-rose-500 border-rose-500"
+                                ? "bg-error border-error-border"
                                 : entry.status === "in_progress"
                                   ? "bg-amber-500 border-amber-500"
                                   : "bg-text-tertiary border-text-tertiary"
@@ -380,9 +380,9 @@ export default function UserMyIssueDetailPage({
                   className="w-full px-4 py-3 rounded-2xl bg-surface-card border border-border-subtle text-[13.5px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-medium transition-colors resize-none"
                 />
                 {replyError && (
-                  <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/25">
-                    <AlertCircle size={14} className="text-rose-600 shrink-0" />
-                    <span className="text-[12px] text-rose-600">{replyError}</span>
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-error-dim border border-error-border">
+                    <AlertCircle size={14} className="text-error shrink-0" />
+                    <span className="text-[12px] text-error">{replyError}</span>
                   </div>
                 )}
                 <div className="mt-2 flex items-center justify-between gap-3">
@@ -461,7 +461,7 @@ function StatusBadge({ status }: { status: IssueStatus }) {
     },
     rejected: {
       label: "Rejected",
-      cls: "bg-rose-500/15 text-rose-600 border-rose-500/30",
+      cls: "bg-error/15 text-error border-error-border",
     },
     closed: {
       label: "Closed",

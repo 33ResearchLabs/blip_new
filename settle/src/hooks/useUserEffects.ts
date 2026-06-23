@@ -367,7 +367,10 @@ export function useUserEffects({
 
       if (newStatus === 'completed') {
         playSound('trade_complete');
-        toast.showTradeComplete();
+        // Pass the orderId (2nd arg) so the persistent notification list dedupes
+        // this completion per-order — overlapping realtime/polling/reconciliation
+        // sources otherwise stacked ~10 identical "Trade Complete" rows.
+        toast.showTradeComplete(undefined, activeOrderId ?? undefined);
         showBrowserNotification('Trade Complete!', 'Your trade has been completed successfully.', activeOrderId || undefined);
         if (solanaWallet.connected) {
           solanaWallet.refreshBalances();
