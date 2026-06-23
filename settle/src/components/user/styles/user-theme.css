@@ -85,9 +85,15 @@
   --color-warning:        #f59e0b;
   --color-warning-dim:    rgba(245,158,11,0.12);
   --color-warning-border: rgba(245,158,11,0.25);
-  --color-error:          #ef4444;
-  --color-error-dim:      rgba(239,68,68,0.10);
-  --color-error-border:   rgba(239,68,68,0.20);
+  /* Error → neutral monochrome (no red anywhere on the user side). These drive
+     every token-based `text-error` / `bg-error-dim` / `border-error-border`
+     across user screens, so the whole error/dispute/destructive surface goes
+     greyscale from here. Solid `bg-error` buttons are handled per-component so
+     their light text stays legible. Sell-side spots that borrow this token are
+     pinned to explicit red to keep the buy/sell convention unchanged. */
+  --color-error:          rgba(255,255,255,0.92);
+  --color-error-dim:      rgba(255,255,255,0.06);
+  --color-error-border:   rgba(255,255,255,0.14);
   --color-info:           #60a5fa;
 
   /* "Desk" frame around the phone column.
@@ -158,9 +164,11 @@
   --color-warning: #d97706;
   --color-warning-dim:    rgba(217,119,6,0.10);
   --color-warning-border: rgba(217,119,6,0.28);
-  --color-error: #dc2626;
-  --color-error-dim:      rgba(220,38,38,0.08);
-  --color-error-border:   rgba(220,38,38,0.22);
+  /* Error → neutral monochrome (light variant). Near-black text + faint grey
+     surface, mirroring the dark block above. See note there. */
+  --color-error: #14151a;
+  --color-error-dim:      rgba(20,21,26,0.05);
+  --color-error-border:   rgba(20,21,26,0.14);
   --color-info: #2563eb;
 
   /* Dark "desk" around the white phone column. Matches the `darkBg` constant

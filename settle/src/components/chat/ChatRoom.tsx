@@ -42,6 +42,7 @@ import {
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { compressImage } from "@/lib/utils/compressImage";
 import type { ChatMessage, PresenceMember } from "@/hooks/useRealtimeChat";
 import { usePusherOptional } from "@/context/PusherContext";
@@ -176,25 +177,6 @@ function getRoleName(senderType?: string): string {
 // Sub-components
 // ============================================
 
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
-
-// Deterministic gradient from username — same palette as the inbox list
-const AVATAR_GRADIENTS = [
-  "linear-gradient(150deg,#ff8a3d,#ff5d73)",
-  "linear-gradient(150deg,#6c63ff,#3b82f6)",
-  "linear-gradient(150deg,#f59e0b,#ef4444)",
-  "linear-gradient(150deg,#10b981,#3b82f6)",
-  "linear-gradient(150deg,#ec4899,#8b5cf6)",
-  "linear-gradient(150deg,#14b8a6,#6366f1)",
-];
-function avatarGradient(name: string): string {
-  const hash = name.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
-  return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
-}
 
 function SenderAvatar({
   senderType,
@@ -220,22 +202,14 @@ function SenderAvatar({
         </div>
       );
     default:
-      if (avatarUrl) {
-        return (
-          <img
-            src={avatarUrl}
-            alt={name}
-            className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/[0.08]"
-          />
-        );
-      }
       return (
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-[12px] select-none"
-          style={{ background: avatarGradient(name) }}
-        >
-          {getInitials(name)}
-        </div>
+        <UserAvatar
+          src={avatarUrl}
+          seed={name}
+          size={32}
+          alt={name}
+          className="border border-white/[0.08]"
+        />
       );
   }
 }

@@ -351,7 +351,7 @@ function ScreenPin({ onConfirmed }: {
         </motion.div>
 
         {error && (
-          <motion.div key={errorTick} initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ marginTop: 16, color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
+          <motion.div key={errorTick} initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ marginTop: 16, color: "var(--color-error)", fontSize: 13, fontWeight: 600 }}>
             {error}
           </motion.div>
         )}
@@ -494,7 +494,7 @@ function ScreenUsername({ onNext, onBack, userId }: {
   }, [canContinue, alreadySet, userId, value, onNext]);
 
   const borderColor =
-    error || available === false ? "#dc2626"
+    error || available === false ? "var(--color-error)"
     : available === true || alreadySet ? "#10b981"
     : HAIR2;
   const statusText =
@@ -506,7 +506,7 @@ function ScreenUsername({ onNext, onBack, userId }: {
     : available === false ? "Already taken"
     : "4–20 letters, numbers or _";
   const statusColor =
-    error || available === false ? "#dc2626"
+    error || available === false ? "var(--color-error)"
     : available === true || alreadySet ? "#10b981"
     : MUTED;
 
@@ -556,7 +556,7 @@ function ScreenUsername({ onNext, onBack, userId }: {
                 : available === true
                   ? <Check size={18} strokeWidth={2.6} style={{ color: "#10b981" }} />
                   : available === false
-                    ? <X size={18} strokeWidth={2.6} style={{ color: "#dc2626" }} />
+                    ? <X size={18} strokeWidth={2.6} style={{ color: "var(--color-error)" }} />
                     : null
             )}
             {alreadySet && <Check size={18} strokeWidth={2.6} style={{ color: "#10b981" }} />}
@@ -628,7 +628,7 @@ function ScreenDone({ onFinish, finishing, error }: {
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.5 }} style={{ padding: "0 22px 30px" }}>
         {error && (
-          <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 600, textAlign: "center", marginBottom: 12 }}>
+          <div style={{ color: "var(--color-error)", fontSize: 13, fontWeight: 600, textAlign: "center", marginBottom: 12 }}>
             {error}
           </div>
         )}

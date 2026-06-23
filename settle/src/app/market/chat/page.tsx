@@ -72,6 +72,7 @@ import { useOrderActionDispatch } from "@/hooks/useOrderActionDispatch";
 import { ImageUpload } from "@/components/chat/ImageUpload";
 import { ReceiptCard } from "@/components/chat/cards";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { orderActionKey } from "@/lib/api/idempotencyKeys";
 import type { BackendOrder, ActionType } from "@/types/backendOrder";
 import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
 
@@ -337,6 +338,14 @@ export default function TradeChatPage() {
     onError: (e) => setActionMsg(e),
   });
 
+  // Reason modal for initiating a cancel / dispute (replaces native prompt()).
+  const [reasonModal, setReasonModal] = useState<{
+    type: "CANCEL" | "DISPUTE";
+    reason: string;
+  } | null>(null);
+  // Responding to an incoming mutual-cancel request (Agree / Decline).
+  const [respondingCancel, setRespondingCancel] = useState(false);
+
   const handleAction = useCallback(
     async (type: ActionType) => {
       if (!activeOrderId) return;
@@ -347,27 +356,63 @@ export default function TradeChatPage() {
         return;
       }
 
-      let reason: string | undefined;
-      if (type === "CANCEL") {
-        const r = window.prompt("Reason for cancelling this order?");
-        if (r === null) return; // user dismissed
-        reason = r || "Cancelled by merchant";
-      } else if (type === "DISPUTE") {
-        const r = window.prompt("Describe the issue to open a dispute:");
-        if (r === null) return;
-        reason = r || "Dispute raised by merchant";
-      } else {
-        const labels: Record<string, string> = {
-          SEND_PAYMENT: "Mark this order as payment sent?",
-          CONFIRM_PAYMENT: "Confirm payment received and release escrow?",
-        };
-        if (!window.confirm(labels[type] ?? `Run ${type}?`)) return;
+      // Cancel / dispute collect a reason via an in-app modal (not window.prompt).
+      if (type === "CANCEL" || type === "DISPUTE") {
+        setReasonModal({ type, reason: "" });
+        return;
       }
 
+      const labels: Record<string, string> = {
+        SEND_PAYMENT: "Mark this order as payment sent?",
+        CONFIRM_PAYMENT: "Confirm payment received and release escrow?",
+      };
+      if (!window.confirm(labels[type] ?? `Run ${type}?`)) return;
+
       setActionMsg(null);
-      await dispatch(activeOrderId, type, { reason });
+      await dispatch(activeOrderId, type, {});
     },
     [activeOrderId, dispatch, router],
+  );
+
+  // Confirm the reason modal → dispatch the cancel/dispute with the typed reason.
+  const confirmReasonAction = useCallback(async () => {
+    if (!reasonModal || !activeOrderId) return;
+    const { type, reason } = reasonModal;
+    const fallback = type === "CANCEL" ? "Cancelled by merchant" : "Dispute raised by merchant";
+    setReasonModal(null);
+    setActionMsg(null);
+    await dispatch(activeOrderId, type, { reason: reason.trim() || fallback });
+  }, [reasonModal, activeOrderId, dispatch]);
+
+  // Respond to an incoming mutual-cancel request: accept (refund) or decline.
+  const respondCancel = useCallback(
+    async (accept: boolean) => {
+      if (!activeOrderId || !merchantId || respondingCancel) return;
+      setRespondingCancel(true);
+      setActionMsg(null);
+      try {
+        const res = await fetchWithAuth(`/api/orders/${activeOrderId}/cancel-request`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": orderActionKey(activeOrderId, "cancel_respond"),
+          },
+          body: JSON.stringify({ actor_type: "merchant", actor_id: merchantId, accept }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+          loadOrder(activeOrderId);
+          fetchOrderConversations();
+        } else {
+          setActionMsg(data.error || "Failed to respond to the cancellation request");
+        }
+      } catch {
+        setActionMsg("Failed to respond to the cancellation request");
+      } finally {
+        setRespondingCancel(false);
+      }
+    },
+    [activeOrderId, merchantId, respondingCancel, loadOrder, fetchOrderConversations],
   );
 
   // ── send a message (text + optional image) ──
@@ -390,6 +435,14 @@ export default function TradeChatPage() {
 
   const signedOut = !merchantId;
   const chatClosed = isChatClosed(order?.status);
+  // Mutual-cancel request state. Prefer the requester id (reliable for M2M
+  // where both parties are merchants); fall back to actor type for legacy rows.
+  const cancelReqBy = order?.cancel_requested_by ?? null;
+  const cancelReqById = order?.cancel_requested_by_id ?? null;
+  const cancelReqReason = order?.cancel_request_reason ?? null;
+  const iRequestedCancel =
+    !!cancelReqBy && (cancelReqById ? cancelReqById === merchantId : cancelReqBy === "merchant");
+  const incomingCancel = !!cancelReqBy && !iRequestedCancel;
 
   return (
     <div className="flex flex-col h-screen bg-[var(--color-bg-primary)] text-foreground">
@@ -579,6 +632,39 @@ export default function TradeChatPage() {
                 )}
               </div>
 
+              {/* Incoming mutual-cancel request — respond inline in the chat. */}
+              {incomingCancel && (
+                <div className="shrink-0 border-t border-white/[0.06] px-3 py-2.5 bg-white/[0.03]">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[12.5px] font-semibold text-foreground">
+                        Cancel &amp; refund requested
+                      </p>
+                      <p className="text-[11px] text-foreground/55 leading-snug truncate">
+                        {cancelReqReason || "Agree to cancel this order and refund the escrow."}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => respondCancel(true)}
+                        disabled={respondingCancel}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-text text-[12.5px] font-semibold disabled:opacity-50"
+                      >
+                        {respondingCancel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        Agree
+                      </button>
+                      <button
+                        onClick={() => respondCancel(false)}
+                        disabled={respondingCancel}
+                        className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-foreground/80 hover:text-foreground hover:bg-white/[0.06] text-[12.5px] font-medium disabled:opacity-50"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* composer */}
               <div className="shrink-0 border-t border-white/[0.06] p-3">
                 {chatClosed ? (
@@ -649,11 +735,66 @@ export default function TradeChatPage() {
             actionLoading={actionLoading}
             actionMsg={actionMsg}
             onAction={handleAction}
+            onRespondCancel={respondCancel}
+            respondingCancel={respondingCancel}
+            incomingCancelRequest={incomingCancel}
+            iRequestedCancel={iRequestedCancel}
+            cancelReqReason={cancelReqReason}
             show={showDetails}
             onClose={() => setShowDetails(false)}
           />
         )}
       </div>
+
+      {/* Reason modal — replaces the native prompt() for cancel / dispute. */}
+      {reasonModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4"
+          onClick={() => setReasonModal(null)}
+        >
+          <div
+            className="w-full max-w-[380px] rounded-2xl bg-[var(--color-bg-secondary)] border border-white/[0.1] p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-[16px] font-semibold text-foreground">
+              {reasonModal.type === "CANCEL" ? "Cancel order" : "Open a dispute"}
+            </h3>
+            <p className="text-[13px] text-foreground/55 mt-1.5 leading-snug">
+              {reasonModal.type === "CANCEL"
+                ? "The other party must accept before the order is cancelled and the escrow refunded."
+                : "Describe the issue. A moderator will review it."}
+            </p>
+            <input
+              autoFocus
+              value={reasonModal.reason}
+              onChange={(e) => setReasonModal({ ...reasonModal, reason: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") confirmReasonAction();
+              }}
+              placeholder={
+                reasonModal.type === "CANCEL" ? "Reason for cancelling…" : "Describe the issue…"
+              }
+              maxLength={200}
+              className="mt-3 w-full rounded-xl px-3.5 py-2.5 text-[14px] text-foreground bg-white/[0.04] border border-white/[0.12] outline-none placeholder:text-foreground/35"
+            />
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setReasonModal(null)}
+                className="flex-1 py-2.5 rounded-xl border border-white/[0.12] bg-white/[0.04] text-foreground text-[14px] font-medium hover:bg-white/[0.08]"
+              >
+                Back
+              </button>
+              <button
+                onClick={confirmReasonAction}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl bg-accent text-accent-text text-[14px] font-semibold disabled:opacity-50"
+              >
+                {reasonModal.type === "CANCEL" ? "Request cancellation" : "Open dispute"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -940,6 +1081,11 @@ function TradeDetailsPane({
   actionLoading,
   actionMsg,
   onAction,
+  onRespondCancel,
+  respondingCancel,
+  incomingCancelRequest,
+  iRequestedCancel,
+  cancelReqReason,
   show,
   onClose,
 }: {
@@ -949,6 +1095,11 @@ function TradeDetailsPane({
   actionLoading: boolean;
   actionMsg: string | null;
   onAction: (type: ActionType) => void;
+  onRespondCancel: (accept: boolean) => void;
+  respondingCancel: boolean;
+  incomingCancelRequest: boolean;
+  iRequestedCancel: boolean;
+  cancelReqReason: string | null;
   show: boolean;
   onClose: () => void;
 }) {
@@ -986,6 +1137,13 @@ function TradeDetailsPane({
       kind: "secondary",
     });
   }
+
+  // Hide the normal "Cancel Order" button while a cancel request is in flight —
+  // the responder card / waiting note covers it.
+  const visibleButtons =
+    incomingCancelRequest || iRequestedCancel
+      ? buttons.filter((b) => b.type !== "CANCEL")
+      : buttons;
 
   const body = (
     <div className="flex flex-col h-full">
@@ -1072,12 +1230,56 @@ function TradeDetailsPane({
         <div className="space-y-2">
           <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Actions</p>
           {actionMsg && <p className="text-[11px] text-error px-1">{actionMsg}</p>}
-          {buttons.length === 0 ? (
-            <p className="text-[11px] text-foreground/40 py-1">
-              {order ? "No actions available for this status." : loading ? "Loading actions…" : "—"}
-            </p>
+
+          {/* Incoming mutual-cancel request — respond inline (Agree / Decline). */}
+          {incomingCancelRequest && (
+            <div className="rounded-xl border border-white/[0.12] bg-white/[0.04] p-3 space-y-2">
+              <p className="text-[12px] font-semibold text-foreground">
+                Cancel &amp; refund requested
+              </p>
+              {cancelReqReason && (
+                <p className="text-[11px] text-foreground/55 leading-snug">{cancelReqReason}</p>
+              )}
+              <p className="text-[11px] text-foreground/55 leading-snug">
+                If you agree, the order is cancelled and the escrow is refunded.
+              </p>
+              <div className="flex gap-2 pt-0.5">
+                <button
+                  onClick={() => onRespondCancel(true)}
+                  disabled={respondingCancel}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-accent-text text-[13px] font-semibold disabled:opacity-50"
+                >
+                  {respondingCancel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Agree to cancel
+                </button>
+                <button
+                  onClick={() => onRespondCancel(false)}
+                  disabled={respondingCancel}
+                  className="flex-1 px-3 py-2 rounded-lg border border-white/[0.12] bg-transparent text-foreground/80 hover:text-foreground hover:bg-white/[0.06] text-[13px] font-medium disabled:opacity-50"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* I requested a cancel — waiting for the other party. */}
+          {iRequestedCancel && (
+            <div className="rounded-xl border border-white/[0.12] bg-white/[0.04] p-3">
+              <p className="text-[12px] font-medium text-foreground/70 leading-snug">
+                Waiting for the other party to accept your cancellation request…
+              </p>
+            </div>
+          )}
+
+          {visibleButtons.length === 0 ? (
+            !incomingCancelRequest && !iRequestedCancel ? (
+              <p className="text-[11px] text-foreground/40 py-1">
+                {order ? "No actions available for this status." : loading ? "Loading actions…" : "—"}
+              </p>
+            ) : null
           ) : (
-            buttons.map((b) => {
+            visibleButtons.map((b) => {
               const Icon = ACTION_ICON[b.type] ?? Check;
               const isWalletFlow = WALLET_FLOW_ACTIONS.has(b.type);
               const cls =
@@ -1101,7 +1303,7 @@ function TradeDetailsPane({
               );
             })
           )}
-          {buttons.some((b) => WALLET_FLOW_ACTIONS.has(b.type)) && (
+          {visibleButtons.some((b) => WALLET_FLOW_ACTIONS.has(b.type)) && (
             <p className="text-[10px] text-foreground/40 text-center leading-snug">
               Escrow & accept require your wallet — opens the trade panel.
             </p>

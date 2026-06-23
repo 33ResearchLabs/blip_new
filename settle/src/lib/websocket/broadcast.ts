@@ -38,6 +38,48 @@ export function wsBroadcastOrderUpdate(data: {
 }
 
 /**
+ * Broadcast a new chat message to all WS clients subscribed to this order.
+ *
+ * Mirrors the `chat:message-new` event the WS server emits from its own
+ * `chat:send` handler (websocket-server.js). Use this for messages inserted
+ * OUTSIDE the WS server's send path — e.g. system messages written directly via
+ * SQL by core-api / workers — so WS-connected clients render them live instead
+ * of only on the next fetch. The chat client dedupes by message id, so it's
+ * safe to also fire the Pusher path (notifyNewMessage) in parallel.
+ */
+export function wsBroadcastNewMessage(data: {
+  orderId: string;
+  messageId: string;
+  senderType: string;
+  senderId: string | null;
+  senderName?: string | null;
+  content: string;
+  messageType: string;
+  createdAt: string;
+}) {
+  broadcast(data.orderId, {
+    type: 'chat:message-new',
+    timestamp: new Date().toISOString(),
+    data: {
+      messageId: data.messageId,
+      orderId: data.orderId,
+      senderType: data.senderType,
+      senderId: data.senderId,
+      senderName: data.senderName ?? 'System',
+      content: data.content,
+      messageType: data.messageType,
+      imageUrl: null,
+      fileUrl: null,
+      fileName: null,
+      fileSize: null,
+      mimeType: null,
+      createdAt: data.createdAt,
+      status: 'sent',
+    },
+  });
+}
+
+/**
  * Broadcast order created event
  */
 export function wsBroadcastOrderCreated(data: {

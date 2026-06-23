@@ -8,7 +8,7 @@ import type {
   BankAccount,
 } from "@/components/user/screens/types";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
-import { orderActionKey, txAnchoredKey } from "@/lib/api/idempotencyKeys";
+import { orderActionKey, txAnchoredKey, newSubmitId } from "@/lib/api/idempotencyKeys";
 import { fetchDisputeInfoFromApi } from "@/lib/api/disputeApi";
 import { showAlert } from "@/context/ModalContext";
 // Simple loading state — no step-by-step progress needed
@@ -75,10 +75,10 @@ export function useUserOrderActions({
     [setOrders],
   );
 
-  // Appeal state — an appeal is a LIGHTWEIGHT message posted into the order
-  // chat so the counterparty sees the issue. It is NOT a dispute: no escrow
-  // freeze, no status change. If the appeal doesn't resolve the problem, a
-  // formal dispute is raised separately (added later).
+  // Appeal state — an appeal is the peer-to-peer resolution stage BEFORE a
+  // dispute. Opening one notifies the counterparty, posts a system message in
+  // the order chat, and pauses the auto-cancel/expiry timers (no on-chain
+  // freeze). `appealReason` holds the selected issue_key from the catalog.
   const [showAppeal, setShowAppeal] = useState(false);
   const [appealReason, setAppealReason] = useState("");
   const [appealDescription, setAppealDescription] = useState("");
@@ -619,50 +619,47 @@ export function useUserOrderActions({
     }
   };
 
-  // Raise an appeal — posts the reason + details as a message into the order
-  // chat (reaches the counterparty in the order chat + their DM inbox). This is
-  // NOT a dispute: it never touches escrow or the order status.
+  // Raise an appeal — opens the peer-to-peer resolution stage on the order
+  // (POST /api/orders/[id]/appeal). The counterparty is notified, a system
+  // message is posted into the order chat, and the auto-cancel/expiry timers
+  // are paused while the appeal is open. If it isn't resolved, it can be
+  // escalated to a formal dispute.
   const submitAppeal = async () => {
     if (!activeOrder || !userId || !appealReason) return;
 
-    const APPEAL_REASON_LABELS: Record<string, string> = {
-      merchant_not_responding: "Merchant is not responding",
-      payment_issue: "Payment issue",
-      extra_payment_request: "Merchant requested extra payment",
-      other: "Other issue",
-    };
-
     setIsSubmittingAppeal(true);
     try {
-      const label = APPEAL_REASON_LABELS[appealReason] || appealReason;
-      const content = `🙋 Appeal raised — ${label}${appealDescription ? `\n${appealDescription}` : ""}`;
-      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/messages`, {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/appeal`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": orderActionKey(activeOrder.id, "open_appeal"),
+        },
         body: JSON.stringify({
-          sender_type: "user",
-          sender_id: userId,
-          content,
-          message_type: "text",
+          issue_key: appealReason,
+          description: appealDescription,
+          initiated_by: "user",
+          user_id: userId,
         }),
       });
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setShowAppeal(false);
         setAppealReason("");
         setAppealDescription("");
         playSound("send");
         showAlert(
-          "Appeal sent",
-          "Your appeal has been posted to the order chat. The merchant will be notified.",
+          "Appeal raised",
+          "Your appeal is open. The other party has been notified and can respond in the order chat.",
           "success",
         );
+        fetchOrders(userId);
       } else {
-        const data = await res.json().catch(() => ({}));
-        toast.showWarning(data.error || "Failed to send appeal. Please try again.");
+        toast.showWarning(data.error || "Failed to raise appeal. Please try again.");
       }
     } catch (err) {
       console.error("Failed to submit appeal:", err);
-      toast.showWarning("Failed to send appeal");
+      toast.showWarning("Failed to raise appeal");
     } finally {
       setIsSubmittingAppeal(false);
     }
@@ -898,7 +895,15 @@ export function useUserOrderActions({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Idempotency-Key": orderActionKey(activeOrder.id, 'cancel_request'),
+            // A cancel REQUEST is not one-shot — the merchant can decline it
+            // and the user can legitimately request again. A fixed per-order
+            // key (orderActionKey) caused the 2nd+ request to collapse onto
+            // core-api's cached first response and silently no-op (the appeal
+            // "Request Cancellation" did nothing). Mint a fresh key per attempt;
+            // the isRequestingCancel in-flight guard blocks double-clicks, and a
+            // 401-retry reuses this same header string, so real retries stay
+            // idempotent while a genuine new request goes through.
+            "Idempotency-Key": newSubmitId(),
           },
           body: JSON.stringify({
             actor_type: "user",

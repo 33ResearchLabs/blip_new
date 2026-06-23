@@ -22,9 +22,9 @@ import {
   ChevronRight,
   FileText,
   Lightbulb,
-  Bot,
 } from "lucide-react";
 import type { Order } from "./types";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { formatCrypto, formatRate, formatCount } from "@/lib/format";
 
 const CARD = "bg-surface-card border border-border-subtle";
@@ -146,12 +146,12 @@ export function OrderCompletedScreen({
         <div className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}>
           <div className="relative shrink-0">
             <div className="w-12 h-12 rounded-full overflow-hidden bg-border-subtle flex items-center justify-center">
-              {order.merchant.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={order.merchant.avatarUrl} alt={order.merchant.name} className="w-full h-full object-cover" />
-              ) : (
-                <Bot className="w-6 h-6 text-text-secondary" />
-              )}
+              <UserAvatar
+                src={order.merchant.avatarUrl}
+                seed={order.merchant.name || order.merchant.username}
+                size={48}
+                alt={order.merchant.name}
+              />
             </div>
             {order.merchant.isOnline && (
               <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-surface-card" />

@@ -28,6 +28,7 @@ import {
   subscribeChatToast,
   type ChatToastPayload,
 } from "@/lib/chat/chatToastBus";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const MAX_VISIBLE = 4;
 const AUTO_DISMISS_MS = 5000;
@@ -147,7 +148,6 @@ export const ChatToastHost = memo(function ChatToastHost({
     >
       <AnimatePresence initial={false}>
         {ordered.map(t => {
-          const initial = (t.senderName || "?").charAt(0).toUpperCase();
           return (
             <motion.button
               key={t.id}
@@ -174,19 +174,13 @@ export const ChatToastHost = memo(function ChatToastHost({
               }}
             >
               {/* Avatar */}
-              <div className="relative w-9 h-9 rounded-full shrink-0 overflow-hidden flex items-center justify-center bg-gradient-to-br from-primary/30 to-primary/10 border border-white/10">
-                {t.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={t.avatarUrl}
-                    alt={t.senderName}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-[13px] font-bold text-white">
-                    {initial}
-                  </span>
-                )}
+              <div className="relative w-9 h-9 rounded-full shrink-0 overflow-hidden flex items-center justify-center border border-white/10">
+                <UserAvatar
+                  src={t.avatarUrl}
+                  seed={t.senderName}
+                  size={36}
+                  alt={t.senderName}
+                />
                 <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary border-2 border-[rgba(20,20,28,1)] flex items-center justify-center">
                   <MessageCircle className="w-2.5 h-2.5 text-background" />
                 </span>

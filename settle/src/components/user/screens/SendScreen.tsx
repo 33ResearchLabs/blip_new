@@ -317,14 +317,14 @@ export function SendScreen({ orders, setScreen, solanaWallet }: SendScreenProps)
                   maxLength={14}
                   style={{
                     width: "100%", padding: "14px", borderRadius: 14,
-                    border: `1.5px solid ${isOverBalance ? "rgba(229,72,77,0.5)" : "rgba(20,21,26,0.12)"}`,
+                    border: `1.5px solid ${isOverBalance ? "var(--color-error-border)" : "rgba(20,21,26,0.12)"}`,
                     fontSize: 28, fontWeight: 800, color: "#14151a",
                     fontFamily: "ui-monospace, monospace", textAlign: "center",
                     background: "#f9f8f6", outline: "none", boxSizing: "border-box",
                   }}
                 />
                 {isOverBalance && (
-                  <p style={{ fontSize: 11.5, fontWeight: 600, color: "#e5484d", marginTop: 6 }}>
+                  <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--color-error)", marginTop: 6 }}>
                     Insufficient balance
                   </p>
                 )}
@@ -337,17 +337,17 @@ export function SendScreen({ orders, setScreen, solanaWallet }: SendScreenProps)
                     initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                     style={{
                       marginBottom: 14, padding: "12px 14px", borderRadius: 14,
-                      background: txResult.success ? "rgba(63,174,106,0.08)" : "rgba(229,72,77,0.08)",
-                      border: `1px solid ${txResult.success ? "rgba(63,174,106,0.25)" : "rgba(229,72,77,0.25)"}`,
+                      background: txResult.success ? "rgba(63,174,106,0.08)" : "var(--color-error-dim)",
+                      border: `1px solid ${txResult.success ? "rgba(63,174,106,0.25)" : "var(--color-error-border)"}`,
                       display: "flex", alignItems: "center", gap: 10,
                     }}
                   >
                     {txResult.success
                       ? <CheckCircle2 size={18} style={{ color: "#3fae6a", flexShrink: 0 }} />
-                      : <AlertCircle size={18} style={{ color: "#e5484d", flexShrink: 0 }} />
+                      : <AlertCircle size={18} style={{ color: "var(--color-error)", flexShrink: 0 }} />
                     }
                     <div>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: txResult.success ? "#2d8c52" : "#a31b1f" }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: txResult.success ? "#2d8c52" : "var(--color-error)" }}>
                         {txResult.success ? "Sent successfully" : "Send failed"}
                       </p>
                       {txResult.txHash && (
@@ -356,7 +356,7 @@ export function SendScreen({ orders, setScreen, solanaWallet }: SendScreenProps)
                         </p>
                       )}
                       {txResult.error && (
-                        <p style={{ fontSize: 11.5, fontWeight: 500, color: "#a31b1f", marginTop: 2 }}>
+                        <p style={{ fontSize: 11.5, fontWeight: 500, color: "var(--color-error)", marginTop: 2 }}>
                           {txResult.error}
                         </p>
                       )}

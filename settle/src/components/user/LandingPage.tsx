@@ -587,7 +587,7 @@ export function LandingPage({
                   )}
                 </div>
               ) : loginError ? (
-                <div className="mb-4 rounded-xl p-3.5 text-sm bg-[#fdecea] border border-[#e5484d]/30 text-[#a31b1f]">
+                <div className="mb-4 rounded-xl p-3.5 text-sm bg-[#f1f1f3] border border-[#14151a]/15 text-[#5e606a]">
                   {loginError}
                 </div>
               ) : null}
@@ -616,14 +616,14 @@ export function LandingPage({
                     maxLength={authMode === 'register' ? 20 : 254}
                     className={`w-full rounded-xl px-4 py-3.5 text-[15px] outline-none transition-all bg-[#fdfbf7] focus:bg-white focus:shadow-[0_0_0_4px_rgba(204,120,92,0.10)] text-[#1d1d1f] placeholder:text-[#6b675f]/60 border ${
                       usernameError || usernameTaken
-                        ? 'border-[#e5484d]/60 focus:border-[#e5484d]'
+                        ? 'border-[#14151a]/40 focus:border-[#14151a]/60'
                         : 'border-[#dcd4c5] focus:border-[#cc785c]'
                     }`}
                   />
                   {/* Per-field status: format error wins over availability,
                       since availability only matters once the format passes. */}
                   {usernameError ? (
-                    <p className="mt-1.5 text-[11.5px] text-[#a31b1f]">{usernameError}</p>
+                    <p className="mt-1.5 text-[11.5px] text-[#5e606a]">{usernameError}</p>
                   ) : authMode === 'register' && usernameAvailability.state === 'checking' ? (
                     <p className="mt-1.5 text-[11.5px] text-[#6b675f] inline-flex items-center gap-1">
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -636,7 +636,7 @@ export function LandingPage({
                       Available
                     </p>
                   ) : usernameTaken ? (
-                    <p className="mt-1.5 text-[11.5px] text-[#a31b1f] inline-flex items-center gap-1">
+                    <p className="mt-1.5 text-[11.5px] text-[#5e606a] inline-flex items-center gap-1">
                       <X className="w-3 h-3" />
                       Username already taken
                     </p>
@@ -708,7 +708,7 @@ export function LandingPage({
                       autoComplete={authMode === 'register' ? 'one-time-code' : 'current-password'}
                       className={`w-full rounded-xl pl-4 pr-11 py-3.5 text-[15px] outline-none transition-all bg-[#fdfbf7] focus:bg-white focus:shadow-[0_0_0_4px_rgba(204,120,92,0.10)] text-[#1d1d1f] placeholder:text-[#6b675f]/60 border ${
                         passwordError
-                          ? 'border-[#e5484d]/60 focus:border-[#e5484d]'
+                          ? 'border-[#14151a]/40 focus:border-[#14151a]/60'
                           : 'border-[#dcd4c5] focus:border-[#cc785c]'
                       } ${authMode === 'register' ? 'tracking-[0.4em] text-center' : ''}`}
                     />
@@ -722,7 +722,7 @@ export function LandingPage({
                     </button>
                   </div>
                   {passwordError ? (
-                    <p className="mt-1.5 text-[11.5px] text-[#a31b1f]">{passwordError}</p>
+                    <p className="mt-1.5 text-[11.5px] text-[#5e606a]">{passwordError}</p>
                   ) : authMode === 'register' ? (
                     <p className="mt-1.5 text-[11px] text-[#6b675f]">
                       You&apos;ll use this PIN to sign in. Keep it private.

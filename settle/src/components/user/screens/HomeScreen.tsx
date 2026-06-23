@@ -100,7 +100,7 @@ function statusChip(status: string): { label: string; bg: string; fg: string } {
     case 'complete':  return { label: 'Completed',   bg: 'rgba(5,150,105,0.12)',  fg: '#059669' };
     case 'cancelled': return { label: 'Cancelled',   bg: 'rgba(20,21,26,0.06)',   fg: '#80828c' };
     case 'expired':   return { label: 'Expired',     bg: 'rgba(20,21,26,0.06)',   fg: '#80828c' };
-    case 'disputed':  return { label: 'Disputed',    bg: 'rgba(220,38,38,0.10)',  fg: '#DC2626' };
+    case 'disputed':  return { label: 'Disputed',    bg: 'var(--color-error-dim)',  fg: 'var(--color-error)' };
     case 'pending':   return { label: 'Pending',     bg: 'rgba(255,176,46,0.16)', fg: '#b45309' };
     default:          return { label: 'In progress', bg: 'rgba(255,176,46,0.16)', fg: '#b45309' };
   }

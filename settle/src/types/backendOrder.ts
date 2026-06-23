@@ -162,6 +162,7 @@ export interface BackendOrder {
 
   // Cancellation
   cancel_requested_by?: string | null;
+  cancel_requested_by_id?: string | null;
   cancel_request_reason?: string | null;
 
   // Fees

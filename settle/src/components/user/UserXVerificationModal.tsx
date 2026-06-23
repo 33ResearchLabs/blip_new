@@ -214,7 +214,7 @@ export function UserXVerificationModal({
                   </div>
 
                   {error && (
-                    <div className="flex items-center gap-2 text-[12px] text-red-400">
+                    <div className="flex items-center gap-2 text-[12px] text-error">
                       <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                       {error}
                     </div>

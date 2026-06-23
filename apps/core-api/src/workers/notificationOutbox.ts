@@ -145,6 +145,11 @@ function formatTelegramMessage(eventType: string, payload: any): string {
     case 'ORDER_ESCROWED':
       return `🔒 *Escrow Locked*\n\nOrder #${orderId}\nStatus: ${status}\n\nFunds have been locked in escrow.`;
 
+    case 'APPEAL_OPENED': {
+      const issue = payload.issueLabel || payload.issueKey || 'an issue';
+      return `🚩 *Appeal Raised*\n\nOrder #${orderId}\n\nAn appeal was raised — ${issue}. Please open the order to review and respond.`;
+    }
+
     default:
       return `📦 *Order Update*\n\nOrder #${orderId}\nStatus: ${status}\n\nYour order has been updated.`;
   }

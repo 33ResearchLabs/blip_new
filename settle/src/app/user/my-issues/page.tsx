@@ -168,7 +168,7 @@ export default function UserMyIssuesPage() {
 
         {/* States: error / loading / empty / list */}
         {error ? (
-          <div className="flex items-start gap-2 px-4 py-3 rounded-xl border border-rose-500/25 bg-rose-500/10 text-rose-600 text-[13px]">
+          <div className="flex items-start gap-2 px-4 py-3 rounded-xl border border-error-border bg-error-dim text-error text-[13px]">
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
             <div>
               <div className="font-medium">Could not load tickets</div>
@@ -190,7 +190,7 @@ export default function UserMyIssuesPage() {
                     : issue.status === "resolved"
                       ? "bg-emerald-400"
                       : issue.status === "rejected"
-                        ? "bg-rose-400"
+                        ? "bg-error"
                         : "bg-zinc-400/40";
               return (
                 <li
@@ -282,7 +282,7 @@ function StatusBadge({ status }: { status: IssueStatus }) {
     },
     rejected: {
       label: "Rejected",
-      cls: "bg-rose-500/15 text-rose-600 border-rose-500/30",
+      cls: "bg-error/15 text-error border-error-border",
     },
     closed: {
       label: "Closed",

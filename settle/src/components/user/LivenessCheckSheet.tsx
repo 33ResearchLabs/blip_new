@@ -395,8 +395,8 @@ export function LivenessCheckSheet({ open, onClose, onVerified }: Props) {
 
             {step === "error" && (
               <div className="flex flex-col items-center gap-4 py-4">
-                <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <AlertCircle size={40} className="text-red-400" />
+                <div className="w-20 h-20 rounded-full bg-error-dim flex items-center justify-center">
+                  <AlertCircle size={40} className="text-error" />
                 </div>
                 {message === "HTTPS_REQUIRED" ? (
                   <p className="text-text-secondary text-sm text-center">Camera requires HTTPS. Make sure the address bar shows <span className="text-text-primary">https://</span></p>
