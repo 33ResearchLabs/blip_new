@@ -55,6 +55,18 @@ const TOAST_COLORS: Record<ToastType, { bg: string; border: string; icon: string
 
 const DEFAULT_DURATION = 5000;
 const MAX_VISIBLE = 4;
+// Collapse identical toasts fired within this window into one. Overlapping
+// realtime sources (Pusher + polling + reconciliation) can each trigger the
+// same status-change toast within ~1-2s; without this the user sees stacked
+// duplicates (e.g. two "Payment Sent" cards). Distinct events (different
+// order, sender, or message) are unaffected.
+const DEDUP_WINDOW_MS = 4000;
+
+// Identity of a toast for dedup purposes — same content for the same order is
+// considered a repeat. orderId distinguishes per-order toasts so two different
+// orders reaching the same status still both surface.
+const toastDedupKey = (t: Pick<Toast, 'type' | 'title' | 'message' | 'orderId'>) =>
+  `${t.type}|${t.title}|${t.message}|${t.orderId ?? ''}`;
 
 interface NotificationToastContainerProps {
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
@@ -75,6 +87,8 @@ export function showToast(toast: Omit<Toast, 'id' | 'timestamp'>) {
 export function NotificationToastContainer({ position = 'top-right', topOffsetClass }: NotificationToastContainerProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  // dedup key -> timestamp of last time we surfaced that toast
+  const recentKeysRef = useRef<Map<string, number>>(new Map());
 
   const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -86,8 +100,23 @@ export function NotificationToastContainer({ position = 'top-right', topOffsetCl
   }, []);
 
   const addToast = useCallback((toast: Omit<Toast, 'id' | 'timestamp'>) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const newToast: Toast = { ...toast, id, timestamp: Date.now() };
+    const now = Date.now();
+
+    // Collapse rapid duplicates: if an identical toast was surfaced within the
+    // dedup window, drop this repeat instead of stacking a second card. The
+    // sliding timestamp means a burst of duplicate triggers keeps collapsing.
+    const dedupKey = toastDedupKey(toast);
+    const lastShown = recentKeysRef.current.get(dedupKey);
+    const isDuplicate = lastShown !== undefined && now - lastShown < DEDUP_WINDOW_MS;
+    recentKeysRef.current.set(dedupKey, now);
+    // Prune stale keys so the map can't grow unbounded.
+    recentKeysRef.current.forEach((ts, k) => {
+      if (now - ts > DEDUP_WINDOW_MS) recentKeysRef.current.delete(k);
+    });
+    if (isDuplicate) return;
+
+    const id = `toast-${now}-${Math.random().toString(36).slice(2, 6)}`;
+    const newToast: Toast = { ...toast, id, timestamp: now };
 
     setToasts(prev => {
       const next = [newToast, ...prev];

@@ -6,7 +6,7 @@
 // `variant` (see SURFACES in ./types). The host provides the page title/back —
 // this renders the body (subtitle + badge downward).
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
@@ -20,6 +20,7 @@ import {
   ArrowDown,
   ChevronRight,
   HelpCircle,
+  Clock,
   X,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -33,9 +34,11 @@ import { RequestDetailModal } from "./RequestDetailModal";
 import {
   SURFACES,
   type LimitsMe,
+  type LimitReset,
   type LimitRequest,
   type LimitsVariant,
   type RequestKind,
+  type SurfaceTokens,
   type XVerif,
 } from "./types";
 
@@ -49,6 +52,53 @@ const fade = (delay = 0) => ({
   animate: { opacity: 1, y: 0 },
   transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] as const, delay },
 });
+
+// Rolling-window reset display helpers. The daily limit has no fixed reset —
+// it frees up as old trades pass the 24h mark — so we show the wall-clock time
+// plus a live "in Xh Ym" countdown. en-US locale per the formatting rules.
+function formatClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+// Live countdown to `iso`, measured against `now` (epoch ms passed in so the
+// caller controls the tick). Includes seconds so it visibly counts down.
+// Returns null once the target has passed.
+function formatCountdown(iso: string, now: number): string | null {
+  const ms = new Date(iso).getTime() - now;
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+// Ticking clock: re-renders every `intervalMs` while `active`, so a countdown
+// derived from it updates live. Inactive (no target) → no interval, no churn.
+function useNow(intervalMs: number, active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [active, intervalMs]);
+  return now;
+}
+
+// Big-timer format: zero-padded HH:MM:SS (e.g. "01:38:24"). Clamps at 0.
+function formatHMS(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
 
 export function TradingLimitsView({ variant, onNavigate }: Props) {
   const surfaces = SURFACES[variant];
@@ -159,6 +209,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
             Icon: ShoppingCart,
             cap: Number(data?.buy?.limitUsd ?? 0),
             used: Number(data?.buy?.usedUsd ?? 0),
+            reset: data?.buy?.reset,
           },
           {
             key: "sell",
@@ -166,6 +217,7 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
             Icon: TrendingUp,
             cap: Number(data?.sell?.limitUsd ?? 0),
             used: Number(data?.sell?.usedUsd ?? 0),
+            reset: data?.sell?.reset,
           },
         ]
       : [];
@@ -292,6 +344,11 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
                 rightLabel={`${formatFiat(dailyRemaining, "USD")} left`}
                 surfaces={surfaces}
               />
+              {/* Rolling-24h reset hint on the daily bar — merchant only; the
+                  user variant gets the richer DailyResetCard below instead. */}
+              {variant === "merchant" && (
+                <ResetHint reset={data?.reset} surfaces={surfaces} />
+              )}
               <UsageBar
                 Icon={CreditCard}
                 label="Per Transaction (24h)"
@@ -307,21 +364,35 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
               {sideCaps.map((s) => {
                 const pct = s.cap > 0 ? Math.min(100, (s.used / s.cap) * 100) : 0;
                 return (
-                  <UsageBar
-                    key={s.key}
-                    Icon={s.Icon}
-                    label={s.label}
-                    used={s.used}
-                    cap={s.cap}
-                    pct={pct}
-                    leftLabel={`${Math.round(pct)}% used`}
-                    rightLabel={`${formatFiat(Math.max(s.cap - s.used, 0), "USD")} remaining`}
-                    surfaces={surfaces}
-                  />
+                  <Fragment key={s.key}>
+                    <UsageBar
+                      Icon={s.Icon}
+                      label={s.label}
+                      used={s.used}
+                      cap={s.cap}
+                      pct={pct}
+                      leftLabel={`${Math.round(pct)}% used`}
+                      rightLabel={`${formatFiat(Math.max(s.cap - s.used, 0), "USD")} remaining`}
+                      surfaces={surfaces}
+                    />
+                    {/* Per-side reset hint — renders only when that side is maxed. */}
+                    <ResetHint reset={s.reset} surfaces={surfaces} />
+                  </Fragment>
                 );
               })}
             </div>
           </motion.div>
+
+          {/* Daily Limit Reset countdown (user side) — shows only when the
+              daily cap is maxed; renders null when there's headroom. */}
+          {variant === "user" && (
+            <DailyResetCard
+              reset={data?.reset}
+              dailyLimitUsd={dailyCap}
+              usedUsd={dailyUsed}
+              surfaces={surfaces}
+            />
+          )}
 
           {/* Need a higher limit? */}
           <motion.div
@@ -561,6 +632,211 @@ export function TradingLimitsView({ variant, onNavigate }: Props) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// Premium "Daily Limit Reset" countdown card (user side), shown below Your
+// Current Limits when the daily cap is maxed. Live HH:MM:SS countdown to when
+// trading reopens + a progress timeline, urgency states, and a capacity recap.
+function DailyResetCard({
+  reset,
+  dailyLimitUsd,
+  usedUsd,
+  surfaces,
+}: {
+  reset?: LimitReset | null;
+  dailyLimitUsd: number;
+  usedUsd: number;
+  surfaces: SurfaceTokens;
+}) {
+  const target = reset?.nextTradeableAt ?? null;
+  const fullResetAt = reset?.fullResetAt ?? null;
+  // Tick every second so the countdown + progress update live.
+  const now = useNow(1000, !!target);
+  if (!target) return null;
+
+  const remainingMs = Math.max(0, new Date(target).getTime() - now);
+
+  // The trade blocking you has a 24h lifespan ending at `target`, so progress =
+  // how far through that window we are (~0% just after it, 100% at reset).
+  const WINDOW_MS = 24 * 60 * 60 * 1000;
+  const progress = Math.min(
+    100,
+    Math.max(0, ((WINDOW_MS - remainingMs) / WINDOW_MS) * 100),
+  );
+
+  // Urgency by time remaining: < 1h urgent, < 3h warning, else neutral.
+  const hrs = remainingMs / 3_600_000;
+  const tone =
+    hrs < 1
+      ? {
+          accent: "text-error",
+          bar: "bg-error",
+          chip: "bg-error-dim border border-error-border",
+          badge: "Almost there",
+        }
+      : hrs < 3
+        ? {
+            accent: "text-warning",
+            bar: "bg-warning",
+            chip: "bg-warning-dim border border-warning-border",
+            badge: "Resetting soon",
+          }
+        : {
+            accent: "text-text-primary",
+            bar: "bg-text-secondary",
+            chip: `border border-border-subtle ${surfaces.chip}`,
+            badge: null as string | null,
+          };
+
+  const availableAfterReset =
+    reset?.headroomAfterResetUsd != null
+      ? Number(reset.headroomAfterResetUsd)
+      : dailyLimitUsd;
+
+  return (
+    <motion.section
+      {...fade(0.12)}
+      className={`rounded-[20px] p-5 border border-border-subtle ${surfaces.card}`}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${tone.chip}`}
+          >
+            <Clock className={`w-4 h-4 ${tone.accent}`} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-[15px] font-bold text-text-primary leading-tight">
+              Daily Limit Reset
+            </h3>
+            <p className="text-[12px] text-text-tertiary leading-tight">
+              Resets at {formatClock(target)}
+            </p>
+          </div>
+        </div>
+        {tone.badge && (
+          <span
+            className={`px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 ${tone.chip} ${tone.accent}`}
+          >
+            {tone.badge}
+          </span>
+        )}
+      </div>
+
+      {/* Big live countdown */}
+      <div className="text-center py-4">
+        <div
+          className={`text-[40px] leading-none font-bold tabular-nums tracking-tight ${tone.accent}`}
+        >
+          {formatHMS(remainingMs)}
+        </div>
+        <p className="text-[12px] text-text-tertiary mt-2">
+          Your daily limit resets at{" "}
+          <span className="font-semibold text-text-secondary">
+            {formatClock(target)}
+          </span>
+        </p>
+      </div>
+
+      {/* Progress timeline: Now ●──────○ Reset */}
+      <div className="mt-1">
+        <div className="flex items-center justify-between text-[11px] mb-1.5">
+          <span className="text-text-tertiary">Now</span>
+          <span className="font-semibold text-text-secondary">
+            {Math.round(progress)}% complete
+          </span>
+          <span className="text-text-tertiary">Reset</span>
+        </div>
+        <div className="h-2 rounded-full bg-border-subtle overflow-hidden">
+          <motion.div
+            className={`h-full rounded-full ${tone.bar}`}
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          />
+        </div>
+      </div>
+
+      {/* Capacity recap */}
+      <div className={`mt-4 rounded-xl p-3.5 space-y-2.5 ${surfaces.inset}`}>
+        <div className="flex items-center justify-between text-[13px]">
+          <span className="text-text-tertiary">Daily limit</span>
+          <span className="font-semibold text-text-primary tabular-nums">
+            {formatFiat(dailyLimitUsd, "USD")}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-[13px]">
+          <span className="text-text-tertiary">Used (last 24h)</span>
+          <span className="font-semibold text-text-primary tabular-nums">
+            {formatFiat(usedUsd, "USD")}
+          </span>
+        </div>
+        <div className="h-px bg-border-subtle" />
+        <div className="flex items-center justify-between text-[13px]">
+          <span className="text-text-secondary">Available after reset</span>
+          <span className={`font-bold tabular-nums ${tone.accent}`}>
+            {formatFiat(availableAfterReset, "USD")}
+          </span>
+        </div>
+      </div>
+
+      {/* Full-reset note — only when it's a later, distinct moment. */}
+      {fullResetAt && fullResetAt !== target && (
+        <p className="text-[11px] text-text-tertiary mt-3 text-center">
+          Full limit ({formatFiat(dailyLimitUsd, "USD")}) restored at{" "}
+          {formatClock(fullResetAt)}
+        </p>
+      )}
+    </motion.section>
+  );
+}
+
+// Rolling-24h reset hint shown under a maxed-out limit bar. Renders nothing
+// when there's headroom (reset.nextTradeableAt is null). Reused by the user
+// daily limit and the merchant buy/sell side caps.
+function ResetHint({
+  reset,
+  surfaces,
+}: {
+  reset?: LimitReset | null;
+  surfaces: SurfaceTokens;
+}) {
+  const target = reset?.nextTradeableAt ?? null;
+  const fullResetAt = reset?.fullResetAt ?? null;
+  // Tick every second while there's a target, so the countdown reduces live.
+  const now = useNow(1000, !!target);
+  if (!target) return null;
+  const countdown = formatCountdown(target, now);
+  return (
+    <div
+      className={`flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 ${surfaces.inset}`}
+    >
+      <Clock className="w-4 h-4 mt-px shrink-0 text-text-tertiary" />
+      <div className="text-[13px] leading-snug">
+        <span className="text-text-secondary">Your limit resets at </span>
+        <span className="font-semibold text-text-primary">
+          {formatClock(target)}
+        </span>
+        {countdown ? (
+          <span className="text-text-tertiary">
+            {" · in "}
+            <span className="tabular-nums">{countdown}</span>
+          </span>
+        ) : (
+          <span className="text-text-tertiary">{" · now"}</span>
+        )}
+        {/* Full reset is a separate, later moment (usage back to $0). Hide it
+            when it's the same instant as the partial reset (single-trade case)
+            so we don't show two identical lines. */}
+        {fullResetAt && fullResetAt !== target && (
+          <div className="text-text-tertiary mt-0.5">
+            Full limit resets at {formatClock(fullResetAt)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

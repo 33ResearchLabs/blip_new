@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, successResponse, forbiddenResponse } from '@/lib/middleware/auth';
-import { getEffectiveLimits, getTrustBasedLimits, getTrailing24hVolumeUsd, getLargestTrade24hUsd, getMerchant24hSideVolumeUsd, getUnsuccessful24hCount, COIN_LIMIT_TIERS, BASE_LIMITS, MERCHANT_SIDE_LIMITS, LIMIT_DECREASE_ALERT_THRESHOLD } from '@/lib/coins/limits';
+import { getEffectiveLimits, getTrustBasedLimits, getTrailing24hVolumeUsd, getLargestTrade24hUsd, getDailyLimitResetInfo, getMerchant24hSideVolumeUsd, getMerchantSideResetInfo, getUnsuccessful24hCount, COIN_LIMIT_TIERS, BASE_LIMITS, MERCHANT_SIDE_LIMITS, LIMIT_DECREASE_ALERT_THRESHOLD } from '@/lib/coins/limits';
 import { getXVerification } from '@/lib/db/repositories/xAccountVerifications';
 
 export async function GET(request: NextRequest) {
@@ -23,6 +23,9 @@ export async function GET(request: NextRequest) {
   const limits = await getEffectiveLimits(auth.actorId, actorType);
   const trailing = await getTrailing24hVolumeUsd(auth.actorId, actorType);
   const largestTrade = await getLargestTrade24hUsd(auth.actorId, actorType);
+  // When the daily cap is a rolling 24h window, tell the UI WHEN it frees up:
+  // nextTradeableAt (used drops below the cap) + fullResetAt (used hits 0).
+  const reset = await getDailyLimitResetInfo(auth.actorId, actorType, limits.dailyUsd);
 
   // Trust Score system preview (Phase 2): what limits WOULD be under the
   // Trust-Tier × stake model. Opt-in via ?preview=trust so we don't add the
@@ -48,12 +51,22 @@ export async function GET(request: NextRequest) {
   // values come from MERCHANT_SIDE_LIMITS (single source of truth, also used
   // by the order-create enforcement), so changing those constants updates the
   // display and the block together.
-  let buy: { limitUsd: number; usedUsd: number } | null = null;
-  let sell: { limitUsd: number; usedUsd: number } | null = null;
+  type SideCap = {
+    limitUsd: number;
+    usedUsd: number;
+    reset: { nextTradeableAt: string | null; fullResetAt: string | null; headroomAfterResetUsd: number };
+  };
+  let buy: SideCap | null = null;
+  let sell: SideCap | null = null;
   if (actorType === 'merchant') {
     const { buyUsd, sellUsd } = await getMerchant24hSideVolumeUsd(auth.actorId);
-    buy = { limitUsd: MERCHANT_SIDE_LIMITS.buyUsd, usedUsd: buyUsd };
-    sell = { limitUsd: MERCHANT_SIDE_LIMITS.sellUsd, usedUsd: sellUsd };
+    // Per-side reset times — when each maxed side frees up (rolling 24h).
+    const [buyReset, sellReset] = await Promise.all([
+      getMerchantSideResetInfo(auth.actorId, 'buy', MERCHANT_SIDE_LIMITS.buyUsd),
+      getMerchantSideResetInfo(auth.actorId, 'sell', MERCHANT_SIDE_LIMITS.sellUsd),
+    ]);
+    buy = { limitUsd: MERCHANT_SIDE_LIMITS.buyUsd, usedUsd: buyUsd, reset: buyReset };
+    sell = { limitUsd: MERCHANT_SIDE_LIMITS.sellUsd, usedUsd: sellUsd, reset: sellReset };
   }
 
   return successResponse({
@@ -61,6 +74,7 @@ export async function GET(request: NextRequest) {
     trailing_24h_usd: trailing,
     largest_trade_24h_usd: largestTrade,
     headroom_usd: Math.max(limits.dailyUsd - trailing, 0),
+    reset,
     base: BASE_LIMITS,
     tiers: COIN_LIMIT_TIERS,
     buy,

@@ -116,7 +116,8 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
             </p>
           </div>
         </div>
-        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
+        {/* Uniform neutral status pill — black bg, white text for every status. */}
+        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-black/40 text-white">
           {statusStyle.label}
         </span>
       </div>

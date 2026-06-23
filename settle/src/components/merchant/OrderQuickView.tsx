@@ -841,7 +841,7 @@ function CounterpartyTrustCard({
           )}
         </div>
         {trustScore != null && (
-          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 shrink-0">
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-foreground/[0.08] text-foreground/70 shrink-0">
             {trustScore}/100
           </span>
         )}

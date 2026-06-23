@@ -55,7 +55,7 @@ interface PaymentMethodSelectorProps {
 // "other" reuses text-text-secondary since the reference has no purple slot.
 const TYPE_CONFIG = {
   bank:  { Icon: Building2,  label: "Bank Account", color: "var(--color-info)" },
-  upi:   { Icon: Smartphone, label: "UPI",          color: "var(--color-success)" },
+  upi:   { Icon: Smartphone, label: "UPI",          color: "var(--color-text-secondary)" },
   cash:  { Icon: Banknote,   label: "Cash",         color: "var(--color-warning)" },
   other: { Icon: CreditCard, label: "Other",        color: "var(--color-text-secondary)" },
 } as const;
@@ -408,10 +408,10 @@ export const PaymentMethodSelector = ({
                           <span className="truncate">{m.label}</span>
                           {isSelected && (
                             <>
-                              <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-success/15 text-success border border-success/25">
+                              <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-active text-text-tertiary border border-border-subtle">
                                 Default
                               </span>
-                              <Check className="w-3 h-3 text-success shrink-0" />
+                              <Check className="w-3 h-3 text-text-secondary shrink-0" />
                             </>
                           )}
                           <span className="ml-1.5 text-[10px] text-text-secondary font-normal">
