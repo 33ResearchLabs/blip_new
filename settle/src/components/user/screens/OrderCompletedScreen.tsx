@@ -101,7 +101,7 @@ export function OrderCompletedScreen({
         <motion.div
           initial={{ scale: 0.96, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="rounded-2xl p-6 text-center bg-warning-dim border border-warning-border"
+          className="rounded-2xl p-6 text-center bg-surface-active border border-border-subtle"
         >
           <div className="relative inline-flex items-center justify-center mb-4">
             <Sparkles className="w-4 h-4 text-accent absolute -left-5 -top-1" />
@@ -119,7 +119,7 @@ export function OrderCompletedScreen({
           <p className="text-[14px] text-text-secondary leading-snug px-2">
             The seller has confirmed the payment and the crypto has been released to you.
           </p>
-          <div className="mt-4 pt-4 border-t border-warning-border/60 flex items-center justify-center gap-2 text-[13px] text-text-secondary">
+          <div className="mt-4 pt-4 border-t border-border-subtle/60 flex items-center justify-center gap-2 text-[13px] text-text-secondary">
             <Clock className="w-4 h-4 text-accent" />
             Completed at {completedStr.replace(",", " •")}
           </div>
@@ -162,7 +162,7 @@ export function OrderCompletedScreen({
               <p className="text-[15px] font-semibold text-text-primary truncate">{order.merchant.name}</p>
               {order.merchant.rating > 0 && (
                 <span className="inline-flex items-center gap-0.5 text-[12px] font-medium text-text-secondary shrink-0">
-                  <Star className="w-3.5 h-3.5 text-warning fill-warning" />
+                  <Star className="w-3.5 h-3.5 text-text-secondary fill-text-secondary" />
                   {formatCrypto(order.merchant.rating, { decimals: 1 })}
                 </span>
               )}
@@ -184,8 +184,8 @@ export function OrderCompletedScreen({
         {/* Rating */}
         <div className={`rounded-2xl p-4 ${CARD}`}>
           <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-warning/15 flex items-center justify-center shrink-0">
-              <Star className="w-5 h-5 text-warning" />
+            <div className="w-9 h-9 rounded-xl bg-surface-active flex items-center justify-center shrink-0">
+              <Star className="w-5 h-5 text-text-secondary" />
             </div>
             <div className="min-w-0">
               <p className="text-[15px] font-semibold text-text-primary">How was your trading experience?</p>
@@ -203,7 +203,7 @@ export function OrderCompletedScreen({
                 aria-label={`Rate ${star} star${star === 1 ? "" : "s"}`}
               >
                 <Star
-                  className={`w-9 h-9 ${star <= displayRating ? "text-warning fill-warning" : "text-border-medium"}`}
+                  className={`w-9 h-9 ${star <= displayRating ? "text-text-secondary fill-text-secondary" : "text-border-medium"}`}
                 />
               </button>
             ))}
@@ -239,8 +239,8 @@ export function OrderCompletedScreen({
         </div>
 
         {/* Tip */}
-        <div className="rounded-2xl p-4 flex gap-3 bg-warning-dim border border-warning-border">
-          <Lightbulb className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+        <div className="rounded-2xl p-4 flex gap-3 bg-surface-active border border-border-subtle">
+          <Lightbulb className="w-5 h-5 text-text-secondary shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="text-[14px] font-semibold text-text-primary mb-0.5">Tip</p>
             <p className="text-[13px] text-text-secondary leading-snug">

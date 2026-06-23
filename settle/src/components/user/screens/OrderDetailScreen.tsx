@@ -2896,8 +2896,16 @@ export const OrderDetailScreen = ({
               disabled={!activeOrder.merchant.name}
               className="flex items-center gap-3 text-left disabled:cursor-default"
             >
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-accent text-accent-text">
-                {(activeOrder.merchant.name || 'M').charAt(0)}
+              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center font-semibold bg-accent text-accent-text shrink-0">
+                {activeOrder.merchant.avatarUrl ? (
+                  <img
+                    src={activeOrder.merchant.avatarUrl}
+                    alt={activeOrder.merchant.name || ''}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  (activeOrder.merchant.name || 'M').charAt(0)
+                )}
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -3743,7 +3751,7 @@ export const OrderDetailScreen = ({
                           <div
                             className={`px-4 py-2 rounded-2xl break-words ${
                               msg.from === "me"
-                                ? "bg-accent text-accent-text text-[15px]"
+                                ? "bg-white text-black text-[15px]"
                                 : msg.from === "system"
                                   ? "bg-surface-active text-text-secondary text-[13px]"
                                   : "bg-surface-card text-text-primary text-[15px]"
@@ -3768,7 +3776,7 @@ export const OrderDetailScreen = ({
                             )}
                             {/* Timestamp + delivery status ticks */}
                             <div className={`flex items-center gap-1 mt-1 ${msg.from === "me" ? "justify-end" : ""}`}>
-                              <span className={`text-[10px] ${msg.from === "me" ? "text-accent-text/60" : "text-text-tertiary"}`}>
+                              <span className={`text-[10px] ${msg.from === "me" ? "text-black/50" : "text-text-tertiary"}`}>
                                 {msg.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                               </span>
                               {msg.from === "me" && (
@@ -3777,7 +3785,7 @@ export const OrderDetailScreen = ({
                                 ) : msg.status === "read" || msg.isRead ? (
                                   <CheckCheck className="w-3.5 h-3.5 text-info" />
                                 ) : msg.status === "delivered" ? (
-                                  <CheckCheck className="w-3.5 h-3.5 text-accent-text/60" />
+                                  <CheckCheck className="w-3.5 h-3.5 text-black/40" />
                                 ) : (
                                   <Check className="w-3 h-3 text-accent-text/60" />
                                 )

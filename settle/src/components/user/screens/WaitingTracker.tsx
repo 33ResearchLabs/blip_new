@@ -305,7 +305,7 @@ export function WaitingTracker({
                             {!isLast && (
                               <div
                                 className={`w-0.5 flex-1 min-h-[18px] ${
-                                  state === "done" ? "bg-accent" : "bg-border-medium"
+                                  state === "done" ? "bg-warning" : "bg-border-medium"
                                 }`}
                               />
                             )}
@@ -327,7 +327,7 @@ export function WaitingTracker({
                               <span className="text-[13px] text-text-tertiary shrink-0">{createdTime}</span>
                             )}
                             {state === "active" && i !== 0 && (
-                              <span className="text-[13px] font-medium text-accent shrink-0">In progress</span>
+                              <span className="text-[13px] font-medium text-warning shrink-0">In progress</span>
                             )}
                           </div>
                         </div>
@@ -379,7 +379,7 @@ export function WaitingTracker({
               whileTap={{ scale: 0.98 }}
               onClick={onCancel}
               disabled={isCancelling}
-              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-foreground/[0.05] text-foreground/70 border border-foreground/[0.08] disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
               {cancelLabel}
@@ -396,7 +396,7 @@ export function WaitingTracker({
 function StepDot({ state }: { state: StepState }) {
   if (state === "done") {
     return (
-      <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center shrink-0">
+      <div className="w-6 h-6 rounded-full bg-warning flex items-center justify-center shrink-0">
         <Check className="w-3.5 h-3.5 text-accent-text" strokeWidth={3} />
       </div>
     );
@@ -404,7 +404,7 @@ function StepDot({ state }: { state: StepState }) {
   if (state === "active") {
     return (
       <motion.div
-        className="w-6 h-6 rounded-full bg-accent shrink-0"
+        className="w-6 h-6 rounded-full bg-warning shrink-0"
         animate={{ scale: [1, 1.15, 1], opacity: [1, 0.8, 1] }}
         transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
       />

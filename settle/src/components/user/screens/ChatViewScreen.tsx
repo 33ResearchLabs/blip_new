@@ -757,7 +757,7 @@ export const ChatViewScreen = ({
               >
                 <div
                   className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
-                    isMe ? "rounded-br-md bg-accent text-accent-text" : "rounded-bl-md bg-surface-card text-text-primary"
+                    isMe ? "rounded-br-md bg-white text-black" : "rounded-bl-md bg-surface-card text-text-primary"
                   }`}
                 >
                   {isImageMsg ? (
@@ -771,7 +771,7 @@ export const ChatViewScreen = ({
                     <p className="text-[15px] leading-relaxed">{msg.text}</p>
                   )}
                   <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
-                    <span className={`text-[10px] ${isMe ? 'text-accent-text/60' : 'text-text-tertiary'}`}>
+                    <span className={`text-[10px] ${isMe ? 'text-black/45' : 'text-text-tertiary'}`}>
                       {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {isMe && (
@@ -782,10 +782,10 @@ export const ChatViewScreen = ({
                         <CheckCheck className="w-3.5 h-3.5 text-info" />
                       ) : msg.status === 'delivered' ? (
                         // ✓✓ grey — message DELIVERED to counterparty's device
-                        <CheckCheck className="w-3.5 h-3.5 text-accent-text/60" />
+                        <CheckCheck className="w-3.5 h-3.5 text-black/45" />
                       ) : (
                         // ✓ single — message SENT to server, not yet delivered
-                        <Check className="w-3 h-3 text-accent-text/60" />
+                        <Check className="w-3 h-3 text-black/45" />
                       )
                     )}
                   </div>
@@ -811,7 +811,7 @@ export const ChatViewScreen = ({
           .sort((a, b) => a.createdAt - b.createdAt)
           .map((upload) => (
             <div key={upload.tempId} className="flex justify-end">
-              <div className="max-w-[75%] px-4 py-2.5 rounded-2xl rounded-br-md bg-accent text-accent-text">
+              <div className="max-w-[75%] px-4 py-2.5 rounded-2xl rounded-br-md bg-white text-black">
                 <ImageMessageBubble
                   imageUrl={upload.localUrl}
                   caption={upload.caption || undefined}
