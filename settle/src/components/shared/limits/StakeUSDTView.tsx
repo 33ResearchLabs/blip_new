@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { formatCrypto, formatFiat } from "@/lib/format";
+import { useSolanaWalletSafe } from "@/hooks/useSolanaWalletSafe";
 import type { SurfaceTokens } from "./types";
 
 interface Props {
@@ -108,6 +109,11 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<EventRow[] | null>(null);
 
+  // On-chain staking wallet (blip_staking). Stake source = the wallet's on-chain
+  // USDT; the contract is the source of truth and /api/staking/sync mirrors the
+  // resulting principal into the DB so the limit boost picks it up.
+  const wallet = useSolanaWalletSafe();
+
   // "Stake Now" on the balance card scrolls to the stake form (works across all
   // three host scroll containers via scrollIntoView on the nearest scrollable).
   const formRef = useRef<HTMLDivElement>(null);
@@ -140,7 +146,8 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
     fetchSnap();
   }, [fetchSnap]);
 
-  const available = mode === "stake" ? snap?.availableBalance ?? 0 : snap?.principal ?? 0;
+  // Stake source is the wallet's on-chain USDT; unstake source is the staked principal.
+  const available = mode === "stake" ? (wallet.usdtBalance ?? 0) : (snap?.principal ?? 0);
   const amountNum = Number(amount) || 0;
 
   const setPct = (pct: number) => {
@@ -161,24 +168,24 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
     }
     setSubmitting(true);
     try {
-      const res = await fetchWithAuth(`/api/staking/${mode}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: amountNum }),
-      });
-      const json = await res.json().catch(() => null);
-      if (res.ok && json?.success) {
-        setAmount("");
-        setNotice(mode === "stake" ? "USDT staked." : "USDT unstaked.");
-        await fetchSnap();
-        if (showHistory) await fetchHistory();
-        onStaked();
-        return;
-      }
-      setError(json?.error || `Couldn't ${mode}.`);
-    } catch (err) {
+      // 1) On-chain stake/unstake, signed by the wallet (USDT moves to/from the vault).
+      if (mode === "stake") await wallet.stake(amountNum);
+      else await wallet.unstake(amountNum);
+      // 2) Mirror the on-chain position into the DB so the trading-limit boost picks it up.
+      await fetchWithAuth("/api/staking/sync", { method: "POST" });
+      setAmount("");
+      setNotice(mode === "stake" ? "USDT staked." : "USDT unstaked.");
+      await fetchSnap();
+      if (showHistory) await fetchHistory();
+      onStaked();
+    } catch (err: any) {
       console.error(`Failed to ${mode}:`, err);
-      setError(`Couldn't ${mode}.`);
+      const msg = String(err?.message ?? err ?? "");
+      if (msg.includes("CooldownActive")) setError("Your stake is still in the unstake cooldown (24h after staking).");
+      else if (msg.includes("BelowMinimum")) setError("Minimum stake is $100.");
+      else if (msg.includes("WouldLeaveDust")) setError("Unstake all or leave at least $100 staked.");
+      else if (msg.toLowerCase().includes("not connected")) setError("Connect your wallet first.");
+      else setError(`Couldn't ${mode}. ${msg.slice(0, 120)}`);
     } finally {
       setSubmitting(false);
     }

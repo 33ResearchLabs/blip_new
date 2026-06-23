@@ -30,7 +30,7 @@
 
 import { query, queryOne } from '@/lib/db';
 import type { WaitlistActorType } from '@/lib/types/database';
-import { getStakeMultiplier } from '@/lib/staking/economy';
+import { getStakeMultiplier, MIN_STAKE_USD, reputationStakeBoost } from '@/lib/staking/economy';
 import { getTrustScore } from '@/lib/trust/repository';
 import { computeLimitReduction } from '@/lib/trust/reductions';
 
@@ -238,7 +238,11 @@ export async function getEffectiveLimits(
     getApprovedLimitOverrides(actorId, actorType),
   ]);
   const repMult = rep.multiplier;
-  const stakeMult = stake.multiplier;
+  // Stake boost (current spec): staking ≥ MIN_STAKE_USD unlocks a reputation-
+  // scaled 1.0x–1.5x multiplier. The staked AMOUNT only gates eligibility; the
+  // boost magnitude comes from the reputation tier. Primary lever for daily.
+  const isStaked = stake.principal >= MIN_STAKE_USD;
+  const stakeMult = isStaked ? reputationStakeBoost(rep.tier) : 1;
 
   // Highest floor wins per field: KYC base vs verification floor vs coin unlock.
   // Then the reputation AND stake multipliers scale it (stake stacks on top of
@@ -301,7 +305,9 @@ export async function getTrustBasedLimits(
     getStakeMultiplier(actorType, actorId),
     getApprovedLimitOverrides(actorId, actorType),
   ]);
-  const stakeMult = stake.multiplier;
+  // Trust mode has no reputation tier to scale by, so a staked position gets the
+  // full boost (1.5x). Same MIN_STAKE_USD gate as the reputation path.
+  const stakeMult = stake.principal >= MIN_STAKE_USD ? 1.5 : 1;
   const tier = trust.tierDef;
 
   // Automatic risk reduction (Phase 4). confirmedChargeback / fraudInvestigation

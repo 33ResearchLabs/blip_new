@@ -32,6 +32,7 @@ import { getPrimaryEndpoint, getHealthyEndpoint } from '@/lib/solana/rpc';
 import { DEVNET_WS_ENDPOINT } from '@/lib/solana/v2/config';
 import { logger } from '@/lib/logger';
 import { sendAndConfirmSafe } from '@/lib/solana/safeTransaction';
+import { buildStakeInstruction, buildUnstakeInstruction } from '@/lib/solana/staking';
 import { PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
@@ -271,6 +272,10 @@ interface SolanaWalletContextType {
     tradeId: number;
     resolution: 'release_to_buyer' | 'refund_to_seller';
   }) => Promise<TradeOperationResult>;
+
+  // Staking (on-chain blip_staking) — lock/withdraw USDT to drive the limit boost.
+  stake: (amountUsdt: number) => Promise<{ signature: string }>;
+  unstake: (amountUsdt: number) => Promise<{ signature: string }>;
 
   // Network
   network: 'devnet' | 'mainnet-beta';
@@ -1731,6 +1736,37 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [publicKey, program, signTransaction, connection, refreshBalances]);
 
+  // ── Staking (on-chain blip_staking) ──────────────────────────────────
+  const stake = useCallback(async (amountUsdt: number): Promise<{ signature: string }> => {
+    if (!publicKey || !signTransaction) throw new Error('Wallet not connected');
+    const ix = buildStakeInstruction({
+      staker: publicKey,
+      amountBaseUnits: BigInt(Math.round(amountUsdt * 1_000_000)),
+      mint: USDT_MINT,
+    });
+    const r = await sendAndConfirmSafe({
+      connection, feePayer: publicKey, signTransaction,
+      instructions: [ix], name: 'stake', maxRetries: 2, priority: 'high',
+    });
+    await refreshBalances();
+    return { signature: r.signature };
+  }, [publicKey, signTransaction, connection, refreshBalances]);
+
+  const unstake = useCallback(async (amountUsdt: number): Promise<{ signature: string }> => {
+    if (!publicKey || !signTransaction) throw new Error('Wallet not connected');
+    const ix = buildUnstakeInstruction({
+      staker: publicKey,
+      amountBaseUnits: BigInt(Math.round(amountUsdt * 1_000_000)),
+      mint: USDT_MINT,
+    });
+    const r = await sendAndConfirmSafe({
+      connection, feePayer: publicKey, signTransaction,
+      instructions: [ix], name: 'unstake', maxRetries: 2, priority: 'high',
+    });
+    await refreshBalances();
+    return { signature: r.signature };
+  }, [publicKey, signTransaction, connection, refreshBalances]);
+
   const value: SolanaWalletContextType = {
     connected,
     connecting,
@@ -1761,6 +1797,8 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     confirmPayment,
     openDispute,
     resolveDispute,
+    stake,
+    unstake,
     network: SOLANA_NETWORK,
     programReady: !!program,
     reinitializeProgram,
@@ -2006,6 +2044,8 @@ const WALLET_NOOP: SolanaWalletContextType = {
   confirmPayment: noopResult,
   openDispute: noopResult,
   resolveDispute: noopResult,
+  stake: async () => { throw new Error('Wallet not connected'); },
+  unstake: async () => { throw new Error('Wallet not connected'); },
   network: 'devnet',
   programReady: false,
   reinitializeProgram: () => {},

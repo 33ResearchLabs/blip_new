@@ -41,6 +41,29 @@ export const STAKE_LIMIT_TIERS = [
   { minStakeUsd: 100,   multiplier: 3,  tier: 'S1' },
 ] as const;
 
+/**
+ * Minimum stake (USD) to unlock the limit boost. Mirrors the on-chain
+ * `StakeConfig.min_stake` in the blip_staking program.
+ */
+export const MIN_STAKE_USD = 100;
+
+/**
+ * Reputation-scaled stake boost (current spec): staking ≥ MIN_STAKE_USD unlocks
+ * a modest 1.0x–1.5x multiplier whose magnitude is set by the actor's reputation
+ * tier (not by how much over the minimum they stake). It is THE primary lever for
+ * raising the daily limit. Returns 1.0 (no boost) for unstaked / unknown tiers.
+ */
+export function reputationStakeBoost(repTier: string | null | undefined): number {
+  switch (repTier) {
+    case 'diamond':  return 1.5;
+    case 'platinum': return 1.4;
+    case 'gold':     return 1.3;
+    case 'silver':   return 1.2;
+    case 'bronze':   return 1.1;
+    default:         return 1.0; // newcomer, risky, null
+  }
+}
+
 const SECONDS_PER_DAY = 24 * 60 * 60;
 
 /** Round to 8 dp (USDT precision) to avoid float drift before a DB write. */
