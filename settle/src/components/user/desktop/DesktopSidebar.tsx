@@ -169,7 +169,7 @@ export function DesktopSidebar({
                     height: 18,
                     padding: "0 5px",
                     borderRadius: 999,
-                    background: "#ffb02e",
+                    background: "#fff",
                     color: "#0b0b0d",
                     fontSize: 10,
                     fontWeight: 800,

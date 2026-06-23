@@ -157,6 +157,7 @@ export const MatchingScreen = ({
         activeStepIndex={1}
         createdTime={createdTime}
         progressSubtitle="Matching merchant · In progress"
+        defaultTimelineOpen={false}
         tiles={tiles}
         onOpenOverview={() => setShowOverview(true)}
         onCancel={handleCancel}

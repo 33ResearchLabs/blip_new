@@ -575,7 +575,7 @@ export const ChatViewScreen = ({
             aria-label="View merchant profile"
             className="flex items-center gap-3 flex-1 min-w-0 text-left"
           >
-          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[16px] bg-accent/20 border border-accent/30 text-accent overflow-hidden shrink-0">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[16px] bg-surface-active border border-border-subtle text-text-secondary overflow-hidden shrink-0">
             {activeOrder.merchant.avatarUrl ? (
               <img
                 src={activeOrder.merchant.avatarUrl}
@@ -768,7 +768,7 @@ export const ChatViewScreen = ({
                       isOwn={isMe}
                     />
                   ) : (
-                    <p className="text-[15px] leading-relaxed">{msg.text}</p>
+                    <p className="text-[15px] leading-relaxed whitespace-pre-wrap wrap-break-word">{msg.text}</p>
                   )}
                   <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
                     <span className={`text-[10px] ${isMe ? 'text-black/45' : 'text-text-tertiary'}`}>
