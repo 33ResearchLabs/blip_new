@@ -451,7 +451,7 @@ export const HomeScreen = ({
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                  <span style={{ fontSize: 26, fontWeight: 700, color: '#fff' }}>{fiatSymbol}</span>
+                  <span style={{ fontSize: 26, fontWeight: 700, color: '#fff' }}>$</span>
                   <span style={{ fontSize: 50, fontWeight: 800, lineHeight: 0.86, color: '#fff', letterSpacing: '-0.03em', fontFamily: 'ui-monospace, monospace' }}>
                     {balWhole}
                   </span>
