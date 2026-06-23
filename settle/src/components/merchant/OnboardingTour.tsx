@@ -21,35 +21,31 @@ import type { EventData, Step } from 'react-joyride';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 
 interface StepDef {
-  key: 'customize-username' | 'connect-wallet' | 'set-inr-rates' | 'accept-trade';
+  key: 'customize-username' | 'connect-wallet' | 'accept-trade';
   target: string;
   title: string;
   content: string;
 }
 
+// INR rate is an optional onboarding step with no setup UI (the rates tab was
+// removed), so it's omitted from the guided tour — its target no longer exists.
 const ALL_STEPS: StepDef[] = [
   {
     key: 'customize-username',
     target: '[data-tour="customize-username"]',
-    title: 'Step 1 of 4 — Set Your Username',
+    title: 'Step 1 of 3 — Set Your Username',
     content: 'Pick a username — this is how traders will recognize you in the marketplace.',
   },
   {
     key: 'connect-wallet',
     target: '[data-tour="connect-wallet"]',
-    title: 'Step 2 of 4 — Connect Wallet',
+    title: 'Step 2 of 3 — Connect Wallet',
     content: 'Connect your wallet to start trading securely.',
-  },
-  {
-    key: 'set-inr-rates',
-    target: '[data-tour="inr-rates"]',
-    title: 'Step 3 of 4 — Set Your INR Rate',
-    content: 'Set the buy and sell rates you want to offer for USDT/INR. Live market suggestions are shown to help you price competitively.',
   },
   {
     key: 'accept-trade',
     target: '[data-tour="pending-panel"]',
-    title: 'Step 4 of 4 — Accept First Trade',
+    title: 'Step 3 of 3 — Accept First Trade',
     content: 'Accept your first trade to start using the platform.',
   },
 ];
@@ -147,7 +143,6 @@ export function OnboardingTour() {
     const conditionFor: Record<StepDef['key'], boolean> = {
       'customize-username': conditions.usernameSet,
       'connect-wallet': conditions.walletConnected,
-      'set-inr-rates': conditions.inrRateSet,
       'accept-trade': conditions.hasTrade,
     };
     return ALL_STEPS.filter((s) => !conditionFor[s.key]).map((s) => ({

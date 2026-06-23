@@ -1,12 +1,12 @@
 /**
  * Merchant progressive onboarding state.
  *
- * Backs the 5-step setup checklist. Only the first three steps are
- * REQUIRED for completed_at to fire — the last two are visible-but-
+ * Backs the 5-step setup checklist. Only the first two steps are
+ * REQUIRED for completed_at to fire — the rest are visible-but-
  * optional informational rows:
  *   1. username customized (merchants.username_customized_at IS NOT NULL)  [required]
  *   2. wallet connected    (merchants.wallet_address present)              [required]
- *   3. payment method added (merchant_payment_methods row exists)          [required]
+ *   3. INR rate set        (merchants.buy_rate or sell_rate present)       [optional — no setup UI yet]
  *   4. wallet funded       (merchants.balance > 0)                         [optional — BUY-trade-time guard]
  *   5. first trade         (any non-cancelled order participated in)       [optional — milestone, prevents deadlock]
  *
@@ -138,21 +138,23 @@ export async function getOnboardingStatus(merchantId: string): Promise<Onboardin
 
   // Compute nextStep + completion.
   //
-  // ONLY the first three steps are required for completed_at:
-  //   1. username, 2. wallet, 3. payment method
+  // ONLY the first two steps are required for completed_at:
+  //   1. username, 2. wallet
   //
-  // Steps 4 (fund wallet) and 5 (first trade) remain visible in the UI
-  // but are advisory — funding is BUY-only and already gated per-action
-  // by useOnboardingGuard, and first-trade is a milestone that would
-  // otherwise deadlock against the trade-participation gate (you can't
-  // accept your first trade if completion blocks accepting trades).
+  // Step 3 (INR rate, tracked in payment_method_at), step 4 (fund wallet)
+  // and step 5 (first trade) remain visible in the UI but are advisory.
+  // INR rate is optional because there is currently no UI to set it (the
+  // rates tab was removed) — gating completion on it would deadlock setup.
+  // Funding is BUY-only and already gated per-action by useOnboardingGuard,
+  // and first-trade is a milestone that would otherwise deadlock against the
+  // trade-participation gate (you can't accept your first trade if completion
+  // blocks accepting trades).
   //
   // Their timestamps still record (sticky) when the conditions become
   // true, so analytics keep the same granularity.
   const requiredDoneFlags = [
     !!updated.username_set_at,
     !!updated.wallet_connected_at,
-    !!updated.payment_method_at,
   ];
   const firstIncompleteRequired = requiredDoneFlags.findIndex((d) => !d);
   const nextStep = (firstIncompleteRequired === -1
@@ -212,9 +214,10 @@ export async function resumeOnboarding(merchantId: string): Promise<OnboardingRo
  */
 export async function isOnboardingComplete(merchantId: string): Promise<boolean> {
   // Treat as complete if: (a) completed_at is set, OR (b) skipped_at is set,
-  // OR (c) the two required conditions (wallet + inr rate) are satisfied.
-  // This ensures merchants who set up wallet+rates can trade without needing
-  // to explicitly click "Go Live" or wait for hasTrade.
+  // OR (c) the wallet is connected. INR rate is NOT required (it's an optional
+  // step with no setup UI), so gating on it would block trading entirely.
+  // This ensures merchants who connect a wallet can trade without needing to
+  // explicitly click "Go Live" or wait for hasTrade.
   const row = await queryOne<{ completed_at: string | null; skipped_at: string | null }>(
     `SELECT completed_at, skipped_at FROM merchant_onboarding WHERE merchant_id = $1`,
     [merchantId]
@@ -222,7 +225,7 @@ export async function isOnboardingComplete(merchantId: string): Promise<boolean>
   if (!row) return true; // no record = new merchant, let them through
   if (row.completed_at || row.skipped_at) return true;
   const conditions = await computeConditions(merchantId);
-  return conditions.walletConnected && conditions.inrRateSet;
+  return conditions.walletConnected;
 }
 
 /**
