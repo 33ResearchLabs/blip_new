@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChatStatus } from "@/hooks/useChatStatus";
 import { ImagePreviewModal } from "@/components/chat/ImagePreviewModal";
 import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { compressImage } from "@/lib/utils/compressImage";
 import { formatFiat } from "@/lib/format";
 import { motion } from "framer-motion";
@@ -575,16 +576,13 @@ export const ChatViewScreen = ({
             aria-label="View merchant profile"
             className="flex items-center gap-3 flex-1 min-w-0 text-left"
           >
-          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[16px] bg-surface-active border border-border-subtle text-text-secondary overflow-hidden shrink-0">
-            {activeOrder.merchant.avatarUrl ? (
-              <img
-                src={activeOrder.merchant.avatarUrl}
-                alt={activeOrder.merchant.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              (activeOrder.merchant.name || 'M').charAt(0).toUpperCase()
-            )}
+          <div className="w-10 h-10 rounded-full overflow-hidden shrink-0">
+            <UserAvatar
+              src={activeOrder.merchant.avatarUrl}
+              seed={activeOrder.merchant.name || activeOrder.merchant.username}
+              size={40}
+              alt={activeOrder.merchant.name}
+            />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
@@ -862,7 +860,7 @@ export const ChatViewScreen = ({
                   <button
                     onClick={() => handleMutualCancel('request')}
                     disabled={mutualCancelLoading}
-                    className="flex-1 py-2 rounded-lg text-[13px] font-medium bg-error text-white disabled:opacity-50"
+                    className="flex-1 py-2 rounded-lg text-[13px] font-medium bg-accent text-accent-text disabled:opacity-50"
                   >
                     {mutualCancelLoading ? 'Processing…' : 'Cancel Dispute'}
                   </button>

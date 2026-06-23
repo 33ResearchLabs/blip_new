@@ -256,15 +256,15 @@ export function OrderPaymentScreen({
         {/* Escrow status */}
         <div className={`rounded-2xl p-4 ${CARD}`}>
           <div className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${fundsLocked ? "bg-success/15" : "bg-surface-active"}`}>
-              {fundsLocked ? <ShieldCheck className="w-5 h-5 text-success" /> : <Shield className="w-5 h-5 text-text-secondary" />}
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${fundsLocked ? "bg-border-medium" : "bg-surface-active"}`}>
+              {fundsLocked ? <ShieldCheck className="w-5 h-5 text-text-primary" /> : <Shield className="w-5 h-5 text-text-secondary" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[15px] font-semibold text-text-primary">Escrow status</p>
                 {/* <Info className="w-4 h-4 text-text-tertiary shrink-0" /> */}
               </div>
-              <p className={`text-[13px] font-medium ${fundsLocked ? "text-success" : "text-text-secondary"}`}>
+              <p className={`text-[13px] font-medium ${fundsLocked ? "text-text-primary" : "text-text-secondary"}`}>
                 {fundsLocked ? "Escrow is locked by seller" : "Escrow is not locked yet"}
               </p>
               <div className="flex items-end justify-between gap-2">
@@ -610,11 +610,13 @@ export function OrderPaymentScreen({
               {needsPayMethodPick ? "Select an account first" : "I have made the payment"}
             </motion.button>
           )}
-          {/* Cancel is only valid before payment is sent. Once dbStatus is
-              payment_sent the buyer has already paid and the seller's USDT is
-              escrowed, so CANCEL is no longer an allowed transition (state
-              machine: open/accepted/escrowed only). Appeal is the action here. */}
-          {!paymentSent && (
+          {/* Cancel is offered ONLY before escrow is locked (accepted /
+              escrow_pending — nothing is at stake, so the buyer can back out
+              instantly and unilaterally). Once the seller has locked USDT
+              (escrowed / payment_pending / payment_sent) there is no cancel
+              button: the buyer raises an Appeal instead (rendered above when
+              fundsLocked), and any mutual cancellation is resolved there. */}
+          {!fundsLocked && (
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={onCancel}
@@ -707,7 +709,7 @@ function ConfirmStep({
           <Check className="w-4 h-4 text-surface-base" strokeWidth={3} />
         </div>
       ) : state === "active" ? (
-        <div className="w-7 h-7 rounded-full bg-surface-active border border-warning flex items-center justify-center shrink-0">
+        <div className="w-7 h-7 rounded-full bg-surface-active border border-border-strong flex items-center justify-center shrink-0">
           <Clock className="w-4 h-4 text-text-secondary" />
         </div>
       ) : (

@@ -207,6 +207,13 @@ export const TradeCreationScreen = ({
 }: TradeCreationScreenProps) => {
   const isLight = theme === "light";
   const T = isLight ? TOKENS_LIGHT : TOKENS_DARK;
+  // Priority segmented control uses a monochrome active pill (black/white) instead
+  // of the orange CTA accent. Dark mode already renders the active tile white, so
+  // only light mode is overridden here; the CTA and other tiles keep T.activeTile*.
+  const prioActiveBg = isLight ? "#14151a" : T.activeTileBg;
+  const prioActiveBorder = isLight ? "rgba(20,21,26,0.85)" : T.activeTileBorder;
+  const prioActiveText = isLight ? "#ffffff" : T.activeTileText;
+  const prioActiveSubText = isLight ? "rgba(255,255,255,0.65)" : T.activeTileSubText;
   const hasAmount = !!amount && parseFloat(amount) > 0;
   const isBuy = tradeType === "buy";
   // BUY needs ≥1 pay rail ticked; SELL needs a receive account chosen.
@@ -938,8 +945,8 @@ export const TradeCreationScreen = ({
                       className="absolute inset-0"
                       style={{
                         borderRadius: 13,
-                        background: T.activeTileBg,
-                        border: `1px solid ${T.activeTileBorder}`,
+                        background: prioActiveBg,
+                        border: `1px solid ${prioActiveBorder}`,
                         boxShadow: isLight
                           ? "0 6px 14px -8px rgba(15,23,42,0.25)"
                           : "0 6px 14px -8px rgba(255,255,255,0.35)",
@@ -949,7 +956,7 @@ export const TradeCreationScreen = ({
                   )}
                   <span
                     className="relative"
-                    style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.01em", color: on ? T.activeTileText : T.hi }}
+                    style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.01em", color: on ? prioActiveText : T.hi }}
                   >
                     {label}
                   </span>
@@ -958,7 +965,7 @@ export const TradeCreationScreen = ({
                       <span style={{
                         fontSize: 11,
                         fontWeight: 700,
-                        color: on ? T.activeTileSubText : T.lo,
+                        color: on ? prioActiveSubText : T.lo,
                         textDecoration: "line-through",
                         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                       }}>
@@ -969,7 +976,7 @@ export const TradeCreationScreen = ({
                       style={{
                         fontSize: 13,
                         fontWeight: 800,
-                        color: fee === "0%" ? (on ? "#15803d" : "#22c55e") : (on ? T.activeTileSubText : T.md),
+                        color: on ? prioActiveSubText : T.md,
                         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                       }}
                     >

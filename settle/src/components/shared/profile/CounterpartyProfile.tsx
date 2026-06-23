@@ -32,6 +32,7 @@ import {
   // UserPlus, // Follow button hidden (see below)
 } from "lucide-react";
 import { formatFiat, formatCount, formatPercentage } from "@/lib/format";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { SurfaceTokens } from "@/components/shared/limits/types";
 import type { ProfileData, TrustBand, RiskLevel } from "./types";
 
@@ -108,18 +109,13 @@ export function CounterpartyProfile({
         {/* Identity */}
         <div className="flex items-start gap-4 pt-1">
           <div className="relative shrink-0">
-            {data.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={data.avatarUrl}
-                alt={data.name}
-                className="w-16 h-16 rounded-full object-cover border border-border-subtle"
-              />
-            ) : (
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-[22px] font-extrabold text-text-secondary border border-border-subtle ${surfaces.chip}`}>
-                {data.name.charAt(0).toUpperCase()}
-              </div>
-            )}
+            <UserAvatar
+              src={data.avatarUrl}
+              seed={data.name || data.username}
+              size={64}
+              alt={data.name}
+              className="border border-border-subtle"
+            />
             {data.isOnline && (
               <span className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-accent border-2 border-[var(--background)]" />
             )}

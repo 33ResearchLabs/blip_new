@@ -386,9 +386,9 @@ export function SupportTicketScreen({
 
                 {/* Error */}
                 {error && (
-                  <div className="flex items-center gap-2 px-4 py-3 rounded-[12px] bg-red-500/10 border border-red-500/20">
-                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-                    <span className="text-[12.5px] text-red-300">{error}</span>
+                  <div className="flex items-center gap-2 px-4 py-3 rounded-[12px] bg-error-dim border border-error-border">
+                    <AlertTriangle className="w-4 h-4 text-error shrink-0" />
+                    <span className="text-[12.5px] text-error">{error}</span>
                   </div>
                 )}
 

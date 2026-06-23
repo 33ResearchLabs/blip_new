@@ -156,6 +156,7 @@ export const cancelRequestRoutes: FastifyPluginAsync = async (fastify) => {
         const upd = await client.query(
           `UPDATE orders
               SET cancel_requested_by = $2,
+                  cancel_requested_by_id = $5,
                   cancel_requested_at = NOW(),
                   cancel_request_reason = $3,
                   last_activity_at = NOW(),
@@ -164,7 +165,7 @@ export const cancelRequestRoutes: FastifyPluginAsync = async (fastify) => {
               AND order_version = $4
               AND status NOT IN ('completed', 'cancelled', 'expired')
             RETURNING *`,
-          [id, actor_type, reason || 'Requested cancellation', order.order_version],
+          [id, actor_type, reason || 'Requested cancellation', order.order_version, actor_id],
         );
         if (upd.rows.length === 0) {
           return {
@@ -330,6 +331,7 @@ export const cancelRequestRoutes: FastifyPluginAsync = async (fastify) => {
           const declined = await client.query(
             `UPDATE orders
                 SET cancel_requested_by = NULL,
+                    cancel_requested_by_id = NULL,
                     cancel_requested_at = NULL,
                     cancel_request_reason = NULL,
                     last_activity_at = NOW(),
@@ -436,6 +438,7 @@ export const cancelRequestRoutes: FastifyPluginAsync = async (fastify) => {
                   cancelled_by = 'system',
                   cancellation_reason = $2,
                   cancel_requested_by = NULL,
+                  cancel_requested_by_id = NULL,
                   cancel_requested_at = NULL,
                   last_activity_at = NOW(),
                   order_version = order_version + 1

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Clock, Check, ArrowDownLeft, ArrowUpRight, X, Bell } from "lucide-react";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown, type FilterOption } from "./ui";
 import type { Screen, Order } from "./types";
@@ -225,15 +226,13 @@ export const OrdersListScreen = ({
                   className={`w-full flex items-center gap-3 rounded-[18px] p-3.5 text-left ${CARD}`}>
                   {/* Avatar with directional badge */}
                   <div className="relative shrink-0 w-11 h-11">
-                    {avatarUrl ? (
-                      <img src={avatarUrl} alt={merchantInitial} className="w-11 h-11 rounded-[14px] object-cover" />
-                    ) : (
-                      <div className="w-11 h-11 rounded-[14px] bg-surface-active border border-border-subtle flex items-center justify-center">
-                        <span style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text-secondary)", fontFamily: "Manrope, sans-serif" }}>
-                          {merchantInitial}
-                        </span>
-                      </div>
-                    )}
+                    <UserAvatar
+                      src={avatarUrl}
+                      seed={order.merchant?.name || order.merchant?.username}
+                      size={44}
+                      alt={merchantInitial}
+                      style={{ borderRadius: 14 }}
+                    />
                     {/* Directional badge — bottom-right corner */}
                     <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
                       style={{ background: badgeBg, backdropFilter: "blur(4px)" }}>

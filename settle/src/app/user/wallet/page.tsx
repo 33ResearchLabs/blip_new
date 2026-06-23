@@ -721,7 +721,7 @@ export default function UserWalletPage() {
                 </div>
 
                 {setupError && (
-                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-500 font-mono">
+                  <div className="p-2.5 bg-error-dim border border-error-border rounded-lg text-xs text-error font-mono">
                     {setupError}
                   </div>
                 )}
@@ -957,8 +957,8 @@ export default function UserWalletPage() {
               </div>
 
               <div className="flex items-start gap-2.5 px-1">
-                <Shield className="w-4 h-4 text-red-500/50 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-red-500/50 font-mono leading-relaxed">
+                <Shield className="w-4 h-4 text-error/50 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-error/50 font-mono leading-relaxed">
                   The backup file contains your private key. Never share it.
                   Store it offline.
                 </p>
@@ -983,7 +983,7 @@ export default function UserWalletPage() {
 
               <div className="bg-surface-card border border-border-subtle rounded-2xl p-5 space-y-4">
                 {unlockError && (
-                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-500 font-mono">
+                  <div className="p-2.5 bg-error-dim border border-error-border rounded-lg text-xs text-error font-mono">
                     {unlockError}
                   </div>
                 )}
@@ -1336,8 +1336,8 @@ export default function UserWalletPage() {
                     onClick={() => setShowDeleteConfirm(true)}
                     className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[var(--color-error)]/5 transition-colors"
                   >
-                    <Trash2 className="w-4 h-4 text-red-500/50" />
-                    <span className="text-sm text-red-500/60 font-mono">Delete Wallet</span>
+                    <Trash2 className="w-4 h-4 text-error/50" />
+                    <span className="text-sm text-error/60 font-mono">Delete Wallet</span>
                   </button>
                 </div>
               )}
@@ -1363,7 +1363,7 @@ export default function UserWalletPage() {
             </div>
 
             {sendError && (
-              <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-500 font-mono">
+              <div className="p-2.5 bg-error-dim border border-error-border rounded-lg text-xs text-error font-mono">
                 {sendError}
               </div>
             )}

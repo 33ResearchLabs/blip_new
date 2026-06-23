@@ -137,9 +137,9 @@ export function UserAvatarModal({
           {/* Error row */}
           {error && (
             <div className="mx-5 mt-4">
-              <div className="flex items-center gap-2 p-3 rounded-[12px] bg-red-500/10 border border-red-500/20">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                <p className="text-[13px] text-red-400">{error}</p>
+              <div className="flex items-center gap-2 p-3 rounded-[12px] bg-error-dim border border-error-border">
+                <AlertCircle className="w-4 h-4 text-error shrink-0" />
+                <p className="text-[13px] text-error">{error}</p>
               </div>
             </div>
           )}

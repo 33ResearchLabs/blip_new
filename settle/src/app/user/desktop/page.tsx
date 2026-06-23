@@ -121,25 +121,43 @@ export default function UserDesktopPage() {
       type: string;
       title: string;
       message: string;
+      orderId?: string;
       timestamp: number;
       read: boolean;
     }>
   >([]);
   const addNotification = useCallback(
-    (type: string, title: string, message: string) => {
-      setNotifications((prev) =>
-        [
+    (type: string, title: string, message: string, orderId?: string) => {
+      setNotifications((prev) => {
+        // Overlapping realtime sources (Pusher + polling + reconciliation) fire
+        // the SAME status-change toast multiple times. The toast container
+        // collapses the visible cards (4s window), but this persistent list used
+        // to keep one permanent row per fire — that's the "one order, 10 'Trade
+        // Complete' rows" bug. Dedupe by (orderId|type|title|message): when the
+        // event carries an orderId, suppress any repeat already in the retained
+        // list (one row per order+event, ever). When it has no orderId, fall back
+        // to a 60s window so two genuinely-distinct events later still surface.
+        const key = `${orderId ?? ""}|${type}|${title}|${message}`;
+        const now = Date.now();
+        const dup = prev.find(
+          (n) => `${n.orderId ?? ""}|${n.type}|${n.title}|${n.message}` === key,
+        );
+        if (dup && (orderId != null || now - dup.timestamp < 60_000)) {
+          return prev;
+        }
+        return [
           {
-            id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: `n-${now}-${Math.random().toString(36).slice(2, 6)}`,
             type,
             title,
             message,
-            timestamp: Date.now(),
+            orderId,
+            timestamp: now,
             read: false,
           },
           ...prev,
-        ].slice(0, 50),
-      );
+        ].slice(0, 50);
+      });
     },
     [],
   );
@@ -152,20 +170,23 @@ export default function UserDesktopPage() {
         type: string,
         titleFn: (...args: any[]) => string,
         msgFn: (...args: any[]) => string,
+        // Optional extractor for the orderId of the event, so the persistent
+        // notification list can dedupe per-order (see addNotification).
+        orderIdFn?: (...args: any[]) => string | undefined,
       ) =>
       (...args: any[]) => {
         method(...args);
-        addNotification(type, titleFn(...args), msgFn(...args));
+        addNotification(type, titleFn(...args), msgFn(...args), orderIdFn?.(...args));
       };
     return {
       ...rawToast,
       show: (t: Parameters<typeof rawToast.show>[0]) => {
         rawToast.show(t);
-        addNotification(t.type, t.title, t.message);
+        addNotification(t.type, t.title, t.message, t.orderId);
       },
       showOrderCreated: wrap(rawToast.showOrderCreated, "order", () => "New Order", (i?: string) => i || "A new order has been placed"),
       showPaymentSent: wrap(rawToast.showPaymentSent, "payment", () => "Payment Sent", () => "Payment has been marked as sent"),
-      showTradeComplete: wrap(rawToast.showTradeComplete, "complete", () => "Trade Complete", (a?: string) => (a ? `${a} USDT completed` : "Trade completed")),
+      showTradeComplete: wrap(rawToast.showTradeComplete, "complete", () => "Trade Complete", (a?: string) => (a ? `${a} USDT completed` : "Trade completed"), (_a?: string, orderId?: string) => orderId),
       showEscrowLocked: wrap(rawToast.showEscrowLocked, "escrow", () => "Escrow Locked", (a?: string) => (a ? `${a} USDT locked` : "Funds locked in escrow")),
       showDisputeOpened: wrap(rawToast.showDisputeOpened, "dispute", () => "Dispute Opened", () => "A dispute has been raised"),
       showNewMessage: wrap(rawToast.showNewMessage, "message", (f: string) => `Message from ${f}`, (_f: string, p?: string) => p || "New message"),

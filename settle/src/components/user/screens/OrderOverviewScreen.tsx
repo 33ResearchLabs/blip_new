@@ -21,7 +21,10 @@ const CARD = "bg-surface-card border border-border-subtle";
 
 type Tone = "accent" | "success" | "error" | "warning";
 
-const CANCELLABLE = new Set(["pending", "accepted", "escrowed"]);
+// Pre-escrow only: cancel is a unilateral, instant back-out while nothing is
+// locked. Once escrow is locked there is no cancel button here — the exit is
+// Appeal, and mutual cancellation is resolved through that flow.
+const CANCELLABLE = new Set(["pending", "accepted", "escrow_pending"]);
 
 const STATUS_LABELS: Record<string, string> = {
   // 'open' is the minimal-status form of a pending/unmatched order — without it
