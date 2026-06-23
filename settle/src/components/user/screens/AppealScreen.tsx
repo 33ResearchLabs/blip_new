@@ -203,12 +203,12 @@ export function AppealScreen({
             aria-label="View merchant profile"
           >
             <div className="relative shrink-0">
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-accent/15 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full overflow-hidden bg-border-subtle flex items-center justify-center">
                 {order.merchant.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={order.merchant.avatarUrl} alt={order.merchant.name} className="w-full h-full object-cover" />
                 ) : (
-                  <Bot className="w-6 h-6 text-accent" />
+                  <Bot className="w-6 h-6 text-text-secondary" />
                 )}
               </div>
               {order.merchant.isOnline && (

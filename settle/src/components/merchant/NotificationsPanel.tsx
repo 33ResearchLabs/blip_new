@@ -149,10 +149,10 @@ export const NotificationsPanel = memo(function NotificationsPanel({
     if (onboardingLoading || !onboardingStatus) return false;
     if (onboardingStatus.skipped_at) return false;
     const c = onboardingStatus.conditions;
+    // INR rate is optional (no setup UI) — excluded so the tab can clear.
     const allMet =
       c.usernameSet &&
       c.walletConnected &&
-      c.inrRateSet &&
       c.hasTrade;
     return !allMet;
   })();

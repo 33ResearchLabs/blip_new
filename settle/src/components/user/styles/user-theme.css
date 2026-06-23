@@ -141,14 +141,15 @@
   --muted: #80828c;
   --muted-bg: #f4f3f1;
 
-  /* Accent CTA — HomeScreen golden pill, dark text */
-  --accent: #ffb02e;
-  --accent-bright: #ffbf4d;
-  --accent-dark: #e89a1c;
-  --accent-dim: rgba(255, 176, 46, 0.70);
-  --accent-subtle: rgba(255, 176, 46, 0.12);
-  --accent-glow: rgba(255, 176, 46, 0.18);
-  --accent-text: #0b0b0d;
+  /* Accent — neutral dark (matches body text); was golden/orange.
+     Mirrors how the dark theme uses a neutral white accent. */
+  --accent: #14151a;
+  --accent-bright: #2a2b30;
+  --accent-dark: #000000;
+  --accent-dim: rgba(20, 21, 26, 0.70);
+  --accent-subtle: rgba(20, 21, 26, 0.08);
+  --accent-glow: rgba(20, 21, 26, 0.10);
+  --accent-text: #ffffff;
 
   /* Semantic — slightly deeper for AA contrast on white */
   --color-success: #059669;

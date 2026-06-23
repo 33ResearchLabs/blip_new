@@ -3,30 +3,44 @@
 /**
  * Trade Chat — merchant dashboard
  * ────────────────────────────────────────────────────────────────────────
- * 3-pane conversation workspace styled with the Pulse design language
- * (dark + burnt-orange #ff6b35), wired to live data:
+ * 3-pane conversation workspace, theme-aware (uses the app's --accent /
+ * --color-* design tokens — NO hardcoded brand colors, so it adapts to all
+ * themes). Layout mirrors the merchant-chat mock:
  *
- *   LEFT   — real order conversations (useMerchantConversations), split into
- *            Favorites (local, persisted) and Others, with unread badges.
- *   CENTER — the live chat for the selected trade (useRealtimeChat): Pusher
- *            messages, optimistic send, typing, read receipts, load-older.
- *   RIGHT  — live order details (GET /api/orders/:id) + the backend-driven
- *            action buttons (primaryAction / secondaryAction). Safe
- *            transitions dispatch via useOrderActionDispatch; the
- *            wallet-signing actions (ACCEPT / LOCK_ESCROW / CLAIM) route to
- *            the dashboard escrow flow rather than re-implementing signing.
+ *   LEFT   — order conversations (useMerchantConversations) with a tab row
+ *            (All / Unread / Active / Groups), search, unread badges.
+ *   CENTER — the live chat for the selected trade (useRealtimeChat): a trade
+ *            summary strip, E2E banner, day dividers, text + receipt cards,
+ *            optimistic send, typing, read receipts, image attach, load-older.
+ *   RIGHT  — Trade Details: counterparty, active order, a live countdown
+ *            (expires_at), payment status, backend-driven action buttons, and
+ *            a support-ticket entry point.
+ *
+ * Backend remains the source of truth for actions: primaryAction /
+ * secondaryAction drive the buttons; wallet-signing actions (ACCEPT /
+ * LOCK_ESCROW / CLAIM) route to the dashboard escrow flow.
+ *
+ * Placeholders (no backend yet, rendered inert): New Chat, New Group, the
+ * Groups tab, the filter button, GIF + @tag composer affordances, and the
+ * Open Support Ticket button.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type ComponentProps,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
+  SlidersHorizontal,
   Send,
-  Star,
-  MoreVertical,
   CheckCheck,
   Check,
-  CircleDollarSign,
   Ban,
   AlertTriangle,
   Lock,
@@ -36,6 +50,16 @@ import {
   Loader2,
   MessagesSquare,
   ExternalLink,
+  Plus,
+  Users,
+  Crown,
+  BadgeCheck,
+  Star,
+  Clock,
+  Paperclip,
+  Smile,
+  LifeBuoy,
+  CircleDollarSign,
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { useMerchantStore } from "@/stores/merchantStore";
@@ -45,24 +69,36 @@ import {
 } from "@/hooks/useMerchantConversations";
 import { useRealtimeChat, type ChatMessage } from "@/hooks/useRealtimeChat";
 import { useOrderActionDispatch } from "@/hooks/useOrderActionDispatch";
+import { ImageUpload } from "@/components/chat/ImageUpload";
+import { ReceiptCard } from "@/components/chat/cards";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import type { BackendOrder, ActionType } from "@/types/backendOrder";
-import { formatCrypto, formatFiat } from "@/lib/format";
+import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
 
 /* ───────────────────────── helpers ───────────────────────── */
 
-const FAV_KEY = "blip_chat_favorites";
+/** Order statuses where the trade is live (drives the "Active" tab + badge). */
+const ACTIVE_STATUSES = new Set([
+  "accepted",
+  "escrowed",
+  "payment_sent",
+  "payment_pending",
+  "disputed",
+]);
 
+/** Theme-aware status pill classes. Neutral by default; semantic only where
+ *  it carries meaning (success / warning / error). */
 const STATUS_PILL: Record<string, string> = {
-  pending: "bg-gray-500/15 text-gray-400",
-  accepted: "bg-blue-500/15 text-blue-400",
-  escrowed: "bg-[#ff6b35]/15 text-[#ff6b35]",
-  payment_sent: "bg-yellow-500/15 text-yellow-400",
-  payment_pending: "bg-yellow-500/15 text-yellow-400",
-  completed: "bg-green-500/15 text-green-400",
-  disputed: "bg-red-500/15 text-red-400",
-  cancelled: "bg-gray-500/15 text-gray-500",
-  expired: "bg-gray-500/15 text-gray-500",
+  pending: "bg-white/[0.06] text-foreground/50",
+  open: "bg-white/[0.06] text-foreground/50",
+  accepted: "bg-white/[0.08] text-foreground/70",
+  escrowed: "bg-accent/15 text-accent",
+  payment_sent: "bg-warning/15 text-warning",
+  payment_pending: "bg-warning/15 text-warning",
+  completed: "bg-success/15 text-success",
+  disputed: "bg-error/15 text-error",
+  cancelled: "bg-white/[0.06] text-foreground/40",
+  expired: "bg-white/[0.06] text-foreground/40",
 };
 
 function statusLabel(s: string) {
@@ -76,15 +112,11 @@ function initials(name: string) {
   return name.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || "??";
 }
 
-const AVATAR_COLORS = [
-  "bg-orange-500/20 text-orange-400",
-  "bg-purple-500/20 text-purple-400",
-  "bg-blue-500/20 text-blue-400",
-  "bg-green-500/20 text-green-400",
-  "bg-pink-500/20 text-pink-400",
-];
-function avatarColor(name: string) {
-  return AVATAR_COLORS[(name.charCodeAt(0) || 0) % AVATAR_COLORS.length];
+/** Neutral avatar tint (theme-aware, derived from name for stable variety). */
+function avatarTint(name: string) {
+  const alpha = [0.1, 0.14, 0.08, 0.12, 0.16];
+  const a = alpha[(name.charCodeAt(0) || 0) % alpha.length];
+  return { backgroundColor: `rgba(255,255,255,${a})` };
 }
 
 const EMOJIS = ["🦊", "🐻", "🐼", "🐨", "🦁", "🐯", "🐸", "🐙", "🦋", "🐳", "🦄", "🐲"];
@@ -111,8 +143,35 @@ function rowTime(iso?: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/** Day-divider label for the message stream. */
+function dayLabel(d: Date) {
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return "Today";
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
 function fiatSymbol(ccy?: string) {
-  return ccy === "INR" ? "₹" : ccy === "AED" ? "AED " : (ccy ? ccy + " " : "");
+  return ccy === "INR" ? "₹" : ccy === "AED" ? "AED " : ccy ? ccy + " " : "";
+}
+
+/** Lifecycle progress (0–1) for the summary-strip bar. */
+function progressFraction(status?: string) {
+  switch (status) {
+    case "accepted":
+      return 0.25;
+    case "escrowed":
+      return 0.5;
+    case "payment_sent":
+    case "payment_pending":
+      return 0.75;
+    case "completed":
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 /* Actions that require the embedded-wallet / on-chain escrow signing flow.
@@ -128,6 +187,14 @@ const ACTION_ICON: Partial<Record<ActionType, typeof Check>> = {
   CANCEL: Ban,
   DISPUTE: AlertTriangle,
 };
+
+type TabKey = "all" | "unread" | "active" | "groups";
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "unread", label: "Unread" },
+  { key: "active", label: "Active" },
+  { key: "groups", label: "Groups" },
+];
 
 /* ───────────────────────── page ───────────────────────── */
 
@@ -151,36 +218,14 @@ export default function TradeChatPage() {
 
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<TabKey>("all");
   const [draft, setDraft] = useState("");
   const [showDetails, setShowDetails] = useState(false);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // ── favorites (persisted locally — OrderConversation has no favorite flag) ──
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(FAV_KEY);
-      if (raw) setFavorites(new Set(JSON.parse(raw)));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-  const toggleFav = useCallback((userId: string) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      next.has(userId) ? next.delete(userId) : next.add(userId);
-      try {
-        localStorage.setItem(FAV_KEY, JSON.stringify([...next]));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
-
-  // ── filtered + grouped conversations ──
-  const filtered = useMemo(() => {
+  // ── filtered + tabbed conversations ──
+  const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return orderConversations;
     return orderConversations.filter(
@@ -190,8 +235,23 @@ export default function TradeChatPage() {
     );
   }, [orderConversations, search]);
 
-  const favConvos = filtered.filter((c) => favorites.has(c.user.id));
-  const otherConvos = filtered.filter((c) => !favorites.has(c.user.id));
+  const visibleConvos = useMemo(() => {
+    switch (tab) {
+      case "unread":
+        return searched.filter((c) => c.unread_count > 0);
+      case "active":
+        return searched.filter((c) => ACTIVE_STATUSES.has(c.order_status));
+      case "groups":
+        return []; // placeholder — group chats not backed yet
+      default:
+        return searched;
+    }
+  }, [searched, tab]);
+
+  const unreadTotal = useMemo(
+    () => orderConversations.filter((c) => c.unread_count > 0).length,
+    [orderConversations],
+  );
 
   const activeConvo =
     orderConversations.find((c) => c.order_id === activeOrderId) ?? null;
@@ -310,7 +370,7 @@ export default function TradeChatPage() {
     [activeOrderId, dispatch, router],
   );
 
-  // ── send a message ──
+  // ── send a message (text + optional image) ──
   const send = useCallback(() => {
     const body = draft.trim();
     if (!body || !activeWindow) return;
@@ -318,28 +378,85 @@ export default function TradeChatPage() {
     setDraft("");
   }, [draft, activeWindow, chat]);
 
+  const sendImage = useCallback(
+    (imageUrl: string) => {
+      if (!activeWindow) return;
+      chat.sendMessage(activeWindow.id, "", imageUrl);
+    },
+    [activeWindow, chat],
+  );
+
   /* ───────────────────────── render ───────────────────────── */
 
   const signedOut = !merchantId;
+  const chatClosed = isChatClosed(order?.status);
 
   return (
-    <div className="flex flex-col h-screen bg-[#0a0a0a] text-white">
+    <div className="flex flex-col h-screen bg-[var(--color-bg-primary)] text-foreground">
       <MerchantNavbar activePage="chat" merchantInfo={merchantInfo} />
 
       <div className="flex-1 min-h-0 flex">
-        {/* ───────────── LEFT: people list ───────────── */}
-        <aside className="hidden md:flex w-72 shrink-0 border-r border-white/[0.06] bg-[#111] flex-col">
-          <div className="px-4 py-3 border-b border-white/[0.06]">
-            <h2 className="text-sm font-semibold text-white mb-2.5">Trades</h2>
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                maxLength={100}
-                placeholder="Search name or order…"
-                className="w-full bg-black/40 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#ff6b35]/50 transition-colors"
-              />
+        {/* ───────────── LEFT: chats list ───────────── */}
+        <aside className="hidden md:flex w-80 shrink-0 border-r border-white/[0.06] bg-[var(--color-bg-secondary)] flex-col">
+          <div className="px-4 pt-4 pb-3 border-b border-white/[0.06]">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-semibold text-foreground">Chats</h2>
+              <button
+                type="button"
+                title="Start a new chat (coming soon)"
+                className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:opacity-80 transition-opacity"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                New Chat
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-foreground/40 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  maxLength={100}
+                  placeholder="Search chats…"
+                  className="w-full bg-black/30 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-sm text-foreground placeholder-foreground/40 focus:outline-none focus:border-accent/50 transition-colors"
+                />
+              </div>
+              <button
+                type="button"
+                title="Filters (coming soon)"
+                className="p-2 rounded-lg border border-white/10 text-foreground/50 hover:text-foreground hover:bg-white/[0.06] transition-all"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* tabs */}
+            <div className="flex items-center gap-1 mt-3">
+              {TABS.map((t) => {
+                const isActive = tab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={`relative px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      isActive
+                        ? "bg-accent text-accent-text"
+                        : "text-foreground/55 hover:text-foreground hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    {t.label}
+                    {t.key === "unread" && unreadTotal > 0 && (
+                      <span
+                        className={`ml-1.5 text-[10px] font-bold ${
+                          isActive ? "text-accent-text/70" : "text-accent"
+                        }`}
+                      >
+                        {unreadTotal}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -348,33 +465,46 @@ export default function TradeChatPage() {
               <ListMessage text="Sign in to the merchant dashboard to see your trades." />
             ) : isLoadingConversations && orderConversations.length === 0 ? (
               <ListMessage spinner text="Loading conversations…" />
-            ) : orderConversations.length === 0 ? (
-              <ListMessage text="No trade conversations yet." />
+            ) : tab === "groups" ? (
+              <ListMessage icon={Users} text="Group chats are coming soon." />
+            ) : visibleConvos.length === 0 ? (
+              <ListMessage
+                text={
+                  tab === "unread"
+                    ? "No unread conversations."
+                    : tab === "active"
+                      ? "No active trades right now."
+                      : search
+                        ? "No matches."
+                        : "No trade conversations yet."
+                }
+              />
             ) : (
-              <>
-                <PeopleSection
-                  title="Favorites"
-                  convos={favConvos}
-                  activeId={activeOrderId}
-                  favorites={favorites}
+              visibleConvos.map((c) => (
+                <ConversationRow
+                  key={c.order_id}
+                  convo={c}
+                  active={c.order_id === activeOrderId}
                   onSelect={selectConvo}
-                  onToggleFav={toggleFav}
                 />
-                <PeopleSection
-                  title="Others"
-                  convos={otherConvos}
-                  activeId={activeOrderId}
-                  favorites={favorites}
-                  onSelect={selectConvo}
-                  onToggleFav={toggleFav}
-                />
-              </>
+              ))
             )}
+          </div>
+
+          <div className="shrink-0 p-3 border-t border-white/[0.06]">
+            <button
+              type="button"
+              title="Create a group (coming soon)"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-foreground/70 text-sm font-medium transition-colors"
+            >
+              <Users className="w-4 h-4" />
+              New Group
+            </button>
           </div>
         </aside>
 
         {/* ───────────── CENTER: conversation ───────────── */}
-        <main className="flex-1 min-w-0 flex flex-col bg-[#0d0d0d]">
+        <main className="flex-1 min-w-0 flex flex-col bg-[var(--color-bg-primary)]">
           {!activeConvo ? (
             <EmptyCenter signedOut={signedOut} />
           ) : (
@@ -383,55 +513,57 @@ export default function TradeChatPage() {
               <div className="h-14 shrink-0 flex items-center gap-3 px-4 border-b border-white/[0.06]">
                 <div className="relative shrink-0">
                   <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${avatarColor(activeConvo.user.username)}`}
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-foreground"
+                    style={avatarTint(activeConvo.user.username)}
                   >
                     {initials(activeConvo.user.username)}
                   </div>
                   {isCounterpartyOnline(activeWindow, merchantId) && (
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0d0d0d] bg-green-400" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--color-bg-primary)] bg-success" />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-white truncate">
-                      @{activeConvo.user.username}
-                    </p>
-                    <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-400">
-                      <Star className="w-3 h-3 text-[#ff6b35] fill-[#ff6b35]" />
-                      {activeConvo.user.rating?.toFixed(1) ?? "—"}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {activeConvo.user.username}
+                  </p>
+                  <p className="text-[11px] text-foreground/50">
                     {activeWindow?.isTyping
                       ? "typing…"
                       : isCounterpartyOnline(activeWindow, merchantId)
                         ? "Online"
-                        : "Offline"}{" "}
-                    · {activeConvo.user.total_trades ?? 0} trades
+                        : "Offline"}
                   </p>
                 </div>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUS_PILL[order?.status ?? activeConvo.order_status] ?? STATUS_PILL.pending}`}
-                >
-                  {order?.statusLabel ?? statusLabel(activeConvo.order_status)}
-                </span>
                 <button
                   onClick={() => setShowDetails((v) => !v)}
-                  className="lg:hidden p-2 text-gray-400 hover:text-white hover:bg-white/[0.08] rounded-lg transition-all"
+                  className="lg:hidden p-2 text-foreground/50 hover:text-foreground hover:bg-white/[0.08] rounded-lg transition-all"
                   aria-label="Order details"
                 >
                   <Info className="w-5 h-5" />
                 </button>
               </div>
 
+              {/* trade summary strip */}
+              <TradeSummaryStrip
+                convo={activeConvo}
+                order={order}
+                onViewOrder={() => setShowDetails(true)}
+              />
+
               {/* messages */}
               <div ref={scrollRef} className="flex-1 overflow-y-auto pulse-scroll px-4 py-4 space-y-3">
+                {/* E2E banner */}
+                <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[11px] text-foreground/45 text-center max-w-xl mx-auto">
+                  <Lock className="w-3 h-3 shrink-0" />
+                  Never share personal info or payment details outside Blip Market. All chats are end-to-end encrypted.
+                </div>
+
                 {activeOrderId && chat.hasOlderMessages(activeOrderId) && activeWindow?.messages.length ? (
                   <div className="flex justify-center">
                     <button
                       onClick={() => chat.loadOlderMessages(activeOrderId)}
                       disabled={chat.isLoadingOlderMessages(activeOrderId)}
-                      className="text-[11px] text-gray-500 hover:text-[#ff6b35] px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] transition-colors"
+                      className="text-[11px] text-foreground/50 hover:text-accent px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] transition-colors"
                     >
                       {chat.isLoadingOlderMessages(activeOrderId) ? "Loading…" : "Load earlier messages"}
                     </button>
@@ -439,22 +571,43 @@ export default function TradeChatPage() {
                 ) : null}
 
                 {!activeWindow || activeWindow.messages.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-gray-600 text-sm">
+                  <div className="h-full flex items-center justify-center text-foreground/40 text-sm">
                     {activeWindow ? "No messages yet — say hello." : <Loader2 className="w-5 h-5 animate-spin" />}
                   </div>
                 ) : (
-                  activeWindow.messages.map((m) => <MessageBubble key={m.id} m={m} />)
+                  <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} />
                 )}
               </div>
 
               {/* composer */}
               <div className="shrink-0 border-t border-white/[0.06] p-3">
-                {isChatClosed(order?.status) ? (
-                  <p className="text-center text-[11px] text-gray-600 py-2">
+                {chatClosed ? (
+                  <p className="text-center text-[11px] text-foreground/40 py-2">
                     This trade is {statusLabel(order?.status ?? "")} — chat is closed.
                   </p>
                 ) : (
-                  <div className="flex items-end gap-2">
+                  <div className="flex items-end gap-1.5">
+                    {activeOrderId && (
+                      <ImageUpload
+                        orderId={activeOrderId}
+                        onUploadComplete={sendImage}
+                        onUploadError={(e) => setActionMsg(e)}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      title="Attach a file (coming soon)"
+                      className="p-2 rounded-lg text-foreground/50 hover:text-foreground hover:bg-white/[0.06] transition-colors"
+                    >
+                      <Paperclip className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="GIF (coming soon)"
+                      className="p-2 rounded-lg text-foreground/50 hover:text-foreground hover:bg-white/[0.06] transition-colors"
+                    >
+                      <Smile className="w-5 h-5" />
+                    </button>
                     <textarea
                       value={draft}
                       onChange={(e) => {
@@ -469,13 +622,13 @@ export default function TradeChatPage() {
                       }}
                       rows={1}
                       maxLength={1000}
-                      placeholder="Type a message…"
-                      className="flex-1 resize-none bg-black/40 border border-white/10 rounded-2xl px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#ff6b35]/50 max-h-32"
+                      placeholder="Type a message…  ( @ to tag a task )"
+                      className="flex-1 resize-none bg-black/30 border border-white/10 rounded-2xl px-3 py-2.5 text-sm text-foreground placeholder-foreground/40 focus:outline-none focus:border-accent/50 max-h-32"
                     />
                     <button
                       onClick={send}
                       disabled={!draft.trim()}
-                      className="p-2.5 rounded-full bg-[#ff6b35] text-black hover:bg-[#ff7a4a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                      className="p-2.5 rounded-full bg-accent text-accent-text hover:bg-accent-bright transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                       aria-label="Send"
                     >
                       <Send className="w-4 h-4" />
@@ -487,9 +640,9 @@ export default function TradeChatPage() {
           )}
         </main>
 
-        {/* ───────────── RIGHT: order details + actions ───────────── */}
+        {/* ───────────── RIGHT: trade details + actions ───────────── */}
         {activeConvo && (
-          <OrderDetailsPane
+          <TradeDetailsPane
             convo={activeConvo}
             order={order}
             loading={orderLoading}
@@ -524,27 +677,134 @@ function isChatClosed(status?: string) {
   return ["completed", "cancelled", "expired"].includes(status ?? "");
 }
 
-/* ───────────────────── message bubble ───────────────────── */
+/* ───────────────────── trade summary strip ───────────────────── */
 
-function MessageBubble({ m }: { m: ChatMessage }) {
+function TradeSummaryStrip({
+  convo,
+  order,
+  onViewOrder,
+}: {
+  convo: OrderConversation;
+  order: BackendOrder | null;
+  onViewOrder: () => void;
+}) {
+  const status = order?.status ?? convo.order_status;
+  const crypto = order?.crypto_amount ?? convo.crypto_amount;
+  const fiat = order?.fiat_amount ?? convo.fiat_amount;
+  const ccy = order?.fiat_currency ?? convo.fiat_currency;
+  const rate = order?.rate;
+  // Perspective from the merchant's resolved role (backend-driven).
+  const verb = order?.my_role === "buyer" ? "buying" : order?.my_role === "seller" ? "selling" : "trading";
+  const pct = progressFraction(status);
+
+  return (
+    <div className="shrink-0 border-b border-white/[0.06] bg-[var(--color-bg-secondary)]/60 px-4 py-2.5">
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">You are {verb}</p>
+          <p className="text-sm font-semibold text-foreground leading-tight">
+            {formatCrypto(crypto)} <span className="text-foreground/50 text-xs font-medium">USDT</span>
+          </p>
+          {rate != null && (
+            <p className="text-[10px] text-foreground/45">Price: {fiatSymbol(ccy)}{formatRate(rate)}</p>
+          )}
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Order ID</p>
+          <p className="font-mono text-xs text-foreground/80 truncate">
+            {order?.order_number ?? convo.order_number}
+          </p>
+          <button
+            onClick={onViewOrder}
+            className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-accent hover:opacity-80"
+          >
+            View Order <ExternalLink className="w-2.5 h-2.5" />
+          </button>
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Total Amount</p>
+          <p className="text-sm font-semibold text-foreground leading-tight">{formatFiat(fiat, ccy)}</p>
+        </div>
+
+        <div className="min-w-0 ml-auto">
+          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Status</p>
+          <p className="text-xs font-semibold text-warning">
+            {order?.statusLabel ?? statusLabel(status)}
+          </p>
+          <div className="mt-1 h-1 w-28 rounded-full bg-white/[0.08] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-accent transition-all"
+              style={{ width: `${Math.round(pct * 100)}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────── message stream ───────────────────── */
+
+function MessageStream({ messages, status }: { messages: ChatMessage[]; status: string }) {
+  const out: ReactNode[] = [];
+  let lastDay = "";
+  for (const m of messages) {
+    const ts = m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp);
+    const day = ts.toDateString();
+    if (day !== lastDay) {
+      lastDay = day;
+      out.push(
+        <div key={`day-${day}`} className="flex justify-center my-2">
+          <span className="px-3 py-0.5 rounded-full bg-white/[0.05] text-[10px] text-foreground/45">
+            {dayLabel(ts)}
+          </span>
+        </div>,
+      );
+    }
+    out.push(<MessageItem key={m.id} m={m} status={status} />);
+  }
+  return <>{out}</>;
+}
+
+function MessageItem({ m, status }: { m: ChatMessage; status: string }) {
+  // Rich receipt cards (Payment Sent / Trade Completed) when the message
+  // carries structured receipt data.
+  if (m.messageType === "receipt" && m.receiptData) {
+    return (
+      <div className="flex justify-center">
+        <div className="max-w-sm w-full">
+          <ReceiptCard
+            data={m.receiptData as unknown as ComponentProps<typeof ReceiptCard>["data"]}
+            currentStatus={status}
+            theme="dark"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // System / compliance events render as a centered pill.
   if (m.from === "system" || m.from === "compliance") {
     return (
       <div className="flex justify-center">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[10px] text-gray-400 max-w-[80%] text-center">
-          {m.from === "compliance" && <span className="text-[#ff6b35] font-semibold">Compliance:</span>}
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[10px] text-foreground/50 max-w-[80%] text-center">
+          {m.from === "compliance" && <span className="text-accent font-semibold">Compliance:</span>}
           {m.text}
         </span>
       </div>
     );
   }
+
   const mine = m.from === "me";
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div
         className={`max-w-[75%] rounded-2xl px-3.5 py-2 ${
           mine
-            ? "bg-[#ff6b35] text-black rounded-br-md"
-            : "bg-[#1a1a1a] text-gray-100 border border-white/[0.06] rounded-bl-md"
+            ? "bg-accent text-accent-text rounded-br-md"
+            : "bg-white/[0.05] text-foreground border border-white/[0.06] rounded-bl-md"
         }`}
       >
         {m.imageUrl && (
@@ -555,7 +815,7 @@ function MessageBubble({ m }: { m: ChatMessage }) {
             href={m.fileUrl}
             target="_blank"
             rel="noreferrer"
-            className={`flex items-center gap-1.5 text-xs underline ${mine ? "text-black/80" : "text-[#ff6b35]"}`}
+            className={`flex items-center gap-1.5 text-xs underline ${mine ? "text-accent-text/80" : "text-accent"}`}
           >
             <ExternalLink className="w-3 h-3" />
             {m.fileName ?? "Attachment"}
@@ -563,14 +823,14 @@ function MessageBubble({ m }: { m: ChatMessage }) {
         )}
         {m.text && <p className="text-sm leading-snug whitespace-pre-wrap break-words">{m.text}</p>}
         <div
-          className={`flex items-center gap-1 justify-end mt-0.5 ${mine ? "text-black/50" : "text-gray-600"}`}
+          className={`flex items-center gap-1 justify-end mt-0.5 ${mine ? "text-accent-text/50" : "text-foreground/40"}`}
         >
           <span className="text-[9px]">
             {m.timestamp instanceof Date ? clock(m.timestamp) : clock(new Date(m.timestamp))}
           </span>
           {mine &&
             (m.status === "read" ? (
-              <CheckCheck className="w-3 h-3 text-blue-700" />
+              <CheckCheck className="w-3 h-3 text-info" />
             ) : m.status === "delivered" ? (
               <CheckCheck className="w-3 h-3" />
             ) : m.status === "sending" ? (
@@ -584,12 +844,21 @@ function MessageBubble({ m }: { m: ChatMessage }) {
   );
 }
 
-/* ───────────────────── left list section ───────────────────── */
+/* ───────────────────── left list pieces ───────────────────── */
 
-function ListMessage({ text, spinner }: { text: string; spinner?: boolean }) {
+function ListMessage({
+  text,
+  spinner,
+  icon: Icon,
+}: {
+  text: string;
+  spinner?: boolean;
+  icon?: typeof Users;
+}) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-gray-600 gap-2">
+    <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-foreground/40 gap-2">
       {spinner && <Loader2 className="w-5 h-5 animate-spin" />}
+      {Icon && <Icon className="w-7 h-7 opacity-50" />}
       <p className="text-xs">{text}</p>
     </div>
   );
@@ -597,90 +866,74 @@ function ListMessage({ text, spinner }: { text: string; spinner?: boolean }) {
 
 function EmptyCenter({ signedOut }: { signedOut: boolean }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center text-gray-600 gap-3">
+    <div className="flex-1 flex flex-col items-center justify-center text-foreground/40 gap-3">
       <MessagesSquare className="w-10 h-10 opacity-40" />
       <p className="text-sm">{signedOut ? "Sign in to view trade chats." : "Select a trade to start chatting."}</p>
     </div>
   );
 }
 
-function PeopleSection({
-  title,
-  convos,
-  activeId,
-  favorites,
+function ConversationRow({
+  convo: c,
+  active,
   onSelect,
-  onToggleFav,
 }: {
-  title: string;
-  convos: OrderConversation[];
-  activeId: string | null;
-  favorites: Set<string>;
+  convo: OrderConversation;
+  active: boolean;
   onSelect: (c: OrderConversation) => void;
-  onToggleFav: (userId: string) => void;
 }) {
-  if (convos.length === 0) return null;
+  const isActiveTrade = ACTIVE_STATUSES.has(c.order_status);
+  const preview =
+    c.last_message?.content ??
+    `${fiatSymbol(c.fiat_currency)}${formatCrypto(c.fiat_amount)} · ${formatCrypto(c.crypto_amount)} USDT`;
+
   return (
-    <div className="mb-2">
-      <p className="px-4 text-[10px] text-gray-500 uppercase tracking-wider mb-1">{title}</p>
-      {convos.map((c) => {
-        const isActive = c.order_id === activeId;
-        const isFav = favorites.has(c.user.id);
-        const preview =
-          c.last_message?.content ??
-          `${fiatSymbol(c.fiat_currency)}${formatCrypto(c.fiat_amount)} · ${formatCrypto(c.crypto_amount)} USDT`;
-        return (
-          <button
-            key={c.order_id}
-            onClick={() => onSelect(c)}
-            className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left mx-auto ${
-              isActive
-                ? "bg-[#ff6b35]/10 border border-[#ff6b35]/20"
-                : "hover:bg-white/[0.04] border border-transparent"
-            }`}
-            style={{ width: "calc(100% - 0.5rem)" }}
-          >
-            <div
-              className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold ${avatarColor(c.user.username)}`}
-            >
-              {initials(c.user.username)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-white truncate">@{c.user.username}</p>
-                <span className="text-[10px] text-gray-600 shrink-0">{rowTime(c.last_activity)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-gray-500 truncate">{preview}</p>
-                {c.unread_count > 0 ? (
-                  <span className="min-w-[18px] h-[18px] bg-[#ff6b35] text-black text-[10px] font-bold rounded-full flex items-center justify-center px-1 shrink-0">
-                    {c.unread_count}
-                  </span>
-                ) : (
-                  <Star
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleFav(c.user.id);
-                    }}
-                    className={`w-3.5 h-3.5 shrink-0 cursor-pointer transition-colors ${
-                      isFav
-                        ? "text-[#ff6b35] fill-[#ff6b35]"
-                        : "text-gray-600 opacity-0 group-hover:opacity-100 hover:text-[#ff6b35]"
-                    }`}
-                  />
-                )}
-              </div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
+    <button
+      onClick={() => onSelect(c)}
+      className={`group w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left border-l-2 ${
+        active
+          ? "bg-white/[0.05] border-accent"
+          : "border-transparent hover:bg-white/[0.03]"
+      }`}
+    >
+      <div
+        className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold text-foreground"
+        style={avatarTint(c.user.username)}
+      >
+        {initials(c.user.username)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1 min-w-0">
+            <span className="text-sm font-medium text-foreground truncate">{c.user.username}</span>
+            {(c.user.total_trades ?? 0) >= 100 && (
+              <Crown className="w-3 h-3 text-warning shrink-0" />
+            )}
+          </span>
+          <span className="text-[10px] text-foreground/40 shrink-0">{rowTime(c.last_activity)}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {isActiveTrade && <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />}
+          <span className="text-[11px] text-foreground/45 shrink-0">
+            {isActiveTrade ? "Active trade" : statusLabel(c.order_status)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2 mt-0.5">
+          <p className="text-[11px] text-foreground/40 truncate">{preview}</p>
+          {c.unread_count > 0 && (
+            <span className="min-w-[18px] h-[18px] bg-accent text-accent-text text-[10px] font-bold rounded-full flex items-center justify-center px-1 shrink-0">
+              {c.unread_count}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
   );
 }
 
-/* ───────────────────── right details pane ───────────────────── */
+/* ───────────────────── right trade-details pane ───────────────────── */
 
-function OrderDetailsPane({
+function TradeDetailsPane({
   convo,
   order,
   loading,
@@ -705,12 +958,17 @@ function OrderDetailsPane({
   const crypto = order?.crypto_amount ?? convo.crypto_amount;
   const fiat = order?.fiat_amount ?? convo.fiat_amount;
   const ccy = order?.fiat_currency ?? convo.fiat_currency;
-  const pay = order?.payment_details;
+  const rate = order?.rate;
 
   // Backend-driven buttons (never computed on the frontend). primaryAction is
-  // always present; secondaryAction may be null. Fall back to nothing if the
-  // order hasn't loaded yet.
-  const buttons: { type: ActionType; label: string; enabled: boolean; reason?: string; kind: "primary" | "secondary" }[] = [];
+  // always present; secondaryAction may be null.
+  const buttons: {
+    type: ActionType;
+    label: string;
+    enabled: boolean;
+    reason?: string;
+    kind: "primary" | "secondary";
+  }[] = [];
   if (order?.primaryAction?.type) {
     buttons.push({
       type: order.primaryAction.type,
@@ -732,15 +990,12 @@ function OrderDetailsPane({
   const body = (
     <div className="flex flex-col h-full">
       <div className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-white/[0.06]">
-        <h2 className="text-sm font-semibold text-white">Order details</h2>
+        <h2 className="text-sm font-semibold text-foreground">Trade Details</h2>
         <div className="flex items-center gap-1">
-          {loading && <Loader2 className="w-3.5 h-3.5 text-gray-500 animate-spin" />}
-          <button className="p-1.5 text-gray-400 hover:text-white hover:bg-white/[0.08] rounded-lg transition-all">
-            <MoreVertical className="w-4 h-4" />
-          </button>
+          {loading && <Loader2 className="w-3.5 h-3.5 text-foreground/40 animate-spin" />}
           <button
             onClick={onClose}
-            className="lg:hidden p-1.5 text-gray-400 hover:text-white hover:bg-white/[0.08] rounded-lg transition-all"
+            className="lg:hidden p-1.5 text-foreground/50 hover:text-foreground hover:bg-white/[0.08] rounded-lg transition-all"
             aria-label="Close"
           >
             <ChevronLeft className="w-4 h-4 rotate-180" />
@@ -749,140 +1004,144 @@ function OrderDetailsPane({
       </div>
 
       <div className="flex-1 overflow-y-auto pulse-scroll p-4 space-y-4">
-        <div className="bg-[#141414] border border-white/[0.06] rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="font-mono text-sm font-semibold text-white">
-              {order?.order_number ?? convo.order_number}
-            </span>
+        {/* counterparty */}
+        <div className="bg-[var(--color-bg-tertiary)] border border-white/[0.06] rounded-xl p-3">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-foreground"
+              style={avatarTint(convo.user.username)}
+            >
+              {initials(convo.user.username)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1">
+                <p className="text-sm font-semibold text-foreground truncate">{convo.user.username}</p>
+                <BadgeCheck className="w-3.5 h-3.5 text-accent shrink-0" />
+              </div>
+              <p className="text-[11px] text-foreground/50">
+                {convo.user.total_trades ?? 0} trades
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="inline-flex items-center gap-0.5 text-sm font-semibold text-foreground">
+                <Star className="w-3.5 h-3.5 text-warning fill-warning" />
+                {convo.user.rating?.toFixed(1) ?? "—"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* active order */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Active Order</p>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide ${
-                type === "buy" ? "bg-green-500/15 text-green-400" : "bg-[#ff6b35]/15 text-[#ff6b35]"
+                type === "buy" ? "bg-success/15 text-success" : "bg-error/15 text-error"
               }`}
             >
               {type}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="bg-black/40 rounded-xl px-3 py-2.5">
-              <p className="text-[9px] text-gray-400 uppercase tracking-wider">Crypto</p>
-              <p className="text-base font-bold text-white leading-none mt-1">
-                {formatCrypto(crypto)}
-                <span className="text-[10px] text-gray-500 font-medium ml-1">USDT</span>
-              </p>
-            </div>
-            <div className="bg-black/40 rounded-xl px-3 py-2.5">
-              <p className="text-[9px] text-gray-400 uppercase tracking-wider">Fiat</p>
-              <p className="text-base font-bold text-white leading-none mt-1">{formatFiat(fiat, ccy)}</p>
+          <div className="bg-[var(--color-bg-tertiary)] border border-white/[0.06] rounded-xl divide-y divide-white/[0.05]">
+            <DetailRow label="Amount" value={`${formatCrypto(crypto)} USDT`} />
+            {rate != null && <DetailRow label="Price" value={`${fiatSymbol(ccy)}${formatRate(rate)}`} />}
+            <DetailRow label="Total" value={formatFiat(fiat, ccy)} />
+            <DetailRow label="Order ID" value={order?.order_number ?? convo.order_number} mono />
+            <div className="flex items-center justify-between px-3 py-2.5">
+              <span className="text-[11px] text-foreground/50">Status</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUS_PILL[status] ?? STATUS_PILL.pending}`}>
+                {order?.statusLabel ?? statusLabel(status)}
+              </span>
             </div>
           </div>
+          {order?.nextStepText && (
+            <p className="text-[11px] text-foreground/45 leading-snug px-1 mt-2">{order.nextStepText}</p>
+          )}
         </div>
 
-        <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-black/20">
-          <span className="text-[11px] text-gray-500">Status</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUS_PILL[status] ?? STATUS_PILL.pending}`}>
-            {order?.statusLabel ?? statusLabel(status)}
-          </span>
-        </div>
-
-        {order?.nextStepText && (
-          <p className="text-[11px] text-gray-400 leading-snug px-1">{order.nextStepText}</p>
+        {/* time remaining */}
+        {order?.expires_at && !order.isTerminal && (
+          <TimeRemaining expiresAt={order.expires_at} />
         )}
 
-        {/* counterparty */}
-        <div>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">Counterparty</p>
-          <div className="bg-[#141414] border border-white/[0.06] rounded-xl p-3">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${avatarColor(convo.user.username)}`}
-              >
-                {initials(convo.user.username)}
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-white truncate">@{convo.user.username}</p>
-                <p className="text-[11px] text-gray-500 flex items-center gap-1">
-                  <Star className="w-3 h-3 text-[#ff6b35] fill-[#ff6b35]" />
-                  {convo.user.rating?.toFixed(1) ?? "—"} · {convo.user.total_trades ?? 0} trades
-                </p>
-              </div>
-            </div>
-          </div>
+        {/* payment status */}
+        <PaymentStatus status={status} />
+
+        {/* actions */}
+        <div className="space-y-2">
+          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Actions</p>
+          {actionMsg && <p className="text-[11px] text-error px-1">{actionMsg}</p>}
+          {buttons.length === 0 ? (
+            <p className="text-[11px] text-foreground/40 py-1">
+              {order ? "No actions available for this status." : loading ? "Loading actions…" : "—"}
+            </p>
+          ) : (
+            buttons.map((b) => {
+              const Icon = ACTION_ICON[b.type] ?? Check;
+              const isWalletFlow = WALLET_FLOW_ACTIONS.has(b.type);
+              const cls =
+                b.kind === "secondary"
+                  ? b.type === "DISPUTE"
+                    ? "bg-transparent text-error border border-error/40 hover:bg-error/10"
+                    : "bg-transparent text-foreground/80 hover:text-foreground border border-white/12 hover:bg-white/[0.06]"
+                  : "bg-accent hover:bg-accent-bright text-accent-text font-semibold";
+              return (
+                <button
+                  key={`${b.kind}-${b.type}`}
+                  onClick={() => onAction(b.type)}
+                  disabled={!b.enabled || actionLoading}
+                  title={b.reason}
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${cls}`}
+                >
+                  {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
+                  {b.label}
+                  {isWalletFlow && <ExternalLink className="w-3 h-3 opacity-60" />}
+                </button>
+              );
+            })
+          )}
+          {buttons.some((b) => WALLET_FLOW_ACTIONS.has(b.type)) && (
+            <p className="text-[10px] text-foreground/40 text-center leading-snug">
+              Escrow & accept require your wallet — opens the trade panel.
+            </p>
+          )}
         </div>
 
-        {/* payment details */}
-        {pay && (pay.bank_name || pay.bank_account_name || pay.bank_iban || pay.location_name) && (
-          <div>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">Payment details</p>
-            <div className="space-y-1">
-              {pay.bank_name && <InfoRow label="Bank" value={pay.bank_name} />}
-              {pay.bank_account_name && <InfoRow label="Account name" value={pay.bank_account_name} />}
-              {pay.bank_iban && <InfoRow label="Account / IBAN" value={pay.bank_iban} mono />}
-              {pay.location_name && <InfoRow label="Location" value={pay.location_name} />}
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-[#ff6b35]/[0.06] border border-[#ff6b35]/15">
-          <CircleDollarSign className="w-3.5 h-3.5 text-[#ff6b35] shrink-0 mt-0.5" />
-          <p className="text-[11px] text-gray-300 leading-snug">
+        {/* settlement note */}
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+          <CircleDollarSign className="w-3.5 h-3.5 text-foreground/50 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-foreground/60 leading-snug">
             Merchant rate + Blip fee apply on settlement. Release only after funds confirm.
           </p>
         </div>
       </div>
 
-      {/* action buttons */}
-      <div className="shrink-0 border-t border-white/[0.06] p-3 space-y-2">
-        {actionMsg && (
-          <p className="text-[11px] text-red-400 text-center px-2">{actionMsg}</p>
-        )}
-        {buttons.length === 0 ? (
-          <p className="text-center text-[11px] text-gray-600 py-2">
-            {order ? "No actions available for this status." : loading ? "Loading actions…" : "—"}
-          </p>
-        ) : (
-          buttons.map((b) => {
-            const Icon = ACTION_ICON[b.type] ?? Check;
-            const isWalletFlow = WALLET_FLOW_ACTIONS.has(b.type);
-            const cls =
-              b.kind === "secondary"
-                ? b.type === "DISPUTE"
-                  ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
-                  : "text-gray-300 hover:text-white hover:bg-white/[0.06] border border-white/10"
-                : "bg-[#ff6b35] hover:bg-[#ff7a4a] text-black font-semibold";
-            return (
-              <button
-                key={`${b.kind}-${b.type}`}
-                onClick={() => onAction(b.type)}
-                disabled={!b.enabled || actionLoading}
-                title={b.reason}
-                className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${cls}`}
-              >
-                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
-                {b.label}
-                {isWalletFlow && <ExternalLink className="w-3 h-3 opacity-60" />}
-              </button>
-            );
-          })
-        )}
-        {buttons.some((b) => WALLET_FLOW_ACTIONS.has(b.type)) && (
-          <p className="text-[10px] text-gray-600 text-center leading-snug">
-            Escrow & accept require your wallet — opens the trade panel.
-          </p>
-        )}
+      {/* need help */}
+      <div className="shrink-0 border-t border-white/[0.06] p-3">
+        <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">Need Help?</p>
+        <button
+          type="button"
+          title="Open a support ticket (coming soon)"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-white/12 text-foreground/80 hover:text-foreground hover:bg-white/[0.06] text-sm transition-colors"
+        >
+          <LifeBuoy className="w-4 h-4" />
+          Open Support Ticket
+        </button>
       </div>
     </div>
   );
 
   return (
     <>
-      <aside className="hidden lg:flex w-80 shrink-0 border-l border-white/[0.06] bg-[#111] flex-col">
+      <aside className="hidden lg:flex w-80 shrink-0 border-l border-white/[0.06] bg-[var(--color-bg-secondary)] flex-col">
         {body}
       </aside>
 
       {show && (
         <>
           <div className="lg:hidden fixed inset-0 z-30 bg-black/50" onClick={onClose} />
-          <aside className="lg:hidden fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] bg-[#111] border-l border-white/[0.06] shadow-2xl flex flex-col">
+          <aside className="lg:hidden fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] bg-[var(--color-bg-secondary)] border-l border-white/[0.06] shadow-2xl flex flex-col">
             {body}
           </aside>
         </>
@@ -891,11 +1150,90 @@ function OrderDetailsPane({
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-black/20">
-      <span className="text-[11px] text-gray-500 shrink-0">{label}</span>
-      <span className={`text-[11px] font-semibold text-gray-200 truncate ${mono ? "font-mono" : ""}`}>{value}</span>
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+      <span className="text-[11px] text-foreground/50 shrink-0">{label}</span>
+      <span className={`text-xs font-semibold text-foreground truncate ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+/** Live mm:ss countdown to expires_at. Hides itself once elapsed. */
+function TimeRemaining({ expiresAt }: { expiresAt: string }) {
+  const target = useMemo(() => new Date(expiresAt).getTime(), [expiresAt]);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const remaining = Math.max(0, Math.floor((target - now) / 1000));
+  if (remaining <= 0) return null;
+
+  const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const ss = String(remaining % 60).padStart(2, "0");
+  const urgent = remaining < 120;
+
+  return (
+    <div>
+      <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">Time Remaining</p>
+      <div className="bg-[var(--color-bg-tertiary)] border border-white/[0.06] rounded-xl px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <Clock className={`w-4 h-4 ${urgent ? "text-warning" : "text-foreground/50"}`} />
+          <span className={`text-lg font-bold font-mono tabular-nums ${urgent ? "text-warning" : "text-foreground"}`}>
+            {mm}:{ss}
+          </span>
+          <span className="text-[11px] text-foreground/45">min</span>
+        </div>
+        <p className="text-[10px] text-foreground/45 mt-1">Do not release crypto before receiving payment.</p>
+      </div>
+    </div>
+  );
+}
+
+/** Derived payment status. Wording is deliberately conservative — we never
+ *  assert "Payment Received" until the order is completed. */
+function PaymentStatus({ status }: { status: string }) {
+  let label: string;
+  let tone: "success" | "warning" | "muted";
+  let Icon = Clock;
+  switch (status) {
+    case "completed":
+      label = "Payment received & released";
+      tone = "success";
+      Icon = CheckCheck;
+      break;
+    case "payment_sent":
+    case "payment_pending":
+      label = "Buyer marked as paid — verify before releasing";
+      tone = "warning";
+      Icon = AlertTriangle;
+      break;
+    case "escrowed":
+      label = "Awaiting buyer payment";
+      tone = "muted";
+      break;
+    case "disputed":
+      label = "Under dispute review";
+      tone = "warning";
+      Icon = AlertTriangle;
+      break;
+    default:
+      label = "Not started";
+      tone = "muted";
+  }
+  const toneCls =
+    tone === "success" ? "text-success" : tone === "warning" ? "text-warning" : "text-foreground/55";
+
+  return (
+    <div>
+      <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">Payment Status</p>
+      <div className="flex items-center gap-2 bg-[var(--color-bg-tertiary)] border border-white/[0.06] rounded-xl px-3 py-2.5">
+        <Icon className={`w-4 h-4 shrink-0 ${toneCls}`} />
+        <span className={`text-xs font-medium ${toneCls}`}>{label}</span>
+      </div>
     </div>
   );
 }

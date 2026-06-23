@@ -40,11 +40,11 @@ import {
   MessageCircle,
   Star,
   Loader2,
-  Bot,
 } from "lucide-react";
 import type { Order, MerchantPaymentMethod } from "./types";
 import { formatCrypto, formatCount } from "@/lib/format";
 import { explorerUrl } from "@/lib/solana/networkLabel";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -219,11 +219,11 @@ export function OrderPaymentScreen({
           animate={{ y: 0, opacity: 1 }}
           className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
         >
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${fundsLocked ? "bg-success/15" : "bg-accent/15"}`}>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 bg-border-subtle`}>
             {fundsLocked ? (
-              <CheckCircle2 className="w-7 h-7 text-success" />
+              <CheckCircle2 className="w-7 h-7 text-text-secondary" />
             ) : (
-              <ShieldCheck className="w-6 h-6 text-accent" />
+              <ShieldCheck className="w-6 h-6 text-text-secondary" />
             )}
           </div>
           <div className="flex-1 min-w-0">
@@ -243,28 +243,28 @@ export function OrderPaymentScreen({
               <p className="text-[13px] text-text-secondary leading-snug">Please wait while the merchant secures the funds.</p>
             )}
           </div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success/15 shrink-0">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-border-subtle shrink-0">
             <motion.span
-              className="w-1.5 h-1.5 rounded-full bg-success"
+              className="w-1.5 h-1.5 rounded-full bg-text-secondary"
               animate={{ opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.4, repeat: Infinity }}
             />
-            <span className="text-[11px] font-semibold text-success">LIVE</span>
+            <span className="text-[11px] font-semibold text-text-secondary">LIVE</span>
           </div>
         </motion.div>
 
         {/* Escrow status */}
         <div className={`rounded-2xl p-4 ${CARD}`}>
           <div className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${fundsLocked ? "bg-success/15" : "bg-warning/15"}`}>
-              {fundsLocked ? <ShieldCheck className="w-5 h-5 text-success" /> : <Shield className="w-5 h-5 text-warning" />}
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${fundsLocked ? "bg-success/15" : "bg-surface-active"}`}>
+              {fundsLocked ? <ShieldCheck className="w-5 h-5 text-success" /> : <Shield className="w-5 h-5 text-text-secondary" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[15px] font-semibold text-text-primary">Escrow status</p>
                 {/* <Info className="w-4 h-4 text-text-tertiary shrink-0" /> */}
               </div>
-              <p className={`text-[13px] font-medium ${fundsLocked ? "text-success" : "text-warning"}`}>
+              <p className={`text-[13px] font-medium ${fundsLocked ? "text-success" : "text-text-secondary"}`}>
                 {fundsLocked ? "Escrow is locked by seller" : "Escrow is not locked yet"}
               </p>
               <div className="flex items-end justify-between gap-2">
@@ -276,7 +276,7 @@ export function OrderPaymentScreen({
                       : "Bank details appear once the merchant locks the funds."}
                 </p>
                 {fundsLocked && (
-                  <span className="shrink-0 inline-flex px-2 py-1 rounded-md text-[11px] font-semibold bg-success/15 text-success whitespace-nowrap">
+                  <span className="shrink-0 inline-flex px-2 py-1 rounded-md text-[11px] font-semibold bg-border-subtle text-text-secondary whitespace-nowrap">
                     {cryptoStr} USDT Locked
                   </span>
                 )}
@@ -311,14 +311,14 @@ export function OrderPaymentScreen({
                     aria-expanded={escrowExpanded}
                     className="w-full flex items-center gap-2.5 p-3 text-left"
                   >
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-success/15">
-                      <Shield className="w-4 h-4 text-success" />
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-border-subtle">
+                      <Shield className="w-4 h-4 text-text-secondary" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-semibold text-text-primary">Escrow details</p>
                       <p className="text-[11px] text-text-tertiary">Verify the lock on-chain</p>
                     </div>
-                    <span className="flex items-center gap-1 text-[12px] font-medium text-success shrink-0">
+                    <span className="flex items-center gap-1 text-[12px] font-medium text-text-secondary shrink-0">
                       {escrowExpanded ? "Hide" : "Details"}
                       <ChevronDown
                         className={`w-4 h-4 transition-transform ${escrowExpanded ? "rotate-180" : ""}`}
@@ -412,8 +412,8 @@ export function OrderPaymentScreen({
         {/* Payment details */}
         <div className={`rounded-2xl overflow-hidden ${CARD}`}>
           <div className="p-4 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
-              <Landmark className="w-5 h-5 text-accent" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-border-subtle">
+              <Landmark className="w-5 h-5 text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-text-primary">Payment details</p>
@@ -426,20 +426,20 @@ export function OrderPaymentScreen({
               </p>
             </div>
             {paymentSent ? (
-              <div className="shrink-0 flex flex-col items-end px-2.5 py-1.5 rounded-lg bg-success/15">
-                <span className="text-[10px] text-success leading-none mb-0.5 flex items-center gap-1">
+              <div className="shrink-0 flex flex-col items-end px-2.5 py-1.5 rounded-lg bg-border-subtle">
+                <span className="text-[10px] text-text-secondary leading-none mb-0.5 flex items-center gap-1">
                   <Check className="w-3 h-3" /> Payment sent
                 </span>
-                <span className="text-[13px] font-bold tabular-nums leading-none text-success">
+                <span className="text-[13px] font-bold tabular-nums leading-none text-text-primary">
                   {order.paymentSentAt ? order.paymentSentAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—"}
                 </span>
               </div>
             ) : escrowLocked ? (
-              <div className={`shrink-0 flex flex-col items-end px-2.5 py-1.5 rounded-lg ${isUrgent ? "bg-error/15" : "bg-warning-dim"}`}>
+              <div className={`shrink-0 flex flex-col items-end px-2.5 py-1.5 rounded-lg ${isUrgent ? "bg-error/15" : "bg-surface-active"}`}>
                 <span className="text-[10px] text-text-tertiary leading-none mb-0.5 flex items-center gap-1">
                   <Clock className="w-3 h-3" /> Pay within
                 </span>
-                <span className={`text-[15px] font-bold tabular-nums leading-none ${isUrgent ? "text-error" : "text-warning"}`}>
+                <span className={`text-[15px] font-bold tabular-nums leading-none ${isUrgent ? "text-error" : "text-text-secondary"}`}>
                   {fmtCountdown(remainingSec)}
                 </span>
               </div>
@@ -483,11 +483,11 @@ export function OrderPaymentScreen({
                       onClick={() => onCopy(row.copyKey, row.copyValue ?? row.value)}
                       className="flex items-center gap-1.5 min-w-0 text-right"
                     >
-                      <span className={`text-[14px] font-medium truncate ${row.accent ? "text-accent font-semibold" : "text-text-primary"} ${row.mono ? "font-mono" : ""}`}>
+                      <span className={`text-[14px] font-medium truncate ${row.accent ? "text-text-primary font-semibold" : "text-text-primary"} ${row.mono ? "font-mono" : ""}`}>
                         {row.value}
                       </span>
                       {copiedField === row.copyKey ? (
-                        <Check className="w-3.5 h-3.5 text-success shrink-0" />
+                        <Check className="w-3.5 h-3.5 text-text-secondary shrink-0" />
                       ) : (
                         <Copy className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
                       )}
@@ -496,15 +496,15 @@ export function OrderPaymentScreen({
                 ))}
               </div>
               {paymentSent ? (
-                <div className="mx-4 mb-4 mt-1 rounded-xl px-3 py-2.5 flex items-start gap-2 bg-success/10 border border-success/30">
-                  <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
+                <div className="mx-4 mb-4 mt-1 rounded-xl px-3 py-2.5 flex items-start gap-2 bg-surface-active border border-border-medium">
+                  <Check className="w-4 h-4 text-text-secondary shrink-0 mt-0.5" />
                   <p className="text-[12px] text-text-secondary">
-                    <span className="font-semibold text-success">Your payment has been recorded.</span> We&apos;ll notify you once the seller confirms and releases your USDT.
+                    <span className="font-semibold text-text-primary">Your payment has been recorded.</span> We&apos;ll notify you once the seller confirms and releases your USDT.
                   </p>
                 </div>
               ) : (
-                <div className="mx-4 mb-4 mt-1 rounded-xl px-3 py-2.5 flex items-start gap-2 bg-warning-dim border border-warning-border">
-                  <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                <div className="mx-4 mb-4 mt-1 rounded-xl px-3 py-2.5 flex items-start gap-2 bg-surface-active border border-border-subtle">
+                  <AlertCircle className="w-4 h-4 text-text-secondary shrink-0 mt-0.5" />
                   <p className="text-[12px] text-text-secondary">Important: Send only the exact amount. Do not add any extra.</p>
                 </div>
               )}
@@ -522,16 +522,15 @@ export function OrderPaymentScreen({
             aria-label="View merchant profile"
           >
             <div className="relative shrink-0">
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-accent/15 flex items-center justify-center">
-                {order.merchant.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={order.merchant.avatarUrl} alt={order.merchant.name} className="w-full h-full object-cover" />
-                ) : (
-                  <Bot className="w-6 h-6 text-accent" />
-                )}
-              </div>
+              <UserAvatar
+                src={order.merchant.avatarUrl}
+                seed={order.merchant.name}
+                size={48}
+                alt={order.merchant.name}
+                className="rounded-full"
+              />
               {order.merchant.isOnline && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-surface-card" />
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-text-secondary border-2 border-surface-card" />
               )}
             </div>
             <div className="flex-1 min-w-0">
@@ -539,7 +538,7 @@ export function OrderPaymentScreen({
                 <p className="text-[15px] font-semibold text-text-primary truncate">{order.merchant.name}</p>
                 {order.merchant.rating > 0 && (
                   <span className="inline-flex items-center gap-0.5 text-[12px] font-medium text-text-secondary shrink-0">
-                    <Star className="w-3.5 h-3.5 text-warning fill-warning" />
+                    <Star className="w-3.5 h-3.5 text-text-secondary fill-text-tertiary" />
                     {formatCrypto(order.merchant.rating, { decimals: 1 })}
                   </span>
                 )}
@@ -567,8 +566,8 @@ export function OrderPaymentScreen({
         </div>
 
         {/* Tip */}
-        <div className="rounded-2xl p-4 flex gap-3 bg-warning-dim border border-warning-border">
-          <Lightbulb className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+        <div className="rounded-2xl p-4 flex gap-3 bg-surface-active border border-border-subtle">
+          <Lightbulb className="w-5 h-5 text-text-secondary shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="text-[14px] font-semibold text-text-primary mb-0.5">Order tip</p>
             <p className="text-[13px] text-text-secondary leading-snug">
@@ -587,8 +586,8 @@ export function OrderPaymentScreen({
             onClick={onViewOverview}
             className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover"
           >
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
-              <FileText className="w-5 h-5 text-accent" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-border-subtle">
+              <FileText className="w-5 h-5 text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-medium text-text-primary">Order Overview</p>
@@ -605,7 +604,7 @@ export function OrderPaymentScreen({
               whileTap={{ scale: 0.98 }}
               onClick={onMarkPaymentSent}
               disabled={!canPay}
-              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-text-primary text-surface-base disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {needsPayMethodPick ? "Select an account first" : "I have made the payment"}
@@ -620,7 +619,7 @@ export function OrderPaymentScreen({
               whileTap={{ scale: 0.98 }}
               onClick={onCancel}
               disabled={isCancelling}
-              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-foreground/[0.05] text-foreground/70 border border-foreground/[0.08] disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
               Cancel Order
@@ -671,7 +670,7 @@ function EscrowDetailRow({
         >
           <span className="truncate">{short}</span>
           {copiedField === copyKey ? (
-            <Check className="w-3 h-3 text-success shrink-0" strokeWidth={3} />
+            <Check className="w-3 h-3 text-text-secondary shrink-0" strokeWidth={3} />
           ) : (
             <Copy className="w-3 h-3 text-text-tertiary shrink-0" />
           )}
@@ -681,7 +680,7 @@ function EscrowDetailRow({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-success hover:opacity-80 transition-opacity shrink-0"
+            className="text-text-secondary hover:opacity-80 transition-opacity shrink-0"
             title="View on explorer"
           >
             <ExternalLink className="w-3 h-3" />
@@ -704,12 +703,12 @@ function ConfirmStep({
   return (
     <div className="flex flex-col items-center text-center min-w-0 px-1">
       {state === "done" ? (
-        <div className="w-7 h-7 rounded-full bg-success flex items-center justify-center shrink-0">
-          <Check className="w-4 h-4 text-accent-text" strokeWidth={3} />
+        <div className="w-7 h-7 rounded-full bg-text-primary flex items-center justify-center shrink-0">
+          <Check className="w-4 h-4 text-surface-base" strokeWidth={3} />
         </div>
       ) : state === "active" ? (
-        <div className="w-7 h-7 rounded-full bg-warning/15 border border-warning flex items-center justify-center shrink-0">
-          <Clock className="w-4 h-4 text-warning" />
+        <div className="w-7 h-7 rounded-full bg-surface-active border border-warning flex items-center justify-center shrink-0">
+          <Clock className="w-4 h-4 text-text-secondary" />
         </div>
       ) : (
         <div className="w-7 h-7 rounded-full border-2 border-border-medium shrink-0" />
@@ -717,7 +716,7 @@ function ConfirmStep({
       <p className={`text-[11px] font-medium mt-1.5 leading-tight ${state === "pending" ? "text-text-tertiary" : "text-text-primary"}`}>
         {label}
       </p>
-      <p className={`text-[10px] leading-tight ${state === "active" ? "text-warning" : "text-text-tertiary"}`}>{sub}</p>
+      <p className={`text-[10px] leading-tight ${state === "active" ? "text-text-secondary" : "text-text-tertiary"}`}>{sub}</p>
     </div>
   );
 }

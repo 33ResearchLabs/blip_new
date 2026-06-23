@@ -45,18 +45,19 @@ import { computeLimitReduction } from '@/lib/trust/reductions';
 const TRUST_LIMITS_ENABLED = process.env.TRUST_LIMITS_ENABLED === 'true';
 
 /**
- * Testnet / development bypass for the trade-limit guard. On Solana devnet
- * ("testnet") or in mock mode, the per-trade/daily caps block routine local
- * testing (a fresh or 'risky' account is capped at only a few dollars/trade),
- * so checkTradeAgainstLimits short-circuits to "allowed" — while STILL returning
- * the computed limits so the UI is unaffected. Hard-gated to non-production:
- * production runs on mainnet with mock off AND NODE_ENV=production, so all three
- * conditions make this false there and the real guard runs unchanged.
+ * Explicit opt-in bypass for the trade-limit guard. OFF by default, so the
+ * per-trade/daily gate enforces EVERYWHERE — production AND devnet/mock. This is
+ * the deliberate, verifiable default: with the flag unset the real guard runs.
+ *
+ * Set SKIP_TRADE_LIMITS=true (e.g. in .env.local) only when you need to test
+ * trade flows without the caps getting in the way — a fresh or 'risky' account
+ * is capped at only a few dollars/trade, which otherwise blocks routine local
+ * testing. When true, checkTradeAgainstLimits short-circuits to "allowed" while
+ * STILL returning the computed limits so the UI is unaffected.
+ *
+ * Server-side runtime env var (not NEXT_PUBLIC_) — read on every order create.
  */
-const SKIP_TRADE_LIMITS =
-  process.env.NODE_ENV !== 'production' &&
-  (process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet' ||
-    process.env.NEXT_PUBLIC_MOCK_MODE === 'true');
+const SKIP_TRADE_LIMITS = process.env.SKIP_TRADE_LIMITS === 'true';
 
 /**
  * Two KYC states only (full KYC not available yet):
@@ -546,6 +547,79 @@ export async function getLargestTrade24hUsd(
 }
 
 /**
+ * Shared walk for a rolling-24h cap reset, used by BOTH the user daily limit
+ * and the merchant per-side caps so the two can't drift apart. Given the
+ * in-window trades oldest-first — each tagged with the instant it leaves the
+ * window (ages_out_at = created_at + 24h) — returns:
+ *   - nextTradeableAt: when the running total first drops below capUsd (null if
+ *     already under the cap now — nothing to wait for);
+ *   - fullResetAt: when the newest trade ages out and usage returns to 0 (null
+ *     if there are no in-window trades).
+ */
+function resetTimesFromAgeOutRows(
+  rows: { amount: number; ages_out_at: string }[],
+  capUsd: number,
+): { nextTradeableAt: string | null; fullResetAt: string | null; headroomAfterResetUsd: number } {
+  if (rows.length === 0)
+    return { nextTradeableAt: null, fullResetAt: null, headroomAfterResetUsd: capUsd };
+  const fullResetAt = rows[rows.length - 1].ages_out_at;
+  let used = rows.reduce((sum, r) => sum + Number(r.amount), 0);
+  // headroomAfterResetUsd = the trading capacity that opens up at nextTradeableAt
+  // (cap minus whatever volume is STILL inside the window after that trade ages
+  // out). Already under the cap → full cap is available.
+  if (used < capUsd)
+    return { nextTradeableAt: null, fullResetAt, headroomAfterResetUsd: Math.max(0, capUsd - used) };
+  let nextTradeableAt: string | null = null;
+  let headroomAfterResetUsd = capUsd;
+  for (const r of rows) {
+    used -= Number(r.amount);
+    if (used < capUsd) {
+      nextTradeableAt = r.ages_out_at;
+      headroomAfterResetUsd = Math.max(0, capUsd - used);
+      break;
+    }
+  }
+  return { nextTradeableAt, fullResetAt, headroomAfterResetUsd };
+}
+
+/**
+ * Reset timeline for the (rolling-24h) daily limit. The daily cap is a rolling
+ * window — there is NO fixed midnight reset — so each past trade's volume drops
+ * off the count exactly 24h after it was made, returning headroom step by step.
+ * This computes the two moments the Trading Limits UI shows:
+ *   - nextTradeableAt: the earliest instant the trailing volume falls BELOW the
+ *     daily limit (i.e. when the actor can place a trade again). null when they
+ *     already have headroom now (nothing to wait for).
+ *   - fullResetAt: when the trailing volume reaches 0 (the newest in-window
+ *     trade ages out). null when there is no in-window volume.
+ * Uses the SAME window + status filter as getTrailing24hVolumeUsd so the times
+ * line up exactly with the "used / headroom" numbers shown alongside them.
+ */
+export async function getDailyLimitResetInfo(
+  actorId: string,
+  actorType: WaitlistActorType,
+  dailyLimitUsd: number,
+): Promise<{ nextTradeableAt: string | null; fullResetAt: string | null; headroomAfterResetUsd: number }> {
+  const actorCol =
+    actorType === 'merchant'
+      ? '(merchant_id = $1 OR buyer_merchant_id = $1)'
+      : 'user_id = $1';
+  // Oldest-first: this is the order trades age out of the window. Each row
+  // carries the exact instant it leaves the 24h window (created_at + 24h).
+  const rows = await query<{ amount: number; ages_out_at: string }>(
+    `SELECT crypto_amount AS amount,
+            (created_at + INTERVAL '24 hours') AS ages_out_at
+       FROM orders
+      WHERE ${actorCol}
+        AND status IN ('completed','accepted','escrowed','payment_sent')
+        AND created_at >= NOW() - INTERVAL '24 hours'
+   ORDER BY created_at ASC`,
+    [actorId],
+  );
+  return resetTimesFromAgeOutRows(rows, dailyLimitUsd);
+}
+
+/**
  * The merchant's trailing-24h USD volume, split by the side the merchant
  * played in each order. Crypto is a USD stablecoin (USDT ≈ $1), so
  * crypto_amount is the USD notional (see getTrailing24hVolumeUsd).
@@ -584,6 +658,36 @@ export async function getMerchant24hSideVolumeUsd(
 }
 
 /**
+ * Reset timeline for a merchant per-side (buy/sell) cap — the merchant analogue
+ * of getDailyLimitResetInfo. The buy/sell caps are rolling-24h cumulative, so
+ * this walks that side's in-window trades and returns when the side frees up
+ * (nextTradeableAt) and when it fully resets to 0 (fullResetAt). The per-side
+ * role filter mirrors getMerchant24hSideVolumeUsd EXACTLY so the times line up
+ * with the used/remaining figures shown beside them.
+ */
+export async function getMerchantSideResetInfo(
+  merchantId: string,
+  side: 'buy' | 'sell',
+  capUsd: number,
+): Promise<{ nextTradeableAt: string | null; fullResetAt: string | null; headroomAfterResetUsd: number }> {
+  const sideFilter =
+    side === 'buy'
+      ? `(buyer_merchant_id = $1 OR (merchant_id = $1 AND buyer_merchant_id IS NULL AND type = 'sell'))`
+      : `(merchant_id = $1 AND (buyer_merchant_id IS NOT NULL OR type = 'buy'))`;
+  const rows = await query<{ amount: number; ages_out_at: string }>(
+    `SELECT crypto_amount AS amount,
+            (created_at + INTERVAL '24 hours') AS ages_out_at
+       FROM orders
+      WHERE ${sideFilter}
+        AND status IN ('completed','accepted','escrowed','payment_sent')
+        AND created_at >= NOW() - INTERVAL '24 hours'
+   ORDER BY created_at ASC`,
+    [merchantId],
+  );
+  return resetTimesFromAgeOutRows(rows, capUsd);
+}
+
+/**
  * Check a proposed merchant trade against the per-side (buy/sell) cap.
  * Cumulative over 24h: blocks when existing side volume + this order would
  * exceed the cap. Called from the merchant order-create guard.
@@ -601,10 +705,10 @@ export async function checkMerchantSideLimit(args: {
   const limitUsd =
     args.side === 'buy' ? MERCHANT_SIDE_LIMITS.buyUsd : MERCHANT_SIDE_LIMITS.sellUsd;
 
-  // Testnet/dev (devnet or mock): never block merchant order creation on
-  // trade limits — mirrors checkTradeAgainstLimits. Gated on SKIP_TRADE_LIMITS
-  // (NODE_ENV !== 'production' AND devnet/mock), so it is a no-op in production
-  // and the real per-side cap below applies unchanged on mainnet.
+  // Opt-in bypass (SKIP_TRADE_LIMITS=true): never block merchant order creation
+  // on trade limits — mirrors checkTradeAgainstLimits. OFF by default, so the
+  // per-side cap below applies everywhere (production AND devnet) unless someone
+  // deliberately sets the flag to test without limits.
   if (SKIP_TRADE_LIMITS) {
     return { allowed: true, limitUsd, usedUsd: 0 };
   }
@@ -639,8 +743,9 @@ export async function checkTradeAgainstLimits(args: {
 }> {
   const limits = await getEffectiveLimits(args.actorId, args.actorType);
 
-  // Testnet/dev (devnet or mock mode): never block trades on limits — return the
-  // computed limits for display but allow the trade. No-op in production.
+  // Opt-in bypass (SKIP_TRADE_LIMITS=true): never block trades on limits —
+  // return the computed limits for display but allow the trade. OFF by default,
+  // so the gate below enforces everywhere (production AND devnet).
   if (SKIP_TRADE_LIMITS) {
     return { allowed: true, limits, trailing24hUsd: 0 };
   }

@@ -1982,7 +1982,7 @@ export const OrderDetailScreen = ({
                                         {/* Prominent identifier + copy */}
                                         <div className="flex items-start justify-between gap-2">
                                           <div className="min-w-0">
-                                            <p className="text-[12px] font-semibold text-accent">
+                                            <p className="text-[12px] font-semibold text-text-secondary">
                                               {typeLabel}
                                               {m.is_default ? " · Preferred" : ""}
                                             </p>
@@ -2896,8 +2896,16 @@ export const OrderDetailScreen = ({
               disabled={!activeOrder.merchant.name}
               className="flex items-center gap-3 text-left disabled:cursor-default"
             >
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-accent text-accent-text">
-                {(activeOrder.merchant.name || 'M').charAt(0)}
+              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center font-semibold bg-accent text-accent-text shrink-0">
+                {activeOrder.merchant.avatarUrl ? (
+                  <img
+                    src={activeOrder.merchant.avatarUrl}
+                    alt={activeOrder.merchant.name || ''}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  (activeOrder.merchant.name || 'M').charAt(0)
+                )}
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -3465,7 +3473,7 @@ export const OrderDetailScreen = ({
             >
               <div className="flex items-center justify-between p-4 border-b border-border-medium">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[14px] bg-accent/20 border border-accent/30 text-accent overflow-hidden shrink-0">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[14px] bg-surface-active border border-border-subtle text-text-secondary overflow-hidden shrink-0">
                     {activeOrder.merchant.avatarUrl ? (
                       <img src={activeOrder.merchant.avatarUrl} alt={activeOrder.merchant.name} className="w-full h-full object-cover" />
                     ) : (
@@ -3731,7 +3739,7 @@ export const OrderDetailScreen = ({
                         className={`flex ${msg.from === "me" ? "justify-end" : msg.from === "system" ? "justify-center" : "justify-start"}`}
                       >
                         <div
-                          className={`max-w-[80%] flex flex-col ${msg.from === "me" ? "items-end" : "items-start"}`}
+                          className={`max-w-[80%] min-w-0 flex flex-col ${msg.from === "me" ? "items-end" : "items-start"}`}
                         >
                           {msg.from !== "me" &&
                             msg.from !== "system" &&
@@ -3743,7 +3751,7 @@ export const OrderDetailScreen = ({
                           <div
                             className={`px-4 py-2 rounded-2xl break-words ${
                               msg.from === "me"
-                                ? "bg-accent text-accent-text text-[15px]"
+                                ? "bg-white text-black text-[15px]"
                                 : msg.from === "system"
                                   ? "bg-surface-active text-text-secondary text-[13px]"
                                   : "bg-surface-card text-text-primary text-[15px]"
@@ -3768,7 +3776,7 @@ export const OrderDetailScreen = ({
                             )}
                             {/* Timestamp + delivery status ticks */}
                             <div className={`flex items-center gap-1 mt-1 ${msg.from === "me" ? "justify-end" : ""}`}>
-                              <span className={`text-[10px] ${msg.from === "me" ? "text-accent-text/60" : "text-text-tertiary"}`}>
+                              <span className={`text-[10px] ${msg.from === "me" ? "text-black/50" : "text-text-tertiary"}`}>
                                 {msg.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                               </span>
                               {msg.from === "me" && (
@@ -3777,9 +3785,9 @@ export const OrderDetailScreen = ({
                                 ) : msg.status === "read" || msg.isRead ? (
                                   <CheckCheck className="w-3.5 h-3.5 text-info" />
                                 ) : msg.status === "delivered" ? (
-                                  <CheckCheck className="w-3.5 h-3.5 text-accent-text/60" />
+                                  <CheckCheck className="w-3.5 h-3.5 text-black/40" />
                                 ) : (
-                                  <Check className="w-3 h-3 text-accent-text/60" />
+                                  <Check className="w-3 h-3 text-surface-base/60" />
                                 )
                               )}
                             </div>
@@ -3802,7 +3810,7 @@ export const OrderDetailScreen = ({
                   .sort((a, b) => a.createdAt - b.createdAt)
                   .map((upload) => (
                     <div key={upload.tempId} className="flex justify-end">
-                      <div className="max-w-[80%] px-4 py-2 rounded-2xl bg-accent text-accent-text">
+                      <div className="max-w-[80%] min-w-0 px-4 py-2 rounded-2xl bg-text-primary text-surface-base">
                         <ImageMessageBubble
                           imageUrl={upload.localUrl}
                           caption={upload.caption || undefined}

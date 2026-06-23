@@ -19,6 +19,19 @@ export interface CoinTier {
   requiresKyc: number;
 }
 
+/**
+ * Rolling-24h cap reset times (no fixed midnight reset). nextTradeableAt: when
+ * usage first drops below the cap (= when trading reopens); null when there's
+ * headroom now. fullResetAt: when usage returns to 0; null when nothing's in
+ * the window. Shared by the user daily limit and the merchant buy/sell caps.
+ */
+export interface LimitReset {
+  nextTradeableAt?: string | null;
+  fullResetAt?: string | null;
+  /** Trading capacity (USD) that opens up at nextTradeableAt. */
+  headroomAfterResetUsd?: number;
+}
+
 export interface LimitsMe {
   effective?: {
     dailyUsd?: number;
@@ -32,10 +45,12 @@ export interface LimitsMe {
   trailing_24h_usd?: number;
   largest_trade_24h_usd?: number;
   headroom_usd?: number;
+  /** Rolling-24h daily-limit reset times (user side). See LimitReset. */
+  reset?: LimitReset;
   base?: { dailyUsd: number; perTradeUsd: number };
   tiers?: Record<string, CoinTier>;
-  buy?: { limitUsd: number; usedUsd: number } | null;
-  sell?: { limitUsd: number; usedUsd: number } | null;
+  buy?: { limitUsd: number; usedUsd: number; reset?: LimitReset } | null;
+  sell?: { limitUsd: number; usedUsd: number; reset?: LimitReset } | null;
   verifications?: { phone: boolean; liveness: boolean; x: boolean };
   reputation?: { tier: string | null; multiplier: number };
   unsuccessful_24h?: number;
