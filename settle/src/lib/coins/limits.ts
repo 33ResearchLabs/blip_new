@@ -496,6 +496,31 @@ export async function getTrailing24hVolumeUsd(
 }
 
 /**
+ * Most recent order timestamp for this actor across the statuses that consume
+ * the trading limit (same set as getTrailing24hVolumeUsd). Used to gate unstake:
+ * a staker can't pull their bond within 24h of using their (stake-boosted) limit.
+ */
+export async function getLastLimitOrderAt(
+  actorId: string,
+  actorType: WaitlistActorType,
+): Promise<Date | null> {
+  const actorCol =
+    actorType === 'merchant'
+      ? '(merchant_id = $1 OR buyer_merchant_id = $1)'
+      : 'user_id = $1';
+  const row = await queryOne<{ ts: Date }>(
+    `SELECT created_at AS ts
+       FROM orders
+      WHERE ${actorCol}
+        AND status IN ('completed','accepted','escrowed','payment_sent')
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [actorId],
+  );
+  return row?.ts ?? null;
+}
+
+/**
  * Count of unsuccessful orders (cancelled / disputed / expired) for this actor
  * in the trailing 24h. Drives the informational "limits may decrease" warning
  * on the Trading Limits page — DISPLAY ONLY, it does not change any limit.

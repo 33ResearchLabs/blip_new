@@ -79,9 +79,11 @@ export async function POST(request: NextRequest) {
 
       await client.query(
         `UPDATE staking_positions
-            SET principal = $3, accrued_rewards = $4, last_accrued_at = NOW(), updated_at = NOW()
+            SET principal = $3, accrued_rewards = $4,
+                staking_wallet_address = CASE WHEN $5 > 0 THEN $6 ELSE staking_wallet_address END,
+                last_accrued_at = NOW(), updated_at = NOW()
           WHERE account_type = $1 AND account_id = $2`,
-        [auth.actorType, auth.actorId, onchain, newAccrued],
+        [auth.actorType, auth.actorId, onchain, newAccrued, onchain, row.wallet_address],
       );
 
       const delta = onchain - oldPrincipal;

@@ -14,6 +14,134 @@
   ],
   "instructions": [
     {
+      "name": "charge",
+      "docs": [
+        "Charge a fee/subscription against a staker's bond — AUTHORITY ONLY. Debits",
+        "`amount` from the staker's stake to the treasury (the protocol authority's",
+        "token account). Distinct from `slash` so fees/subscriptions are accounted",
+        "separately from misconduct penalties. May reduce the stake below the",
+        "minimum (the staker tops up to keep their limit boost)."
+      ],
+      "discriminator": [
+        26,
+        55,
+        197,
+        209,
+        93,
+        77,
+        242,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "position.staker",
+                "account": "StakePosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "treasury_ata",
+          "docs": [
+            "Treasury (protocol authority's token account) — receives the fee."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "initialize_config",
       "docs": [
         "One-time setup (authority only). Creates the config + shared vault ATA."
@@ -210,6 +338,134 @@
       ]
     },
     {
+      "name": "slash",
+      "docs": [
+        "Slash a staker's bond — AUTHORITY ONLY (arbiter/compliance). Seizes up to",
+        "the full staked amount and sends it to `recipient_ata` (the wronged",
+        "counterparty's wallet, or the treasury). This is the protocol's recourse",
+        "when a merchant scams / loses a dispute. The authority key MUST be a",
+        "multisig in production — it can seize any active stake."
+      ],
+      "discriminator": [
+        204,
+        141,
+        18,
+        161,
+        8,
+        177,
+        92,
+        142
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "position.staker",
+                "account": "StakePosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "recipient_ata",
+          "docs": [
+            "Where seized funds go (victim's wallet or treasury) — authority's choice."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "stake",
       "docs": [
         "Stake USDT. The position's *total* must be >= min_stake. Each stake",
@@ -305,8 +561,10 @@
     {
       "name": "unstake",
       "docs": [
-        "Unstake USDT back to the staker. Blocked until the cooldown since the",
-        "last stake has elapsed (anti-gaming). Remaining must be 0 or >= min."
+        "Unstake USDT back to the staker. The full position unlocks LOCK_PERIOD",
+        "after the most recent stake; unstaking BEFORE that is allowed but charges",
+        "an EARLY_UNSTAKE_FEE_BPS (10%) penalty sent to the treasury (the protocol",
+        "authority's token account). Remaining must be 0 or >= min."
       ],
       "discriminator": [
         90,
@@ -413,6 +671,13 @@
           "writable": true
         },
         {
+          "name": "treasury_ata",
+          "docs": [
+            "Early-unstake fee destination — must be the protocol authority's token account."
+          ],
+          "writable": true
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
@@ -512,6 +777,32 @@
   ],
   "events": [
     {
+      "name": "ChargedEvent",
+      "discriminator": [
+        213,
+        1,
+        132,
+        33,
+        197,
+        244,
+        243,
+        6
+      ]
+    },
+    {
+      "name": "SlashedEvent",
+      "discriminator": [
+        153,
+        202,
+        240,
+        154,
+        125,
+        255,
+        19,
+        118
+      ]
+    },
+    {
       "name": "StakedEvent",
       "discriminator": [
         81,
@@ -597,6 +888,30 @@
   ],
   "types": [
     {
+      "name": "ChargedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "staker",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "remaining",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "InitializeConfigParams",
       "type": {
         "kind": "struct",
@@ -607,6 +922,34 @@
           },
           {
             "name": "unstake_cooldown",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlashedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "staker",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "remaining",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
             "type": "i64"
           }
         ]

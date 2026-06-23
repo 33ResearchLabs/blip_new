@@ -168,6 +168,19 @@ export function StakeUSDTView({ surfaces, onBack, onStaked, hideHeaderOnMobile, 
     }
     setSubmitting(true);
     try {
+      // Unstake gates (app-layer): 24h-since-last-order (Rule 5) + must use the
+      // original staking wallet (Rule 4; the on-chain program enforces this too).
+      if (mode === "unstake") {
+        const chkRes = await fetchWithAuth("/api/staking/unstake-check");
+        const chk = await chkRes.json().catch(() => null);
+        if (chkRes.ok && chk?.success) {
+          if (!chk.data.allowed) { setError(chk.data.reason || "Unstaking is locked right now."); return; }
+          if (chk.data.stakingWallet && wallet.walletAddress && chk.data.stakingWallet !== wallet.walletAddress) {
+            setError(`Reconnect the wallet you staked with (…${String(chk.data.stakingWallet).slice(-6)}) to unstake.`);
+            return;
+          }
+        }
+      }
       // 1) On-chain stake/unstake, signed by the wallet (USDT moves to/from the vault).
       if (mode === "stake") await wallet.stake(amountNum);
       else await wallet.unstake(amountNum);

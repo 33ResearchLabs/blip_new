@@ -15,6 +15,7 @@ import { useSolanaWallet } from '@/context/SolanaWalletContext';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useMobileDetect } from '@/hooks/useMobileDetect';
 import { hasMobileDeepLink, getAppStoreLink } from '@/lib/wallet/deepLinks';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 // Ultra-minimal theme configurations - NO colors, only subtle grays
 const THEMES = {
@@ -323,7 +324,17 @@ function WalletModalInner({
                   {/* Action Buttons */}
                   <div className="flex gap-3">
                     <button
-                      onClick={() => {
+                      onClick={async () => {
+                        // Block disconnect while a trade is in progress so the
+                        // user can't strand an escrow they must release/refund.
+                        try {
+                          const r = await fetchWithAuth('/api/orders/active-count');
+                          const j = await r.json().catch(() => null);
+                          if (r.ok && j?.success && (j.data?.active ?? 0) > 0) {
+                            alert(`You have ${j.data.active} active trade(s). Finish or cancel them before disconnecting your wallet.`);
+                            return;
+                          }
+                        } catch { /* if the check fails, fall through (don't hard-block) */ }
                         disconnect();
                         onClose();
                       }}

@@ -10,6 +10,7 @@ import {
   getUserByUsername,
   linkWalletToUser,
 } from '@/lib/db/repositories/users';
+import { getMerchantByWallet } from '@/lib/db/repositories/merchants';
 import { query, queryOne, transaction } from '@/lib/db';
 import crypto from 'crypto';
 import { verifyWalletAuthRequest } from '@/lib/auth/loginNonce';
@@ -96,6 +97,16 @@ export async function POST(request: NextRequest) {
       let needsUsername = false;
 
       if (!user) {
+        // Rule: a wallet already linked to a merchant account can't be claimed
+        // by a new user account. (getUserByWallet already makes a wallet map to a
+        // single user, so this guards the cross-account-type case.)
+        const ownedByMerchant = await getMerchantByWallet(wallet_address);
+        if (ownedByMerchant) {
+          return NextResponse.json(
+            { success: false, error: 'This wallet is already linked to a merchant account and cannot be used for a user account.' },
+            { status: 409 },
+          );
+        }
         // Create new user without username (will be set later)
         user = await createUser({
           wallet_address,

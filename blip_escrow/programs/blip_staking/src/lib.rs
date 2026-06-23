@@ -103,29 +103,43 @@ pub mod blip_staking {
         Ok(())
     }
 
-    /// Unstake USDT back to the staker. Blocked until the cooldown since the
-    /// last stake has elapsed (anti-gaming). Remaining must be 0 or >= min.
+    /// Unstake USDT back to the staker. The full position unlocks LOCK_PERIOD
+    /// after the most recent stake; unstaking BEFORE that is allowed but charges
+    /// an EARLY_UNSTAKE_FEE_BPS (10%) penalty sent to the treasury (the protocol
+    /// authority's token account). Remaining must be 0 or >= min.
     pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
         let cfg = &mut ctx.accounts.config;
         let pos = &mut ctx.accounts.position;
         let now = Clock::get()?.unix_timestamp;
 
         require!(amount > 0 && amount <= pos.amount, StakeError::InvalidAmount);
-        let unlock_at = pos
-            .last_stake_at
-            .checked_add(cfg.unstake_cooldown)
-            .ok_or(StakeError::Overflow)?;
-        require!(now >= unlock_at, StakeError::CooldownActive);
-
         let remaining = pos.amount - amount;
         require!(
             remaining == 0 || remaining >= cfg.min_stake,
             StakeError::WouldLeaveDust
         );
 
-        // Transfer out of the vault, signed by the vault-authority PDA.
+        // Early-unstake penalty: 0 once LOCK_PERIOD has elapsed since the last
+        // stake, otherwise 10% of the withdrawn amount.
+        let unlocked_at = pos
+            .last_stake_at
+            .checked_add(LOCK_PERIOD_SECS)
+            .ok_or(StakeError::Overflow)?;
+        let fee: u64 = if now >= unlocked_at {
+            0
+        } else {
+            ((amount as u128)
+                .checked_mul(EARLY_UNSTAKE_FEE_BPS as u128)
+                .ok_or(StakeError::Overflow)?
+                / 10_000) as u64
+        };
+        let payout = amount.checked_sub(fee).ok_or(StakeError::Overflow)?;
+
+        // Vault-authority PDA signer.
         let bump = [cfg.vault_authority_bump];
         let seeds: &[&[u8]] = &[VAULT_AUTHORITY_SEED, &bump];
+
+        // Payout to staker.
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -136,14 +150,111 @@ pub mod blip_staking {
                 },
                 &[seeds],
             ),
-            amount,
+            payout,
         )?;
+
+        // Early-unstake fee to treasury (authority's token account).
+        if fee > 0 {
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.vault.to_account_info(),
+                        to: ctx.accounts.treasury_ata.to_account_info(),
+                        authority: ctx.accounts.vault_authority.to_account_info(),
+                    },
+                    &[seeds],
+                ),
+                fee,
+            )?;
+        }
 
         pos.amount = remaining;
         cfg.total_staked = cfg.total_staked.checked_sub(amount).ok_or(StakeError::Overflow)?;
 
         emit!(UnstakedEvent { staker: pos.staker, amount, total: remaining, timestamp: now });
-        msg!("unstaked {}, remaining={}", amount, remaining);
+        msg!("unstaked {} (fee {}), remaining={}", amount, fee, remaining);
+        Ok(())
+    }
+
+    /// Slash a staker's bond — AUTHORITY ONLY (arbiter/compliance). Seizes up to
+    /// the full staked amount and sends it to `recipient_ata` (the wronged
+    /// counterparty's wallet, or the treasury). This is the protocol's recourse
+    /// when a merchant scams / loses a dispute. The authority key MUST be a
+    /// multisig in production — it can seize any active stake.
+    pub fn slash(ctx: Context<Slash>, amount: u64) -> Result<()> {
+        let cfg = &mut ctx.accounts.config;
+        let pos = &mut ctx.accounts.position;
+        let now = Clock::get()?.unix_timestamp;
+
+        require!(amount > 0 && amount <= pos.amount, StakeError::InvalidAmount);
+
+        let bump = [cfg.vault_authority_bump];
+        let seeds: &[&[u8]] = &[VAULT_AUTHORITY_SEED, &bump];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.recipient_ata.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount,
+        )?;
+
+        pos.amount = pos.amount.checked_sub(amount).ok_or(StakeError::Overflow)?;
+        cfg.total_staked = cfg.total_staked.checked_sub(amount).ok_or(StakeError::Overflow)?;
+
+        emit!(SlashedEvent {
+            staker: pos.staker,
+            recipient: ctx.accounts.recipient_ata.key(),
+            amount,
+            remaining: pos.amount,
+            timestamp: now,
+        });
+        msg!("SLASHED {} from {} -> {}", amount, pos.staker, ctx.accounts.recipient_ata.key());
+        Ok(())
+    }
+
+    /// Charge a fee/subscription against a staker's bond — AUTHORITY ONLY. Debits
+    /// `amount` from the staker's stake to the treasury (the protocol authority's
+    /// token account). Distinct from `slash` so fees/subscriptions are accounted
+    /// separately from misconduct penalties. May reduce the stake below the
+    /// minimum (the staker tops up to keep their limit boost).
+    pub fn charge(ctx: Context<Charge>, amount: u64) -> Result<()> {
+        let cfg = &mut ctx.accounts.config;
+        let pos = &mut ctx.accounts.position;
+        let now = Clock::get()?.unix_timestamp;
+
+        require!(amount > 0 && amount <= pos.amount, StakeError::InvalidAmount);
+
+        let bump = [cfg.vault_authority_bump];
+        let seeds: &[&[u8]] = &[VAULT_AUTHORITY_SEED, &bump];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.treasury_ata.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount,
+        )?;
+
+        pos.amount = pos.amount.checked_sub(amount).ok_or(StakeError::Overflow)?;
+        cfg.total_staked = cfg.total_staked.checked_sub(amount).ok_or(StakeError::Overflow)?;
+
+        emit!(ChargedEvent {
+            staker: pos.staker,
+            amount,
+            remaining: pos.amount,
+            timestamp: now,
+        });
+        msg!("CHARGED {} from {} -> treasury", amount, pos.staker);
         Ok(())
     }
 }
@@ -151,6 +262,11 @@ pub mod blip_staking {
 pub const CONFIG_SEED: &[u8] = b"stake-config";
 pub const POSITION_SEED: &[u8] = b"stake";
 pub const VAULT_AUTHORITY_SEED: &[u8] = b"stake-vault-authority";
+
+/// Lock period: the full stake unlocks 30 days after the most recent stake.
+pub const LOCK_PERIOD_SECS: i64 = 30 * 24 * 60 * 60;
+/// Early-unstake fee (bps) charged when unstaking before LOCK_PERIOD_SECS.
+pub const EARLY_UNSTAKE_FEE_BPS: u64 = 1_000; // 10%
 
 #[account]
 pub struct StakeConfig {
@@ -274,6 +390,63 @@ pub struct Unstake<'info> {
         constraint = staker_ata.mint == config.mint @ StakeError::InvalidMint
     )]
     pub staker_ata: Box<Account<'info, TokenAccount>>,
+    /// Early-unstake fee destination — must be the protocol authority's token account.
+    #[account(
+        mut,
+        constraint = treasury_ata.owner == config.authority @ StakeError::Unauthorized,
+        constraint = treasury_ata.mint == config.mint @ StakeError::InvalidMint
+    )]
+    pub treasury_ata: Box<Account<'info, TokenAccount>>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct Slash<'info> {
+    #[account(constraint = authority.key() == config.authority @ StakeError::Unauthorized)]
+    pub authority: Signer<'info>,
+    #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, StakeConfig>>,
+    #[account(
+        mut,
+        seeds = [POSITION_SEED, position.staker.as_ref()],
+        bump = position.bump
+    )]
+    pub position: Box<Account<'info, StakePosition>>,
+    /// CHECK: PDA that owns the vault
+    #[account(seeds = [VAULT_AUTHORITY_SEED], bump = config.vault_authority_bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(mut, constraint = vault.key() == config.vault @ StakeError::InvalidVault)]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    /// Where seized funds go (victim's wallet or treasury) — authority's choice.
+    #[account(mut, constraint = recipient_ata.mint == config.mint @ StakeError::InvalidMint)]
+    pub recipient_ata: Box<Account<'info, TokenAccount>>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct Charge<'info> {
+    #[account(constraint = authority.key() == config.authority @ StakeError::Unauthorized)]
+    pub authority: Signer<'info>,
+    #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, StakeConfig>>,
+    #[account(
+        mut,
+        seeds = [POSITION_SEED, position.staker.as_ref()],
+        bump = position.bump
+    )]
+    pub position: Box<Account<'info, StakePosition>>,
+    /// CHECK: PDA that owns the vault
+    #[account(seeds = [VAULT_AUTHORITY_SEED], bump = config.vault_authority_bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(mut, constraint = vault.key() == config.vault @ StakeError::InvalidVault)]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    /// Treasury (protocol authority's token account) — receives the fee.
+    #[account(
+        mut,
+        constraint = treasury_ata.owner == config.authority @ StakeError::Unauthorized,
+        constraint = treasury_ata.mint == config.mint @ StakeError::InvalidMint
+    )]
+    pub treasury_ata: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -289,6 +462,21 @@ pub struct UnstakedEvent {
     pub staker: Pubkey,
     pub amount: u64,
     pub total: u64,
+    pub timestamp: i64,
+}
+#[event]
+pub struct SlashedEvent {
+    pub staker: Pubkey,
+    pub recipient: Pubkey,
+    pub amount: u64,
+    pub remaining: u64,
+    pub timestamp: i64,
+}
+#[event]
+pub struct ChargedEvent {
+    pub staker: Pubkey,
+    pub amount: u64,
+    pub remaining: u64,
     pub timestamp: i64,
 }
 

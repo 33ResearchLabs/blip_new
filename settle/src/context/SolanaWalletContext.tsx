@@ -32,7 +32,7 @@ import { getPrimaryEndpoint, getHealthyEndpoint } from '@/lib/solana/rpc';
 import { DEVNET_WS_ENDPOINT } from '@/lib/solana/v2/config';
 import { logger } from '@/lib/logger';
 import { sendAndConfirmSafe } from '@/lib/solana/safeTransaction';
-import { buildStakeInstruction, buildUnstakeInstruction } from '@/lib/solana/staking';
+import { buildStakeInstruction, buildUnstakeInstruction, readStakeAuthority } from '@/lib/solana/staking';
 import { PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
@@ -1754,10 +1754,13 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
   const unstake = useCallback(async (amountUsdt: number): Promise<{ signature: string }> => {
     if (!publicKey || !signTransaction) throw new Error('Wallet not connected');
+    const treasuryOwner = await readStakeAuthority(connection);
+    if (!treasuryOwner) throw new Error('Staking not initialized');
     const ix = buildUnstakeInstruction({
       staker: publicKey,
       amountBaseUnits: BigInt(Math.round(amountUsdt * 1_000_000)),
       mint: USDT_MINT,
+      treasuryOwner,
     });
     const r = await sendAndConfirmSafe({
       connection, feePayer: publicKey, signTransaction,
