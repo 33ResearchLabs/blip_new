@@ -124,8 +124,8 @@ export function SellPaymentTracker({
         title: "Payment marked as sent",
         sub: "Verify the funds landed in your account, then release the USDT.",
         icon: Clock,
-        bg: "bg-accent/15",
-        fg: "text-accent",
+        bg: "bg-border-subtle",
+        fg: "text-text-secondary",
       }
     : {
         title: "Merchant accepted your order!",
@@ -227,8 +227,8 @@ export function SellPaymentTracker({
             transition={{ delay: 0.03 }}
             className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
           >
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-accent/15">
-              <ShieldCheck className="w-6 h-6 text-accent" />
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-border-subtle">
+              <ShieldCheck className="w-6 h-6 text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-text-primary">Escrow locked</p>
@@ -236,9 +236,9 @@ export function SellPaymentTracker({
                 Your {cryptoStr} USDT is locked securely in escrow. You will receive the payment once the buyer pays.
               </p>
             </div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/15 shrink-0 self-start">
-              <Lock className="w-3 h-3 text-accent" />
-              <span className="text-[11px] font-semibold text-accent">SECURED</span>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-border-subtle shrink-0 self-start">
+              <Lock className="w-3 h-3 text-text-secondary" />
+              <span className="text-[11px] font-semibold text-text-secondary">SECURED</span>
             </div>
           </motion.div>
 
@@ -309,8 +309,8 @@ export function SellPaymentTracker({
             className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
           >
             <button onClick={onViewProfile} className="flex items-center gap-3 flex-1 min-w-0 text-left">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-accent/15 relative">
-                <Store className="w-5 h-5 text-accent" />
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-border-subtle relative">
+                <Store className="w-5 h-5 text-text-secondary" />
                 {merchantOnline && (
                   <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-surface-card" />
                 )}
@@ -350,8 +350,8 @@ export function SellPaymentTracker({
               onClick={() => setShowOverview(true)}
               className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover"
             >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
-                <FileText className="w-5 h-5 text-accent" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-border-subtle">
+                <FileText className="w-5 h-5 text-text-secondary" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-medium text-text-primary">Order Overview</p>

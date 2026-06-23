@@ -51,22 +51,19 @@ function statusMeta(status: string): { label: string; tone: Tone; progressText: 
   return { label, tone: "accent", progressText: "In progress" };
 }
 
+// `accent` (the in-progress tone) is neutralized to monochrome — text-accent is
+// yellow in user-light mode. text-text-* / border-subtle resolve correctly in
+// both light and dark scopes. Semantic tones (success/error/warning) keep their
+// meaning-bearing colors.
 const TONE_TEXT: Record<Tone, string> = {
-  accent: "text-accent",
+  accent: "text-text-secondary",
   success: "text-success",
   error: "text-error",
   warning: "text-warning",
 };
 
-const TONE_DOT: Record<Tone, string> = {
-  accent: "bg-accent",
-  success: "bg-success",
-  error: "bg-error",
-  warning: "bg-warning",
-};
-
 const TONE_PILL: Record<Tone, string> = {
-  accent: "bg-accent/15 text-accent",
+  accent: "bg-border-subtle text-text-secondary",
   success: "bg-success/15 text-success",
   error: "bg-error/15 text-error",
   warning: "bg-warning/15 text-warning",
@@ -147,9 +144,6 @@ export function OrderOverviewScreen({
   const s = (status || "").toLowerCase();
   const meta = statusMeta(s);
   const canCancel = CANCELLABLE.has(s);
-  // Once an order is cancelled/expired there's no live progress — hide the
-  // "In progress"-style progress badge (the pill + the right-hand status block).
-  const isCancelledState = s === "cancelled" || s === "expired";
   const sym = fiatSymbol(fiatCode);
 
   // Tap-to-copy for the Order ID.
@@ -195,25 +189,16 @@ export function OrderOverviewScreen({
           className={`rounded-2xl p-3.5 flex items-start justify-between gap-3 ${CARD}`}
         >
           <div className="min-w-0">
-            <p className="text-[20px] font-bold text-text-primary mb-0.5">
+            <p className="text-[20px] font-bold text-text-primary">
               {typeLabel} {cryptoStr}
             </p>
-            <div className={`flex items-center gap-2 ${isCancelledState ? "" : "mb-1.5"}`}>
-              <span className={`w-2 h-2 rounded-full ${TONE_DOT[meta.tone]}`} />
-              <span className={`text-[15px] font-semibold ${TONE_TEXT[meta.tone]}`}>{meta.label}</span>
-            </div>
-            {!isCancelledState && (
-              <span className={`inline-flex px-2.5 py-1 rounded-full text-[12px] font-medium ${TONE_PILL[meta.tone]}`}>
-                {meta.progressText}
-              </span>
-            )}
           </div>
-          {!isCancelledState && (
-            <div className="text-right shrink-0">
-              <p className="text-[12px] text-text-tertiary mb-1">Order Status</p>
-              <p className={`text-[14px] font-semibold ${TONE_TEXT[meta.tone]}`}>{meta.progressText}</p>
-            </div>
-          )}
+          <div className="text-right shrink-0">
+            <p className="text-[12px] text-text-tertiary mb-1.5">Order Status</p>
+            <span className={`inline-flex px-2.5 py-1 rounded-full text-[12px] font-medium ${TONE_PILL[meta.tone]}`}>
+              {meta.progressText}
+            </span>
+          </div>
         </motion.div>
 
         {/* Order Details */}
@@ -267,7 +252,7 @@ export function OrderOverviewScreen({
         </Section>
 
         {/* Important Information */}
-        <div className="rounded-2xl p-3.5 bg-warning-dim border border-warning-border">
+        <div className="rounded-2xl p-3.5 bg-surface-active border border-border-medium">
           <p className="text-[14px] font-semibold text-text-primary mb-1.5">Important Information</p>
           <ul className="space-y-1.5">
             {[

@@ -101,26 +101,26 @@ export function OrderCompletedScreen({
         <motion.div
           initial={{ scale: 0.96, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="rounded-2xl p-6 text-center bg-surface-active border border-border-subtle"
+          className="rounded-2xl p-6 text-center bg-surface-active border border-border-medium"
         >
           <div className="relative inline-flex items-center justify-center mb-4">
-            <Sparkles className="w-4 h-4 text-accent absolute -left-5 -top-1" />
-            <Sparkles className="w-3 h-3 text-accent absolute -right-5 top-1" />
+            <Sparkles className="w-4 h-4 text-text-tertiary absolute -left-5 -top-1" />
+            <Sparkles className="w-3 h-3 text-text-tertiary absolute -right-5 top-1" />
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.1 }}
-              className="w-16 h-16 rounded-full bg-accent flex items-center justify-center"
+              className="w-16 h-16 rounded-full bg-text-primary flex items-center justify-center"
             >
-              <Check className="w-8 h-8 text-accent-text" strokeWidth={3} />
+              <Check className="w-8 h-8 text-surface-base" strokeWidth={3} />
             </motion.div>
           </div>
           <p className="text-[24px] font-bold text-text-primary mb-1">{cryptoStr} USDT Released</p>
           <p className="text-[14px] text-text-secondary leading-snug px-2">
             The seller has confirmed the payment and the crypto has been released to you.
           </p>
-          <div className="mt-4 pt-4 border-t border-border-subtle/60 flex items-center justify-center gap-2 text-[13px] text-text-secondary">
-            <Clock className="w-4 h-4 text-accent" />
+          <div className="mt-4 pt-4 border-t border-border-medium flex items-center justify-center gap-2 text-[13px] text-text-secondary">
+            <Clock className="w-4 h-4 text-text-secondary" />
             Completed at {completedStr.replace(",", " •")}
           </div>
         </motion.div>
@@ -128,8 +128,8 @@ export function OrderCompletedScreen({
         {/* Order Details */}
         <div className={`rounded-2xl ${CARD}`}>
           <div className="flex items-center gap-2 px-4 pt-4 pb-1">
-            <div className="w-7 h-7 rounded-lg bg-accent/15 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4 text-accent" />
+            <div className="w-7 h-7 rounded-lg bg-border-subtle flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4 text-text-secondary" />
             </div>
             <p className="text-[15px] font-semibold text-text-primary">Order Details</p>
           </div>
@@ -145,12 +145,12 @@ export function OrderCompletedScreen({
         {/* Merchant */}
         <div className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}>
           <div className="relative shrink-0">
-            <div className="w-12 h-12 rounded-full overflow-hidden bg-accent/15 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full overflow-hidden bg-border-subtle flex items-center justify-center">
               {order.merchant.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={order.merchant.avatarUrl} alt={order.merchant.name} className="w-full h-full object-cover" />
               ) : (
-                <Bot className="w-6 h-6 text-accent" />
+                <Bot className="w-6 h-6 text-text-secondary" />
               )}
             </div>
             {order.merchant.isOnline && (
@@ -162,6 +162,7 @@ export function OrderCompletedScreen({
               <p className="text-[15px] font-semibold text-text-primary truncate">{order.merchant.name}</p>
               {order.merchant.rating > 0 && (
                 <span className="inline-flex items-center gap-0.5 text-[12px] font-medium text-text-secondary shrink-0">
+                  <Star className="w-3.5 h-3.5 text-text-secondary fill-text-secondary" />
                   <Star className="w-3.5 h-3.5 text-text-secondary fill-text-secondary" />
                   {formatCrypto(order.merchant.rating, { decimals: 1 })}
                 </span>
@@ -204,6 +205,7 @@ export function OrderCompletedScreen({
               >
                 <Star
                   className={`w-9 h-9 ${star <= displayRating ? "text-text-secondary fill-text-secondary" : "text-border-medium"}`}
+                  className={`w-9 h-9 ${star <= displayRating ? "text-text-secondary fill-text-secondary" : "text-border-medium"}`}
                 />
               </button>
             ))}
@@ -230,7 +232,7 @@ export function OrderCompletedScreen({
                 type="button"
                 disabled={displayRating < 1}
                 onClick={onSubmitReview}
-                className="w-full mt-3 py-3 rounded-xl text-[14px] font-semibold bg-accent text-accent-text disabled:opacity-40 disabled:cursor-default"
+                className="w-full mt-3 py-3 rounded-xl text-[14px] font-semibold bg-text-primary text-surface-base disabled:opacity-40 disabled:cursor-default"
               >
                 Submit Rating
               </motion.button>
@@ -256,8 +258,8 @@ export function OrderCompletedScreen({
             onClick={onViewOverview}
             className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover"
           >
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
-              <FileText className="w-5 h-5 text-accent" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-border-subtle">
+              <FileText className="w-5 h-5 text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-medium text-text-primary">Order Overview</p>
@@ -271,7 +273,7 @@ export function OrderCompletedScreen({
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={onBackHome}
-          className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text"
+          className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-text-primary text-surface-base"
         >
           Back to Home
         </motion.button>

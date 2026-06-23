@@ -39,7 +39,7 @@ const CARD = "bg-surface-card border border-border-subtle";
 export type Tone = "accent" | "success" | "error" | "warning";
 
 const TONE_CLASSES: Record<Tone, { bg: string; text: string }> = {
-  accent: { bg: "bg-accent/15", text: "text-accent" },
+  accent: { bg: "bg-border-subtle", text: "text-text-secondary" },
   success: { bg: "bg-success/15", text: "text-success" },
   error: { bg: "bg-error/15", text: "text-error" },
   warning: { bg: "bg-warning/15", text: "text-warning" },
@@ -235,8 +235,8 @@ export function WaitingTracker({
               transition={{ delay: 0.03 }}
               className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
             >
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-accent/15">
-                <ShieldCheck className="w-6 h-6 text-accent" />
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-border-subtle">
+                <ShieldCheck className="w-6 h-6 text-text-secondary" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-semibold text-text-primary">Escrow locked</p>
@@ -246,15 +246,15 @@ export function WaitingTracker({
                     href={escrow.txHref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 mt-1 text-[12px] font-semibold text-accent"
+                    className="inline-flex items-center gap-1 mt-1 text-[12px] font-semibold text-text-secondary"
                   >
                     View transaction <ExternalLink className="w-3 h-3" />
                   </a>
                 )}
               </div>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/15 shrink-0 self-start">
-                <Lock className="w-3 h-3 text-accent" />
-                <span className="text-[11px] font-semibold text-accent">SECURED</span>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-border-subtle shrink-0 self-start">
+                <Lock className="w-3 h-3 text-text-secondary" />
+                <span className="text-[11px] font-semibold text-text-secondary">SECURED</span>
               </div>
             </motion.div>
           )}
@@ -350,8 +350,8 @@ export function WaitingTracker({
               onClick={onOpenOverview}
               className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-surface-hover"
             >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-accent/15">
-                <FileText className="w-5 h-5 text-accent" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-border-subtle">
+                <FileText className="w-5 h-5 text-text-secondary" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-medium text-text-primary">Order Overview</p>
