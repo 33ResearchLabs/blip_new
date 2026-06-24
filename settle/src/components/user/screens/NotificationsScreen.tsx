@@ -23,6 +23,7 @@ interface Notification {
   message: string;
   timestamp: number;
   read: boolean;
+  orderId?: string;
 }
 
 // Icons use the semantic tokens (success / warning / error / info) plus the
@@ -74,6 +75,8 @@ export interface NotificationsScreenProps {
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  /** Opens the order detail screen for a notification tied to an order. */
+  onOpenOrder?: (orderId: string) => void;
   unreadCount: number;
   maxW: string;
   hideBottomNav?: boolean;
@@ -87,6 +90,7 @@ export const NotificationsScreen = ({
   notifications,
   onMarkRead,
   onMarkAllRead,
+  onOpenOrder,
   unreadCount,
   maxW,
   hideBottomNav = false,
@@ -200,7 +204,10 @@ export const NotificationsScreen = ({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => onMarkRead(notif.id)}
+                onClick={() => {
+                  if (!notif.read) onMarkRead(notif.id);
+                  if (notif.orderId) onOpenOrder?.(notif.orderId);
+                }}
                 className={`w-full rounded-[18px] p-3.5 flex items-start gap-3 text-left border ${
                   notif.read
                     ? 'bg-surface-card border-border-subtle'
