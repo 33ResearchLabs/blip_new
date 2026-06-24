@@ -70,7 +70,6 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
   const isBuy = data.order_type === 'buy';
   const effectiveStatus = currentStatus || data.status || '';
   const statusStyle = STATUS_STYLES[effectiveStatus] || STATUS_STYLES.pending;
-  const isCompleted = effectiveStatus === 'completed';
   const isCancelled = effectiveStatus === 'cancelled';
   const isExpired = effectiveStatus === 'expired';
 
@@ -97,7 +96,6 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
     <div className={`${t.card} rounded-xl overflow-hidden`}>
       {/* Header */}
       <div className={`px-4 py-3 border-b flex items-center justify-between ${
-        isCompleted ? 'bg-emerald-500/10 border-emerald-500/20' :
         isCancelled ? 'bg-red-500/10 border-red-500/20' :
         isExpired ? 'bg-zinc-500/10 border-zinc-500/20' :
         t.headerDefault

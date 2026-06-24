@@ -63,8 +63,8 @@ export function SupportBubbleInline({ actorType, actorId }: SupportBubbleInlineP
   return (
     <div className="flex flex-col h-full bg-[var(--color-bg-secondary)]">
       <div className="shrink-0 px-5 py-4 border-b border-border flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-          <MessageCircle className="w-4 h-4 text-primary" />
+        <div className="w-9 h-9 rounded-full bg-[var(--color-bg-tertiary)] flex items-center justify-center shrink-0">
+          <MessageCircle className="w-4 h-4 text-foreground" />
         </div>
         <div>
           <p className="text-sm font-semibold">Blip Support</p>
@@ -110,7 +110,7 @@ export function SupportBubbleInline({ actorType, actorId }: SupportBubbleInlineP
           />
           {wsStatus === 'connecting'
             ? <Loader2 className="w-4 h-4 text-muted animate-spin" />
-            : <button onClick={send} disabled={!input.trim() || wsStatus !== 'connected'} className="text-primary disabled:opacity-30"><Send className="w-4 h-4" /></button>
+            : <button onClick={send} disabled={!input.trim() || wsStatus !== 'connected'} className="text-foreground disabled:opacity-30"><Send className="w-4 h-4" /></button>
           }
         </div>
       </div>
