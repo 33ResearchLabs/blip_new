@@ -45,31 +45,46 @@ export function useMerchantConversations() {
   const [totalUnread, setTotalUnread] = useState(0);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
 
-  const convAbortRef = useRef<AbortController | null>(null);
+  // Monotonic request id. Every fetch tags itself; only the response from the
+  // most-recently-started fetch is allowed to write state. This replaces the
+  // old abort-on-every-call approach, which cancelled in-flight requests and
+  // let whichever stale/empty response resolved last win — blanking the inbox
+  // even after a full payload had already arrived. We no longer abort, so the
+  // overlapping calls (mount + retry + poll + Pusher) all complete and only
+  // the newest one's result renders.
+  const reqSeqRef = useRef(0);
 
   const fetchOrderConversations = useCallback(async () => {
     if (!merchantId) return;
-    convAbortRef.current?.abort();
-    const controller = new AbortController();
-    convAbortRef.current = controller;
+    const seq = ++reqSeqRef.current;
 
     setIsLoadingConversations(true);
     try {
       const res = await fetchWithAuth(
-        `/api/merchant/messages?merchant_id=${merchantId}&limit=50`,
-        { signal: controller.signal }
+        `/api/merchant/messages?merchant_id=${merchantId}&limit=50`
       );
+      // Superseded by a newer fetch — discard this stale response.
+      if (seq !== reqSeqRef.current) return;
+      // Real failure (not supersession): leave the list untouched so the
+      // safety-net retry / poll re-fires instead of swallowing it silently.
       if (!res.ok) return;
       const data = await res.json();
+      if (seq !== reqSeqRef.current) return;
       if (data.success) {
-        setOrderConversations(data.data.conversations || []);
+        const next: OrderConversation[] = data.data.conversations || [];
+        // Never let an empty response wipe an already-populated inbox: during
+        // the load burst, slower/filtered responses can come back empty. Only
+        // accept an empty list when we genuinely have none yet (first load).
+        setOrderConversations(prev =>
+          next.length === 0 && prev.length > 0 ? prev : next
+        );
         setTotalUnread(data.data.totalUnread || 0);
       }
     } catch (error) {
       if ((error as Error).name === 'AbortError') return;
       console.error('Failed to fetch order conversations:', error);
     } finally {
-      if (!controller.signal.aborted) setIsLoadingConversations(false);
+      if (seq === reqSeqRef.current) setIsLoadingConversations(false);
     }
   }, [merchantId]);
 
@@ -96,7 +111,10 @@ export function useMerchantConversations() {
   //
   // Re-fire the fetch the moment the session token becomes present AND the
   // inbox is still empty. Falls back to a 2s timer for edge cases where
-  // sessionToken doesn't observably transition. Capped at 2 retries.
+  // sessionToken doesn't observably transition. Now that overlapping fetches
+  // no longer cancel each other (see reqSeqRef above), these retries are cheap
+  // and safe, so the cap is raised to cover slow prod cold-starts where the
+  // first few attempts can land before data/auth is fully ready.
   const sessionTokenPresent = useMerchantStore((s) => !!s.sessionToken);
   const retryCountRef = useRef(0);
   useEffect(() => {
@@ -108,7 +126,7 @@ export function useMerchantConversations() {
       retryCountRef.current = 0;
       return;
     }
-    if (retryCountRef.current >= 2) return;
+    if (retryCountRef.current >= 5) return;
     const delay = sessionTokenPresent ? 50 : 2000;
     const timer = setTimeout(() => {
       retryCountRef.current += 1;
