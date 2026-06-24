@@ -302,7 +302,7 @@ export default function WaitlistDashboardPage() {
         actor={actor}
       />
 
-      <main id="dash-top" className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4 pb-24 md:pb-4 relative z-10 lg:min-h-[calc(100vh-64px)] lg:flex lg:flex-col">
+      <main id="dash-top" className={`max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4 ${isMerchant ? 'pb-20' : 'pb-4'} md:pb-4 relative z-10 lg:min-h-[calc(100vh-64px)] lg:flex lg:flex-col`}>
         {/* Mobile-only app shell — Founding Merchant hero + Your Overview +
             Your Journey, stacked above the standard cards. Hidden on lg+
             where the full grid layout takes over. No bottom tab bar. */}
@@ -499,7 +499,7 @@ function MobileWaitlistHeader({
   const checkText = t.d ? 'text-black' : 'text-white';
 
   return (
-    <div className="lg:hidden mb-5">
+    <div className="lg:hidden mb-4">
       {/* Dark full-bleed band — continues the navbar's black behind the hero
           and extends below it so the Overview card can overlap, creating the
           premium layered effect from the mockup. */}
@@ -512,10 +512,8 @@ function MobileWaitlistHeader({
       <div
         className="rounded-[26px] overflow-hidden relative"
         style={{
-          background:
-            'radial-gradient(135% 95% at 84% 26%, rgba(204,120,92,0.32) 0%, rgba(204,120,92,0.08) 38%, rgba(0,0,0,0) 66%), #070707',
+          background: '#070707',
           border: '1px solid rgba(255,255,255,0.07)',
-          boxShadow: '0 26px 64px -30px rgba(204,120,92,0.5)',
         }}
       >
         <div className="relative flex items-center min-h-[272px]">
@@ -543,17 +541,17 @@ function MobileWaitlistHeader({
 
       {/* Your Overview — pulled up to overlap the dark band above (top sits on
           the dark area, the rest extends onto the light page background). */}
-      <div className={`relative z-10 -mt-24 ${t.surface} border ${t.border} ${t.cardShadow} rounded-[22px] p-6 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.22)]`}>
-        <h3 className={`text-[19px] font-bold ${t.txt} tracking-tight mb-5`}>Your Overview</h3>
-        <div className="grid grid-cols-3 gap-3">
-          <MobileOverviewStat icon={<Target className={`w-6 h-6 ${t.txt}`} strokeWidth={2} />} value={blipPoints} label="BLIP Points" />
-          <MobileOverviewStat icon={<BadgeCheck className={`w-6 h-6 ${t.txt}`} strokeWidth={2} />} value={questsCompleted} label="Completed Quests" hint="of 4" />
-          <MobileOverviewStat icon={<UsersIcon className={`w-6 h-6 ${t.txt}`} strokeWidth={2} />} value={referralCount} label="Referrals" hint="of 3" />
+      <div className={`relative z-10 -mt-24 ${t.surface} border ${t.border} ${t.cardShadow} rounded-[22px] p-5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.22)]`}>
+        <h3 className={`text-[19px] font-bold ${t.txt} tracking-tight mb-4`}>Your Overview</h3>
+        <div className="grid grid-cols-3 gap-2">
+          <MobileOverviewStat icon={<Target className={`w-4 h-4 ${t.txt}`} strokeWidth={2} />} value={blipPoints} label="BLIP Points" />
+          <MobileOverviewStat icon={<BadgeCheck className={`w-4 h-4 ${t.txt}`} strokeWidth={2} />} value={questsCompleted} label="Completed Quests" hint="of 4" />
+          <MobileOverviewStat icon={<UsersIcon className={`w-4 h-4 ${t.txt}`} strokeWidth={2} />} value={referralCount} label="Referrals" hint="of 3" />
         </div>
       </div>
 
       {/* Your Journey — step timeline. */}
-      <div className={`mt-5 ${t.surface} border ${t.border} ${t.cardShadow} rounded-[22px] p-6`}>
+      <div className={`mt-4 ${t.surface} border ${t.border} ${t.cardShadow} rounded-[22px] p-5`}>
         <div className="flex items-center justify-between mb-5">
           <h3 className={`text-[19px] font-bold ${t.txt} tracking-tight`}>Your Journey</h3>
           <span className={`text-[12px] font-medium ${t.muted}`}>
@@ -625,12 +623,12 @@ function MobileOverviewStat({
   const t = useThemeTokens();
   const fill = t.d ? 'bg-[rgba(255,255,255,0.03)]' : 'bg-[rgba(0,0,0,0.015)]';
   return (
-    <div className={`flex flex-col items-center justify-center text-center gap-2.5 px-2 py-6 ${fill} border ${t.border} rounded-2xl`}>
-      <div className="h-6 flex items-center justify-center">{icon}</div>
-      <p className={`text-[27px] font-bold ${t.txt} leading-none tabular-nums`}>{formatCount(value)}</p>
+    <div className={`flex flex-col items-center text-center gap-2 px-1.5 py-5 ${fill} border ${t.border} rounded-2xl min-w-0`}>
+      <div className="h-4 flex items-center justify-center">{icon}</div>
+      <p className={`text-[18px] font-bold ${t.txt} leading-none tabular-nums tracking-tight whitespace-nowrap`}>{formatCount(value)}</p>
       <div className="space-y-0.5">
-        <p className={`text-[12px] font-semibold ${t.txt} leading-tight`}>{label}</p>
-        {hint && <p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{hint}</p>}
+        <p className={`text-[10.5px] font-semibold ${t.txt} leading-tight`}>{label}</p>
+        {hint && <p className="text-[10.5px] font-semibold leading-tight" style={{ color: ACCENT }}>{hint}</p>}
       </div>
     </div>
   );
@@ -656,10 +654,6 @@ function BlipMarketStall({ className }: { className?: string }) {
           <stop offset="0" stopColor="#ffd27a" />
           <stop offset="1" stopColor="#d98a32" />
         </linearGradient>
-        <radialGradient id="bmGlow" cx="0.5" cy="0.42" r="0.55">
-          <stop offset="0" stopColor="#f7a64e" stopOpacity="0.45" />
-          <stop offset="1" stopColor="#f7a64e" stopOpacity="0" />
-        </radialGradient>
         <radialGradient id="bmWindow" cx="0.5" cy="1" r="0.9">
           <stop offset="0" stopColor="#ffb155" stopOpacity="0.55" />
           <stop offset="1" stopColor="#ffb155" stopOpacity="0" />
@@ -668,9 +662,6 @@ function BlipMarketStall({ className }: { className?: string }) {
           <path d="M44 88 L60 54 H140 L156 88 Z" />
         </clipPath>
       </defs>
-
-      {/* ambient glow */}
-      <ellipse cx="100" cy="96" rx="92" ry="92" fill="url(#bmGlow)" />
 
       {/* ground shadow */}
       <ellipse cx="100" cy="172" rx="58" ry="10" fill="#1c0c06" opacity="0.7" />
@@ -771,7 +762,7 @@ function MerchantLayout(props: {
         onOpenHow={onOpenHow}
         isMerchant
       />
-      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3 lg:items-stretch">
+      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         <div className="lg:col-span-6">
           <HeroCard
             referralUnit={referralUnit}
@@ -799,11 +790,11 @@ function MerchantLayout(props: {
 
       {/* Below the top row: LEFT (Onboard + Stats + Quests + P2P)
           | MIDDLE (Progress + Leaderboard) | RIGHT (Steps) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3 lg:items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         {/* LEFT COLUMN */}
-        <div className="lg:col-span-6 flex flex-col gap-3">
+        <div className="lg:col-span-6 flex flex-col gap-4 lg:gap-3">
           {/* Merchant Onboarding CTA */}
-          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${onboardDone ? 'opacity-70' : ''}`}>
+          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${onboardDone ? 'opacity-70' : ''}`}>
             <div className="flex items-center gap-3.5 min-w-0">
               <div className={`w-11 h-11 rounded-xl ${t.inputBg} border ${t.border} flex items-center justify-center shrink-0`}>
                 <Store className={`w-[18px] h-[18px] ${t.txt}`} strokeWidth={2} />
@@ -908,7 +899,7 @@ function MerchantLayout(props: {
         </div>
 
         {/* MIDDLE COLUMN */}
-        <div className="lg:col-span-3 flex flex-col gap-3 min-w-0">
+        <div className="lg:col-span-3 flex flex-col gap-4 lg:gap-3 min-w-0">
           <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} compact />
         </div>
@@ -974,7 +965,7 @@ function UserLayout(props: {
         onOpenHow={onOpenHow}
         isMerchant={false}
       />
-      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3 lg:items-stretch">
+      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         <div className="lg:col-span-6">
           <HeroCard
             referralUnit={referralUnit}
@@ -1000,9 +991,9 @@ function UserLayout(props: {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3 lg:items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         {/* LEFT — Quests + Invite */}
-        <div className="lg:col-span-8 flex flex-col gap-3">
+        <div className="lg:col-span-8 flex flex-col gap-4 lg:gap-3">
           <div id="social-quests">
             <div className="mb-4">
               <div className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub} mb-1`}>
@@ -1065,7 +1056,7 @@ function UserLayout(props: {
         </div>
 
         {/* RIGHT — Progress + Leaderboard */}
-        <div className="lg:col-span-4 flex flex-col gap-3">
+        <div className="lg:col-span-4 flex flex-col gap-4 lg:gap-3">
           <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} />
         </div>
@@ -1092,7 +1083,7 @@ function MobileReferralCard({
   const codeTint = t.d ? 'rgba(204,120,92,0.07)' : 'rgba(204,120,92,0.045)';
 
   return (
-    <div className={`lg:hidden ${t.surface} border ${t.border} ${t.cardShadow} rounded-[24px] p-6 shadow-sm mb-3`}>
+    <div className={`lg:hidden ${t.surface} border ${t.border} ${t.cardShadow} rounded-[24px] p-5 shadow-sm mb-4`}>
       {/* Header — circular icon, title, description (centred) */}
       <div className="flex flex-col items-center text-center gap-3.5">
         <div
@@ -1917,7 +1908,7 @@ function MerchantBetaProgramCard({
     <div className={`lg:hidden ${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5`}>
       <div className="flex items-center gap-2.5 mb-1.5">
         <h3 className={`text-[18px] font-semibold ${t.txt} tracking-tight`}>Merchant Beta Program</h3>
-        <span className="px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-500 border border-emerald-500/20 rounded-full">
+        <span className="shrink-0 whitespace-nowrap px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-500 border border-emerald-500/20 rounded-full">
           On Mainnet
         </span>
       </div>
@@ -2077,13 +2068,11 @@ function QuestCard({ quest, existing, onUpdate, onShareReferral }: {
           <p className={`text-[12px] ${t.muted} leading-snug truncate mt-0.5`}>{quest.description}</p>
         </div>
         {isDone ? (
-          <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-emerald-500 shrink-0">
-            <CheckCircle2 className="w-4 h-4" /> Completed
-          </div>
+          <CheckCircle2 className="w-[22px] h-[22px] text-emerald-500 shrink-0" />
         ) : (
-          <button onClick={handleStart}
-            className={`${t.accentBg} ${t.accentText} px-5 py-2 rounded-full text-[13px] font-semibold tracking-tight active:scale-[0.98] transition shrink-0`}>
-            Start
+          <button onClick={handleStart} aria-label="Start quest"
+            className={`${t.accentBg} ${t.accentText} w-9 h-9 rounded-full flex items-center justify-center active:scale-[0.95] transition shrink-0`}>
+            <ArrowRight className="w-4 h-4" />
           </button>
         )}
       </div>
