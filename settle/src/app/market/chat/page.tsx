@@ -68,6 +68,7 @@ import {
   type OrderConversation,
 } from "@/hooks/useMerchantConversations";
 import { useRealtimeChat, type ChatMessage } from "@/hooks/useRealtimeChat";
+import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
 import { useOrderActionDispatch } from "@/hooks/useOrderActionDispatch";
 import { ImageUpload } from "@/components/chat/ImageUpload";
 import { ReceiptCard } from "@/components/chat/cards";
@@ -82,6 +83,7 @@ import { useEscrowOperations } from "@/hooks/useEscrowOperations";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { MOCK_MODE } from "@/lib/config/mockMode";
 import { EscrowLockModal } from "@/components/merchant/EscrowLockModal";
+import { MutualCancelAppealBanner } from "@/components/shared/MutualCancelAppealBanner";
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -310,33 +312,24 @@ export default function TradeChatPage() {
   }, [activeOrderId, activeWindow?.messages.length]);
 
   // ── live order details for the right rail ──
-  const [order, setOrder] = useState<BackendOrder | null>(null);
-  const [orderLoading, setOrderLoading] = useState(false);
-
-  const loadOrder = useCallback(async (orderId: string) => {
-    setOrderLoading(true);
-    try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const o: BackendOrder = data?.data ?? data;
-      setOrder(o);
-    } catch {
-      /* best-effort */
-    } finally {
-      setOrderLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!activeOrderId) {
-      setOrder(null);
-      return;
-    }
-    loadOrder(activeOrderId);
-    const t = setInterval(() => loadOrder(activeOrderId), 15000);
-    return () => clearInterval(t);
-  }, [activeOrderId, loadOrder]);
+  // Realtime (Pusher per-order channel) with a polling fallback. This replaces
+  // the old 15s-only poll so order-state changes — especially a counterparty's
+  // mutual-cancel request, which doesn't change `status` — reflect near-instantly
+  // (the hook refetches on every order event, so `cancel_requested_by` and the
+  // Agree/Decline button appear at the ~2s backend floor instead of up to 15s).
+  const {
+    order: realtimeOrder,
+    isLoading: orderLoading,
+    refetch: refetchOrder,
+  } = useRealtimeOrder(activeOrderId);
+  const order = realtimeOrder as unknown as BackendOrder | null;
+  // Back-compat alias: existing call sites imperatively reload after an action.
+  // The hook always refetches its bound order (activeOrderId), so the orderId
+  // arg is accepted but ignored.
+  const loadOrder = useCallback(
+    (_orderId?: string) => refetchOrder(),
+    [refetchOrder],
+  );
 
   // ── action dispatch ──
   const [actionMsg, setActionMsg] = useState<string | null>(null);
@@ -810,6 +803,7 @@ export default function TradeChatPage() {
           <TradeDetailsPane
             convo={activeConvo}
             order={order}
+            merchantId={merchantId}
             loading={orderLoading}
             actionLoading={actionLoading}
             actionMsg={actionMsg}
@@ -819,6 +813,10 @@ export default function TradeChatPage() {
             incomingCancelRequest={incomingCancel}
             iRequestedCancel={iRequestedCancel}
             cancelReqReason={cancelReqReason}
+            onAppealResolved={() => {
+              if (activeOrderId) loadOrder(activeOrderId);
+              fetchOrderConversations();
+            }}
             show={showDetails}
             onClose={() => setShowDetails(false)}
           />
@@ -1169,6 +1167,7 @@ function ConversationRow({
 function TradeDetailsPane({
   convo,
   order,
+  merchantId,
   loading,
   actionLoading,
   actionMsg,
@@ -1178,11 +1177,13 @@ function TradeDetailsPane({
   incomingCancelRequest,
   iRequestedCancel,
   cancelReqReason,
+  onAppealResolved,
   show,
   onClose,
 }: {
   convo: OrderConversation;
   order: BackendOrder | null;
+  merchantId: string | null;
   loading: boolean;
   actionLoading: boolean;
   actionMsg: string | null;
@@ -1192,6 +1193,7 @@ function TradeDetailsPane({
   incomingCancelRequest: boolean;
   iRequestedCancel: boolean;
   cancelReqReason: string | null;
+  onAppealResolved: () => void;
   show: boolean;
   onClose: () => void;
 }) {
@@ -1322,6 +1324,20 @@ function TradeDetailsPane({
         <div className="space-y-2">
           <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Actions</p>
           {actionMsg && <p className="text-[11px] text-error px-1">{actionMsg}</p>}
+
+          {/* Mutual-cancellation APPEAL — Agree to Cancel / Reject when the
+              counterparty raised one, or a "waiting" note when I did. Self-hides
+              when there's no active mutual_cancel appeal. This is the current
+              cancellation path; the cancel_requested_by block below is legacy. */}
+          {(order?.id ?? convo.order_id) && (
+            <MutualCancelAppealBanner
+              orderId={order?.id ?? convo.order_id}
+              viewerActorId={merchantId}
+              variant="merchant"
+              enabled={!["cancelled", "expired", "completed", "disputed"].includes(status)}
+              onResolved={onAppealResolved}
+            />
+          )}
 
           {/* Incoming mutual-cancel request — respond inline (Agree / Decline). */}
           {incomingCancelRequest && (

@@ -4045,11 +4045,7 @@ export function OrderQuickView({
                               whileTap={{ scale: 0.98 }}
                               disabled={loading}
                               onClick={() => ACTION_HANDLER[primary.type!]?.()}
-                              className={`${
-                                primary.type === "LOCK_ESCROW"
-                                  ? "flex-[2]"
-                                  : "w-full"
-                              } ${
+                              className={`w-full ${
                                 isActiveOrder ? "py-3 text-sm" : "py-3"
                               } rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
                                 loading ? PRIMARY_LOADING : PRIMARY_STYLE
@@ -4065,25 +4061,11 @@ export function OrderQuickView({
                               {primaryLabel}
                             </motion.button>
                           );
-                          if (primary.type === "LOCK_ESCROW") {
-                            return (
-                              <div className="flex gap-3">
-                                <button
-                                  onClick={() => {
-                                    onCancelOrderWithoutEscrow(
-                                      selectedOrder.id,
-                                    );
-                                    onClose();
-                                  }}
-                                  disabled={loading}
-                                  className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] font-semibold text-sm disabled:opacity-50 transition-all"
-                                >
-                                  Cancel
-                                </button>
-                                {primaryBtn}
-                              </div>
-                            );
-                          }
+                          // After a merchant accepts, the order can no longer be
+                          // unilaterally cancelled — cancellation goes through the
+                          // appeal / mutual-cancel flow (Raise Appeal, rendered
+                          // below). So the Lock-Escrow CTA is full-width with no
+                          // paired Cancel button.
                           return primaryBtn;
                         })()
                       ) : primary.label &&
