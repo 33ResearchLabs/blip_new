@@ -476,6 +476,25 @@ export const OrderDetailScreen = ({
   // payment & completed screens — one tap, no tracker hop in between.
   const [showOrderOverview, setShowOrderOverview] = useLocalState(false);
 
+  // Auto-dismiss the manually-opened order-info overlays (the ⓘ tracker and the
+  // Order Overview) the moment the order's status advances — e.g. the
+  // counterparty takes their turn while one is open. Without this the overlay
+  // sits stale on top of the now-updated screen and never reveals it ("doesn't
+  // remove, doesn't update"). Only the MANUAL flags are reset; the derived
+  // autoTracker (the primary screen for matching/unmatched states) is untouched,
+  // and the receipt sheet is left alone. Guarded on a ref so it fires ONLY on a
+  // real status/step transition — not on first mount, and not on unrelated
+  // order updates (unread counts, expiry ticks, cancel-request flags).
+  const orderProgressKey =
+    `${String(activeOrder?.dbStatus || activeOrder?.status || "")}:${String(activeOrder?.step ?? "")}`;
+  const prevProgressRef = useLocalRef(orderProgressKey);
+  useLocalEffect(() => {
+    if (prevProgressRef.current === orderProgressKey) return;
+    prevProgressRef.current = orderProgressKey;
+    setShowTracker(false);
+    setShowOrderOverview(false);
+  }, [orderProgressKey, setShowTracker, setShowOrderOverview]);
+
   // Receipt timestamps. Dates only — locale fixed to en-US for consistency
   // with the @/lib/format number rules.
   const fmtDateTime = (d?: Date | null) =>

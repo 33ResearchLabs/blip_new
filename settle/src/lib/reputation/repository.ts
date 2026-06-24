@@ -176,7 +176,7 @@ async function getVolumeIntelligence(
     // 1. Weighted volume: size_weight * time_decay * fiat_amount
     //    size_weight: <$10=0.2, <$100=0.5, >=100=1.0
     //    time_decay:  7d=1.0, 30d=0.5, 90d=0.2, older=0.1
-    const wvResult = await queryOne<{ wv: string }>(
+    const wvResultP = queryOne<{ wv: string }>(
       `SELECT COALESCE(SUM(
         fiat_amount
         * CASE
@@ -197,7 +197,7 @@ async function getVolumeIntelligence(
     );
 
     // 2. Unique counterparties
-    const cpResult = await queryOne<{ cnt: string }>(
+    const cpResultP = queryOne<{ cnt: string }>(
       `SELECT COUNT(DISTINCT ${counterpartyCol})::text AS cnt
        FROM orders
        WHERE ${idCol} = $1 AND status = 'completed' AND ${counterpartyCol} IS NOT NULL`,
@@ -205,7 +205,7 @@ async function getVolumeIntelligence(
     );
 
     // 3. Top counterparty concentration (% of total volume with #1 counterparty)
-    const concResult = await queryOne<{ pct: string }>(
+    const concResultP = queryOne<{ pct: string }>(
       `WITH totals AS (
         SELECT COALESCE(SUM(fiat_amount), 0) AS total_vol
         FROM orders WHERE ${idCol} = $1 AND status = 'completed'
@@ -225,7 +225,7 @@ async function getVolumeIntelligence(
     );
 
     // 4. Repeat pair farming: count counterparty pairs with >5 completed trades
-    const farmResult = await queryOne<{ cnt: string }>(
+    const farmResultP = queryOne<{ cnt: string }>(
       `SELECT COUNT(*)::text AS cnt FROM (
         SELECT ${counterpartyCol}, COUNT(*) AS trade_count
         FROM orders
@@ -235,6 +235,15 @@ async function getVolumeIntelligence(
       ) farming_pairs`,
       [entityId]
     );
+
+    // All four are independent reads — run concurrently instead of in a
+    // sequential await chain (same SQL, same results, fewer round-trip waits).
+    const [wvResult, cpResult, concResult, farmResult] = await Promise.all([
+      wvResultP,
+      cpResultP,
+      concResultP,
+      farmResultP,
+    ]);
 
     return {
       weighted_volume: parseFloat(wvResult?.wv || '0'),
@@ -264,7 +273,7 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
   if (!user) return null;
 
   // Get order stats
-  const orderStats = await queryOne<{
+  const orderStatsP = queryOne<{
     total_orders: number;
     completed_orders: number;
     cancelled_orders: number;
@@ -289,7 +298,7 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
   );
 
   // Get review stats
-  const reviewStats = await queryOne<{
+  const reviewStatsP = queryOne<{
     review_count: number;
     average_rating: number;
     five_star_count: number;
@@ -305,7 +314,7 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
   );
 
   // Get recent ratings for trend
-  const recentReviews = await query<{ rating: number; created_at: Date }>(
+  const recentReviewsP = query<{ rating: number; created_at: Date }>(
     `SELECT rating, created_at FROM ratings
      WHERE rated_id = $1 AND rated_type = 'user'
      ORDER BY created_at DESC LIMIT 10`,
@@ -316,7 +325,7 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
   // (i.e. anything not yet resolved against either side). Awarding the
   // "dispute free" badge while a dispute is still in flight is a bug — the
   // calculator now gates on this count too. See calculator.ts (badge logic).
-  const disputeStats = await queryOne<{
+  const disputeStatsP = queryOne<{
     disputes_raised: number;
     disputes_won: number;
     disputes_lost: number;
@@ -334,7 +343,7 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
   );
 
   // Get activity stats
-  const activityStats = await queryOne<{
+  const activityStatsP = queryOne<{
     active_days: number;
     longest_inactive: number;
   }>(
@@ -356,21 +365,46 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
   );
 
   // Get volume percentile
-  const volumePercentile = await queryOne<{ percentile: number }>(
+  const volumePercentileP = queryOne<{ percentile: number }>(
     `SELECT PERCENT_RANK() OVER (ORDER BY total_volume) * 100 as percentile
      FROM users WHERE id = $1`,
     [userId]
   );
 
   // Get user number for early adopter
-  const userNumber = await queryOne<{ row_num: number }>(
+  const userNumberP = queryOne<{ row_num: number }>(
     `SELECT ROW_NUMBER() OVER (ORDER BY created_at) as row_num
      FROM users WHERE id = $1`,
     [userId]
   );
 
   // Volume intelligence (weighted volume, counterparties, farming detection)
-  const volIntel = await getVolumeIntelligence(userId, 'user');
+  const volIntelP = getVolumeIntelligence(userId, 'user');
+
+  // These reads are independent of one another (only the `user` row above is a
+  // prerequisite, for the null check). Run them concurrently instead of as a
+  // sequential await waterfall of ~11 round-trips — the bulk of the
+  // profile / trust-panel latency. Same queries, same results, same error
+  // propagation (any rejection still bubbles up and is caught by the caller).
+  const [
+    orderStats,
+    reviewStats,
+    recentReviews,
+    disputeStats,
+    activityStats,
+    volumePercentile,
+    userNumber,
+    volIntel,
+  ] = await Promise.all([
+    orderStatsP,
+    reviewStatsP,
+    recentReviewsP,
+    disputeStatsP,
+    activityStatsP,
+    volumePercentileP,
+    userNumberP,
+    volIntelP,
+  ]);
 
   return {
     entity_id: userId,
@@ -422,7 +456,7 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
   if (!merchant) return null;
 
   // Get order stats
-  const orderStats = await queryOne<{
+  const orderStatsP = queryOne<{
     total_orders: number;
     completed_orders: number;
     cancelled_orders: number;
@@ -447,7 +481,7 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
   );
 
   // Get review stats
-  const reviewStats = await queryOne<{
+  const reviewStatsP = queryOne<{
     review_count: number;
     average_rating: number;
     five_star_count: number;
@@ -463,7 +497,7 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
   );
 
   // Get recent ratings for trend
-  const recentReviews = await query<{ rating: number; created_at: Date }>(
+  const recentReviewsP = query<{ rating: number; created_at: Date }>(
     `SELECT rating, created_at FROM ratings
      WHERE rated_id = $1 AND rated_type = 'merchant'
      ORDER BY created_at DESC LIMIT 10`,
@@ -474,7 +508,7 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
   // (i.e. anything not yet resolved). Without this, a merchant with several
   // unresolved disputes still counts `disputes_lost = 0` and the "dispute
   // free" badge is wrongly awarded. See calculator.ts (badge logic).
-  const disputeStats = await queryOne<{
+  const disputeStatsP = queryOne<{
     disputes_raised: number;
     disputes_won: number;
     disputes_lost: number;
@@ -492,7 +526,7 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
   );
 
   // Get activity stats
-  const activityStats = await queryOne<{
+  const activityStatsP = queryOne<{
     active_days: number;
     longest_inactive: number;
   }>(
@@ -514,11 +548,35 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
   );
 
   // Get volume percentile among merchants
-  const volumePercentile = await queryOne<{ percentile: number }>(
+  const volumePercentileP = queryOne<{ percentile: number }>(
     `SELECT PERCENT_RANK() OVER (ORDER BY total_volume) * 100 as percentile
      FROM merchants WHERE id = $1`,
     [merchantId]
   );
+
+  // Volume intelligence (weighted volume, counterparties, farming detection)
+  const volIntelP = getVolumeIntelligence(merchantId, 'merchant');
+
+  // Independent reads (only the `merchant` row above gates them, for the null
+  // check). Run concurrently instead of as a sequential await waterfall of ~10
+  // round-trips — same queries, same results, same error propagation.
+  const [
+    orderStats,
+    reviewStats,
+    recentReviews,
+    disputeStats,
+    activityStats,
+    volumePercentile,
+    volIntel,
+  ] = await Promise.all([
+    orderStatsP,
+    reviewStatsP,
+    recentReviewsP,
+    disputeStatsP,
+    activityStatsP,
+    volumePercentileP,
+    volIntelP,
+  ]);
 
   return {
     entity_id: merchantId,
@@ -547,7 +605,7 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
     orders_last_30_days: orderStats?.orders_last_30_days || 0,
     longest_inactive_streak: activityStats?.longest_inactive || 0,
     volume_percentile: volumePercentile?.percentile || 0,
-    ...await getVolumeIntelligence(merchantId, 'merchant'),
+    ...volIntel,
   };
 }
 
