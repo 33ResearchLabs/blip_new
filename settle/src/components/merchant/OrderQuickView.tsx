@@ -66,6 +66,7 @@ import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { ProfileEntityType } from "@/components/shared/profile/types";
 import { deriveCounterparty } from "@/components/shared/profile/counterparty";
 import { MerchantAppealSheet } from "@/components/merchant/MerchantAppealSheet";
+import { MutualCancelAppealBanner } from "@/components/shared/MutualCancelAppealBanner";
 
 // ── Counterparty profile wiring ──────────────────────────────────────────────
 // The popup is one big tree of sub-component bodies (CounterpartyTrustCard,
@@ -3645,6 +3646,22 @@ export function OrderQuickView({
                   </>
                 )}
               </div>
+
+              {/* Mutual-cancellation appeal — counterparty Agree/Reject (self-hides if none) */}
+              {selectedOrder.id && (
+                <MutualCancelAppealBanner
+                  orderId={selectedOrder.id}
+                  viewerActorId={merchantId}
+                  variant="merchant"
+                  className="mx-5 mb-2"
+                  enabled={
+                    !["cancelled", "expired", "completed", "complete", "disputed"].includes(
+                      (selectedOrder.dbOrder?.status as string) || "",
+                    )
+                  }
+                  onResolved={() => onClose()}
+                />
+              )}
 
               {/* Cancel Request Banner — shown when counterparty requested cancellation */}
               {(() => {

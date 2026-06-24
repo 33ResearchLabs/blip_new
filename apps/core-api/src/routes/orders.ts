@@ -271,6 +271,21 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         if (!order) {
           return reply.status(404).send({ success: false, error: 'Order not found' });
         }
+        // Defense-in-depth: post-acceptance cancellation must be MUTUAL (appeal
+        // agree/reject), not a unilateral PATCH by a participant. Block once a
+        // counterparty is engaged (accepted_at set). 'system' (workers + the
+        // mutual-cancel/appeal finalize, which write the order directly) is
+        // exempt; pre-acceptance + unclaimed sell-offer withdrawals have
+        // accepted_at NULL and still cancel here. Primary enforcement is in
+        // settle handleOrderAction; this closes the direct-core-api path.
+        const acceptedAt = (order as { accepted_at?: string | Date | null }).accepted_at;
+        if (actor_type !== 'system' && acceptedAt) {
+          return reply.status(409).send({
+            success: false,
+            error: 'This order has been accepted. Use mutual cancellation (the counterparty must agree) or an appeal.',
+            code: 'MUST_USE_MUTUAL_CANCEL',
+          });
+        }
         if (order.escrow_tx_hash) {
           // The caller MUST have signed + submitted the on-chain
           // cancelTrade/refundEscrow first and forwarded the tx hash here.
@@ -937,6 +952,22 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (!order) {
           return { statusCode: 404, body: { success: false, error: 'Order not found' } };
+        }
+
+        // Defense-in-depth (see PATCH cancel): post-acceptance cancellation must
+        // be mutual. Block a participant's unilateral DELETE once a counterparty
+        // is engaged (accepted_at set); 'system' and pre-acceptance/unclaimed
+        // (accepted_at NULL) still cancel here.
+        const acceptedAt = (order as { accepted_at?: string | Date | null }).accepted_at;
+        if (actor_type !== 'system' && acceptedAt) {
+          return {
+            statusCode: 409,
+            body: {
+              success: false,
+              error: 'This order has been accepted. Use mutual cancellation (the counterparty must agree) or an appeal.',
+              code: 'MUST_USE_MUTUAL_CANCEL',
+            },
+          };
         }
 
         if (order.escrow_tx_hash) {
