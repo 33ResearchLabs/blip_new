@@ -205,7 +205,6 @@ export function OrderCompletedScreen({
               >
                 <Star
                   className={`w-9 h-9 ${star <= displayRating ? "text-text-secondary fill-text-secondary" : "text-border-medium"}`}
-                  className={`w-9 h-9 ${star <= displayRating ? "text-text-secondary fill-text-secondary" : "text-border-medium"}`}
                 />
               </button>
             ))}
