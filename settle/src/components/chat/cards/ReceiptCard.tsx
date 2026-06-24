@@ -70,8 +70,6 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
   const isBuy = data.order_type === 'buy';
   const effectiveStatus = currentStatus || data.status || '';
   const statusStyle = STATUS_STYLES[effectiveStatus] || STATUS_STYLES.pending;
-  const isCancelled = effectiveStatus === 'cancelled';
-  const isExpired = effectiveStatus === 'expired';
 
   // Theme-aware color tokens
   const isLight = theme === 'light';
@@ -95,11 +93,7 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
   return (
     <div className={`${t.card} rounded-xl overflow-hidden`}>
       {/* Header */}
-      <div className={`px-4 py-3 border-b flex items-center justify-between ${
-        isCancelled ? 'bg-red-500/10 border-red-500/20' :
-        isExpired ? 'bg-zinc-500/10 border-zinc-500/20' :
-        t.headerDefault
-      }`}>
+      <div className={`px-4 py-3 border-b flex items-center justify-between ${t.headerDefault}`}>
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-lg ${t.iconBg} flex items-center justify-center`}>
             <Receipt className={`w-4 h-4 ${t.receiptIcon}`} />
@@ -114,8 +108,9 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
             </p>
           </div>
         </div>
-        {/* Uniform neutral status pill — black bg, white text for every status. */}
-        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-black/40 text-white">
+        {/* Uniform neutral status pill — accent bg, contrasting text. Inverts
+            with the theme: black-on-white in light, white-on-black in dark. */}
+        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-accent text-accent-text">
           {statusStyle.label}
         </span>
       </div>

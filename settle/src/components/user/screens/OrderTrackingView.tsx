@@ -228,7 +228,7 @@ export function OrderTrackingView({
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={onClose}
-            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-surface-active text-text-primary border border-border-subtle"
+            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent"
           >
             Back to order
           </motion.button>
