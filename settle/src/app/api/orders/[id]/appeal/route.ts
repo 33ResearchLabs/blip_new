@@ -297,3 +297,122 @@ export async function GET(
     );
   }
 }
+
+// Respond to an active appeal.
+//   action: 'agree'  → (mutual_cancel only) cancel the order + refund escrow.
+//           'reject' → escalate to a formal dispute (order → disputed).
+// Identity is taken ONLY from the verified JWT (the body's actor is advisory and
+// can go stale — same rationale as the cancel-request respond path). Mutations
+// are proxied to core-api, which owns the state machine + escrow refund.
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const rateLimitResponse = await checkRateLimit(request, 'appeal:respond', STRICT_LIMIT);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  try {
+    const { id: orderId } = await params;
+    const body = await request.json();
+
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const scopeErr = requireApiKeyScope(auth, 'orders:write');
+    if (scopeErr) return scopeErr;
+
+    if (auth.actorType !== 'user' && auth.actorType !== 'merchant') {
+      return forbiddenResponse('Only a user or merchant can respond to an appeal');
+    }
+
+    const action = body?.action;
+    if (action !== 'agree' && action !== 'reject') {
+      return NextResponse.json(
+        { success: false, error: "action must be 'agree' or 'reject'" },
+        { status: 400 }
+      );
+    }
+
+    // Idempotency-Key required — responding agrees-and-refunds or escalates to a
+    // dispute. core-api commits the idempotency record atomically with the mutation.
+    const missingKey = requireIdempotencyKey(request);
+    if (missingKey) return missingKey;
+    const idempotencyKey = getIdempotencyKey(request);
+    if (!idempotencyKey || idempotencyKey.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Idempotency-Key header is required for responding to an appeal.' },
+        { status: 400 }
+      );
+    }
+
+    const canAccess = await canAccessOrder(auth, orderId);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
+    }
+
+    logger.info('[Appeal] Responding', { orderId, action });
+
+    const resp = await proxyCoreApi(`/v1/orders/${orderId}/appeal`, {
+      method: 'PUT',
+      body: { action, actor_type: auth.actorType, actor_id: auth.actorId },
+      actorType: auth.actorType,
+      actorId: auth.actorId,
+      idempotencyKey,
+    });
+
+    // Best-effort live chat broadcast of the system message (cancelled/disputed),
+    // mirroring the open handler. Never fail the request on a broadcast error.
+    try {
+      const json = await resp.clone().json();
+      if (json?.success && json?.chatMessage) {
+        const order = await getOrderWithRelations(orderId);
+        if (order) {
+          const cm = json.chatMessage as {
+            id: string;
+            sender_id: string | null;
+            content: string;
+            created_at: string;
+          };
+          const createdAtIso =
+            typeof cm.created_at === 'string' ? cm.created_at : new Date(cm.created_at).toISOString();
+          await notifyNewMessage({
+            orderId,
+            messageId: cm.id,
+            senderType: 'system',
+            senderId: cm.sender_id ?? orderId,
+            content: cm.content || '',
+            messageType: 'text',
+            createdAt: createdAtIso,
+            userId: order.user_id,
+            merchantId: order.merchant_id,
+            buyerMerchantId: order.buyer_merchant_id ?? null,
+            clientId: null,
+            seq: null,
+          });
+          wsBroadcastNewMessage({
+            orderId,
+            messageId: cm.id,
+            senderType: 'system',
+            senderId: cm.sender_id ?? orderId,
+            senderName: 'System',
+            content: cm.content || '',
+            messageType: 'text',
+            createdAt: createdAtIso,
+          });
+        }
+      }
+    } catch (broadcastErr) {
+      logger.warn('[Appeal] live chat broadcast failed (non-fatal)', {
+        orderId,
+        error: broadcastErr instanceof Error ? broadcastErr.message : String(broadcastErr),
+      });
+    }
+
+    return resp;
+  } catch (error) {
+    console.error('Failed to respond to appeal:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to respond to appeal' },
+      { status: 500 }
+    );
+  }
+}

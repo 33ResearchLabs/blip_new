@@ -52,6 +52,11 @@ export const MINIMAL_ALLOWED_TRANSITIONS: Record<MinimalOrderStatus, MinimalTran
   accepted: [
     { to: 'escrowed', allowedActors: ['user', 'merchant', 'system'], description: 'Lock escrow after acceptance' },
     { to: 'cancelled', allowedActors: ['user', 'merchant', 'system'], description: 'Cancel after acceptance' },
+    // System-only: a mutual-cancellation appeal that is rejected or times out
+    // escalates a still-unescrowed (accepted) order straight to a dispute.
+    // Restricted to 'system' so no party can directly dispute from 'accepted'
+    // via /action — that path stays gated to escrowed/payment_sent.
+    { to: 'disputed', allowedActors: ['system'], description: 'Appeal rejected/timed out → dispute' },
     { to: 'expired', allowedActors: ['system'], description: 'Timeout after acceptance' },
   ],
   escrowed: [

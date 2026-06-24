@@ -169,6 +169,7 @@ const MUTED_BTN = "bg-surface-active text-text-secondary";
 
 // Shared expiry timer — used on both user and merchant order detail screens
 import { OrderExpiryTimer } from '@/components/shared/OrderExpiryTimer';
+import { MutualCancelAppealBanner } from '@/components/shared/MutualCancelAppealBanner';
 
 /** Glossy animated expiry bar — sits at the card's bottom edge.
  *  Shrinks with time. Shimmers to attract attention. Pulses red when urgent. */
@@ -1269,6 +1270,22 @@ export const OrderDetailScreen = ({
               </div>
             </motion.div>
           )}
+
+        {/* Mutual-cancellation appeal — counterparty Agree/Reject (or requester
+            waiting). Self-hides unless an active mutual_cancel appeal exists. */}
+        {activeOrder.id && (
+          <MutualCancelAppealBanner
+            orderId={activeOrder.id}
+            viewerActorId={userId}
+            variant="user"
+            className="mb-4"
+            enabled={
+              !["cancelled", "expired", "complete", "completed", "disputed"].includes(
+                activeOrder.status || "",
+              )
+            }
+          />
+        )}
 
         {/* Inactivity Warning / Extension Sent / Extension Granted Banner */}
         {activeOrder.inactivityWarned &&
@@ -2934,32 +2951,12 @@ export const OrderDetailScreen = ({
           </div>
           </div>
 
-          {/* Cancel button — ONLY pre-escrow (accepted / escrow_pending).
-              Nothing is locked yet, so this is a unilateral, instant cancel
-              via cancelOrderDirect (the /action CANCEL endpoint). Once escrow
-              is locked there is intentionally NO cancel button here — the
-              user raises an Appeal instead, and mutual cancellation is
-              resolved through that flow. Routing pre-escrow cancels through
-              the mutual cancel-request endpoint used to silently create a
-              merchant-approval request that never resolved. */}
-        {["accepted", "escrow_pending"].includes(
-          (activeOrder.dbStatus || activeOrder.status || "").toLowerCase(),
-        ) &&
-          activeOrder.status !== "disputed" &&
-          !activeOrder.cancelRequest && (
-            <button
-              onClick={() => cancelOrderDirect()}
-              disabled={isRequestingCancel}
-              className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning hover:bg-warning-dim transition-colors`}
-            >
-              {isRequestingCancel ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <X className="w-4 h-4" />
-              )}
-              Cancel Order
-            </button>
-          )}
+          {/* No "Cancel Order" button once a merchant has accepted
+              (accepted / escrow_pending). Per product: cancel is only offered
+              BEFORE a merchant accepts (the matching phase) — afterwards the
+              only exits are Back (header) and Raise Appeal below. The unmatched
+              SELL "Cancel & Refund" path below is pre-accept (no merchant has
+              claimed yet), so it stays. */}
 
         {/* Cancel button for SELL orders waiting for a merchant (step 1).
             These have on-chain escrow locked by the user but no merchant
@@ -3112,14 +3109,6 @@ export const OrderDetailScreen = ({
               onViewProfile={() => setShowProfile(true)}
               onNeedHelp={() => setScreen("support")}
               onMarkPaymentSent={markPaymentSent}
-              onCancel={() => {
-                // The Cancel button on OrderPaymentScreen now renders ONLY
-                // pre-escrow (gated on !fundsLocked there), so this is always a
-                // unilateral, instant cancel — no crypto is locked yet. Once
-                // escrow is locked the screen shows Appeal instead, and mutual
-                // cancellation is resolved through the appeal flow.
-                cancelOrderDirect();
-              }}
               onAppeal={() => setShowAppeal(true)}
               onCopy={(key, value) => copyField(key, value)}
               copiedField={copiedField}
@@ -3127,7 +3116,6 @@ export const OrderDetailScreen = ({
               matchingPayMethods={matchingPayMethods}
               onChoosePayMethod={handleChoosePayMethod}
               isSubmitting={isLoading}
-              isCancelling={isRequestingCancel}
             />
           </div>
         )}

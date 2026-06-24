@@ -99,6 +99,7 @@ interface OrderForEnrichment {
   escrow_debited_entity_id?: string | null;
   escrow_tx_hash?: string | null;
   refund_tx_hash?: string | null;
+  accepted_at?: string | Date | null;
   order_version?: number;
   // Timer fields — surfaced to the frontend for backend-driven countdowns.
   // Optional because legacy callers may not include them; enricher safely
@@ -378,6 +379,7 @@ function guardedAction(
       merchant_id: order.merchant_id,
       buyer_merchant_id: order.buyer_merchant_id ?? null,
       escrow_debited_entity_id: order.escrow_debited_entity_id ?? null,
+      accepted_at: (order.accepted_at ?? null) as Date | null,
       order_version: order.order_version ?? 0,
     },
     action,
@@ -416,6 +418,7 @@ function guardedSecondary(
       merchant_id: order.merchant_id,
       buyer_merchant_id: order.buyer_merchant_id ?? null,
       escrow_debited_entity_id: order.escrow_debited_entity_id ?? null,
+      accepted_at: (order.accepted_at ?? null) as Date | null,
       order_version: order.order_version ?? 0,
     },
     action,

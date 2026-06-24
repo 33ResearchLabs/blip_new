@@ -53,40 +53,11 @@ export function MerchantAppealSheet({
     !submitting &&
     !!merchantId;
 
-  // "Cancel & refund (mutual)" fires the existing audited cancel-request
-  // handshake instead of opening an appeal — the counterparty must accept,
-  // then the escrow is refunded. Only offered before the buyer has paid.
-  const requestMutualCancel = async () => {
-    if (!merchantId || submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}/cancel-request`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": orderActionKey(orderId, "cancel_request"),
-        },
-        body: JSON.stringify({
-          actor_type: "merchant",
-          actor_id: merchantId,
-          reason: "Cancel & refund requested via appeal",
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
-        onSubmitted?.();
-        onClose();
-      } else {
-        setError(data.error || "Failed to request cancellation. Please try again.");
-      }
-    } catch {
-      setError("Failed to request cancellation. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
+  // "Cancel & refund (mutual)" now opens a mutual_cancel APPEAL (same as every
+  // other issue) — the counterparty agrees (→ cancel + refund) or rejects
+  // (→ dispute), and an unanswered request auto-escalates to a dispute after the
+  // appeal deadline. This unifies all post-accept resolution under the appeal
+  // subsystem (no more split cancel-request path). Only offered before fiat is sent.
   const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
@@ -219,18 +190,18 @@ export function MerchantAppealSheet({
 
             {isMutualCancel && (
               <p className="text-[12px] text-[#a1a1a6] leading-snug">
-                The other party must accept. If they agree, the order is cancelled and
-                the escrow is refunded.
+                The other party must respond. If they agree, the order is cancelled and
+                the escrow refunded. If they reject — or don&apos;t respond in time — it
+                becomes a dispute for review.
               </p>
             )}
 
             {error && <p className="text-[12.5px] text-red-400">{error}</p>}
 
-            {/* Primary action — "Request Cancellation" for mutual cancel, else
-                "Submit Appeal". Cancel reuses the existing cancel-request flow. */}
+            {/* Primary action — opens an appeal (mutual_cancel included). */}
             <button
-              onClick={isMutualCancel ? requestMutualCancel : submit}
-              disabled={isMutualCancel ? submitting || !merchantId : !canSubmit}
+              onClick={submit}
+              disabled={!canSubmit}
               className="w-full py-3.5 rounded-2xl text-[15px] font-semibold bg-white text-black disabled:opacity-40 flex items-center justify-center gap-2"
             >
               {submitting ? (

@@ -184,6 +184,7 @@ export function handleOrderAction(
     | 'merchant_id'
     | 'buyer_merchant_id'
     | 'escrow_debited_entity_id'
+    | 'accepted_at'
     | 'order_version'
   >,
   action: OrderAction,
@@ -225,6 +226,20 @@ export function handleOrderAction(
       success: false,
       error: `Action '${action}' is not allowed from status '${currentMinimal}'. Allowed from: ${rule.allowedFromStatuses.join(', ')}`,
       code: 'INVALID_STATUS_FOR_ACTION',
+    };
+  }
+
+  // 4b. Post-acceptance cancellation must be MUTUAL. Once a counterparty is
+  //     engaged (accepted_at set — covers merchant-accept AND sell/M2M claim),
+  //     a unilateral CANCEL is no longer allowed: the cancelling party opens a
+  //     mutual-cancellation appeal instead (counterparty agrees → cancel+refund,
+  //     or rejects/times-out → dispute). Pre-acceptance (open) and unclaimed
+  //     sell-offer withdrawals keep accepted_at NULL, so they still cancel here.
+  if (action === 'CANCEL' && order.accepted_at) {
+    return {
+      success: false,
+      error: 'This order has been accepted. Request a mutual cancellation (the other party must agree) or raise an appeal.',
+      code: 'MUST_USE_MUTUAL_CANCEL',
     };
   }
 
@@ -353,6 +368,7 @@ export function getAllowedActions(
     | 'merchant_id'
     | 'buyer_merchant_id'
     | 'escrow_debited_entity_id'
+    | 'accepted_at'
     | 'order_version'
   >,
   currentUserId: string

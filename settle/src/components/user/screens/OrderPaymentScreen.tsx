@@ -129,7 +129,6 @@ export interface OrderPaymentScreenProps {
   onViewProfile: () => void;
   onNeedHelp: () => void;
   onMarkPaymentSent: () => void;
-  onCancel: () => void;
   onAppeal: () => void;
   onCopy: (key: string, value: string) => void;
   copiedField: string | null;
@@ -137,7 +136,6 @@ export interface OrderPaymentScreenProps {
   matchingPayMethods: MerchantPaymentMethod[];
   onChoosePayMethod: (pm: MerchantPaymentMethod) => void;
   isSubmitting: boolean;
-  isCancelling: boolean;
 }
 
 export function OrderPaymentScreen({
@@ -150,7 +148,6 @@ export function OrderPaymentScreen({
   onViewProfile,
   onNeedHelp,
   onMarkPaymentSent,
-  onCancel,
   onAppeal,
   onCopy,
   copiedField,
@@ -158,7 +155,6 @@ export function OrderPaymentScreen({
   matchingPayMethods,
   onChoosePayMethod,
   isSubmitting,
-  isCancelling,
 }: OrderPaymentScreenProps) {
   const dbStatus = String(order.dbStatus || order.status || "").toLowerCase();
   const escrowLocked = dbStatus === "escrowed" || dbStatus === "payment_pending";
@@ -610,22 +606,23 @@ export function OrderPaymentScreen({
               {needsPayMethodPick ? "Select an account first" : "I have made the payment"}
             </motion.button>
           )}
-          {/* Cancel is offered ONLY before escrow is locked (accepted /
-              escrow_pending — nothing is at stake, so the buyer can back out
-              instantly and unilaterally). Once the seller has locked USDT
-              (escrowed / payment_pending / payment_sent) there is no cancel
-              button: the buyer raises an Appeal instead (rendered above when
-              fundsLocked), and any mutual cancellation is resolved there. */}
+          {/* No "Cancel Order" button here. This screen only renders once a
+              merchant has accepted the order, and per product the buyer can no
+              longer cancel after acceptance — the exits are Back (header),
+              Raise Appeal, and Need help. Cancel is only offered BEFORE a
+              merchant accepts (the matching phase). */}
+          {/* Raise Appeal — available from acceptance onward. Once escrow is
+              locked the escrow-status card above renders its own inline Appeal,
+              so this bottom button only shows in the pre-lock (accepted /
+              escrow_pending) state to avoid a duplicate. */}
           {!fundsLocked && (
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={onCancel}
-              disabled={isCancelling}
-              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-foreground/[0.05] text-foreground/70 border border-foreground/[0.08] disabled:opacity-50 flex items-center justify-center gap-2"
+            <button
+              onClick={onAppeal}
+              className="w-full py-3 rounded-2xl text-[14px] font-semibold text-error border border-error-border hover:bg-error-dim transition-colors flex items-center justify-center gap-2"
             >
-              {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
-              Cancel Order
-            </motion.button>
+              <AlertCircle className="w-4 h-4" />
+              Raise Appeal
+            </button>
           )}
           {/* Need help — always available support path (navigation only). */}
           <button

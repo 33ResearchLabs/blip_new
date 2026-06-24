@@ -264,30 +264,35 @@ export function useDisputeHandlers({
     if (!merchantId) return;
     setIsRequestingCancel(true);
     try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}/cancel-request`, {
+      // Opens a mutual-cancellation APPEAL — the counterparty agrees
+      // (→ cancel + refund) or rejects (→ dispute) via the in-order banner, and
+      // an unanswered request auto-escalates to a dispute. Replaces the legacy
+      // cancel-request handshake whose decline silently left the order running.
+      const res = await fetchWithAuth(`/api/orders/${orderId}/appeal`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': orderActionKey(orderId, 'cancel_request'),
+          'Idempotency-Key': orderActionKey(orderId, 'open_appeal'),
         },
         body: JSON.stringify({
-          actor_type: 'merchant',
-          actor_id: merchantId,
-          reason: 'Merchant requested cancellation',
+          issue_key: 'mutual_cancel',
+          description: 'Merchant requested mutual cancellation',
+          initiated_by: 'merchant',
+          merchant_id: merchantId,
         }),
       });
       const data = await res.json();
       if (data.success) {
         playSound('click');
-        addNotification('order', 'Cancel request sent to user', orderId);
+        addNotification('order', 'Cancellation requested — waiting for the other party', orderId);
         await afterMutationReconcile(orderId);
       } else {
         playSound('error');
-        addNotification('system', data.error || 'Failed to request cancel', orderId);
+        addNotification('system', data.error || 'Failed to request cancellation', orderId);
       }
     } catch (err) {
       playSound('error');
-      addNotification('system', 'Failed to request cancel', orderId);
+      addNotification('system', 'Failed to request cancellation', orderId);
     } finally {
       setIsRequestingCancel(false);
     }
