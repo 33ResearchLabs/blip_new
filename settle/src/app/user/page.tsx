@@ -1249,6 +1249,10 @@ export default function Home() {
                   prev.map((n) => ({ ...n, read: true })),
                 )
               }
+              onOpenOrder={(orderId) => {
+                setActiveOrderId(orderId);
+                setScreen("order");
+              }}
               unreadCount={notifications.filter((n) => !n.read).length}
               cancelledOrderCount={cancelledOrders.length}
               totalOrderCount={orders.length}

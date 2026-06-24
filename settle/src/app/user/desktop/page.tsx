@@ -772,6 +772,10 @@ export default function UserDesktopPage() {
                 notifications={notifications}
                 onMarkRead={(id) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))}
                 onMarkAllRead={() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))}
+                onOpenOrder={(orderId) => {
+                  setActiveOrderId(orderId);
+                  setScreen("order");
+                }}
                 unreadCount={notifications.filter((n) => !n.read).length}
                 maxW={maxW}
                 hideBottomNav
