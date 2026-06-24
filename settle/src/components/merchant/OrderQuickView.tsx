@@ -3296,9 +3296,17 @@ export function OrderQuickView({
                     }
                     role={qvCounterparty ? "button" : undefined}
                   >
-                    <div className="w-12 h-12 rounded-xl bg-foreground/5 flex items-center justify-center text-2xl border border-foreground/[0.04]">
-                      {selectedOrder.emoji}
-                    </div>
+                    {/* Counterparty avatar — same src/seed as the order cards
+                        and the Trade Parties panel so the picture is identical
+                        across list → detail (was an emoji, which read as a
+                        different avatar on open). */}
+                    <UserAvatar
+                      src={selectedOrder.user_avatar}
+                      seed={selectedOrder.user}
+                      size={48}
+                      alt={selectedOrder.user}
+                      style={{ borderRadius: 12 }}
+                    />
                     <div>
                       <p className="text-base font-semibold text-foreground">
                         {selectedOrder.user}

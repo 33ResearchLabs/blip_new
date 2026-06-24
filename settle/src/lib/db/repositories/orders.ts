@@ -55,7 +55,22 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
               'username', u.username,
               'wallet_address', u.wallet_address,
               'rating', u.rating,
-              'total_trades', u.total_trades
+              'total_trades', u.total_trades,
+              -- Avatar parity with the list queries (getUserOrders /
+              -- getMerchantOrders). Without it, the single-order refetch
+              -- (useRealtimeOrder) returns a merchant/user with no photo, the
+              -- re-map sets avatarUrl=null, and the counterparty avatar visibly
+              -- flips to a generated face a few seconds after opening the order.
+              -- Synthetic M2M "user" shells surface the real merchant's picture
+              -- (same placeholder-user logic as 'name' above).
+              'avatar_url', CASE
+                WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN
+                  CASE
+                    WHEN o.buyer_merchant_id IS DISTINCT FROM o.merchant_id THEN COALESCE(bm.avatar_url, m.avatar_url)
+                    ELSE m.avatar_url
+                  END
+                ELSE u.avatar_url
+              END
             ) as user,
             json_build_object(
               'id', m.id,
@@ -64,7 +79,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
               'rating', m.rating,
               'total_trades', m.total_trades,
               'is_online', m.is_online,
-              'wallet_address', m.wallet_address
+              'wallet_address', m.wallet_address,
+              'avatar_url', m.avatar_url
             ) as merchant,
             CASE
               WHEN bm.id IS NOT NULL THEN json_build_object(
@@ -74,7 +90,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
                 'rating', bm.rating,
                 'total_trades', bm.total_trades,
                 'is_online', bm.is_online,
-                'wallet_address', bm.wallet_address
+                'wallet_address', bm.wallet_address,
+                'avatar_url', bm.avatar_url
               )
               ELSE NULL
             END as buyer_merchant,

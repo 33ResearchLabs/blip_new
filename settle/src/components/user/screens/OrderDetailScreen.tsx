@@ -300,7 +300,7 @@ export interface OrderDetailScreenProps {
   respondToResolution: (action: "accept" | "reject") => void;
   isRespondingToResolution: boolean;
   // Cancel request
-  requestCancelOrder: (reason?: string) => void;
+  requestCancelOrder: (reason?: string) => Promise<boolean> | void;
   cancelOrderDirect: (reason?: string) => void;
   respondToCancelRequest: (accept: boolean) => void;
   isRequestingCancel: boolean;
@@ -3082,9 +3082,16 @@ export const OrderDetailScreen = ({
               onNeedHelp={() => setScreen("support")}
               onSubmit={submitAppeal}
               isSubmitting={isSubmittingAppeal}
-              onRequestCancel={() => {
-                setShowAppeal(false);
-                requestCancelOrder("Cancel & refund requested via appeal");
+              onRequestCancel={async () => {
+                // Keep the appeal screen (and its "Request Cancellation"
+                // spinner) up until the request actually resolves — closing it
+                // synchronously redirected to Order Details before the
+                // mutual-cancel request completed, hiding the loading state.
+                // requestCancelOrder drives isRequestingCancel (the spinner);
+                // we only leave the screen once it succeeds, so a slow/failed
+                // request keeps the user here to see the result or retry.
+                const ok = await requestCancelOrder("Cancel & refund requested via appeal");
+                if (ok) setShowAppeal(false);
               }}
               isRequestingCancel={isRequestingCancel}
             />

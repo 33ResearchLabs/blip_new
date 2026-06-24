@@ -925,15 +925,14 @@ export function useUserOrderActions({
     }
   };
 
-  const requestCancelOrder = async (reason?: string) => {
-    if (!activeOrder || !userId) return;
+  const requestCancelOrder = async (reason?: string): Promise<boolean> => {
+    if (!activeOrder || !userId) return false;
     setIsRequestingCancel(true);
     try {
       // Accepted/claimed orders (a counterparty is engaged) resolve through the
       // mutual-cancellation appeal; unclaimed orders keep the legacy handshake.
       if (activeOrder.acceptedAt) {
-        await openMutualCancelAppeal(reason);
-        return;
+        return await openMutualCancelAppeal(reason);
       }
       const res = await fetchWithAuth(
         `/api/orders/${activeOrder.id}/cancel-request`,
@@ -977,13 +976,15 @@ export function useUserOrderActions({
           ),
         );
         fetchOrders(userId);
-      } else {
-        playSound("error");
-        showAlert("Error", data.error || "Failed to request cancel", "error");
+        return true;
       }
+      playSound("error");
+      showAlert("Error", data.error || "Failed to request cancel", "error");
+      return false;
     } catch (err) {
       console.error("Failed to request cancel:", err);
       playSound("error");
+      return false;
     } finally {
       setIsRequestingCancel(false);
     }

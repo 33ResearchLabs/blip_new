@@ -75,6 +75,13 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { orderActionKey } from "@/lib/api/idempotencyKeys";
 import type { BackendOrder, ActionType } from "@/types/backendOrder";
 import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
+import { useSolanaWallet } from "@/context/SolanaWalletContext";
+import { useSounds } from "@/hooks/useSounds";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useEscrowOperations } from "@/hooks/useEscrowOperations";
+import { mapDbOrderToUI } from "@/lib/orders/mappers";
+import { MOCK_MODE } from "@/lib/config/mockMode";
+import { EscrowLockModal } from "@/components/merchant/EscrowLockModal";
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -176,8 +183,14 @@ function progressFraction(status?: string) {
 }
 
 /* Actions that require the embedded-wallet / on-chain escrow signing flow.
-   We do NOT re-implement signing here — clicking routes to the dashboard. */
+   LOCK_ESCROW now runs in-chat via the escrow modal; ACCEPT / CLAIM still
+   route to the dashboard (handled in handleAction). */
 const WALLET_FLOW_ACTIONS = new Set<ActionType>(["ACCEPT", "LOCK_ESCROW", "CLAIM"]);
+
+/* Wallet-flow actions that still bounce the merchant to the dashboard (i.e.
+   everything except LOCK_ESCROW, which we now handle in the chat tab). Drives
+   the ↗ icon + caption so Lock Escrow no longer looks like a redirect. */
+const DASHBOARD_REDIRECT_ACTIONS = new Set<ActionType>(["ACCEPT", "CLAIM"]);
 
 const ACTION_ICON: Partial<Record<ActionType, typeof Check>> = {
   ACCEPT: Check,
@@ -346,11 +359,77 @@ export default function TradeChatPage() {
   // Responding to an incoming mutual-cancel request (Agree / Decline).
   const [respondingCancel, setRespondingCancel] = useState(false);
 
+  // ── in-chat escrow lock ──
+  // Lets the merchant lock escrow directly from the chat tab instead of being
+  // bounced to the dashboard. Reuses the dashboard's exact escrow hook + modal,
+  // so the on-chain signing / idempotency path is identical — only the mount
+  // point differs. Wallet connection still lives on the dashboard (handleAction
+  // falls back to /market when the wallet isn't connected).
+  const solanaWallet = useSolanaWallet();
+  const { playSound } = useSounds();
+  const { addNotification } = useNotifications(merchantId, !!merchantId);
+  // effectiveBalance mirrors useOrderFetching: mock mode uses a fixed in-app
+  // balance, live mode reads on-chain USDT. The modal shows it; executeLockEscrow
+  // re-checks the real on-chain balance before signing.
+  const inAppBalance = MOCK_MODE ? 10000 : null;
+  const effectiveBalance = MOCK_MODE ? inAppBalance : (solanaWallet?.usdtBalance ?? null);
+  const {
+    showEscrowModal,
+    escrowOrder,
+    isLockingEscrow,
+    escrowTxHash,
+    escrowError,
+    openEscrowModal,
+    executeLockEscrow,
+    closeEscrowModal,
+  } = useEscrowOperations({
+    solanaWallet,
+    effectiveBalance,
+    inAppBalance,
+    addNotification,
+    playSound,
+    afterMutationReconcile: async (orderId: string) => {
+      await loadOrder(orderId);
+      fetchOrderConversations();
+    },
+    fetchOrders: async () => {
+      fetchOrderConversations();
+    },
+    refreshBalance: () => {
+      solanaWallet?.refreshBalances?.();
+    },
+    // Wallet connection lives on the dashboard; if the escrow flow needs it,
+    // send the merchant there (handleAction also pre-checks `connected`).
+    setShowWalletModal: (show: boolean) => {
+      if (show) router.push("/market");
+    },
+    setRatingModalData: () => {},
+  });
+
   const handleAction = useCallback(
     async (type: ActionType) => {
       if (!activeOrderId) return;
 
-      // Wallet-signing / on-chain escrow actions live on the dashboard.
+      // Lock Escrow runs IN the chat tab via the escrow modal. Wallet
+      // connection still lives on the dashboard, so fall back to /market when
+      // the wallet isn't connected.
+      if (type === "LOCK_ESCROW") {
+        if (!order) return;
+        if (!solanaWallet?.connected) {
+          router.push("/market");
+          return;
+        }
+        openEscrowModal(
+          mapDbOrderToUI(
+            order as unknown as Parameters<typeof mapDbOrderToUI>[0],
+            merchantId,
+            merchantInfo?.display_name ?? null,
+          ),
+        );
+        return;
+      }
+
+      // ACCEPT / CLAIM still need the dashboard wallet flow.
       if (WALLET_FLOW_ACTIONS.has(type)) {
         router.push("/market");
         return;
@@ -371,7 +450,7 @@ export default function TradeChatPage() {
       setActionMsg(null);
       await dispatch(activeOrderId, type, {});
     },
-    [activeOrderId, dispatch, router],
+    [activeOrderId, dispatch, router, order, solanaWallet, openEscrowModal, merchantId, merchantInfo],
   );
 
   // Confirm the reason modal → dispatch the cancel/dispute with the typed reason.
@@ -795,6 +874,19 @@ export default function TradeChatPage() {
           </div>
         </div>
       )}
+
+      {/* Escrow lock — opens in-chat when the merchant taps "Lock Escrow"
+          (reuses the dashboard's escrow modal + signing flow). */}
+      <EscrowLockModal
+        showEscrowModal={showEscrowModal}
+        escrowOrder={escrowOrder}
+        isLockingEscrow={isLockingEscrow}
+        escrowTxHash={escrowTxHash}
+        escrowError={escrowError}
+        effectiveBalance={effectiveBalance}
+        onClose={closeEscrowModal}
+        onExecute={executeLockEscrow}
+      />
     </div>
   );
 }
@@ -1281,7 +1373,7 @@ function TradeDetailsPane({
           ) : (
             visibleButtons.map((b) => {
               const Icon = ACTION_ICON[b.type] ?? Check;
-              const isWalletFlow = WALLET_FLOW_ACTIONS.has(b.type);
+              const redirectsToDashboard = DASHBOARD_REDIRECT_ACTIONS.has(b.type);
               const cls =
                 b.kind === "secondary"
                   ? b.type === "DISPUTE"
@@ -1298,14 +1390,14 @@ function TradeDetailsPane({
                 >
                   {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
                   {b.label}
-                  {isWalletFlow && <ExternalLink className="w-3 h-3 opacity-60" />}
+                  {redirectsToDashboard && <ExternalLink className="w-3 h-3 opacity-60" />}
                 </button>
               );
             })
           )}
-          {visibleButtons.some((b) => WALLET_FLOW_ACTIONS.has(b.type)) && (
+          {visibleButtons.some((b) => DASHBOARD_REDIRECT_ACTIONS.has(b.type)) && (
             <p className="text-[10px] text-foreground/40 text-center leading-snug">
-              Escrow & accept require your wallet — opens the trade panel.
+              Accepting a trade opens the dashboard for wallet signing.
             </p>
           )}
         </div>
