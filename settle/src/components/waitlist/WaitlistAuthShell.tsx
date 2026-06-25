@@ -281,7 +281,8 @@ export default function WaitlistAuthShell({ initialRole, initialMode }: Props) {
                 marginBottom: 16,
               }}
             >
-              {copy.headlineLead}{' '}
+              {copy.headlineLead}
+              <br />
               <span style={{ fontStyle: 'italic', fontWeight: 500, color: ACCENT }}>
                 {copy.headlineAccent}
               </span>
