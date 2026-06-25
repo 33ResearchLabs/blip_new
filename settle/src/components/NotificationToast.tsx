@@ -79,6 +79,10 @@ interface NotificationToastContainerProps {
   // sticky topbar so toasts don't overlap nav buttons. Pages without a
   // sticky topbar should leave this unset to preserve existing behavior.
   topOffsetClass?: string;
+  // Visual style. 'compact' (default) = small top-right toasts. 'card' = the
+  // larger top-center card design used on the user app (icon tile + bold title
+  // + message + close), so every notification shares one consistent look.
+  variant?: 'compact' | 'card';
 }
 
 let addToastGlobal: ((toast: Omit<Toast, 'id' | 'timestamp'>) => void) | null = null;
@@ -89,7 +93,7 @@ export function showToast(toast: Omit<Toast, 'id' | 'timestamp'>) {
   }
 }
 
-export function NotificationToastContainer({ position = 'top-right', topOffsetClass }: NotificationToastContainerProps) {
+export function NotificationToastContainer({ position = 'top-right', topOffsetClass, variant = 'compact' }: NotificationToastContainerProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   // dedup key -> timestamp of last time we surfaced that toast
@@ -167,13 +171,61 @@ export function NotificationToastContainer({ position = 'top-right', topOffsetCl
   };
 
   const slideDirection = position.includes('right') ? 100 : -100;
+  const isCard = variant === 'card';
+
+  const containerClass = isCard
+    ? `fixed ${topOffsetClass ?? 'top-4'} left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-stretch pointer-events-none w-[90%] max-w-sm`
+    : `fixed ${positionClasses[position]} z-[100] flex flex-col gap-2 pointer-events-none w-[calc(100vw-1.5rem)] max-w-[380px]`;
 
   return (
-    <div className={`fixed ${positionClasses[position]} z-[100] flex flex-col gap-2 pointer-events-none w-[calc(100vw-1.5rem)] max-w-[380px]`}>
+    <div className={containerClass}>
       <AnimatePresence mode="popLayout">
         {toasts.slice(0, MAX_VISIBLE).map((toast) => {
           const Icon = TOAST_ICONS[toast.type];
           const colors = TOAST_COLORS[toast.type];
+
+          // Card variant — larger top-center card (user app). One consistent
+          // look for every order-stage + chat notification.
+          if (isCard) {
+            return (
+              <motion.div
+                key={toast.id}
+                layout
+                initial={{ opacity: 0, y: -24, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -24, scale: 0.95 }}
+                transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+                className={`pointer-events-auto w-full ${colors.bg} backdrop-blur-sm rounded-2xl p-4 shadow-2xl shadow-black/30 border ${colors.border}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${colors.accent} flex items-center justify-center`}>
+                    <Icon className={`w-5 h-5 ${colors.icon}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-foreground mb-0.5">{toast.title}</p>
+                    <p className="text-xs text-foreground/60 leading-snug line-clamp-3">{toast.message}</p>
+                    {toast.actionLabel && toast.onAction && (
+                      <button
+                        onClick={() => { toast.onAction?.(); removeToast(toast.id); }}
+                        className="mt-2 flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                      >
+                        {toast.actionLabel}
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => removeToast(toast.id)}
+                    className="flex-shrink-0 p-1 rounded-lg hover:bg-foreground/10 transition-colors"
+                  >
+                    <X className="w-4 h-4 text-foreground/40" />
+                  </button>
+                </div>
+              </motion.div>
+            );
+          }
+
+          // Compact variant — small top-right toast (default, merchant/admin).
           return (
             <motion.div
               key={toast.id}
