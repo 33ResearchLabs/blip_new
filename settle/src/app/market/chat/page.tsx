@@ -364,6 +364,15 @@ export default function TradeChatPage() {
     type: "CANCEL" | "DISPUTE";
     reason: string;
   } | null>(null);
+  // Confirm modal for plain confirm-then-dispatch actions (e.g. SEND_PAYMENT),
+  // replacing the native window.confirm(). The orderId is captured at open time
+  // so confirming after switching conversations can't dispatch against the
+  // wrong order — window.confirm was synchronous and couldn't be raced this way.
+  const [confirmModal, setConfirmModal] = useState<{
+    type: ActionType;
+    orderId: string;
+    message: string;
+  } | null>(null);
   // Responding to an incoming mutual-cancel request (Agree / Decline).
   const [respondingCancel, setRespondingCancel] = useState(false);
 
@@ -485,10 +494,13 @@ export default function TradeChatPage() {
       const labels: Record<string, string> = {
         SEND_PAYMENT: "Mark this order as payment sent?",
       };
-      if (!window.confirm(labels[type] ?? `Run ${type}?`)) return;
-
-      setActionMsg(null);
-      await dispatch(activeOrderId, type, {});
+      // In-app confirm modal (replaces the native window.confirm). The actual
+      // dispatch runs in confirmGenericAction when the user confirms.
+      setConfirmModal({
+        type,
+        orderId: activeOrderId,
+        message: labels[type] ?? `Run ${type}?`,
+      });
     },
     [activeOrderId, dispatch, router, order, solanaWallet, openEscrowModal, openReleaseModal, merchantId, merchantInfo],
   );
@@ -502,6 +514,17 @@ export default function TradeChatPage() {
     setActionMsg(null);
     await dispatch(activeOrderId, type, { reason: reason.trim() || fallback });
   }, [reasonModal, activeOrderId, dispatch]);
+
+  // Confirm the generic confirm modal → dispatch against the captured orderId
+  // (not the current activeOrderId, which may have changed if the merchant
+  // switched conversations while the modal was open).
+  const confirmGenericAction = useCallback(async () => {
+    if (!confirmModal) return;
+    const { type, orderId } = confirmModal;
+    setConfirmModal(null);
+    setActionMsg(null);
+    await dispatch(orderId, type, {});
+  }, [confirmModal, dispatch]);
 
   // Respond to an incoming mutual-cancel request: accept (refund) or decline.
   const respondCancel = useCallback(
@@ -914,6 +937,40 @@ export default function TradeChatPage() {
                 className="flex-1 py-2.5 rounded-xl bg-accent text-accent-text text-[14px] font-semibold disabled:opacity-50"
               >
                 {reasonModal.type === "CANCEL" ? "Request cancellation" : "Open dispute"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generic confirm modal — replaces the native window.confirm() for
+          plain confirm-then-dispatch actions (e.g. Mark Payment Sent). */}
+      {confirmModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4"
+          onClick={() => setConfirmModal(null)}
+        >
+          <div
+            className="w-full max-w-[380px] rounded-2xl bg-[var(--color-bg-secondary)] border border-white/[0.1] p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-[16px] font-semibold text-foreground">Confirm</h3>
+            <p className="text-[13px] text-foreground/55 mt-1.5 leading-snug">
+              {confirmModal.message}
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="flex-1 py-2.5 rounded-xl border border-white/[0.12] bg-white/[0.04] text-foreground text-[14px] font-medium hover:bg-white/[0.08]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmGenericAction}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl bg-accent text-accent-text text-[14px] font-semibold disabled:opacity-50"
+              >
+                Confirm
               </button>
             </div>
           </div>
