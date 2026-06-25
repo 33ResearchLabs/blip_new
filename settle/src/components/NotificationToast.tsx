@@ -195,11 +195,17 @@ export function NotificationToastContainer({ position = 'top-right', topOffsetCl
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -24, scale: 0.95 }}
                 transition={{ type: 'spring', damping: 24, stiffness: 320 }}
-                className={`pointer-events-auto w-full ${colors.bg} backdrop-blur-sm rounded-2xl p-4 shadow-2xl shadow-black/30 border ${colors.border}`}
+                className={`pointer-events-auto w-full ${colors.bg} backdrop-blur-sm rounded-2xl p-4 shadow-2xl shadow-black/30 border border-accent/15`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${colors.accent} flex items-center justify-center`}>
-                    <Icon className={`w-5 h-5 ${colors.icon}`} />
+                  {/* Card variant is user-app-only (.user-scope), which defines
+                      --accent (white on dark / near-black on light) but NOT
+                      --primary. Using primary here leaked the html theme's
+                      --primary, which on the white user card resolved to an
+                      invisible color (e.g. white-on-white in Mono) — the icon
+                      "disappeared". Accent is always defined + contrasting. */}
+                  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
+                    <Icon className="w-5 h-5 text-accent" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-foreground mb-0.5">{toast.title}</p>
