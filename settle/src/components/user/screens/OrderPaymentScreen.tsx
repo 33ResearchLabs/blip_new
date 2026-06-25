@@ -547,10 +547,18 @@ export function OrderPaymentScreen({
           </button>
           <button
             onClick={onOpenChat}
-            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-surface-active"
+            className="relative w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-surface-active"
             aria-label="Chat with merchant"
           >
             <MessageCircle className="w-5 h-5 text-text-secondary" />
+            {/* Unread badge — this BUY accepted/escrow-pending screen never had
+                one, so incoming merchant messages didn't surface here even though
+                the count was already on the order. */}
+            {!!order.unreadCount && order.unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-accent text-accent-text text-[10px] font-semibold leading-4 text-center tabular-nums">
+                {order.unreadCount > 99 ? "99+" : order.unreadCount}
+              </span>
+            )}
           </button>
         </div>
 

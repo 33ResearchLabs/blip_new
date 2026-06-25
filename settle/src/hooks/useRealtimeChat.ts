@@ -183,11 +183,26 @@ const CACHE_TTL = 5 * 60_000; // 5 min
 // (≈30s at the 3s poll cadence — covers slow prod cold-start token restores).
 const HISTORY_RECOVERY_MAX_ATTEMPTS = 10;
 
+// Back-compat: messages stored BEFORE the server stopped HTML-encoding content
+// (sanitizeMessage) hold entities like &#x27; (') and &#x2F; (/), which rendered
+// literally because React escapes on output (double-escape). Decode them for
+// display. New messages are stored raw, so this is a no-op for them. Safe: the
+// result is rendered as React text, which escapes output — no XSS reintroduced.
+function decodeMessageEntities(s: string | null | undefined): string {
+  if (!s) return '';
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#x2F;/g, '/');
+}
+
 function _mapDbMsg(dbMsg: DbMessage, actorType: string, actorId: string): ChatMessage {
   const from = determineSender(dbMsg.sender_type, dbMsg.message_type, actorType, dbMsg.sender_id, actorId);
   return {
     id: dbMsg.id, from,
-    text: dbMsg.content,
+    text: decodeMessageEntities(dbMsg.content),
     timestamp: new Date(dbMsg.created_at),
     messageType: dbMsg.message_type,
     receiptData: dbMsg.receipt_data ?? null,
@@ -357,7 +372,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       return {
         id: dbMsg.id,
         from,
-        text: dbMsg.content,
+        text: decodeMessageEntities(dbMsg.content),
         timestamp: new Date(dbMsg.created_at),
         messageType: dbMsg.message_type,
         receiptData: dbMsg.receipt_data ?? null,
@@ -402,7 +417,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       return {
         id: event.messageId,
         from,
-        text: event.content,
+        text: decodeMessageEntities(event.content),
         timestamp: new Date(event.createdAt),
         messageType: event.messageType,
         imageUrl: event.imageUrl,
