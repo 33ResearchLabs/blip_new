@@ -13,6 +13,7 @@ import { usePusherOptional } from '@/context/PusherContext';
 import { getOrderChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS } from '@/lib/pusher/events';
 import { useOrderReconciliation } from './useOrderReconciliation';
+import { isDuplicateRealtimeEvent, orderEventIdentity } from '@/lib/notifications/realtimeDedup';
 
 // Polling interval — only used when Pusher is unavailable
 const POLLING_INTERVAL_FALLBACK = 3000;
@@ -204,9 +205,18 @@ export function useRealtimeOrder(
         orderId: string;
         status: string;
         previousStatus: string;
+        order_version?: number;
         data?: OrderData;
       };
       if (data.orderId !== orderId) return;
+
+      // Authoritative identity dedup (see realtimeDedup.ts): a single transition
+      // is delivered to this detail view multiple times (instant + ~5-10s-late
+      // outbox + core-api + overlapping channels), all sharing the same
+      // (orderId, status, order_version). Drop repeats here so the duplicate
+      // copy can't re-toast or trigger a redundant refetch. The previousStatus
+      // guard below remains the fallback when order_version is absent.
+      if (isDuplicateRealtimeEvent('order-detail', orderEventIdentity(data.orderId, data.status, data.order_version))) return;
 
       // Guard against replayed Pusher events: only fire when local state actually transitions.
       // (Without this, a replayed event after reconnect re-triggers "Trade Complete" toasts.)

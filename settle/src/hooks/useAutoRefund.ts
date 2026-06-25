@@ -8,7 +8,7 @@ import { txAnchoredKey } from '@/lib/api/idempotencyKeys';
 
 interface UseAutoRefundParams {
   solanaWallet: any;
-  addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string, opts?: { sticky?: boolean; priority?: 'high' | 'normal'; status?: string }) => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   debouncedFetchOrders: () => void;
 }
@@ -36,7 +36,7 @@ export function useAutoRefund({
 
       if (refundResult.success) {
 
-        addNotification('system', `Escrow auto-refunded! ${order.amount} USDT returned to your wallet.`, order.id);
+        addNotification('system', `Escrow auto-refunded! ${order.amount} USDT returned to your wallet.`, order.id, { status: 'cancelled' });
         playSound('click');
 
         // status=cancelled is a financial transition — backend rejects

@@ -13,6 +13,7 @@ import { usePusherOptional } from '@/context/PusherContext';
 import { getUserChannel, getMerchantChannel, getAllMerchantsChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS, CHAT_EVENTS } from '@/lib/pusher/events';
 import { shouldAcceptUpdate } from '@/lib/orders/statusResolver';
+import { isDuplicateRealtimeEvent, orderEventIdentity } from '@/lib/notifications/realtimeDedup';
 
 interface OrderData {
   id: string;
@@ -338,6 +339,12 @@ export function useRealtimeOrders(
         data?: OrderData;
       };
 
+      // Authoritative identity dedup (see realtimeDedup.ts): collapse the same
+      // transition delivered via instant+outbox / multiple producers /
+      // overlapping channels. Falls through (null identity) to the short window
+      // below when order_version is absent, preserving existing behavior.
+      if (isDuplicateRealtimeEvent('orders-list', orderEventIdentity(data.orderId, 'created', data.order_version))) return;
+
       if (isDuplicate(`created:${data.orderId}`)) return;
 
       if (data.data) {
@@ -362,6 +369,11 @@ export function useRealtimeOrders(
         data?: OrderData;
       };
 
+      // Authoritative identity dedup — the ~5-10s-late outbox copy lands
+      // outside the 3s window below, so gate on the stable transition identity
+      // first. Null identity (no order_version) falls through unchanged.
+      if (isDuplicateRealtimeEvent('orders-list', orderEventIdentity(data.orderId, data.status, data.order_version))) return;
+
       if (isDuplicate(`status:${data.orderId}:${data.status}`)) return;
 
       enqueueEvent({
@@ -381,6 +393,10 @@ export function useRealtimeOrders(
         order_version?: number;
         minimal_status?: string;
       };
+
+      // Same identity scope as status updates so a dedicated CANCELLED event and
+      // a generic STATUS_UPDATED(cancelled) for the same transition collapse.
+      if (isDuplicateRealtimeEvent('orders-list', orderEventIdentity(data.orderId, 'cancelled', data.order_version))) return;
 
       enqueueEvent({
         type: 'cancelled',
