@@ -932,9 +932,6 @@ export default function UserDesktopPage() {
         solanaWallet={solanaWallet}
         showUsernameModal={auth.showUsernameModal}
         handleWalletUsername={auth.handleWalletUsername}
-        showAcceptancePopup={userEffects.showAcceptancePopup}
-        setShowAcceptancePopup={userEffects.setShowAcceptancePopup}
-        acceptedOrderInfo={userEffects.acceptedOrderInfo}
       />
 
       <PushPermissionPrompt authed={!!auth.userId} />

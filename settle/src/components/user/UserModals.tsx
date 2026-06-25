@@ -1,9 +1,6 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Check } from "lucide-react";
 import dynamic from "next/dynamic";
-import { formatFiat } from "@/lib/format";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -33,15 +30,6 @@ interface UserModalsProps {
   solanaWallet: any;
   showUsernameModal: boolean;
   handleWalletUsername: (username: string) => Promise<void>;
-  showAcceptancePopup: boolean;
-  setShowAcceptancePopup: (show: boolean) => void;
-  acceptedOrderInfo: {
-    merchantName: string;
-    cryptoAmount: number;
-    fiatAmount: number;
-    fiatCurrency?: string;
-    orderType: 'buy' | 'sell';
-  } | null;
 }
 
 export function UserModals({
@@ -56,9 +44,6 @@ export function UserModals({
   solanaWallet,
   showUsernameModal,
   handleWalletUsername,
-  showAcceptancePopup,
-  setShowAcceptancePopup,
-  acceptedOrderInfo,
 }: UserModalsProps) {
   return (
     <>
@@ -125,41 +110,6 @@ export function UserModals({
         />
       )}
 
-      <AnimatePresence>
-        {showAcceptancePopup && acceptedOrderInfo && (
-          <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -50, scale: 0.9 }}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm"
-          >
-            <div className="rounded-2xl p-4 shadow-xl bg-surface-base border border-border-subtle">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-surface-active">
-                  <Check className="w-5 h-5 text-text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold mb-1 text-text-primary">Order Accepted!</p>
-                  <p className="text-xs mb-2 text-text-secondary">
-                    <span className="font-semibold text-text-primary">{acceptedOrderInfo.merchantName}</span> accepted your {acceptedOrderInfo.orderType === 'sell' ? 'sell' : 'buy'} order
-                  </p>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-semibold text-text-primary">{acceptedOrderInfo.cryptoAmount} USDT</span>
-                    <span className="text-text-quaternary">{'\u2022'}</span>
-                    <span className="text-text-secondary">{formatFiat(acceptedOrderInfo.fiatAmount, acceptedOrderInfo.fiatCurrency)}</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowAcceptancePopup(false)}
-                  className="p-1 rounded-lg bg-surface-card"
-                >
-                  <X className="w-4 h-4 text-text-tertiary" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </>
   );
 }
