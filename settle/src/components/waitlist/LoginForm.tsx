@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
 import { rememberRole } from "@/lib/waitlist/roleCache";
+import { useWaitlistTokens } from "@/context/WaitlistThemeContext";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import OrDivider from "@/components/auth/OrDivider";
 
@@ -24,6 +25,16 @@ interface LoginFormProps {
 export default function LoginForm({ role }: LoginFormProps) {
   const router = useRouter();
   const isMerchant = role === "merchant";
+  // Drive field colors off the waitlist-scoped theme (NOT Tailwind's
+  // `dark:`, which follows the global .dark class and can disagree with
+  // the waitlist toggle — that mismatch rendered dark inputs on the light
+  // auth card). Mirrors the submit button's [data-waitlist-theme] scoping.
+  const t = useWaitlistTokens();
+  const fieldBg = t.d ? "bg-white/[0.06]" : "bg-[#F2F2F5]";
+  const fieldText = t.d ? "text-white placeholder:text-white/30" : "text-black placeholder:text-black/30";
+  const fieldBorder = t.d ? "border-white/10" : "border-black/10";
+  const fieldRing = t.d ? "focus:ring-white/20" : "focus:ring-black/20";
+  const iconMuted = t.d ? "text-white/30" : "text-black/30";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -184,7 +195,7 @@ export default function LoginForm({ role }: LoginFormProps) {
           {/* Email */}
           <div>
             <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/30" />
+              <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] ${iconMuted}`} />
               <input
                 id="login-email"
                 name="email"
@@ -196,11 +207,11 @@ export default function LoginForm({ role }: LoginFormProps) {
                 onBlur={() => validate()}
                 maxLength={254}
                 disabled={isLoading}
-                className={`w-full pl-12 pr-4 py-3.5 bg-[#F2F2F5] dark:bg-white/[0.06] border ${
+                className={`w-full pl-12 pr-4 py-3.5 ${fieldBg} border ${
                   errors.email
                     ? "border-red-500/50 ring-2 ring-red-500/10"
-                    : "border-black/10 dark:border-white/10"
-                } rounded-xl text-black dark:text-white placeholder:text-black/30 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 focus:border-transparent transition-all duration-200`}
+                    : fieldBorder
+                } rounded-xl ${fieldText} focus:outline-none focus:ring-2 ${fieldRing} focus:border-transparent transition-all duration-200`}
                 placeholder="you@example.com"
               />
             </div>
@@ -218,13 +229,13 @@ export default function LoginForm({ role }: LoginFormProps) {
                 href={
                   isMerchant ? "/market/forgot-password" : "/user/forgot-password"
                 }
-                className="text-xs text-black/40 dark:text-white/40 hover:text-black dark:hover:text-white transition-colors duration-200"
+                className={`text-xs transition-colors duration-200 ${t.d ? "text-white/40 hover:text-white" : "text-black/40 hover:text-black"}`}
               >
                 Forgot password?
               </Link>
             </div>
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/30" />
+              <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] ${iconMuted}`} />
               <input
                 id="login-password"
                 name="password"
@@ -235,17 +246,17 @@ export default function LoginForm({ role }: LoginFormProps) {
                 onBlur={() => validate()}
                 maxLength={100}
                 disabled={isLoading}
-                className={`w-full pl-12 pr-12 py-3.5 bg-[#F2F2F5] dark:bg-white/[0.06] border ${
+                className={`w-full pl-12 pr-12 py-3.5 ${fieldBg} border ${
                   errors.password
                     ? "border-red-500/50 ring-2 ring-red-500/10"
-                    : "border-black/10 dark:border-white/10"
-                } rounded-xl text-black dark:text-white placeholder:text-black/30 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 focus:border-transparent transition-all duration-200`}
+                    : fieldBorder
+                } rounded-xl ${fieldText} focus:outline-none focus:ring-2 ${fieldRing} focus:border-transparent transition-all duration-200`}
                 placeholder="Enter your password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/30 hover:text-black/60 dark:hover:text-white/60 transition-colors duration-200"
+                className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${t.d ? "text-white/30 hover:text-white/60" : "text-black/30 hover:text-black/60"}`}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -325,12 +336,12 @@ export default function LoginForm({ role }: LoginFormProps) {
           </div>
 
           <div className="pt-2 space-y-2">
-            <OrDivider />
+            <OrDivider dark={t.d} />
             <GoogleSignInButton
               role={role}
               source={isMerchant ? "waitlist_merchant_login_google" : "waitlist_user_login_google"}
               waitlist
-              theme="light"
+              theme={t.d ? "dark" : "light"}
               onSuccess={() => {
                 rememberRole(role);
                 router.push("/waitlist/dashboard");

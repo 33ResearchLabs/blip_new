@@ -35,6 +35,7 @@ import {
 import { rememberRole } from "@/lib/waitlist/roleCache";
 import { collectFingerprint, type FingerprintPayload } from "@/lib/threat/clientFingerprint";
 import { SignupBehaviorCollector } from "@/lib/threat/clientTelemetry";
+import { useWaitlistTokens } from "@/context/WaitlistThemeContext";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import OrDivider from "@/components/auth/OrDivider";
 
@@ -104,6 +105,11 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   const params = useSearchParams();
   const isMerchant = role === "merchant";
   const initialRef = params.get("ref") ?? "";
+  // Field colors follow the waitlist-scoped theme, not Tailwind's global
+  // `dark:` — otherwise a global/waitlist theme mismatch paints dark
+  // inputs onto the light auth card (and vice-versa).
+  const t = useWaitlistTokens();
+  const iconMuted = t.d ? "text-white/70" : "text-black/30";
 
   // Form state — matches futureStick Register.tsx formData shape.
   const [email, setEmail] = useState("");
@@ -247,11 +253,11 @@ export default function RegisterForm({ role }: RegisterFormProps) {
   function inputCls(hasError: boolean, extra = ""): string {
     return [
       "w-full py-3.5 rounded-xl",
-      "bg-[#F2F2F5] dark:bg-white/[0.06]",
-      "text-black dark:text-white",
-      "placeholder:text-[#6e6e73] dark:placeholder:text-white/55",
-      "focus:outline-none focus:ring-2 focus:bg-white dark:focus:bg-white/[0.10]",
-      "focus:ring-black/[0.12] dark:focus:ring-white/20",
+      t.d ? "bg-white/[0.06]" : "bg-[#F2F2F5]",
+      t.d ? "text-white" : "text-black",
+      t.d ? "placeholder:text-white/55" : "placeholder:text-[#6e6e73]",
+      "focus:outline-none focus:ring-2",
+      t.d ? "focus:bg-white/[0.10] focus:ring-white/20" : "focus:bg-white focus:ring-black/[0.12]",
       "border",
       hasError
         ? "border-red-500/50 ring-2 ring-red-500/10"
@@ -266,7 +272,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
       {/* Email */}
       <div>
         <div className="relative">
-          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/70" />
+          <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] ${iconMuted}`} />
           <input
             id="reg-email"
             type="email"
@@ -290,7 +296,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
       {/* Password */}
       <div>
         <div className="relative">
-          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/70" />
+          <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] ${iconMuted}`} />
           <input
             id="reg-password"
             type={showPassword ? "text" : "password"}
@@ -307,7 +313,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/70 hover:text-black/60 dark:hover:text-white transition-colors duration-200"
+            className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${t.d ? "text-white/70 hover:text-white" : "text-black/30 hover:text-black/60"}`}
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? (
@@ -326,7 +332,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
         {password && (
           <div className="mt-3 space-y-2.5">
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+              <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${t.d ? "bg-white/5" : "bg-black/5"}`}>
                 <div
                   className={`h-full rounded-full transition-all duration-500 ease-out ${
                     strength.score <= 2
@@ -359,7 +365,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
                 type="button"
                 onClick={() => setShowRequirements((v) => !v)}
                 aria-expanded={showRequirements}
-                className="w-full flex items-center justify-between gap-2 text-[11px] font-medium text-black/50 dark:text-white/50 hover:text-black/70 dark:hover:text-white/70 transition-colors duration-200"
+                className={`w-full flex items-center justify-between gap-2 text-[11px] font-medium transition-colors duration-200 ${t.d ? "text-white/50 hover:text-white/70" : "text-black/50 hover:text-black/70"}`}
               >
                 <span>
                   Requirements ({strength.score}/
@@ -390,13 +396,13 @@ export default function RegisterForm({ role }: RegisterFormProps) {
                         {item.ok ? (
                           <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
                         ) : (
-                          <XCircle className="w-3.5 h-3.5 text-black/15 dark:text-white/15" />
+                          <XCircle className={`w-3.5 h-3.5 ${t.d ? "text-white/15" : "text-black/15"}`} />
                         )}
                         <span
                           className={`text-[11px] ${
                             item.ok
-                              ? "text-emerald-500 dark:text-emerald-400"
-                              : "text-black/30 dark:text-white/30"
+                              ? (t.d ? "text-emerald-400" : "text-emerald-500")
+                              : (t.d ? "text-white/30" : "text-black/30")
                           }`}
                         >
                           {item.label}
@@ -414,7 +420,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
       {/* Confirm Password */}
       <div>
         <div className="relative">
-          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/30 dark:text-white/70" />
+          <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] ${iconMuted}`} />
           <input
             id="reg-confirm"
             type={showConfirmPassword ? "text" : "password"}
@@ -430,7 +436,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/70 hover:text-black/60 dark:hover:text-white transition-colors duration-200"
+            className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${t.d ? "text-white/70 hover:text-white" : "text-black/30 hover:text-black/60"}`}
             aria-label={showConfirmPassword ? "Hide password" : "Show password"}
           >
             {showConfirmPassword ? (
@@ -456,7 +462,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
           onChange={(e) => setReferralCode(e.target.value)}
           maxLength={32}
           disabled={isLoading}
-          className="w-full px-4 py-3.5 bg-[#F2F2F5] dark:bg-white/[0.06] border-0 rounded-xl text-black dark:text-white placeholder:text-[#6e6e73] dark:placeholder:text-white/55 focus:outline-none focus:ring-2 focus:ring-black/[0.12] dark:focus:ring-white/20 focus:bg-white dark:focus:bg-white/[0.10] transition-all duration-200"
+          className={`w-full px-4 py-3.5 border-0 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${t.d ? "bg-white/[0.06] text-white placeholder:text-white/55 focus:ring-white/20 focus:bg-white/[0.10]" : "bg-[#F2F2F5] text-black placeholder:text-[#6e6e73] focus:ring-black/[0.12] focus:bg-white"}`}
           placeholder="Referral code (optional)"
         />
       </div>
@@ -466,6 +472,7 @@ export default function RegisterForm({ role }: RegisterFormProps) {
         checked={robotChecked}
         onChange={setRobotChecked}
         disabled={isLoading}
+        dark={t.d}
       />
 
       {submitError && (
@@ -507,20 +514,20 @@ export default function RegisterForm({ role }: RegisterFormProps) {
             </>
           )}
         </button>
-        <p className="mt-3 text-center text-[11.5px] text-[#1d1d1f] dark:text-white/80 flex items-center justify-center gap-1.5">
+        <p className={`mt-3 text-center text-[11.5px] flex items-center justify-center gap-1.5 ${t.d ? "text-white/80" : "text-[#1d1d1f]"}`}>
           <Shield className="w-3 h-3" strokeWidth={2} />
           We respect your privacy. No spam, ever.
         </p>
       </div>
 
       <div className="pt-1 space-y-2">
-        <OrDivider />
+        <OrDivider dark={t.d} />
         <GoogleSignInButton
           role={role}
           source={isMerchant ? "waitlist_merchant_register_google" : "waitlist_user_register_google"}
           waitlist
           referralCode={referralCode.trim() || undefined}
-          theme="light"
+          theme={t.d ? "dark" : "light"}
           onSuccess={() => {
             rememberRole(role);
             router.push("/waitlist/dashboard");
@@ -537,10 +544,12 @@ function RecaptchaTile({
   checked,
   onChange,
   disabled,
+  dark,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  dark?: boolean;
 }) {
   return (
     <div
@@ -554,15 +563,15 @@ function RecaptchaTile({
           onChange(!checked);
         }
       }}
-      className={`flex w-full items-center gap-3 px-4 py-2 rounded-xl bg-[#F2F2F5] dark:bg-white/[0.06] border border-black/10 dark:border-white/10 select-none cursor-pointer ${disabled ? "opacity-60 cursor-wait" : ""}`}
+      className={`flex w-full items-center gap-3 px-4 py-2 rounded-xl border select-none cursor-pointer ${dark ? "bg-white/[0.06] border-white/10" : "bg-[#F2F2F5] border-black/10"} ${disabled ? "opacity-60 cursor-wait" : ""}`}
     >
       <div
-        className={`w-5 h-5 rounded border ${checked ? "border-emerald-500 bg-white" : "border-black/30 bg-white dark:bg-white/90"} flex items-center justify-center transition-colors shrink-0`}
+        className={`w-5 h-5 rounded border ${checked ? "border-emerald-500 bg-white" : (dark ? "border-white/30 bg-white/90" : "border-black/30 bg-white")} flex items-center justify-center transition-colors shrink-0`}
       >
         {checked && <Check className="w-3.5 h-3.5 text-emerald-500" />}
       </div>
-      <span className="text-sm text-black/80 dark:text-white/80 flex-1">I&apos;m not a robot</span>
-      <div className="flex flex-col items-center pl-2 border-l border-black/10 dark:border-white/10 shrink-0">
+      <span className={`text-sm flex-1 ${dark ? "text-white/80" : "text-black/80"}`}>I&apos;m not a robot</span>
+      <div className={`flex flex-col items-center pl-2 border-l shrink-0 ${dark ? "border-white/10" : "border-black/10"}`}>
         <svg width="24" height="24" viewBox="0 0 32 32" aria-label="reCAPTCHA">
           <circle
             cx="16"
@@ -576,8 +585,8 @@ function RecaptchaTile({
           />
           <circle cx="16" cy="16" r="3.5" fill="#4285F4" />
         </svg>
-        <span className="text-[7px] font-bold text-black/40 dark:text-white/40 mt-0.5">reCAPTCHA</span>
-        <span className="text-[6px] text-black/30 dark:text-white/30 leading-none">Privacy&nbsp;-&nbsp;Terms</span>
+        <span className={`text-[7px] font-bold mt-0.5 ${dark ? "text-white/40" : "text-black/40"}`}>reCAPTCHA</span>
+        <span className={`text-[6px] leading-none ${dark ? "text-white/30" : "text-black/30"}`}>Privacy&nbsp;-&nbsp;Terms</span>
       </div>
     </div>
   );

@@ -888,6 +888,31 @@ select:-webkit-autofill {
   caret-color: #0f172a !important;
 }
 
+/* Waitlist-scoped autofill — the /waitlist/* auth shell runs a theme that
+   is independent of the global :root.light / .dark class. Keying the fill
+   off the waitlist data attribute (doubled for specificity, and placed
+   after the :root.light rule so it wins on order too) keeps autofilled
+   inputs matching the waitlist theme even when the global theme disagrees
+   — fixes black autofilled inputs on the light auth card. */
+[data-waitlist-theme="light"][data-waitlist-theme="light"] input:-webkit-autofill,
+[data-waitlist-theme="light"][data-waitlist-theme="light"] input:-webkit-autofill:hover,
+[data-waitlist-theme="light"][data-waitlist-theme="light"] input:-webkit-autofill:focus,
+[data-waitlist-theme="light"][data-waitlist-theme="light"] input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #F2F2F5 inset !important;
+  box-shadow: 0 0 0 1000px #F2F2F5 inset !important;
+  -webkit-text-fill-color: #000000 !important;
+  caret-color: #000000 !important;
+}
+[data-waitlist-theme="dark"][data-waitlist-theme="dark"] input:-webkit-autofill,
+[data-waitlist-theme="dark"][data-waitlist-theme="dark"] input:-webkit-autofill:hover,
+[data-waitlist-theme="dark"][data-waitlist-theme="dark"] input:-webkit-autofill:focus,
+[data-waitlist-theme="dark"][data-waitlist-theme="dark"] input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgb(10 10 10 / 0.95) inset !important;
+  box-shadow: 0 0 0 1000px rgb(10 10 10 / 0.95) inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+}
+
 /* Number input */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {

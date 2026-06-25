@@ -452,7 +452,7 @@ function MobileWaitlistHeader({
   const t = useThemeTokens();
   // Collapsible "Your Journey" — the chevron after the step count toggles
   // the timeline open/closed (mobile-only card, defaults to open).
-  const [journeyOpen, setJourneyOpen] = useState(false);
+  const [journeyOpen, setJourneyOpen] = useState(true);
 
   // Step timeline — mirror ProgressStepsCard's source logic exactly so the
   // mobile "Your Journey" and the desktop "Your Progress & Steps" can never
@@ -502,7 +502,7 @@ function MobileWaitlistHeader({
   const checkText = t.d ? 'text-black' : 'text-white';
 
   return (
-    <div className="lg:hidden mb-6">
+    <div className="lg:hidden mb-10">
       {/* Dark full-bleed band — continues the navbar's black behind the hero
           and extends below it so the Overview card can overlap, creating the
           premium layered effect from the mockup. */}
@@ -529,7 +529,7 @@ function MobileWaitlistHeader({
             </span> */}
             <h2 className="text-[31px] font-bold leading-[1.08] tracking-[-0.015em] text-white">
               {headlineLead}
-              <span style={{ color: ACCENT }}>Blip Market.</span>
+              <span className="italic" style={{ color: ACCENT }}>Blip Market.</span>
             </h2>
             <p className="text-[13.5px] text-white/55 leading-[1.55] max-w-[15rem]">
               {headlineSub}
@@ -554,23 +554,24 @@ function MobileWaitlistHeader({
       </div>
 
       {/* Your Journey — step timeline. */}
-      <div className={`mt-6 ${t.surface} border ${t.border} ${t.cardShadow} rounded-[22px] p-5`}>
-        <div className={journeyOpen ? 'mb-5' : 'mb-0'}>
+      <div className={`mt-10 ${t.surface} border ${t.border} ${t.cardShadow} rounded-[22px] p-5`}>
+        <button
+          type="button"
+          onClick={() => setJourneyOpen((v) => !v)}
+          aria-expanded={journeyOpen}
+          aria-controls="journey-steps"
+          aria-label={journeyOpen ? 'Hide steps' : 'Show steps'}
+          className={`w-full flex items-center justify-between gap-2 active:opacity-70 transition ${journeyOpen ? 'mb-4' : 'mb-0'}`}
+        >
           <h3 className={`text-[19px] font-bold ${t.txt} tracking-tight`}>Your Journey</h3>
-          <button
-            type="button"
-            onClick={() => setJourneyOpen((v) => !v)}
-            aria-expanded={journeyOpen}
-            aria-controls="journey-steps"
-            aria-label={journeyOpen ? 'Hide steps' : 'Show steps'}
-            className={`mt-1.5 w-full flex items-center justify-between gap-1.5 text-[12px] font-medium ${t.muted} active:opacity-70 transition`}
-          >
-            <span>{completedCount} of {steps.length} steps completed</span>
-            <ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 ${journeyOpen ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
+          <ChevronDown className={`w-5 h-5 shrink-0 ${t.muted} transition-transform duration-200 ${journeyOpen ? 'rotate-180' : ''}`} />
+        </button>
         {journeyOpen && (
-        <div id="journey-steps" className="space-y-5">
+        <div id="journey-steps">
+          <p className={`text-[12px] font-medium ${t.muted} mb-4`}>
+            {completedCount} of {steps.length} steps completed
+          </p>
+          <div className="space-y-5">
           {steps.map((step, i) => {
             const isLast = i === steps.length - 1;
             const isDone = step.status === 'done';
@@ -621,6 +622,7 @@ function MobileWaitlistHeader({
               </div>
             );
           })}
+          </div>
         </div>
         )}
       </div>
@@ -775,7 +777,7 @@ function MerchantLayout(props: {
         onOpenHow={onOpenHow}
         isMerchant
       />
-      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
+      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         <div className="lg:col-span-6">
           <HeroCard
             referralUnit={referralUnit}
@@ -803,9 +805,9 @@ function MerchantLayout(props: {
 
       {/* Below the top row: LEFT (Onboard + Stats + Quests + P2P)
           | MIDDLE (Progress + Leaderboard) | RIGHT (Steps) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         {/* LEFT COLUMN */}
-        <div className="lg:col-span-6 flex flex-col gap-6 lg:gap-3">
+        <div className="lg:col-span-6 flex flex-col gap-10 lg:gap-3">
           {/* Merchant Onboarding CTA */}
           <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${onboardDone ? 'opacity-70' : ''}`}>
             <div className="flex items-center gap-3.5 min-w-0">
@@ -912,7 +914,7 @@ function MerchantLayout(props: {
         </div>
 
         {/* MIDDLE COLUMN */}
-        <div className="lg:col-span-3 flex flex-col gap-6 lg:gap-3 min-w-0">
+        <div className="lg:col-span-3 flex flex-col gap-10 lg:gap-3 min-w-0">
           <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} compact />
         </div>
@@ -978,7 +980,7 @@ function UserLayout(props: {
         onOpenHow={onOpenHow}
         isMerchant={false}
       />
-      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
+      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         <div className="lg:col-span-6">
           <HeroCard
             referralUnit={referralUnit}
@@ -1004,9 +1006,9 @@ function UserLayout(props: {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         {/* LEFT — Quests + Invite */}
-        <div className="lg:col-span-8 flex flex-col gap-6 lg:gap-3">
+        <div className="lg:col-span-8 flex flex-col gap-10 lg:gap-3">
           <div id="social-quests">
             <div className="mb-4">
               <div className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub} mb-1`}>
@@ -1068,10 +1070,14 @@ function UserLayout(props: {
           )}
         </div>
 
-        {/* RIGHT — Progress + Leaderboard */}
-        <div className="lg:col-span-4 flex flex-col gap-6 lg:gap-3">
+        {/* RIGHT — Progress + Leaderboard + Steps */}
+        <div className="lg:col-span-4 flex flex-col gap-10 lg:gap-3">
           <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} />
+          {/* Your Progress & Steps — desktop only (mobile uses "Your Journey"). */}
+          <div className="hidden lg:block">
+            <ProgressStepsCard me={me} referralCount={referralCount} isMerchant={false} />
+          </div>
         </div>
       </div>
     </>
@@ -1096,7 +1102,7 @@ function MobileReferralCard({
   const codeTint = t.d ? 'rgba(204,120,92,0.07)' : 'rgba(204,120,92,0.045)';
 
   return (
-    <div className={`lg:hidden ${t.surface} border ${t.border} ${t.cardShadow} rounded-[24px] p-5 shadow-sm mb-6`}>
+    <div className={`lg:hidden ${t.surface} border ${t.border} ${t.cardShadow} rounded-[24px] p-5 shadow-sm mb-10`}>
       {/* Header — circular icon, title, description (centred) */}
       <div className="flex flex-col items-center text-center gap-3.5">
         <div
@@ -1107,7 +1113,7 @@ function MobileReferralCard({
         </div>
         <h2 className="text-[30px] font-bold leading-[1.08] tracking-tight">
           <span className={t.txt}>Refer Friends. </span>
-          <span style={{ color: ACCENT }}>Earn More.</span>
+          <span className="italic" style={{ color: ACCENT }}>Earn More.</span>
         </h2>
         <p className={`text-[14px] ${t.muted} leading-relaxed max-w-[21rem]`}>
           Invite your friends to Blip Market and earn{' '}
@@ -1466,8 +1472,7 @@ function RealTimeActivityCard({
               <div className="text-right shrink-0 ml-3 flex flex-col items-end gap-0.5">
                 {a.points !== null && (
                   <span
-                    className="text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full tabular-nums"
-                    style={{ background: 'rgba(204,120,92,0.10)', color: ACCENT }}
+                    className={`text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full tabular-nums ${t.inputBg} border ${t.border} ${t.txt}`}
                   >
                     +{a.points.toLocaleString('en-US')} pts
                   </span>
@@ -2058,8 +2063,7 @@ function QuestCard({ quest, existing, onUpdate, onShareReferral }: {
 
   const rewardPill = (
     <span
-      className="text-[11px] font-semibold tracking-tight whitespace-nowrap px-2 py-0.5 rounded-full shrink-0"
-      style={{ background: 'rgba(204,120,92,0.10)', color: ACCENT }}
+      className={`text-[11px] font-semibold tracking-tight whitespace-nowrap px-2 py-0.5 rounded-full shrink-0 ${t.inputBg} border ${t.border} ${t.txt}`}
     >
       +{formatCount(quest.reward)} BLIP
     </span>
@@ -2103,9 +2107,7 @@ function QuestCard({ quest, existing, onUpdate, onShareReferral }: {
         </div>
         <div className={`mt-auto flex ${isDone ? 'justify-end' : 'justify-start'}`}>
           {isDone ? (
-            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-500">
-              <CheckCircle2 className="w-4 h-4" /> Redeemed
-            </div>
+            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
           ) : (
             <button onClick={handleStart}
               className={`${t.accentBg} ${t.accentText} px-6 py-3 rounded-full text-[13.5px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]`}>
