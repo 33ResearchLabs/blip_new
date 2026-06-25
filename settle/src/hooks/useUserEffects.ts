@@ -94,14 +94,6 @@ export function useUserEffects({
 }: UseUserEffectsParams) {
   const [matchingTimeLeft, setMatchingTimeLeft] = useState<number>(15 * 60);
   const [timerTick, setTimerTick] = useState(0);
-  const [showAcceptancePopup, setShowAcceptancePopup] = useState(false);
-  const [acceptedOrderInfo, setAcceptedOrderInfo] = useState<{
-    merchantName: string;
-    cryptoAmount: number;
-    fiatAmount: number;
-    fiatCurrency: string;
-    orderType: 'buy' | 'sell';
-  } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const [showChat, setShowChat] = useState(false);
@@ -337,15 +329,8 @@ export function useUserEffects({
         const merchantName = orderData?.merchant?.display_name || orderData?.merchant?.business_name || 'Merchant';
         playSound('notification');
 
-        setAcceptedOrderInfo({
-          merchantName,
-          cryptoAmount: orderData?.crypto_amount || 0,
-          fiatAmount: orderData?.fiat_amount || 0,
-          fiatCurrency: (orderData as any)?.fiat_currency || '',
-          orderType: orderData?.type || 'buy',
-        });
-        setShowAcceptancePopup(true);
-        setTimeout(() => setShowAcceptancePopup(false), 5000);
+        // Standard themed toast (Design A) — consistent with every other stage
+        // notification (replaces the old AcceptancePopup card).
         stageToast('order', 'Order Accepted', `${merchantName} accepted your order`, 6000);
         showBrowserNotification('Order Accepted!', `${merchantName} accepted your ${orderData?.type || 'buy'} order`, activeOrderId || undefined);
 
@@ -503,16 +488,8 @@ export function useUserEffects({
     if (merchantId && !prevMerchantId && (screen === 'escrow' || screen === 'matching')) {
       const merchantName = (realtimeOrder as any).merchant?.display_name || 'Merchant';
       playSound('notification');
+      // Standard themed toast (Design A) only — no AcceptancePopup card.
       toast.showMerchantAccepted(merchantName);
-      setAcceptedOrderInfo({
-        merchantName,
-        cryptoAmount: (realtimeOrder as any).crypto_amount || 0,
-        fiatAmount: (realtimeOrder as any).fiat_amount || 0,
-        fiatCurrency: (realtimeOrder as any).fiat_currency || '',
-        orderType: (realtimeOrder as any).type || 'sell',
-      });
-      setShowAcceptancePopup(true);
-      setTimeout(() => setShowAcceptancePopup(false), 5000);
       if (screen === 'matching') setPendingTradeData(null);
       setScreen('order');
     }
@@ -673,6 +650,12 @@ export function useUserEffects({
     // never subscribes to private-order-{id} until they explicitly click the
     // chat button — and any merchant message that arrives in the meantime
     // only shows up on refresh (when GET /messages re-fetches the inserted row).
+    //
+    // IMPORTANT: subscribing must NOT mark the thread read or clear unread.
+    // Sitting on the order screen with the chat panel CLOSED is not "reading" —
+    // clearing unread here would stop an incoming message from ever surfacing
+    // on the chat icon. Read-marking happens only when the chat is actually
+    // open (see the read effect just below).
     const shouldSubscribe = (screen === "chat-view" || screen === "order") && !!order;
     if (shouldSubscribe && order.id !== prevChatViewOrderRef.current) {
       prevChatViewOrderRef.current = order.id;
@@ -681,16 +664,6 @@ export function useUserEffects({
         "\uD83C\uDFEA",
         order.id
       );
-      // Mark merchant's messages as read once when user enters chat
-      setTimeout(() => {
-        const chat = chatWindowsRef2.current.find(w => w.orderId === order.id);
-        if (chat) markAsReadRef.current(chat.id);
-      }, 500);
-      // Also clear the inbox unread counter for this order so the Chat-button
-      // badge disappears as soon as the user is looking at the thread.
-      setOrders(prev => prev.map(o =>
-        o.id === order.id ? { ...o, unreadCount: 0 } : o
-      ));
     }
     if (!shouldSubscribe) {
       prevChatViewOrderRef.current = null;
@@ -710,6 +683,23 @@ export function useUserEffects({
       });
     }
   }, [showChat, screen, activeChat?.messages?.length]);
+
+  // Mark the thread read + clear the unread badge ONLY when the chat panel is
+  // actually open (showChat) or on the dedicated chat-view screen. This is the
+  // counterpart to the subscribe-only effect above: being on the order screen
+  // with the chat closed leaves unread intact so an incoming message shows on
+  // the chat icon; opening the chat is what marks it read. Re-runs as messages
+  // arrive so a message that lands WHILE the chat is open is also marked read.
+  useEffect(() => {
+    if (!(showChat || screen === "chat-view")) return;
+    const order = activeOrderRef.current;
+    if (!order) return;
+    const chat = chatWindowsRef2.current.find(w => w.orderId === order.id);
+    if (chat) markAsReadRef.current(chat.id);
+    setOrders(prev =>
+      prev.map(o => (o.id === order.id && o.unreadCount ? { ...o, unreadCount: 0 } : o)),
+    );
+  }, [showChat, screen, activeOrder?.id, activeChat?.messages?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSendMessage = useCallback(() => {
     if (!activeChat || !chatMessage.trim()) return;
@@ -929,8 +919,5 @@ export function useUserEffects({
     loadOlderMessages,
     hasOlderMessages,
     isLoadingOlderMessages,
-    // Acceptance popup
-    showAcceptancePopup, setShowAcceptancePopup,
-    acceptedOrderInfo,
   };
 }

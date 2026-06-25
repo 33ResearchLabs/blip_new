@@ -1414,9 +1414,6 @@ export default function Home() {
         solanaWallet={solanaWallet}
         showUsernameModal={auth.showUsernameModal}
         handleWalletUsername={auth.handleWalletUsername}
-        showAcceptancePopup={userEffects.showAcceptancePopup}
-        setShowAcceptancePopup={userEffects.setShowAcceptancePopup}
-        acceptedOrderInfo={userEffects.acceptedOrderInfo}
       />
 
       {isDesktop && (
