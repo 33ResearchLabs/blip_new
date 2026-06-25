@@ -1008,7 +1008,7 @@ function UserLayout(props: {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         {/* LEFT — Quests + Invite */}
-        <div className="lg:col-span-8 flex flex-col gap-10 lg:gap-3">
+        <div className="lg:col-span-6 flex flex-col gap-10 lg:gap-3">
           <div id="social-quests">
             <div className="mb-4">
               <div className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub} mb-1`}>
@@ -1053,7 +1053,7 @@ function UserLayout(props: {
             </div>
             <div className="flex items-center gap-4 w-full md:w-auto">
               <div>
-                <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${t.sub}`}>Your Referrals</p>
+                <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${t.sub}`}>Your Referrals </p>
                 <p className={`text-lg font-semibold ${t.txt} leading-tight`}>{referralCount}</p>
               </div>
               <button
@@ -1070,14 +1070,17 @@ function UserLayout(props: {
           )}
         </div>
 
-        {/* RIGHT — Progress + Leaderboard + Steps */}
-        <div className="lg:col-span-4 flex flex-col gap-10 lg:gap-3">
+        {/* MIDDLE — Progress + Leaderboard */}
+        <div className="lg:col-span-3 flex flex-col gap-10 lg:gap-3 min-w-0">
           <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} />
-          {/* Your Progress & Steps — desktop only (mobile uses "Your Journey"). */}
-          <div className="hidden lg:block">
-            <ProgressStepsCard me={me} referralCount={referralCount} isMerchant={false} />
-          </div>
+        </div>
+
+        {/* RIGHT — Your Progress & Steps (desktop only; mobile uses "Your
+            Journey"). Placed beside the progress column to match the
+            merchant dashboard. */}
+        <div className="hidden lg:flex lg:col-span-3 flex-col gap-3 min-w-0">
+          <ProgressStepsCard me={me} referralCount={referralCount} isMerchant={false} />
         </div>
       </div>
     </>
@@ -1246,10 +1249,10 @@ function HeroCard({
           <h2 className="text-[26px] md:text-[31px] font-semibold leading-[1.15] tracking-tight">
             <span className={t.txt}>Refer Friends.</span>
             <br />
-            <span style={{ color: ACCENT }}>Earn More.</span>
+            <span className="italic" style={{ color: ACCENT }}>Earn More.</span>
           </h2>
           <p className={`text-[13.5px] ${t.muted} max-w-md leading-[1.7]`}>
-            Invite your friends to Blip Market and earn{' '}
+            Invite your friends to Blip Market and earn  {' '}
             <span className={`font-semibold ${t.txt}`}>{formatCount(referralUnit)} pts</span> for each
             successful referral. There&apos;s no limit to how much you can earn.
           </p>
