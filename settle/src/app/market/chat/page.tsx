@@ -69,6 +69,7 @@ import {
 } from "@/hooks/useMerchantConversations";
 import { useRealtimeChat, type ChatMessage } from "@/hooks/useRealtimeChat";
 import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
+import { usePusher } from "@/context/PusherContext";
 import { useOrderActionDispatch } from "@/hooks/useOrderActionDispatch";
 import { ImageUpload } from "@/components/chat/ImageUpload";
 import { ReceiptCard } from "@/components/chat/cards";
@@ -83,6 +84,7 @@ import { useEscrowOperations } from "@/hooks/useEscrowOperations";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { MOCK_MODE } from "@/lib/config/mockMode";
 import { EscrowLockModal } from "@/components/merchant/EscrowLockModal";
+import { EscrowReleaseModal } from "@/components/merchant/EscrowReleaseModal";
 import { MutualCancelAppealBanner } from "@/components/shared/MutualCancelAppealBanner";
 
 /* ───────────────────────── helpers ───────────────────────── */
@@ -218,6 +220,19 @@ export default function TradeChatPage() {
   const router = useRouter();
   const merchantId = useMerchantStore((s) => s.merchantId);
   const merchantInfo = useMerchantStore((s) => s.merchantInfo);
+
+  // Initialize the Pusher actor for this page. The dashboard does this via
+  // useMerchantEffects, but the chat tab doesn't mount that hook — so on a HARD
+  // REFRESH of /market/chat (vs. navigating in from the dashboard, where the
+  // connection is already live) the Pusher client was never created. That left
+  // the whole tab on polling only: chat history (loaded inside subscribeToOrder,
+  // which bails when there's no channel), the right-rail order, and the inbox
+  // all fell back to slow polls. Setting the actor here connects Pusher so chat
+  // + order state load and update in realtime. setActor is idempotent.
+  const { setActor: setPusherActor } = usePusher();
+  useEffect(() => {
+    if (merchantId) setPusherActor("merchant", merchantId);
+  }, [merchantId, setPusherActor]);
 
   const {
     orderConversations,
@@ -375,6 +390,16 @@ export default function TradeChatPage() {
     openEscrowModal,
     executeLockEscrow,
     closeEscrowModal,
+    // Release flow — used by CONFIRM_PAYMENT so the seller signs the on-chain
+    // release (sends USDT to the buyer + completes) directly in the chat tab.
+    showReleaseModal,
+    releaseOrder,
+    isReleasingEscrow,
+    releaseTxHash,
+    releaseError,
+    openReleaseModal,
+    executeRelease,
+    closeReleaseModal,
   } = useEscrowOperations({
     solanaWallet,
     effectiveBalance,
@@ -422,6 +447,29 @@ export default function TradeChatPage() {
         return;
       }
 
+      // Confirm Payment = release escrow. The seller must sign the on-chain
+      // release that sends USDT to the buyer + completes the order. Previously
+      // this fell through to the generic action dispatch, which only advanced
+      // the DB to `payment_confirmed` and NEVER released the crypto (a dead-end
+      // state with no further action). Now it opens the release modal and runs
+      // the same on-chain release the dashboard uses. Wallet connection still
+      // lives on the dashboard, so fall back to /market when not connected.
+      if (type === "CONFIRM_PAYMENT") {
+        if (!order) return;
+        if (!solanaWallet?.connected) {
+          router.push("/market");
+          return;
+        }
+        openReleaseModal(
+          mapDbOrderToUI(
+            order as unknown as Parameters<typeof mapDbOrderToUI>[0],
+            merchantId,
+            merchantInfo?.display_name ?? null,
+          ),
+        );
+        return;
+      }
+
       // ACCEPT / CLAIM still need the dashboard wallet flow.
       if (WALLET_FLOW_ACTIONS.has(type)) {
         router.push("/market");
@@ -436,14 +484,13 @@ export default function TradeChatPage() {
 
       const labels: Record<string, string> = {
         SEND_PAYMENT: "Mark this order as payment sent?",
-        CONFIRM_PAYMENT: "Confirm payment received and release escrow?",
       };
       if (!window.confirm(labels[type] ?? `Run ${type}?`)) return;
 
       setActionMsg(null);
       await dispatch(activeOrderId, type, {});
     },
-    [activeOrderId, dispatch, router, order, solanaWallet, openEscrowModal, merchantId, merchantInfo],
+    [activeOrderId, dispatch, router, order, solanaWallet, openEscrowModal, openReleaseModal, merchantId, merchantInfo],
   );
 
   // Confirm the reason modal → dispatch the cancel/dispute with the typed reason.
@@ -884,6 +931,19 @@ export default function TradeChatPage() {
         effectiveBalance={effectiveBalance}
         onClose={closeEscrowModal}
         onExecute={executeLockEscrow}
+      />
+
+      {/* Confirm Payment → release escrow — opens in-chat when the seller taps
+          "Confirm Payment" (signs the on-chain release, sends USDT to the buyer,
+          completes the order). Reuses the dashboard's escrow release flow. */}
+      <EscrowReleaseModal
+        showReleaseModal={showReleaseModal}
+        releaseOrder={releaseOrder}
+        isReleasingEscrow={isReleasingEscrow}
+        releaseTxHash={releaseTxHash}
+        releaseError={releaseError}
+        onClose={closeReleaseModal}
+        onExecute={executeRelease}
       />
     </div>
   );
