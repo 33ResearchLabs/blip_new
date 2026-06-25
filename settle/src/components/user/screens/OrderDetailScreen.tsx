@@ -1854,9 +1854,10 @@ export const OrderDetailScreen = ({
                                 <motion.button
                                   whileTap={{ scale: 0.98 }}
                                   onClick={markPaymentSent}
-                                  className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold ${PRIMARY_BTN}`}
+                                  disabled={isLoading}
+                                  className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${PRIMARY_BTN}`}
                                 >
-                                  I&apos;m at the location
+                                  {isLoading ? "Processing..." : "I'm at the location"}
                                 </motion.button>
                               </div>
                             </>
