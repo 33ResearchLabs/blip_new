@@ -805,7 +805,7 @@ export default function Home() {
         />
       )}
       <IssueReporter hideTrigger />
-      <NotificationToastContainer position="top-right" />
+      <NotificationToastContainer variant="card" />
       {/* Onboarding — shown once per new user AFTER they sign in/up */}
       {showOnboarding && !!auth.userId && (
         <UserOnboardingFlow

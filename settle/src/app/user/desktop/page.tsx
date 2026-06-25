@@ -465,7 +465,7 @@ export default function UserDesktopPage() {
       className={`user-scope ${isUserLight ? "user-light" : ""}`}
       style={{ display: "flex", minHeight: "100dvh", background: "#080810", fontFamily: "Manrope, sans-serif" }}
     >
-      <NotificationToastContainer position="top-right" />
+      <NotificationToastContainer variant="card" />
 
       {/* Onboarding overlay */}
       {showOnboarding && !!auth.userId && (

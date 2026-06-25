@@ -768,22 +768,25 @@ export const ChatViewScreen = ({
                   ) : (
                     <p className="text-[15px] leading-relaxed whitespace-pre-wrap wrap-break-word">{msg.text}</p>
                   )}
+                  {/* Own messages: timestamp + ticks inherit the bubble's text
+                      color (white on the navy light-theme bubble, black on the
+                      white dark-theme bubble) so they're always legible. */}
                   <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
-                    <span className={`text-[10px] ${isMe ? 'text-black/45' : 'text-text-tertiary'}`}>
+                    <span className={`text-[10px] ${isMe ? 'opacity-90' : 'text-text-tertiary'}`}>
                       {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {isMe && (
                       msg.status === 'sending' ? (
-                        <Clock className="w-3 h-3 text-text-tertiary" />
+                        <Clock className="w-3 h-3 opacity-70" />
                       ) : msg.status === 'read' || msg.isRead ? (
-                        // ✓✓ blue — counterparty has READ the message
-                        <CheckCheck className="w-3.5 h-3.5 text-info" />
+                        // ✓✓ — counterparty has READ the message (full opacity)
+                        <CheckCheck className="w-3.5 h-3.5" />
                       ) : msg.status === 'delivered' ? (
-                        // ✓✓ grey — message DELIVERED to counterparty's device
-                        <CheckCheck className="w-3.5 h-3.5 text-black/45" />
+                        // ✓✓ — message DELIVERED to counterparty's device
+                        <CheckCheck className="w-3.5 h-3.5 opacity-70" />
                       ) : (
                         // ✓ single — message SENT to server, not yet delivered
-                        <Check className="w-3 h-3 text-black/45" />
+                        <Check className="w-3 h-3 opacity-70" />
                       )
                     )}
                   </div>
