@@ -14,7 +14,6 @@ import {
   NotificationToastContainer,
   useToast,
 } from "@/components/NotificationToast";
-import { ChatToastHost } from "@/components/user/ChatToastHost";
 import { useUserAuth } from "@/hooks/useUserAuth";
 import { UserModals } from "@/components/user/UserModals";
 import { useUserDataFetching } from "@/hooks/useUserDataFetching";
@@ -807,18 +806,6 @@ export default function Home() {
       )}
       <IssueReporter hideTrigger />
       <NotificationToastContainer position="top-right" />
-      {/* Global chat-toast overlay — shows per-order popups for inbound
-          merchant messages on any screen. Tap jumps into that order's
-          chat. Suppressed automatically when the chat is already open
-          (publisher gates the event in useUserEffects). */}
-      {auth.userId && (
-        <ChatToastHost
-          onOpenChat={(orderId) => {
-            setActiveOrderId(orderId);
-            setScreen("chat-view");
-          }}
-        />
-      )}
       {/* Onboarding — shown once per new user AFTER they sign in/up */}
       {showOnboarding && !!auth.userId && (
         <UserOnboardingFlow

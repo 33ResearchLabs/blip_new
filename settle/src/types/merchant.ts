@@ -210,6 +210,13 @@ export interface Notification {
   /** High-priority warnings (e.g. trade-expiry) keep their toast visible until dismissed */
   sticky?: boolean;
   priority?: 'high' | 'normal';
+  /**
+   * Stable per-transition dedup key `${orderId}|${milestone}`, set for order
+   * lifecycle notifications so optimistic + realtime + history copies of the
+   * same milestone (which carry different wording) collapse to one panel entry.
+   * Absent for transient/non-lifecycle notifications, which dedup by message.
+   */
+  dedupeKey?: string;
 }
 
 export interface OrderConversation {

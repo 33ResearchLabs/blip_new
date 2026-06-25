@@ -72,7 +72,7 @@ interface UseEscrowOperationsParams {
   solanaWallet: any;
   effectiveBalance: number | null;
   inAppBalance: number | null;
-  addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string, opts?: { sticky?: boolean; priority?: 'high' | 'normal'; status?: string }) => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   afterMutationReconcile: (orderId: string, optimisticUpdate?: Partial<Order>) => Promise<void>;
   fetchOrders: () => Promise<void>;
@@ -457,7 +457,7 @@ export function useEscrowOperations({
           try { localStorage.removeItem(orphanKey); } catch {}
           const newOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
           setOrders((prev: Order[]) => [newOrder, ...prev]);
-          addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDT locked in escrow`, data.data.id);
+          addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDT locked in escrow`, data.data.id, { status: 'escrowed' });
           delete (window as any).__pendingSellOrder;
           dispatch({ type: 'CLOSE', op: 'lock' });
         } else {
@@ -513,7 +513,7 @@ export function useEscrowOperations({
 
         if (recorded) {
           playSound('trade_complete');
-          addNotification('escrow', `${escrowOrder.amount} USDT locked in escrow - waiting for payment`, escrowOrder.id);
+          addNotification('escrow', `${escrowOrder.amount} USDT locked in escrow - waiting for payment`, escrowOrder.id, { status: 'escrowed' });
           dispatch({ type: 'CLOSE', op: 'lock' });
           try { localStorage.removeItem(`blip_unrecorded_escrow_${escrowOrder.id}`); } catch {}
           await afterMutationReconcile(escrowOrder.id);
@@ -816,7 +816,7 @@ export function useEscrowOperations({
         }
 
         playSound('trade_complete');
-        addNotification('escrow', `Escrow released! ${releaseOrder.amount} USDT sent to buyer.`, releaseOrder.id);
+        addNotification('escrow', `Escrow released! ${releaseOrder.amount} USDT sent to buyer.`, releaseOrder.id, { status: 'completed' });
         await afterMutationReconcile(releaseOrder.id, { status: "completed" as const });
 
         setTimeout(() => {
@@ -946,7 +946,7 @@ export function useEscrowOperations({
         }
 
         playSound('click');
-        addNotification('system', `Escrow refunded. ${cancelOrder.amount} USDT returned to your wallet.`, cancelOrder.id);
+        addNotification('system', `Escrow refunded. ${cancelOrder.amount} USDT returned to your wallet.`, cancelOrder.id, { status: 'cancelled' });
         await afterMutationReconcile(cancelOrder.id, { status: 'cancelled' as const });
       } else {
         dispatch({ type: 'SET_ERROR', op: 'cancel', error: refundResult.error || 'Failed to refund escrow' });
@@ -997,7 +997,7 @@ export function useEscrowOperations({
           const data = await res.json();
           if (data.success) {
             playSound('click');
-            addNotification('system', 'Order cancelled successfully.', orderId);
+            addNotification('system', 'Order cancelled successfully.', orderId, { status: 'cancelled' });
             await afterMutationReconcile(orderId, { status: "cancelled" as const });
           } else {
             addNotification('system', data.error || 'Failed to cancel order', orderId);

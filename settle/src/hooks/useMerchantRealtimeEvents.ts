@@ -3,13 +3,15 @@
 import { useMerchantStore } from "@/stores/merchantStore";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import type { Order, Notification } from "@/types/merchant";
+import { stageMessage } from "@/lib/notifications/notificationCopy";
+import { isDuplicateRealtimeEvent } from "@/lib/notifications/realtimeDedup";
 
 interface UseMerchantRealtimeEventsParams {
   debouncedFetchOrders: () => void;
   refetchSingleOrder: (orderId: string) => Promise<void>;
   debouncedFetchConversations: () => void;
   refreshBalance: () => void;
-  addNotification: (type: Notification['type'], message: string, orderId?: string, opts?: { sticky?: boolean; priority?: 'high' | 'normal' }) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string, opts?: { sticky?: boolean; priority?: 'high' | 'normal'; status?: string }) => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   toast: any;
   setExtensionRequests: (fn: (prev: Map<string, any>) => Map<string, any>) => void;
@@ -68,6 +70,11 @@ export function useMerchantRealtimeEvents({
       const amt = matchedOrder ? `${matchedOrder.amount.toLocaleString()} USDT` : '';
       const usr = matchedOrder?.user || '';
       const desc = amt ? (usr ? `${amt} · ${usr}` : amt) : '';
+      // Role-aware, concise panel copy. Falls back to the previous wording when
+      // no milestone message applies (msg() returns the fallback unchanged).
+      const role = matchedOrder?.my_role;
+      const msg = (fallback: string) =>
+        stageMessage(newStatus, role, { amount: amt || undefined, counterparty: usr || undefined }) ?? fallback;
 
       // Settled / advanced past the warning window — clear any sticky
       // expiry warning toast still on screen for this trade.
@@ -79,35 +86,35 @@ export function useMerchantRealtimeEvents({
       }
 
       if (newStatus === 'payment_sent') {
-        addNotification('payment', desc ? `Payment marked sent · ${desc}` : 'Payment sent for order', orderId);
+        addNotification('payment', msg(desc ? `Payment marked sent · ${desc}` : 'Payment sent for order'), orderId, { status: newStatus });
         playSound('notification');
         toast.showPaymentSent(orderId);
       } else if (newStatus === 'escrowed') {
-        addNotification('escrow', amt ? `Escrow locked · ${amt} secured` : 'Escrow locked on order', orderId);
+        addNotification('escrow', msg(amt ? `Escrow locked · ${amt} secured` : 'Escrow locked on order'), orderId, { status: newStatus });
         playSound('notification');
         toast.showEscrowLocked();
       } else if (newStatus === 'completed') {
-        addNotification('complete', desc ? `Trade completed! ${desc}` : 'Trade completed!', orderId);
+        addNotification('complete', msg(desc ? `Trade completed! ${desc}` : 'Trade completed!'), orderId, { status: newStatus });
         playSound('order_complete');
         toast.showTradeComplete();
         refreshBalance();
       } else if (newStatus === 'disputed') {
-        addNotification('dispute', desc ? `Dispute opened · ${desc}` : 'Dispute opened on order', orderId);
+        addNotification('dispute', msg(desc ? `Dispute opened · ${desc}` : 'Dispute opened on order'), orderId, { status: newStatus });
         playSound('error');
         toast.showDisputeOpened(orderId);
       } else if (newStatus === 'cancelled' && isRelevantOrder()) {
-        addNotification('system', desc ? `Order cancelled · ${desc}` : 'Order cancelled', orderId);
+        addNotification('system', msg(desc ? `Order cancelled · ${desc}` : 'Order cancelled'), orderId, { status: newStatus });
         playSound('error');
         toast.showOrderCancelled();
       } else if (newStatus === 'expired' && isRelevantOrder()) {
-        addNotification('system', amt ? `Order expired · ${amt} timed out` : 'Order expired', orderId);
+        addNotification('system', msg(amt ? `Order expired · ${amt} timed out` : 'Order expired'), orderId, { status: newStatus });
         toast.showOrderExpired();
       } else if (newStatus === 'accepted' && isRelevantOrder() && matchedOrder?.isMyOrder) {
-        addNotification('order', desc ? `Your order accepted · ${desc}` : 'Your order has been accepted!', orderId);
+        addNotification('order', msg(desc ? `Your order accepted · ${desc}` : 'Your order has been accepted!'), orderId, { status: newStatus });
         playSound('notification');
         toast.show({ type: 'order', title: 'Order Accepted!', message: 'Someone accepted your order!' });
       } else if (newStatus === 'payment_confirmed') {
-        addNotification('payment', amt ? `Payment confirmed · ${amt} · Ready to release` : 'Payment confirmed!', orderId);
+        addNotification('payment', msg(amt ? `Payment confirmed · ${amt} · Ready to release` : 'Payment confirmed!'), orderId, { status: newStatus });
         playSound('notification');
         toast.show({ type: 'payment', title: 'Payment Confirmed', message: 'Payment has been confirmed. Ready to release.' });
       }
@@ -207,6 +214,12 @@ export function useMerchantRealtimeEvents({
       if (data.senderType === 'merchant' && data.senderId === merchantId) return;
 
       debouncedFetchConversations();
+
+      // Dedup the alert across the two merchant chat transports (WebSocket
+      // open-window path in market/page + this private-channel path) by message
+      // id, so one message never produces two toasts. Data refresh above always
+      // runs; only the alert is gated.
+      if (isDuplicateRealtimeEvent('chat-toast-mrc', data.messageId)) return;
 
       // Light-weight notification so the merchant gets the same alert UX as
       // for status events. Falls back to a generic label if we can't find

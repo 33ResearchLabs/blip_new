@@ -19,7 +19,6 @@ import {
   NotificationToastContainer,
   useToast,
 } from "@/components/NotificationToast";
-import { ChatToastHost } from "@/components/user/ChatToastHost";
 import { useUserAuth } from "@/hooks/useUserAuth";
 import { UserModals } from "@/components/user/UserModals";
 import { useUserDataFetching } from "@/hooks/useUserDataFetching";
@@ -467,15 +466,6 @@ export default function UserDesktopPage() {
       style={{ display: "flex", minHeight: "100dvh", background: "#080810", fontFamily: "Manrope, sans-serif" }}
     >
       <NotificationToastContainer position="top-right" />
-
-      {auth.userId && (
-        <ChatToastHost
-          onOpenChat={(orderId) => {
-            setActiveOrderId(orderId);
-            setScreen("chat-view");
-          }}
-        />
-      )}
 
       {/* Onboarding overlay */}
       {showOnboarding && !!auth.userId && (

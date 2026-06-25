@@ -3,6 +3,14 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Notification } from "@/types/merchant";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { milestoneDedupeKey, eventTypeToStatus } from '@/lib/notifications/notificationKey';
+
+// Effective dedup identity for a panel notification: prefer the stable
+// per-transition milestone key (collapses optimistic + realtime + history
+// copies that are worded differently); otherwise fall back to the legacy
+// content key so transient/non-lifecycle notifications keep their old behavior.
+const notifDedupeKey = (n: Pick<Notification, 'orderId' | 'type' | 'message' | 'dedupeKey'>) =>
+  n.dedupeKey ?? `${n.orderId || ''}|${n.type}|${n.message}`;
 
 export function useNotifications(merchantId: string | null, isLoggedIn: boolean) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -40,7 +48,7 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
     type: Notification['type'],
     message: string,
     orderId?: string,
-    opts?: { sticky?: boolean; priority?: 'high' | 'normal' },
+    opts?: { sticky?: boolean; priority?: 'high' | 'normal'; status?: string },
   ) => {
     notifQueueRef.current.push({
       id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -51,6 +59,10 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
       orderId,
       sticky: opts?.sticky,
       priority: opts?.priority,
+      // Stable milestone key (when this is a lifecycle event) so the optimistic
+      // and realtime copies of the same transition collapse despite different
+      // wording. milestoneDedupeKey returns null for transient messages.
+      dedupeKey: milestoneDedupeKey(orderId, opts?.status) ?? undefined,
     });
     if (!notifTimerRef.current) {
       notifTimerRef.current = setTimeout(() => {
@@ -59,15 +71,14 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
         notifTimerRef.current = null;
         if (batch.length > 0) {
           setNotifications(prev => {
-            // Dedupe within the batch + against existing by (orderId, type, message)
-            // — protects against rapid-fire duplicate addNotification() calls
-            // (e.g. same Pusher event delivered through multiple channels).
-            const seenKeys = new Set(
-              prev.map(n => `${n.orderId || ''}|${n.type}|${n.message}`)
-            );
+            // Dedupe within the batch + against existing. Lifecycle events use a
+            // stable (orderId, milestone) key so optimistic + realtime copies of
+            // the same transition collapse despite different wording; everything
+            // else falls back to the (orderId, type, message) content key.
+            const seenKeys = new Set(prev.map(notifDedupeKey));
             const fresh: Notification[] = [];
             for (const n of batch.reverse()) {
-              const key = `${n.orderId || ''}|${n.type}|${n.message}`;
+              const key = notifDedupeKey(n);
               if (seenKeys.has(key)) continue;
               seenKeys.add(key);
               fresh.push(n);
@@ -127,19 +138,20 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
               timestamp: new Date(n.created_at).getTime(),
               read: true,
               orderId: n.order_id,
+              // Same milestone key as the realtime/optimistic paths so a reload
+              // doesn't append a duplicate card for an event already in the panel.
+              dedupeKey: milestoneDedupeKey(n.order_id, eventTypeToStatus(n.event_type)) ?? undefined,
             }));
-            // Dedupe by id (e.g. db-${n.id}) AND by (orderId, type, message)
-            // so a remount + history refetch can't append the same items
-            // twice, and a real-time notification already in state for the
-            // same event won't get a stale "read: true" copy appended either.
+            // Dedupe by id (e.g. db-${n.id}) AND by milestone/content key so a
+            // remount + history refetch can't append the same items twice, and a
+            // real-time notification already in state for the same event won't
+            // get a stale "read: true" copy appended either.
             setNotifications(prev => {
               const seenIds = new Set(prev.map(n => n.id));
-              const seenKeys = new Set(
-                prev.map(n => `${n.orderId || ''}|${n.type}|${n.message}`)
-              );
+              const seenKeys = new Set(prev.map(notifDedupeKey));
               const dedup = history.filter((n: Notification) => {
                 if (seenIds.has(n.id)) return false;
-                const key = `${n.orderId || ''}|${n.type}|${n.message}`;
+                const key = notifDedupeKey(n);
                 if (seenKeys.has(key)) return false;
                 seenKeys.add(key);
                 return true;

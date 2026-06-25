@@ -10,7 +10,9 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { orderActionKey } from '@/lib/api/idempotencyKeys';
 import { getUserChannel } from "@/lib/pusher/channels";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
-import { emitChatToast } from "@/lib/chat/chatToastBus";
+import { stageMessage, type TradeRole } from "@/lib/notifications/notificationCopy";
+import { isDuplicateRealtimeEvent } from "@/lib/notifications/realtimeDedup";
+import { formatCrypto } from "@/lib/format";
 
 // ── Auto-refund "already handled" persistence ──────────────────────────────
 // The client-side auto-refund scan (below) records every order whose on-chain
@@ -173,24 +175,23 @@ export function useUserEffects({
         return o;
       }));
 
-      if (message.from === 'them' && (screen !== 'order' || activeOrderId !== orderId)) {
+      if (
+        message.from === 'them' &&
+        (screen !== 'order' || activeOrderId !== orderId) &&
+        // Guard against the same message arriving via overlapping channels
+        // (order + private) firing two notifications.
+        !isDuplicateRealtimeEvent('chat-toast-user', message.id)
+      ) {
         const order = orders.find(o => o.id === orderId);
         const merchantName = order?.merchant?.name || 'Merchant';
-        toast.showNewMessage(merchantName, message.text?.substring(0, 80));
         showBrowserNotification(
           `New message from ${merchantName}`,
           message.text.substring(0, 100),
           orderId
         );
-        // Emit to in-app chat toast stack (ChatToastHost subscribes).
-        // No-op when no listener is mounted → zero regression.
-        emitChatToast({
-          orderId,
-          senderName: merchantName,
-          preview: (message.text || '').slice(0, 120),
-          avatarUrl: order?.merchant?.avatarUrl ?? null,
-          timestamp: Date.now(),
-        });
+        // Message notifications use the standard themed toast (Design A) so they
+        // match every other notification's look (icon tile + theme tokens).
+        toast.showNewMessage(merchantName, message.text?.substring(0, 80));
       }
     },
   });
@@ -313,6 +314,24 @@ export function useUserEffects({
   // Real-time order updates for active order
   const { order: realtimeOrder, refetch: refetchActiveOrder } = useRealtimeOrder(activeOrderId, {
     onStatusChange: (newStatus, previousStatus, orderData) => {
+      // Role-aware, concise stage copy. In the user app the logged-in user is
+      // always the order's user_id party: buyer on a BUY, seller on a SELL.
+      const stageRole: TradeRole = orderData?.type === 'sell' ? 'seller' : 'buyer';
+      const stageMerchant = orderData?.merchant?.display_name || orderData?.merchant?.business_name || '';
+      const stageAmt = orderData?.crypto_amount ? `${formatCrypto(orderData.crypto_amount)} USDT` : '';
+      // Show a meaningful toast (which also records a panel entry via the wrap)
+      // for the given status, falling back to `fallback` when no milestone copy
+      // applies. `type`/`duration` preserve the previous per-stage toast feel.
+      const stageToast = (
+        type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system' | 'warning',
+        title: string,
+        fallback: string,
+        duration?: number,
+      ) => {
+        const message = stageMessage(newStatus, stageRole, { amount: stageAmt || undefined, counterparty: stageMerchant || undefined }) ?? fallback;
+        toast.show({ type, title, message, orderId: activeOrderId ?? undefined, ...(duration ? { duration } : {}) });
+      };
+
       const wasPending = previousStatus === 'pending' || previousStatus === 'escrowed' || (!previousStatus && screen === 'matching');
       if (wasPending && (newStatus === 'accepted' || newStatus === 'escrowed')) {
         const merchantName = orderData?.merchant?.display_name || orderData?.merchant?.business_name || 'Merchant';
@@ -327,7 +346,7 @@ export function useUserEffects({
         });
         setShowAcceptancePopup(true);
         setTimeout(() => setShowAcceptancePopup(false), 5000);
-        toast.showMerchantAccepted(merchantName);
+        stageToast('order', 'Order Accepted', `${merchantName} accepted your order`, 6000);
         showBrowserNotification('Order Accepted!', `${merchantName} accepted your ${orderData?.type || 'buy'} order`, activeOrderId || undefined);
 
         if (screen === "matching") {
@@ -344,7 +363,7 @@ export function useUserEffects({
         setAmount("");
         setSelectedOffer(null);
         playSound('notification');
-        toast.showEscrowLocked();
+        stageToast('escrow', 'Escrow Locked', 'Funds locked in escrow');
       }
 
       if (newStatus === 'payment_sent') {
@@ -352,25 +371,25 @@ export function useUserEffects({
           setScreen("order");
         }
         playSound('notification');
-        toast.showPaymentSent();
+        stageToast('payment', 'Payment Sent', 'Payment marked as sent', 8000);
         showBrowserNotification('Payment Sent', 'Your fiat payment has been marked as sent. Waiting for confirmation.', activeOrderId || undefined);
       }
 
       if (newStatus === 'payment_confirmed') {
         playSound('notification');
-        toast.show({ type: 'payment', title: 'Payment Confirmed', message: 'Payment has been confirmed!' });
+        stageToast('payment', 'Payment Confirmed', 'Payment confirmed');
       }
 
       if (newStatus === 'releasing') {
-        toast.showEscrowReleased();
+        stageToast('complete', 'Releasing', 'Funds are being released', 6000);
       }
 
       if (newStatus === 'completed') {
         playSound('trade_complete');
-        // Pass the orderId (2nd arg) so the persistent notification list dedupes
-        // this completion per-order — overlapping realtime/polling/reconciliation
+        // Pass the orderId so the persistent notification list dedupes this
+        // completion per-order — overlapping realtime/polling/reconciliation
         // sources otherwise stacked ~10 identical "Trade Complete" rows.
-        toast.showTradeComplete(undefined, activeOrderId ?? undefined);
+        stageToast('complete', 'Trade Complete', 'Trade completed', 6000);
         showBrowserNotification('Trade Complete!', 'Your trade has been completed successfully.', activeOrderId || undefined);
         if (solanaWallet.connected) {
           solanaWallet.refreshBalances();
@@ -384,7 +403,7 @@ export function useUserEffects({
 
       if (newStatus === 'disputed') {
         playSound('error');
-        toast.showDisputeOpened();
+        stageToast('dispute', 'Dispute Opened', 'A dispute has been raised', 10000);
         showBrowserNotification('Dispute Opened', 'A dispute has been raised on your order.', activeOrderId || undefined);
         if (screen === 'escrow' || screen === 'matching') {
           setScreen('order');
@@ -393,7 +412,7 @@ export function useUserEffects({
 
       if (newStatus === 'cancelled') {
         playSound('error');
-        toast.showOrderCancelled();
+        stageToast('warning', 'Order Cancelled', 'Order cancelled', 6000);
         // Keep the user on the order tracker so the SAME screen updates in
         // place to the cancelled state (OrderTrackingView's cancelled banner)
         // — the autoTracker/isMatching fix means 'order' no longer reopens as
@@ -404,7 +423,7 @@ export function useUserEffects({
       }
 
       if (newStatus === 'expired') {
-        toast.showOrderExpired();
+        stageToast('warning', 'Order Expired', 'Order expired', 6000);
         if (screen === 'escrow' || screen === 'matching') {
           setScreen('order');
         }
