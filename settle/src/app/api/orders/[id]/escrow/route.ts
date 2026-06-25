@@ -493,6 +493,17 @@ export async function POST(
 
     const depositSuccess = depositResponse.status < 400;
     if (depositSuccess) {
+      // Core-api just flipped the DB to `escrowed`. The settle `order-full`
+      // cache, however, was re-populated with the PRE-lock `accepted` snapshot
+      // by the getOrderWithRelations() read above (line ~274) and would
+      // otherwise serve that stale row for the full 60s TTL. Without this
+      // invalidation, GET /api/orders/:id keeps returning status=`accepted`
+      // with no escrow_tx_hash, so enrichOrderResponse computes a LOCK_ESCROW
+      // primaryAction and the "Lock Escrow" button never clears (and the
+      // realtime optimistic flip gets overwritten back to `accepted` on the
+      // next refetch). The mock path already invalidates after its flip; the
+      // real path must do the same.
+      invalidateOrderCache(id);
       auditLog('escrow.locked', parseResult.data.actor_id, parseResult.data.actor_type, id, {
         txHash: parseResult.data.tx_hash,
         cryptoAmount: depositOrder?.crypto_amount,
@@ -914,6 +925,15 @@ export async function PATCH(
     } else {
       const releaseSuccess = idempotencyResult.statusCode < 400;
       if (releaseSuccess) {
+        // Core-api flipped the DB to `completed`. As with the deposit path,
+        // the getOrderWithRelations() read above re-cached the PRE-release
+        // snapshot (status `payment_sent`/`escrowed`) into `order-full`, which
+        // would otherwise be served for the 60s TTL — leaving enrichOrderResponse
+        // computing a CONFIRM_PAYMENT primaryAction so the "Confirm Payment"
+        // button never clears after an in-chat release. Invalidate so the next
+        // GET re-queries the now-`completed` row.
+        const { invalidateOrderCache } = await import("@/lib/cache");
+        invalidateOrderCache(id);
         auditLog('escrow.released', actor_id, actor_type, id, {
           deductedAmount: order.escrow_debited_amount,
           txHash: tx_hash,

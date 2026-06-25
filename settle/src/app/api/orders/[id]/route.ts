@@ -471,6 +471,18 @@ export async function PATCH(
           key: idempotencyKey,
         });
       }
+      // Core-api flipped the DB status. Invalidate the settle `order-full`
+      // cache so the client's follow-up refetch (useRealtimeOrder refetches
+      // on its own Pusher event, and the action handlers reconcile right
+      // after) reads the NEW status instead of the 60s-stale snapshot. Without
+      // this, the optimistic flip is immediately overwritten back to the old
+      // status by the refetch and the action button reappears (e.g. "I've
+      // Paid" stays after payment_sent). Skip on a cached idempotent replay —
+      // the original call already invalidated.
+      if (!idempotencyResult.cached && idempotencyResult.statusCode < 400) {
+        const { invalidateOrderCache } = await import('@/lib/cache/cacheService');
+        await invalidateOrderCache(id);
+      }
       __mark('proxy_core_api');
       const __finTotal = Date.now() - __t0;
       logger.info(`[Timing] PATCH.${status}`, { orderId: id, total_ms: __finTotal, marks: __marks });
@@ -488,6 +500,11 @@ export async function PATCH(
     __mark('proxy_core_api');
 
     if (response.status < 400) {
+      // Invalidate the settle `order-full` cache so the follow-up refetch
+      // reflects the new status immediately (see the financial-branch note
+      // above). Covers non-financial transitions like accept.
+      const { invalidateOrderCache } = await import('@/lib/cache/cacheService');
+      await invalidateOrderCache(id);
       const action = status === 'cancelled' ? 'order.cancelled' as const : 'order.status_changed' as const;
       auditLog(action, actor_id, actor_type, id, {
         newStatus: status,
