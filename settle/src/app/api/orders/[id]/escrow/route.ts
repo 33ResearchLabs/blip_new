@@ -64,6 +64,24 @@ const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 // on mainnet, even if MOCK_MODE were somehow misconfigured there.
 const MOCK_ESCROW = MOCK_MODE && SOLANA_NETWORK !== "mainnet-beta";
 
+// Bust the merchant order-list cache for every merchant who could have this
+// order in their dashboard list (acting merchant + seller + M2M buyer). Without
+// this, the dashboard's debounced list refetch after a lock/release re-reads the
+// stale list and resurrects the old action button (enabled + clickable). Mirrors
+// the orders/[id] PATCH route. Purely additive — only affects cache freshness.
+async function invalidateMerchantOrderLists(
+  auth: { actorType?: string | null; actorId?: string | null } | null | undefined,
+  order: { merchant_id?: string | null; buyer_merchant_id?: string | null } | null | undefined,
+): Promise<void> {
+  const ids = new Set<string>();
+  if (auth?.actorType === 'merchant' && auth.actorId) ids.add(auth.actorId);
+  if (order?.merchant_id) ids.add(order.merchant_id);
+  if (order?.buyer_merchant_id) ids.add(order.buyer_merchant_id);
+  if (ids.size === 0) return;
+  const { invalidateMerchantOrderListCache } = await import("@/lib/cache");
+  await Promise.all([...ids].map((mid) => invalidateMerchantOrderListCache(mid)));
+}
+
 // Schema for escrow release. Same base58-signature shape guard as the
 // lock route above. Without this, an earlier bug in the UI fabricated
 // `server-release-fallback-<timestamp>` strings here, which the backend
@@ -230,6 +248,7 @@ export async function POST(
         );
       }
       invalidateOrderCache(id);
+      await invalidateMerchantOrderLists(auth, mockResult.order);
       auditLog("escrow.locked", actor_id, actor_type, id, {
         txHash: tx_hash,
         cryptoAmount: mockResult.order.crypto_amount,
@@ -504,6 +523,7 @@ export async function POST(
       // next refetch). The mock path already invalidates after its flip; the
       // real path must do the same.
       invalidateOrderCache(id);
+      await invalidateMerchantOrderLists(auth, depositOrder);
       auditLog('escrow.locked', parseResult.data.actor_id, parseResult.data.actor_type, id, {
         txHash: parseResult.data.tx_hash,
         cryptoAmount: depositOrder?.crypto_amount,
@@ -934,6 +954,7 @@ export async function PATCH(
         // GET re-queries the now-`completed` row.
         const { invalidateOrderCache } = await import("@/lib/cache");
         invalidateOrderCache(id);
+        await invalidateMerchantOrderLists(auth, order);
         auditLog('escrow.released', actor_id, actor_type, id, {
           deductedAmount: order.escrow_debited_amount,
           txHash: tx_hash,
