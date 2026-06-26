@@ -329,9 +329,9 @@ export async function PUT(
     }
 
     const action = body?.action;
-    if (!['propose', 'accept', 'agree', 'reject'].includes(action)) {
+    if (!['propose', 'accept', 'agree', 'reject', 'withdraw'].includes(action)) {
       return NextResponse.json(
-        { success: false, error: "action must be 'propose', 'accept', 'agree' or 'reject'" },
+        { success: false, error: "action must be 'propose', 'accept', 'agree', 'reject' or 'withdraw'" },
         { status: 400 }
       );
     }
