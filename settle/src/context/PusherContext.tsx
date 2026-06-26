@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Pusher Context Provider
@@ -15,7 +15,7 @@ import React, {
   useCallback,
   useRef,
   ReactNode,
-} from 'react';
+} from "react";
 
 // Types for pusher-js (defined locally to avoid import errors when module is missing)
 interface Channel {
@@ -52,7 +52,13 @@ const pusherAuthInflight = new Map<string, Promise<unknown>>();
 let pusherAuthBlockedUntil = 0;
 
 // Connection states
-type ConnectionState = 'initialized' | 'connecting' | 'connected' | 'disconnected' | 'unavailable' | 'failed';
+type ConnectionState =
+  | "initialized"
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "unavailable"
+  | "failed";
 
 interface PusherContextType {
   // Connection state
@@ -60,11 +66,11 @@ interface PusherContextType {
   connectionState: ConnectionState;
 
   // Actor info (for auth)
-  actorType: 'user' | 'merchant' | 'compliance' | null;
+  actorType: "user" | "merchant" | "compliance" | null;
   actorId: string | null;
 
   // Set actor for auth
-  setActor: (type: 'user' | 'merchant' | 'compliance', id: string) => void;
+  setActor: (type: "user" | "merchant" | "compliance", id: string) => void;
   clearActor: () => void;
 
   // Subscribe to channels
@@ -93,8 +99,11 @@ const RETRY_DELAY_MS = 2000;
 
 export function PusherProvider({ children }: PusherProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionState, setConnectionState] = useState<ConnectionState>('initialized');
-  const [actorType, setActorType] = useState<'user' | 'merchant' | 'compliance' | null>(null);
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>("initialized");
+  const [actorType, setActorType] = useState<
+    "user" | "merchant" | "compliance" | null
+  >(null);
   const [actorId, setActorId] = useState<string | null>(null);
 
   const pusherRef = useRef<PusherClientType | null>(null);
@@ -136,15 +145,12 @@ export function PusherProvider({ children }: PusherProviderProps) {
 
   // Initialize Pusher
   const initPusher = useCallback(async () => {
-
     // Prevent multiple simultaneous initializations
     if (isInitializingRef.current || !isMountedRef.current) {
-
       return;
     }
 
     if (!actorType || !actorId) {
-
       return;
     }
 
@@ -152,15 +158,17 @@ export function PusherProvider({ children }: PusherProviderProps) {
     const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
 
     if (!key || !cluster) {
-      console.warn('[Pusher] Credentials not configured - real-time features disabled');
-      setConnectionState('unavailable');
+      console.warn(
+        "[Pusher] Credentials not configured - real-time features disabled",
+      );
+      setConnectionState("unavailable");
       return;
     }
 
     isInitializingRef.current = true;
 
     try {
-      const PusherClient = (await import('pusher-js')).default;
+      const PusherClient = (await import("pusher-js")).default;
 
       // Don't proceed if unmounted during async import
       if (!isMountedRef.current) {
@@ -182,13 +190,15 @@ export function PusherProvider({ children }: PusherProviderProps) {
       // Identity is established server-side from Authorization: Bearer ...
       // (see /api/pusher/auth). x-actor-id / x-actor-type are NOT sent —
       // those headers were the bypass vector this fix removes.
-      const { buildPusherAuthHeaders } = await import('@/lib/pusher/authHeaders');
-      const { fetchWithAuth } = await import('@/lib/api/fetchWithAuth');
+      const { buildPusherAuthHeaders } = await import(
+        "@/lib/pusher/authHeaders"
+      );
+      const { fetchWithAuth } = await import("@/lib/api/fetchWithAuth");
 
       const pusher = new PusherClient(key, {
         cluster,
-        authEndpoint: '/api/pusher/auth',
-        authTransport: 'ajax',
+        authEndpoint: "/api/pusher/auth",
+        authTransport: "ajax",
         authorizer: (channel: { name: string }) => ({
           authorize: (
             socketId: string,
@@ -210,7 +220,11 @@ export function PusherProvider({ children }: PusherProviderProps) {
             const blockedFor = pusherAuthBlockedUntil - Date.now();
             if (blockedFor > 0) {
               callback(
-                new Error(`Pusher auth backoff: retry in ${Math.ceil(blockedFor / 1000)}s`),
+                new Error(
+                  `Pusher auth backoff: retry in ${Math.ceil(
+                    blockedFor / 1000,
+                  )}s`,
+                ),
                 null,
               );
               return;
@@ -225,17 +239,17 @@ export function PusherProvider({ children }: PusherProviderProps) {
             // Without this, an expired access cookie keeps Pusher subscription
             // failing forever — even though every other API call recovers
             // transparently — until something else forces a re-auth.
-            const promise = fetchWithAuth('/api/pusher/auth', {
-              method: 'POST',
-              credentials: 'include',
+            const promise = fetchWithAuth("/api/pusher/auth", {
+              method: "POST",
+              credentials: "include",
               headers: {
                 ...buildPusherAuthHeaders(),
-                'Content-Type': 'application/x-www-form-urlencoded',
+                "Content-Type": "application/x-www-form-urlencoded",
               },
               body,
             }).then(async (res) => {
               if (res.status === 429) {
-                const ra = parseInt(res.headers.get('Retry-After') || '0', 10);
+                const ra = parseInt(res.headers.get("Retry-After") || "0", 10);
                 const waitMs = (ra > 0 ? ra : 10) * 1000;
                 pusherAuthBlockedUntil = Date.now() + waitMs;
               }
@@ -244,7 +258,9 @@ export function PusherProvider({ children }: PusherProviderProps) {
                 try {
                   const errBody = await res.json();
                   if (errBody?.error) errMsg = `${errMsg} — ${errBody.error}`;
-                } catch { /* non-JSON body */ }
+                } catch {
+                  /* non-JSON body */
+                }
                 throw new Error(errMsg);
               }
               return res.json();
@@ -253,7 +269,12 @@ export function PusherProvider({ children }: PusherProviderProps) {
             pusherAuthInflight.set(dedupKey, promise);
             promise
               .then((data) => callback(null, data))
-              .catch((err) => callback(err instanceof Error ? err : new Error(String(err)), null))
+              .catch((err) =>
+                callback(
+                  err instanceof Error ? err : new Error(String(err)),
+                  null,
+                ),
+              )
               .finally(() => {
                 // Clear after a short delay so racing authorize() calls
                 // (same tick) still piggy-back on the one network request.
@@ -276,19 +297,18 @@ export function PusherProvider({ children }: PusherProviderProps) {
         const newState = s.current as ConnectionState;
 
         setConnectionState(newState);
-        setIsConnected(newState === 'connected');
+        setIsConnected(newState === "connected");
 
-        if (process.env.NODE_ENV === 'development') {
-
+        if (process.env.NODE_ENV === "development") {
         }
 
         // Reset retry count on successful connection
-        if (newState === 'connected') {
+        if (newState === "connected") {
           retryCountRef.current = 0;
         }
 
         // Handle disconnection with retry
-        if (newState === 'disconnected' || newState === 'failed') {
+        if (newState === "disconnected" || newState === "failed") {
           if (retryCountRef.current < MAX_RETRIES && isMountedRef.current) {
             retryCountRef.current++;
 
@@ -308,37 +328,44 @@ export function PusherProvider({ children }: PusherProviderProps) {
       const handleError = (error: unknown) => {
         if (!isMountedRef.current) return;
 
-        const e = error as { error?: { data?: { code?: number; message?: string }; type?: string }; message?: string; type?: string };
+        const e = error as {
+          error?: { data?: { code?: number; message?: string }; type?: string };
+          message?: string;
+          type?: string;
+        };
         const code = e?.error?.data?.code;
         const message = e?.error?.data?.message || e?.message;
         const type = e?.error?.type || e?.type;
 
         // 4004 = connection limit reached → mark unavailable
         if (code === 4004) {
-          console.warn('[Pusher] Connection limit reached');
-          setConnectionState('unavailable');
+          console.warn("[Pusher] Connection limit reached");
+          setConnectionState("unavailable");
           return;
         }
 
         // Only log when we have something useful; otherwise stay silent —
         // PusherJS already auto-reconnects on transient WebSocket drops.
         if (code || message || type) {
-          console.warn('[Pusher] Connection error', { code, type, message });
+          console.warn("[Pusher] Connection error", { code, type, message });
         }
       };
 
       // Bind event handlers
-      pusher.connection.bind('state_change', handleStateChange);
-      pusher.connection.bind('error', handleError);
+      pusher.connection.bind("state_change", handleStateChange);
+      pusher.connection.bind("error", handleError);
 
       // Connect
-      setConnectionState('connecting');
+      setConnectionState("connecting");
       pusher.connect();
 
       isInitializingRef.current = false;
     } catch (error) {
-      console.warn('[Pusher] Module not available or initialization failed:', error);
-      setConnectionState('unavailable');
+      console.warn(
+        "[Pusher] Module not available or initialization failed:",
+        error,
+      );
+      setConnectionState("unavailable");
       isInitializingRef.current = false;
     }
   }, [actorType, actorId, cleanup]);
@@ -370,11 +397,13 @@ export function PusherProvider({ children }: PusherProviderProps) {
   }, [cleanup]);
 
   // Set actor for authentication
-  const setActor = useCallback((type: 'user' | 'merchant' | 'compliance', id: string) => {
-
-    setActorType(type);
-    setActorId(id);
-  }, []);
+  const setActor = useCallback(
+    (type: "user" | "merchant" | "compliance", id: string) => {
+      setActorType(type);
+      setActorId(id);
+    },
+    [],
+  );
 
   // Clear actor and disconnect
   const clearActor = useCallback(() => {
@@ -382,7 +411,7 @@ export function PusherProvider({ children }: PusherProviderProps) {
     setActorType(null);
     setActorId(null);
     setIsConnected(false);
-    setConnectionState('initialized');
+    setConnectionState("initialized");
   }, [cleanup]);
 
   // Manual reconnect
@@ -396,17 +425,14 @@ export function PusherProvider({ children }: PusherProviderProps) {
 
   // Subscribe to a channel
   const subscribe = useCallback((channelName: string): Channel | null => {
-
     const pusher = pusherRef.current;
     if (!pusher) {
-
       return null;
     }
 
     // Check if already subscribed
     const existing = channelsRef.current.get(channelName);
     if (existing) {
-
       return existing;
     }
 
@@ -416,13 +442,11 @@ export function PusherProvider({ children }: PusherProviderProps) {
       const channel = pusher.subscribe(channelName);
       channelsRef.current.set(channelName, channel);
 
-      channel.bind('pusher:subscription_error', (error: unknown) => {
+      channel.bind("pusher:subscription_error", (error: unknown) => {
         console.error(`[Pusher] Subscription error for ${channelName}:`, error);
       });
 
-      channel.bind('pusher:subscription_succeeded', () => {
-
-      });
+      channel.bind("pusher:subscription_succeeded", () => {});
 
       return channel;
     } catch (error) {
@@ -439,17 +463,22 @@ export function PusherProvider({ children }: PusherProviderProps) {
     try {
       pusher.unsubscribe(channelName);
       channelsRef.current.delete(channelName);
-
     } catch (error) {
-      console.error(`[Pusher] Failed to unsubscribe from ${channelName}:`, error);
+      console.error(
+        `[Pusher] Failed to unsubscribe from ${channelName}:`,
+        error,
+      );
     }
   }, []);
 
   // Subscribe to a presence channel
-  const subscribePresence = useCallback((channelName: string): PresenceChannel | null => {
-    const channel = subscribe(channelName);
-    return channel as PresenceChannel | null;
-  }, [subscribe]);
+  const subscribePresence = useCallback(
+    (channelName: string): PresenceChannel | null => {
+      const channel = subscribe(channelName);
+      return channel as PresenceChannel | null;
+    },
+    [subscribe],
+  );
 
   // Get a channel if already subscribed
   const getChannel = useCallback((channelName: string): Channel | null => {
@@ -471,9 +500,7 @@ export function PusherProvider({ children }: PusherProviderProps) {
   };
 
   return (
-    <PusherContext.Provider value={value}>
-      {children}
-    </PusherContext.Provider>
+    <PusherContext.Provider value={value}>{children}</PusherContext.Provider>
   );
 }
 
@@ -481,7 +508,7 @@ export function PusherProvider({ children }: PusherProviderProps) {
 export function usePusher(): PusherContextType {
   const context = useContext(PusherContext);
   if (!context) {
-    throw new Error('usePusher must be used within a PusherProvider');
+    throw new Error("usePusher must be used within a PusherProvider");
   }
   return context;
 }

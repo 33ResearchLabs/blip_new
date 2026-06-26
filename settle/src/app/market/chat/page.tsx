@@ -62,6 +62,7 @@ import {
   CircleDollarSign,
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
+import { openIssueReporter } from "@/components/IssueReporter";
 import { useMerchantStore } from "@/stores/merchantStore";
 import {
   useMerchantConversations,
@@ -1549,7 +1550,8 @@ function TradeDetailsPane({
         <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">Need Help?</p>
         <button
           type="button"
-          title="Open a support ticket (coming soon)"
+          title="Open a support ticket"
+          onClick={() => openIssueReporter()}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-white/12 text-foreground/80 hover:text-foreground hover:bg-white/[0.06] text-sm transition-colors"
         >
           <LifeBuoy className="w-4 h-4" />

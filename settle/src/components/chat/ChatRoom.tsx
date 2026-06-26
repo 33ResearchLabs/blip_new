@@ -448,11 +448,13 @@ export function ChatRoom({
       pusher.unsubscribe(channelName);
     };
   }, [pusher, orderId]);
+
   const [pendingFile, setPendingFile] = useState<{
     file: File;
     previewUrl?: string;
     category: "image" | "document";
   } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -470,9 +472,11 @@ export function ChatRoom({
     abortController: AbortController | null;
     createdAt: number;
   }
+
   const [pendingUploads, setPendingUploads] = useState<
     Map<string, PendingUpload>
   >(new Map());
+
   const pendingUploadsRef = useRef(pendingUploads);
   pendingUploadsRef.current = pendingUploads;
 
