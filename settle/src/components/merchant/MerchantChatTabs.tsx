@@ -257,7 +257,17 @@ export function MerchantChatTabs({
                     ? "د.إ"
                     : conv.fiat_currency;
               const timestamp = conv.last_message?.created_at || conv.last_activity;
-              const initials = getInitials(conv.user.username);
+              // Counterparty display name: prefer the server-resolved name; if it
+              // (or the raw username) is still an open_order_/m2m_ placeholder,
+              // fall back to the order number so the list never shows the ugly id.
+              const isPlaceholderName = (n?: string | null) =>
+                !n || /^(open_order_|m2m_)/i.test(n);
+              const displayName = !isPlaceholderName(conv.counterparty_name)
+                ? (conv.counterparty_name as string)
+                : !isPlaceholderName(conv.user.username)
+                  ? conv.user.username
+                  : `#${conv.order_number}`;
+              const initials = getInitials(displayName);
               const isActive = ACTIVE_STATUSES.has(conv.order_status);
 
               return (
@@ -267,7 +277,7 @@ export function MerchantChatTabs({
                     onClearUnread?.(conv.order_id);
                     onOpenOrderChat(
                       conv.order_id,
-                      conv.user.username,
+                      displayName,
                       conv.order_number,
                       conv.order_type,
                       conv.user.avatar_url,
@@ -333,7 +343,7 @@ export function MerchantChatTabs({
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3, gap: 6 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
                         <span style={{ fontWeight: 800, fontSize: 15, color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {conv.user.username || "Merchant"}
+                          {displayName}
                         </span>
                         <span style={{
                           flexShrink: 0,

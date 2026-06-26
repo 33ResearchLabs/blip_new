@@ -3210,10 +3210,10 @@ export function OrderQuickView({
                 ? "fixed inset-0 z-50 w-full h-dvh max-h-dvh flex flex-col overflow-hidden pb-safe"
                 : `fixed z-50 inset-x-0 bottom-0 mx-auto w-full ${
                     isActiveOrder
-                      ? "max-w-2xl"
-                      : isAcceptableBuyOrder
                       ? "max-w-xl"
-                      : "max-w-md"
+                      : isAcceptableBuyOrder
+                      ? "max-w-lg"
+                      : "max-w-sm"
                   } lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[90%] max-h-[90dvh] flex flex-col overflow-hidden rounded-t-2xl lg:rounded-2xl shadow-2xl pb-safe lg:pb-0`
             }
             style={{

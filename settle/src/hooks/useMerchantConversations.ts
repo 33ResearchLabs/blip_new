@@ -24,6 +24,10 @@ export interface OrderConversation {
     total_trades: number;
     avatar_url?: string | null;
   };
+  // Friendly counterparty name resolved server-side (the OTHER party relative
+  // to the viewing merchant). Null/empty for broadcast orders with no resolved
+  // merchant — the UI then falls back to the order number.
+  counterparty_name?: string | null;
   message_count: number;
   unread_count: number;
   last_message: {

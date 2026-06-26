@@ -22,7 +22,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Info, Check, Zap, X } from "lucide-react";
+import { Search, Check, Zap, X } from "lucide-react";
 
 type Category = "bank" | "upi" | "cash";
 type Mode = "sheet" | "center";
@@ -194,7 +194,6 @@ export function PayWithSheet({
               <div className={`flex items-center justify-between ${isCenter ? "pt-1" : ""}`}>
                 <h2 className={`text-[18px] font-bold flex items-center gap-1.5 ${t.title}`}>
                   Pay With
-                  <Info className={`w-4 h-4 ${t.muted}`} />
                 </h2>
                 <button
                   onClick={onClose}
