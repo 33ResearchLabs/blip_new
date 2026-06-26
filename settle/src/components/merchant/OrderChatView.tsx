@@ -196,6 +196,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
             messages={chatWindow.messages}
             currentUserType="merchant"
             currentUserId={merchantId}
+            viewerRole={viewerRole}
             userName={userName}
             userAvatarUrl={userAvatarUrl}
             counterpartyNameClass="text-white bg-black"

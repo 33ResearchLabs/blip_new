@@ -67,6 +67,7 @@ import type { ProfileEntityType } from "@/components/shared/profile/types";
 import { deriveCounterparty } from "@/components/shared/profile/counterparty";
 import { MerchantAppealSheet } from "@/components/merchant/MerchantAppealSheet";
 import { MutualCancelAppealBanner } from "@/components/shared/MutualCancelAppealBanner";
+import { useOrderAppeal, isActiveAppeal } from "@/hooks/useOrderAppeal";
 
 // ── Counterparty profile wiring ──────────────────────────────────────────────
 // The popup is one big tree of sub-component bodies (CounterpartyTrustCard,
@@ -3070,6 +3071,10 @@ export function OrderQuickView({
   // already 'buyer' for the creator (see getAllPendingOrdersForMerchant).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const qvDb = (selectedOrder?.dbOrder ?? {}) as any;
+  // Hide "Raise Appeal" once an appeal is already open/proposed (the inline
+  // banner carries the resolution actions; a second appeal can't be raised).
+  const { appeal: qvAppeal } = useOrderAppeal(selectedOrder?.id, { enabled: !!selectedOrder });
+  const qvAppealActive = isActiveAppeal(qvAppeal);
   const isOwnPendingBuy =
     !!selectedOrder &&
     selectedOrder.myRole === "buyer" &&
@@ -4142,7 +4147,7 @@ export function OrderQuickView({
                             "accepted",
                             "escrowed",
                             "payment_sent",
-                          ].includes(st);
+                          ].includes(st) && !qvAppealActive;
                           return (
                             <div className="flex gap-3">
                               {showAppeal && (

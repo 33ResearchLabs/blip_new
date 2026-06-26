@@ -170,6 +170,7 @@ const MUTED_BTN = "bg-surface-active text-text-secondary";
 // Shared expiry timer — used on both user and merchant order detail screens
 import { OrderExpiryTimer } from '@/components/shared/OrderExpiryTimer';
 import { MutualCancelAppealBanner } from '@/components/shared/MutualCancelAppealBanner';
+import { useOrderAppeal, isActiveAppeal } from '@/hooks/useOrderAppeal';
 
 /** Glossy animated expiry bar — sits at the card's bottom edge.
  *  Shrinks with time. Shimmers to attract attention. Pulses red when urgent. */
@@ -407,6 +408,16 @@ export const OrderDetailScreen = ({
 }: OrderDetailScreenProps) => {
   // Suppress unused-param lint: `copied` is part of the prop API but not rendered here.
   void copied;
+
+  // Active-appeal state — drives hiding the "Raise Appeal" entries on the
+  // payment/tracker overlays once an appeal is open/proposed (the banner there
+  // carries the resolution actions instead).
+  const { appeal: odAppeal } = useOrderAppeal(activeOrder?.id, {
+    enabled: !["cancelled", "expired", "complete", "completed"].includes(
+      activeOrder?.status || "",
+    ),
+  });
+  const appealActive = isActiveAppeal(odAppeal);
   const [showEmojiPicker, setShowEmojiPicker] = useLocalState(false);
   const [showProfile, setShowProfile] = useLocalState(false);
   const [isUploading, setIsUploading] = useLocalState(false);
@@ -3146,6 +3157,20 @@ export const OrderDetailScreen = ({
               matchingPayMethods={matchingPayMethods}
               onChoosePayMethod={handleChoosePayMethod}
               isSubmitting={isLoading}
+              appealBanner={
+                <MutualCancelAppealBanner
+                  orderId={activeOrder.id}
+                  viewerActorId={userId}
+                  variant="user"
+                  enabled={
+                    !["cancelled", "expired", "complete", "completed", "disputed"].includes(
+                      activeOrder.status || "",
+                    )
+                  }
+                  // Buyer view: no release handler — a buyer can only escalate.
+                />
+              }
+              appealActive={appealActive}
             />
           </div>
         )}
@@ -3172,6 +3197,21 @@ export const OrderDetailScreen = ({
               onConfirmReceived={confirmFiatReceived}
               onRaiseAppeal={() => setShowAppeal(true)}
               isConfirming={isLoading}
+              appealBanner={
+                <MutualCancelAppealBanner
+                  orderId={activeOrder.id}
+                  viewerActorId={userId}
+                  variant="user"
+                  enabled={
+                    !["cancelled", "expired", "complete", "completed", "disputed"].includes(
+                      activeOrder.status || "",
+                    )
+                  }
+                  // Seller: route "Release crypto to buyer" through the on-chain release flow.
+                  onReleaseRequest={confirmFiatReceived}
+                />
+              }
+              appealActive={appealActive}
             />
           </div>
         )}

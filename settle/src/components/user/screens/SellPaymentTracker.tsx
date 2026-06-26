@@ -80,6 +80,10 @@ export interface SellPaymentTrackerProps {
   onConfirmReceived: () => void;
   onRaiseAppeal: () => void;
   isConfirming: boolean;
+  /** Active-appeal banner (rendered at the top of the content when an appeal is live). */
+  appealBanner?: React.ReactNode;
+  /** When an appeal is already open/proposed, hide the "Raise Appeal" entries. */
+  appealActive?: boolean;
 }
 
 export function SellPaymentTracker({
@@ -92,6 +96,8 @@ export function SellPaymentTracker({
   onConfirmReceived,
   onRaiseAppeal,
   isConfirming,
+  appealBanner,
+  appealActive,
 }: SellPaymentTrackerProps) {
   const [showOverview, setShowOverview] = useState(false);
   const dbStatus = String(order.dbStatus || order.status || "").toLowerCase();
@@ -184,6 +190,9 @@ export function SellPaymentTracker({
         </div>
 
         <div className="px-5 pb-10 space-y-4">
+          {/* Active-appeal banner — shown when an appeal is open/proposed. */}
+          {appealBanner}
+
           {/* Status banner */}
           <motion.div
             initial={{ y: 12, opacity: 0 }}
@@ -394,13 +403,17 @@ export function SellPaymentTracker({
             </button>
           )}
 
-          <button
-            onClick={onRaiseAppeal}
-            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-warning-dim text-warning border border-warning-border flex items-center justify-center gap-2"
-          >
-            <AlertTriangle className="w-4 h-4" />
-            Raise Appeal
-          </button>
+          {/* Hidden once an appeal is active — the banner above carries the
+              resolution actions, and a second appeal can't be raised. */}
+          {!appealActive && (
+            <button
+              onClick={onRaiseAppeal}
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-warning-dim text-warning border border-warning-border flex items-center justify-center gap-2"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Raise Appeal
+            </button>
+          )}
         </div>
       </div>
 

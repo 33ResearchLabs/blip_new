@@ -51,6 +51,7 @@ import type { ChatMessage, PresenceMember } from "@/hooks/useRealtimeChat";
 import { usePusherOptional } from "@/context/PusherContext";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
 import { getOrderChannel } from "@/lib/pusher/channels";
+import { personalizeAppealMessage } from "@/lib/appeals/personalizeMessage";
 
 // ============================================
 // Types
@@ -105,6 +106,9 @@ interface ChatRoomProps {
   // (e.g. merchant desktop passes "text-white bg-black"), the buyer/seller name
   // renders neutral instead of its role colour. Compliance/system keep theirs.
   counterpartyNameClass?: string;
+  // The viewer's trade role (buyer/seller) — used to personalize appeal system
+  // messages ("You raised an appeal" instead of "The seller raised an appeal").
+  viewerRole?: "buyer" | "seller" | null;
 }
 
 // ============================================
@@ -416,6 +420,7 @@ export function ChatRoom({
   orderLabel,
   userAvatarUrl,
   counterpartyNameClass,
+  viewerRole,
 }: ChatRoomProps) {
   const [messageText, setMessageText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -1040,7 +1045,7 @@ export function ChatRoom({
               <div key={msg.id} className="flex justify-center my-2">
                 <div className="px-3 py-1.5 bg-white/[0.03] rounded-full border border-white/[0.04]">
                   <p className="text-[11px] text-gray-500 text-center">
-                    {msg.text}
+                    {personalizeAppealMessage(msg.text, viewerRole)}
                   </p>
                 </div>
               </div>
