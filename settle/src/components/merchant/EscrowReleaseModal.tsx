@@ -70,7 +70,7 @@ export function EscrowReleaseModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed z-50 w-full max-w-lg inset-x-0 bottom-0 mx-auto md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
+            className="fixed z-50 w-full max-w-md inset-x-0 bottom-0 mx-auto md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           >
             <div
               className={`${S.screen} rounded-t-2xl md:rounded-2xl border border-b-0 md:border-b border-border-subtle shadow-2xl overflow-hidden pb-safe md:pb-0 max-h-[90dvh] overflow-y-auto`}

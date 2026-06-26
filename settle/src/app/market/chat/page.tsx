@@ -53,8 +53,6 @@ import {
   Plus,
   Users,
   Crown,
-  BadgeCheck,
-  Star,
   Clock,
   Paperclip,
   Smile,
@@ -687,17 +685,6 @@ export default function TradeChatPage() {
               ))
             )}
           </div>
-
-          <div className="shrink-0 p-3 border-t border-white/[0.06]">
-            <button
-              type="button"
-              title="Create a group (coming soon)"
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-foreground/70 text-sm font-medium transition-colors"
-            >
-              <Users className="w-4 h-4" />
-              New Group
-            </button>
-          </div>
         </aside>
 
         {/* ───────────── CENTER: conversation ───────────── */}
@@ -1061,19 +1048,6 @@ function TradeSummaryStrip({
         </div>
 
         <div className="min-w-0">
-          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Order ID</p>
-          <p className="font-mono text-xs text-foreground/80 truncate">
-            {order?.order_number ?? convo.order_number}
-          </p>
-          <button
-            onClick={onViewOrder}
-            className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-accent hover:opacity-80"
-          >
-            View Order <ExternalLink className="w-2.5 h-2.5" />
-          </button>
-        </div>
-
-        <div className="min-w-0">
           <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Total Amount</p>
           <p className="text-sm font-semibold text-foreground leading-tight">{formatFiat(fiat, ccy)}</p>
         </div>
@@ -1391,33 +1365,6 @@ function TradeDetailsPane({
       </div>
 
       <div className="flex-1 overflow-y-auto pulse-scroll p-4 space-y-4">
-        {/* counterparty */}
-        <div className="bg-[var(--color-bg-tertiary)] border border-white/[0.06] rounded-xl p-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-foreground"
-              style={avatarTint(convo.user.username)}
-            >
-              {initials(convo.user.username)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1">
-                <p className="text-sm font-semibold text-foreground truncate">{convo.user.username}</p>
-                <BadgeCheck className="w-3.5 h-3.5 text-accent shrink-0" />
-              </div>
-              <p className="text-[11px] text-foreground/50">
-                {convo.user.total_trades ?? 0} trades
-              </p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="inline-flex items-center gap-0.5 text-sm font-semibold text-foreground">
-                <Star className="w-3.5 h-3.5 text-warning fill-warning" />
-                {convo.user.rating?.toFixed(1) ?? "—"}
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* active order */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
