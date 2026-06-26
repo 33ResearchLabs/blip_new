@@ -1317,6 +1317,7 @@ export const OrderDetailScreen = ({
             // Real mode: route the seller's "Release" through the normal on-chain
             // release flow (signs + completes); the appeal closes server-side.
             onReleaseRequest={confirmFiatReceived}
+            onOpenChat={handleOpenChat}
           />
         )}
 
@@ -3168,6 +3169,7 @@ export const OrderDetailScreen = ({
                     )
                   }
                   // Buyer view: no release handler — a buyer can only escalate.
+                  onOpenChat={handleOpenChat}
                 />
               }
               appealActive={appealActive}
@@ -3209,6 +3211,7 @@ export const OrderDetailScreen = ({
                   }
                   // Seller: route "Release crypto to buyer" through the on-chain release flow.
                   onReleaseRequest={confirmFiatReceived}
+                  onOpenChat={handleOpenChat}
                 />
               }
               appealActive={appealActive}

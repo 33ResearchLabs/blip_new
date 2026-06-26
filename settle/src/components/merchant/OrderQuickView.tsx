@@ -3677,6 +3677,7 @@ export function OrderQuickView({
                   // on-chain release flow (signs + completes); the appeal closes
                   // server-side once the order completes.
                   onReleaseRequest={() => { onConfirmPayment(selectedOrder.id).then(onClose); }}
+                  onOpenChat={() => { if (selectedOrder) onOpenChat(selectedOrder); }}
                 />
               )}
 

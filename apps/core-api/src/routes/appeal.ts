@@ -269,6 +269,9 @@ export const appealRoutes: FastifyPluginAsync = async (fastify) => {
   //                         no resolution = accept the STANDING proposal (accepter must
   //                           not be the proposer).
   //           'agree'   → back-compat alias: accept the opener's mutual_cancel appeal.
+  //           'withdraw'→ "Continue Trade": close the appeal with NO money movement
+  //                       and resume the normal order flow (either party may do it;
+  //                       the other can re-appeal). Order status is unchanged.
   //           'reject'  → escalate to a formal dispute (order → disputed).
   //
   // Idempotency-Key REQUIRED. The whole handler runs in ONE transaction with
@@ -283,7 +286,7 @@ export const appealRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.put<{
     Params: { id: string };
     Body: {
-      action: 'propose' | 'accept' | 'agree' | 'reject';
+      action: 'propose' | 'accept' | 'agree' | 'reject' | 'withdraw';
       resolution?: 'complete' | 'mutual_cancel';
       actor_type: 'user' | 'merchant';
       actor_id: string;
@@ -292,10 +295,10 @@ export const appealRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params;
     const { action, resolution, actor_type, actor_id } = request.body;
 
-    if (!action || !['propose', 'accept', 'agree', 'reject'].includes(action) || !actor_type || !actor_id) {
+    if (!action || !['propose', 'accept', 'agree', 'reject', 'withdraw'].includes(action) || !actor_type || !actor_id) {
       return reply.status(400).send({
         success: false,
-        error: 'action (propose|accept|agree|reject), actor_type and actor_id are required',
+        error: 'action (propose|accept|agree|reject|withdraw), actor_type and actor_id are required',
       });
     }
     // A resolution is required to propose, and optional only when accepting a
@@ -371,6 +374,39 @@ export const appealRoutes: FastifyPluginAsync = async (fastify) => {
       }
       // The opener funds the escrow on a SELL order, so "seller" for release auth
       // is always the escrow depositor — checked per-resolution below.
+
+      // ── WITHDRAW → "Continue Trade": close the appeal, resume the order ──
+      // No money moves and the order status is unchanged; this just clears the
+      // active appeal so the normal trade flow resumes. Either participant may
+      // do it (the other can re-appeal). Safe — nothing financial happens.
+      if (action === 'withdraw') {
+        await client.query(
+          `UPDATE appeals
+              SET status = 'resolved'::appeal_status, resolved_at = NOW(), updated_at = NOW()
+            WHERE id = $1 AND status IN ('open', 'proposed')`,
+          [appeal.id],
+        );
+        await client.query(
+          `UPDATE orders SET appeal_status = NULL, appeal_deadline = NULL WHERE id = $1`,
+          [id],
+        );
+        await client.query(
+          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+           VALUES ($1, 'appeal_withdrawn', $2::actor_type, $3, $4, $4, $5)`,
+          [id, actor_type, actor_id, order.status, JSON.stringify({ appeal_id: appeal.id, reason: 'continue_trade' })],
+        );
+        const chatInsert = await client.query(
+          `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
+           VALUES ($1, 'system', $1, $2, 'text')
+           RETURNING id, sender_id, content, created_at`,
+          [id, '✅ Appeal closed — the trade continues. You can raise a new appeal later if needed.'],
+        );
+        logger.info('[core-api] Appeal withdrawn (continue trade)', { orderId: id, by: actor_type });
+        return {
+          statusCode: 200,
+          body: { success: true, withdrawn: true, chatMessage: chatInsert.rows[0] ?? null },
+        };
+      }
 
       // ── PROPOSE → record a standing resolution for the other party to accept ──
       // No money moves. Either party may propose; execution still enforces the
