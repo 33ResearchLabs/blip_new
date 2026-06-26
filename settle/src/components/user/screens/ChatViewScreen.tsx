@@ -30,6 +30,7 @@ import { usePusherOptional } from "@/context/PusherContext";
 import { getOrderChannel } from "@/lib/pusher/channels";
 import { ORDER_EVENTS, CHAT_EVENTS } from "@/lib/pusher/events";
 import { formatLastSeen } from "./helpers";
+import { personalizeAppealMessage } from "@/lib/appeals/personalizeMessage";
 import type { Screen, Order } from "./types";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { RefObject } from "react";
@@ -154,6 +155,12 @@ export const ChatViewScreen = ({
 
   // Backend-controlled chat availability — the ONLY source of truth
   const { chatEnabled, chatReason, chatState } = useChatStatus(activeOrder.id);
+
+  // This user's trade role drives perspective-aware appeal system messages
+  // ("You raised an appeal" vs "The seller raised an appeal"). In the user app
+  // the viewer is always the order creator: sell → seller, buy → buyer.
+  const viewerTradeRole: "buyer" | "seller" =
+    String(activeOrder.type).toLowerCase() === "sell" ? "seller" : "buyer";
 
   // ── Typing indicator debounce (auto-stop after 3s) ──
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -736,7 +743,7 @@ export const ChatViewScreen = ({
               return (
                 <div key={msg.id} className="flex justify-center">
                   <div className="w-full max-w-[90%] rounded-2xl px-4 py-3 bg-surface-hover border border-border-strong">
-                    <p className="text-[13px] whitespace-pre-line leading-relaxed text-text-secondary">{msg.text}</p>
+                    <p className="text-[13px] whitespace-pre-line leading-relaxed text-text-secondary">{personalizeAppealMessage(msg.text, viewerTradeRole)}</p>
                     <p className="text-[10px] mt-1.5 text-text-tertiary">
                       {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     </p>

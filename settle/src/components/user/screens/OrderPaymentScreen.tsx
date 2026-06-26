@@ -136,6 +136,10 @@ export interface OrderPaymentScreenProps {
   matchingPayMethods: MerchantPaymentMethod[];
   onChoosePayMethod: (pm: MerchantPaymentMethod) => void;
   isSubmitting: boolean;
+  /** Active-appeal banner (rendered at the top of the content when an appeal is live). */
+  appealBanner?: React.ReactNode;
+  /** When an appeal is already open/proposed, hide the "Raise Appeal" entry. */
+  appealActive?: boolean;
 }
 
 export function OrderPaymentScreen({
@@ -155,6 +159,8 @@ export function OrderPaymentScreen({
   matchingPayMethods,
   onChoosePayMethod,
   isSubmitting,
+  appealBanner,
+  appealActive,
 }: OrderPaymentScreenProps) {
   const dbStatus = String(order.dbStatus || order.status || "").toLowerCase();
   const escrowLocked = dbStatus === "escrowed" || dbStatus === "payment_pending";
@@ -209,6 +215,9 @@ export function OrderPaymentScreen({
       </div>
 
       <div className="px-5 pb-10 space-y-4">
+        {/* Active-appeal banner — shown when an appeal is open/proposed. */}
+        {appealBanner}
+
         {/* Accepted banner */}
         <motion.div
           initial={{ y: 12, opacity: 0 }}
@@ -623,7 +632,7 @@ export function OrderPaymentScreen({
               locked the escrow-status card above renders its own inline Appeal,
               so this bottom button only shows in the pre-lock (accepted /
               escrow_pending) state to avoid a duplicate. */}
-          {!fundsLocked && (
+          {!fundsLocked && !appealActive && (
             <button
               onClick={onAppeal}
               className="w-full py-3 rounded-2xl text-[14px] font-semibold text-error border border-error-border hover:bg-error-dim transition-colors flex items-center justify-center gap-2"

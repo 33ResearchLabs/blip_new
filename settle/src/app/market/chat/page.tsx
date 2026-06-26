@@ -87,6 +87,7 @@ import { MOCK_MODE } from "@/lib/config/mockMode";
 import { EscrowLockModal } from "@/components/merchant/EscrowLockModal";
 import { EscrowReleaseModal } from "@/components/merchant/EscrowReleaseModal";
 import { MutualCancelAppealBanner } from "@/components/shared/MutualCancelAppealBanner";
+import { personalizeAppealMessage } from "@/lib/appeals/personalizeMessage";
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -771,7 +772,7 @@ export default function TradeChatPage() {
                     {activeWindow ? "No messages yet — say hello." : <Loader2 className="w-5 h-5 animate-spin" />}
                   </div>
                 ) : (
-                  <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} />
+                  <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} viewerRole={order?.my_role === "buyer" || order?.my_role === "seller" ? order.my_role : null} />
                 )}
               </div>
 
@@ -1096,7 +1097,15 @@ function TradeSummaryStrip({
 
 /* ───────────────────── message stream ───────────────────── */
 
-function MessageStream({ messages, status }: { messages: ChatMessage[]; status: string }) {
+function MessageStream({
+  messages,
+  status,
+  viewerRole,
+}: {
+  messages: ChatMessage[];
+  status: string;
+  viewerRole?: "buyer" | "seller" | null;
+}) {
   const out: ReactNode[] = [];
   let lastDay = "";
   for (const m of messages) {
@@ -1112,12 +1121,20 @@ function MessageStream({ messages, status }: { messages: ChatMessage[]; status: 
         </div>,
       );
     }
-    out.push(<MessageItem key={m.id} m={m} status={status} />);
+    out.push(<MessageItem key={m.id} m={m} status={status} viewerRole={viewerRole} />);
   }
   return <>{out}</>;
 }
 
-function MessageItem({ m, status }: { m: ChatMessage; status: string }) {
+function MessageItem({
+  m,
+  status,
+  viewerRole,
+}: {
+  m: ChatMessage;
+  status: string;
+  viewerRole?: "buyer" | "seller" | null;
+}) {
   // Rich receipt cards (Payment Sent / Trade Completed) when the message
   // carries structured receipt data.
   if (m.messageType === "receipt" && m.receiptData) {
@@ -1140,7 +1157,7 @@ function MessageItem({ m, status }: { m: ChatMessage; status: string }) {
       <div className="flex justify-center">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[10px] text-foreground/50 max-w-[80%] text-center">
           {m.from === "compliance" && <span className="text-accent font-semibold">Compliance:</span>}
-          {m.text}
+          {personalizeAppealMessage(m.text, viewerRole)}
         </span>
       </div>
     );

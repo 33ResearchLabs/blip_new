@@ -112,6 +112,8 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
               ORDER_CANCELLED: 'system',
               ORDER_EXPIRED: 'system',
               ORDER_DISPUTED: 'dispute',
+              APPEAL_OPENED: 'dispute',
+              APPEAL_PROPOSED: 'dispute',
             };
             const buildHistoryMsg = (n: any): string => {
               const amt = n.crypto_amount ? `${parseFloat(n.crypto_amount).toLocaleString()} USDT` : '';
@@ -128,6 +130,8 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
                 case 'ORDER_CANCELLED': return `Order cancelled · ${amt}${user ? ` · ${user}` : ''}`;
                 case 'ORDER_EXPIRED': return `Order expired · ${amt} timed out`;
                 case 'ORDER_DISPUTED': return `Dispute opened · ${amt}${user ? ` · ${user}` : ''}`;
+                case 'APPEAL_OPENED': return `Appeal raised · ${amt}${user ? ` · ${user}` : ''}`;
+                case 'APPEAL_PROPOSED': return `Resolution proposed · ${amt}${user ? ` · ${user}` : ''}`;
                 default: return n.event_type;
               }
             };
