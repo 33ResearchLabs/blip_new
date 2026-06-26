@@ -45,78 +45,17 @@ import type { Order, MerchantPaymentMethod } from "./types";
 import { formatCrypto, formatCount } from "@/lib/format";
 import { explorerUrl } from "@/lib/solana/networkLabel";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { PaymentConfirmSheet } from "@/components/user/PaymentConfirmSheet";
+// Shared "where to pay" helpers — single source for both this screen and the
+// new Active Order architecture (ActiveOrderPaymentScreen). No duplicated logic.
+import { fiatSymbol, fmtCountdown, derivePaymentRows } from "@/lib/orders/paymentRows";
 
 const CARD = "bg-surface-card border border-border-subtle";
-
-function fiatSymbol(code: string | undefined | null): string {
-  switch ((code || "").toUpperCase()) {
-    case "INR": return "₹";
-    case "USD": return "$";
-    case "AED": return "AED ";
-    default: return `${(code || "AED").toUpperCase()} `;
-  }
-}
-
-function fmtCountdown(totalSec: number): string {
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
-}
 
 function fmtLockedAt(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   return `${time}, ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-}
-
-interface PaymentRow {
-  label: string;
-  value: string;
-  copyKey: string;
-  copyValue?: string;
-  mono?: boolean;
-  accent?: boolean;
-}
-
-/**
- * Builds the labelled payment-detail rows from whichever source the order
- * carries — mirrors OrderDetailScreen's precedence: merchantPaymentMethod →
- * lockedPaymentMethod → raw merchant fields.
- */
-function derivePaymentRows(order: Order, displayId: string): PaymentRow[] {
-  const rows: PaymentRow[] = [];
-  const mpm = order.merchantPaymentMethod;
-  const lpm = order.lockedPaymentMethod;
-
-  if (mpm) {
-    const t = (mpm.type || "").toLowerCase();
-    const isUpi = t === "upi" || (typeof mpm.details === "string" && mpm.details.includes("@"));
-    rows.push({ label: isUpi ? "UPI Name" : "Account Name", value: mpm.name || "—", copyKey: "pm-name" });
-    rows.push({ label: isUpi ? "UPI ID" : "Account No. / IBAN", value: mpm.details || "—", copyKey: "pm-id", mono: true });
-  } else if (lpm) {
-    const d = lpm.details || {};
-    if (d.bank_name) rows.push({ label: "Bank Name", value: d.bank_name, copyKey: "bank" });
-    if (d.account_name) rows.push({ label: "Account Name", value: d.account_name, copyKey: "name" });
-    if (d.iban) rows.push({ label: "IBAN / Account No.", value: d.iban, copyKey: "iban", mono: true });
-    if (d.upi_id) rows.push({ label: "UPI ID", value: d.upi_id, copyKey: "upi", mono: true });
-  } else {
-    if (order.merchant.bank) rows.push({ label: "Bank Name", value: order.merchant.bank, copyKey: "bank" });
-    if (order.merchant.accountName) rows.push({ label: "Account Name", value: order.merchant.accountName, copyKey: "name" });
-    if (order.merchant.iban) rows.push({ label: "IBAN / Account No.", value: order.merchant.iban, copyKey: "iban", mono: true });
-  }
-
-  const sym = fiatSymbol(order.fiatCode);
-  rows.push({
-    label: "Amount",
-    value: `${sym}${formatCrypto(parseFloat(order.fiatAmount))}`,
-    copyKey: "amount",
-    copyValue: order.fiatAmount,
-    accent: true,
-  });
-  rows.push({ label: "Reference / Note", value: displayId, copyKey: "ref" });
-  return rows;
 }
 
 export interface OrderPaymentScreenProps {
@@ -185,6 +124,20 @@ export function OrderPaymentScreen({
   const fiatStr = `${sym}${formatCrypto(parseFloat(order.fiatAmount))}`;
   const rows = derivePaymentRows(order, displayId);
   const canPay = escrowLocked && !needsPayMethodPick && !isSubmitting;
+
+  // "I've Paid" confirmation. Marking payment sent is irreversible, so it's
+  // gated behind a checklist sheet. The sheet's `open` is *derived* — once the
+  // order leaves the escrow-locked phase (payment_sent) it auto-closes, so no
+  // effect is needed.
+  const [showPaidConfirm, setShowPaidConfirm] = useState(false);
+  const nameRow = rows.find((r) => /name/i.test(r.label));
+  const payDestination =
+    nameRow && nameRow.value && nameRow.value !== "—" ? nameRow.value : "the account shown above";
+  const paidChecklist = [
+    `I sent exactly ${fiatStr} — no more, no less`,
+    "I paid the account shown above",
+    "The payment is complete (not pending)",
+  ];
 
   return (
     <div className="bg-surface-base flex-1 min-h-0 overflow-y-auto scrollbar-hide">
@@ -486,15 +439,18 @@ export function OrderPaymentScreen({
                     <span className="text-[13px] text-text-secondary shrink-0">{row.label}</span>
                     <button
                       onClick={() => onCopy(row.copyKey, row.copyValue ?? row.value)}
-                      className="flex items-center gap-1.5 min-w-0 text-right"
+                      aria-label={`Copy ${row.label}`}
+                      className="flex items-center gap-1.5 min-w-0 text-right -my-1.5 -mr-2 py-1.5 pr-2 pl-1 rounded-lg active:bg-surface-hover"
                     >
                       <span className={`text-[14px] font-medium truncate ${row.accent ? "text-text-primary font-semibold" : "text-text-primary"} ${row.mono ? "font-mono" : ""}`}>
                         {row.value}
                       </span>
                       {copiedField === row.copyKey ? (
-                        <Check className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                        <span className="inline-flex items-center gap-1 shrink-0 text-[11px] font-semibold text-text-secondary">
+                          <Check className="w-3.5 h-3.5" strokeWidth={3} /> Copied
+                        </span>
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+                        <Copy className="w-4 h-4 text-text-tertiary shrink-0" />
                       )}
                     </button>
                   </div>
@@ -615,7 +571,7 @@ export function OrderPaymentScreen({
           {escrowLocked && (
             <motion.button
               whileTap={{ scale: 0.98 }}
-              onClick={onMarkPaymentSent}
+              onClick={() => setShowPaidConfirm(true)}
               disabled={!canPay}
               className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-text-primary text-surface-base disabled:opacity-50 flex items-center justify-center gap-2"
             >
@@ -651,6 +607,20 @@ export function OrderPaymentScreen({
           </button>
         </div>
       </div>
+
+      {/* Irreversible-action guard for "I've paid". Open is derived — it auto-
+          closes when the order leaves the escrow-locked phase (success), and on
+          failure the parent's alert reports it while the sheet stays open to retry. */}
+      <PaymentConfirmSheet
+        open={showPaidConfirm && escrowLocked && !needsPayMethodPick}
+        amountLabel={fiatStr}
+        destination={payDestination}
+        checklist={paidChecklist}
+        confirmLabel={`Yes, I've sent ${fiatStr}`}
+        loading={isSubmitting}
+        onClose={() => setShowPaidConfirm(false)}
+        onConfirm={onMarkPaymentSent}
+      />
     </div>
   );
 }

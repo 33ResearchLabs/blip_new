@@ -903,6 +903,7 @@ export default function UserDesktopPage() {
                 setPendingTradeData={setPendingTradeData}
                 toast={toast}
                 maxW={maxW}
+                matched={userEffects.matched}
               />
             </CenterPanel>
           )}

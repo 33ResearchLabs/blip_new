@@ -41,6 +41,10 @@ import { OrderTrackingView } from "./OrderTrackingView";
 import { MatchingScreen } from "./MatchingScreen";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
 import { OrderPaymentScreen } from "./OrderPaymentScreen";
+import { ActiveOrderPaymentScreen } from "@/components/user/active-order/ActiveOrderPaymentScreen";
+import { ActiveOrderAcceptedScreen } from "@/components/user/active-order/ActiveOrderAcceptedScreen";
+import { ActiveOrderReviewScreen } from "@/components/user/active-order/ActiveOrderReviewScreen";
+import { ActiveOrderTerminalScreen } from "@/components/user/active-order/ActiveOrderTerminalScreen";
 import { SellPaymentTracker } from "./SellPaymentTracker";
 import { SellCompletedScreen } from "./SellCompletedScreen";
 import { OrderCompletedScreen } from "./OrderCompletedScreen";
@@ -59,6 +63,7 @@ import dynamic from "next/dynamic";
 import { showAlert } from "@/context/ModalContext";
 import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
 import { useGlobalNow } from "@/hooks/useGlobalNow";
+import { useCancelOrderSheet } from "@/hooks/useCancelOrderSheet";
 import { OrderProgressStepper } from "@/components/user/OrderProgressStepper";
 import { OrderMinimisedPill } from "@/components/user/OrderMinimisedPill";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
@@ -426,6 +431,32 @@ export const OrderDetailScreen = ({
   // Order receipt sheet — opened by tapping the summary card.
   const [showReceipt, setShowReceipt] = useLocalState(false);
   const [showTracker, setShowTracker] = useLocalState(false);
+  const cancel = useCancelOrderSheet();
+  // Stage-aware confirmation in front of the EXISTING cancel handlers. The
+  // resolver derives the dialog (direct vs mutual) from the live order; the
+  // handler passed in `run` is unchanged and still owns the backend routing,
+  // optimistic update and its own error alert. `after` runs only on success
+  // (e.g. closing the tracker/overview overlay), preserving prior navigation.
+  const openCancel = (run: () => Promise<unknown> | void, after?: () => void) => {
+    if (!activeOrder) return;
+    cancel.request(
+      {
+        type: activeOrder.type,
+        dbStatus: String(activeOrder.dbStatus || activeOrder.status || ""),
+        acceptedAt: activeOrder.acceptedAt,
+        paymentSentAt: activeOrder.paymentSentAt,
+        disputedAt: activeOrder.disputedAt,
+        cancelRequest: activeOrder.cancelRequest,
+        cryptoAmount: activeOrder.cryptoAmount,
+        cryptoCode: activeOrder.cryptoCode,
+      },
+      {
+        role: activeOrder.type === "sell" ? "seller" : "buyer",
+        onConfirm: async () => { await run(); },
+        onSuccess: after,
+      },
+    );
+  };
   // Chat popup: collapse the order-details (receipt) card by default so the
   // message area gets the full height. Toggled from the chat header.
   const [showOrderDetails, setShowOrderDetails] = useLocalState(false);
@@ -3003,7 +3034,7 @@ export const OrderDetailScreen = ({
           activeOrder.dbStatus === "escrowed" &&
           !activeOrder.cancelRequest && (
             <button
-              onClick={() => requestCancelOrder("Cancelled by seller — offer withdrawn")}
+              onClick={() => openCancel(() => requestCancelOrder("Cancelled by seller — offer withdrawn"))}
               disabled={isRequestingCancel}
               className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning hover:bg-warning-dim transition-colors`}
             >
@@ -3134,46 +3165,91 @@ export const OrderDetailScreen = ({
       </AnimatePresence>
 
       {/* Buyer payment view — replaces the step layout for an accepted/escrowed
-          BUY order. Bank details + pay action are gated on escrow lock inside. */}
+          BUY order. Bank details + pay action are gated on escrow lock inside.
+
+          ACTIVE ORDER REDESIGN (Phase 1): the escrow-locked "send payment"
+          state renders the new ActiveOrderShell-based screen; every other BUY
+          state (pre-lock wait, payment-sent wait) keeps the existing screen
+          until those states are migrated. Same prop API → the two screens are
+          interchangeable, so this is a presentation-only swap for one state. */}
       {activeOrder.type === "buy" &&
         ["accepted", "escrow_pending", "escrowed", "payment_pending", "payment_sent"].includes(
           String(activeOrder.dbStatus || "").toLowerCase(),
-        ) && (
-          <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
-            <OrderPaymentScreen
-              order={activeOrder}
-              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
-              onClose={() => setScreen(previousScreen || "orders")}
-              onOpenOverview={() => setShowTracker(true)}
-              onViewOverview={() => setShowOrderOverview(true)}
-              onOpenChat={handleOpenChat}
-              onViewProfile={() => setShowProfile(true)}
-              onNeedHelp={() => setScreen("support")}
-              onMarkPaymentSent={markPaymentSent}
-              onAppeal={() => setShowAppeal(true)}
-              onCopy={(key, value) => copyField(key, value)}
-              copiedField={copiedField}
-              needsPayMethodPick={needsPayMethodPick}
-              matchingPayMethods={matchingPayMethods}
-              onChoosePayMethod={handleChoosePayMethod}
-              isSubmitting={isLoading}
-              appealBanner={
-                <MutualCancelAppealBanner
-                  orderId={activeOrder.id}
-                  viewerActorId={userId}
-                  variant="user"
-                  enabled={
-                    !["cancelled", "expired", "complete", "completed", "disputed"].includes(
-                      activeOrder.status || "",
-                    )
-                  }
-                  // Buyer view: no release handler — a buyer can only escalate.
-                />
-              }
-              appealActive={appealActive}
-            />
-          </div>
-        )}
+        ) &&
+        (() => {
+          const lowered = String(activeOrder.dbStatus || "").toLowerCase();
+          // Escrow locked (send payment) AND payment-sent (read-only, waiting for
+          // the seller to confirm) both render the new payment screen.
+          const usesPaymentScreen =
+            lowered === "escrowed" || lowered === "payment_pending" || lowered === "payment_sent";
+          // Merchant accepted but escrow not locked yet → new "securing funds"
+          // waiting screen.
+          const isSecuringFundsState = lowered === "accepted" || lowered === "escrow_pending";
+          const buyPayProps = {
+            order: activeOrder,
+            displayId: getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number),
+            onClose: () => setScreen(previousScreen || "orders"),
+            onOpenOverview: () => setShowTracker(true),
+            onViewOverview: () => setShowOrderOverview(true),
+            onOpenChat: handleOpenChat,
+            onViewProfile: () => setShowProfile(true),
+            onNeedHelp: () => setScreen("support"),
+            onMarkPaymentSent: markPaymentSent,
+            onAppeal: () => setShowAppeal(true),
+            onCopy: (key: string, value: string) => copyField(key, value),
+            copiedField,
+            needsPayMethodPick,
+            matchingPayMethods,
+            onChoosePayMethod: handleChoosePayMethod,
+            isSubmitting: isLoading,
+            appealBanner: (
+              <MutualCancelAppealBanner
+                orderId={activeOrder.id}
+                viewerActorId={userId}
+                variant="user"
+                enabled={
+                  !["cancelled", "expired", "complete", "completed", "disputed"].includes(
+                    activeOrder.status || "",
+                  )
+                }
+                // Buyer view: no release handler — a buyer can only escalate.
+              />
+            ),
+            appealActive,
+          };
+          return (
+            <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
+              {usesPaymentScreen ? (
+                <ActiveOrderPaymentScreen {...buyPayProps} />
+              ) : isSecuringFundsState ? (
+                <ActiveOrderAcceptedScreen {...buyPayProps} />
+              ) : (
+                <OrderPaymentScreen {...buyPayProps} />
+              )}
+            </div>
+          );
+        })()}
+
+      {/* Under Review (disputed) — unified calm overlay for both directions.
+          The buyer/seller payment overlays and autoTracker all exclude
+          'disputed', so this is the sole primary view for a disputed order.
+          Resolution proposals stay in chat (Message seller). */}
+      {activeOrder.status === "disputed" && (
+        <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
+          <ActiveOrderReviewScreen
+            order={activeOrder}
+            displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
+            onClose={() => setScreen(previousScreen || "orders")}
+            onOpenOverview={() => setShowTracker(true)}
+            onOpenChat={handleOpenChat}
+            onViewProfile={() => setShowProfile(true)}
+            onNeedHelp={() => setScreen("support")}
+            requestExtension={requestExtension}
+            requestingExtension={requestingExtension}
+            extensionRequest={extensionRequest}
+          />
+        </div>
+      )}
 
       {/* Seller's matched-state view — once a merchant has claimed a SELL order
           (escrowed+merchant / payment_pending / payment_sent), replace the
@@ -3316,6 +3392,22 @@ export const OrderDetailScreen = ({
                 }}
                 maxW={maxW}
               />
+            ) : ["expired", "cancelled"].includes(
+                String(activeOrder.dbStatus || activeOrder.status || "").toLowerCase(),
+              ) ? (
+              // Ended (expired/cancelled) → new terminal screen (no dead 7-step
+              // ladder). Other non-matching states keep OrderTrackingView.
+              <ActiveOrderTerminalScreen
+                order={activeOrder}
+                displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
+                onClose={() => {
+                  if (autoTracker) setScreen(previousScreen || "orders");
+                  else setShowTracker(false);
+                }}
+                onRetry={() => setScreen("trade")}
+                onOpenSupport={() => setScreen("support")}
+                onViewOverview={() => setShowOrderOverview(true)}
+              />
             ) : (
               <OrderTrackingView
                 order={activeOrder}
@@ -3343,12 +3435,14 @@ export const OrderDetailScreen = ({
                     s === "escrowed" ||
                     s === "payment_pending" ||
                     s === "payment_sent";
-                  if (escrowLocked) requestCancelOrder();
-                  else cancelOrderDirect();
-                  setShowTracker(false);
+                  openCancel(
+                    () => (escrowLocked ? requestCancelOrder() : cancelOrderDirect()),
+                    () => setShowTracker(false),
+                  );
                 }}
                 isCancelling={isRequestingCancel}
                 onOpenSupport={() => setScreen("support")}
+                onRetry={() => setScreen("trade")}
               />
             )}
           </motion.div>
@@ -3385,14 +3479,16 @@ export const OrderDetailScreen = ({
               onCancel={() => {
                 // Overview only exposes Cancel pre-escrow now (canCancel gates
                 // out any locked state), so this is always a unilateral cancel.
-                cancelOrderDirect();
-                setShowOrderOverview(false);
+                openCancel(() => cancelOrderDirect(), () => setShowOrderOverview(false));
               }}
               isCancelling={isRequestingCancel}
             />
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Stage-aware cancel confirmation (portaled above all order overlays). */}
+      {cancel.sheet}
 
       {/* Order Receipt Sheet — opened by tapping the summary card */}
       <AnimatePresence>

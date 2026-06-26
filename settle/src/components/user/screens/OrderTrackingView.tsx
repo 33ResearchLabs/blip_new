@@ -96,7 +96,9 @@ function bannerFor(type: string, dbStatus: string, merchantName: string, matched
     case "cancelled":
       return { title: "Order cancelled", sub: "This order was cancelled.", icon: XCircle, tone: "error", live: false };
     case "expired":
-      return { title: "Order expired", sub: "No merchant accepted in time.", icon: XCircle, tone: "error", live: false };
+      // Expiry only happens pre-escrow (a locked order times out to cancelled +
+      // refund instead), so nothing was ever charged or locked here.
+      return { title: "No merchant available", sub: "No one accepted in time — you weren't charged.", icon: XCircle, tone: "error", live: false };
     case "disputed":
       return { title: "Under review", sub: "Our team is reviewing this order.", icon: AlertCircle, tone: "warning" as Tone, live: false };
     default:
@@ -122,6 +124,8 @@ export interface OrderTrackingViewProps {
   isCancelling: boolean;
   /** Opens the support/help flow — wired to the header help (?) button. */
   onOpenSupport: () => void;
+  /** Start a fresh order — shown as the recovery action on the expired state. */
+  onRetry?: () => void;
 }
 
 export function OrderTrackingView({
@@ -131,6 +135,7 @@ export function OrderTrackingView({
   onCancel,
   isCancelling,
   onOpenSupport,
+  onRetry,
 }: OrderTrackingViewProps) {
   const [showOverview, setShowOverview] = useState(false);
   const dbStatus = String(order.dbStatus || order.status || "").toLowerCase();
@@ -225,13 +230,34 @@ export function OrderTrackingView({
         onCancel={canCancel ? onCancel : undefined}
         isCancelling={isCancelling}
         secondaryAction={
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={onClose}
-            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent"
-          >
-            Back to order
-          </motion.button>
+          dbStatus === "expired" && onRetry ? (
+            // Expired = no merchant accepted. Offer an honest recovery: start a
+            // new order (primary) or step back (secondary). No funds were locked.
+            <div className="space-y-2.5">
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={onRetry}
+                className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent"
+              >
+                Try again
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={onClose}
+                className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-surface-active text-text-primary border border-border-subtle"
+              >
+                Back to order
+              </motion.button>
+            </div>
+          ) : (
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={onClose}
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent"
+            >
+              Back to order
+            </motion.button>
+          )
         }
       />
 
