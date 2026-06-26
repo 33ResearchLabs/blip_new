@@ -1303,6 +1303,9 @@ export const OrderDetailScreen = ({
                 activeOrder.status || "",
               )
             }
+            // Real mode: route the seller's "Release" through the normal on-chain
+            // release flow (signs + completes); the appeal closes server-side.
+            onReleaseRequest={confirmFiatReceived}
           />
         )}
 

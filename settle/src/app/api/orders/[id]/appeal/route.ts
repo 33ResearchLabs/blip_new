@@ -298,12 +298,16 @@ export async function GET(
   }
 }
 
-// Respond to an active appeal.
-//   action: 'agree'  → (mutual_cancel only) cancel the order + refund escrow.
-//           'reject' → escalate to a formal dispute (order → disputed).
+// Respond to / resolve an active appeal.
+//   action: 'propose' → record a standing resolution (resolution: complete|mutual_cancel).
+//           'accept'  → execute it: complete = seller releases crypto to the buyer
+//                       (MOCK credits the buyer; real mode returns releaseRequired so the
+//                       seller signs on-chain); mutual_cancel = cancel + refund seller.
+//           'agree'   → back-compat: accept the opener's mutual_cancel appeal.
+//           'reject'  → escalate to a formal dispute (order → disputed).
 // Identity is taken ONLY from the verified JWT (the body's actor is advisory and
 // can go stale — same rationale as the cancel-request respond path). Mutations
-// are proxied to core-api, which owns the state machine + escrow refund.
+// are proxied to core-api, which owns the state machine + escrow refund/release.
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -325,9 +329,22 @@ export async function PUT(
     }
 
     const action = body?.action;
-    if (action !== 'agree' && action !== 'reject') {
+    if (!['propose', 'accept', 'agree', 'reject'].includes(action)) {
       return NextResponse.json(
-        { success: false, error: "action must be 'agree' or 'reject'" },
+        { success: false, error: "action must be 'propose', 'accept', 'agree' or 'reject'" },
+        { status: 400 }
+      );
+    }
+    const resolution = body?.resolution;
+    if (resolution !== undefined && resolution !== 'complete' && resolution !== 'mutual_cancel') {
+      return NextResponse.json(
+        { success: false, error: "resolution must be 'complete' or 'mutual_cancel'" },
+        { status: 400 }
+      );
+    }
+    if (action === 'propose' && !resolution) {
+      return NextResponse.json(
+        { success: false, error: 'resolution is required to propose' },
         { status: 400 }
       );
     }
@@ -353,7 +370,7 @@ export async function PUT(
 
     const resp = await proxyCoreApi(`/v1/orders/${orderId}/appeal`, {
       method: 'PUT',
-      body: { action, actor_type: auth.actorType, actor_id: auth.actorId },
+      body: { action, resolution, actor_type: auth.actorType, actor_id: auth.actorId },
       actorType: auth.actorType,
       actorId: auth.actorId,
       idempotencyKey,

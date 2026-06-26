@@ -3668,6 +3668,10 @@ export function OrderQuickView({
                     )
                   }
                   onResolved={() => onClose()}
+                  // Real mode: route the seller's "Release" through the normal
+                  // on-chain release flow (signs + completes); the appeal closes
+                  // server-side once the order completes.
+                  onReleaseRequest={() => { onConfirmPayment(selectedOrder.id).then(onClose); }}
                 />
               )}
 

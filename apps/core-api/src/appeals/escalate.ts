@@ -138,8 +138,8 @@ export async function escalateAppealToDispute(
   //    the note in appeal.ts open handler for why system-sender 'text' is used.
   const chatContent =
     reason === 'appeal_timeout'
-      ? '⚖️ The mutual-cancellation request timed out with no response — a dispute has been opened for review.'
-      : '⚖️ The mutual-cancellation request was rejected — a dispute has been opened for review.';
+      ? '⚖️ The appeal timed out with no agreement and was sent to a moderator for review. The crypto stays locked until the moderator makes a decision — no action is needed from either party right now.'
+      : '⚖️ The appeal was sent to a moderator for review. The crypto stays locked until the moderator makes a decision — no action is needed from either party right now.';
   const chatInsert = await client.query(
     `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
      VALUES ($1, 'system', $1, $2, 'text')

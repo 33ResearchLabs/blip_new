@@ -23,6 +23,8 @@ import {
   MOCK_MODE,
 } from 'settlement-core';
 
+import { closeActiveAppealForTerminalOrder } from '../appeals/closeAppeal';
+
 // Fire-and-forget helper — logs errors but never blocks
 const bgQuery = (sql: string, params: unknown[]) => dbQuery(sql, params).catch(() => {});
 
@@ -802,6 +804,13 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        // Close any active appeal if this transition terminates the order (e.g. a
+        // manual cancel, or a MOCK-mode completion that didn't go through the
+        // appeal endpoint). Atomic with the status write; no-op if no appeal.
+        if (['completed', 'cancelled', 'expired'].includes(String(updatedOrder.status))) {
+          await closeActiveAppealForTerminalOrder(client, id, String(updatedOrder.status));
+        }
+
         // Outbox event inside transaction — atomic with order update
         const statusToEvent: Record<string, OrderEventPayload['event']> = {
           escrowed: ORDER_EVENT.ESCROWED, payment_sent: ORDER_EVENT.PAYMENT_SENT,
@@ -1195,6 +1204,19 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             txHash: tx_hash, metadata: { tx_hash },
           });
           syncReceiptTransition(id, 'COMPLETED', { txHash: tx_hash });
+
+          // If the seller resolved an open appeal by releasing, close it so the
+          // timeout worker doesn't try to escalate a now-completed order. Pooled
+          // (this endpoint isn't a single multi-statement txn); best-effort.
+          try {
+            await closeActiveAppealForTerminalOrder(
+              { query: async (t, p) => ({ rows: await dbQuery(t, p) }) },
+              id,
+              'completed',
+            );
+          } catch (appealCloseErr) {
+            logger.error('[Appeal] Failed to auto-close appeal after release', { orderId: id, error: appealCloseErr });
+          }
           const __relT3 = Date.now();
 
           const __relBreakdown = {
