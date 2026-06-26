@@ -46,7 +46,7 @@ export interface OrderAppeal {
 export type AppealRespondAction = "agree" | "reject";
 export type AppealResolution = "complete" | "mutual_cancel";
 /** Every action the PUT endpoint accepts. */
-export type AppealAction = "propose" | "accept" | "agree" | "reject";
+export type AppealAction = "propose" | "accept" | "agree" | "reject" | "withdraw";
 
 export interface AppealRespondResult {
   ok: boolean;
@@ -54,6 +54,8 @@ export interface AppealRespondResult {
   cancelled?: boolean;
   completed?: boolean;
   proposed?: boolean;
+  /** "Continue Trade": appeal closed, order resumes (no money moved). */
+  withdrawn?: boolean;
   /** Real mode: the seller must sign the on-chain release before it completes. */
   releaseRequired?: boolean;
   error?: string;
@@ -73,6 +75,8 @@ interface UseOrderAppealResult {
   propose: (resolution: AppealResolution) => Promise<AppealRespondResult>;
   /** Execute a resolution (a standing proposal, or a direct seller release). */
   accept: (resolution?: AppealResolution) => Promise<AppealRespondResult>;
+  /** "Continue Trade": close the appeal and resume the order (no money moved). */
+  withdraw: () => Promise<AppealRespondResult>;
 }
 
 const ACTIVE_APPEAL_STATUSES: AppealStatus[] = ["open", "proposed"];
@@ -157,6 +161,7 @@ export function useOrderAppeal(
             cancelled: !!data.cancelled,
             completed: !!data.completed,
             proposed: !!data.proposed,
+            withdrawn: !!data.withdrawn,
             releaseRequired: !!data.releaseRequired,
           };
         }
@@ -186,6 +191,7 @@ export function useOrderAppeal(
     (resolution?: AppealResolution) => act("accept", resolution),
     [act],
   );
+  const withdraw = useCallback(() => act("withdraw"), [act]);
 
-  return { appeal, viewerRole, loading, responding, error, refetch, respond, propose, accept };
+  return { appeal, viewerRole, loading, responding, error, refetch, respond, propose, accept, withdraw };
 }

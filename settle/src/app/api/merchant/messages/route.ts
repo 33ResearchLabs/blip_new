@@ -79,6 +79,22 @@ export async function GET(request: NextRequest) {
           'total_trades', u.total_trades,
           'avatar_url', u.avatar_url
         ) as user,
+        -- Friendly counterparty name relative to the viewing merchant ($1).
+        -- Mirrors deriveCounterparty() role logic: U2M → the real user;
+        -- M2M/broadcast → the OTHER merchant slot (merchant_id = seller,
+        -- buyer_merchant_id = buyer). u.username is an open_order_/m2m_
+        -- placeholder for broadcast orders, so we resolve the merchant
+        -- display name instead. NULL when neither side resolves — the
+        -- frontend then falls back to the order number.
+        CASE
+          WHEN u.username IS NOT NULL
+               AND u.username NOT LIKE 'open_order_%'
+               AND u.username NOT LIKE 'm2m_%'
+            THEN u.username
+          WHEN o.buyer_merchant_id = $1 THEN seller_m.display_name
+          WHEN o.merchant_id = $1 THEN buyer_m.display_name
+          ELSE COALESCE(buyer_m.display_name, seller_m.display_name)
+        END as counterparty_name,
         COALESCE(unread.cnt, 0) as message_count,
         COALESCE(unread.unread, 0) as unread_count,
         CASE WHEN o.last_message_preview IS NOT NULL THEN
@@ -95,6 +111,8 @@ export async function GET(request: NextRequest) {
         o.last_message_at as last_activity
       FROM orders o
       JOIN users u ON o.user_id = u.id
+      LEFT JOIN merchants seller_m ON o.merchant_id = seller_m.id
+      LEFT JOIN merchants buyer_m ON o.buyer_merchant_id = buyer_m.id
       LEFT JOIN LATERAL (
         SELECT
           COUNT(*)::int as cnt,
