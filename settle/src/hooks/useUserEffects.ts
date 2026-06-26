@@ -14,6 +14,13 @@ import { stageMessage, type TradeRole } from "@/lib/notifications/notificationCo
 import { isDuplicateRealtimeEvent } from "@/lib/notifications/realtimeDedup";
 import { formatCrypto } from "@/lib/format";
 
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 // ── Auto-refund "already handled" persistence ──────────────────────────────
 // The client-side auto-refund scan (below) records every order whose on-chain
 // outcome is TERMINAL (refunded / already-closed / program-incompatible) so it
@@ -94,6 +101,38 @@ export function useUserEffects({
 }: UseUserEffectsParams) {
   const [matchingTimeLeft, setMatchingTimeLeft] = useState<number>(15 * 60);
   const [timerTick, setTimerTick] = useState(0);
+  // Brief "Merchant matched" celebration shown on the matching screen before we
+  // navigate to the order/payment view. Frontend-only: every existing toast /
+  // sound / side-effect still fires immediately; only the navigation is held by
+  // ~1.4s so the user sees the hand-off instead of an abrupt screen swap.
+  const [matched, setMatched] = useState<{ merchantName?: string } | null>(null);
+  const matchedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Per-order guard so a single match is acknowledged exactly once across the
+  // accept (status) + claim (merchant_id) paths, reconnects, and duplicate
+  // sockets. Once an order id is in here, all repeat feedback is skipped.
+  const acknowledgedMatchRef = useRef<Set<string>>(new Set());
+  const beginMatchedCelebration = useCallback(
+    (merchantName?: string) => {
+      if (prefersReducedMotion()) {
+        setScreen("order");
+        return;
+      }
+      if (matchedTimerRef.current) return; // fire-once — ignore repeat events
+      setMatched({ merchantName });
+      matchedTimerRef.current = setTimeout(() => {
+        matchedTimerRef.current = null;
+        setMatched(null);
+        setScreen("order");
+      }, 1400);
+    },
+    [setScreen],
+  );
+  useEffect(
+    () => () => {
+      if (matchedTimerRef.current) clearTimeout(matchedTimerRef.current);
+    },
+    [],
+  );
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const [showChat, setShowChat] = useState(false);
@@ -118,6 +157,10 @@ export function useUserEffects({
   }, []);
 
   const showBrowserNotification = useCallback((title: string, body: string, orderId?: string) => {
+    // Only surface an OS notification when the app isn't on screen — anything
+    // the user is actively viewing is already acknowledged in-app, so a browser
+    // notification there would just duplicate it.
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       const notification = new Notification(title, {
         body,
@@ -327,18 +370,31 @@ export function useUserEffects({
       const wasPending = previousStatus === 'pending' || previousStatus === 'escrowed' || (!previousStatus && screen === 'matching');
       if (wasPending && (newStatus === 'accepted' || newStatus === 'escrowed')) {
         const merchantName = orderData?.merchant?.display_name || orderData?.merchant?.business_name || 'Merchant';
-        playSound('notification');
+        // Acknowledge a match exactly once per order (see acknowledgedMatchRef).
+        const firstAck = !activeOrderId || !acknowledgedMatchRef.current.has(activeOrderId);
+        if (activeOrderId) acknowledgedMatchRef.current.add(activeOrderId);
 
-        // Standard themed toast (Design A) — consistent with every other stage
-        // notification (replaces the old AcceptancePopup card).
-        stageToast('order', 'Order Accepted', `${merchantName} accepted your order`, 6000);
-        showBrowserNotification('Order Accepted!', `${merchantName} accepted your ${orderData?.type || 'buy'} order`, activeOrderId || undefined);
+        if (firstAck) {
+          playSound('notification');
 
-        if (screen === "matching") {
-          setPendingTradeData(null);
-        }
-        if (screen !== "order") {
-          setScreen("order");
+          // On the matching screen the full-screen celebration IS the primary
+          // acknowledgement — suppress the duplicate toast. Off that screen (or
+          // under reduced motion, where no celebration runs) the toast stays the
+          // primary acknowledgement.
+          const willCelebrate = screen === "matching" && !prefersReducedMotion();
+          if (!willCelebrate) {
+            stageToast('order', 'Order Accepted', `${merchantName} accepted your order`, 6000);
+          }
+          showBrowserNotification('Order Accepted!', `${merchantName} accepted your ${orderData?.type || 'buy'} order`, activeOrderId || undefined);
+
+          if (screen === "matching") {
+            // Brief "Merchant matched" celebration, then navigate. The helper
+            // falls back to an instant nav under reduced-motion.
+            setPendingTradeData(null);
+            beginMatchedCelebration(merchantName);
+          } else if (screen !== "order") {
+            setScreen("order");
+          }
         }
       }
 
@@ -487,13 +543,26 @@ export function useUserEffects({
     // Merchant just got assigned (claim transition on sell order)
     if (merchantId && !prevMerchantId && (screen === 'escrow' || screen === 'matching')) {
       const merchantName = (realtimeOrder as any).merchant?.display_name || 'Merchant';
-      playSound('notification');
-      // Standard themed toast (Design A) only — no AcceptancePopup card.
-      toast.showMerchantAccepted(merchantName);
-      if (screen === 'matching') setPendingTradeData(null);
-      setScreen('order');
+      // Same per-order guard as the accept path — whichever fires first wins, so
+      // a claim that follows an accept (or a duplicate event) produces nothing.
+      const firstAck = !activeOrderId || !acknowledgedMatchRef.current.has(activeOrderId);
+      if (activeOrderId) acknowledgedMatchRef.current.add(activeOrderId);
+      if (firstAck) {
+        playSound('notification');
+        const willCelebrate = screen === 'matching' && !prefersReducedMotion();
+        if (!willCelebrate) {
+          // Standard themed toast (Design A) only — no AcceptancePopup card.
+          toast.showMerchantAccepted(merchantName);
+        }
+        if (screen === 'matching') {
+          setPendingTradeData(null);
+          beginMatchedCelebration(merchantName);
+        } else {
+          setScreen('order');
+        }
+      }
     }
-  }, [realtimeOrder, activeOrderId, screen]);
+  }, [realtimeOrder, activeOrderId, screen, beginMatchedCelebration, setPendingTradeData]);
 
   // Active order: merge real-time data with list data, preserving optimistic updates
   const orderFromList = orders.find(o => o.id === activeOrderId);
@@ -898,6 +967,7 @@ export function useUserEffects({
   return {
     matchingTimeLeft,
     timerTick,
+    matched,
     formatTimeLeft,
     activeOrder,
     realtimeOrder,

@@ -1396,6 +1396,7 @@ export default function Home() {
               setPendingTradeData={setPendingTradeData}
               toast={toast}
               maxW={maxW}
+              matched={userEffects.matched}
             />
           </Panel>
         )}

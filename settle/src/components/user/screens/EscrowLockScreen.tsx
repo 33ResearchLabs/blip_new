@@ -25,6 +25,7 @@ import { getDisplayOrderId } from "@/lib/displayOrderId";
 import { BottomNav } from "./BottomNav";
 import { WaitingTracker, type TrackerBanner } from "./WaitingTracker";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
+import { useCancelOrderSheet } from "@/hooks/useCancelOrderSheet";
 
 const T = {
   hi: "var(--color-text-primary)",
@@ -103,6 +104,7 @@ export const EscrowLockScreen = ({
   const handleConnectWallet = onConnectWallet || (() => setShowWalletModal(true));
   const balanceOk = solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance >= parseFloat(amount || '0');
   const isProcessing = ['signing', 'confirming', 'recording'].includes(escrowTxStatus);
+  const cancel = useCancelOrderSheet();
 
   // QR-scan handoff: when this screen is reached from UpiPayScreen
   // (scan a merchant's UPI QR → enter amount → land here for escrow lock),
@@ -186,6 +188,16 @@ export const EscrowLockScreen = ({
       { icon: <Landmark className="w-4 h-4" />, label: "Method", value: methodLabel },
     ];
 
+    // Stage-aware confirmation in front of the existing cancel handler. This is
+    // a freshly-locked, unmatched sell order (escrow held, no merchant), so the
+    // resolver shows the "Cancel & refund" copy. onConfirm runs the unchanged
+    // onCancelOrder (which cancels + navigates to the order detail).
+    const openCancel = () =>
+      cancel.request(
+        { type: "sell", dbStatus: "escrowed", escrowLocked: true, cryptoAmount: cryptoStr, cryptoCode: "USDT" },
+        { role: "seller", onConfirm: () => onCancelOrder?.() },
+      );
+
     return (
       <div className="relative flex-1 min-h-0 flex flex-col bg-surface-base">
         <WaitingTracker
@@ -208,7 +220,7 @@ export const EscrowLockScreen = ({
           progressSubtitle="Matching merchant · In progress"
           tiles={tiles}
           onOpenOverview={() => setShowOverview(true)}
-          onCancel={onCancelOrder}
+          onCancel={openCancel}
           isCancelling={isCancellingOrder}
           secondaryAction={
             <motion.button
@@ -244,13 +256,16 @@ export const EscrowLockScreen = ({
                 onClose={() => setShowOverview(false)}
                 onCancel={() => {
                   setShowOverview(false);
-                  onCancelOrder?.();
+                  openCancel();
                 }}
                 isCancelling={isCancellingOrder}
               />
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Stage-aware cancel confirmation (portaled above the tracker/overlay). */}
+        {cancel.sheet}
       </div>
     );
   }
