@@ -44,6 +44,23 @@ function recordTiming(type: string, orderId: string, totalMs: number, marks: Arr
   ).catch(() => {});
 }
 
+// Bust the merchant order-list cache for every merchant who could have this
+// order in their dashboard list: the requesting merchant (acceptor) plus the
+// order's seller (merchant_id) and M2M buyer (buyer_merchant_id). Dedup'd.
+// Purely additive — only affects cache freshness, never the response.
+async function invalidateMerchantOrderLists(
+  invalidate: (merchantId: string) => Promise<void>,
+  auth: { actorType?: string | null; actorId?: string | null } | null | undefined,
+  order: { merchant_id?: string | null; buyer_merchant_id?: string | null } | null | undefined,
+): Promise<void> {
+  const ids = new Set<string>();
+  if (auth?.actorType === 'merchant' && auth.actorId) ids.add(auth.actorId);
+  if (order?.merchant_id) ids.add(order.merchant_id);
+  if (order?.buyer_merchant_id) ids.add(order.buyer_merchant_id);
+  if (ids.size === 0) return;
+  await Promise.all([...ids].map((mid) => invalidate(mid)));
+}
+
 // Validate order ID parameter
 async function validateOrderId(
   id: string,
@@ -480,8 +497,16 @@ export async function PATCH(
       // Paid" stays after payment_sent). Skip on a cached idempotent replay —
       // the original call already invalidated.
       if (!idempotencyResult.cached && idempotencyResult.statusCode < 400) {
-        const { invalidateOrderCache } = await import('@/lib/cache/cacheService');
+        const { invalidateOrderCache, invalidateMerchantOrderListCache } = await import('@/lib/cache/cacheService');
         await invalidateOrderCache(id);
+        // Also bust the merchant order LIST cache. The dashboard's
+        // afterMutationReconcile does a debounced full-list refetch after the
+        // single-order refetch; if the list is served stale (this 60s cache),
+        // it overwrites the fresh order with the PRE-action snapshot (old
+        // primaryAction) and the action button reappears, enabled + clickable.
+        // The /action route already invalidates this; PATCH (accept /
+        // send-payment / cancel / complete) did not. Additive — only freshness.
+        await invalidateMerchantOrderLists(invalidateMerchantOrderListCache, auth, prefetchedOrder);
       }
       __mark('proxy_core_api');
       const __finTotal = Date.now() - __t0;
@@ -503,8 +528,11 @@ export async function PATCH(
       // Invalidate the settle `order-full` cache so the follow-up refetch
       // reflects the new status immediately (see the financial-branch note
       // above). Covers non-financial transitions like accept.
-      const { invalidateOrderCache } = await import('@/lib/cache/cacheService');
+      const { invalidateOrderCache, invalidateMerchantOrderListCache } = await import('@/lib/cache/cacheService');
       await invalidateOrderCache(id);
+      // Bust the merchant order LIST cache too (see financial-branch note) so a
+      // stale list refetch can't resurrect the old action button.
+      await invalidateMerchantOrderLists(invalidateMerchantOrderListCache, auth, prefetchedOrder);
       const action = status === 'cancelled' ? 'order.cancelled' as const : 'order.status_changed' as const;
       auditLog(action, actor_id, actor_type, id, {
         newStatus: status,
