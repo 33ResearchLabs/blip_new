@@ -826,7 +826,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               setShowBuyPayModal(true);
             }}
             disabled={isDisabled}
-            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg bg-[#f5f5f7] text-[#0b0b0c] font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5 min-w-0 px-1"
+            className="flex-1 h-full rounded-xl @max-[240px]:rounded-lg bg-[#f5f5f7] text-[#0b0b0c] font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5 min-w-0 px-1 border border-transparent"
           >
             {isCreatingTrade && openTradeForm.tradeType === "buy" ? (
               <Loader2 className="w-4 h-4 animate-spin" />
