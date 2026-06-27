@@ -11,8 +11,6 @@ import { getDisplayOrderId } from '@/lib/displayOrderId';
 import { OrderOverviewScreen } from './OrderOverviewScreen';
 import { WaitingTracker, type TrackerBanner } from './WaitingTracker';
 import { useCancelOrderSheet } from '@/hooks/useCancelOrderSheet';
-import { resolveActiveOrderView } from '@/lib/orders/resolveActiveOrderView';
-import { ActiveOrderMatchingScreen } from '@/components/user/active-order/ActiveOrderMatchingScreen';
 
 // Total matching window (mirrors the 15-min default expiry on order creation).
 const MATCHING_WINDOW_SECONDS = 15 * 60;
@@ -196,57 +194,31 @@ export const MatchingScreen = ({
 
   return (
     <div className="relative flex-1 min-h-0 flex flex-col bg-surface-base">
-      {isBuy ? (
-        // BUY matching → new Active Order shell (5-step progress + hero).
-        // SELL-unmatched stays on WaitingTracker below (escrow already locked,
-        // different progress semantics — migrated in a later step).
-        <ActiveOrderMatchingScreen
-          title={`${typeLabel} ${cryptoStr} USDT`}
-          orderRef={`Order #${displayId}`}
-          view={resolveActiveOrderView({
-            type: "buy",
-            dbStatus: "pending",
-            fiatLabel: fiatStr,
-            cryptoLabel: cryptoStr,
-            paymentMethod: pendingTradeData.paymentMethod === "cash" ? "cash" : "bank",
-          })}
-          countdown={{
-            remainingSec: Math.max(0, matchingTimeLeft),
-            totalSec: MATCHING_WINDOW_SECONDS,
-          }}
-          tiles={tiles}
-          onBack={() => setScreen("home")}
-          onOpenOverview={() => setShowOverview(true)}
-          onOpenSupport={() => setScreen("support")}
-          onCancel={openCancel}
-        />
-      ) : (
-        <WaitingTracker
-          title={`${typeLabel} ${cryptoStr} USDT`}
-          orderRef={`Order #${displayId}`}
-          onBack={() => setScreen("home")}
-          onOpenSupport={() => setScreen("support")}
-          banner={banner}
-          countdown={{
-            remainingSec: Math.max(0, matchingTimeLeft),
-            totalSec: MATCHING_WINDOW_SECONDS,
-            caption: countdownCaption,
-            tone: "neutral",
-          }}
-          searchHint={{ lines: searchLines }}
-          // Seller's USDT is already in escrow — show the escrow card.
-          escrow={{
-            sub: `Your ${cryptoStr} USDT is locked securely in escrow. You'll be notified once a merchant is matched.`,
-            txHref: null,
-          }}
-          activeStepIndex={1}
-          createdTime={createdTime}
-          progressSubtitle="Matching merchant · In progress"
-          tiles={tiles}
-          onOpenOverview={() => setShowOverview(true)}
-          onCancel={openCancel}
-        />
-      )}
+      <WaitingTracker
+        title={`${typeLabel} ${cryptoStr} USDT`}
+        orderRef={`Order #${displayId}`}
+        onBack={() => setScreen("home")}
+        onOpenSupport={() => setScreen("support")}
+        banner={banner}
+        countdown={{
+          remainingSec: Math.max(0, matchingTimeLeft),
+          totalSec: MATCHING_WINDOW_SECONDS,
+          caption: countdownCaption,
+          tone: "neutral",
+        }}
+        searchHint={{ lines: searchLines }}
+        // Buyer hasn't escrowed anything yet — no escrow card on the buy flow.
+        escrow={isBuy ? null : {
+          sub: `Your ${cryptoStr} USDT is locked securely in escrow. You'll be notified once a merchant is matched.`,
+          txHref: null,
+        }}
+        activeStepIndex={1}
+        createdTime={createdTime}
+        progressSubtitle="Matching merchant · In progress"
+        tiles={tiles}
+        onOpenOverview={() => setShowOverview(true)}
+        onCancel={openCancel}
+      />
 
       {/* Itemised order overview — slides in over the matching screen */}
       <AnimatePresence>

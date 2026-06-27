@@ -41,10 +41,6 @@ import { OrderTrackingView } from "./OrderTrackingView";
 import { MatchingScreen } from "./MatchingScreen";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
 import { OrderPaymentScreen } from "./OrderPaymentScreen";
-import { ActiveOrderPaymentScreen } from "@/components/user/active-order/ActiveOrderPaymentScreen";
-import { ActiveOrderAcceptedScreen } from "@/components/user/active-order/ActiveOrderAcceptedScreen";
-import { ActiveOrderReviewScreen } from "@/components/user/active-order/ActiveOrderReviewScreen";
-import { ActiveOrderTerminalScreen } from "@/components/user/active-order/ActiveOrderTerminalScreen";
 import { SellPaymentTracker } from "./SellPaymentTracker";
 import { SellCompletedScreen } from "./SellCompletedScreen";
 import { OrderCompletedScreen } from "./OrderCompletedScreen";
@@ -3166,92 +3162,47 @@ export const OrderDetailScreen = ({
       </AnimatePresence>
 
       {/* Buyer payment view — replaces the step layout for an accepted/escrowed
-          BUY order. Bank details + pay action are gated on escrow lock inside.
-
-          ACTIVE ORDER REDESIGN (Phase 1): the escrow-locked "send payment"
-          state renders the new ActiveOrderShell-based screen; every other BUY
-          state (pre-lock wait, payment-sent wait) keeps the existing screen
-          until those states are migrated. Same prop API → the two screens are
-          interchangeable, so this is a presentation-only swap for one state. */}
+          BUY order. Bank details + pay action are gated on escrow lock inside. */}
       {activeOrder.type === "buy" &&
         ["accepted", "escrow_pending", "escrowed", "payment_pending", "payment_sent"].includes(
           String(activeOrder.dbStatus || "").toLowerCase(),
-        ) &&
-        (() => {
-          const lowered = String(activeOrder.dbStatus || "").toLowerCase();
-          // Escrow locked (send payment) AND payment-sent (read-only, waiting for
-          // the seller to confirm) both render the new payment screen.
-          const usesPaymentScreen =
-            lowered === "escrowed" || lowered === "payment_pending" || lowered === "payment_sent";
-          // Merchant accepted but escrow not locked yet → new "securing funds"
-          // waiting screen.
-          const isSecuringFundsState = lowered === "accepted" || lowered === "escrow_pending";
-          const buyPayProps = {
-            order: activeOrder,
-            displayId: getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number),
-            onClose: () => setScreen(previousScreen || "orders"),
-            onOpenOverview: () => setShowTracker(true),
-            onViewOverview: () => setShowOrderOverview(true),
-            onOpenChat: handleOpenChat,
-            onViewProfile: () => setShowProfile(true),
-            onNeedHelp: () => setScreen("support"),
-            onMarkPaymentSent: markPaymentSent,
-            onAppeal: () => setShowAppeal(true),
-            onCopy: (key: string, value: string) => copyField(key, value),
-            copiedField,
-            needsPayMethodPick,
-            matchingPayMethods,
-            onChoosePayMethod: handleChoosePayMethod,
-            isSubmitting: isLoading,
-            appealBanner: (
-              <MutualCancelAppealBanner
-                orderId={activeOrder.id}
-                viewerActorId={userId}
-                variant="user"
-                enabled={
-                  !["cancelled", "expired", "complete", "completed", "disputed"].includes(
-                    activeOrder.status || "",
-                  )
-                }
-                // Buyer view: no release handler — a buyer can only escalate.
-                onOpenChat={handleOpenChat}
-              />
-            ),
-            appealActive,
-          };
-          return (
-            <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
-              {usesPaymentScreen ? (
-                <ActiveOrderPaymentScreen {...buyPayProps} />
-              ) : isSecuringFundsState ? (
-                <ActiveOrderAcceptedScreen {...buyPayProps} />
-              ) : (
-                <OrderPaymentScreen {...buyPayProps} />
-              )}
-            </div>
-          );
-        })()}
-
-      {/* Under Review (disputed) — unified calm overlay for both directions.
-          The buyer/seller payment overlays and autoTracker all exclude
-          'disputed', so this is the sole primary view for a disputed order.
-          Resolution proposals stay in chat (Message seller). */}
-      {activeOrder.status === "disputed" && (
-        <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
-          <ActiveOrderReviewScreen
-            order={activeOrder}
-            displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
-            onClose={() => setScreen(previousScreen || "orders")}
-            onOpenOverview={() => setShowTracker(true)}
-            onOpenChat={handleOpenChat}
-            onViewProfile={() => setShowProfile(true)}
-            onNeedHelp={() => setScreen("support")}
-            requestExtension={requestExtension}
-            requestingExtension={requestingExtension}
-            extensionRequest={extensionRequest}
-          />
-        </div>
-      )}
+        ) && (
+          <div className={`fixed inset-0 z-40 mx-auto ${maxW} flex flex-col ${SHEET_BG}`}>
+            <OrderPaymentScreen
+              order={activeOrder}
+              displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
+              onClose={() => setScreen(previousScreen || "orders")}
+              onOpenOverview={() => setShowTracker(true)}
+              onViewOverview={() => setShowOrderOverview(true)}
+              onOpenChat={handleOpenChat}
+              onViewProfile={() => setShowProfile(true)}
+              onNeedHelp={() => setScreen("support")}
+              onMarkPaymentSent={markPaymentSent}
+              onAppeal={() => setShowAppeal(true)}
+              onCopy={(key, value) => copyField(key, value)}
+              copiedField={copiedField}
+              needsPayMethodPick={needsPayMethodPick}
+              matchingPayMethods={matchingPayMethods}
+              onChoosePayMethod={handleChoosePayMethod}
+              isSubmitting={isLoading}
+              appealBanner={
+                <MutualCancelAppealBanner
+                  orderId={activeOrder.id}
+                  viewerActorId={userId}
+                  variant="user"
+                  enabled={
+                    !["cancelled", "expired", "complete", "completed", "disputed"].includes(
+                      activeOrder.status || "",
+                    )
+                  }
+                  // Buyer view: no release handler — a buyer can only escalate.
+                  onOpenChat={handleOpenChat}
+                />
+              }
+              appealActive={appealActive}
+            />
+          </div>
+        )}
 
       {/* Seller's matched-state view — once a merchant has claimed a SELL order
           (escrowed+merchant / payment_pending / payment_sent), replace the
@@ -3394,22 +3345,6 @@ export const OrderDetailScreen = ({
                   showWarning: (m: string) => showAlert("Notice", m, "warning"),
                 }}
                 maxW={maxW}
-              />
-            ) : ["expired", "cancelled"].includes(
-                String(activeOrder.dbStatus || activeOrder.status || "").toLowerCase(),
-              ) ? (
-              // Ended (expired/cancelled) → new terminal screen (no dead 7-step
-              // ladder). Other non-matching states keep OrderTrackingView.
-              <ActiveOrderTerminalScreen
-                order={activeOrder}
-                displayId={getDisplayOrderId(activeOrder.id, new Date(activeOrder.createdAt), activeOrder.order_number)}
-                onClose={() => {
-                  if (autoTracker) setScreen(previousScreen || "orders");
-                  else setShowTracker(false);
-                }}
-                onRetry={() => setScreen("trade")}
-                onOpenSupport={() => setScreen("support")}
-                onViewOverview={() => setShowOrderOverview(true)}
               />
             ) : (
               <OrderTrackingView
