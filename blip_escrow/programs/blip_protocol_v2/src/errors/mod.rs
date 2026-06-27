@@ -104,6 +104,8 @@ pub enum ErrorCode {
 
     #[msg("Only authorized arbiters can resolve disputes")]
     NotArbiter,
+    #[msg("Too many arbiters")]
+    TooManyArbiters,
 
     #[msg("Must use dispute resolution - payment already confirmed")]
     MustUseDispute,

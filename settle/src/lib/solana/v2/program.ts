@@ -848,11 +848,18 @@ export async function buildResolveDisputeTx(
     ? { releaseToBuyer: {} }
     : { refundToSeller: {} };
 
+  // Arbiter allowlist PDA — the signer must be the authority OR a wallet in it.
+  const [arbiterSet] = PublicKey.findProgramAddressSync(
+    [Buffer.from('arbiter-set')],
+    program.programId
+  );
+
   const instruction = await (program.methods as any)
     .resolveDispute({ resolution: resolutionEnum })
     .accounts({
       arbiter,
       protocolConfig: protocolConfigPda,
+      arbiterSet,
       trade: tradePda,
       escrow: escrowPda,
       vaultAuthority,

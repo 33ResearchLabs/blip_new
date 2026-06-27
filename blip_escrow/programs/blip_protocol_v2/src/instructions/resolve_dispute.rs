@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, CloseAccount, Mint, Token, TokenAccount, Transfer};
-use crate::state::{Trade, Escrow, ProtocolConfig, TradeStatus, DisputeResolution};
+use crate::state::{Trade, Escrow, ProtocolConfig, TradeStatus, DisputeResolution, ArbiterSet};
 use crate::errors::ErrorCode;
 use crate::events::DisputeResolvedEvent;
 
@@ -18,10 +18,14 @@ pub struct ResolveDispute<'info> {
 
     #[account(
         seeds = [ProtocolConfig::SEED_PREFIX],
-        bump = protocol_config.bump,
-        constraint = protocol_config.authority == arbiter.key() @ ErrorCode::NotArbiter
+        bump = protocol_config.bump
     )]
     pub protocol_config: Box<Account<'info, ProtocolConfig>>,
+
+    /// Dispute-arbiter allowlist. The signer must be the protocol authority OR a
+    /// wallet in this set (checked in the handler).
+    #[account(seeds = [ArbiterSet::SEED], bump = arbiter_set.bump)]
+    pub arbiter_set: Box<Account<'info, ArbiterSet>>,
 
     #[account(
         mut,
@@ -95,6 +99,12 @@ pub fn handler(ctx: Context<ResolveDispute>, params: ResolveDisputeParams) -> Re
     let trade = &mut ctx.accounts.trade;
     let escrow = &ctx.accounts.escrow;
     let protocol_config = &ctx.accounts.protocol_config;
+    // Authorize: protocol authority OR a wallet in the arbiter allowlist.
+    let signer = ctx.accounts.arbiter.key();
+    require!(
+        signer == protocol_config.authority || ctx.accounts.arbiter_set.contains(&signer),
+        ErrorCode::NotArbiter
+    );
     let clock = Clock::get()?;
 
     require!(escrow.amount > 0, ErrorCode::InsufficientAmount);

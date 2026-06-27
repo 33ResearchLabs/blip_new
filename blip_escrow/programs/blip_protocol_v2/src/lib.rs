@@ -124,6 +124,11 @@ pub mod blip_protocol_v2 {
         instructions::resolve_dispute_timeout::handler(ctx)
     }
 
+    /// Set the dispute-arbiter allowlist (authority only).
+    pub fn set_arbiters(ctx: Context<SetArbiters>, params: SetArbitersParams) -> Result<()> {
+        instructions::set_arbiters::handler(ctx, params)
+    }
+
     /// Match a signed offer (v2.1 - with signature verification)
     pub fn match_offer(
         ctx: Context<MatchOffer>,

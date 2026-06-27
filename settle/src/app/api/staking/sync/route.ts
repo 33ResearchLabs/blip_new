@@ -88,6 +88,15 @@ export async function POST(request: NextRequest) {
 
       const delta = onchain - oldPrincipal;
       if (delta !== 0) {
+        // Keep the DB ledger consistent: the staked amount must leave the
+        // spendable balance (and return on unstake), so the displayed balance is
+        // total − staked and the staked USDT can't also be traded. delta>0 =
+        // staked more → balance down; delta<0 = unstaked → balance up.
+        const balTable = auth.actorType === "user" ? "users" : "merchants";
+        await client.query(
+          `UPDATE ${balTable} SET balance = GREATEST(balance - $1, 0) WHERE id = $2`,
+          [delta, auth.actorId],
+        );
         await client.query(
           `INSERT INTO staking_events
              (account_type, account_id, event_type, amount, principal_after, rewards_after, metadata)

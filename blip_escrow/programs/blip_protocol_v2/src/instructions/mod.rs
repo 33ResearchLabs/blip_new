@@ -14,6 +14,7 @@ pub mod match_offer;
 pub mod confirm_payment;
 pub mod open_dispute;
 pub mod resolve_dispute;
+pub mod set_arbiters;
 pub mod resolve_dispute_timeout;
 
 // V2.2: Liquidity lanes for atomic matching
@@ -46,6 +47,7 @@ pub use match_offer::*;
 pub use confirm_payment::*;
 pub use open_dispute::*;
 pub use resolve_dispute::*;
+pub use set_arbiters::*;
 pub use resolve_dispute_timeout::*;
 
 // V2.2 lane exports
