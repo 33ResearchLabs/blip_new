@@ -196,21 +196,42 @@ export function useDisputeManagement(
         }),
       });
 
-      if (res.ok) {
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
         const resolutionText =
           resolveForm.resolution === "user"
             ? "in favor of user"
             : resolveForm.resolution === "merchant"
               ? "in favor of merchant"
               : "with split";
-        addNotification("resolution", `Dispute #${selectedDispute.orderNumber} resolved ${resolutionText}`, selectedDispute.id);
+        // This endpoint PROPOSES a resolution — both parties must still confirm
+        // before it's final (see the /resolve route). Don't claim "resolved".
+        addNotification(
+          "resolution",
+          `Dispute #${selectedDispute.orderNumber} — resolution proposed ${resolutionText}, awaiting confirmation`,
+          selectedDispute.id,
+        );
         setShowResolveModal(false);
         setSelectedDispute(null);
         setResolveForm({ resolution: "", notes: "", splitUser: 50, splitMerchant: 50 });
         fetchDisputes();
+      } else {
+        // Surface the failure instead of silently no-op'ing — e.g. 409
+        // "Resolution already proposed", 400 invalid/already-resolved, 403/404.
+        addNotification(
+          "dispute",
+          `Failed to propose resolution: ${data?.error || `request failed (${res.status})`}`,
+          selectedDispute.id,
+        );
       }
     } catch (error) {
       console.error("Failed to resolve dispute:", error);
+      addNotification(
+        "dispute",
+        "Failed to propose resolution. Check your connection and try again.",
+        selectedDispute.id,
+      );
     }
   };
 

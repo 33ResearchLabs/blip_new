@@ -105,19 +105,29 @@ export const ActivityPanel = memo(function ActivityPanel({
     return 0;
   };
 
-  // Combine ongoing + pending as "open" orders
-  const openOrders = [...ongoingOrders, ...pendingOrders];
-  const openCount = openOrders.length;
-  const failedCount = cancelledOrders.length;
-  // Disputed orders live inside `cancelledOrders` (the parent groups
-  // cancelled+disputed+expired together). We surface them in their own
-  // section so merchants can find their active disputes — without removing
-  // them from the existing "Failed" tab to keep behavior backward-compatible.
+  // Disputed orders live in `ongoingOrders` — the parent keeps them "in
+  // progress" so both parties can still act on them (page.tsx). Older
+  // groupings also bucketed them with cancelled, so scan both lists to be
+  // safe. They get their own tab below.
   const disputedOrders = useMemo(
-    () => cancelledOrders.filter((o) => o?.status === 'disputed'),
-    [cancelledOrders]
+    () =>
+      [...ongoingOrders, ...cancelledOrders].filter(
+        (o) => o?.status === 'disputed',
+      ),
+    [ongoingOrders, cancelledOrders]
   );
   const disputedCount = disputedOrders.length;
+  // "Open" = in-progress + pending, EXCLUDING disputed (they have their own
+  // tab) so a disputed order never appears in two places.
+  const openOrders = useMemo(
+    () =>
+      [...ongoingOrders, ...pendingOrders].filter(
+        (o) => o?.status !== 'disputed',
+      ),
+    [ongoingOrders, pendingOrders]
+  );
+  const openCount = openOrders.length;
+  const failedCount = cancelledOrders.length;
 
   // Build dropdown options dynamically so the labels still show counts.
   const activityOptions = useMemo<ReadonlyArray<FilterOption<ActivityTab>>>(() => [
