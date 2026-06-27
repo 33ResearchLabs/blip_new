@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireAuth } from '@/lib/middleware/auth';
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 import { atomicFinalizeDispute, DisputeResolution } from '@/lib/orders/atomicFinalizeDispute';
+import { getVoteTally } from '@/lib/compliance/voting';
 
 async function hasComplianceAccess(auth: { actorType: string; merchantId?: string }): Promise<boolean> {
   if (auth.actorType === 'compliance' || auth.actorType === 'system') return true;
@@ -57,6 +58,7 @@ export async function POST(
       notes,
       release_tx_hash, // Optional: If compliance already released on-chain
       refund_tx_hash,  // Optional: If compliance already refunded on-chain
+      force,           // Single-officer override (bypass the >50% / 4h vote)
     } = body;
 
     if (!resolution || !complianceId) {
@@ -156,6 +158,25 @@ export async function POST(
       user_wallet: string | null;
       merchant_wallet: string | null;
     };
+
+    // ── Vote / force gate ─────────────────────────────────────────────
+    // Either a strict majority (>50%) of compliance officers voted this
+    // outcome within the 4h window, OR a single officer forces it (override).
+    if (!force) {
+      const o = await queryOne<{ disputed_at: Date | null }>(
+        `SELECT disputed_at FROM orders WHERE id = $1`, [orderId]);
+      const tally = await getVoteTally(orderId, o?.disputed_at ?? null);
+      if (tally.passedOutcome !== resolution) {
+        const have = tally.counts[resolution] ?? 0;
+        return NextResponse.json({
+          success: false,
+          error: tally.expired
+            ? 'Voting window (4h) closed without a majority — use force, or let the 72h on-chain timeout refund the seller.'
+            : `Needs >50% of officers to vote '${resolution}' within 4h (have ${have} of ${tally.threshold}).`,
+          tally,
+        }, { status: 409 });
+      }
+    }
 
     // ── Atomic finalization ───────────────────────────────────────────
     // Single transaction: lock order row → conditional refund to
