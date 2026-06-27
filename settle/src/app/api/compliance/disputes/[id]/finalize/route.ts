@@ -159,24 +159,20 @@ export async function POST(
       merchant_wallet: string | null;
     };
 
-    // ── Vote / force gate ─────────────────────────────────────────────
-    // Either a strict majority (>50%) of compliance officers voted this
-    // outcome within the 4h window, OR a single officer forces it (override).
-    if (!force) {
+    // ── Resolution mode (audit, non-blocking) ─────────────────────────
+    // A compliance officer can resolve directly (single-officer "force" — the
+    // existing flow), OR by consensus when >50% of officers voted this outcome
+    // within the 4h window. Both are allowed so the current UI keeps working;
+    // we just record which path was used. The dev can gate the "Resolve" button
+    // on the vote tally (GET /vote) and surface a distinct "Force" action.
+    let viaConsensus = false;
+    try {
       const o = await queryOne<{ disputed_at: Date | null }>(
         `SELECT disputed_at FROM orders WHERE id = $1`, [orderId]);
       const tally = await getVoteTally(orderId, o?.disputed_at ?? null);
-      if (tally.passedOutcome !== resolution) {
-        const have = tally.counts[resolution] ?? 0;
-        return NextResponse.json({
-          success: false,
-          error: tally.expired
-            ? 'Voting window (4h) closed without a majority — use force, or let the 72h on-chain timeout refund the seller.'
-            : `Needs >50% of officers to vote '${resolution}' within 4h (have ${have} of ${tally.threshold}).`,
-          tally,
-        }, { status: 409 });
-      }
-    }
+      viaConsensus = tally.passedOutcome === resolution;
+    } catch { /* tally unavailable — treat as single-officer */ }
+    const wasForced = force === true || !viaConsensus;
 
     // ── Atomic finalization ───────────────────────────────────────────
     // Single transaction: lock order row → conditional refund to
@@ -212,6 +208,12 @@ export async function POST(
         { success: false, error: result.error ?? 'Failed to finalize dispute' },
         { status }
       );
+    }
+
+    // Audit: mark a single-officer "force" resolution (not backed by a >50% vote).
+    if (wasForced) {
+      await query(`UPDATE disputes SET force_resolved_by = $1 WHERE order_id = $2`,
+        [complianceId, orderId]).catch(() => {});
     }
 
     // Best-effort real-time push. The notification_outbox row was already
