@@ -36,6 +36,7 @@ import {
   Flag,
   Sparkles,
   HelpCircle,
+  Ban,
 } from "lucide-react";
 import {
   useState as useLocalState,
@@ -1325,6 +1326,148 @@ function AcceptorSellOrderBody({
           </p>
         </div>
       </div>
+    </>
+  );
+}
+
+// Read-only summary for a TERMINAL order (completed / cancelled / expired) the
+// merchant is party to. Used for the desktop/modal presentation, where the rich
+// full-screen "Order Completed" hero (in ActiveOrderBody) doesn't run — without
+// this, terminal orders fell through to the generic open-order fallback and
+// showed a stale "No action available" footer. Self-contained from order/db so
+// it works regardless of how the order was opened (e.g. the "Mine" tab).
+function TerminalOrderBody({
+  order,
+  db,
+  status,
+  isSeller,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  order: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any;
+  status: string;
+  isSeller: boolean;
+}) {
+  const ccy = order.toCurrency || "AED";
+  const sym = fiatSymbol(ccy);
+  const cryptoStr = `${formatCrypto(Number(order.amount) || 0)} USDT`;
+  const fiatStr = `${sym}${formatCrypto(Number(order.total) || 0)} ${ccy}`;
+  const rateStr = `${sym}${formatCrypto(Number(order.rate) || 0)}`;
+
+  const fmtDT = (iso?: string | null) => {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleString("en-US", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+  const stampIso =
+    status === "completed"
+      ? db.completed_at || db.updated_at
+      : db.cancelled_at || db.expired_at || db.updated_at;
+  const stamp = fmtDT(stampIso);
+
+  const orderId =
+    typeof db.order_number === "string" && db.order_number
+      ? db.order_number
+      : typeof db.id === "string"
+      ? `BLP-${db.id.slice(0, 8).toUpperCase()}`
+      : "—";
+
+  const META: Record<
+    string,
+    {
+      Icon: typeof Check;
+      emerald: boolean;
+      title: string;
+      sub: string;
+      stampLabel: string;
+    }
+  > = {
+    completed: {
+      Icon: CheckCircle2,
+      emerald: true,
+      title: `${cryptoStr} ${isSeller ? "Released" : "Received"}`,
+      sub: isSeller
+        ? "You confirmed the payment and the USDT was released to the buyer."
+        : "The seller confirmed your payment and released the USDT to you.",
+      stampLabel: "Completed",
+    },
+    cancelled: {
+      Icon: Ban,
+      emerald: false,
+      title: "Order Cancelled",
+      sub: "This order was cancelled. No funds changed hands.",
+      stampLabel: "Cancelled",
+    },
+    expired: {
+      Icon: Clock,
+      emerald: false,
+      title: "Order Expired",
+      sub: "This order expired before it was completed. No funds changed hands.",
+      stampLabel: "Expired",
+    },
+  };
+  const meta = META[status] ?? META.cancelled;
+  const ring = meta.emerald
+    ? "bg-emerald-500 ring-emerald-500/20"
+    : "bg-white/[0.06] ring-white/[0.04]";
+  const iconColor = meta.emerald ? "text-white" : "text-foreground/70";
+
+  const rows = [
+    { label: isSeller ? "You Received" : "You Paid", value: fiatStr },
+    { label: isSeller ? "You Released" : "You Received", value: cryptoStr },
+    { label: "Rate", value: rateStr },
+    { label: meta.stampLabel, value: stamp },
+    { label: "Order ID", value: orderId },
+  ];
+
+  return (
+    <>
+      {/* Status hero */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-center">
+        <div className="inline-flex items-center justify-center mb-3">
+          <div
+            className={`w-14 h-14 rounded-full ring-4 flex items-center justify-center ${ring}`}
+          >
+            <meta.Icon className={`w-7 h-7 ${iconColor}`} strokeWidth={2.5} />
+          </div>
+        </div>
+        <p className="text-xl font-bold text-foreground mb-1.5">{meta.title}</p>
+        <p className="text-[13px] text-foreground/55 leading-snug px-2">
+          {meta.sub}
+        </p>
+      </div>
+
+      {/* Order details */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4">
+        <div className="divide-y divide-white/[0.06]">
+          {rows.map((r) => (
+            <div
+              key={r.label}
+              className="flex items-center justify-between gap-4 py-3"
+            >
+              <span className="text-[13px] text-foreground/55 shrink-0">
+                {r.label}
+              </span>
+              <span className="text-[13px] font-semibold text-foreground text-right truncate">
+                {r.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Counterparty */}
+      <CounterpartyTrustCard
+        db={db}
+        now={Date.now()}
+        heading={isSeller ? "Buyer" : "Seller"}
+      />
     </>
   );
 }
@@ -3071,6 +3214,9 @@ export function OrderQuickView({
   // already 'buyer' for the creator (see getAllPendingOrdersForMerchant).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const qvDb = (selectedOrder?.dbOrder ?? {}) as any;
+  const qvStatus = String(
+    qvDb.status || qvDb.minimal_status || "",
+  ).toLowerCase();
   // Hide "Raise Appeal" once an appeal is already open/proposed (the inline
   // banner carries the resolution actions; a second appeal can't be raised).
   const { appeal: qvAppeal } = useOrderAppeal(selectedOrder?.id, { enabled: !!selectedOrder });
@@ -3083,14 +3229,15 @@ export function OrderQuickView({
     !selectedOrder.sellerPaymentMethod &&
     !selectedOrder.lockedPaymentMethod &&
     !qvDb.accepted_at &&
+    // Live pending only — exclude terminal/disputed so an expired or cancelled
+    // own broadcast buy isn't treated as "waiting" (which wrongly showed the
+    // Open-Market-Waiting layout + Cancel Order button on a dead order).
+    !["completed", "cancelled", "expired", "disputed"].includes(qvStatus) &&
     Array.isArray(qvDb.buyer_payment_types) &&
     qvDb.buyer_payment_types.length > 0;
   // Seller's view: a NEW pending buy order (declared pay types) that I can
   // accept — placed by someone else, not yet taken. Buy orders are the only
   // ones carrying buyer_payment_types, so sell orders never match here.
-  const qvStatus = String(
-    qvDb.status || qvDb.minimal_status || "",
-  ).toLowerCase();
   const isAcceptableBuyOrder =
     !!selectedOrder &&
     !isOwnPendingBuy &&
@@ -3148,6 +3295,22 @@ export function OrderQuickView({
       (presentation === "fullscreen" && qvStatus === "completed"));
   const activeRole: "buyer" | "seller" =
     selectedOrder?.myRole === "buyer" ? "buyer" : "seller";
+  // TERMINAL order the merchant is party to (completed / cancelled / expired) —
+  // drives the read-only TerminalOrderBody + a plain Close footer. EXCLUDES the
+  // unreturned-escrow case (seller funded, no refund yet): that still needs the
+  // "Withdraw Escrow" action, so it stays on the standard action footer.
+  const qvHasUnreturnedEscrow =
+    !!(selectedOrder?.escrowTxHash || qvDb.escrow_tx_hash) &&
+    !(selectedOrder?.refundTxHash || qvDb.refund_tx_hash) &&
+    selectedOrder?.myRole === "seller";
+  const isTerminalOrder =
+    !!selectedOrder &&
+    !isOwnPendingBuy &&
+    !isAcceptableBuyOrder &&
+    !isClaimableSellOrder &&
+    !isActiveOrder &&
+    ["completed", "cancelled", "expired"].includes(qvStatus) &&
+    !qvHasUnreturnedEscrow;
   // Full-screen presentation (merchant mobile, active orders) — see prop doc.
   const isFull = presentation === "fullscreen";
   // Stage-aware app-bar title for the full-screen header. Mirrors the active
@@ -3209,7 +3372,7 @@ export function OrderQuickView({
               isFull
                 ? "fixed inset-0 z-50 w-full h-dvh max-h-dvh flex flex-col overflow-hidden pb-safe"
                 : `fixed z-50 inset-x-0 bottom-0 mx-auto w-full ${
-                    isActiveOrder
+                    isActiveOrder || isTerminalOrder
                       ? "max-w-xl"
                       : isAcceptableBuyOrder || isOwnPendingBuy
                       ? "max-w-lg"
@@ -3372,6 +3535,13 @@ export function OrderQuickView({
                     onRecvSelectionChange={setLockMethodId}
                     onWaitingTimeout={setWaitingTimedOut}
                     fullScreen={isFull}
+                  />
+                ) : isTerminalOrder ? (
+                  <TerminalOrderBody
+                    order={selectedOrder}
+                    db={qvDb}
+                    status={qvStatus}
+                    isSeller={selectedOrder.myRole === "seller"}
                   />
                 ) : (
                   <>
@@ -3938,8 +4108,20 @@ export function OrderQuickView({
                   Accept Order
                 </motion.button>
               )}
+              {/* Terminal order (completed / cancelled / expired) → no actions,
+                  just a Close button. Full-screen completed keeps its dedicated
+                  "Back to Home" CTA below; everything else closes the popup. */}
+              {isTerminalOrder && !(isFull && qvStatus === "completed") && (
+                <button
+                  onClick={onClose}
+                  className="w-full py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold transition-all"
+                >
+                  Close
+                </button>
+              )}
               {!isOwnPendingBuy &&
                 !isAcceptableBuyOrder &&
+                !isTerminalOrder &&
                 (() => {
                   // Completed order on the full-screen mobile view → a single
                   // "Back to Home" CTA (the trade is done; nothing left to act on).

@@ -103,6 +103,8 @@ export interface MerchantDesktopLayoutProps {
   setSelectedOrderPopup: (order: Order | null) => void;
   setSelectedMempoolOrder: (order: any | null) => void;
   setSelectedOrderId: (id: string | null) => void;
+  /** Open the OrderQuickView popup by id (fetches if not loaded). */
+  onOpenOrderById: (orderId: string) => void;
   acceptOrder: (order: Order) => void;
   acceptingOrderId: string | null;
   lockingEscrowOrderId?: string | null;
@@ -222,6 +224,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(
     setSelectedOrderPopup,
     setSelectedMempoolOrder,
     setSelectedOrderId,
+    onOpenOrderById,
     acceptOrder,
     acceptingOrderId,
     lockingEscrowOrderId,
@@ -576,7 +579,11 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(
             <NotificationsPanel
               notifications={notifications}
               onMarkRead={markNotificationRead}
-              onSelectOrder={setSelectedOrderId}
+              // Open the current OrderQuickView popup (same as order cards /
+              // mobile notifications), not the legacy OrderDetailsPanel. The
+              // handler fetches the order when it isn't in the loaded lists
+              // (completed orders live in the paginated "Mine" feed).
+              onSelectOrder={onOpenOrderById}
               onOpenChat={(orderId) => {
                 const order =
                   pendingOrders.find((o) => o.id === orderId) ||
@@ -893,6 +900,7 @@ function MerchantDashboardV2({
     setSelectedOrderPopup: props.setSelectedOrderPopup,
     setSelectedMempoolOrder: props.setSelectedMempoolOrder,
     setSelectedOrderId: props.setSelectedOrderId,
+    onOpenOrderById: props.onOpenOrderById,
     acceptOrder: props.acceptOrder,
     acceptingOrderId: props.acceptingOrderId,
     lockingEscrowOrderId: props.lockingEscrowOrderId,

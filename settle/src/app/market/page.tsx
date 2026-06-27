@@ -24,6 +24,7 @@ import {
   getEffectiveStatus,
   isOrderExpired,
   TRADER_CUT_CONFIG,
+  mapDbOrderToUI,
 } from "@/lib/orders/mappers";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useOrderFetching } from "@/hooks/useOrderFetching";
@@ -762,11 +763,15 @@ export default function MerchantDashboard() {
     ],
   );
 
-  // Listen for compliance message notifications → auto-open order details
+  // Listen for compliance message notifications → auto-open the order. Routes
+  // through a ref so the stable [] listener always calls the latest
+  // openOrderPopupById (defined below) — opening the current OrderQuickView
+  // popup instead of the legacy OrderDetailsPanel.
+  const openOrderPopupByIdRef = useRef<((id: string) => void) | null>(null);
   useEffect(() => {
     const handler = (e: Event) => {
       const orderId = (e as CustomEvent).detail?.orderId;
-      if (orderId) setSelectedOrderId(orderId);
+      if (orderId) openOrderPopupByIdRef.current?.(orderId);
     };
     window.addEventListener("open-order-chat", handler);
     return () => window.removeEventListener("open-order-chat", handler);
@@ -937,6 +942,38 @@ export default function MerchantDashboard() {
       );
     });
   }, [orders, merchantId]);
+
+  // Open the current OrderQuickView popup for an order referenced only by id
+  // (notifications). The order may not be in the dashboard's `orders` store —
+  // e.g. completed orders live in the paginated "Mine" feed — so fall back to a
+  // single fetch, then to the legacy OrderDetailsPanel only if that fails too.
+  const openOrderPopupById = useCallback(
+    async (orderId: string) => {
+      const loaded = orders.find((o) => o.id === orderId);
+      if (loaded) {
+        setSelectedOrderPopup(loaded);
+        return;
+      }
+      try {
+        const res = await fetchWithAuth(`/api/orders/${orderId}`);
+        const data = await res.json().catch(() => null);
+        const dbOrder = data?.data ?? null;
+        if (res.ok && dbOrder) {
+          setSelectedOrderPopup(
+            mapDbOrderToUI(dbOrder, merchantId, merchantInfo?.username),
+          );
+          return;
+        }
+      } catch {
+        /* fall through to legacy panel */
+      }
+      setSelectedOrderId(orderId);
+    },
+    [orders, merchantId, merchantInfo],
+  );
+  // Keep the ref used by the compliance "open-order-chat" listener current so it
+  // opens the new OrderQuickView popup with up-to-date orders/merchant identity.
+  openOrderPopupByIdRef.current = openOrderPopupById;
 
   // Earnings displayed under the "24h" badge on the dashboard. Only counts
   // orders that actually completed within the last 24 hours (the prior
@@ -1150,6 +1187,7 @@ export default function MerchantDashboard() {
           setSelectedOrderPopup={setSelectedOrderPopup}
           setSelectedMempoolOrder={setSelectedMempoolOrder}
           setSelectedOrderId={setSelectedOrderId}
+          onOpenOrderById={openOrderPopupById}
           acceptOrder={acceptOrder}
           acceptingOrderId={acceptingOrderId}
           lockingEscrowOrderId={
@@ -1344,8 +1382,7 @@ export default function MerchantDashboard() {
                   notifications={notifications}
                   onMarkRead={markNotificationRead}
                   onSelectOrder={(orderId) => {
-                    const target = orders.find((o) => o.id === orderId);
-                    if (target) setSelectedOrderPopup(target);
+                    void openOrderPopupById(orderId);
                     setShowNotifications(false);
                   }}
                   onOpenChat={(orderId) => {
